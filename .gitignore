@@ -140,4 +140,4 @@ dist
 .svelte-kit
 
 # DBs
-.db
+*.db
