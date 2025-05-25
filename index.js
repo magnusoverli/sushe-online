@@ -459,6 +459,7 @@ app.get('/', ensureAuth, (req, res) => {
     let lists = {};
     let draggedItem = null;
     let db = null;
+    let draggedOriginalIndex = null;
     
     // Initialize IndexedDB
     async function initDB() {
@@ -621,6 +622,7 @@ app.get('/', ensureAuth, (req, res) => {
         row.className = 'album-row grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-800 cursor-move';
         row.draggable = true;
         row.dataset.index = index;
+        row.dataset.originalIndex = index;
         
         // Safely get values with defaults
         const rank = album.rank || index + 1;
@@ -634,7 +636,7 @@ app.get('/', ensureAuth, (req, res) => {
         const imageFormat = album.cover_image_format || 'PNG';
         
         row.innerHTML = \`
-          <div class="col-span-1 text-gray-400">\${index + 1}</div>
+          <div class="col-span-1 text-gray-400">\${rank}</div>
           <div class="col-span-1">
             \${coverImage ? \`
               <img src="data:image/\${imageFormat};base64,\${coverImage}" 
@@ -670,14 +672,12 @@ app.get('/', ensureAuth, (req, res) => {
         // Drag events
         row.addEventListener('dragstart', handleDragStart);
         row.addEventListener('dragend', handleDragEnd);
+        row.addEventListener('dragover', handleDragOver);
+        row.addEventListener('drop', handleDrop);
         
         rowsContainer.appendChild(row);
         row.appendChild(dropIndicator);
       });
-      
-      // Add dragover and drop events to the container
-      rowsContainer.addEventListener('dragover', handleDragOver);
-      rowsContainer.addEventListener('drop', handleDrop);
       
       table.appendChild(rowsContainer);
       container.appendChild(table);
@@ -686,11 +686,12 @@ app.get('/', ensureAuth, (req, res) => {
     // Drag and drop handlers
     let draggedIndex = null;
     let currentDropIndex = null;
-    let draggedElement = null;
+    let placeholder = null;
     
     function handleDragStart(e) {
-      draggedElement = this;
+      draggedItem = this;
       draggedIndex = parseInt(this.dataset.index);
+      draggedOriginalIndex = draggedIndex;
       this.classList.add('dragging');
       
       // Store the drag image
@@ -719,7 +720,6 @@ app.get('/', ensureAuth, (req, res) => {
       
       draggedIndex = null;
       currentDropIndex = null;
-      draggedElement = null;
     }
     
     function handleDragOver(e) {
@@ -728,16 +728,14 @@ app.get('/', ensureAuth, (req, res) => {
       }
       e.dataTransfer.dropEffect = 'move';
       
-      const draggingElement = document.querySelector('.dragging');
-      const afterElement = getDragAfterElement(this, e.clientY);
+      const afterElement = getDragAfterElement(e.currentTarget.parentElement, e.clientY);
+      const allRows = Array.from(document.querySelectorAll('.album-row'));
+      const targetIndex = afterElement ? parseInt(afterElement.dataset.index) : allRows.length;
       
-      if (afterElement == null) {
-        currentDropIndex = document.querySelectorAll('.album-row').length;
-      } else {
-        currentDropIndex = parseInt(afterElement.dataset.index);
+      if (targetIndex !== currentDropIndex) {
+        currentDropIndex = targetIndex;
+        animateReflow(draggedIndex, targetIndex);
       }
-      
-      animateReflow(draggedIndex, currentDropIndex);
       
       return false;
     }
@@ -770,39 +768,36 @@ app.get('/', ensureAuth, (req, res) => {
         row.style.transform = '';
       });
       
-      if (fromIndex === toIndex) {
+      if (fromIndex === toIndex || fromIndex === toIndex - 1) {
         return;
       }
       
       // Calculate which items need to move
       allRows.forEach((row, index) => {
+        const rowIndex = parseInt(row.dataset.originalIndex);
+        
         if (row.classList.contains('dragging')) {
           return; // Skip the dragged item
         }
         
-        const currentIndex = parseInt(row.dataset.index);
+        let newIndex = index;
         
         if (fromIndex < toIndex) {
           // Dragging down
-          if (currentIndex > fromIndex && currentIndex < toIndex) {
+          if (index > fromIndex && index < toIndex) {
             row.style.transform = 'translateY(-60px)';
           }
         } else {
           // Dragging up
-          if (currentIndex >= toIndex && currentIndex <= fromIndex) {
+          if (index >= toIndex && index < fromIndex) {
             row.style.transform = 'translateY(60px)';
           }
         }
       });
       
       // Show drop indicator
-      let indicatorIndex = toIndex;
-      if (toIndex > fromIndex) {
-        indicatorIndex = toIndex - 1;
-      }
-      
-      if (indicatorIndex >= 0 && indicatorIndex < allRows.length) {
-        const targetRow = allRows[indicatorIndex];
+      const targetRow = allRows[toIndex > fromIndex ? toIndex - 1 : toIndex];
+      if (targetRow) {
         const indicator = targetRow.querySelector('.drop-indicator');
         if (indicator) {
           indicator.classList.add('active');
@@ -823,27 +818,26 @@ app.get('/', ensureAuth, (req, res) => {
       }
       e.preventDefault();
       
-      if (draggedElement && currentDropIndex !== null && draggedIndex !== currentDropIndex) {
+      if (draggedItem && currentDropIndex !== null && draggedOriginalIndex !== currentDropIndex) {
         const list = lists[currentList];
-        
-        // Calculate the actual target index for array manipulation
-        let targetIndex = currentDropIndex;
-        if (currentDropIndex > draggedIndex) {
-          targetIndex = currentDropIndex - 1;
-        }
+        const targetIndex = currentDropIndex > draggedOriginalIndex ? currentDropIndex - 1 : currentDropIndex;
         
         // Reorder the list
-        const [draggedAlbum] = list.splice(draggedIndex, 1);
+        const [draggedAlbum] = list.splice(draggedOriginalIndex, 1);
         list.splice(targetIndex, 0, draggedAlbum);
         
-        // Update ranks (optional - for data consistency)
+        // Update ranks
         list.forEach((album, index) => {
           album.rank = index + 1;
         });
         
-        // Save and redisplay
+        // Save with animation delay
         await saveList(currentList, list);
-        displayAlbums(list);
+        
+        // Redisplay with a small delay for smooth transition
+        setTimeout(() => {
+          displayAlbums(list);
+        }, 50);
       }
       
       return false;
