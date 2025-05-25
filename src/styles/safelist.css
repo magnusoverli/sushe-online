@@ -1,0 +1,81 @@
+/* Safelist - ensures these classes are always included */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Force include the classes we need */
+.bg-black { }
+.bg-gray-900 { }
+.bg-gray-800 { }
+.bg-gray-700 { }
+.bg-red-600 { }
+.bg-red-900 { }
+.bg-red-800 { }
+.bg-gray-900\/90 { }
+.bg-gray-800\/50 { }
+
+.text-gray-200 { }
+.text-gray-300 { }
+.text-gray-400 { }
+.text-gray-500 { }
+.text-white { }
+.text-red-500 { }
+.text-red-600 { }
+.text-red-400 { }
+.text-blue-400 { }
+
+.border-gray-800 { }
+.border-gray-700 { }
+.border-red-600 { }
+
+.hover\:bg-red-700 { }
+.hover\:bg-gray-700 { }
+.hover\:text-red-400 { }
+.hover\:text-red-500 { }
+
+.rounded-lg { }
+.rounded { }
+.shadow-2xl { }
+.backdrop-blur-sm { }
+.animate-pulse { }
+.blur-3xl { }
+
+.p-8 { }
+.px-4 { }
+.py-3 { }
+.px-8 { }
+.pt-6 { }
+.pb-8 { }
+.mb-2 { }
+.mb-4 { }
+.mb-6 { }
+.mb-8 { }
+.mt-4 { }
+.mt-6 { }
+.mt-8 { }
+.ml-2 { }
+
+.space-y-2 { }
+.space-y-4 { }
+.space-y-6 { }
+
+.text-xs { }
+.text-sm { }
+.text-3xl { }
+.text-4xl { }
+
+.font-bold { }
+.font-semibold { }
+.font-medium { }
+
+.tracking-wider { }
+.max-w-md { }
+.w-96 { }
+.h-96 { }
+.inset-0 { }
+.top-0 { }
+.bottom-0 { }
+
+.placeholder-gray-500 { }
+.focus\:border-red-600 { }
+.focus\:ring-red-600 { }
