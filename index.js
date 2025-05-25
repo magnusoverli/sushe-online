@@ -89,6 +89,33 @@ const htmlTemplate = (content, title = 'KVLT Auth') => `
     .spotify-input:focus {
       box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.4);
     }
+    
+    /* Drag and drop styles */
+    .dragging {
+      opacity: 0.5;
+    }
+    
+    .drag-over {
+      background-color: rgba(220, 38, 38, 0.1);
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
   </style>
 </head>
 <body class="bg-black text-gray-200 min-h-screen flex items-center justify-center relative overflow-hidden">
@@ -251,38 +278,667 @@ app.post('/login',
   (req, res) => res.redirect('/')
 );
 
-// Home (protected)
+// Home (protected) - Spotify-like interface
 app.get('/', ensureAuth, (req, res) => {
-  const content = `
-    <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
-      <div class="text-center mb-8">
-        <h1 class="metal-title text-3xl font-bold text-red-600 glow-red mb-4">WELCOME TO THE INNER CIRCLE</h1>
-        <p class="text-gray-400">You have crossed the threshold, <span class="text-red-500 font-semibold">${req.user.email}</span></p>
+  const spotifyTemplate = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KVLT Collections</title>
+  <link href="/styles/output.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
+    
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    
+    .metal-title {
+      font-family: 'Cinzel', serif;
+      text-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
+    }
+    
+    .glow-red {
+      animation: glow 2s ease-in-out infinite alternate;
+    }
+    
+    @keyframes glow {
+      from { text-shadow: 0 0 10px #dc2626, 0 0 20px #dc2626, 0 0 30px #dc2626; }
+      to { text-shadow: 0 0 20px #dc2626, 0 0 30px #dc2626, 0 0 40px #dc2626; }
+    }
+    
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+    
+    /* Drag and drop styles with smooth animations */
+    .album-row {
+      transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1), 
+                  opacity 0.3s ease,
+                  background-color 0.2s ease;
+      transform-origin: center;
+      will-change: transform;
+      position: relative;
+    }
+    
+    .album-row:hover {
+      background-color: rgba(31, 41, 55, 0.5);
+    }
+    
+    .album-row.dragging {
+      opacity: 0.5;
+      transform: scale(1.02);
+      z-index: 1000;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+    
+    .album-row.drag-placeholder {
+      visibility: hidden;
+      opacity: 0;
+    }
+    
+    .album-row.moving-up {
+      transform: translateY(-100%);
+    }
+    
+    .album-row.moving-down {
+      transform: translateY(100%);
+    }
+    
+    .drop-indicator {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #dc2626, transparent);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 999;
+      pointer-events: none;
+    }
+    
+    .drop-indicator.active {
+      opacity: 1;
+      animation: pulse-line 1s ease-in-out infinite;
+    }
+    
+    @keyframes pulse-line {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+    
+    .drop-zone {
+      border: 2px dashed transparent;
+      transition: all 0.3s ease;
+    }
+    
+    .drop-zone.active {
+      border-color: #dc2626;
+      background-color: rgba(220, 38, 38, 0.05);
+    }
+  </style>
+</head>
+<body class="bg-black text-gray-200">
+  <div class="flex h-screen">
+    <!-- Sidebar -->
+    <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
+      <div class="p-6 border-b border-gray-800">
+        <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">KVLT</h1>
+        <p class="text-gray-400 text-sm mt-1">Collections</p>
       </div>
       
-      <div class="bg-gray-800/50 rounded-lg p-6 mb-6">
-        <h2 class="text-gray-300 font-semibold mb-3 uppercase tracking-wider text-sm">Your Kvlt Status</h2>
-        <div class="space-y-2">
-          <div class="flex justify-between text-sm">
-            <span class="text-gray-400">Initiation Date</span>
-            <span class="text-gray-300">${new Date().toLocaleDateString()}</span>
-          </div>
-          <div class="flex justify-between text-sm">
-            <span class="text-gray-400">Darkness Level</span>
-            <span class="text-red-500">∞</span>
+      <nav class="flex-1 overflow-y-auto p-4">
+        <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Lists</h3>
+        <ul id="listNav" class="space-y-1">
+          <!-- Lists will be populated here -->
+        </ul>
+        
+        <div class="mt-6 pt-6 border-t border-gray-800">
+          <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
+            + Import List
+          </button>
+          <input type="file" id="fileInput" accept=".json" style="display: none;">
+          <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+            Clear All Lists
+          </button>
+          <div id="storageInfo" class="text-xs text-gray-500 mt-2 text-center"></div>
+        </div>
+      </nav>
+      
+      <div class="p-4 border-t border-gray-800">
+        <div class="flex items-center justify-between text-sm">
+          <span class="text-gray-400">${req.user.email}</span>
+          <a href="/logout" class="text-red-500 hover:text-red-400 transition duration-200">Logout</a>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col overflow-hidden">
+      <!-- Header -->
+      <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-6">
+        <h2 id="listTitle" class="text-3xl font-bold">Select a list to begin</h2>
+        <p id="listInfo" class="text-gray-400 mt-1"></p>
+      </div>
+      
+      <!-- Album List -->
+      <div class="flex-1 overflow-y-auto">
+        <div id="dropZone" class="drop-zone min-h-full p-6">
+          <div id="albumContainer">
+            <!-- Albums will be displayed here -->
+            <div class="text-center text-gray-500 mt-20">
+              <p class="text-xl mb-2">No list selected</p>
+              <p class="text-sm">Import a JSON file to get started</p>
+            </div>
           </div>
         </div>
       </div>
-      
-      <a 
-        href="/logout" 
-        class="block w-full text-center bg-gray-800 hover:bg-gray-700 text-gray-300 font-bold py-3 px-4 rounded transition duration-200 uppercase tracking-wider border border-gray-700"
-      >
-        Return to the Light
-      </a>
     </div>
+  </div>
+  
+  <script>
+    let currentList = null;
+    let lists = {};
+    let draggedItem = null;
+    let db = null;
+    
+    // Initialize IndexedDB
+    async function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open('KvltDB', 1);
+        
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          db = request.result;
+          resolve(db);
+        };
+        
+        request.onupgradeneeded = (event) => {
+          db = event.target.result;
+          if (!db.objectStoreNames.contains('lists')) {
+            db.createObjectStore('lists', { keyPath: 'name' });
+          }
+        };
+      });
+    }
+    
+    // Load lists from IndexedDB
+    async function loadLists() {
+      if (!db) await initDB();
+      
+      const transaction = db.transaction(['lists'], 'readonly');
+      const store = transaction.objectStore('lists');
+      const request = store.getAll();
+      
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => {
+          const allLists = request.result;
+          lists = {};
+          allLists.forEach(list => {
+            lists[list.name] = list.data;
+          });
+          updateListNav();
+          updateStorageInfo();
+          resolve();
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Save list to IndexedDB
+    async function saveList(name, data) {
+      if (!db) await initDB();
+      
+      const transaction = db.transaction(['lists'], 'readwrite');
+      const store = transaction.objectStore('lists');
+      const request = store.put({ name, data });
+      
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => {
+          lists[name] = data;
+          updateStorageInfo();
+          resolve();
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Delete all lists from IndexedDB
+    async function clearAllLists() {
+      if (!db) await initDB();
+      
+      const transaction = db.transaction(['lists'], 'readwrite');
+      const store = transaction.objectStore('lists');
+      const request = store.clear();
+      
+      return new Promise((resolve, reject) => {
+        request.onsuccess = () => {
+          lists = {};
+          updateStorageInfo();
+          resolve();
+        };
+        request.onerror = () => reject(request.error);
+      });
+    }
+    
+    // Update storage info
+    async function updateStorageInfo() {
+      const storageInfo = document.getElementById('storageInfo');
+      if (storageInfo && navigator.storage && navigator.storage.estimate) {
+        try {
+          const estimate = await navigator.storage.estimate();
+          const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
+          const quotaMB = (estimate.quota / 1024 / 1024).toFixed(0);
+          storageInfo.textContent = \`Storage: \${usedMB} MB / \${quotaMB} MB\`;
+        } catch (e) {
+          storageInfo.textContent = '';
+        }
+      }
+    }
+    
+    // Update sidebar navigation
+    function updateListNav() {
+      const nav = document.getElementById('listNav');
+      nav.innerHTML = '';
+      
+      Object.keys(lists).forEach(listName => {
+        const li = document.createElement('li');
+        li.innerHTML = \`
+          <button class="w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-800 transition duration-200 \${currentList === listName ? 'bg-gray-800 text-red-500' : 'text-gray-300'}">
+            \${listName}
+          </button>
+        \`;
+        li.querySelector('button').onclick = () => selectList(listName);
+        nav.appendChild(li);
+      });
+    }
+    
+    // Select and display a list
+    function selectList(listName) {
+      currentList = listName;
+      const list = lists[listName];
+      
+      document.getElementById('listTitle').textContent = listName;
+      document.getElementById('listInfo').textContent = \`\${list.length} albums\`;
+      
+      displayAlbums(list);
+      updateListNav();
+    }
+    
+    // Display albums in the main view
+    function displayAlbums(albums) {
+      const container = document.getElementById('albumContainer');
+      container.innerHTML = '';
+      
+      if (!albums || albums.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 mt-20">No albums in this list</p>';
+        return;
+      }
+      
+      // Create table
+      const table = document.createElement('div');
+      table.className = 'w-full relative';
+      
+      // Table header
+      const header = document.createElement('div');
+      header.className = 'grid grid-cols-12 gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800';
+      header.innerHTML = \`
+        <div class="col-span-1">#</div>
+        <div class="col-span-1"></div>
+        <div class="col-span-4">Album</div>
+        <div class="col-span-2">Artist</div>
+        <div class="col-span-2">Genre</div>
+        <div class="col-span-1">Rating</div>
+        <div class="col-span-1">Points</div>
+      \`;
+      table.appendChild(header);
+      
+      // Album rows container
+      const rowsContainer = document.createElement('div');
+      rowsContainer.className = 'relative';
+      
+      // Album rows
+      albums.forEach((album, index) => {
+        const row = document.createElement('div');
+        row.className = 'album-row grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-800 cursor-move';
+        row.draggable = true;
+        row.dataset.index = index;
+        
+        // Safely get values with defaults
+        const rank = album.rank || index + 1;
+        const albumName = album.album || 'Unknown Album';
+        const artist = album.artist || 'Unknown Artist';
+        const genre = album.genre_1 || album.genre || 'Unknown';
+        const rating = album.rating || '-';
+        const points = album.points || '-';
+        const releaseDate = album.release_date || '';
+        const coverImage = album.cover_image || '';
+        const imageFormat = album.cover_image_format || 'PNG';
+        
+        row.innerHTML = \`
+          <div class="col-span-1 text-gray-400">\${index + 1}</div>
+          <div class="col-span-1">
+            \${coverImage ? \`
+              <img src="data:image/\${imageFormat};base64,\${coverImage}" 
+                   alt="\${albumName}" 
+                   class="w-10 h-10 rounded"
+                   onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMUYyOTM3Ii8+CjxwYXRoIGQ9Ik0yMCAxMEMyMCAxMCAyNSAxNSAyNSAyMEMyNSAyNSAyMCAzMCAyMCAzMEMyMCAzMCAxNSAyNSAxNSAyMEMxNSAxNSAyMCAxMCAyMCAxMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+'"
+              >
+            \` : \`
+              <div class="w-10 h-10 rounded bg-gray-800 flex items-center justify-center">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </div>
+            \`}
+          </div>
+          <div class="col-span-4">
+            <div class="font-medium">\${albumName}</div>
+            <div class="text-xs text-gray-400">\${releaseDate}</div>
+          </div>
+          <div class="col-span-2 text-gray-300">\${artist}</div>
+          <div class="col-span-2 text-sm text-gray-400">\${genre}</div>
+          <div class="col-span-1 text-red-500 font-semibold">\${rating}</div>
+          <div class="col-span-1 text-gray-300">\${points}</div>
+        \`;
+        
+        // Create drop indicator
+        const dropIndicator = document.createElement('div');
+        dropIndicator.className = 'drop-indicator';
+        dropIndicator.style.top = '-1.5px';
+        
+        // Drag events
+        row.addEventListener('dragstart', handleDragStart);
+        row.addEventListener('dragend', handleDragEnd);
+        
+        rowsContainer.appendChild(row);
+        row.appendChild(dropIndicator);
+      });
+      
+      // Add dragover and drop events to the container
+      rowsContainer.addEventListener('dragover', handleDragOver);
+      rowsContainer.addEventListener('drop', handleDrop);
+      
+      table.appendChild(rowsContainer);
+      container.appendChild(table);
+    }
+    
+    // Drag and drop handlers
+    let draggedIndex = null;
+    let currentDropIndex = null;
+    let draggedElement = null;
+    
+    function handleDragStart(e) {
+      draggedElement = this;
+      draggedIndex = parseInt(this.dataset.index);
+      this.classList.add('dragging');
+      
+      // Store the drag image
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setDragImage(this, e.offsetX, e.offsetY);
+      
+      // Create placeholder
+      setTimeout(() => {
+        this.classList.add('drag-placeholder');
+      }, 0);
+    }
+    
+    function handleDragEnd(e) {
+      this.classList.remove('dragging', 'drag-placeholder');
+      
+      // Clean up all animations
+      document.querySelectorAll('.album-row').forEach(row => {
+        row.classList.remove('drag-over', 'moving-up', 'moving-down');
+        row.style.transform = '';
+      });
+      
+      // Hide all drop indicators
+      document.querySelectorAll('.drop-indicator').forEach(indicator => {
+        indicator.classList.remove('active');
+      });
+      
+      draggedIndex = null;
+      currentDropIndex = null;
+      draggedElement = null;
+    }
+    
+    function handleDragOver(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      e.dataTransfer.dropEffect = 'move';
+      
+      const draggingElement = document.querySelector('.dragging');
+      const afterElement = getDragAfterElement(this, e.clientY);
+      
+      if (afterElement == null) {
+        currentDropIndex = document.querySelectorAll('.album-row').length;
+      } else {
+        currentDropIndex = parseInt(afterElement.dataset.index);
+      }
+      
+      animateReflow(draggedIndex, currentDropIndex);
+      
+      return false;
+    }
+    
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.album-row:not(.dragging)')];
+      
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    
+    function animateReflow(fromIndex, toIndex) {
+      const allRows = Array.from(document.querySelectorAll('.album-row'));
+      
+      // Hide all drop indicators first
+      document.querySelectorAll('.drop-indicator').forEach(indicator => {
+        indicator.classList.remove('active');
+      });
+      
+      // Reset all transforms
+      allRows.forEach(row => {
+        row.style.transform = '';
+      });
+      
+      if (fromIndex === toIndex) {
+        return;
+      }
+      
+      // Calculate which items need to move
+      allRows.forEach((row, index) => {
+        if (row.classList.contains('dragging')) {
+          return; // Skip the dragged item
+        }
+        
+        const currentIndex = parseInt(row.dataset.index);
+        
+        if (fromIndex < toIndex) {
+          // Dragging down
+          if (currentIndex > fromIndex && currentIndex < toIndex) {
+            row.style.transform = 'translateY(-60px)';
+          }
+        } else {
+          // Dragging up
+          if (currentIndex >= toIndex && currentIndex <= fromIndex) {
+            row.style.transform = 'translateY(60px)';
+          }
+        }
+      });
+      
+      // Show drop indicator
+      let indicatorIndex = toIndex;
+      if (toIndex > fromIndex) {
+        indicatorIndex = toIndex - 1;
+      }
+      
+      if (indicatorIndex >= 0 && indicatorIndex < allRows.length) {
+        const targetRow = allRows[indicatorIndex];
+        const indicator = targetRow.querySelector('.drop-indicator');
+        if (indicator) {
+          indicator.classList.add('active');
+          if (toIndex > fromIndex) {
+            indicator.style.top = 'auto';
+            indicator.style.bottom = '-1.5px';
+          } else {
+            indicator.style.top = '-1.5px';
+            indicator.style.bottom = 'auto';
+          }
+        }
+      }
+    }
+    
+    async function handleDrop(e) {
+      if (e.stopPropagation) {
+        e.stopPropagation();
+      }
+      e.preventDefault();
+      
+      if (draggedElement && currentDropIndex !== null && draggedIndex !== currentDropIndex) {
+        const list = lists[currentList];
+        
+        // Calculate the actual target index for array manipulation
+        let targetIndex = currentDropIndex;
+        if (currentDropIndex > draggedIndex) {
+          targetIndex = currentDropIndex - 1;
+        }
+        
+        // Reorder the list
+        const [draggedAlbum] = list.splice(draggedIndex, 1);
+        list.splice(targetIndex, 0, draggedAlbum);
+        
+        // Update ranks (optional - for data consistency)
+        list.forEach((album, index) => {
+          album.rank = index + 1;
+        });
+        
+        // Save and redisplay
+        await saveList(currentList, list);
+        displayAlbums(list);
+      }
+      
+      return false;
+    }
+    
+    // File import
+    document.getElementById('importBtn').onclick = () => {
+      document.getElementById('fileInput').click();
+    };
+    
+    document.getElementById('fileInput').onchange = async (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const content = e.target.result;
+            
+            // Debug: Log file size
+            console.log('File size:', content.length, 'characters');
+            
+            // Parse JSON
+            const data = JSON.parse(content);
+            
+            // Validate that it's an array
+            if (!Array.isArray(data)) {
+              throw new Error('JSON must be an array of albums');
+            }
+            
+            // Validate album structure
+            if (data.length > 0) {
+              const requiredFields = ['artist', 'album'];
+              const missingFields = requiredFields.filter(field => !data[0].hasOwnProperty(field));
+              if (missingFields.length > 0) {
+                throw new Error('Missing required fields: ' + missingFields.join(', '));
+              }
+            }
+            
+            const listName = file.name.replace('.json', '');
+            
+            // Save to IndexedDB
+            await saveList(listName, data);
+            
+            updateListNav();
+            selectList(listName);
+            
+            console.log('Successfully imported:', listName, 'with', data.length, 'albums');
+          } catch (err) {
+            console.error('Import error:', err);
+            alert('Error importing file: ' + err.message);
+          }
+        };
+        
+        reader.onerror = (err) => {
+          console.error('File read error:', err);
+          alert('Error reading file');
+        };
+        
+        // Read as UTF-8 text
+        reader.readAsText(file, 'UTF-8');
+      }
+      // Reset file input
+      e.target.value = '';
+    };
+    
+    // Clear all lists
+    document.getElementById('clearBtn').onclick = async () => {
+      if (confirm('Are you sure you want to delete all lists? This cannot be undone.')) {
+        await clearAllLists();
+        currentList = null;
+        updateListNav();
+        document.getElementById('listTitle').textContent = 'Select a list to begin';
+        document.getElementById('listInfo').textContent = '';
+        document.getElementById('albumContainer').innerHTML = \`
+          <div class="text-center text-gray-500 mt-20">
+            <p class="text-xl mb-2">No list selected</p>
+            <p class="text-sm">Import a JSON file to get started</p>
+          </div>
+        \`;
+      }
+    };
+    
+    // Initialize
+    initDB().then(() => {
+      loadLists();
+    }).catch(err => {
+      console.error('Failed to initialize database:', err);
+      alert('Failed to initialize database. Some features may not work.');
+    });
+  </script>
+</body>
+</html>
   `;
-  res.send(htmlTemplate(content, 'Inner Circle - Black Metal Auth'));
+  
+  res.send(spotifyTemplate);
 });
 
 // Logout

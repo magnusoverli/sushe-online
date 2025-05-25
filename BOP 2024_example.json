@@ -1,0 +1,47 @@
+[
+    {
+        "artist": "Blood Incantation",
+        "album": "Absolute Elsewhere",
+        "album_id": "7hriIeLMviZKpNfcXgpsd8",
+        "release_date": "04-10-2024",
+        "cover_image": "iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAEAAElEQVR42oz9WZOkWXIliOlyl2+zxbdYMiMzKytRQAFodKM5PeTDkCKkUIT/+jf4zeEPYBA4AYwAEaFMBLKjORBAmaKDVAC3CPAW4W3gACFAgRhGjWdJlTEXazZl4hjNwIY1j7M9l0AAMIAmYSITQgBCbKSed5PpVTa2D9iAoejggP8IiISimlTN36cGd3CZicIJDCMXwwG0IQapZSJtXsRJ6zlpndbb0dbasP81QVJROQoJZpmdJcUnlkrIfvBh6iyixEGBDoTimXaV5OZ5HsxA7hFuEOHu6OgEqkqhgTInMSC/DWKMl8Oqec/x+F2VmakzE5rAAAAABJRU5ErkJggg==",
+        "cover_image_format": "PNG",
+        "country": "United States",
+        "genre_1": "Death Metal",
+        "genre_2": "Progressive Metal",
+        "rating": "4.70",
+        "comments": "",
+        "rank": 1,
+        "points": 60
+    },
+    {
+        "artist": "Ulcerate",
+        "album": "Cutting the Throat of God",
+        "album_id": "2QNcQNDeIvL0EWOSP87iSm",
+        "release_date": "14-06-2024",
+        "cover_image": "iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAABvSElEQVR42u392ZIjSbIkCjKLqAG+RORSdU6dvmdoHmaI7v+/z/cM3bndfWrJjAh3wExFeB5UbQPgHkt6LtVdTllZkQg4FjNVUREWFmb+f/7y75h/RKx/Sz1nAMxJI2mdzjherwlvwx7ZTtLHD+CNWhX+0TsD/GnyseS7+XxjAH39hLfPQwKVVsfTH6cbPdg2CoB0T6it38FcRtv6Ie+uNVGL+FbFu4QWbq/ivJvHv+/P/B5OkSN2t+kE1AAAAAElFTkSuQmCC",
+        "cover_image_format": "PNG",
+        "country": "New Zealand",
+        "genre_1": "Dissonant Death Metal",
+        "genre_2": "Technical Death Metal",
+        "rating": "4.60",
+        "comments": "",
+        "rank": 2,
+        "points": 54
+    },
+    {
+        "artist": "Hamfer\u00f0",
+        "album": "Men Gu\u00f0s hond er sterk",
+        "album_id": "3TTyQYHEL3z7fXJyU5QkDA",
+        "release_date": "22-03-2024",
+        "cover_image": "iVBORw0KGgoAAAANSUhEUgAAAMgAAADICAIAAAAiOjnJAAEAAElEQVR42jT9We8t2bYnBo1mdtGstf7dbrI7Td2u6l6bxobCZRtjJArbgG2QeMAqEJZBgLCQ+Ah8H8Qn4AXxhEG4jKtu3XtPk+fkycyde//71UTE7MYYPOzjkOItHkKhGWPO8esG/l//L/+HS26H6/08heW8ztfXKaZa6/33P4bkwbm6ZiV0cdBupj0Een03073xERXK9eK5g7EeYJesO2RwBBGMKfJF1tkNKbDx84SUpZax3qqSRHRLUyFwEY+6aIt8sNiVIWzmmep+idAxzC3NtQYtyuV2cBRKdYzieGMDUfg3OGlHJOFA1QkKm2SpLKMrFIInI1JoQl91rr0+3/A9bCbJTFBiBaAAAAAElFTkSuQmCC",
+        "cover_image_format": "PNG",
+        "country": "Faroe Islands",
+        "genre_1": "Doom Metal",
+        "genre_2": "Death Doom Metal",
+        "rating": "4.55",
+        "comments": "",
+        "rank": 3,
+        "points": 50
+    }
+]
