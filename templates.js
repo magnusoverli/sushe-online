@@ -332,7 +332,7 @@ const spotifyTemplate = (req) => `
       background: #4b5563;
     }
     
-    /* Improved drag and drop styles */
+    /* Enhanced album row styles */
     #albumContainer {
       min-height: 100vh;
       position: relative;
@@ -345,12 +345,12 @@ const spotifyTemplate = (req) => `
     .album-row {
       transition: all 0.2s ease;
       position: relative;
-      background-color: black;
+      background-color: transparent;
       user-select: none;
     }
     
     .album-row:hover:not(.dragging) {
-      background-color: rgba(31, 41, 55, 0.5);
+      background-color: rgba(31, 41, 55, 0.3);
       transform: translateX(2px);
     }
     
@@ -363,7 +363,12 @@ const spotifyTemplate = (req) => `
       background-color: rgba(220, 38, 38, 0.1);
       border: 2px dashed #dc2626;
       opacity: 0.8;
-      min-height: 60px;
+      min-height: 64px;
+    }
+    
+    /* Grid layout with specific column sizes */
+    .grid-cols-\\[50px_60px_1fr_1fr_1\\.5fr_80px\\] {
+      grid-template-columns: 50px 60px 1fr 1fr 1.5fr 80px;
     }
     
     /* Ensure the table takes full height */
@@ -371,6 +376,46 @@ const spotifyTemplate = (req) => `
       min-height: calc(100vh - 200px);
     }
     
+    /* Make sure text doesn't overflow */
+    .truncate {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    
+    /* Flex utilities */
+    .flex-col {
+      flex-direction: column;
+    }
+    
+    .space-y-1 > * + * {
+      margin-top: 0.25rem;
+    }
+    
+    .min-w-0 {
+      min-width: 0;
+    }
+    
+    .col-span-full {
+      grid-column: 1 / -1;
+    }
+
+    /* Genre dropdown styles */
+    .genre-cell select {
+    font-family: inherit;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+    }
+
+    /* Prevent drag when editing */
+    .album-row:has(select) {
+    cursor: default;
+    }
+
     /* Loading states */
     .loading {
       opacity: 0.5;
@@ -404,6 +449,30 @@ const spotifyTemplate = (req) => `
     
     .toast.success {
       background-color: #059669;
+    }
+
+    /* Line clamp for comments */
+    .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+
+    /* Comment editing styles */
+    .comment-cell {
+    position: relative;
+    }
+
+    .comment-cell textarea {
+    font-family: inherit;
+    }
+
+    /* Prevent drag when editing */
+    .album-row:has(textarea) {
+    cursor: default;
+    }
+    
     }
   </style>
 </head>
