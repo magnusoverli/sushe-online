@@ -4,7 +4,7 @@ const session = require('express-session');
 const flash = require('connect-flash');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-const Datastore = require('@seald-io/nedb');  // Changed this line
+const Datastore = require('@seald-io/nedb');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -29,12 +29,17 @@ passport.serializeUser((user, done) => done(null, user._id));
 passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 
 const app = express();
-app.use(express.static('public')); // Serve static files from public directory
+app.use(express.static('public'));
 app.use(express.urlencoded({ extended: false }));
 app.use(session({
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'your-secret-key-here',
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  }
 }));
 app.use(flash());
 app.use(passport.initialize());
@@ -88,15 +93,6 @@ const htmlTemplate = (content, title = 'KVLT Auth') => `
     
     .spotify-input:focus {
       box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.4);
-    }
-    
-    /* Drag and drop styles */
-    .dragging {
-      opacity: 0.5;
-    }
-    
-    .drag-over {
-      background-color: rgba(220, 38, 38, 0.1);
     }
     
     /* Custom scrollbar */
@@ -155,6 +151,7 @@ app.get('/register', (req, res) => {
             type="email" 
             placeholder="your@email.com" 
             required 
+            autocomplete="email"
           />
         </div>
         <div>
@@ -168,6 +165,8 @@ app.get('/register', (req, res) => {
             type="password" 
             placeholder="••••••••" 
             required 
+            autocomplete="new-password"
+            minlength="8"
           />
         </div>
         <button 
@@ -191,20 +190,55 @@ app.get('/register', (req, res) => {
   res.send(htmlTemplate(content, 'Join the KVLT - Black Metal Auth'));
 });
 
-app.post('/register', (req, res) => {
-  const { email, password } = req.body;
-  users.findOne({ email }, (err, existing) => {
-    if (existing) {
-      req.flash('error', 'Email already registered');
+app.post('/register', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Validate input
+    if (!email || !password) {
+      req.flash('error', 'Email and password are required');
       return res.redirect('/register');
     }
-    bcrypt.hash(password, 12, (err, hash) => {
-      users.insert({ email, hash }, (err) => {
-        if (err) req.flash('error', 'Registration error');
-        return res.redirect('/login');
-      });
+    
+    if (password.length < 8) {
+      req.flash('error', 'Password must be at least 8 characters');
+      return res.redirect('/register');
+    }
+    
+    users.findOne({ email }, async (err, existing) => {
+      if (err) {
+        console.error('Database error:', err);
+        req.flash('error', 'Registration error');
+        return res.redirect('/register');
+      }
+      
+      if (existing) {
+        req.flash('error', 'Email already registered');
+        return res.redirect('/register');
+      }
+      
+      try {
+        const hash = await bcrypt.hash(password, 12);
+        users.insert({ email, hash }, (err) => {
+          if (err) {
+            console.error('Insert error:', err);
+            req.flash('error', 'Registration error');
+            return res.redirect('/register');
+          }
+          req.flash('success', 'Registration successful! Please login.');
+          res.redirect('/login');
+        });
+      } catch (hashErr) {
+        console.error('Hashing error:', hashErr);
+        req.flash('error', 'Registration error');
+        res.redirect('/register');
+      }
     });
-  });
+  } catch (error) {
+    console.error('Registration error:', error);
+    req.flash('error', 'Registration error');
+    res.redirect('/register');
+  }
 });
 
 // Login form
@@ -228,6 +262,7 @@ app.get('/login', (req, res) => {
             type="email" 
             placeholder="your@email.com" 
             required 
+            autocomplete="email"
           />
         </div>
         <div>
@@ -241,6 +276,7 @@ app.get('/login', (req, res) => {
             type="password" 
             placeholder="••••••••" 
             required 
+            autocomplete="current-password"
           />
         </div>
         
@@ -261,6 +297,7 @@ app.get('/login', (req, res) => {
       </form>
       
       ${req.flash('error').length ? `<p class="text-red-500 text-sm mt-4 text-center">${req.flash('error')}</p>` : ''}
+      ${req.flash('success').length ? `<p class="text-green-500 text-sm mt-4 text-center">${req.flash('success')}</p>` : ''}
       
       <div class="mt-8 pt-6 border-t border-gray-800">
         <p class="text-center text-gray-500 text-sm">
@@ -329,70 +366,78 @@ app.get('/', ensureAuth, (req, res) => {
       background: #4b5563;
     }
     
-    /* Drag and drop styles with smooth animations */
-    .album-row {
-      transition: transform 0.3s cubic-bezier(0.2, 0, 0.2, 1), 
-                  opacity 0.3s ease,
-                  background-color 0.2s ease;
-      transform-origin: center;
-      will-change: transform;
+    /* Improved drag and drop styles */
+    #albumContainer {
+      min-height: 100vh;
       position: relative;
     }
     
-    .album-row:hover {
+    #albumContainer.drag-active {
+      background-color: rgba(220, 38, 38, 0.03);
+    }
+    
+    .album-row {
+      transition: all 0.2s ease;
+      position: relative;
+      background-color: black;
+      user-select: none;
+    }
+    
+    .album-row:hover:not(.dragging) {
       background-color: rgba(31, 41, 55, 0.5);
+      transform: translateX(2px);
     }
     
     .album-row.dragging {
-      opacity: 0.5;
-      transform: scale(1.02);
-      z-index: 1000;
-      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      opacity: 0.2;
+      cursor: grabbing;
     }
     
     .album-row.drag-placeholder {
-      visibility: hidden;
-      opacity: 0;
+      background-color: rgba(220, 38, 38, 0.1);
+      border: 2px dashed #dc2626;
+      opacity: 0.8;
+      min-height: 60px;
     }
     
-    .album-row.moving-up {
-      transform: translateY(-100%);
+    /* Ensure the table takes full height */
+    .album-rows-container {
+      min-height: calc(100vh - 200px);
     }
     
-    .album-row.moving-down {
-      transform: translateY(100%);
-    }
-    
-    .drop-indicator {
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: linear-gradient(90deg, transparent, #dc2626, transparent);
-      opacity: 0;
-      transition: opacity 0.2s ease;
-      z-index: 999;
+    /* Loading states */
+    .loading {
+      opacity: 0.5;
       pointer-events: none;
     }
     
-    .drop-indicator.active {
-      opacity: 1;
-      animation: pulse-line 1s ease-in-out infinite;
-    }
-    
-    @keyframes pulse-line {
-      0%, 100% { opacity: 0.5; }
-      50% { opacity: 1; }
-    }
-    
-    .drop-zone {
-      border: 2px dashed transparent;
+    /* Toast notifications */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background-color: #1f2937;
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      transform: translateY(100%);
+      opacity: 0;
       transition: all 0.3s ease;
+      z-index: 50;
     }
     
-    .drop-zone.active {
-      border-color: #dc2626;
-      background-color: rgba(220, 38, 38, 0.05);
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    
+    .toast.error {
+      background-color: #dc2626;
+    }
+    
+    .toast.success {
+      background-color: #059669;
     }
   </style>
 </head>
@@ -454,12 +499,31 @@ app.get('/', ensureAuth, (req, res) => {
     </div>
   </div>
   
+  <!-- Toast container -->
+  <div id="toast" class="toast"></div>
+  
   <script>
+    // Global variables
     let currentList = null;
     let lists = {};
-    let draggedItem = null;
     let db = null;
-    let draggedOriginalIndex = null;
+    
+    // Drag and drop variables
+    let draggedElement = null;
+    let draggedIndex = null;
+    let placeholder = null;
+    let lastValidDropIndex = null;
+    
+    // Toast notification
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast ' + type;
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
     
     // Initialize IndexedDB
     async function initDB() {
@@ -584,6 +648,150 @@ app.get('/', ensureAuth, (req, res) => {
       updateListNav();
     }
     
+    // Initialize drag and drop for container
+    function initializeDragAndDrop() {
+      const container = document.getElementById('albumContainer');
+      
+      // Make the entire container a drop zone
+      container.addEventListener('dragover', handleContainerDragOver);
+      container.addEventListener('drop', handleContainerDrop);
+      container.addEventListener('dragleave', handleContainerDragLeave);
+    }
+    
+    // Drag handlers
+    function handleDragStart(e) {
+      draggedElement = this;
+      draggedIndex = parseInt(this.dataset.index);
+      
+      // Create placeholder
+      placeholder = document.createElement('div');
+      placeholder.className = 'album-row drag-placeholder grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-800';
+      placeholder.style.height = this.offsetHeight + 'px';
+      placeholder.innerHTML = '<div class="col-span-12 text-center text-gray-500">Drop here</div>';
+      
+      this.classList.add('dragging');
+      
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', this.innerHTML);
+      
+      // Hide original after drag image is captured
+      requestAnimationFrame(() => {
+        this.style.display = 'none';
+        this.parentNode.insertBefore(placeholder, this.nextSibling);
+      });
+    }
+    
+    function handleContainerDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      
+      const rowsContainer = this.querySelector('.album-rows-container') || this;
+      const afterElement = getDragAfterElement(rowsContainer, e.clientY);
+      
+      if (!placeholder || !placeholder.parentNode) return;
+      
+      if (afterElement == null) {
+        // Drop at the end
+        rowsContainer.appendChild(placeholder);
+        lastValidDropIndex = rowsContainer.children.length - 1;
+      } else {
+        // Insert before the found element
+        rowsContainer.insertBefore(placeholder, afterElement);
+        const allElements = Array.from(rowsContainer.children);
+        lastValidDropIndex = allElements.indexOf(placeholder);
+      }
+      
+      // Add visual feedback to the container
+      this.classList.add('drag-active');
+    }
+    
+    function handleContainerDragLeave(e) {
+      // Only remove the class if we're actually leaving the container
+      const rect = this.getBoundingClientRect();
+      if (e.clientX < rect.left || e.clientX > rect.right || 
+          e.clientY < rect.top || e.clientY > rect.bottom) {
+        this.classList.remove('drag-active');
+      }
+    }
+    
+    function getDragAfterElement(container, y) {
+      const draggableElements = [...container.querySelectorAll('.album-row:not(.dragging):not(.drag-placeholder)')];
+      
+      return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+          return { offset: offset, element: child };
+        } else {
+          return closest;
+        }
+      }, { offset: Number.NEGATIVE_INFINITY }).element;
+    }
+    
+    function handleDragEnd(e) {
+      // Clean up
+      if (draggedElement) {
+        draggedElement.style.display = '';
+        draggedElement.classList.remove('dragging');
+      }
+      
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.removeChild(placeholder);
+      }
+      
+      // Remove container feedback
+      document.getElementById('albumContainer').classList.remove('drag-active');
+      
+      // Reset variables
+      draggedElement = null;
+      draggedIndex = null;
+      placeholder = null;
+      lastValidDropIndex = null;
+    }
+    
+    async function handleContainerDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      this.classList.remove('drag-active');
+      
+      if (!draggedElement || lastValidDropIndex === null) return;
+      
+      // Calculate the actual drop index
+      const rowsContainer = this.querySelector('.album-rows-container') || this;
+      const allRows = Array.from(rowsContainer.querySelectorAll('.album-row:not(.drag-placeholder)'));
+      
+      let dropIndex = lastValidDropIndex;
+      // Adjust for the removed dragged element
+      if (draggedIndex < dropIndex) {
+        dropIndex--;
+      }
+      
+      if (dropIndex !== draggedIndex) {
+        try {
+          const list = lists[currentList];
+          
+          // Reorder the array
+          const [movedItem] = list.splice(draggedIndex, 1);
+          list.splice(dropIndex, 0, movedItem);
+          
+          // Update ranks
+          list.forEach((album, index) => {
+            album.rank = index + 1;
+          });
+          
+          // Save and refresh
+          await saveList(currentList, list);
+          displayAlbums(list);
+          showToast('Reordered successfully');
+        } catch (error) {
+          console.error('Error saving reorder:', error);
+          showToast('Error saving changes', 'error');
+        }
+      }
+    }
+    
     // Display albums in the main view
     function displayAlbums(albums) {
       const container = document.getElementById('albumContainer');
@@ -600,7 +808,7 @@ app.get('/', ensureAuth, (req, res) => {
       
       // Table header
       const header = document.createElement('div');
-      header.className = 'grid grid-cols-12 gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800';
+      header.className = 'grid grid-cols-12 gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
       header.innerHTML = \`
         <div class="col-span-1">#</div>
         <div class="col-span-1"></div>
@@ -614,7 +822,7 @@ app.get('/', ensureAuth, (req, res) => {
       
       // Album rows container
       const rowsContainer = document.createElement('div');
-      rowsContainer.className = 'relative';
+      rowsContainer.className = 'album-rows-container relative';
       
       // Album rows
       albums.forEach((album, index) => {
@@ -622,7 +830,6 @@ app.get('/', ensureAuth, (req, res) => {
         row.className = 'album-row grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-800 cursor-move';
         row.draggable = true;
         row.dataset.index = index;
-        row.dataset.originalIndex = index;
         
         // Safely get values with defaults
         const rank = album.rank || index + 1;
@@ -642,7 +849,8 @@ app.get('/', ensureAuth, (req, res) => {
               <img src="data:image/\${imageFormat};base64,\${coverImage}" 
                    alt="\${albumName}" 
                    class="w-10 h-10 rounded"
-                   onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMUYyOTM3Ii8+CjxwYXRoIGQ9Ik0yMCAxMEMyMCAxMCAyNSAxNSAyNSAyMEMyNSAyNSAyMCAzMCAyMCAzMEMyMCAzMCAxNSAyNSAxNSAyMEMxNSAxNSAyMCAxMCAyMCAxMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+'"
+                   loading="lazy"
+                   onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjMUYyOTM3Ii8+CjxwYXRoIGQ9Ik0yMCAxMEMyMCAxMCAyNSAxNSAyNSAyMEMyNSAyNSAyMCAzMCAyMCAzMEMyMCAzMCAxNSAyNSAxNSAyMEMxNSAxNSAyMCAxMCAyMCAxMFoiIGZpbGw9IiM5Q0EzQUYiLz4KPC9zdmc+'"
               >
             \` : \`
               <div class="w-10 h-10 rounded bg-gray-800 flex items-center justify-center">
@@ -664,183 +872,18 @@ app.get('/', ensureAuth, (req, res) => {
           <div class="col-span-1 text-gray-300">\${points}</div>
         \`;
         
-        // Create drop indicator
-        const dropIndicator = document.createElement('div');
-        dropIndicator.className = 'drop-indicator';
-        dropIndicator.style.top = '-1.5px';
-        
-        // Drag events
+        // Attach drag events
         row.addEventListener('dragstart', handleDragStart);
         row.addEventListener('dragend', handleDragEnd);
-        row.addEventListener('dragover', handleDragOver);
-        row.addEventListener('drop', handleDrop);
         
         rowsContainer.appendChild(row);
-        row.appendChild(dropIndicator);
       });
       
       table.appendChild(rowsContainer);
       container.appendChild(table);
-    }
-    
-    // Drag and drop handlers
-    let draggedIndex = null;
-    let currentDropIndex = null;
-    let placeholder = null;
-    
-    function handleDragStart(e) {
-      draggedItem = this;
-      draggedIndex = parseInt(this.dataset.index);
-      draggedOriginalIndex = draggedIndex;
-      this.classList.add('dragging');
       
-      // Store the drag image
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setDragImage(this, e.offsetX, e.offsetY);
-      
-      // Create placeholder
-      setTimeout(() => {
-        this.classList.add('drag-placeholder');
-      }, 0);
-    }
-    
-    function handleDragEnd(e) {
-      this.classList.remove('dragging', 'drag-placeholder');
-      
-      // Clean up all animations
-      document.querySelectorAll('.album-row').forEach(row => {
-        row.classList.remove('drag-over', 'moving-up', 'moving-down');
-        row.style.transform = '';
-      });
-      
-      // Hide all drop indicators
-      document.querySelectorAll('.drop-indicator').forEach(indicator => {
-        indicator.classList.remove('active');
-      });
-      
-      draggedIndex = null;
-      currentDropIndex = null;
-    }
-    
-    function handleDragOver(e) {
-      if (e.preventDefault) {
-        e.preventDefault();
-      }
-      e.dataTransfer.dropEffect = 'move';
-      
-      const afterElement = getDragAfterElement(e.currentTarget.parentElement, e.clientY);
-      const allRows = Array.from(document.querySelectorAll('.album-row'));
-      const targetIndex = afterElement ? parseInt(afterElement.dataset.index) : allRows.length;
-      
-      if (targetIndex !== currentDropIndex) {
-        currentDropIndex = targetIndex;
-        animateReflow(draggedIndex, targetIndex);
-      }
-      
-      return false;
-    }
-    
-    function getDragAfterElement(container, y) {
-      const draggableElements = [...container.querySelectorAll('.album-row:not(.dragging)')];
-      
-      return draggableElements.reduce((closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
-      }, { offset: Number.NEGATIVE_INFINITY }).element;
-    }
-    
-    function animateReflow(fromIndex, toIndex) {
-      const allRows = Array.from(document.querySelectorAll('.album-row'));
-      
-      // Hide all drop indicators first
-      document.querySelectorAll('.drop-indicator').forEach(indicator => {
-        indicator.classList.remove('active');
-      });
-      
-      // Reset all transforms
-      allRows.forEach(row => {
-        row.style.transform = '';
-      });
-      
-      if (fromIndex === toIndex || fromIndex === toIndex - 1) {
-        return;
-      }
-      
-      // Calculate which items need to move
-      allRows.forEach((row, index) => {
-        const rowIndex = parseInt(row.dataset.originalIndex);
-        
-        if (row.classList.contains('dragging')) {
-          return; // Skip the dragged item
-        }
-        
-        let newIndex = index;
-        
-        if (fromIndex < toIndex) {
-          // Dragging down
-          if (index > fromIndex && index < toIndex) {
-            row.style.transform = 'translateY(-60px)';
-          }
-        } else {
-          // Dragging up
-          if (index >= toIndex && index < fromIndex) {
-            row.style.transform = 'translateY(60px)';
-          }
-        }
-      });
-      
-      // Show drop indicator
-      const targetRow = allRows[toIndex > fromIndex ? toIndex - 1 : toIndex];
-      if (targetRow) {
-        const indicator = targetRow.querySelector('.drop-indicator');
-        if (indicator) {
-          indicator.classList.add('active');
-          if (toIndex > fromIndex) {
-            indicator.style.top = 'auto';
-            indicator.style.bottom = '-1.5px';
-          } else {
-            indicator.style.top = '-1.5px';
-            indicator.style.bottom = 'auto';
-          }
-        }
-      }
-    }
-    
-    async function handleDrop(e) {
-      if (e.stopPropagation) {
-        e.stopPropagation();
-      }
-      e.preventDefault();
-      
-      if (draggedItem && currentDropIndex !== null && draggedOriginalIndex !== currentDropIndex) {
-        const list = lists[currentList];
-        const targetIndex = currentDropIndex > draggedOriginalIndex ? currentDropIndex - 1 : currentDropIndex;
-        
-        // Reorder the list
-        const [draggedAlbum] = list.splice(draggedOriginalIndex, 1);
-        list.splice(targetIndex, 0, draggedAlbum);
-        
-        // Update ranks
-        list.forEach((album, index) => {
-          album.rank = index + 1;
-        });
-        
-        // Save with animation delay
-        await saveList(currentList, list);
-        
-        // Redisplay with a small delay for smooth transition
-        setTimeout(() => {
-          displayAlbums(list);
-        }, 50);
-      }
-      
-      return false;
+      // Initialize container-level drag and drop
+      initializeDragAndDrop();
     }
     
     // File import
@@ -855,11 +898,6 @@ app.get('/', ensureAuth, (req, res) => {
         reader.onload = async (e) => {
           try {
             const content = e.target.result;
-            
-            // Debug: Log file size
-            console.log('File size:', content.length, 'characters');
-            
-            // Parse JSON
             const data = JSON.parse(content);
             
             // Validate that it's an array
@@ -884,19 +922,18 @@ app.get('/', ensureAuth, (req, res) => {
             updateListNav();
             selectList(listName);
             
-            console.log('Successfully imported:', listName, 'with', data.length, 'albums');
+            showToast(\`Successfully imported \${data.length} albums\`);
           } catch (err) {
             console.error('Import error:', err);
-            alert('Error importing file: ' + err.message);
+            showToast('Error importing file: ' + err.message, 'error');
           }
         };
         
         reader.onerror = (err) => {
           console.error('File read error:', err);
-          alert('Error reading file');
+          showToast('Error reading file', 'error');
         };
         
-        // Read as UTF-8 text
         reader.readAsText(file, 'UTF-8');
       }
       // Reset file input
@@ -906,26 +943,32 @@ app.get('/', ensureAuth, (req, res) => {
     // Clear all lists
     document.getElementById('clearBtn').onclick = async () => {
       if (confirm('Are you sure you want to delete all lists? This cannot be undone.')) {
-        await clearAllLists();
-        currentList = null;
-        updateListNav();
-        document.getElementById('listTitle').textContent = 'Select a list to begin';
-        document.getElementById('listInfo').textContent = '';
-        document.getElementById('albumContainer').innerHTML = \`
-          <div class="text-center text-gray-500 mt-20">
-            <p class="text-xl mb-2">No list selected</p>
-            <p class="text-sm">Import a JSON file to get started</p>
-          </div>
-        \`;
+        try {
+          await clearAllLists();
+          currentList = null;
+          updateListNav();
+          document.getElementById('listTitle').textContent = 'Select a list to begin';
+          document.getElementById('listInfo').textContent = '';
+          document.getElementById('albumContainer').innerHTML = \`
+            <div class="text-center text-gray-500 mt-20">
+              <p class="text-xl mb-2">No list selected</p>
+              <p class="text-sm">Import a JSON file to get started</p>
+            </div>
+          \`;
+          showToast('All lists cleared');
+        } catch (error) {
+          console.error('Error clearing lists:', error);
+          showToast('Error clearing lists', 'error');
+        }
       }
     };
     
-    // Initialize
+    // Initialize on load
     initDB().then(() => {
       loadLists();
     }).catch(err => {
       console.error('Failed to initialize database:', err);
-      alert('Failed to initialize database. Some features may not work.');
+      showToast('Failed to initialize database', 'error');
     });
   </script>
 </body>
@@ -994,21 +1037,23 @@ app.post('/forgot', (req, res) => {
     const token = crypto.randomBytes(20).toString('hex');
     const expires = Date.now() + 3600000; // 1 hour
     users.update({ _id: user._id }, { $set: { resetToken: token, resetExpires: expires } }, {}, () => {
-      // Configure SendGrid via SMTP
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.sendgrid.net',
-        port: 587,
-        auth: {
-          user: 'apikey',
-          pass: process.env.SENDGRID_API_KEY
-        }
-      });
-      const resetUrl = `${process.env.BASE_URL}/reset/${token}`;
-      transporter.sendMail({
-        to: user.email,
-        from: process.env.EMAIL_FROM,
-        subject: 'Password Reset - Return to the Darkness',
-        text: `A password reset has been requested for your account.
+      // Configure email transport
+      if (process.env.SENDGRID_API_KEY) {
+        const transporter = nodemailer.createTransport({
+          host: 'smtp.sendgrid.net',
+          port: 587,
+          auth: {
+            user: 'apikey',
+            pass: process.env.SENDGRID_API_KEY
+          }
+        });
+        
+        const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset/${token}`;
+        transporter.sendMail({
+          to: user.email,
+          from: process.env.EMAIL_FROM || 'noreply@kvltauth.com',
+          subject: 'Password Reset - Return to the Darkness',
+          text: `A password reset has been requested for your account.
         
 Click here to reset your password: ${resetUrl}
 
@@ -1016,7 +1061,8 @@ If you did not request this, ignore this email and your password will remain unc
 
 Stay kvlt,
 The Inner Circle`
-      });
+        });
+      }
       res.redirect('/forgot');
     });
   });
@@ -1053,6 +1099,7 @@ app.get('/reset/:token', (req, res) => {
               type="password" 
               placeholder="••••••••" 
               required 
+              minlength="8"
             />
           </div>
           <button 
@@ -1069,8 +1116,8 @@ app.get('/reset/:token', (req, res) => {
 });
 
 // Handle password reset
-app.post('/reset/:token', (req, res) => {
-  users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, (err, user) => {
+app.post('/reset/:token', async (req, res) => {
+  users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, async (err, user) => {
     if (!user) {
       const content = `
         <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
@@ -1080,14 +1127,28 @@ app.post('/reset/:token', (req, res) => {
       `;
       return res.send(htmlTemplate(content, 'Invalid Token - Black Metal Auth'));
     }
-    bcrypt.hash(req.body.password, 12, (err, hash) => {
+    
+    try {
+      const hash = await bcrypt.hash(req.body.password, 12);
       users.update({ _id: user._id }, { $set: { hash }, $unset: { resetToken: true, resetExpires: true } }, {}, () => {
         res.redirect('/login');
       });
-    });
+    } catch (error) {
+      console.error('Password reset error:', error);
+      res.redirect('/reset/' + req.params.token);
+    }
   });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Application error:', err);
+  res.status(500).send('Something went wrong!');
 });
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`));
+app.listen(PORT, () => {
+  console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
+  console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+});
