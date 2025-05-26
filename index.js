@@ -9,6 +9,8 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
+const { composeForgotPasswordEmail } = require('./forgot_email');
+
 // Import templates
 const { 
   htmlTemplate, 
@@ -165,20 +167,22 @@ app.post('/forgot', (req, res) => {
         });
         
         const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset/${token}`;
-        transporter.sendMail({
-          to: user.email,
-          from: process.env.EMAIL_FROM || 'noreply@kvltauth.com',
-          subject: 'Password Reset - Return to the Darkness',
-          text: `A password reset has been requested for your account.
         
-Click here to reset your password: ${resetUrl}
-
-If you did not request this, ignore this email and your password will remain unchanged.
-
-Stay kvlt,
-The Inner Circle`
+        // Get email configuration from forgot_email.js
+        const emailOptions = composeForgotPasswordEmail(user.email, resetUrl);
+        
+        // Send email with error handling
+        transporter.sendMail(emailOptions, (error, info) => {
+          if (error) {
+            console.error('Failed to send password reset email:', error.message);
+          } else {
+            console.log('Password reset email sent successfully to:', user.email);
+          }
         });
+      } else {
+        console.warn('SENDGRID_API_KEY not configured - password reset email not sent');
       }
+      
       res.redirect('/forgot');
     });
   });
