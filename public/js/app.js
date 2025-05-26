@@ -1,15 +1,14 @@
 // Global variables
 let currentList = null;
 let lists = {};
-let db = null;
 
-// Drag and drop variables
+// Drag and drop variables (same as before)
 let draggedElement = null;
 let draggedIndex = null;
 let placeholder = null;
 let lastValidDropIndex = null;
 
-// Toast notification
+// Toast notification (same as before)
 function showToast(message, type = 'success') {
   const toast = document.getElementById('toast');
   toast.textContent = message;
@@ -20,101 +19,71 @@ function showToast(message, type = 'success') {
   }, 3000);
 }
 
-// Initialize IndexedDB
-async function initDB() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open('KvltDB', 1);
+// API helper functions
+async function apiCall(url, options = {}) {
+  try {
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      credentials: 'same-origin'
+    });
     
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => {
-      db = request.result;
-      resolve(db);
-    };
-    
-    request.onupgradeneeded = (event) => {
-      db = event.target.result;
-      if (!db.objectStoreNames.contains('lists')) {
-        db.createObjectStore('lists', { keyPath: 'name' });
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login';
+        return;
       }
-    };
-  });
-}
-
-// Load lists from IndexedDB
-async function loadLists() {
-  if (!db) await initDB();
-  
-  const transaction = db.transaction(['lists'], 'readonly');
-  const store = transaction.objectStore('lists');
-  const request = store.getAll();
-  
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => {
-      const allLists = request.result;
-      lists = {};
-      allLists.forEach(list => {
-        lists[list.name] = list.data;
-      });
-      updateListNav();
-      updateStorageInfo();
-      resolve();
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
-// Save list to IndexedDB
-async function saveList(name, data) {
-  if (!db) await initDB();
-  
-  const transaction = db.transaction(['lists'], 'readwrite');
-  const store = transaction.objectStore('lists');
-  const request = store.put({ name, data });
-  
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => {
-      lists[name] = data;
-      updateStorageInfo();
-      resolve();
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
-// Delete all lists from IndexedDB
-async function clearAllLists() {
-  if (!db) await initDB();
-  
-  const transaction = db.transaction(['lists'], 'readwrite');
-  const store = transaction.objectStore('lists');
-  const request = store.clear();
-  
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => {
-      lists = {};
-      updateStorageInfo();
-      resolve();
-    };
-    request.onerror = () => reject(request.error);
-  });
-}
-
-// Update storage info
-async function updateStorageInfo() {
-  const storageInfo = document.getElementById('storageInfo');
-  if (storageInfo && navigator.storage && navigator.storage.estimate) {
-    try {
-      const estimate = await navigator.storage.estimate();
-      const usedMB = (estimate.usage / 1024 / 1024).toFixed(2);
-      const quotaMB = (estimate.quota / 1024 / 1024).toFixed(0);
-      storageInfo.textContent = `Storage: ${usedMB} MB / ${quotaMB} MB`;
-    } catch (e) {
-      storageInfo.textContent = '';
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('API call failed:', error);
+    throw error;
   }
 }
 
-// Update sidebar navigation
+// Load lists from server
+async function loadLists() {
+  try {
+    lists = await apiCall('/api/lists');
+    updateListNav();
+  } catch (error) {
+    showToast('Error loading lists', 'error');
+  }
+}
+
+// Save list to server
+async function saveList(name, data) {
+  try {
+    await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: JSON.stringify({ data })
+    });
+    lists[name] = data;
+  } catch (error) {
+    showToast('Error saving list', 'error');
+    throw error;
+  }
+}
+
+// Delete all lists from server
+async function clearAllLists() {
+  try {
+    await apiCall('/api/lists', {
+      method: 'DELETE'
+    });
+    lists = {};
+  } catch (error) {
+    showToast('Error clearing lists', 'error');
+    throw error;
+  }
+}
+
+// Update sidebar navigation (same as before)
 function updateListNav() {
   const nav = document.getElementById('listNav');
   nav.innerHTML = '';
@@ -131,7 +100,7 @@ function updateListNav() {
   });
 }
 
-// Select and display a list
+// Select and display a list (same as before)
 function selectList(listName) {
   currentList = listName;
   const list = lists[listName];
@@ -143,22 +112,20 @@ function selectList(listName) {
   updateListNav();
 }
 
-// Initialize drag and drop for container
+// Initialize drag and drop for container (same as before)
 function initializeDragAndDrop() {
   const container = document.getElementById('albumContainer');
   
-  // Make the entire container a drop zone
   container.addEventListener('dragover', handleContainerDragOver);
   container.addEventListener('drop', handleContainerDrop);
   container.addEventListener('dragleave', handleContainerDragLeave);
 }
 
-// Drag handlers
+// All drag handlers remain the same...
 function handleDragStart(e) {
   draggedElement = this;
   draggedIndex = parseInt(this.dataset.index);
   
-  // Create placeholder
   placeholder = document.createElement('div');
   placeholder.className = 'album-row drag-placeholder grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-800';
   placeholder.style.height = this.offsetHeight + 'px';
@@ -169,7 +136,6 @@ function handleDragStart(e) {
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/html', this.innerHTML);
   
-  // Hide original after drag image is captured
   requestAnimationFrame(() => {
     this.style.display = 'none';
     this.parentNode.insertBefore(placeholder, this.nextSibling);
@@ -186,22 +152,18 @@ function handleContainerDragOver(e) {
   if (!placeholder || !placeholder.parentNode) return;
   
   if (afterElement == null) {
-    // Drop at the end
     rowsContainer.appendChild(placeholder);
     lastValidDropIndex = rowsContainer.children.length - 1;
   } else {
-    // Insert before the found element
     rowsContainer.insertBefore(placeholder, afterElement);
     const allElements = Array.from(rowsContainer.children);
     lastValidDropIndex = allElements.indexOf(placeholder);
   }
   
-  // Add visual feedback to the container
   this.classList.add('drag-active');
 }
 
 function handleContainerDragLeave(e) {
-  // Only remove the class if we're actually leaving the container
   const rect = this.getBoundingClientRect();
   if (e.clientX < rect.left || e.clientX > rect.right || 
       e.clientY < rect.top || e.clientY > rect.bottom) {
@@ -225,7 +187,6 @@ function getDragAfterElement(container, y) {
 }
 
 function handleDragEnd(e) {
-  // Clean up
   if (draggedElement) {
     draggedElement.style.display = '';
     draggedElement.classList.remove('dragging');
@@ -235,10 +196,8 @@ function handleDragEnd(e) {
     placeholder.parentNode.removeChild(placeholder);
   }
   
-  // Remove container feedback
   document.getElementById('albumContainer').classList.remove('drag-active');
   
-  // Reset variables
   draggedElement = null;
   draggedIndex = null;
   placeholder = null;
@@ -253,12 +212,10 @@ async function handleContainerDrop(e) {
   
   if (!draggedElement || lastValidDropIndex === null) return;
   
-  // Calculate the actual drop index
   const rowsContainer = this.querySelector('.album-rows-container') || this;
   const allRows = Array.from(rowsContainer.querySelectorAll('.album-row:not(.drag-placeholder)'));
   
   let dropIndex = lastValidDropIndex;
-  // Adjust for the removed dragged element
   if (draggedIndex < dropIndex) {
     dropIndex--;
   }
@@ -267,16 +224,13 @@ async function handleContainerDrop(e) {
     try {
       const list = lists[currentList];
       
-      // Reorder the array
       const [movedItem] = list.splice(draggedIndex, 1);
       list.splice(dropIndex, 0, movedItem);
       
-      // Update ranks
       list.forEach((album, index) => {
         album.rank = index + 1;
       });
       
-      // Save and refresh
       await saveList(currentList, list);
       displayAlbums(list);
       showToast('Reordered successfully');
@@ -287,7 +241,7 @@ async function handleContainerDrop(e) {
   }
 }
 
-// Display albums in the main view
+// Display albums function remains the same...
 function displayAlbums(albums) {
   const container = document.getElementById('albumContainer');
   container.innerHTML = '';
@@ -297,11 +251,9 @@ function displayAlbums(albums) {
     return;
   }
   
-  // Create table
   const table = document.createElement('div');
   table.className = 'w-full relative';
   
-  // Table header
   const header = document.createElement('div');
   header.className = 'grid grid-cols-12 gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
   header.innerHTML = `
@@ -315,18 +267,15 @@ function displayAlbums(albums) {
   `;
   table.appendChild(header);
   
-  // Album rows container
   const rowsContainer = document.createElement('div');
   rowsContainer.className = 'album-rows-container relative';
   
-  // Album rows
   albums.forEach((album, index) => {
     const row = document.createElement('div');
     row.className = 'album-row grid grid-cols-12 gap-4 px-4 py-3 border-b border-gray-800 cursor-move';
     row.draggable = true;
     row.dataset.index = index;
     
-    // Safely get values with defaults
     const rank = album.rank || index + 1;
     const albumName = album.album || 'Unknown Album';
     const artist = album.artist || 'Unknown Artist';
@@ -367,7 +316,6 @@ function displayAlbums(albums) {
       <div class="col-span-1 text-gray-300">${points}</div>
     `;
     
-    // Attach drag events
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
     
@@ -377,7 +325,6 @@ function displayAlbums(albums) {
   table.appendChild(rowsContainer);
   container.appendChild(table);
   
-  // Initialize container-level drag and drop
   initializeDragAndDrop();
 }
 
@@ -395,12 +342,10 @@ document.getElementById('fileInput').onchange = async (e) => {
         const content = e.target.result;
         const data = JSON.parse(content);
         
-        // Validate that it's an array
         if (!Array.isArray(data)) {
           throw new Error('JSON must be an array of albums');
         }
         
-        // Validate album structure
         if (data.length > 0) {
           const requiredFields = ['artist', 'album'];
           const missingFields = requiredFields.filter(field => !data[0].hasOwnProperty(field));
@@ -411,7 +356,7 @@ document.getElementById('fileInput').onchange = async (e) => {
         
         const listName = file.name.replace('.json', '');
         
-        // Save to IndexedDB
+        // Save to server
         await saveList(listName, data);
         
         updateListNav();
@@ -431,7 +376,6 @@ document.getElementById('fileInput').onchange = async (e) => {
     
     reader.readAsText(file, 'UTF-8');
   }
-  // Reset file input
   e.target.value = '';
 };
 
@@ -459,9 +403,7 @@ document.getElementById('clearBtn').onclick = async () => {
 };
 
 // Initialize on load
-initDB().then(() => {
-  loadLists();
-}).catch(err => {
-  console.error('Failed to initialize database:', err);
-  showToast('Failed to initialize database', 'error');
+loadLists().catch(err => {
+  console.error('Failed to load lists:', err);
+  showToast('Failed to load lists', 'error');
 });

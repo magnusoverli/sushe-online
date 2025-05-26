@@ -22,10 +22,15 @@ const {
   spotifyTemplate 
 } = require('./templates');
 
-// Initialize NeDB
+// Initialize NeDB databases
 const users = new Datastore({ filename: 'users.db', autoload: true });
+const lists = new Datastore({ filename: 'lists.db', autoload: true });
 
-// Passport configuration
+// Create indexes for better performance
+lists.ensureIndex({ fieldName: 'userId' });
+lists.ensureIndex({ fieldName: 'name' });
+
+// Passport configuration (same as before)
 passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
   users.findOne({ email }, (err, user) => {
     if (err) return done(err);
@@ -43,7 +48,8 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 
 const app = express();
 app.use(express.static('public'));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key-here',
   resave: false,
@@ -64,7 +70,13 @@ function ensureAuth(req, res, next) {
   res.redirect('/login');
 }
 
-// Registration form
+// API middleware to ensure authentication
+function ensureAuthAPI(req, res, next) {
+  if (req.isAuthenticated()) return next();
+  res.status(401).json({ error: 'Unauthorized' });
+}
+
+// Registration form (same as before)
 app.get('/register', (req, res) => {
   res.send(htmlTemplate(registerTemplate(req), 'Join the KVLT - Black Metal Auth'));
 });
@@ -73,7 +85,6 @@ app.post('/register', async (req, res) => {
   try {
     const { email, password } = req.body;
     
-    // Validate input
     if (!email || !password) {
       req.flash('error', 'Email and password are required');
       return res.redirect('/register');
@@ -120,7 +131,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Login form
+// Login form (same as before)
 app.get('/login', (req, res) => {
   res.send(htmlTemplate(loginTemplate(req), 'Enter the Void - Black Metal Auth'));
 });
@@ -140,7 +151,106 @@ app.get('/logout', (req, res) => {
   req.logout(() => res.redirect('/login'));
 });
 
-// Forgot password request
+// API ENDPOINTS FOR LISTS
+
+// Get all lists for current user
+app.get('/api/lists', ensureAuthAPI, (req, res) => {
+  lists.find({ userId: req.user._id }, (err, userLists) => {
+    if (err) {
+      console.error('Error fetching lists:', err);
+      return res.status(500).json({ error: 'Error fetching lists' });
+    }
+    
+    // Transform to simple object format
+    const listsObj = {};
+    userLists.forEach(list => {
+      listsObj[list.name] = list.data;
+    });
+    
+    res.json(listsObj);
+  });
+});
+
+// Create or update a list
+app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
+  const { name } = req.params;
+  const { data } = req.body;
+  
+  if (!data || !Array.isArray(data)) {
+    return res.status(400).json({ error: 'Invalid list data' });
+  }
+  
+  // Check if list exists
+  lists.findOne({ userId: req.user._id, name }, (err, existingList) => {
+    if (err) {
+      console.error('Error checking list:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    
+    if (existingList) {
+      // Update existing list
+      lists.update(
+        { _id: existingList._id },
+        { $set: { data, updatedAt: new Date() } },
+        {},
+        (err) => {
+          if (err) {
+            console.error('Error updating list:', err);
+            return res.status(500).json({ error: 'Error updating list' });
+          }
+          res.json({ success: true, message: 'List updated' });
+        }
+      );
+    } else {
+      // Create new list
+      lists.insert({
+        userId: req.user._id,
+        name,
+        data,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }, (err, newList) => {
+        if (err) {
+          console.error('Error creating list:', err);
+          return res.status(500).json({ error: 'Error creating list' });
+        }
+        res.json({ success: true, message: 'List created' });
+      });
+    }
+  });
+});
+
+// Delete a specific list
+app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
+  const { name } = req.params;
+  
+  lists.remove({ userId: req.user._id, name }, {}, (err, numRemoved) => {
+    if (err) {
+      console.error('Error deleting list:', err);
+      return res.status(500).json({ error: 'Error deleting list' });
+    }
+    
+    if (numRemoved === 0) {
+      return res.status(404).json({ error: 'List not found' });
+    }
+    
+    res.json({ success: true, message: 'List deleted' });
+  });
+});
+
+// Delete all lists for current user
+app.delete('/api/lists', ensureAuthAPI, (req, res) => {
+  lists.remove({ userId: req.user._id }, { multi: true }, (err, numRemoved) => {
+    if (err) {
+      console.error('Error clearing lists:', err);
+      return res.status(500).json({ error: 'Error clearing lists' });
+    }
+    
+    res.json({ success: true, message: `Deleted ${numRemoved} lists` });
+  });
+});
+
+// Forgot password routes (same as before)
 app.get('/forgot', (req, res) => {
   res.send(htmlTemplate(forgotPasswordTemplate(req), 'Password Recovery - Black Metal Auth'));
 });
@@ -151,11 +261,9 @@ app.post('/forgot', (req, res) => {
     req.flash('info', 'If that email exists, you will receive a reset link');
     if (!user) return res.redirect('/forgot');
 
-    // Generate reset token
     const token = crypto.randomBytes(20).toString('hex');
     const expires = Date.now() + 3600000; // 1 hour
     users.update({ _id: user._id }, { $set: { resetToken: token, resetExpires: expires } }, {}, () => {
-      // Configure email transport
       if (process.env.SENDGRID_API_KEY) {
         const transporter = nodemailer.createTransport({
           host: 'smtp.sendgrid.net',
@@ -167,11 +275,8 @@ app.post('/forgot', (req, res) => {
         });
         
         const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset/${token}`;
-        
-        // Get email configuration from forgot_email.js
         const emailOptions = composeForgotPasswordEmail(user.email, resetUrl);
         
-        // Send email with error handling
         transporter.sendMail(emailOptions, (error, info) => {
           if (error) {
             console.error('Failed to send password reset email:', error.message);
@@ -188,7 +293,7 @@ app.post('/forgot', (req, res) => {
   });
 });
 
-// Reset password form
+// Reset password routes (same as before)
 app.get('/reset/:token', (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, (err, user) => {
     if (!user) {
@@ -198,7 +303,6 @@ app.get('/reset/:token', (req, res) => {
   });
 });
 
-// Handle password reset
 app.post('/reset/:token', async (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, async (err, user) => {
     if (!user) {
