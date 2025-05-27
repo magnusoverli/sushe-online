@@ -11,6 +11,7 @@ let lastValidDropIndex = null;
 
 // Context menu variables
 let currentContextList = null;
+let currentContextAlbum = null;
 
 // Position-based points mapping
 const POSITION_POINTS = {
@@ -25,6 +26,12 @@ document.addEventListener('click', () => {
   const contextMenu = document.getElementById('contextMenu');
   if (contextMenu) {
     contextMenu.classList.add('hidden');
+  }
+  
+  // ADD THIS:
+  const albumContextMenu = document.getElementById('albumContextMenu');
+  if (albumContextMenu) {
+    albumContextMenu.classList.add('hidden');
   }
 });
 
@@ -197,6 +204,47 @@ function initializeContextMenu() {
     }
     
     currentContextList = null;
+  };
+}
+
+// Initialize album context menu
+function initializeAlbumContextMenu() {
+  const contextMenu = document.getElementById('albumContextMenu');
+  const removeOption = document.getElementById('removeAlbumOption');
+  
+  if (!contextMenu || !removeOption) return;
+  
+  // Handle remove option click
+  removeOption.onclick = async () => {
+    contextMenu.classList.add('hidden');
+    
+    if (currentContextAlbum === null) return;
+    
+    // Confirm deletion
+    const album = lists[currentList][currentContextAlbum];
+    if (confirm(`Are you sure you want to remove "${album.album}" by ${album.artist} from this list?`)) {
+      try {
+        // Remove from the list
+        lists[currentList].splice(currentContextAlbum, 1);
+        
+        // Save to server
+        await saveList(currentList, lists[currentList]);
+        
+        // Update display
+        selectList(currentList);
+        
+        showToast(`Removed "${album.album}" from the list`);
+      } catch (error) {
+        console.error('Error removing album:', error);
+        showToast('Error removing album', 'error');
+        
+        // Reload the list to ensure consistency
+        await loadLists();
+        selectList(currentList);
+      }
+    }
+    
+    currentContextAlbum = null;
   };
 }
 
@@ -746,6 +794,33 @@ function displayAlbums(albums) {
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
     
+    // ADD THIS: Right-click handler for album rows
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      currentContextAlbum = index;
+      
+      const contextMenu = document.getElementById('albumContextMenu');
+      if (!contextMenu) return;
+      
+      // Position the context menu at cursor
+      contextMenu.style.left = `${e.clientX}px`;
+      contextMenu.style.top = `${e.clientY}px`;
+      contextMenu.classList.remove('hidden');
+      
+      // Adjust position if menu goes off-screen
+      setTimeout(() => {
+        const rect = contextMenu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+          contextMenu.style.left = `${e.clientX - rect.width}px`;
+        }
+        if (rect.bottom > window.innerHeight) {
+          contextMenu.style.top = `${e.clientY - rect.height}px`;
+        }
+      }, 0);
+    });
+    
     rowsContainer.appendChild(row);
   });
   
@@ -840,6 +915,7 @@ document.getElementById('clearBtn').onclick = async () => {
 Promise.all([loadGenres(), loadLists()])
   .then(() => {
     initializeContextMenu();
+    initializeAlbumContextMenu(); // ADD THIS
   })
   .catch(err => {
     console.error('Failed to initialize:', err);

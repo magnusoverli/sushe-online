@@ -579,7 +579,12 @@ const spotifyTemplate = (req) => `
       Delete List
     </button>
   </div>
-
+  <!-- ADD THIS: Context Menu for Albums -->
+  <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+    <button id="removeAlbumOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors">
+      Remove from List
+    </button>
+  </div>
   <!-- Add Album Modal -->
   <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
