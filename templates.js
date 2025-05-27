@@ -563,9 +563,7 @@ const spotifyTemplate = (req) => `
   <!-- Toast container -->
   <div id="toast" class="toast"></div>
   
-  <script src="/js/app.js"></script>
-
-    <!-- Context Menu -->
+  <!-- Context Menu -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
     <button id="deleteListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors">
       Delete List
@@ -573,7 +571,6 @@ const spotifyTemplate = (req) => `
   </div>
   
   <script src="/js/app.js"></script>
-
 </body>
 </html>
 `;
