@@ -353,6 +353,7 @@ function handleDragEnd(e) {
     draggedElement.classList.remove('dragging');
   }
   
+  // Only remove placeholder if it still exists (wasn't removed by drop handler)
   if (placeholder && placeholder.parentNode) {
     placeholder.parentNode.removeChild(placeholder);
   }
@@ -371,10 +372,9 @@ async function handleContainerDrop(e) {
   
   this.classList.remove('drag-active');
   
-  if (!draggedElement || lastValidDropIndex === null) return;
+  if (!draggedElement || lastValidDropIndex === null || !placeholder) return;
   
   const rowsContainer = this.querySelector('.album-rows-container') || this;
-  const allRows = Array.from(rowsContainer.querySelectorAll('.album-row:not(.drag-placeholder)'));
   
   let dropIndex = lastValidDropIndex;
   if (draggedIndex < dropIndex) {
@@ -383,19 +383,68 @@ async function handleContainerDrop(e) {
   
   if (dropIndex !== draggedIndex) {
     try {
-      const list = lists[currentList];
+      // First, immediately update the DOM by moving the dragged element
+      if (placeholder && placeholder.parentNode) {
+        // Insert the dragged element where the placeholder is
+        placeholder.parentNode.insertBefore(draggedElement, placeholder);
+        // Remove the placeholder
+        placeholder.parentNode.removeChild(placeholder);
+        placeholder = null;
+      }
       
+      // Show the dragged element in its new position
+      draggedElement.style.display = '';
+      draggedElement.classList.remove('dragging');
+      
+      // Update all position numbers and data-index attributes
+      const allRows = Array.from(rowsContainer.querySelectorAll('.album-row'));
+      allRows.forEach((row, index) => {
+        // Update position number
+        const positionEl = row.querySelector('.flex.items-center.justify-center');
+        if (positionEl) {
+          positionEl.textContent = index + 1;
+        }
+        // Update data-index
+        row.dataset.index = index;
+      });
+      
+      // Now update the data to match the new DOM order
+      const list = lists[currentList];
       const [movedItem] = list.splice(draggedIndex, 1);
       list.splice(dropIndex, 0, movedItem);
       
+      // Save to server
       await saveList(currentList, list);
-      displayAlbums(list);
       showToast('Reordered successfully');
+      
     } catch (error) {
       console.error('Error saving reorder:', error);
       showToast('Error saving changes', 'error');
+      // On error, rebuild to ensure consistency
+      displayAlbums(lists[currentList]);
     }
   }
+  
+  // Clean up drag state
+  draggedElement = null;
+  draggedIndex = null;
+  lastValidDropIndex = null;
+}
+
+// Add this new function to update positions without rebuilding
+function updateAlbumPositions(container) {
+  const rows = Array.from(container.querySelectorAll('.album-row:not(.drag-placeholder)'));
+  
+  rows.forEach((row, index) => {
+    // Update the position number
+    const positionEl = row.querySelector('.flex.items-center.justify-center');
+    if (positionEl) {
+      positionEl.textContent = index + 1;
+    }
+    
+    // Update the data-index attribute
+    row.dataset.index = index;
+  });
 }
 
 // Make genre editable with dropdown (simplified and fixed)
