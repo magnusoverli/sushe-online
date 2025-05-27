@@ -133,6 +133,8 @@ module.exports = {
     'bg-opacity-50',
     'transform',
     'scale-105',
+    'grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr]',
+    'country-cell',
   ],
   theme: {
     extend: {},

@@ -2,6 +2,7 @@
 let currentList = null;
 let lists = {};
 let availableGenres = [];
+let availableCountries = [];
 
 // Drag and drop variables
 let draggedElement = null;
@@ -28,7 +29,6 @@ document.addEventListener('click', () => {
     contextMenu.classList.add('hidden');
   }
   
-  // ADD THIS:
   const albumContextMenu = document.getElementById('albumContextMenu');
   if (albumContextMenu) {
     albumContextMenu.classList.add('hidden');
@@ -46,6 +46,145 @@ document.addEventListener('contextmenu', (e) => {
 // Helper function to get points for a position
 function getPointsForPosition(position) {
   return POSITION_POINTS[position] || 1; // Default to 1 point for positions > 40
+}
+
+// Load available countries
+async function loadCountries() {
+  try {
+    const response = await fetch('/countries.txt');
+    const text = await response.text();
+    availableCountries = text.split('\n')
+      .map(c => c.trim())
+      .filter((c, index, arr) => {
+        // Keep the first empty line if it exists, but remove other empty lines
+        return c.length > 0 || (index === 0 && c === '');
+      });
+    // Don't sort if the first item is empty - keep it at the top
+    if (availableCountries[0] !== '') {
+      availableCountries.sort();
+    } else {
+      // Sort everything except the first empty item
+      const emptyItem = availableCountries.shift();
+      availableCountries.sort();
+      availableCountries.unshift(emptyItem);
+    }
+  } catch (error) {
+    console.error('Error loading countries:', error);
+    showToast('Error loading countries', 'error');
+  }
+}
+
+// Make country editable with dropdown
+function makeCountryEditable(countryDiv, albumIndex) {
+  // Check if we're already editing
+  if (countryDiv.querySelector('select')) {
+    return;
+  }
+  
+  // Get current country from the live data
+  const currentCountry = lists[currentList][albumIndex].country || '';
+  
+  // Create select element
+  const select = document.createElement('select');
+  select.className = 'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+  
+  // Always add the "- Select Country -" option first
+  const instructionOption = document.createElement('option');
+  instructionOption.value = '##SELECT##';
+  instructionOption.textContent = '- Select Country -';
+  instructionOption.disabled = true;
+  if (!currentCountry) {
+    instructionOption.selected = true;
+  }
+  select.appendChild(instructionOption);
+  
+  // Add all available countries
+  availableCountries.forEach(country => {
+    const option = document.createElement('option');
+    option.value = country;
+    option.textContent = country;
+    if (country === currentCountry) {
+      option.selected = true;
+    }
+    select.appendChild(option);
+  });
+  
+  // Store the original onclick handler
+  const originalOnClick = countryDiv.onclick;
+  countryDiv.onclick = null; // Temporarily remove click handler
+  
+  // Replace content with select
+  countryDiv.innerHTML = '';
+  countryDiv.appendChild(select);
+  select.focus();
+  
+  // Create handleClickOutside function so we can reference it for removal
+  let handleClickOutside;
+  
+  const restoreDisplay = (valueToDisplay) => {
+    // Remove the click outside listener if it exists
+    if (handleClickOutside) {
+      document.removeEventListener('click', handleClickOutside);
+      handleClickOutside = null;
+    }
+    
+    countryDiv.innerHTML = `<span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${valueToDisplay}</span>`;
+    
+    // Restore the original click handler
+    countryDiv.onclick = originalOnClick;
+  };
+  
+  const saveCountry = async (newCountry) => {
+    // Ignore instruction option
+    if (newCountry === '##SELECT##') {
+      return;
+    }
+    
+    // Check if value actually changed
+    if (newCountry === currentCountry) {
+      restoreDisplay(currentCountry);
+      return;
+    }
+    
+    // Update the data
+    lists[currentList][albumIndex].country = newCountry;
+    
+    try {
+      await saveList(currentList, lists[currentList]);
+      restoreDisplay(newCountry);
+      showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
+    } catch (error) {
+      showToast('Error saving country', 'error');
+      // Revert on error
+      lists[currentList][albumIndex].country = currentCountry;
+      restoreDisplay(currentCountry);
+    }
+  };
+  
+  // Handle selection change
+  select.addEventListener('change', (e) => {
+    saveCountry(e.target.value);
+  });
+  
+  // Handle keyboard
+  select.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      restoreDisplay(currentCountry);
+    }
+  });
+  
+  // Define handleClickOutside
+  handleClickOutside = (e) => {
+    if (!countryDiv.contains(e.target)) {
+      restoreDisplay(lists[currentList][albumIndex].country || '');
+    }
+  };
+  
+  // Small delay to prevent immediate trigger
+  setTimeout(() => {
+    document.addEventListener('click', handleClickOutside);
+  }, 100);
 }
 
 // Load available genres
@@ -160,9 +299,19 @@ async function clearAllLists() {
 // Initialize context menu
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
+  const renameOption = document.getElementById('renameListOption');
   const deleteOption = document.getElementById('deleteListOption');
   
-  if (!contextMenu || !deleteOption) return;
+  if (!contextMenu || !deleteOption || !renameOption) return;
+  
+  // Handle rename option click
+  renameOption.onclick = () => {
+    contextMenu.classList.add('hidden');
+    
+    if (!currentContextList) return;
+    
+    openRenameModal(currentContextList);
+  };
   
   // Handle delete option click
   deleteOption.onclick = async () => {
@@ -191,6 +340,18 @@ function initializeContextMenu() {
               <p class="text-sm">Create or import a list to get started</p>
             </div>
           `;
+          
+          // Hide the add album button
+          const addAlbumBtn = document.getElementById('addAlbumBtn');
+          if (addAlbumBtn) {
+            addAlbumBtn.classList.add('hidden');
+          }
+          
+          // Hide the export button
+          const exportBtn = document.getElementById('exportBtn');
+          if (exportBtn) {
+            exportBtn.classList.add('hidden');
+          }
         }
         
         // Update the navigation
@@ -334,6 +495,173 @@ function initializeCreateList() {
   });
 }
 
+// Rename list functionality
+function initializeRenameList() {
+  const modal = document.getElementById('renameListModal');
+  const currentNameSpan = document.getElementById('currentListName');
+  const nameInput = document.getElementById('newListNameInput');
+  const cancelBtn = document.getElementById('cancelRenameBtn');
+  const confirmBtn = document.getElementById('confirmRenameBtn');
+  
+  if (!modal) return;
+  
+  // Close modal function
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    nameInput.value = '';
+  };
+  
+  cancelBtn.onclick = closeModal;
+  
+  // Click outside to close
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  };
+  
+  // Rename list function
+  const renameList = async () => {
+    const oldName = currentNameSpan.textContent;
+    const newName = nameInput.value.trim();
+    
+    if (!newName) {
+      showToast('Please enter a new list name', 'error');
+      nameInput.focus();
+      return;
+    }
+    
+    if (newName === oldName) {
+      showToast('New name must be different from current name', 'error');
+      nameInput.focus();
+      return;
+    }
+    
+    // Check if new name already exists
+    if (lists[newName]) {
+      showToast('A list with this name already exists', 'error');
+      nameInput.focus();
+      return;
+    }
+    
+    try {
+      // Get the list data
+      const listData = lists[oldName];
+      
+      // Create new list with new name
+      await saveList(newName, listData);
+      
+      // Delete old list
+      await apiCall(`/api/lists/${encodeURIComponent(oldName)}`, {
+        method: 'DELETE'
+      });
+      
+      // Update local data
+      delete lists[oldName];
+      
+      // If we're currently viewing this list, update the view
+      if (currentList === oldName) {
+        currentList = newName;
+        selectList(newName);
+      }
+      
+      // Update navigation
+      updateListNav();
+      
+      // Close modal
+      closeModal();
+      
+      showToast(`List renamed from "${oldName}" to "${newName}"`);
+    } catch (error) {
+      console.error('Error renaming list:', error);
+      showToast('Error renaming list', 'error');
+    }
+  };
+  
+  confirmBtn.onclick = renameList;
+  
+  // Enter key to rename
+  nameInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      renameList();
+    }
+  };
+}
+
+// Open rename modal
+function openRenameModal(listName) {
+  const modal = document.getElementById('renameListModal');
+  const currentNameSpan = document.getElementById('currentListName');
+  const nameInput = document.getElementById('newListNameInput');
+  
+  if (!modal || !currentNameSpan || !nameInput) return;
+  
+  currentNameSpan.textContent = listName;
+  nameInput.value = listName;
+  modal.classList.remove('hidden');
+  
+  // Select all text in the input for easy editing
+  setTimeout(() => {
+    nameInput.focus();
+    nameInput.select();
+  }, 100);
+}
+
+// Export functionality
+function initializeExport() {
+  const exportBtn = document.getElementById('exportBtn');
+  if (!exportBtn) return;
+  
+  exportBtn.onclick = () => {
+    if (!currentList || !lists[currentList]) {
+      showToast('No list selected to export', 'error');
+      return;
+    }
+    
+    try {
+      // Get the current list data
+      const listData = lists[currentList];
+      
+      // Create a copy with rank added based on position
+      const exportData = listData.map((album, index) => {
+        const exported = { ...album };
+        // Add rank based on position (1-indexed)
+        exported.rank = index + 1;
+        // Add points for this position
+        exported.points = getPointsForPosition(index + 1);
+        // Remove any internal properties that shouldn't be exported
+        // (but keep rank and points since they're useful)
+        return exported;
+      });
+      
+      // Convert to JSON with pretty formatting
+      const jsonStr = JSON.stringify(exportData, null, 2);
+      
+      // Create blob and download link
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create temporary download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentList}.json`;
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast(`Exported "${currentList}" successfully`);
+    } catch (error) {
+      console.error('Error exporting list:', error);
+      showToast('Error exporting list', 'error');
+    }
+  };
+}
+
 // Update sidebar navigation
 function updateListNav() {
   const nav = document.getElementById('listNav');
@@ -405,6 +733,12 @@ function selectList(listName) {
   if (addAlbumBtn) {
     addAlbumBtn.classList.remove('hidden');
   }
+  
+  // Show the export button when a list is selected
+  const exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) {
+    exportBtn.classList.remove('hidden');
+  }
 }
 
 // Initialize drag and drop for container
@@ -418,7 +752,7 @@ function initializeDragAndDrop() {
 
 // Drag handlers
 function handleDragStart(e) {
-  // Don't start drag if we're editing a comment or selecting genre
+  // Don't start drag if we're editing a comment or selecting genre/country
   if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
     e.preventDefault();
     return;
@@ -428,7 +762,7 @@ function handleDragStart(e) {
   draggedIndex = parseInt(this.dataset.index);
   
   placeholder = document.createElement('div');
-  placeholder.className = 'album-row drag-placeholder grid grid-cols-[50px_60px_1fr_0.8fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800';
+  placeholder.className = 'album-row drag-placeholder grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800';
   placeholder.style.height = this.offsetHeight + 'px';
   placeholder.innerHTML = '<div class="col-span-full text-center text-gray-500">Drop album here</div>';
   
@@ -571,7 +905,7 @@ async function handleContainerDrop(e) {
   lastValidDropIndex = null;
 }
 
-// Add this new function to update positions without rebuilding
+// Update positions without rebuilding
 function updateAlbumPositions(container) {
   const rows = Array.from(container.querySelectorAll('.album-row:not(.drag-placeholder)'));
   
@@ -587,7 +921,7 @@ function updateAlbumPositions(container) {
   });
 }
 
-// Make genre editable with dropdown (simplified and fixed)
+// Make genre editable with dropdown
 function makeGenreEditable(genreDiv, albumIndex, genreField) {
   // Check if we're already editing
   if (genreDiv.querySelector('select')) {
@@ -791,14 +1125,15 @@ function displayAlbums(albums) {
   const table = document.createElement('div');
   table.className = 'w-full relative';
   
-  // Header with comment column
+  // Header with country column - updated grid
   const header = document.createElement('div');
-  header.className = 'grid grid-cols-[50px_60px_1fr_0.8fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+  header.className = 'grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
   header.innerHTML = `
     <div class="text-center">#</div>
     <div></div>
     <div>Album</div>
     <div>Artist</div>
+    <div>Country</div>
     <div>Genre 1</div>
     <div>Genre 2</div>
     <div>Comment</div>
@@ -810,13 +1145,14 @@ function displayAlbums(albums) {
   
   albums.forEach((album, index) => {
     const row = document.createElement('div');
-    row.className = 'album-row grid grid-cols-[50px_60px_1fr_0.8fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
+    row.className = 'album-row grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
     row.draggable = true;
     row.dataset.index = index;
     
     const position = index + 1;
     const albumName = album.album || 'Unknown Album';
     const artist = album.artist || 'Unknown Artist';
+    const country = album.country || '';
     const genre1 = album.genre_1 || album.genre || '';
     
     // Handle genre_2: show empty if it's missing, "Genre 2", or "-"
@@ -860,6 +1196,9 @@ function displayAlbums(albums) {
         <div class="text-xs text-gray-400">${releaseDate}</div>
       </div>
       <div class="flex items-center text-gray-300 truncate">${artist}</div>
+      <div class="flex items-center country-cell">
+        <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${country}</span>
+      </div>
       <div class="flex items-center genre-cell genre-1-cell">
         <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${genre1}</span>
       </div>
@@ -870,6 +1209,10 @@ function displayAlbums(albums) {
         <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
       </div>
     `;
+    
+    // Add click handler to country cell
+    const countryCell = row.querySelector('.country-cell');
+    countryCell.onclick = () => makeCountryEditable(countryCell, index);
     
     // Add click handlers to genre cells
     const genre1Cell = row.querySelector('.genre-1-cell');
@@ -885,7 +1228,7 @@ function displayAlbums(albums) {
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
     
-    // ADD THIS: Right-click handler for album rows
+    // Right-click handler for album rows
     row.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -994,6 +1337,12 @@ document.getElementById('clearBtn').onclick = async () => {
         addAlbumBtn.classList.add('hidden');
       }
       
+      // Hide the export button
+      const exportBtn = document.getElementById('exportBtn');
+      if (exportBtn) {
+        exportBtn.classList.add('hidden');
+      }
+      
       showToast('All lists cleared');
     } catch (error) {
       console.error('Error clearing lists:', error);
@@ -1003,11 +1352,13 @@ document.getElementById('clearBtn').onclick = async () => {
 };
 
 // Initialize on load
-Promise.all([loadGenres(), loadLists()])
+Promise.all([loadGenres(), loadCountries(), loadLists()])
   .then(() => {
     initializeContextMenu();
     initializeAlbumContextMenu();
-    initializeCreateList(); // ADD THIS LINE
+    initializeCreateList();
+    initializeRenameList();
+    initializeExport();
   })
   .catch(err => {
     console.error('Failed to initialize:', err);

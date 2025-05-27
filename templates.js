@@ -524,10 +524,13 @@ const spotifyTemplate = (req) => `
           <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
             + Import List
           </button>
-          <input type="file" id="fileInput" accept=".json" style="display: none;">
-          <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-            Clear All Lists
+          <button id="exportBtn" class="hidden w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+            ↓ Download List
           </button>
+          <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+            DELETE All Lists
+          </button>
+          <input type="file" id="fileInput" accept=".json" style="display: none;">
           <div id="storageInfo" class="text-xs text-gray-500 mt-2 text-center"></div>
         </div>
       </nav>
@@ -578,6 +581,9 @@ const spotifyTemplate = (req) => `
   
   <!-- Context Menu -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+    <button id="renameListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
+      Rename List
+    </button>
     <button id="deleteListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors">
       Delete List
     </button>
@@ -626,6 +632,48 @@ const spotifyTemplate = (req) => `
           class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
         >
           Create List
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Rename List Modal -->
+  <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-2xl font-bold text-white">Rename List</h3>
+        <p class="text-sm text-gray-400 mt-1">Current name: <span id="currentListName" class="text-gray-300"></span></p>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-6">
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListNameInput">
+          New List Name
+        </label>
+        <input 
+          type="text" 
+          id="newListNameInput" 
+          placeholder="Enter new name..." 
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          maxlength="50"
+        >
+        <p class="text-xs text-gray-500 mt-2">Enter a new unique name for this list</p>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
+        <button 
+          id="cancelRenameBtn" 
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+        >
+          Cancel
+        </button>
+        <button 
+          id="confirmRenameBtn" 
+          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+        >
+          Rename List
         </button>
       </div>
     </div>
