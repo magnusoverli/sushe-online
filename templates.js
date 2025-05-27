@@ -409,6 +409,32 @@ const spotifyTemplate = (req) => `
     background-repeat: no-repeat;
     background-size: 1.5em 1.5em;
     padding-right: 2.5rem;
+    cursor: pointer;
+    }
+
+    .genre-cell select:focus {
+    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+    }
+
+    /* Style the disabled instruction option */
+    .genre-cell select option:disabled {
+    color: #6b7280;
+    font-style: italic;
+    }
+
+    /* Prevent drag when editing */
+    .album-row:has(select) {
+    cursor: default;
+    }
+
+    /* Better hover state for genre cells */
+    .genre-cell {
+    position: relative;
+    }
+
+    .genre-cell span {
+    display: block;
+    padding: 0.125rem 0;
     }
 
     /* Prevent drag when editing */

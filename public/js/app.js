@@ -29,8 +29,19 @@ async function loadGenres() {
     const text = await response.text();
     availableGenres = text.split('\n')
       .map(g => g.trim())
-      .filter(g => g.length > 0)
-      .sort();
+      .filter((g, index, arr) => {
+        // Keep the first empty line if it exists, but remove other empty lines
+        return g.length > 0 || (index === 0 && g === '');
+      });
+    // Don't sort if the first item is empty - keep it at the top
+    if (availableGenres[0] !== '') {
+      availableGenres.sort();
+    } else {
+      // Sort everything except the first empty item
+      const emptyItem = availableGenres.shift();
+      availableGenres.sort();
+      availableGenres.unshift(emptyItem);
+    }
   } catch (error) {
     console.error('Error loading genres:', error);
     showToast('Error loading genres', 'error');
@@ -286,19 +297,29 @@ async function handleContainerDrop(e) {
   }
 }
 
-// Make genre editable with dropdown
+// Make genre editable with dropdown (simplified and fixed)
 function makeGenreEditable(genreDiv, albumIndex, genreField) {
+  // Check if we're already editing
+  if (genreDiv.querySelector('select')) {
+    return;
+  }
+  
+  // Get current genre from the live data
   const currentGenre = lists[currentList][albumIndex][genreField] || '';
   
   // Create select element
   const select = document.createElement('select');
   select.className = 'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
   
-  // Add empty option
-  const emptyOption = document.createElement('option');
-  emptyOption.value = '';
-  emptyOption.textContent = '- Select Genre -';
-  select.appendChild(emptyOption);
+  // Always add the "- Select Genre -" option first
+  const instructionOption = document.createElement('option');
+  instructionOption.value = '##SELECT##';
+  instructionOption.textContent = '- Select Genre -';
+  instructionOption.disabled = true;
+  if (!currentGenre) {
+    instructionOption.selected = true;
+  }
+  select.appendChild(instructionOption);
   
   // Add all available genres
   availableGenres.forEach(genre => {
@@ -311,54 +332,82 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     select.appendChild(option);
   });
   
-  // Replace div content with select
+  // Store the original onclick handler
+  const originalOnClick = genreDiv.onclick;
+  genreDiv.onclick = null; // Temporarily remove click handler
+  
+  // Replace content with select
   genreDiv.innerHTML = '';
   genreDiv.appendChild(select);
   select.focus();
   
-  const saveGenre = async () => {
-    const newGenre = select.value;
+  const restoreDisplay = (valueToDisplay) => {
+    const colorClass = genreField === 'genre_1' ? 'text-gray-300' : 'text-gray-400';
+    let displayGenre = valueToDisplay;
+    
+    // Handle empty or placeholder values for genre_2
+    if (genreField === 'genre_2' && (displayGenre === 'Genre 2' || displayGenre === '-' || displayGenre === '')) {
+      displayGenre = '';
+    }
+    
+    genreDiv.innerHTML = `<span class="text-sm ${colorClass} truncate cursor-pointer hover:text-gray-100">${displayGenre}</span>`;
+    
+    // Restore the original click handler
+    genreDiv.onclick = originalOnClick;
+  };
+  
+  const saveGenre = async (newGenre) => {
+    // Ignore instruction option
+    if (newGenre === '##SELECT##') {
+      return;
+    }
+    
+    // Check if value actually changed
+    if (newGenre === currentGenre) {
+      restoreDisplay(currentGenre);
+      return;
+    }
+    
+    // Update the data
     lists[currentList][albumIndex][genreField] = newGenre;
     
     try {
       await saveList(currentList, lists[currentList]);
-      
-      // Update display
-      let displayGenre = newGenre;
-      if (genreField === 'genre_2' && (displayGenre === 'Genre 2' || displayGenre === '-' || !displayGenre)) {
-        displayGenre = '';
-      }
-      
-      const colorClass = genreField === 'genre_1' ? 'text-gray-300' : 'text-gray-400';
-      genreDiv.innerHTML = `<span class="text-sm ${colorClass} truncate cursor-pointer hover:text-gray-100">${displayGenre}</span>`;
-      
-      // Re-add click handler
-      genreDiv.onclick = () => makeGenreEditable(genreDiv, albumIndex, genreField);
-      
-      if (newGenre !== currentGenre) {
-        showToast('Genre updated');
-      }
+      restoreDisplay(newGenre);
+      showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
     } catch (error) {
       showToast('Error saving genre', 'error');
       // Revert on error
-      const colorClass = genreField === 'genre_1' ? 'text-gray-300' : 'text-gray-400';
-      genreDiv.innerHTML = `<span class="text-sm ${colorClass} truncate cursor-pointer hover:text-gray-100">${currentGenre}</span>`;
-      genreDiv.onclick = () => makeGenreEditable(genreDiv, albumIndex, genreField);
+      lists[currentList][albumIndex][genreField] = currentGenre;
+      restoreDisplay(currentGenre);
     }
   };
   
-  select.addEventListener('change', saveGenre);
-  select.addEventListener('blur', () => {
-    // Small delay to allow change event to fire first
-    setTimeout(() => {
-      if (document.activeElement !== select) {
-        select.removeEventListener('change', saveGenre);
-        const colorClass = genreField === 'genre_1' ? 'text-gray-300' : 'text-gray-400';
-        genreDiv.innerHTML = `<span class="text-sm ${colorClass} truncate cursor-pointer hover:text-gray-100">${currentGenre}</span>`;
-        genreDiv.onclick = () => makeGenreEditable(genreDiv, albumIndex, genreField);
-      }
-    }, 200);
+  // Handle selection change
+  select.addEventListener('change', (e) => {
+    saveGenre(e.target.value);
   });
+  
+  // Handle keyboard
+  select.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      restoreDisplay(currentGenre);
+    }
+  });
+  
+  // Handle clicks outside
+  const handleClickOutside = (e) => {
+    if (!genreDiv.contains(e.target)) {
+      restoreDisplay(lists[currentList][albumIndex][genreField] || '');
+      document.removeEventListener('click', handleClickOutside);
+    }
+  };
+  
+  // Small delay to prevent immediate trigger
+  setTimeout(() => {
+    document.addEventListener('click', handleClickOutside);
+  }, 100);
 }
 
 // Make comment editable
