@@ -188,7 +188,7 @@ function initializeContextMenu() {
           document.getElementById('albumContainer').innerHTML = `
             <div class="text-center text-gray-500 mt-20">
               <p class="text-xl mb-2">No list selected</p>
-              <p class="text-sm">Import a JSON file to get started</p>
+              <p class="text-sm">Create or import a list to get started</p>
             </div>
           `;
         }
@@ -246,6 +246,92 @@ function initializeAlbumContextMenu() {
     
     currentContextAlbum = null;
   };
+}
+
+// Create list functionality
+function initializeCreateList() {
+  const createBtn = document.getElementById('createListBtn');
+  const modal = document.getElementById('createListModal');
+  const nameInput = document.getElementById('newListName');
+  const cancelBtn = document.getElementById('cancelCreateBtn');
+  const confirmBtn = document.getElementById('confirmCreateBtn');
+  
+  if (!createBtn || !modal) return;
+  
+  // Open modal
+  createBtn.onclick = () => {
+    modal.classList.remove('hidden');
+    nameInput.value = '';
+    nameInput.focus();
+  };
+  
+  // Close modal
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    nameInput.value = '';
+  };
+  
+  cancelBtn.onclick = closeModal;
+  
+  // Click outside to close
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  };
+  
+  // Create list
+  const createList = async () => {
+    const listName = nameInput.value.trim();
+    
+    if (!listName) {
+      showToast('Please enter a list name', 'error');
+      nameInput.focus();
+      return;
+    }
+    
+    // Check if list already exists
+    if (lists[listName]) {
+      showToast('A list with this name already exists', 'error');
+      nameInput.focus();
+      return;
+    }
+    
+    try {
+      // Create empty list
+      await saveList(listName, []);
+      
+      // Update navigation
+      updateListNav();
+      
+      // Select the new list
+      selectList(listName);
+      
+      // Close modal
+      closeModal();
+      
+      showToast(`Created list "${listName}"`);
+    } catch (error) {
+      console.error('Error creating list:', error);
+      showToast('Error creating list', 'error');
+    }
+  };
+  
+  confirmBtn.onclick = createList;
+  
+  // Enter key to create
+  nameInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      createList();
+    }
+  };
+  
+  // ESC key to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeModal();
+    }
+  });
 }
 
 // Update sidebar navigation
@@ -693,7 +779,12 @@ function displayAlbums(albums) {
   container.innerHTML = '';
   
   if (!albums || albums.length === 0) {
-    container.innerHTML = '<p class="text-center text-gray-500 mt-20">No albums in this list</p>';
+    container.innerHTML = `
+      <div class="text-center text-gray-500 mt-20">
+        <p class="text-xl mb-2">This list is empty</p>
+        <p class="text-sm">Click the + button above to add albums from MusicBrainz</p>
+      </div>
+    `;
     return;
   }
   
@@ -893,7 +984,7 @@ document.getElementById('clearBtn').onclick = async () => {
       document.getElementById('albumContainer').innerHTML = `
         <div class="text-center text-gray-500 mt-20">
           <p class="text-xl mb-2">No list selected</p>
-          <p class="text-sm">Import a JSON file to get started</p>
+          <p class="text-sm">Create or import a list to get started</p>
         </div>
       `;
       
@@ -915,7 +1006,8 @@ document.getElementById('clearBtn').onclick = async () => {
 Promise.all([loadGenres(), loadLists()])
   .then(() => {
     initializeContextMenu();
-    initializeAlbumContextMenu(); // ADD THIS
+    initializeAlbumContextMenu();
+    initializeCreateList(); // ADD THIS LINE
   })
   .catch(err => {
     console.error('Failed to initialize:', err);
