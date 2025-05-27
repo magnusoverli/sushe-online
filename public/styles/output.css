@@ -688,6 +688,9 @@ video {
 .flex-col {
   flex-direction: column;
 }
+.items-start {
+  align-items: flex-start;
+}
 .items-center {
   align-items: center;
 }
@@ -699,6 +702,9 @@ video {
 }
 .gap-4 {
   gap: 1rem;
+}
+.gap-2 {
+  gap: 0.5rem;
 }
 .space-y-1 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-y-reverse: 0;
