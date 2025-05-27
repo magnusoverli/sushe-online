@@ -265,6 +265,12 @@ function selectList(listName) {
   
   displayAlbums(list);
   updateListNav();
+  
+  // Show the add album button when a list is selected
+  const addAlbumBtn = document.getElementById('addAlbumBtn');
+  if (addAlbumBtn) {
+    addAlbumBtn.classList.remove('hidden');
+  }
 }
 
 // Initialize drag and drop for container
@@ -815,6 +821,13 @@ document.getElementById('clearBtn').onclick = async () => {
           <p class="text-sm">Import a JSON file to get started</p>
         </div>
       `;
+      
+      // Hide the add album button
+      const addAlbumBtn = document.getElementById('addAlbumBtn');
+      if (addAlbumBtn) {
+        addAlbumBtn.classList.add('hidden');
+      }
+      
       showToast('All lists cleared');
     } catch (error) {
       console.error('Error clearing lists:', error);

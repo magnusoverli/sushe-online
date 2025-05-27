@@ -541,8 +541,18 @@ const spotifyTemplate = (req) => `
     <div class="flex-1 flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-6">
-        <h2 id="listTitle" class="text-3xl font-bold">Select a list to begin</h2>
-        <p id="listInfo" class="text-gray-400 mt-1"></p>
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 id="listTitle" class="text-3xl font-bold">Select a list to begin</h2>
+            <p id="listInfo" class="text-gray-400 mt-1"></p>
+          </div>
+          <button id="addAlbumBtn" class="hidden bg-red-600 hover:bg-red-700 text-white p-3 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+        </div>
       </div>
       
       <!-- Album List -->
@@ -569,7 +579,82 @@ const spotifyTemplate = (req) => `
       Delete List
     </button>
   </div>
-  
+
+  <!-- Add Album Modal -->
+  <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800 flex items-center justify-between">
+        <h3 class="text-2xl font-bold text-white">Add Album to List</h3>
+        <button id="closeModalBtn" class="text-gray-400 hover:text-gray-200 transition-colors">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="flex-1 overflow-hidden flex flex-col">
+        <!-- Search Section -->
+        <div class="p-6 border-b border-gray-800">
+          <div class="flex gap-4">
+            <input 
+              type="text" 
+              id="artistSearchInput" 
+              placeholder="Search for an artist..." 
+              class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            >
+            <button 
+              id="searchArtistBtn" 
+              class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded transition duration-200 font-semibold"
+            >
+              Search
+            </button>
+          </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="flex-1 overflow-y-auto p-6">
+          <!-- Artist Results -->
+          <div id="artistResults" class="hidden">
+            <h4 class="text-lg font-semibold text-gray-300 mb-4">Select an Artist</h4>
+            <div id="artistList" class="space-y-2">
+              <!-- Artist results will be populated here -->
+            </div>
+          </div>
+          
+          <!-- Album Results -->
+          <div id="albumResults" class="hidden">
+            <button id="backToArtists" class="text-gray-400 hover:text-white mb-4 flex items-center gap-2 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="19" y1="12" x2="5" y2="12"></line>
+                <polyline points="12 19 5 12 12 5"></polyline>
+              </svg>
+              Back to artists
+            </button>
+            
+            <h4 class="text-lg font-semibold text-gray-300 mb-4">Select an Album</h4>
+            <div id="albumList" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <!-- Album results will be populated here -->
+            </div>
+          </div>
+          
+          <!-- Loading State -->
+          <div id="searchLoading" class="hidden text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+            <p class="text-gray-400 mt-4">Searching...</p>
+          </div>
+          
+          <!-- Empty State -->
+          <div id="searchEmpty" class="text-center py-12 text-gray-500">
+            <p>Search for an artist to add albums</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/js/musicbrainz.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>
