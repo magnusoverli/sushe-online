@@ -9,6 +9,9 @@ let draggedIndex = null;
 let placeholder = null;
 let lastValidDropIndex = null;
 
+// Context menu variables
+let currentContextList = null;
+
 // Position-based points mapping
 const POSITION_POINTS = {
     1: 60, 2: 54, 3: 50, 4: 46, 5: 43, 6: 40, 7: 38, 8: 36, 9: 34, 10: 32,
@@ -16,6 +19,22 @@ const POSITION_POINTS = {
     21: 20, 22: 19, 23: 18, 24: 17, 25: 16, 26: 15, 27: 14, 28: 13, 29: 12, 30: 11,
     31: 10, 32: 9, 33: 8, 34: 7, 35: 6, 36: 5, 37: 4, 38: 3, 39: 2, 40: 1
 };
+
+// Hide context menu when clicking elsewhere
+document.addEventListener('click', () => {
+  const contextMenu = document.getElementById('contextMenu');
+  if (contextMenu) {
+    contextMenu.classList.add('hidden');
+  }
+});
+
+// Prevent default context menu on right-click in list nav
+document.addEventListener('contextmenu', (e) => {
+  const listButton = e.target.closest('#listNav button');
+  if (listButton) {
+    e.preventDefault();
+  }
+});
 
 // Helper function to get points for a position
 function getPointsForPosition(position) {
@@ -131,6 +150,56 @@ async function clearAllLists() {
   }
 }
 
+// Initialize context menu
+function initializeContextMenu() {
+  const contextMenu = document.getElementById('contextMenu');
+  const deleteOption = document.getElementById('deleteListOption');
+  
+  if (!contextMenu || !deleteOption) return;
+  
+  // Handle delete option click
+  deleteOption.onclick = async () => {
+    contextMenu.classList.add('hidden');
+    
+    if (!currentContextList) return;
+    
+    // Confirm deletion
+    if (confirm(`Are you sure you want to delete the list "${currentContextList}"? This cannot be undone.`)) {
+      try {
+        await apiCall(`/api/lists/${encodeURIComponent(currentContextList)}`, {
+          method: 'DELETE'
+        });
+        
+        // Remove from local data
+        delete lists[currentContextList];
+        
+        // If we're currently viewing this list, clear the view
+        if (currentList === currentContextList) {
+          currentList = null;
+          document.getElementById('listTitle').textContent = 'Select a list to begin';
+          document.getElementById('listInfo').textContent = '';
+          document.getElementById('albumContainer').innerHTML = `
+            <div class="text-center text-gray-500 mt-20">
+              <p class="text-xl mb-2">No list selected</p>
+              <p class="text-sm">Import a JSON file to get started</p>
+            </div>
+          `;
+        }
+        
+        // Update the navigation
+        updateListNav();
+        
+        showToast(`List "${currentContextList}" deleted`);
+      } catch (error) {
+        console.error('Error deleting list:', error);
+        showToast('Error deleting list', 'error');
+      }
+    }
+    
+    currentContextList = null;
+  };
+}
+
 // Update sidebar navigation
 function updateListNav() {
   const nav = document.getElementById('listNav');
@@ -143,7 +212,39 @@ function updateListNav() {
         ${listName}
       </button>
     `;
-    li.querySelector('button').onclick = () => selectList(listName);
+    
+    const button = li.querySelector('button');
+    
+    // Left click - select list
+    button.onclick = () => selectList(listName);
+    
+    // Right click - show context menu
+    button.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      currentContextList = listName;
+      
+      const contextMenu = document.getElementById('contextMenu');
+      if (!contextMenu) return;
+      
+      // Position the context menu at cursor
+      contextMenu.style.left = `${e.clientX}px`;
+      contextMenu.style.top = `${e.clientY}px`;
+      contextMenu.classList.remove('hidden');
+      
+      // Adjust position if menu goes off-screen
+      setTimeout(() => {
+        const rect = contextMenu.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+          contextMenu.style.left = `${e.clientX - rect.width}px`;
+        }
+        if (rect.bottom > window.innerHeight) {
+          contextMenu.style.top = `${e.clientY - rect.height}px`;
+        }
+      }, 0);
+    });
+    
     nav.appendChild(li);
   });
 }
@@ -341,7 +442,16 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
   genreDiv.appendChild(select);
   select.focus();
   
+  // Create handleClickOutside function so we can reference it for removal
+  let handleClickOutside;
+  
   const restoreDisplay = (valueToDisplay) => {
+    // Remove the click outside listener if it exists
+    if (handleClickOutside) {
+      document.removeEventListener('click', handleClickOutside);
+      handleClickOutside = null;
+    }
+    
     const colorClass = genreField === 'genre_1' ? 'text-gray-300' : 'text-gray-400';
     let displayGenre = valueToDisplay;
     
@@ -396,11 +506,10 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     }
   });
   
-  // Handle clicks outside
-  const handleClickOutside = (e) => {
+  // Define handleClickOutside
+  handleClickOutside = (e) => {
     if (!genreDiv.contains(e.target)) {
       restoreDisplay(lists[currentList][albumIndex][genreField] || '');
-      document.removeEventListener('click', handleClickOutside);
     }
   };
   
@@ -666,7 +775,11 @@ document.getElementById('clearBtn').onclick = async () => {
 };
 
 // Initialize on load
-Promise.all([loadGenres(), loadLists()]).catch(err => {
-  console.error('Failed to initialize:', err);
-  showToast('Failed to initialize', 'error');
-});
+Promise.all([loadGenres(), loadLists()])
+  .then(() => {
+    initializeContextMenu();
+  })
+  .catch(err => {
+    console.error('Failed to initialize:', err);
+    showToast('Failed to initialize', 'error');
+  });
