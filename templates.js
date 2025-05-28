@@ -1,5 +1,5 @@
 // Base HTML template with Black Metal Spotify-inspired theme
-const htmlTemplate = (content, title = 'KVLT Auth') => `
+const htmlTemplate = (content, title = 'SuShe Auth') => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -81,8 +81,7 @@ const htmlTemplate = (content, title = 'KVLT Auth') => `
 const registerTemplate = (req) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
-      <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">JOIN THE KVLT</h1>
-      <p class="text-gray-400 text-sm">Forge your identity in digital darkness</p>
+      <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">Join SuShe Online</h1>
     </div>
     
     <form method="post" action="/register" class="space-y-6">
@@ -127,8 +126,7 @@ const registerTemplate = (req) => `
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
-        Already initiated? 
-        <a href="/login" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Sign in</a>
+        <a href="/login" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Return to login</a>
       </p>
     </div>
   </div>
@@ -138,8 +136,7 @@ const registerTemplate = (req) => `
 const loginTemplate = (req) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
-      <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">ENTER THE VOID</h1>
-      <p class="text-gray-400 text-sm">Return to the darkness</p>
+      <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOG IN</h1>
     </div>
     
     <form method="post" action="/login" class="space-y-6">
@@ -193,8 +190,8 @@ const loginTemplate = (req) => `
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
-        New to the darkness? 
-        <a href="/register" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Join the kvlt</a>
+        No account? 
+        <a href="/register" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">REGISTER</a>
       </p>
     </div>
   </div>
@@ -204,8 +201,7 @@ const loginTemplate = (req) => `
 const forgotPasswordTemplate = (req) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
-      <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">LOST IN THE ABYSS?</h1>
-      <p class="text-gray-400 text-sm">We'll guide you back to the darkness</p>
+      <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">Forgot password</h1>
     </div>
     
     <form method="post" action="/forgot" class="space-y-6">
@@ -226,7 +222,7 @@ const forgotPasswordTemplate = (req) => `
         class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
-        Send Recovery Rune
+        Reset password
       </button>
     </form>
     
@@ -234,7 +230,6 @@ const forgotPasswordTemplate = (req) => `
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
-        Found your way? 
         <a href="/login" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Return to login</a>
       </p>
     </div>
@@ -289,7 +284,7 @@ const spotifyTemplate = (req) => `
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KVLT Collections</title>
+  <title>SuShe Online</title>
   <link href="/styles/output.css" rel="stylesheet">
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
@@ -507,7 +502,7 @@ const spotifyTemplate = (req) => `
     <!-- Sidebar -->
     <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
       <div class="p-6 border-b border-gray-800">
-        <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">KVLT</h1>
+        <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">SuShe Online</h1>
         <p class="text-gray-400 text-sm mt-1">Collections</p>
       </div>
       
