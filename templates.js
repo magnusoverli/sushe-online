@@ -299,9 +299,6 @@ const sidebarComponent = (req) => `
         <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
           + Import List
         </button>
-        <button id="exportBtn" class="hidden w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-          Export Current List
-        </button>
         <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
           DELETE All Lists
         </button>

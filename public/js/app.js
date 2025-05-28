@@ -647,61 +647,6 @@ function openRenameModal(listName) {
   }, 100);
 }
 
-// Export functionality
-function initializeExport() {
-  const exportBtn = document.getElementById('exportBtn');
-  if (!exportBtn) return;
-  
-  exportBtn.onclick = () => {
-    if (!currentList || !lists[currentList]) {
-      showToast('No list selected to export', 'error');
-      return;
-    }
-    
-    try {
-      // Get the current list data
-      const listData = lists[currentList];
-      
-      // Create a copy with rank added based on position
-      const exportData = listData.map((album, index) => {
-        const exported = { ...album };
-        // Add rank based on position (1-indexed)
-        exported.rank = index + 1;
-        // Add points for this position
-        exported.points = getPointsForPosition(index + 1);
-        // Remove any internal properties that shouldn't be exported
-        // (but keep rank and points since they're useful)
-        return exported;
-      });
-      
-      // Convert to JSON with pretty formatting
-      const jsonStr = JSON.stringify(exportData, null, 2);
-      
-      // Create blob and download link
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      // Create temporary download link
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentList}.json`;
-      
-      // Trigger download
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast(`Exported "${currentList}" successfully`);
-    } catch (error) {
-      console.error('Error exporting list:', error);
-      showToast('Error exporting list', 'error');
-    }
-  };
-}
-
 // Update sidebar navigation
 function updateListNav() {
   const nav = document.getElementById('listNav');
@@ -772,12 +717,6 @@ function selectList(listName) {
   const addAlbumBtn = document.getElementById('addAlbumBtn');
   if (addAlbumBtn) {
     addAlbumBtn.classList.remove('hidden');
-  }
-  
-  // Show the export button when a list is selected
-  const exportBtn = document.getElementById('exportBtn');
-  if (exportBtn) {
-    exportBtn.classList.remove('hidden');
   }
 }
 
@@ -1224,12 +1163,6 @@ document.getElementById('clearBtn').onclick = async () => {
         addAlbumBtn.classList.add('hidden');
       }
       
-      // Hide the export button
-      const exportBtn = document.getElementById('exportBtn');
-      if (exportBtn) {
-        exportBtn.classList.add('hidden');
-      }
-      
       showToast('All lists cleared');
     } catch (error) {
       console.error('Error clearing lists:', error);
@@ -1245,7 +1178,7 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeAlbumContextMenu();
       initializeCreateList();
       initializeRenameList();
-      initializeExport();
+      // REMOVED: initializeExport();
     })
     .catch(err => {
       console.error('Failed to initialize:', err);
