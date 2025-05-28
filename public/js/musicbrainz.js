@@ -80,6 +80,7 @@ async function searchArtists(query) {
   return data.artists || [];
 }
 
+// Get release groups - ONLY pure Albums and EPs (no secondary types)
 // Get release groups - ONLY pure Albums and EPs (no secondary types) that have been released
 async function getArtistReleaseGroups(artistId) {
   // Get albums and EPs
@@ -92,56 +93,38 @@ async function getArtistReleaseGroups(artistId) {
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   
-  console.log(`Found ${releaseGroups.length} total release groups for artist`);
-  
-  // Filter to ONLY include releases that meet our criteria
+  // Filter to ONLY include releases with no secondary types AND that have been released
   releaseGroups = releaseGroups.filter(rg => {
     const primaryType = rg['primary-type'];
     const secondaryTypes = rg['secondary-types'] || [];
     const releaseDate = rg['first-release-date'];
     
-    // Debug logging for a few examples
-    if (releaseGroups.indexOf(rg) < 5) {
-      console.log(`Release: "${rg.title}", Type: ${primaryType}, Secondary: ${JSON.stringify(secondaryTypes)}, Date: ${releaseDate || 'NO DATE'}`);
+    // Only include if it's an Album or EP with NO secondary types
+    const isValidType = (primaryType === 'Album' || primaryType === 'EP') && secondaryTypes.length === 0;
+    
+    // Check if it has been released
+    let hasBeenReleased = true;
+    if (releaseDate) {
+      // Handle partial dates (YYYY or YYYY-MM)
+      let comparableDate = releaseDate;
+      
+      // If only year, assume December 31st of that year
+      if (releaseDate.length === 4) {
+        comparableDate = `${releaseDate}-12-31`;
+      }
+      // If only year and month, assume last day of that month
+      else if (releaseDate.length === 7) {
+        const [year, month] = releaseDate.split('-');
+        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+        comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
+      }
+      
+      // Compare with today
+      hasBeenReleased = comparableDate <= todayStr;
     }
     
-    // Must be an Album or EP
-    if (primaryType !== 'Album' && primaryType !== 'EP') {
-      return false;
-    }
-    
-    // Must have NO secondary types (this excludes compilations, live albums, etc.)
-    if (secondaryTypes.length > 0) {
-      return false;
-    }
-    
-    // Must have a release date
-    if (!releaseDate) {
-      return false; // Changed from including to excluding
-    }
-    
-    // Check if it has been released (not in the future)
-    // Handle partial dates (YYYY or YYYY-MM)
-    let comparableDate = releaseDate;
-    
-    // If only year, assume December 31st of that year
-    if (releaseDate.length === 4) {
-      comparableDate = `${releaseDate}-12-31`;
-    }
-    // If only year and month, assume last day of that month
-    else if (releaseDate.length === 7) {
-      const [year, month] = releaseDate.split('-');
-      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-      comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
-    }
-    
-    // Must not be in the future
-    const hasBeenReleased = comparableDate <= todayStr;
-    
-    return hasBeenReleased;
+    return isValidType && hasBeenReleased;
   });
-  
-  console.log(`Filtered to ${releaseGroups.length} releases that meet our criteria`);
   
   // Sort by first release date (newest first)
   releaseGroups.sort((a, b) => {
@@ -250,61 +233,18 @@ async function getCoverArtFromArchive(releaseGroupId) {
   });
 }
 
-// Get cover art using "First Success Wins" approach
+// Get cover art with iTunes priority and Cover Art Archive fallback
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
-  // Create a promise that resolves with the first successful (non-null) result
-  return new Promise(async (resolve) => {
-    let resolved = false;
-    let completedCount = 0;
-    const totalSources = 2;
-    
-    const checkComplete = () => {
-      completedCount++;
-      if (completedCount >= totalSources && !resolved) {
-        resolved = true;
-        resolve(null); // No source had an image
-      }
-    };
-    
-    // Start iTunes fetch
-    if (artistName && albumTitle) {
-      searchITunesArtwork(artistName, albumTitle)
-        .then(url => {
-          if (url && !resolved) {
-            resolved = true;
-            resolve(url);
-          } else {
-            checkComplete();
-          }
-        })
-        .catch(() => checkComplete());
-    } else {
-      completedCount++; // Skip iTunes if no info
+  // First try iTunes (faster and more reliable)
+  if (artistName && albumTitle) {
+    const itunesArt = await searchITunesArtwork(artistName, albumTitle);
+    if (itunesArt) {
+      return itunesArt;
     }
-    
-    // Start Cover Art Archive fetch after a small delay
-    // This gives iTunes a head start since it's usually faster
-    setTimeout(() => {
-      getCoverArtFromArchive(releaseGroupId)
-        .then(url => {
-          if (url && !resolved) {
-            resolved = true;
-            resolve(url);
-          } else {
-            checkComplete();
-          }
-        })
-        .catch(() => checkComplete());
-    }, 500); // 500ms head start for iTunes
-    
-    // Overall timeout
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        resolve(null);
-      }
-    }, 5000);
-  });
+  }
+  
+  // Fall back to Cover Art Archive
+  return await getCoverArtFromArchive(releaseGroupId);
 }
 
 // Convert date to year format
@@ -581,14 +521,13 @@ async function loadCoverArtProgressive(releaseGroups, artistName) {
     }
   };
   
-  // Create promises for all cover art fetches using the race approach
+  // Create promises for all cover art fetches
   const coverArtPromises = releaseGroups.map(async (rg, index) => {
     try {
       if (currentLoadingController?.signal.aborted) {
         return null;
       }
       
-      // Use the race approach for faster results
       const coverArt = await getCoverArt(rg.id, artistName, rg.title);
       
       // Update UI immediately when cover art is found
