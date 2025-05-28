@@ -316,6 +316,102 @@ const sidebarComponent = (req) => `
   </div>
 `;
 
+// Component: Import Conflict Modal
+const importConflictModalComponent = () => `
+  <div id="importConflictModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-2xl font-bold text-white">List Already Exists</h3>
+        <p class="text-sm text-gray-400 mt-1">A list named "<span id="conflictListName" class="text-gray-300"></span>" already exists.</p>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-6 space-y-4">
+        <p class="text-gray-300 text-sm mb-4">What would you like to do?</p>
+        
+        <div class="space-y-3">
+          <button 
+            id="importOverwriteBtn"
+            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 hover:border-red-600 transition-colors group"
+          >
+            <div class="font-semibold text-white group-hover:text-red-500">Overwrite Existing List</div>
+            <div class="text-xs text-gray-400 mt-1">Replace the current list with the imported one</div>
+          </button>
+          
+          <button 
+            id="importRenameBtn"
+            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 hover:border-red-600 transition-colors group"
+          >
+            <div class="font-semibold text-white group-hover:text-red-500">Rename Import</div>
+            <div class="text-xs text-gray-400 mt-1">Save with a different name</div>
+          </button>
+          
+          <button 
+            id="importMergeBtn"
+            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 hover:border-red-600 transition-colors group"
+          >
+            <div class="font-semibold text-white group-hover:text-red-500">Merge Lists</div>
+            <div class="text-xs text-gray-400 mt-1">Add imported albums to the existing list</div>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800">
+        <button 
+          id="importCancelBtn" 
+          class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+        >
+          Cancel Import
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Rename Import Modal -->
+  <div id="importRenameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-2xl font-bold text-white">Choose New Name</h3>
+        <p class="text-sm text-gray-400 mt-1">Original name: <span id="originalImportName" class="text-gray-300"></span></p>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-6">
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="importNewName">
+          New List Name
+        </label>
+        <input 
+          type="text" 
+          id="importNewName" 
+          placeholder="Enter new name..." 
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          maxlength="50"
+        >
+        <p class="text-xs text-gray-500 mt-2">Choose a unique name for the imported list</p>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
+        <button 
+          id="cancelImportRenameBtn" 
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+        >
+          Cancel
+        </button>
+        <button 
+          id="confirmImportRenameBtn" 
+          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+        >
+          Import with New Name
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
 // Component: Main Content Area
 const mainContentComponent = () => `
   <div class="flex-1 flex flex-col overflow-hidden">
@@ -561,6 +657,7 @@ const spotifyTemplate = (req) => `
   ${createListModalComponent()}
   ${renameListModalComponent()}
   ${addAlbumModalComponent()}
+  ${importConflictModalComponent()}
   
   <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>

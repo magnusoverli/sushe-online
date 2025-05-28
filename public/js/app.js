@@ -3,6 +3,8 @@ let currentList = null;
 let lists = {};
 let availableGenres = [];
 let availableCountries = [];
+let pendingImportData = null;
+let pendingImportFilename = null;
 
 // Context menu variables
 let currentContextList = null;
@@ -66,6 +68,152 @@ async function loadCountries() {
     console.error('Error loading countries:', error);
     showToast('Error loading countries', 'error');
   }
+}
+
+// Initialize import conflict handling
+function initializeImportConflictHandling() {
+  const conflictModal = document.getElementById('importConflictModal');
+  const renameModal = document.getElementById('importRenameModal');
+  const conflictListNameSpan = document.getElementById('conflictListName');
+  const originalImportNameSpan = document.getElementById('originalImportName');
+  const importNewNameInput = document.getElementById('importNewName');
+  
+  // Overwrite option
+  document.getElementById('importOverwriteBtn').onclick = async () => {
+    if (!pendingImportData || !pendingImportFilename) return;
+    
+    conflictModal.classList.add('hidden');
+    
+    try {
+      await saveList(pendingImportFilename, pendingImportData);
+      updateListNav();
+      selectList(pendingImportFilename);
+      showToast(`Overwritten "${pendingImportFilename}" with ${pendingImportData.length} albums`);
+    } catch (err) {
+      console.error('Import overwrite error:', err);
+      showToast('Error overwriting list', 'error');
+    }
+    
+    pendingImportData = null;
+    pendingImportFilename = null;
+  };
+  
+  // Rename option
+  document.getElementById('importRenameBtn').onclick = () => {
+    conflictModal.classList.add('hidden');
+    originalImportNameSpan.textContent = pendingImportFilename;
+    
+    // Suggest a new name
+    let suggestedName = pendingImportFilename;
+    let counter = 1;
+    while (lists[suggestedName]) {
+      suggestedName = `${pendingImportFilename} (${counter})`;
+      counter++;
+    }
+    importNewNameInput.value = suggestedName;
+    
+    renameModal.classList.remove('hidden');
+    
+    setTimeout(() => {
+      importNewNameInput.focus();
+      importNewNameInput.select();
+    }, 100);
+  };
+  
+  // Merge option
+  document.getElementById('importMergeBtn').onclick = async () => {
+    if (!pendingImportData || !pendingImportFilename) return;
+    
+    conflictModal.classList.add('hidden');
+    
+    try {
+      // Get existing list
+      const existingList = lists[pendingImportFilename] || [];
+      
+      // Merge the lists (avoiding duplicates based on artist + album)
+      const existingKeys = new Set(
+        existingList.map(album => `${album.artist}::${album.album}`.toLowerCase())
+      );
+      
+      const newAlbums = pendingImportData.filter(album => {
+        const key = `${album.artist}::${album.album}`.toLowerCase();
+        return !existingKeys.has(key);
+      });
+      
+      const mergedList = [...existingList, ...newAlbums];
+      
+      await saveList(pendingImportFilename, mergedList);
+      updateListNav();
+      selectList(pendingImportFilename);
+      
+      const addedCount = newAlbums.length;
+      const skippedCount = pendingImportData.length - addedCount;
+      
+      if (skippedCount > 0) {
+        showToast(`Added ${addedCount} new albums, skipped ${skippedCount} duplicates`);
+      } else {
+        showToast(`Added ${addedCount} albums to "${pendingImportFilename}"`);
+      }
+    } catch (err) {
+      console.error('Import merge error:', err);
+      showToast('Error merging lists', 'error');
+    }
+    
+    pendingImportData = null;
+    pendingImportFilename = null;
+  };
+  
+  // Cancel import
+  document.getElementById('importCancelBtn').onclick = () => {
+    conflictModal.classList.add('hidden');
+    pendingImportData = null;
+    pendingImportFilename = null;
+    showToast('Import cancelled');
+  };
+  
+  // Rename modal handlers
+  document.getElementById('confirmImportRenameBtn').onclick = async () => {
+    const newName = importNewNameInput.value.trim();
+    
+    if (!newName) {
+      showToast('Please enter a new name', 'error');
+      return;
+    }
+    
+    if (lists[newName]) {
+      showToast('A list with this name already exists', 'error');
+      return;
+    }
+    
+    renameModal.classList.add('hidden');
+    
+    try {
+      await saveList(newName, pendingImportData);
+      updateListNav();
+      selectList(newName);
+      showToast(`Imported as "${newName}" with ${pendingImportData.length} albums`);
+    } catch (err) {
+      console.error('Import with rename error:', err);
+      showToast('Error importing list', 'error');
+    }
+    
+    pendingImportData = null;
+    pendingImportFilename = null;
+  };
+  
+  document.getElementById('cancelImportRenameBtn').onclick = () => {
+    renameModal.classList.add('hidden');
+    // Go back to conflict modal
+    document.getElementById('conflictListName').textContent = pendingImportFilename;
+    conflictModal.classList.remove('hidden');
+  };
+  
+  // Enter key in rename input
+  importNewNameInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      document.getElementById('confirmImportRenameBtn').click();
+    }
+  };
 }
 
 // Make country editable with datalist
@@ -1118,13 +1266,21 @@ document.getElementById('fileInput').onchange = async (e) => {
         
         const listName = file.name.replace('.json', '');
         
-        // Save to server
-        await saveList(listName, data);
-        
-        updateListNav();
-        selectList(listName);
-        
-        showToast(`Successfully imported ${data.length} albums`);
+        // Check if list already exists
+        if (lists[listName]) {
+          // Store the data and show conflict modal
+          pendingImportData = data;
+          pendingImportFilename = listName;
+          
+          document.getElementById('conflictListName').textContent = listName;
+          document.getElementById('importConflictModal').classList.remove('hidden');
+        } else {
+          // No conflict, import directly
+          await saveList(listName, data);
+          updateListNav();
+          selectList(listName);
+          showToast(`Successfully imported ${data.length} albums`);
+        }
       } catch (err) {
         console.error('Import error:', err);
         showToast('Error importing file: ' + err.message, 'error');
@@ -1178,7 +1334,7 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeAlbumContextMenu();
       initializeCreateList();
       initializeRenameList();
-      // REMOVED: initializeExport();
+      initializeImportConflictHandling(); // Add this line
     })
     .catch(err => {
       console.error('Failed to initialize:', err);
