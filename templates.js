@@ -289,6 +289,53 @@ const spotifyTemplate = (req) => `
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
     
+    /* Album grid column configuration */
+    :root {
+      --album-grid-columns: 0.1fr 0.15fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+      /* Column descriptions:
+         Position number
+         Album cover
+         Album name/date
+         Artist
+         Country
+         Genre 1
+         Genre 2
+         Comment
+      */
+      
+      /* Cover art size configuration */
+      --cover-art-size: 100px;  /* Maximum size for cover art */
+    }
+    
+    /* Define the album grid class */
+    .album-grid {
+      display: grid;
+      grid-template-columns: var(--album-grid-columns);
+    }
+    
+    /* Cover art container */
+    .album-cover-container {
+      width: 100%;
+      max-width: var(--cover-art-size);
+      aspect-ratio: 1 / 1;  /* Ensures square aspect ratio */
+    }
+    
+    /* Cover art styling */
+    .album-cover {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;  /* Ensures image fills container while maintaining aspect ratio */
+    }
+    
+    /* Placeholder cover styling */
+    .album-cover-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
     body {
       margin: 0;
       padding: 0;
@@ -359,11 +406,6 @@ const spotifyTemplate = (req) => `
       border: 2px dashed #dc2626;
       opacity: 0.8;
       min-height: 64px;
-    }
-    
-    /* Grid layout with specific column sizes */
-    .grid-cols-\\[50px_60px_1fr_1fr_1\\.5fr_80px\\] {
-      grid-template-columns: 50px 60px 1fr 1fr 1.5fr 80px;
     }
     
     /* Ensure the table takes full height */

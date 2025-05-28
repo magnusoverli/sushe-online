@@ -1125,13 +1125,13 @@ function displayAlbums(albums) {
     `;
     return;
   }
-  
+
   const table = document.createElement('div');
   table.className = 'w-full relative';
   
-  // Header with country column - updated grid
+  // Header - now using album-grid class
   const header = document.createElement('div');
-  header.className = 'grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+  header.className = 'album-grid gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
   header.innerHTML = `
     <div class="text-center">#</div>
     <div></div>
@@ -1149,7 +1149,7 @@ function displayAlbums(albums) {
   
   albums.forEach((album, index) => {
     const row = document.createElement('div');
-    row.className = 'album-row grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
+    row.className = 'album-row album-grid gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
     row.draggable = true;
     row.dataset.index = index;
     
@@ -1178,22 +1178,24 @@ function displayAlbums(albums) {
     row.innerHTML = `
       <div class="flex items-center justify-center text-gray-400 font-medium">${position}</div>
       <div class="flex items-center">
-        ${coverImage ? `
-          <img src="data:image/${imageFormat};base64,${coverImage}" 
-               alt="${albumName}" 
-               class="w-12 h-12 rounded shadow-lg"
-               loading="lazy"
-               onerror="this.onerror=null; this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHZpZXdCb3g9IjAgMCA0OCA0OCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiBmaWxsPSIjMUYyOTM3Ii8+CjxwYXRoIGQ9Ik0yNCAxMkMyNCAxMiAzMCAxOCAzMCAyNEMzMCAzMCAyNCAzNiAyNCAzNkMyNCAzNiAxOCAzMCAxOCAyNEMxOCAxOCAyNCAxMiAyNCAxMloiIGZpbGw9IiM0QjU1NjMiLz4KPC9zdmc+'"
-          >
-        ` : `
-          <div class="w-12 h-12 rounded bg-gray-800 flex items-center justify-center shadow-lg">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-          </div>
-        `}
+        <div class="album-cover-container">
+          ${coverImage ? `
+            <img src="data:image/${imageFormat};base64,${coverImage}" 
+                alt="${albumName}" 
+                class="album-cover rounded shadow-lg"
+                loading="lazy"
+                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+            >
+          ` : `
+            <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
+          `}
+        </div>
       </div>
       <div class="flex flex-col justify-center min-w-0">
         <div class="font-medium text-white truncate">${albumName}</div>
