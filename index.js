@@ -153,7 +153,7 @@ app.post('/register', async (req, res) => {
 
 // Login form (same as before)
 app.get('/login', (req, res) => {
-  res.send(htmlTemplate(loginTemplate(req), 'Enter the Void - Black Metal Auth'));
+  res.send(htmlTemplate(loginTemplate(req), 'SuShe Online'));
 });
 
 app.post('/login',
