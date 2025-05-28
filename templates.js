@@ -291,7 +291,7 @@ const spotifyTemplate = (req) => `
     
     /* Album grid column configuration */
     :root {
-      --album-grid-columns: 0.1fr 0.15fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+      --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
       /* Column descriptions:
          Position number
          Album cover
@@ -304,7 +304,7 @@ const spotifyTemplate = (req) => `
       */
       
       /* Cover art size configuration */
-      --cover-art-size: 55px;  /* Maximum size for cover art */
+      --cover-art-size: 100px;  /* Maximum size for cover art */
     }
     
     /* Define the album grid class */
