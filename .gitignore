@@ -141,3 +141,5 @@ dist
 
 # DBs
 *.db
+
+.env.production

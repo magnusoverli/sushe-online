@@ -8,6 +8,7 @@ const Datastore = require('@seald-io/nedb');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 const { composeForgotPasswordEmail } = require('./forgot_email');
 
@@ -22,9 +23,21 @@ const {
   spotifyTemplate 
 } = require('./templates');
 
+// Create data directory if it doesn't exist
+const dataDir = process.env.DATA_DIR || './data';
+if (!require('fs').existsSync(dataDir)) {
+  require('fs').mkdirSync(dataDir, { recursive: true });
+}
+
 // Initialize NeDB databases
-const users = new Datastore({ filename: 'users.db', autoload: true });
-const lists = new Datastore({ filename: 'lists.db', autoload: true });
+const users = new Datastore({ 
+  filename: path.join(dataDir, 'users.db'), 
+  autoload: true 
+});
+const lists = new Datastore({ 
+  filename: path.join(dataDir, 'lists.db'), 
+  autoload: true 
+});
 
 // Create indexes for better performance
 lists.ensureIndex({ fieldName: 'userId' });
