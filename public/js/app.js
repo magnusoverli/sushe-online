@@ -74,49 +74,45 @@ async function loadCountries() {
   }
 }
 
-// Make country editable with dropdown
+// Make country editable with datalist
 function makeCountryEditable(countryDiv, albumIndex) {
   // Check if we're already editing
-  if (countryDiv.querySelector('select')) {
+  if (countryDiv.querySelector('input')) {
     return;
   }
   
   // Get current country from the live data
   const currentCountry = lists[currentList][albumIndex].country || '';
   
-  // Create select element
-  const select = document.createElement('select');
-  select.className = 'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+  // Create input with datalist
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+  input.value = currentCountry;
+  input.placeholder = 'Type to search countries...';
+  input.setAttribute('list', `country-list-${currentList}-${albumIndex}`);
   
-  // Always add the "- Select Country -" option first
-  const instructionOption = document.createElement('option');
-  instructionOption.value = '##SELECT##';
-  instructionOption.textContent = '- Select Country -';
-  instructionOption.disabled = true;
-  if (!currentCountry) {
-    instructionOption.selected = true;
-  }
-  select.appendChild(instructionOption);
+  // Create datalist
+  const datalist = document.createElement('datalist');
+  datalist.id = `country-list-${currentList}-${albumIndex}`;
   
   // Add all available countries
   availableCountries.forEach(country => {
     const option = document.createElement('option');
     option.value = country;
-    option.textContent = country;
-    if (country === currentCountry) {
-      option.selected = true;
-    }
-    select.appendChild(option);
+    datalist.appendChild(option);
   });
   
   // Store the original onclick handler
   const originalOnClick = countryDiv.onclick;
   countryDiv.onclick = null; // Temporarily remove click handler
   
-  // Replace content with select
+  // Replace content with input and datalist
   countryDiv.innerHTML = '';
-  countryDiv.appendChild(select);
-  select.focus();
+  countryDiv.appendChild(input);
+  countryDiv.appendChild(datalist);
+  input.focus();
+  input.select();
   
   // Create handleClickOutside function so we can reference it for removal
   let handleClickOutside;
@@ -135,10 +131,8 @@ function makeCountryEditable(countryDiv, albumIndex) {
   };
   
   const saveCountry = async (newCountry) => {
-    // Ignore instruction option
-    if (newCountry === '##SELECT##') {
-      return;
-    }
+    // Trim the input
+    newCountry = newCountry.trim();
     
     // Check if value actually changed
     if (newCountry === currentCountry) {
@@ -161,14 +155,22 @@ function makeCountryEditable(countryDiv, albumIndex) {
     }
   };
   
-  // Handle selection change
-  select.addEventListener('change', (e) => {
+  // Handle input change (when selecting from datalist)
+  input.addEventListener('change', (e) => {
     saveCountry(e.target.value);
   });
   
+  // Handle blur (when clicking away)
+  input.addEventListener('blur', () => {
+    saveCountry(input.value);
+  });
+  
   // Handle keyboard
-  select.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveCountry(input.value);
+    } else if (e.key === 'Escape') {
       e.preventDefault();
       restoreDisplay(currentCountry);
     }
@@ -177,7 +179,7 @@ function makeCountryEditable(countryDiv, albumIndex) {
   // Define handleClickOutside
   handleClickOutside = (e) => {
     if (!countryDiv.contains(e.target)) {
-      restoreDisplay(lists[currentList][albumIndex].country || '');
+      saveCountry(input.value);
     }
   };
   
@@ -921,49 +923,45 @@ function updateAlbumPositions(container) {
   });
 }
 
-// Make genre editable with dropdown
+// Make genre editable with datalist
 function makeGenreEditable(genreDiv, albumIndex, genreField) {
   // Check if we're already editing
-  if (genreDiv.querySelector('select')) {
+  if (genreDiv.querySelector('input')) {
     return;
   }
   
   // Get current genre from the live data
   const currentGenre = lists[currentList][albumIndex][genreField] || '';
   
-  // Create select element
-  const select = document.createElement('select');
-  select.className = 'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+  // Create input with datalist
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+  input.value = currentGenre;
+  input.placeholder = `Type to search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
+  input.setAttribute('list', `genre-list-${currentList}-${albumIndex}-${genreField}`);
   
-  // Always add the "- Select Genre -" option first
-  const instructionOption = document.createElement('option');
-  instructionOption.value = '##SELECT##';
-  instructionOption.textContent = '- Select Genre -';
-  instructionOption.disabled = true;
-  if (!currentGenre) {
-    instructionOption.selected = true;
-  }
-  select.appendChild(instructionOption);
+  // Create datalist
+  const datalist = document.createElement('datalist');
+  datalist.id = `genre-list-${currentList}-${albumIndex}-${genreField}`;
   
   // Add all available genres
   availableGenres.forEach(genre => {
     const option = document.createElement('option');
     option.value = genre;
-    option.textContent = genre;
-    if (genre === currentGenre) {
-      option.selected = true;
-    }
-    select.appendChild(option);
+    datalist.appendChild(option);
   });
   
   // Store the original onclick handler
   const originalOnClick = genreDiv.onclick;
   genreDiv.onclick = null; // Temporarily remove click handler
   
-  // Replace content with select
+  // Replace content with input and datalist
   genreDiv.innerHTML = '';
-  genreDiv.appendChild(select);
-  select.focus();
+  genreDiv.appendChild(input);
+  genreDiv.appendChild(datalist);
+  input.focus();
+  input.select();
   
   // Create handleClickOutside function so we can reference it for removal
   let handleClickOutside;
@@ -990,10 +988,8 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
   };
   
   const saveGenre = async (newGenre) => {
-    // Ignore instruction option
-    if (newGenre === '##SELECT##') {
-      return;
-    }
+    // Trim the input
+    newGenre = newGenre.trim();
     
     // Check if value actually changed
     if (newGenre === currentGenre) {
@@ -1016,14 +1012,22 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     }
   };
   
-  // Handle selection change
-  select.addEventListener('change', (e) => {
+  // Handle input change (when selecting from datalist)
+  input.addEventListener('change', (e) => {
     saveGenre(e.target.value);
   });
   
+  // Handle blur (when clicking away)
+  input.addEventListener('blur', () => {
+    saveGenre(input.value);
+  });
+  
   // Handle keyboard
-  select.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveGenre(input.value);
+    } else if (e.key === 'Escape') {
       e.preventDefault();
       restoreDisplay(currentGenre);
     }
@@ -1032,7 +1036,7 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
   // Define handleClickOutside
   handleClickOutside = (e) => {
     if (!genreDiv.contains(e.target)) {
-      restoreDisplay(lists[currentList][albumIndex][genreField] || '');
+      saveGenre(input.value);
     }
   };
   

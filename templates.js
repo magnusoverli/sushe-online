@@ -397,44 +397,70 @@ const spotifyTemplate = (req) => `
 
     /* Genre dropdown styles */
     .genre-cell select {
-    font-family: inherit;
-    appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
-    background-position: right 0.5rem center;
-    background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
-    padding-right: 2.5rem;
-    cursor: pointer;
+      font-family: inherit;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+      background-position: right 0.5rem center;
+      background-repeat: no-repeat;
+      background-size: 1.5em 1.5em;
+      padding-right: 2.5rem;
+      cursor: pointer;
     }
 
     .genre-cell select:focus {
-    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
     }
 
     /* Style the disabled instruction option */
     .genre-cell select option:disabled {
-    color: #6b7280;
-    font-style: italic;
-    }
-
-    /* Prevent drag when editing */
-    .album-row:has(select) {
-    cursor: default;
+      color: #6b7280;
+      font-style: italic;
     }
 
     /* Better hover state for genre cells */
     .genre-cell {
-    position: relative;
+      position: relative;
     }
 
     .genre-cell span {
-    display: block;
-    padding: 0.125rem 0;
+      display: block;
+      padding: 0.125rem 0;
+    }
+
+    /* Datalist input styling */
+    input[list] {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+      background-position: right 0.5rem center;
+      background-repeat: no-repeat;
+      background-size: 1.5em 1.5em;
+      padding-right: 2.5rem;
+    }
+
+    /* Hide the default browser dropdown arrow for datalist */
+    input::-webkit-calendar-picker-indicator {
+      display: none !important;
+    }
+
+    /* Firefox */
+    input[list]::-moz-list-bullet {
+      list-style-type: none;
+    }
+
+    /* Datalist option styling (limited browser support) */
+    datalist {
+      display: none;
+    }
+
+    /* Style the dropdown when shown (Webkit browsers) */
+    input[list]::-webkit-list-button {
+      display: none;
     }
 
     /* Prevent drag when editing */
-    .album-row:has(select) {
-    cursor: default;
+    .album-row:has(select),
+    .album-row:has(input[list]),
+    .album-row:has(textarea) {
+      cursor: default;
     }
 
     /* Loading states */
@@ -474,26 +500,30 @@ const spotifyTemplate = (req) => `
 
     /* Line clamp for comments */
     .line-clamp-2 {
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
 
     /* Comment editing styles */
     .comment-cell {
-    position: relative;
+      position: relative;
     }
 
     .comment-cell textarea {
-    font-family: inherit;
+      font-family: inherit;
     }
 
-    /* Prevent drag when editing */
-    .album-row:has(textarea) {
-    cursor: default;
+    /* Country cell styling */
+    .country-cell {
+      position: relative;
     }
-    
+
+    .country-cell span {
+      display: block;
+      padding: 0.125rem 0;
     }
   </style>
 </head>
