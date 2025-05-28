@@ -4,12 +4,6 @@ let lists = {};
 let availableGenres = [];
 let availableCountries = [];
 
-// Drag and drop variables
-let draggedElement = null;
-let draggedIndex = null;
-let placeholder = null;
-let lastValidDropIndex = null;
-
 // Context menu variables
 let currentContextList = null;
 let currentContextAlbum = null;
@@ -787,186 +781,6 @@ function selectList(listName) {
   }
 }
 
-// Initialize drag and drop for container
-function initializeDragAndDrop() {
-  const container = document.getElementById('albumContainer');
-  
-  container.addEventListener('dragover', handleContainerDragOver);
-  container.addEventListener('drop', handleContainerDrop);
-  container.addEventListener('dragleave', handleContainerDragLeave);
-}
-
-// Drag handlers
-function handleDragStart(e) {
-  // Don't start drag if we're editing a comment or selecting genre/country
-  if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-    e.preventDefault();
-    return;
-  }
-  
-  draggedElement = this;
-  draggedIndex = parseInt(this.dataset.index);
-  
-  placeholder = document.createElement('div');
-  placeholder.className = 'album-row drag-placeholder grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800';
-  placeholder.style.height = this.offsetHeight + 'px';
-  placeholder.innerHTML = '<div class="col-span-full text-center text-gray-500">Drop album here</div>';
-  
-  this.classList.add('dragging');
-  
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/html', this.innerHTML);
-  
-  requestAnimationFrame(() => {
-    this.style.display = 'none';
-    this.parentNode.insertBefore(placeholder, this.nextSibling);
-  });
-}
-
-function handleContainerDragOver(e) {
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  
-  const rowsContainer = this.querySelector('.album-rows-container') || this;
-  const afterElement = getDragAfterElement(rowsContainer, e.clientY);
-  
-  if (!placeholder || !placeholder.parentNode) return;
-  
-  if (afterElement == null) {
-    rowsContainer.appendChild(placeholder);
-    lastValidDropIndex = rowsContainer.children.length - 1;
-  } else {
-    rowsContainer.insertBefore(placeholder, afterElement);
-    const allElements = Array.from(rowsContainer.children);
-    lastValidDropIndex = allElements.indexOf(placeholder);
-  }
-  
-  this.classList.add('drag-active');
-}
-
-function handleContainerDragLeave(e) {
-  const rect = this.getBoundingClientRect();
-  if (e.clientX < rect.left || e.clientX > rect.right || 
-      e.clientY < rect.top || e.clientY > rect.bottom) {
-    this.classList.remove('drag-active');
-  }
-}
-
-function getDragAfterElement(container, y) {
-  const draggableElements = [...container.querySelectorAll('.album-row:not(.dragging):not(.drag-placeholder)')];
-  
-  return draggableElements.reduce((closest, child) => {
-    const box = child.getBoundingClientRect();
-    const offset = y - box.top - box.height / 2;
-    
-    if (offset < 0 && offset > closest.offset) {
-      return { offset: offset, element: child };
-    } else {
-      return closest;
-    }
-  }, { offset: Number.NEGATIVE_INFINITY }).element;
-}
-
-function handleDragEnd(e) {
-  if (draggedElement) {
-    draggedElement.style.display = '';
-    draggedElement.classList.remove('dragging');
-  }
-  
-  // Only remove placeholder if it still exists (wasn't removed by drop handler)
-  if (placeholder && placeholder.parentNode) {
-    placeholder.parentNode.removeChild(placeholder);
-  }
-  
-  document.getElementById('albumContainer').classList.remove('drag-active');
-  
-  draggedElement = null;
-  draggedIndex = null;
-  placeholder = null;
-  lastValidDropIndex = null;
-}
-
-async function handleContainerDrop(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  
-  this.classList.remove('drag-active');
-  
-  if (!draggedElement || lastValidDropIndex === null || !placeholder) return;
-  
-  const rowsContainer = this.querySelector('.album-rows-container') || this;
-  
-  let dropIndex = lastValidDropIndex;
-  if (draggedIndex < dropIndex) {
-    dropIndex--;
-  }
-  
-  if (dropIndex !== draggedIndex) {
-    try {
-      // First, immediately update the DOM by moving the dragged element
-      if (placeholder && placeholder.parentNode) {
-        // Insert the dragged element where the placeholder is
-        placeholder.parentNode.insertBefore(draggedElement, placeholder);
-        // Remove the placeholder
-        placeholder.parentNode.removeChild(placeholder);
-        placeholder = null;
-      }
-      
-      // Show the dragged element in its new position
-      draggedElement.style.display = '';
-      draggedElement.classList.remove('dragging');
-      
-      // Update all position numbers and data-index attributes
-      const allRows = Array.from(rowsContainer.querySelectorAll('.album-row'));
-      allRows.forEach((row, index) => {
-        // Update position number
-        const positionEl = row.querySelector('.flex.items-center.justify-center');
-        if (positionEl) {
-          positionEl.textContent = index + 1;
-        }
-        // Update data-index
-        row.dataset.index = index;
-      });
-      
-      // Now update the data to match the new DOM order
-      const list = lists[currentList];
-      const [movedItem] = list.splice(draggedIndex, 1);
-      list.splice(dropIndex, 0, movedItem);
-      
-      // Save to server
-      await saveList(currentList, list);
-      showToast('Reordered successfully');
-      
-    } catch (error) {
-      console.error('Error saving reorder:', error);
-      showToast('Error saving changes', 'error');
-      // On error, rebuild to ensure consistency
-      displayAlbums(lists[currentList]);
-    }
-  }
-  
-  // Clean up drag state
-  draggedElement = null;
-  draggedIndex = null;
-  lastValidDropIndex = null;
-}
-
-// Update positions without rebuilding
-function updateAlbumPositions(container) {
-  const rows = Array.from(container.querySelectorAll('.album-row:not(.drag-placeholder)'));
-  
-  rows.forEach((row, index) => {
-    // Update the position number
-    const positionEl = row.querySelector('.flex.items-center.justify-center');
-    if (positionEl) {
-      positionEl.textContent = index + 1;
-    }
-    
-    // Update the data-index attribute
-    row.dataset.index = index;
-  });
-}
-
 // Make genre editable with datalist
 function makeGenreEditable(genreDiv, albumIndex, genreField) {
   // Check if we're already editing
@@ -1194,7 +1008,6 @@ function displayAlbums(albums) {
   albums.forEach((album, index) => {
     const row = document.createElement('div');
     row.className = 'album-row album-grid gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
-    row.draggable = true;
     row.dataset.index = index;
     
     const position = index + 1;
@@ -1275,8 +1088,10 @@ function displayAlbums(albums) {
     const commentCell = row.querySelector('.comment-cell');
     commentCell.onclick = () => makeCommentEditable(commentCell, index);
     
-    row.addEventListener('dragstart', handleDragStart);
-    row.addEventListener('dragend', handleDragEnd);
+    // Make row draggable using DragDropManager
+    if (window.DragDropManager) {
+      window.DragDropManager.makeRowDraggable(row);
+    }
     
     // Right-click handler for album rows
     row.addEventListener('contextmenu', (e) => {
@@ -1311,7 +1126,29 @@ function displayAlbums(albums) {
   table.appendChild(rowsContainer);
   container.appendChild(table);
   
-  initializeDragAndDrop();
+  // Initialize drag and drop
+  if (window.DragDropManager) {
+    window.DragDropManager.initialize();
+    
+    // Set up the drop handler callback
+    window.DragDropManager.setupDropHandler(async (draggedIndex, dropIndex, needsRebuild) => {
+      if (needsRebuild) {
+        // Rebuild the display on error
+        displayAlbums(lists[currentList]);
+        return;
+      }
+      
+      if (draggedIndex !== null && dropIndex !== null) {
+        // Update the data to match the new DOM order
+        const list = lists[currentList];
+        const [movedItem] = list.splice(draggedIndex, 1);
+        list.splice(dropIndex, 0, movedItem);
+        
+        // Save to server
+        await saveList(currentList, list);
+      }
+    });
+  }
 }
 
 // File import
@@ -1415,3 +1252,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Failed to initialize', 'error');
     });
 });
+
+// Make showToast globally available
+window.showToast = showToast;

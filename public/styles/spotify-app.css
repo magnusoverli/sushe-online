@@ -1,0 +1,280 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
+
+/* Album grid column configuration */
+:root {
+  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+  /* Column descriptions:
+     Position number
+     Album cover
+     Album name/date
+     Artist
+     Country
+     Genre 1
+     Genre 2
+     Comment
+  */
+  
+  /* Cover art size configuration */
+  --cover-art-size: 100px;  /* Maximum size for cover art */
+}
+
+/* Define the album grid class */
+.album-grid {
+  display: grid;
+  grid-template-columns: var(--album-grid-columns);
+}
+
+/* Cover art container */
+.album-cover-container {
+  width: 100%;
+  max-width: var(--cover-art-size);
+  aspect-ratio: 1 / 1;  /* Ensures square aspect ratio */
+}
+
+/* Cover art styling */
+.album-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;  /* Ensures image fills container while maintaining aspect ratio */
+}
+
+/* Placeholder cover styling */
+.album-cover-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.metal-title {
+  font-family: 'Cinzel', serif;
+  text-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
+}
+
+.glow-red {
+  animation: glow 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow {
+  from { text-shadow: 0 0 10px #dc2626, 0 0 20px #dc2626, 0 0 30px #dc2626; }
+  to { text-shadow: 0 0 20px #dc2626, 0 0 30px #dc2626, 0 0 40px #dc2626; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Enhanced album row styles */
+#albumContainer {
+  min-height: 100vh;
+  position: relative;
+}
+
+#albumContainer.drag-active {
+  background-color: rgba(220, 38, 38, 0.03);
+}
+
+.album-row {
+  transition: all 0.2s ease;
+  position: relative;
+  background-color: transparent;
+  user-select: none;
+}
+
+.album-row:hover:not(.dragging) {
+  background-color: rgba(31, 41, 55, 0.3);
+  transform: translateX(2px);
+}
+
+.album-row.dragging {
+  opacity: 0.2;
+  cursor: grabbing;
+}
+
+.album-row.drag-placeholder {
+  background-color: rgba(220, 38, 38, 0.1);
+  border: 2px dashed #dc2626;
+  opacity: 0.8;
+  min-height: 64px;
+}
+
+/* Ensure the table takes full height */
+.album-rows-container {
+  min-height: calc(100vh - 200px);
+}
+
+/* Make sure text doesn't overflow */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Flex utilities */
+.flex-col {
+  flex-direction: column;
+}
+
+.space-y-1 > * + * {
+  margin-top: 0.25rem;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.col-span-full {
+  grid-column: 1 / -1;
+}
+
+/* Genre dropdown styles */
+.genre-cell select {
+  font-family: inherit;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+  cursor: pointer;
+}
+
+.genre-cell select:focus {
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
+}
+
+/* Style the disabled instruction option */
+.genre-cell select option:disabled {
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Better hover state for genre cells */
+.genre-cell {
+  position: relative;
+}
+
+.genre-cell span {
+  display: block;
+  padding: 0.125rem 0;
+}
+
+/* Datalist input styling */
+input[list] {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 0.5rem center;
+  background-repeat: no-repeat;
+  background-size: 1.5em 1.5em;
+  padding-right: 2.5rem;
+}
+
+/* Hide the default browser dropdown arrow for datalist */
+input::-webkit-calendar-picker-indicator {
+  display: none !important;
+}
+
+/* Firefox */
+input[list]::-moz-list-bullet {
+  list-style-type: none;
+}
+
+/* Datalist option styling (limited browser support) */
+datalist {
+  display: none;
+}
+
+/* Style the dropdown when shown (Webkit browsers) */
+input[list]::-webkit-list-button {
+  display: none;
+}
+
+/* Prevent drag when editing */
+.album-row:has(select),
+.album-row:has(input[list]),
+.album-row:has(textarea) {
+  cursor: default;
+}
+
+/* Loading states */
+.loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Toast notifications */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background-color: #1f2937;
+  color: white;
+  padding: 1rem 1.5rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  transform: translateY(100%);
+  opacity: 0;
+  transition: all 0.3s ease;
+  z-index: 50;
+}
+
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.toast.error {
+  background-color: #dc2626;
+}
+
+.toast.success {
+  background-color: #059669;
+}
+
+/* Line clamp for comments */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Comment editing styles */
+.comment-cell {
+  position: relative;
+}
+
+.comment-cell textarea {
+  font-family: inherit;
+}
+
+/* Country cell styling */
+.country-cell {
+  position: relative;
+}
+
+.country-cell span {
+  display: block;
+  padding: 0.125rem 0;
+}

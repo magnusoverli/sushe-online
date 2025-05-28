@@ -277,374 +277,85 @@ const invalidTokenTemplate = () => `
   </div>
 `;
 
-// Home page (Spotify-like interface) template
-const spotifyTemplate = (req) => `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SuShe Online</title>
-  <link href="/styles/output.css" rel="stylesheet">
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
+// Component: Sidebar
+const sidebarComponent = (req) => `
+  <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
+    <div class="p-6 border-b border-gray-800">
+      <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">SuShe Online</h1>
+    </div>
     
-    /* Album grid column configuration */
-    :root {
-      --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
-      /* Column descriptions:
-         Position number
-         Album cover
-         Album name/date
-         Artist
-         Country
-         Genre 1
-         Genre 2
-         Comment
-      */
-      
-      /* Cover art size configuration */
-      --cover-art-size: 100px;  /* Maximum size for cover art */
-    }
-    
-    /* Define the album grid class */
-    .album-grid {
-      display: grid;
-      grid-template-columns: var(--album-grid-columns);
-    }
-    
-    /* Cover art container */
-    .album-cover-container {
-      width: 100%;
-      max-width: var(--cover-art-size);
-      aspect-ratio: 1 / 1;  /* Ensures square aspect ratio */
-    }
-    
-    /* Cover art styling */
-    .album-cover {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;  /* Ensures image fills container while maintaining aspect ratio */
-    }
-    
-    /* Placeholder cover styling */
-    .album-cover-placeholder {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    
-    body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-    }
-    
-    .metal-title {
-      font-family: 'Cinzel', serif;
-      text-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
-    }
-    
-    .glow-red {
-      animation: glow 2s ease-in-out infinite alternate;
-    }
-    
-    @keyframes glow {
-      from { text-shadow: 0 0 10px #dc2626, 0 0 20px #dc2626, 0 0 30px #dc2626; }
-      to { text-shadow: 0 0 20px #dc2626, 0 0 30px #dc2626, 0 0 40px #dc2626; }
-    }
-    
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-      background: #111827;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-      background: #374151;
-      border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-      background: #4b5563;
-    }
-    
-    /* Enhanced album row styles */
-    #albumContainer {
-      min-height: 100vh;
-      position: relative;
-    }
-    
-    #albumContainer.drag-active {
-      background-color: rgba(220, 38, 38, 0.03);
-    }
-    
-    .album-row {
-      transition: all 0.2s ease;
-      position: relative;
-      background-color: transparent;
-      user-select: none;
-    }
-    
-    .album-row:hover:not(.dragging) {
-      background-color: rgba(31, 41, 55, 0.3);
-      transform: translateX(2px);
-    }
-    
-    .album-row.dragging {
-      opacity: 0.2;
-      cursor: grabbing;
-    }
-    
-    .album-row.drag-placeholder {
-      background-color: rgba(220, 38, 38, 0.1);
-      border: 2px dashed #dc2626;
-      opacity: 0.8;
-      min-height: 64px;
-    }
-    
-    /* Ensure the table takes full height */
-    .album-rows-container {
-      min-height: calc(100vh - 200px);
-    }
-    
-    /* Make sure text doesn't overflow */
-    .truncate {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    
-    /* Flex utilities */
-    .flex-col {
-      flex-direction: column;
-    }
-    
-    .space-y-1 > * + * {
-      margin-top: 0.25rem;
-    }
-    
-    .min-w-0 {
-      min-width: 0;
-    }
-    
-    .col-span-full {
-      grid-column: 1 / -1;
-    }
-
-    /* Genre dropdown styles */
-    .genre-cell select {
-      font-family: inherit;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
-      background-position: right 0.5rem center;
-      background-repeat: no-repeat;
-      background-size: 1.5em 1.5em;
-      padding-right: 2.5rem;
-      cursor: pointer;
-    }
-
-    .genre-cell select:focus {
-      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
-    }
-
-    /* Style the disabled instruction option */
-    .genre-cell select option:disabled {
-      color: #6b7280;
-      font-style: italic;
-    }
-
-    /* Better hover state for genre cells */
-    .genre-cell {
-      position: relative;
-    }
-
-    .genre-cell span {
-      display: block;
-      padding: 0.125rem 0;
-    }
-
-    /* Datalist input styling */
-    input[list] {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
-      background-position: right 0.5rem center;
-      background-repeat: no-repeat;
-      background-size: 1.5em 1.5em;
-      padding-right: 2.5rem;
-    }
-
-    /* Hide the default browser dropdown arrow for datalist */
-    input::-webkit-calendar-picker-indicator {
-      display: none !important;
-    }
-
-    /* Firefox */
-    input[list]::-moz-list-bullet {
-      list-style-type: none;
-    }
-
-    /* Datalist option styling (limited browser support) */
-    datalist {
-      display: none;
-    }
-
-    /* Style the dropdown when shown (Webkit browsers) */
-    input[list]::-webkit-list-button {
-      display: none;
-    }
-
-    /* Prevent drag when editing */
-    .album-row:has(select),
-    .album-row:has(input[list]),
-    .album-row:has(textarea) {
-      cursor: default;
-    }
-
-    /* Loading states */
-    .loading {
-      opacity: 0.5;
-      pointer-events: none;
-    }
-    
-    /* Toast notifications */
-    .toast {
-      position: fixed;
-      bottom: 2rem;
-      right: 2rem;
-      background-color: #1f2937;
-      color: white;
-      padding: 1rem 1.5rem;
-      border-radius: 0.5rem;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-      transform: translateY(100%);
-      opacity: 0;
-      transition: all 0.3s ease;
-      z-index: 50;
-    }
-    
-    .toast.show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-    
-    .toast.error {
-      background-color: #dc2626;
-    }
-    
-    .toast.success {
-      background-color: #059669;
-    }
-
-    /* Line clamp for comments */
-    .line-clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* Comment editing styles */
-    .comment-cell {
-      position: relative;
-    }
-
-    .comment-cell textarea {
-      font-family: inherit;
-    }
-
-    /* Country cell styling */
-    .country-cell {
-      position: relative;
-    }
-
-    .country-cell span {
-      display: block;
-      padding: 0.125rem 0;
-    }
-  </style>
-</head>
-<body class="bg-black text-gray-200">
-  <div class="flex h-screen">
-    <!-- Sidebar -->
-    <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-      <div class="p-6 border-b border-gray-800">
-        <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">SuShe Online</h1>
+    <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
+      <div class="flex-1">
+        <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Lists</h3>
+        <ul id="listNav" class="space-y-1">
+          <!-- Lists will be populated here -->
+        </ul>
       </div>
       
-      <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
-        <div class="flex-1">
-          <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Lists</h3>
-          <ul id="listNav" class="space-y-1">
-            <!-- Lists will be populated here -->
-          </ul>
+      <div class="mt-6 pt-6 border-t border-gray-800">
+        <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
+          + Create List
+        </button>
+        <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+          + Import List
+        </button>
+        <button id="exportBtn" class="hidden w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+          Export Current List
+        </button>
+        <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+          DELETE All Lists
+        </button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+        <div id="storageInfo" class="text-xs text-gray-500 mt-2 text-center"></div>
+      </div>
+    </nav>
+    
+    <div class="p-4 border-t border-gray-800">
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-gray-400">${req.user.email}</span>
+        <a href="/logout" class="text-red-500 hover:text-red-400 transition duration-200">Logout</a>
+      </div>
+    </div>
+  </div>
+`;
+
+// Component: Main Content Area
+const mainContentComponent = () => `
+  <div class="flex-1 flex flex-col overflow-hidden">
+    <!-- Header -->
+    <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-6">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 id="listTitle" class="text-3xl font-bold">Select a list to begin</h2>
+          <p id="listInfo" class="text-gray-400 mt-1"></p>
         </div>
-        
-        <div class="mt-6 pt-6 border-t border-gray-800">
-          <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
-            + Create List
-          </button>
-          <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-            + Import List
-          </button>
-          <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-            DELETE All Lists
-          </button>
-          <input type="file" id="fileInput" accept=".json" style="display: none;">
-          <div id="storageInfo" class="text-xs text-gray-500 mt-2 text-center"></div>
-        </div>
-      </nav>
-      
-      <div class="p-4 border-t border-gray-800">
-        <div class="flex items-center justify-between text-sm">
-          <span class="text-gray-400">${req.user.email}</span>
-          <a href="/logout" class="text-red-500 hover:text-red-400 transition duration-200">Logout</a>
-        </div>
+        <button id="addAlbumBtn" class="hidden bg-red-600 hover:bg-red-700 text-white p-3 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
       </div>
     </div>
     
-    <!-- Main Content -->
-    <div class="flex-1 flex flex-col overflow-hidden">
-      <!-- Header -->
-      <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h2 id="listTitle" class="text-3xl font-bold">Select a list to begin</h2>
-            <p id="listInfo" class="text-gray-400 mt-1"></p>
-          </div>
-          <button id="addAlbumBtn" class="hidden bg-red-600 hover:bg-red-700 text-white p-3 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-          </button>
-        </div>
-      </div>
-      
-      <!-- Album List -->
-      <div class="flex-1 overflow-y-auto">
-        <div id="dropZone" class="drop-zone min-h-full p-6">
-          <div id="albumContainer">
-            <!-- Albums will be displayed here -->
-            <div class="text-center text-gray-500 mt-20">
-              <p class="text-xl mb-2">No list selected</p>
-              <p class="text-sm">Create or import a list to get started</p>
-            </div>
+    <!-- Album List -->
+    <div class="flex-1 overflow-y-auto">
+      <div id="dropZone" class="drop-zone min-h-full p-6">
+        <div id="albumContainer">
+          <!-- Albums will be displayed here -->
+          <div class="text-center text-gray-500 mt-20">
+            <p class="text-xl mb-2">No list selected</p>
+            <p class="text-sm">Create or import a list to get started</p>
           </div>
         </div>
       </div>
     </div>
   </div>
-  
-  <!-- Toast container -->
-  <div id="toast" class="toast"></div>
-  
-  <!-- Context Menu -->
+`;
+
+// Component: Context Menus
+const contextMenusComponent = () => `
+  <!-- Context Menu for Lists -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
     <button id="downloadListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
       Download List
@@ -663,8 +374,10 @@ const spotifyTemplate = (req) => `
       Remove from List
     </button>
   </div>
-  
-  <!-- Create List Modal -->
+`;
+
+// Component: Create List Modal
+const createListModalComponent = () => `
   <div id="createListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
@@ -704,8 +417,10 @@ const spotifyTemplate = (req) => `
       </div>
     </div>
   </div>
-  
-  <!-- Rename List Modal -->
+`;
+
+// Component: Rename List Modal
+const renameListModalComponent = () => `
   <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
@@ -746,8 +461,10 @@ const spotifyTemplate = (req) => `
       </div>
     </div>
   </div>
-  
-  <!-- Add Album Modal -->
+`;
+
+// Component: Add Album Modal
+const addAlbumModalComponent = () => `
   <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
       <!-- Modal Header -->
@@ -821,7 +538,34 @@ const spotifyTemplate = (req) => `
       </div>
     </div>
   </div>
+`;
+
+// Main Spotify template - now composed of smaller parts
+const spotifyTemplate = (req) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuShe Online</title>
+  <link href="/styles/output.css" rel="stylesheet">
+  <link href="/styles/spotify-app.css" rel="stylesheet">
+</head>
+<body class="bg-black text-gray-200">
+  <div class="flex h-screen">
+    ${sidebarComponent(req)}
+    ${mainContentComponent()}
+  </div>
   
+  <!-- Toast container -->
+  <div id="toast" class="toast"></div>
+  
+  ${contextMenusComponent()}
+  ${createListModalComponent()}
+  ${renameListModalComponent()}
+  ${addAlbumModalComponent()}
+  
+  <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>
   <script src="/js/app.js"></script>
 </body>
