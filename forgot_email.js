@@ -8,9 +8,6 @@ Click here to reset your password: ${resetUrl}
 
 If you did not request this, ignore this email and your password will remain unchanged.
 
-Stay kvlt,
-The Inner Circle`;
-
   // HTML version with styling matching the app's theme
   const htmlContent = `
 <!DOCTYPE html>
@@ -130,7 +127,7 @@ The Inner Circle`;
       </div>
       
       <div class="signature">
-        <p>Stay kvlt,<br>The Inner Circle</p>
+        <p>Magnus</p>
       </div>
     </div>
     
@@ -148,7 +145,7 @@ The Inner Circle`;
   return {
     to: userEmail,
     from: process.env.EMAIL_FROM || 'magnus@overli.dev',
-    subject: 'Password Reset - Return to the Darkness',
+    subject: 'SuShe Online - Password Reset',
     text: textContent,
     html: htmlContent
   };
