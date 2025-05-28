@@ -1355,16 +1355,17 @@ document.getElementById('clearBtn').onclick = async () => {
   }
 };
 
-// Initialize on load
-Promise.all([loadGenres(), loadCountries(), loadLists()])
-  .then(() => {
-    initializeContextMenu();
-    initializeAlbumContextMenu();
-    initializeCreateList();
-    initializeRenameList();
-    initializeExport();
-  })
-  .catch(err => {
-    console.error('Failed to initialize:', err);
-    showToast('Failed to initialize', 'error');
-  });
+document.addEventListener('DOMContentLoaded', () => {
+  Promise.all([loadGenres(), loadCountries(), loadLists()])
+    .then(() => {
+      initializeContextMenu();
+      initializeAlbumContextMenu();
+      initializeCreateList();
+      initializeRenameList();
+      initializeExport();
+    })
+    .catch(err => {
+      console.error('Failed to initialize:', err);
+      showToast('Failed to initialize', 'error');
+    });
+});
