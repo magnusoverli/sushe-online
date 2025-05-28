@@ -341,6 +341,29 @@ app.post('/reset/:token', async (req, res) => {
   });
 });
 
+// Proxy for Deezer API to avoid CORS issues
+app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
+  try {
+    const { q } = req.query;
+    if (!q) {
+      return res.status(400).json({ error: 'Query parameter q is required' });
+    }
+    
+    const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`Deezer API responded with status ${response.status}`);
+    }
+    
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('Deezer proxy error:', error);
+    res.status(500).json({ error: 'Failed to fetch from Deezer' });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Application error:', err);

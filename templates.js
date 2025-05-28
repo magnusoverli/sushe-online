@@ -533,7 +533,6 @@ const spotifyTemplate = (req) => `
     <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
       <div class="p-6 border-b border-gray-800">
         <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">SuShe Online</h1>
-        <p class="text-gray-400 text-sm mt-1">Collections</p>
       </div>
       
       <nav class="flex-1 overflow-y-auto p-4">

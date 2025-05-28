@@ -2,18 +2,21 @@
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
 const COVERART_API = 'https://coverartarchive.org';
 const ITUNES_API = 'https://itunes.apple.com';
+const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
 const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
 
 // Rate limiting - MusicBrainz requires max 1 request per second
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
 
-// Cache for iTunes searches to avoid duplicate requests
+// Cache for searches to avoid duplicate requests
 const itunesCache = new Map();
+const deezerCache = new Map();
 
 // Concurrent request limits
-const ITUNES_BATCH_SIZE = 5; // iTunes can handle more concurrent requests
-const COVERART_BATCH_SIZE = 3; // Cover Art Archive is less reliable with many concurrent requests
+const ITUNES_BATCH_SIZE = 5;
+const COVERART_BATCH_SIZE = 3;
+const DEEZER_BATCH_SIZE = 5;
 
 // Queue for managing concurrent requests
 class RequestQueue {
@@ -48,7 +51,50 @@ class RequestQueue {
 
 const itunesQueue = new RequestQueue(ITUNES_BATCH_SIZE);
 const coverArtQueue = new RequestQueue(COVERART_BATCH_SIZE);
+const deezerQueue = new RequestQueue(DEEZER_BATCH_SIZE);
 
+// Modal management
+let currentArtist = null;
+let modal = null;
+let modalElements = {};
+let currentLoadingController = null;
+
+// Optimization 4: Smart Source Priority
+const sourceStats = {
+  itunes: { attempts: 0, successes: 0 },
+  deezer: { attempts: 0, successes: 0 },
+  coverart: { attempts: 0, successes: 0 }
+};
+
+// Optimization 1: Preload cache for hovering
+const preloadCache = new Map();
+let currentPreloadController = null;
+
+// Optimization 3: Browser Connection Optimization
+function warmupConnections() {
+  const cdns = [
+    'https://is1-ssl.mzstatic.com', // iTunes CDN
+    'https://is2-ssl.mzstatic.com', // iTunes CDN alternate
+    'https://is3-ssl.mzstatic.com', // iTunes CDN alternate
+    'https://is4-ssl.mzstatic.com', // iTunes CDN alternate
+    'https://is5-ssl.mzstatic.com', // iTunes CDN alternate
+    'https://e-cdns-images.dzcdn.net', // Deezer CDN
+    'https://coverartarchive.org'
+  ];
+  
+  cdns.forEach(origin => {
+    const existingLink = document.querySelector(`link[href="${origin}"]`);
+    if (!existingLink) {
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = origin;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
+  });
+}
+
+// Rate limited fetch ONLY for MusicBrainz
 async function rateLimitedFetch(url) {
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
@@ -82,53 +128,42 @@ async function searchArtists(query) {
 
 // Get release groups - ONLY pure Albums and EPs (no secondary types)
 async function getArtistReleaseGroups(artistId) {
-  // Get albums and EPs
   const url = `${MUSICBRAINZ_API}/release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
   const data = await rateLimitedFetch(url);
   
   let releaseGroups = data['release-groups'] || [];
   
-  // Get today's date in YYYY-MM-DD format for comparison
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
   
-  // Filter to ONLY include releases with no secondary types AND that have been released
   releaseGroups = releaseGroups.filter(rg => {
     const primaryType = rg['primary-type'];
     const secondaryTypes = rg['secondary-types'] || [];
     const releaseDate = rg['first-release-date'];
     
-    // Only include if it's an Album or EP with NO secondary types
     const isValidType = (primaryType === 'Album' || primaryType === 'EP') && secondaryTypes.length === 0;
     
-    // EXCLUDE releases without a release date
+    // Exclude releases without a release date
     if (!releaseDate) {
-      return false; // Skip releases with no date
+      return false;
     }
     
-    // Check if it has been released
     let hasBeenReleased = true;
-    // Handle partial dates (YYYY or YYYY-MM)
     let comparableDate = releaseDate;
     
-    // If only year, assume December 31st of that year
     if (releaseDate.length === 4) {
       comparableDate = `${releaseDate}-12-31`;
-    }
-    // If only year and month, assume last day of that month
-    else if (releaseDate.length === 7) {
+    } else if (releaseDate.length === 7) {
       const [year, month] = releaseDate.split('-');
       const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
       comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
     }
     
-    // Compare with today
     hasBeenReleased = comparableDate <= todayStr;
     
     return isValidType && hasBeenReleased;
   });
   
-  // Sort by first release date (newest first)
   releaseGroups.sort((a, b) => {
     const dateA = a['first-release-date'] || '0000';
     const dateB = b['first-release-date'] || '0000';
@@ -140,17 +175,16 @@ async function getArtistReleaseGroups(artistId) {
 
 // Search iTunes for album artwork
 async function searchITunesArtwork(artistName, albumName) {
-  // Create a cache key
   const cacheKey = `${artistName}::${albumName}`.toLowerCase();
   
-  // Check cache first
   if (itunesCache.has(cacheKey)) {
     return itunesCache.get(cacheKey);
   }
   
+  sourceStats.itunes.attempts++;
+  
   return itunesQueue.add(async () => {
     try {
-      // Clean up the search query
       const searchTerm = `${artistName} ${albumName}`.replace(/[^\w\s]/g, ' ').trim();
       const url = `${ITUNES_API}/search?term=${encodeURIComponent(searchTerm)}&entity=album&limit=5`;
       
@@ -162,35 +196,30 @@ async function searchITunesArtwork(artistName, albumName) {
       const data = await response.json();
       
       if (data.results && data.results.length > 0) {
-        // Try to find the best match
         const normalizedAlbumName = albumName.toLowerCase().replace(/[^\w\s]/g, '');
         const normalizedArtistName = artistName.toLowerCase().replace(/[^\w\s]/g, '');
         
-        // First try exact match
         let bestMatch = data.results.find(result => {
           const resultAlbum = (result.collectionName || '').toLowerCase().replace(/[^\w\s]/g, '');
           const resultArtist = (result.artistName || '').toLowerCase().replace(/[^\w\s]/g, '');
           return resultAlbum === normalizedAlbumName && resultArtist === normalizedArtistName;
         });
         
-        // If no exact match, try partial match
         if (!bestMatch) {
           bestMatch = data.results.find(result => {
             const resultAlbum = (result.collectionName || '').toLowerCase().replace(/[^\w\s]/g, '');
-            const resultArtist = (result.artistName || '').toLowerCase().replace(/[^\w\s]/g, '');
             return resultAlbum.includes(normalizedAlbumName) || normalizedAlbumName.includes(resultAlbum);
           });
         }
         
-        // If still no match, just use the first result
         if (!bestMatch) {
           bestMatch = data.results[0];
         }
         
         if (bestMatch && bestMatch.artworkUrl100) {
-          // Get higher resolution artwork (600x600 instead of 100x100)
           const highResArtwork = bestMatch.artworkUrl100.replace('100x100', '600x600');
           itunesCache.set(cacheKey, highResArtwork);
+          sourceStats.itunes.successes++;
           return highResArtwork;
         }
       }
@@ -205,8 +234,73 @@ async function searchITunesArtwork(artistName, albumName) {
   });
 }
 
-// Get cover art from Cover Art Archive (fallback)
+// Search Deezer for album artwork (via proxy)
+async function searchDeezerArtwork(artistName, albumName) {
+  const cacheKey = `${artistName}::${albumName}`.toLowerCase();
+  
+  if (deezerCache.has(cacheKey)) {
+    return deezerCache.get(cacheKey);
+  }
+  
+  sourceStats.deezer.attempts++;
+  
+  return deezerQueue.add(async () => {
+    try {
+      const searchQuery = `${artistName} ${albumName}`.replace(/[^\w\s]/g, ' ').trim();
+      const url = `${DEEZER_PROXY}?q=${encodeURIComponent(searchQuery)}`;
+      
+      const response = await fetch(url, {
+        credentials: 'same-origin' // Include cookies for authentication
+      });
+      
+      if (!response.ok) {
+        throw new Error('Deezer proxy request failed');
+      }
+      
+      const data = await response.json();
+      
+      if (data.data && data.data.length > 0) {
+        const normalizedAlbumName = albumName.toLowerCase().replace(/[^\w\s]/g, '');
+        const normalizedArtistName = artistName.toLowerCase().replace(/[^\w\s]/g, '');
+        
+        let bestMatch = data.data.find(album => {
+          const albumTitle = (album.title || '').toLowerCase().replace(/[^\w\s]/g, '');
+          const albumArtist = (album.artist?.name || '').toLowerCase().replace(/[^\w\s]/g, '');
+          return albumTitle === normalizedAlbumName && albumArtist === normalizedArtistName;
+        });
+        
+        if (!bestMatch) {
+          bestMatch = data.data.find(album => {
+            const albumTitle = (album.title || '').toLowerCase().replace(/[^\w\s]/g, '');
+            return albumTitle.includes(normalizedAlbumName) || normalizedAlbumName.includes(albumTitle);
+          });
+        }
+        
+        if (!bestMatch) {
+          bestMatch = data.data[0];
+        }
+        
+        if (bestMatch && bestMatch.cover_xl) {
+          deezerCache.set(cacheKey, bestMatch.cover_xl);
+          sourceStats.deezer.successes++;
+          return bestMatch.cover_xl;
+        }
+      }
+      
+      deezerCache.set(cacheKey, null);
+      return null;
+    } catch (error) {
+      console.error('Deezer search error:', error);
+      deezerCache.set(cacheKey, null);
+      return null;
+    }
+  });
+}
+
+// Get cover art from Cover Art Archive
 async function getCoverArtFromArchive(releaseGroupId) {
+  sourceStats.coverart.attempts++;
+  
   return coverArtQueue.add(async () => {
     try {
       const response = await fetch(`${COVERART_API}/release-group/${releaseGroupId}`, {
@@ -221,10 +315,11 @@ async function getCoverArtFromArchive(releaseGroupId) {
       
       const data = await response.json();
       
-      // Get the front image thumbnail
       if (data.images && data.images.length > 0) {
         const frontImage = data.images.find(img => img.front) || data.images[0];
-        return frontImage.thumbnails['250'] || frontImage.thumbnails.small || frontImage.image;
+        const imageUrl = frontImage.thumbnails['250'] || frontImage.thumbnails.small || frontImage.image;
+        sourceStats.coverart.successes++;
+        return imageUrl;
       }
       
       return null;
@@ -235,34 +330,228 @@ async function getCoverArtFromArchive(releaseGroupId) {
   });
 }
 
-// Get cover art with iTunes priority and Cover Art Archive fallback
+// Optimization 4: Smart Source Priority
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
-  // First try iTunes (faster and more reliable)
-  if (artistName && albumTitle) {
-    const itunesArt = await searchITunesArtwork(artistName, albumTitle);
-    if (itunesArt) {
-      return itunesArt;
+  // Calculate success rates
+  const getSuccessRate = (source) => {
+    const stats = sourceStats[source];
+    return stats.attempts > 0 ? stats.successes / stats.attempts : 0.5;
+  };
+  
+  // Sort sources by success rate
+  const sources = [
+    { name: 'itunes', fn: () => searchITunesArtwork(artistName, albumTitle), enabled: artistName && albumTitle },
+    { name: 'deezer', fn: () => searchDeezerArtwork(artistName, albumTitle), enabled: artistName && albumTitle },
+    { name: 'coverart', fn: () => getCoverArtFromArchive(releaseGroupId), enabled: true }
+  ]
+  .filter(s => s.enabled)
+  .sort((a, b) => getSuccessRate(b.name) - getSuccessRate(a.name));
+  
+  // Try sources in order of success rate
+  for (const source of sources) {
+    try {
+      const result = await source.fn();
+      if (result) {
+        return result;
+      }
+    } catch (error) {
+      console.error(`${source.name} error:`, error);
     }
   }
   
-  // Fall back to Cover Art Archive
-  return await getCoverArtFromArchive(releaseGroupId);
+  return null;
 }
 
 // Convert date to year format
 function formatReleaseDate(date) {
   if (!date) return '';
-  return date.split('-')[0]; // Just return the year
+  return date.split('-')[0];
 }
 
-// Modal management
-let currentArtist = null;
-let modal = null;
-let modalElements = {};
-let currentLoadingController = null; // To cancel ongoing requests
+// Optimization 1: Preload on hover
+async function preloadArtistAlbums(artist) {
+  if (preloadCache.has(artist.id)) {
+    return preloadCache.get(artist.id);
+  }
+  
+  if (currentPreloadController) {
+    currentPreloadController.abort();
+  }
+  
+  currentPreloadController = new AbortController();
+  
+  try {
+    const releaseGroups = await getArtistReleaseGroups(artist.id);
+    
+    if (!currentPreloadController.signal.aborted) {
+      preloadCache.set(artist.id, releaseGroups);
+      
+      // Preload first 6 album covers
+      releaseGroups.slice(0, 6).forEach(async (rg) => {
+        const coverArt = await getCoverArt(rg.id, artist.name, rg.title);
+        if (coverArt) {
+          const img = new Image();
+          img.src = coverArt;
+        }
+      });
+    }
+    
+    return releaseGroups;
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Preload error:', error);
+    }
+    return null;
+  }
+}
 
+// Optimization 2: Intersection Observer with background loading
+let imageObserver = null;
+let isBackgroundLoading = false;
+
+function setupIntersectionObserver(releaseGroups, artistName) {
+  // Clean up existing observer
+  if (imageObserver) {
+    imageObserver.disconnect();
+  }
+  
+  // Track which albums have been loaded
+  const loadedAlbums = new Set();
+  const loadingAlbums = new Set();
+  
+  // Function to load a specific album's cover
+  const loadAlbumCover = async (index) => {
+    if (loadedAlbums.has(index) || loadingAlbums.has(index)) {
+      return;
+    }
+    
+    loadingAlbums.add(index);
+    
+    const albumEl = modalElements.albumList.querySelector(`[data-album-index="${index}"]`);
+    if (!albumEl) return;
+    
+    const coverContainer = albumEl.querySelector('.album-cover-container');
+    if (!coverContainer || coverContainer.dataset.loaded === 'true') return;
+    
+    try {
+      const coverArt = await getCoverArt(releaseGroups[index].id, artistName, releaseGroups[index].title);
+      
+      if (coverArt && !currentLoadingController?.signal.aborted) {
+        coverContainer.innerHTML = `
+          <img src="${coverArt}" 
+               alt="${releaseGroups[index].title}" 
+               class="w-full h-full object-cover group-hover:scale-105 transition-transform" 
+               loading="lazy" 
+               crossorigin="anonymous"
+               onerror="this.onerror=null; this.parentElement.innerHTML='<svg width=\\'48\\' height=\\'48\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg>'">
+        `;
+        releaseGroups[index].coverArt = coverArt;
+        coverContainer.dataset.loaded = 'true';
+      }
+      
+      loadedAlbums.add(index);
+      loadingAlbums.delete(index);
+      
+    } catch (error) {
+      console.error(`Error loading cover for ${releaseGroups[index].title}:`, error);
+      loadedAlbums.add(index); // Mark as loaded to avoid retry
+      loadingAlbums.delete(index);
+    }
+  };
+  
+  // Function to start background loading of remaining images
+  const startBackgroundLoading = async () => {
+    if (isBackgroundLoading || currentLoadingController?.signal.aborted) return;
+    
+    isBackgroundLoading = true;
+    
+    // Get all unloaded albums
+    const unloadedIndexes = [];
+    for (let i = 0; i < releaseGroups.length; i++) {
+      if (!loadedAlbums.has(i) && !loadingAlbums.has(i)) {
+        unloadedIndexes.push(i);
+      }
+    }
+    
+    // Load remaining albums in batches
+    const BATCH_SIZE = 3;
+    
+    for (let i = 0; i < unloadedIndexes.length; i += BATCH_SIZE) {
+      if (currentLoadingController?.signal.aborted) break;
+      
+      const batch = unloadedIndexes.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(index => loadAlbumCover(index));
+      
+      await Promise.allSettled(batchPromises);
+      
+      // Small delay between batches to avoid overwhelming the browser
+      if (i + BATCH_SIZE < unloadedIndexes.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+    
+    isBackgroundLoading = false;
+  };
+  
+  // Track visible images loaded
+  let visibleImagesLoaded = 0;
+  let totalVisibleImages = 0;
+  
+  imageObserver = new IntersectionObserver((entries, observer) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const albumEl = entry.target;
+        const index = parseInt(albumEl.dataset.albumIndex);
+        
+        totalVisibleImages++;
+        
+        // Load this album's cover
+        loadAlbumCover(index).then(() => {
+          visibleImagesLoaded++;
+          
+          // Check if all initially visible images are loaded
+          if (visibleImagesLoaded >= totalVisibleImages && visibleImagesLoaded > 0) {
+            // Start loading remaining images in background after a short delay
+            setTimeout(() => {
+              startBackgroundLoading();
+            }, 500);
+          }
+        });
+        
+        // Stop observing this element
+        observer.unobserve(albumEl);
+      }
+    });
+  }, {
+    rootMargin: '100px', // Start loading 100px before entering viewport
+    threshold: 0.01
+  });
+  
+  // Also start background loading after a timeout if no scrolling happens
+  setTimeout(() => {
+    if (visibleImagesLoaded === 0) {
+      // No visible images detected yet, force check for visible albums
+      const visibleAlbums = Array.from(modalElements.albumList.querySelectorAll('[data-album-index]'))
+        .filter(el => {
+          const rect = el.getBoundingClientRect();
+          return rect.top < window.innerHeight && rect.bottom > 0;
+        });
+      
+      // Load visible albums first
+      Promise.all(visibleAlbums.map(el => 
+        loadAlbumCover(parseInt(el.dataset.albumIndex))
+      )).then(() => {
+        // Then start background loading
+        startBackgroundLoading();
+      });
+    }
+  }, 2000); // 2 seconds timeout
+  
+  return imageObserver;
+}
+
+// Initialize modal
 function initializeAddAlbumFeature() {
-  // Get modal elements
   modal = document.getElementById('addAlbumModal');
   modalElements = {
     artistSearchInput: document.getElementById('artistSearchInput'),
@@ -277,13 +566,11 @@ function initializeAddAlbumFeature() {
     backToArtists: document.getElementById('backToArtists')
   };
   
-  // Add button click handler
   const addAlbumBtn = document.getElementById('addAlbumBtn');
   if (addAlbumBtn) {
     addAlbumBtn.onclick = openAddAlbumModal;
   }
   
-  // Modal close handlers
   modalElements.closeModalBtn.onclick = closeAddAlbumModal;
   modal.onclick = (e) => {
     if (e.target === modal) {
@@ -291,7 +578,6 @@ function initializeAddAlbumFeature() {
     }
   };
   
-  // Search handlers
   modalElements.searchArtistBtn.onclick = performArtistSearch;
   modalElements.artistSearchInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
@@ -299,9 +585,7 @@ function initializeAddAlbumFeature() {
     }
   };
   
-  // Back button
   modalElements.backToArtists.onclick = () => {
-    // Cancel any ongoing album loading
     if (currentLoadingController) {
       currentLoadingController.abort();
       currentLoadingController = null;
@@ -310,7 +594,6 @@ function initializeAddAlbumFeature() {
     modalElements.albumResults.classList.add('hidden');
   };
   
-  // ESC key to close
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
       closeAddAlbumModal();
@@ -324,6 +607,9 @@ function openAddAlbumModal() {
     return;
   }
   
+  // Optimization 3: Warm up connections when modal opens
+  warmupConnections();
+  
   modal.classList.remove('hidden');
   modalElements.artistSearchInput.value = '';
   modalElements.artistSearchInput.focus();
@@ -331,11 +617,24 @@ function openAddAlbumModal() {
 }
 
 function closeAddAlbumModal() {
-  // Cancel any ongoing requests
   if (currentLoadingController) {
     currentLoadingController.abort();
     currentLoadingController = null;
   }
+  if (currentPreloadController) {
+    currentPreloadController.abort();
+    currentPreloadController = null;
+  }
+  
+  // Stop background loading
+  isBackgroundLoading = false;
+  
+  // Disconnect observer
+  if (imageObserver) {
+    imageObserver.disconnect();
+    imageObserver = null;
+  }
+  
   modal.classList.add('hidden');
   resetModalState();
 }
@@ -398,6 +697,7 @@ async function performArtistSearch() {
   }
 }
 
+// Display artist results with hover preloading
 function displayArtistResults(artists) {
   modalElements.artistList.innerHTML = '';
   
@@ -415,6 +715,18 @@ function displayArtistResults(artists) {
       <div class="text-sm text-gray-400 mt-1">${artist.type || 'Artist'}${country}${years}</div>
     `;
     
+    // Optimization 1: Preload on hover
+    let preloadTimeout;
+    artistEl.addEventListener('mouseenter', () => {
+      preloadTimeout = setTimeout(() => {
+        preloadArtistAlbums(artist);
+      }, 300); // 300ms delay to avoid loading on quick mouse movements
+    });
+    
+    artistEl.addEventListener('mouseleave', () => {
+      clearTimeout(preloadTimeout);
+    });
+    
     artistEl.onclick = () => selectArtist(artist);
     modalElements.artistList.appendChild(artistEl);
   });
@@ -426,24 +738,24 @@ async function selectArtist(artist) {
   currentArtist = artist;
   showLoading();
   
-  // Create abort controller for cancellable requests
   currentLoadingController = new AbortController();
   
   try {
-    const releaseGroups = await getArtistReleaseGroups(artist.id);
+    // Check if we have preloaded data
+    let releaseGroups = preloadCache.get(artist.id);
+    
+    if (!releaseGroups) {
+      releaseGroups = await getArtistReleaseGroups(artist.id);
+    }
     
     if (releaseGroups.length === 0) {
       showToast('No pure albums or EPs found for this artist', 'error');
       showAlbumResults();
-      modalElements.albumList.innerHTML = '<p class="col-span-full text-center text-gray-500">No standard albums or EPs found. This artist may only have compilations, live albums, or other special releases.</p>';
+      modalElements.albumList.innerHTML = '<p class="col-span-full text-center text-gray-500">No standard albums or EPs found.</p>';
       return;
     }
     
-    // Display albums immediately without cover art
-    displayAlbumResultsProgressive(releaseGroups);
-    
-    // Load cover art progressively
-    loadCoverArtProgressive(releaseGroups, artist.name);
+    displayAlbumResultsWithLazyLoading(releaseGroups);
     
   } catch (error) {
     if (error.name === 'AbortError') {
@@ -456,14 +768,19 @@ async function selectArtist(artist) {
   }
 }
 
-function displayAlbumResultsProgressive(releaseGroups) {
+function displayAlbumResultsWithLazyLoading(releaseGroups) {
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
   
-  // Calculate date 30 days ago
+  // Reset background loading state
+  isBackgroundLoading = false;
+  
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  
+  // Set up intersection observer
+  const observer = setupIntersectionObserver(releaseGroups, currentArtist.name);
   
   releaseGroups.forEach((rg, index) => {
     const albumEl = document.createElement('div');
@@ -472,8 +789,6 @@ function displayAlbumResultsProgressive(releaseGroups) {
     
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
-    
-    // Check if this is a very recent release
     const isNewRelease = rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
     
     albumEl.innerHTML = `
@@ -499,79 +814,49 @@ function displayAlbumResultsProgressive(releaseGroups) {
     
     albumEl.onclick = () => addAlbumToList(rg);
     modalElements.albumList.appendChild(albumEl);
-  });
-}
-
-async function loadCoverArtProgressive(releaseGroups, artistName) {
-  // Process albums in batches for better performance
-  const updateAlbumCover = (index, coverArt) => {
-    const albumEl = modalElements.albumList.querySelector(`[data-album-index="${index}"]`);
-    if (!albumEl) return;
     
-    const coverContainer = albumEl.querySelector('.album-cover-container');
-    if (coverContainer && coverArt) {
-      coverContainer.innerHTML = `
-        <img src="${coverArt}" 
-             alt="${releaseGroups[index].title}" 
-             class="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-             loading="lazy" 
-             crossorigin="anonymous"
-             onerror="this.onerror=null; this.parentElement.innerHTML='<svg width=\\'48\\' height=\\'48\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg>'">
-      `;
-      // Store the cover art URL in the release group object
-      releaseGroups[index].coverArt = coverArt;
-    }
-  };
-  
-  // Create promises for all cover art fetches
-  const coverArtPromises = releaseGroups.map(async (rg, index) => {
-    try {
-      if (currentLoadingController?.signal.aborted) {
-        return null;
-      }
-      
-      const coverArt = await getCoverArt(rg.id, artistName, rg.title);
-      
-      // Update UI immediately when cover art is found
-      if (coverArt && !currentLoadingController?.signal.aborted) {
-        updateAlbumCover(index, coverArt);
-      }
-      
-      return { index, coverArt };
-    } catch (error) {
-      console.error(`Error loading cover for ${rg.title}:`, error);
-      return { index, coverArt: null };
-    }
+    // Start observing this element for lazy loading
+    observer.observe(albumEl);
   });
   
-  // Use Promise.allSettled to handle failures gracefully
-  await Promise.allSettled(coverArtPromises);
+  // Also immediately check for visible albums
+  requestAnimationFrame(() => {
+    const visibleAlbums = Array.from(modalElements.albumList.querySelectorAll('[data-album-index]'))
+      .filter(el => {
+        const rect = el.getBoundingClientRect();
+        return rect.top < window.innerHeight && rect.bottom > 0;
+      });
+    
+    // Trigger intersection observer for visible albums
+    visibleAlbums.forEach(el => {
+      if (observer) {
+        observer.unobserve(el);
+        observer.observe(el);
+      }
+    });
+  });
 }
 
 async function addAlbumToList(releaseGroup) {
-  // Create album object matching the expected format
   const album = {
     artist: currentArtist.name,
     album: releaseGroup.title,
     album_id: releaseGroup.id,
     release_date: releaseGroup['first-release-date'] || '',
     country: currentArtist.country || '',
-    genre_1: '', // User can add genres later
+    genre_1: '',
     genre_2: '',
     rating: '',
     comments: ''
   };
   
-  // Show loading state
   showToast('Adding album...', 'info');
   
-  // If we have cover art, download and convert to base64
   if (releaseGroup.coverArt) {
     try {
       const response = await fetch(releaseGroup.coverArt);
       const blob = await response.blob();
       
-      // Check if blob is actually an image
       if (!blob.type.startsWith('image/')) {
         throw new Error('Invalid image type');
       }
@@ -580,43 +865,35 @@ async function addAlbumToList(releaseGroup) {
       
       reader.onloadend = function() {
         const base64data = reader.result;
-        album.cover_image = base64data.split(',')[1]; // Remove data:image/jpeg;base64, prefix
+        album.cover_image = base64data.split(',')[1];
         album.cover_image_format = blob.type.split('/')[1].toUpperCase();
         
-        // Add to current list
         addAlbumToCurrentList(album);
       };
       
       reader.onerror = function() {
         console.error('Error reading cover art');
-        // Add without cover art
         addAlbumToCurrentList(album);
       };
       
       reader.readAsDataURL(blob);
     } catch (error) {
       console.error('Error fetching cover art:', error);
-      // Add without cover art
       addAlbumToCurrentList(album);
     }
   } else {
-    // Add without cover art
     addAlbumToCurrentList(album);
   }
 }
 
 async function addAlbumToCurrentList(album) {
   try {
-    // Add to the end of the current list
     lists[currentList].push(album);
     
-    // Save to server
     await saveList(currentList, lists[currentList]);
     
-    // Update display
     selectList(currentList);
     
-    // Close modal
     closeAddAlbumModal();
     
     showToast(`Added "${album.album}" by ${album.artist} to the list`);
@@ -624,13 +901,11 @@ async function addAlbumToCurrentList(album) {
     console.error('Error adding album:', error);
     showToast('Error adding album to list', 'error');
     
-    // Remove the album we just added
     lists[currentList].pop();
   }
 }
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-  // Wait a bit for the main app to initialize
   setTimeout(initializeAddAlbumFeature, 100);
 });
