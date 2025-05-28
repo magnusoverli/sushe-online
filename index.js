@@ -117,8 +117,8 @@ app.post('/register', async (req, res) => {
     
     users.findOne({ email }, async (err, existing) => {
       if (err) {
-        console.error('Database error:', err);
-        req.flash('error', 'Registration error');
+        console.error('Database error during registration:', err);
+        req.flash('error', 'Registration error. Please try again.');
         return res.redirect('/register');
       }
       
@@ -129,24 +129,27 @@ app.post('/register', async (req, res) => {
       
       try {
         const hash = await bcrypt.hash(password, 12);
-        users.insert({ email, hash }, (err) => {
+        
+        users.insert({ email, hash }, (err, newUser) => {
           if (err) {
-            console.error('Insert error:', err);
-            req.flash('error', 'Registration error');
+            console.error('Insert error during registration:', err);
+            req.flash('error', 'Registration error. Please try again.');
             return res.redirect('/register');
           }
+          
+          console.log('New user registered:', email);
           req.flash('success', 'Registration successful! Please login.');
           res.redirect('/login');
         });
       } catch (hashErr) {
-        console.error('Hashing error:', hashErr);
-        req.flash('error', 'Registration error');
+        console.error('Password hashing error during registration:', hashErr);
+        req.flash('error', 'Registration error. Please try again.');
         res.redirect('/register');
       }
     });
   } catch (error) {
     console.error('Registration error:', error);
-    req.flash('error', 'Registration error');
+    req.flash('error', 'Registration error. Please try again.');
     res.redirect('/register');
   }
 });
@@ -277,39 +280,77 @@ app.get('/forgot', (req, res) => {
 
 app.post('/forgot', (req, res) => {
   const { email } = req.body;
+  
+  if (!email) {
+    req.flash('error', 'Please provide an email address');
+    return res.redirect('/forgot');
+  }
+  
   users.findOne({ email }, (err, user) => {
+    if (err) {
+      console.error('Database error during forgot password:', err);
+      req.flash('error', 'An error occurred. Please try again.');
+      return res.redirect('/forgot');
+    }
+    
+    // Always show the same message for security reasons
     req.flash('info', 'If that email exists, you will receive a reset link');
-    if (!user) return res.redirect('/forgot');
+    
+    if (!user) {
+      // Don't reveal that the email doesn't exist
+      return res.redirect('/forgot');
+    }
 
     const token = crypto.randomBytes(20).toString('hex');
     const expires = Date.now() + 3600000; // 1 hour
-    users.update({ _id: user._id }, { $set: { resetToken: token, resetExpires: expires } }, {}, () => {
-      if (process.env.SENDGRID_API_KEY) {
-        const transporter = nodemailer.createTransport({
-          host: 'smtp.sendgrid.net',
-          port: 587,
-          auth: {
-            user: 'apikey',
-            pass: process.env.SENDGRID_API_KEY
-          }
-        });
+    
+    users.update(
+      { _id: user._id }, 
+      { $set: { resetToken: token, resetExpires: expires } }, 
+      {}, 
+      (err, numReplaced) => {
+        if (err) {
+          console.error('Failed to set reset token:', err);
+          // Don't show error to user for security reasons
+          return res.redirect('/forgot');
+        }
         
-        const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset/${token}`;
-        const emailOptions = composeForgotPasswordEmail(user.email, resetUrl);
+        if (numReplaced === 0) {
+          console.error('No user updated when setting reset token');
+          // Don't show error to user for security reasons
+          return res.redirect('/forgot');
+        }
         
-        transporter.sendMail(emailOptions, (error, info) => {
-          if (error) {
-            console.error('Failed to send password reset email:', error.message);
-          } else {
-            console.log('Password reset email sent successfully to:', user.email);
-          }
-        });
-      } else {
-        console.warn('SENDGRID_API_KEY not configured - password reset email not sent');
+        console.log('Reset token set for user:', user.email);
+        
+        if (process.env.SENDGRID_API_KEY) {
+          const transporter = nodemailer.createTransport({
+            host: 'smtp.sendgrid.net',
+            port: 587,
+            auth: {
+              user: 'apikey',
+              pass: process.env.SENDGRID_API_KEY
+            }
+          });
+          
+          const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset/${token}`;
+          const emailOptions = composeForgotPasswordEmail(user.email, resetUrl);
+          
+          transporter.sendMail(emailOptions, (error, info) => {
+            if (error) {
+              console.error('Failed to send password reset email:', error.message);
+            } else {
+              console.log('Password reset email sent successfully to:', user.email);
+            }
+          });
+        } else {
+          console.warn('SENDGRID_API_KEY not configured - password reset email not sent');
+          console.log('Reset token for testing:', token);
+        }
+        
+        res.redirect('/forgot');
       }
-      
-      res.redirect('/forgot');
-    });
+    );
   });
 });
 
@@ -325,17 +366,43 @@ app.get('/reset/:token', (req, res) => {
 
 app.post('/reset/:token', async (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, async (err, user) => {
+    if (err) {
+      console.error('Error finding user with reset token:', err);
+      return res.send(htmlTemplate(invalidTokenTemplate(), 'Invalid Token - Black Metal Auth'));
+    }
+    
     if (!user) {
       return res.send(htmlTemplate(invalidTokenTemplate(), 'Invalid Token - Black Metal Auth'));
     }
     
     try {
       const hash = await bcrypt.hash(req.body.password, 12);
-      users.update({ _id: user._id }, { $set: { hash }, $unset: { resetToken: true, resetExpires: true } }, {}, () => {
-        res.redirect('/login');
-      });
+      
+      users.update(
+        { _id: user._id }, 
+        { $set: { hash }, $unset: { resetToken: true, resetExpires: true } }, 
+        {}, 
+        (err, numReplaced) => {
+          if (err) {
+            console.error('Password reset update error:', err);
+            req.flash('error', 'Error updating password. Please try again.');
+            return res.redirect('/reset/' + req.params.token);
+          }
+          
+          if (numReplaced === 0) {
+            console.error('No user updated during password reset');
+            req.flash('error', 'Error updating password. Please try again.');
+            return res.redirect('/reset/' + req.params.token);
+          }
+          
+          console.log('Password successfully updated for user:', user.email);
+          req.flash('success', 'Password updated successfully. Please login with your new password.');
+          res.redirect('/login');
+        }
+      );
     } catch (error) {
-      console.error('Password reset error:', error);
+      console.error('Password hashing error:', error);
+      req.flash('error', 'Error processing password. Please try again.');
       res.redirect('/reset/' + req.params.token);
     }
   });
