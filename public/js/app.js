@@ -301,10 +301,60 @@ async function clearAllLists() {
 // Initialize context menu
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
+  const downloadOption = document.getElementById('downloadListOption');
   const renameOption = document.getElementById('renameListOption');
   const deleteOption = document.getElementById('deleteListOption');
   
-  if (!contextMenu || !deleteOption || !renameOption) return;
+  if (!contextMenu || !deleteOption || !renameOption || !downloadOption) return;
+  
+  // Handle download option click
+  downloadOption.onclick = () => {
+    contextMenu.classList.add('hidden');
+    
+    if (!currentContextList) return;
+    
+    try {
+      // Get the list data
+      const listData = lists[currentContextList];
+      
+      // Create a copy with rank added based on position
+      const exportData = listData.map((album, index) => {
+        const exported = { ...album };
+        // Add rank based on position (1-indexed)
+        exported.rank = index + 1;
+        // Add points for this position
+        exported.points = getPointsForPosition(index + 1);
+        return exported;
+      });
+      
+      // Convert to JSON with pretty formatting
+      const jsonStr = JSON.stringify(exportData, null, 2);
+      
+      // Create blob and download link
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      
+      // Create temporary download link
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${currentContextList}.json`;
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      showToast(`Downloaded "${currentContextList}"`);
+    } catch (error) {
+      console.error('Error downloading list:', error);
+      showToast('Error downloading list', 'error');
+    }
+    
+    currentContextList = null;
+  };
   
   // Handle rename option click
   renameOption.onclick = () => {
@@ -347,12 +397,6 @@ function initializeContextMenu() {
           const addAlbumBtn = document.getElementById('addAlbumBtn');
           if (addAlbumBtn) {
             addAlbumBtn.classList.add('hidden');
-          }
-          
-          // Hide the export button
-          const exportBtn = document.getElementById('exportBtn');
-          if (exportBtn) {
-            exportBtn.classList.add('hidden');
           }
         }
         

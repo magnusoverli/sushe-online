@@ -304,7 +304,7 @@ const spotifyTemplate = (req) => `
       */
       
       /* Cover art size configuration */
-      --cover-art-size: 100px;  /* Maximum size for cover art */
+      --cover-art-size: 55px;  /* Maximum size for cover art */
     }
     
     /* Define the album grid class */
@@ -577,11 +577,13 @@ const spotifyTemplate = (req) => `
         <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">SuShe Online</h1>
       </div>
       
-      <nav class="flex-1 overflow-y-auto p-4">
-        <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Lists</h3>
-        <ul id="listNav" class="space-y-1">
-          <!-- Lists will be populated here -->
-        </ul>
+      <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
+        <div class="flex-1">
+          <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Lists</h3>
+          <ul id="listNav" class="space-y-1">
+            <!-- Lists will be populated here -->
+          </ul>
+        </div>
         
         <div class="mt-6 pt-6 border-t border-gray-800">
           <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
@@ -589,9 +591,6 @@ const spotifyTemplate = (req) => `
           </button>
           <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
             + Import List
-          </button>
-          <button id="exportBtn" class="hidden w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-            ↓ Download List
           </button>
           <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
             DELETE All Lists
@@ -647,6 +646,9 @@ const spotifyTemplate = (req) => `
   
   <!-- Context Menu -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+    <button id="downloadListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
+      Download List
+    </button>
     <button id="renameListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
       Rename List
     </button>
