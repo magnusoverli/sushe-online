@@ -46,12 +46,35 @@ lists.ensureIndex({ fieldName: 'name' });
 
 // Passport configuration (same as before)
 passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
+  console.log('Login attempt for email:', email);
+  
   users.findOne({ email }, (err, user) => {
-    if (err) return done(err);
-    if (!user) return done(null, false, { message: 'Unknown email' });
+    if (err) {
+      console.error('Database error during login:', err);
+      return done(err);
+    }
+    
+    if (!user) {
+      console.log('Login failed: Unknown email -', email);
+      return done(null, false, { message: 'Unknown email' });
+    }
+    
+    console.log('User found:', { email: user.email, hasHash: !!user.hash });
+    
     bcrypt.compare(password, user.hash, (err, isMatch) => {
-      if (err) return done(err);
-      if (!isMatch) return done(null, false, { message: 'Bad password' });
+      if (err) {
+        console.error('Bcrypt compare error:', err);
+        return done(err);
+      }
+      
+      console.log('Password comparison result:', isMatch);
+      
+      if (!isMatch) {
+        console.log('Login failed: Bad password for', email);
+        return done(null, false, { message: 'Bad password' });
+      }
+      
+      console.log('Login successful for:', email);
       return done(null, user);
     });
   });
@@ -75,11 +98,36 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production' && process.env.BASE_URL?.startsWith('https'),
+    // Only set secure in production if using HTTPS
+    secure: false, // Set to true only if using HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax' // Add this for better compatibility
+  },
+  name: 'sushe.sid' // Custom session name
 }));
+
+app.get('/debug/users', async (req, res) => {
+  if (process.env.NODE_ENV !== 'production') {
+    users.find({}, (err, allUsers) => {
+      if (err) {
+        return res.json({ error: err.message });
+      }
+      
+      const sanitizedUsers = allUsers.map(u => ({
+        email: u.email,
+        hasHash: !!u.hash,
+        hashLength: u.hash ? u.hash.length : 0,
+        _id: u._id
+      }));
+      
+      res.json({ users: sanitizedUsers });
+    });
+  } else {
+    res.status(404).send('Not found');
+  }
+});
+
 app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());
@@ -159,10 +207,34 @@ app.get('/login', (req, res) => {
   res.send(htmlTemplate(loginTemplate(req), 'SuShe Online'));
 });
 
-app.post('/login',
-  passport.authenticate('local', { failureRedirect: '/login', failureFlash: true }),
-  (req, res) => res.redirect('/')
-);
+app.post('/login', (req, res, next) => {
+  console.log('Login POST request received for:', req.body.email);
+  
+  passport.authenticate('local', (err, user, info) => {
+    if (err) {
+      console.error('Authentication error:', err);
+      req.flash('error', 'An error occurred during login');
+      return res.redirect('/login');
+    }
+    
+    if (!user) {
+      console.log('Authentication failed:', info);
+      req.flash('error', info.message || 'Invalid credentials');
+      return res.redirect('/login');
+    }
+    
+    req.logIn(user, (err) => {
+      if (err) {
+        console.error('Login error:', err);
+        req.flash('error', 'Login failed');
+        return res.redirect('/login');
+      }
+      
+      console.log('User logged in successfully:', user.email);
+      return res.redirect('/');
+    });
+  })(req, res, next);
+});
 
 // Home (protected) - Spotify-like interface
 app.get('/', ensureAuth, (req, res) => {
