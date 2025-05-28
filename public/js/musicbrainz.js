@@ -81,7 +81,6 @@ async function searchArtists(query) {
 }
 
 // Get release groups - ONLY pure Albums and EPs (no secondary types)
-// Get release groups - ONLY pure Albums and EPs (no secondary types) that have been released
 async function getArtistReleaseGroups(artistId) {
   // Get albums and EPs
   const url = `${MUSICBRAINZ_API}/release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
@@ -102,26 +101,29 @@ async function getArtistReleaseGroups(artistId) {
     // Only include if it's an Album or EP with NO secondary types
     const isValidType = (primaryType === 'Album' || primaryType === 'EP') && secondaryTypes.length === 0;
     
+    // EXCLUDE releases without a release date
+    if (!releaseDate) {
+      return false; // Skip releases with no date
+    }
+    
     // Check if it has been released
     let hasBeenReleased = true;
-    if (releaseDate) {
-      // Handle partial dates (YYYY or YYYY-MM)
-      let comparableDate = releaseDate;
-      
-      // If only year, assume December 31st of that year
-      if (releaseDate.length === 4) {
-        comparableDate = `${releaseDate}-12-31`;
-      }
-      // If only year and month, assume last day of that month
-      else if (releaseDate.length === 7) {
-        const [year, month] = releaseDate.split('-');
-        const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-        comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
-      }
-      
-      // Compare with today
-      hasBeenReleased = comparableDate <= todayStr;
+    // Handle partial dates (YYYY or YYYY-MM)
+    let comparableDate = releaseDate;
+    
+    // If only year, assume December 31st of that year
+    if (releaseDate.length === 4) {
+      comparableDate = `${releaseDate}-12-31`;
     }
+    // If only year and month, assume last day of that month
+    else if (releaseDate.length === 7) {
+      const [year, month] = releaseDate.split('-');
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
+    }
+    
+    // Compare with today
+    hasBeenReleased = comparableDate <= todayStr;
     
     return isValidType && hasBeenReleased;
   });
