@@ -7,6 +7,7 @@ const composeForgotPasswordEmail = (userEmail, resetUrl) => {
 Click here to reset your password: ${resetUrl}
 
 If you did not request this, ignore this email and your password will remain unchanged.
+`;
 
   // HTML version with styling matching the app's theme
   const htmlContent = `
