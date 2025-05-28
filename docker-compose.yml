@@ -13,5 +13,9 @@ services:
       - PORT=3000
       - DATA_DIR=/app/data
     volumes:
-      - ./data:/app/data
+      # Use a named volume instead of bind mount
+      - sushe-data:/app/data
     restart: unless-stopped
+
+volumes:
+  sushe-data:
