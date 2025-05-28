@@ -767,6 +767,74 @@ async function selectArtist(artist) {
     showArtistResults();
   }
 }
+async function resolveCountryCode(countryCode) {
+  if (!countryCode || countryCode.length !== 2) {
+    return '';
+  }
+  
+  try {
+    // Use RestCountries API to get country info
+    const response = await fetch(`https://restcountries.com/v3.1/alpha/${countryCode}`);
+    
+    if (!response.ok) {
+      console.warn(`Country code ${countryCode} not found`);
+      return '';
+    }
+    
+    const data = await response.json();
+    if (!data || !data[0]) {
+      return '';
+    }
+    
+    const countryData = data[0];
+    
+    // Try different name variations to match against our countries list
+    const namesToTry = [
+      countryData.name.common,
+      countryData.name.official,
+      // Also check alternative names
+      ...(countryData.altSpellings || [])
+    ];
+    
+    // Special cases for common variations
+    if (countryCode === 'US') {
+      namesToTry.push('United States');
+    } else if (countryCode === 'GB') {
+      namesToTry.push('United Kingdom');
+    } else if (countryCode === 'KR') {
+      namesToTry.push('Korea, South');
+    } else if (countryCode === 'KP') {
+      namesToTry.push('Korea, North');
+    }
+    
+    // Find the first name that matches our countries list
+    for (const name of namesToTry) {
+      if (name && availableCountries.includes(name)) {
+        return name;
+      }
+    }
+    
+    // If no exact match, try case-insensitive partial matching
+    const commonName = countryData.name.common.toLowerCase();
+    const closeMatch = availableCountries.find(country => {
+      const countryLower = country.toLowerCase();
+      return countryLower === commonName || 
+             countryLower.includes(commonName) || 
+             commonName.includes(countryLower);
+    });
+    
+    if (closeMatch) {
+      return closeMatch;
+    }
+    
+    console.warn(`Country "${countryData.name.common}" (${countryCode}) not found in allowed countries list`);
+    return '';
+    
+  } catch (error) {
+    console.error('Error resolving country code:', error);
+    return '';
+  }
+}
 
 function displayAlbumResultsWithLazyLoading(releaseGroups) {
   showAlbumResults();
@@ -838,20 +906,25 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 }
 
 async function addAlbumToList(releaseGroup) {
+  // Show initial loading message
+  showToast('Adding album...', 'info');
+  
+  // Resolve the country code to full name
+  const resolvedCountry = await resolveCountryCode(currentArtist.country);
+  
   const album = {
     artist: currentArtist.name,
     album: releaseGroup.title,
     album_id: releaseGroup.id,
     release_date: releaseGroup['first-release-date'] || '',
-    country: currentArtist.country || '',
+    country: resolvedCountry, // Use the resolved country name
     genre_1: '',
     genre_2: '',
     rating: '',
     comments: ''
   };
   
-  showToast('Adding album...', 'info');
-  
+  // Continue with cover art fetching...
   if (releaseGroup.coverArt) {
     try {
       const response = await fetch(releaseGroup.coverArt);
