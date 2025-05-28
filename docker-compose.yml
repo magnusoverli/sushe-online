@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   app:
     build: .
@@ -13,10 +11,7 @@ services:
       - EMAIL_FROM=${EMAIL_FROM}
       - BASE_URL=${BASE_URL}
       - PORT=3000
+      - DATA_DIR=/app/data
     volumes:
-      # Persist database files
       - ./data:/app/data
     restart: unless-stopped
-
-volumes:
-  app-data:

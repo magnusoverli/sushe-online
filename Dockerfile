@@ -20,8 +20,10 @@ RUN npm run build:css
 # Clean up dev dependencies
 RUN npm prune --production
 
-# Create a directory for data persistence
-RUN mkdir -p /app/data
+# Create a directory for data persistence and set permissions
+RUN mkdir -p /app/data && \
+    chown -R node:node /app/data && \
+    chown -R node:node /app
 
 # Expose the port your app runs on
 EXPOSE 3000
