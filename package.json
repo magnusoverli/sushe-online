@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@seald-io/nedb": "^4.1.1",
+    "connect-nedb-session": "^0.0.3",
     "bcryptjs": "^2.4.3",
     "connect-flash": "^0.1.1",
     "dotenv": "^16.5.0",

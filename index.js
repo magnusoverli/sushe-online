@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const NedbStore = require('connect-nedb-session')(session);
 const flash = require('connect-flash');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
@@ -63,12 +64,18 @@ const app = express();
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
+
+// Updated session configuration with NeDB store
 app.use(session({
+  store: new NedbStore({
+    filename: path.join(dataDir, 'sessions.db'),
+    autoCompactInterval: 300000 // compact every 5 minutes
+  }),
   secret: process.env.SESSION_SECRET || 'your-secret-key-here',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production' && process.env.BASE_URL?.startsWith('https'),
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000 // 24 hours
   }
