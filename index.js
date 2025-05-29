@@ -44,6 +44,33 @@ const lists = new Datastore({
 lists.ensureIndex({ fieldName: 'userId' });
 lists.ensureIndex({ fieldName: 'name' });
 
+// Admin code variables
+const adminCodeAttempts = new Map(); // Track failed attempts
+let adminCode = null;
+let adminCodeExpiry = null;
+
+// Enhanced admin code generation
+function generateAdminCode() {
+  try {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    adminCode = Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
+    
+    console.log('\n┌─────────────────────────────────────────┐');
+    console.log('│          ADMIN ACCESS CODE              │');
+    console.log('├─────────────────────────────────────────┤');
+    console.log(`│  Code: ${adminCode}                        │`);
+    console.log(`│  Valid until: ${adminCodeExpiry.toLocaleTimeString()}              │`);
+    console.log('└─────────────────────────────────────────┘\n');
+  } catch (error) {
+    console.error('Error generating admin code:', error);
+  }
+}
+
+// Generate initial code and rotate every 5 minutes
+generateAdminCode();
+setInterval(generateAdminCode, 5 * 60 * 1000);
+
 // Passport configuration
 passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
   console.log('Login attempt for email:', email);
@@ -83,14 +110,18 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
 passport.serializeUser((user, done) => done(null, user._id));
 passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 
+// Create Express app
 const app = express();
+
+// Basic Express middleware
 app.use(express.static('public'));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
+// Session middleware
 app.use(session({
   store: new FileStore({
-    path: './data/sessions',
+    path: path.join(dataDir, 'sessions'),
     ttl: 86400, // 1 day in seconds
     retries: 0
   }),
@@ -104,115 +135,7 @@ app.use(session({
   }
 }));
 
-const adminCodeAttempts = new Map(); // Track failed attempts
-let adminCode = null;
-let adminCodeExpiry = null;
-let adminCodeSalt = null;
-
-// Enhanced admin code generation
-function generateAdminCode() {
-  try {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    adminCode = Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-    adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
-    
-    console.log('\n┌─────────────────────────────────────────┐');
-    console.log('│          ADMIN ACCESS CODE              │');
-    console.log('├─────────────────────────────────────────┤');
-    console.log(`│  Code: ${adminCode}                        │`);
-    console.log(`│  Valid until: ${adminCodeExpiry.toLocaleTimeString()}              │`);
-    console.log('└─────────────────────────────────────────┘\n');
-    // NO file writes here
-  } catch (error) {
-    console.error('Error generating admin code:', error);
-  }
-}
-
-// Generate initial code and rotate every 5 minutes
-generateAdminCode();
-setInterval(generateAdminCode, 5 * 60 * 1000);
-
-// Rate limiting middleware for admin requests
-function rateLimitAdminRequest(req, res, next) {
-  const userKey = req.user._id;
-  const attempts = adminCodeAttempts.get(userKey) || { count: 0, firstAttempt: Date.now() };
-  
-  // Reset if more than 30 minutes since first attempt
-  if (Date.now() - attempts.firstAttempt > 30 * 60 * 1000) {
-    attempts.count = 0;
-    attempts.firstAttempt = Date.now();
-  }
-  
-  // Block if too many attempts
-  if (attempts.count >= 5) {
-    console.warn(`⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`);
-    req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
-    return res.redirect('/account');
-  }
-  
-  req.adminAttempts = attempts;
-  next();
-}
-
-// Enhanced admin request endpoint
-app.post('/account/request-admin', ensureAuth, async (req, res) => {
-  console.log('Admin request received from:', req.user.email);
-  
-  try {
-    const { code } = req.body;
-    
-    // Validate code
-    if (!code || code.toUpperCase() !== adminCode || new Date() > adminCodeExpiry) {
-      console.log('Invalid code attempt');
-      req.flash('error', 'Invalid or expired admin code');
-      return res.redirect('/account');
-    }
-    
-    // Grant admin
-    users.update(
-      { _id: req.user._id },
-      { 
-        $set: { 
-          role: 'admin',
-          adminGrantedAt: new Date()
-        }
-      },
-      {},
-      (err, numUpdated) => {
-        if (err) {
-          console.error('Error granting admin:', err);
-          req.flash('error', 'Error granting admin access');
-          return res.redirect('/account');
-        }
-        
-        console.log(`✅ Admin access granted to: ${req.user.email}`);
-        
-        // Update the session
-        req.user.role = 'admin';
-        req.session.save((err) => {
-          if (err) console.error('Session save error:', err);
-          req.flash('success', 'Admin access granted!');
-          res.redirect('/account');
-        });
-      }
-    );
-  } catch (error) {
-    console.error('Admin request error:', error);
-    req.flash('error', 'Error processing admin request');
-    res.redirect('/account');
-  }
-});
-
-// Optional: Endpoint to check admin status (for debugging)
-app.get('/api/admin/status', ensureAuth, (req, res) => {
-  res.json({
-    isAdmin: req.user.role === 'admin',
-    codeValid: new Date() < adminCodeExpiry,
-    codeExpiresIn: Math.max(0, Math.floor((adminCodeExpiry - new Date()) / 1000)) + ' seconds'
-  });
-});
-
-// Custom flash middleware (replaces connect-flash)
+// Custom flash middleware
 app.use((req, res, next) => {
   // Initialize flash in session if it doesn't exist
   if (!req.session.flash) {
@@ -242,8 +165,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
+
+// ============ MIDDLEWARE FUNCTIONS ============
 
 // Middleware to protect routes
 function ensureAuth(req, res, next) {
@@ -259,7 +185,31 @@ function ensureAuthAPI(req, res, next) {
   res.status(401).json({ error: 'Unauthorized' });
 }
 
-// Registration form
+// Rate limiting middleware for admin requests
+function rateLimitAdminRequest(req, res, next) {
+  const userKey = req.user._id;
+  const attempts = adminCodeAttempts.get(userKey) || { count: 0, firstAttempt: Date.now() };
+  
+  // Reset if more than 30 minutes since first attempt
+  if (Date.now() - attempts.firstAttempt > 30 * 60 * 1000) {
+    attempts.count = 0;
+    attempts.firstAttempt = Date.now();
+  }
+  
+  // Block if too many attempts
+  if (attempts.count >= 5) {
+    console.warn(`⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`);
+    req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
+    return res.redirect('/account');
+  }
+  
+  req.adminAttempts = attempts;
+  next();
+}
+
+// ============ ROUTES ============
+
+// Registration routes
 app.get('/register', (req, res) => {
   res.send(htmlTemplate(registerTemplate(req, res.locals.flash), 'Join the KVLT - Black Metal Auth'));
 });
@@ -368,7 +318,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Login form
+// Login routes
 app.get('/login', (req, res) => {
   res.send(htmlTemplate(loginTemplate(req, res.locals.flash), 'SuShe Online'));
 });
@@ -402,34 +352,14 @@ app.post('/login', (req, res, next) => {
   })(req, res, next);
 });
 
-// Home (protected) - Spotify-like interface
-app.get('/', ensureAuth, (req, res) => {
-  res.send(spotifyTemplate(req));
-});
-
 // Logout
 app.get('/logout', (req, res) => {
   req.logout(() => res.redirect('/login'));
 });
 
-// API ENDPOINTS FOR LISTS
-
-// Get all lists for current user
-app.get('/api/lists', ensureAuthAPI, (req, res) => {
-  lists.find({ userId: req.user._id }, (err, userLists) => {
-    if (err) {
-      console.error('Error fetching lists:', err);
-      return res.status(500).json({ error: 'Error fetching lists' });
-    }
-    
-    // Transform to simple object format
-    const listsObj = {};
-    userLists.forEach(list => {
-      listsObj[list.name] = list.data;
-    });
-    
-    res.json(listsObj);
-  });
+// Home (protected) - Spotify-like interface
+app.get('/', ensureAuth, (req, res) => {
+  res.send(spotifyTemplate(req));
 });
 
 // Account settings page
@@ -528,6 +458,93 @@ app.post('/account/change-password', ensureAuth, async (req, res) => {
   }
 });
 
+// Admin request endpoint - NOW PROPERLY PLACED AFTER PASSPORT INIT
+app.post('/account/request-admin', ensureAuth, rateLimitAdminRequest, async (req, res) => {
+  console.log('Admin request received from:', req.user.email);
+  
+  try {
+    const { code } = req.body;
+    
+    // Validate code
+    if (!code || code.toUpperCase() !== adminCode || new Date() > adminCodeExpiry) {
+      console.log('Invalid code attempt');
+      
+      // Increment failed attempts
+      const attempts = req.adminAttempts;
+      attempts.count++;
+      adminCodeAttempts.set(req.user._id, attempts);
+      
+      req.flash('error', 'Invalid or expired admin code');
+      return res.redirect('/account');
+    }
+    
+    // Clear failed attempts on success
+    adminCodeAttempts.delete(req.user._id);
+    
+    // Grant admin
+    users.update(
+      { _id: req.user._id },
+      { 
+        $set: { 
+          role: 'admin',
+          adminGrantedAt: new Date()
+        }
+      },
+      {},
+      (err, numUpdated) => {
+        if (err) {
+          console.error('Error granting admin:', err);
+          req.flash('error', 'Error granting admin access');
+          return res.redirect('/account');
+        }
+        
+        console.log(`✅ Admin access granted to: ${req.user.email}`);
+        
+        // Update the session
+        req.user.role = 'admin';
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          req.flash('success', 'Admin access granted!');
+          res.redirect('/account');
+        });
+      }
+    );
+  } catch (error) {
+    console.error('Admin request error:', error);
+    req.flash('error', 'Error processing admin request');
+    res.redirect('/account');
+  }
+});
+
+// Admin status endpoint (for debugging)
+app.get('/api/admin/status', ensureAuth, (req, res) => {
+  res.json({
+    isAdmin: req.user.role === 'admin',
+    codeValid: new Date() < adminCodeExpiry,
+    codeExpiresIn: Math.max(0, Math.floor((adminCodeExpiry - new Date()) / 1000)) + ' seconds'
+  });
+});
+
+// ============ API ENDPOINTS FOR LISTS ============
+
+// Get all lists for current user
+app.get('/api/lists', ensureAuthAPI, (req, res) => {
+  lists.find({ userId: req.user._id }, (err, userLists) => {
+    if (err) {
+      console.error('Error fetching lists:', err);
+      return res.status(500).json({ error: 'Error fetching lists' });
+    }
+    
+    // Transform to simple object format
+    const listsObj = {};
+    userLists.forEach(list => {
+      listsObj[list.name] = list.data;
+    });
+    
+    res.json(listsObj);
+  });
+});
+
 // Create or update a list
 app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
   const { name } = req.params;
@@ -607,11 +624,14 @@ app.delete('/api/lists', ensureAuthAPI, (req, res) => {
   });
 });
 
-// Forgot password routes
+// ============ PASSWORD RESET ROUTES ============
+
+// Forgot password page
 app.get('/forgot', (req, res) => {
   res.send(htmlTemplate(forgotPasswordTemplate(req, res.locals.flash), 'Password Recovery - Black Metal Auth'));
 });
 
+// Handle forgot password submission
 app.post('/forgot', (req, res) => {
   const { email } = req.body;
   
@@ -688,7 +708,7 @@ app.post('/forgot', (req, res) => {
   });
 });
 
-// Reset password routes
+// Reset password page
 app.get('/reset/:token', (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, (err, user) => {
     if (!user) {
@@ -698,6 +718,7 @@ app.get('/reset/:token', (req, res) => {
   });
 });
 
+// Handle password reset
 app.post('/reset/:token', async (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, async (err, user) => {
     if (err) {
