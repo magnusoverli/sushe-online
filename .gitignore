@@ -143,3 +143,19 @@ dist
 *.db
 
 .env.production
+
+# Data directory (sessions, databases, user data)
+data/
+
+# Generated CSS files
+public/styles/output.css
+
+# OS files (if not already present)
+.DS_Store
+Thumbs.db
+
+# IDE files (if not already present)
+.vscode/
+.idea/
+*.swp
+*.swo
