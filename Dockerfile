@@ -1,11 +1,6 @@
 # Use Node.js LTS version
 FROM node:22-alpine
 
-# Verify the Node.js version:
-node -v # Should print "v22.16.0".
-# Verify npm version:
-npm -v # Should print "10.9.2".
-
 # Set working directory
 WORKDIR /app
 
