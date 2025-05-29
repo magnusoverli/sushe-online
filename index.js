@@ -20,7 +20,8 @@ const {
   forgotPasswordTemplate, 
   resetPasswordTemplate, 
   invalidTokenTemplate, 
-  spotifyTemplate 
+  spotifyTemplate,
+  accountSettingsTemplate
 } = require('./templates');
 
 // Create data directory if it doesn't exist
@@ -87,7 +88,6 @@ app.use(express.static('public'));
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-// Updated session configuration with NeDB store
 app.use(session({
   store: new FileStore({
     path: './data/sessions',
@@ -103,6 +103,114 @@ app.use(session({
     maxAge: 1000 * 60 * 60 * 24 // 24 hours
   }
 }));
+
+const adminCodeAttempts = new Map(); // Track failed attempts
+let adminCode = null;
+let adminCodeExpiry = null;
+let adminCodeSalt = null;
+
+// Enhanced admin code generation
+function generateAdminCode() {
+  try {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    adminCode = Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
+    
+    console.log('\n┌─────────────────────────────────────────┐');
+    console.log('│          ADMIN ACCESS CODE              │');
+    console.log('├─────────────────────────────────────────┤');
+    console.log(`│  Code: ${adminCode}                        │`);
+    console.log(`│  Valid until: ${adminCodeExpiry.toLocaleTimeString()}              │`);
+    console.log('└─────────────────────────────────────────┘\n');
+    // NO file writes here
+  } catch (error) {
+    console.error('Error generating admin code:', error);
+  }
+}
+
+// Generate initial code and rotate every 5 minutes
+generateAdminCode();
+setInterval(generateAdminCode, 5 * 60 * 1000);
+
+// Rate limiting middleware for admin requests
+function rateLimitAdminRequest(req, res, next) {
+  const userKey = req.user._id;
+  const attempts = adminCodeAttempts.get(userKey) || { count: 0, firstAttempt: Date.now() };
+  
+  // Reset if more than 30 minutes since first attempt
+  if (Date.now() - attempts.firstAttempt > 30 * 60 * 1000) {
+    attempts.count = 0;
+    attempts.firstAttempt = Date.now();
+  }
+  
+  // Block if too many attempts
+  if (attempts.count >= 5) {
+    console.warn(`⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`);
+    req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
+    return res.redirect('/account');
+  }
+  
+  req.adminAttempts = attempts;
+  next();
+}
+
+// Enhanced admin request endpoint
+app.post('/account/request-admin', ensureAuth, async (req, res) => {
+  console.log('Admin request received from:', req.user.email);
+  
+  try {
+    const { code } = req.body;
+    
+    // Validate code
+    if (!code || code.toUpperCase() !== adminCode || new Date() > adminCodeExpiry) {
+      console.log('Invalid code attempt');
+      req.flash('error', 'Invalid or expired admin code');
+      return res.redirect('/account');
+    }
+    
+    // Grant admin
+    users.update(
+      { _id: req.user._id },
+      { 
+        $set: { 
+          role: 'admin',
+          adminGrantedAt: new Date()
+        }
+      },
+      {},
+      (err, numUpdated) => {
+        if (err) {
+          console.error('Error granting admin:', err);
+          req.flash('error', 'Error granting admin access');
+          return res.redirect('/account');
+        }
+        
+        console.log(`✅ Admin access granted to: ${req.user.email}`);
+        
+        // Update the session
+        req.user.role = 'admin';
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          req.flash('success', 'Admin access granted!');
+          res.redirect('/account');
+        });
+      }
+    );
+  } catch (error) {
+    console.error('Admin request error:', error);
+    req.flash('error', 'Error processing admin request');
+    res.redirect('/account');
+  }
+});
+
+// Optional: Endpoint to check admin status (for debugging)
+app.get('/api/admin/status', ensureAuth, (req, res) => {
+  res.json({
+    isAdmin: req.user.role === 'admin',
+    codeValid: new Date() < adminCodeExpiry,
+    codeExpiresIn: Math.max(0, Math.floor((adminCodeExpiry - new Date()) / 1000)) + ' seconds'
+  });
+});
 
 // Custom flash middleware (replaces connect-flash)
 app.use((req, res, next) => {
@@ -139,7 +247,9 @@ app.use(passport.session());
 
 // Middleware to protect routes
 function ensureAuth(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  if (req.user || (req.isAuthenticated && req.isAuthenticated())) {
+    return next();
+  }
   res.redirect('/login');
 }
 
@@ -320,6 +430,102 @@ app.get('/api/lists', ensureAuthAPI, (req, res) => {
     
     res.json(listsObj);
   });
+});
+
+// Account settings page
+app.get('/account', ensureAuth, async (req, res) => {
+  try {
+    console.log('Account page accessed by:', req.user.email, 'Role:', req.user.role);
+    
+    // Get user's list count for basic stats
+    lists.count({ userId: req.user._id }, (err, listCount) => {
+      if (err) {
+        console.error('Error counting lists:', err);
+        listCount = 0;
+      }
+      
+      // Count total albums across all lists
+      let totalAlbums = 0;
+      Object.values(lists).forEach(list => {
+        if (Array.isArray(list)) {
+          totalAlbums += list.length;
+        }
+      });
+      
+      const accountData = {
+        user: req.user,
+        stats: {
+          listCount: Object.keys(lists).length, // Using current loaded lists
+          totalAlbums: totalAlbums
+        }
+      };
+      
+      console.log('Account data prepared:', { 
+        email: accountData.user.email, 
+        role: accountData.user.role,
+        stats: accountData.stats 
+      });
+      
+      res.send(accountSettingsTemplate(req, accountData));
+    });
+  } catch (error) {
+    console.error('Error loading account page:', error);
+    res.redirect('/');
+  }
+});
+
+// Change password endpoint
+app.post('/account/change-password', ensureAuth, async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    
+    // Validate inputs
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      req.flash('error', 'All fields are required');
+      return res.redirect('/account');
+    }
+    
+    if (newPassword !== confirmPassword) {
+      req.flash('error', 'New passwords do not match');
+      return res.redirect('/account');
+    }
+    
+    if (newPassword.length < 8) {
+      req.flash('error', 'New password must be at least 8 characters');
+      return res.redirect('/account');
+    }
+    
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, req.user.hash);
+    if (!isMatch) {
+      req.flash('error', 'Current password is incorrect');
+      return res.redirect('/account');
+    }
+    
+    // Hash new password
+    const newHash = await bcrypt.hash(newPassword, 12);
+    
+    // Update user
+    users.update(
+      { _id: req.user._id },
+      { $set: { hash: newHash, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating password:', err);
+          req.flash('error', 'Error updating password');
+          return res.redirect('/account');
+        }
+        
+        req.flash('success', 'Password updated successfully');
+        res.redirect('/account');
+      }
+    );
+  } catch (error) {
+    console.error('Password change error:', error);
+    req.flash('error', 'Error changing password');
+    res.redirect('/account');
+  }
 });
 
 // Create or update a list
