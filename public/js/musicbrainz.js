@@ -913,15 +913,14 @@ async function addAlbumToList(releaseGroup) {
   const resolvedCountry = await resolveCountryCode(currentArtist.country);
   
   const album = {
-    artist: currentArtist.name,
-    album: releaseGroup.title,
-    album_id: releaseGroup.id,
-    release_date: releaseGroup['first-release-date'] || '',
-    country: resolvedCountry, // Use the resolved country name
-    genre_1: '',
-    genre_2: '',
-    rating: '',
-    comments: ''
+      artist: currentArtist.name,
+      album: releaseGroup.title,
+      album_id: releaseGroup.id,
+      release_date: releaseGroup['first-release-date'] || '',
+      country: resolvedCountry,
+      genre_1: '',
+      genre_2: '',
+      comments: ''
   };
   
   // Continue with cover art fetching...

@@ -86,17 +86,17 @@ const registerTemplate = (req) => `
     
     <form method="post" action="/register" class="space-y-6">
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
-          Email Address
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
+          Password
         </label>
         <input 
           class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-          name="email" 
-          id="email"
-          type="email" 
-          placeholder="your@email.com" 
+          name="password" 
+          id="password"
+          type="password" 
+          placeholder="••••••••" 
           required 
-          autocomplete="email"
+          autocomplete="current-password"
         />
       </div>
       <div>
@@ -169,11 +169,7 @@ const loginTemplate = (req) => `
         />
       </div>
       
-      <div class="flex items-center justify-between">
-        <label class="flex items-center">
-          <input type="checkbox" class="bg-gray-800 border-gray-700 text-red-600 rounded focus:ring-red-600 focus:ring-offset-0">
-          <span class="ml-2 text-sm text-gray-400">Remember me</span>
-        </label>
+      <div class="text-right">
         <a href="/forgot" class="text-sm text-gray-400 hover:text-red-500 transition duration-200">Forgot password?</a>
       </div>
       
