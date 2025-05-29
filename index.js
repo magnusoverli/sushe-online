@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
-const NedbStore = require('connect-nedb-session')(session);
+const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const Datastore = require('@seald-io/nedb');
@@ -89,21 +89,19 @@ app.use(express.json({ limit: '10mb' }));
 
 // Updated session configuration with NeDB store
 app.use(session({
-  store: new NedbStore({
-    filename: path.join(dataDir, 'sessions.db'),
-    autoCompactInterval: 300000 // compact every 5 minutes
+  store: new FileStore({
+    path: './data/sessions',
+    ttl: 86400, // 1 day in seconds
+    retries: 0
   }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key-here',
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    // Only set secure in production if using HTTPS
-    secure: false, // Set to true only if using HTTPS
+    secure: false,
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: 'lax' // Add this for better compatibility
-  },
-  name: 'sushe.sid' // Custom session name
+    maxAge: 1000 * 60 * 60 * 24 // 24 hours
+  }
 }));
 
 // Custom flash middleware (replaces connect-flash)
