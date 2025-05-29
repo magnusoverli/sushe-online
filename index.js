@@ -615,6 +615,116 @@ app.post('/settings/request-admin', ensureAuth, rateLimitAdminRequest, async (re
   }
 });
 
+// Update email endpoint
+app.post('/settings/update-email', ensureAuth, async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    // Validate email
+    if (!email || !email.trim()) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    // Check if email is already taken by another user
+    users.findOne({ email, _id: { $ne: req.user._id } }, (err, existingUser) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (existingUser) {
+        return res.status(400).json({ error: 'Email already in use' });
+      }
+      
+      // Update user email
+      users.update(
+        { _id: req.user._id },
+        { $set: { email: email.trim(), updatedAt: new Date() } },
+        {},
+        (err) => {
+          if (err) {
+            console.error('Error updating email:', err);
+            return res.status(500).json({ error: 'Error updating email' });
+          }
+          
+          // Update session
+          req.user.email = email.trim();
+          req.session.save((err) => {
+            if (err) console.error('Session save error:', err);
+            req.flash('success', 'Email updated successfully');
+            res.json({ success: true });
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Update email error:', error);
+    res.status(500).json({ error: 'Error updating email' });
+  }
+});
+
+// Update username endpoint
+app.post('/settings/update-username', ensureAuth, async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    // Validate username
+    if (!username || !username.trim()) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+    
+    if (username.length < 3 || username.length > 30) {
+      return res.status(400).json({ error: 'Username must be between 3 and 30 characters' });
+    }
+    
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(username)) {
+      return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+    }
+    
+    // Check if username is already taken by another user
+    users.findOne({ username, _id: { $ne: req.user._id } }, (err, existingUser) => {
+      if (err) {
+        console.error('Database error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      }
+      
+      if (existingUser) {
+        return res.status(400).json({ error: 'Username already taken' });
+      }
+      
+      // Update username
+      users.update(
+        { _id: req.user._id },
+        { $set: { username: username.trim(), updatedAt: new Date() } },
+        {},
+        (err) => {
+          if (err) {
+            console.error('Error updating username:', err);
+            return res.status(500).json({ error: 'Error updating username' });
+          }
+          
+          // Update session
+          req.user.username = username.trim();
+          req.session.save((err) => {
+            if (err) console.error('Session save error:', err);
+            req.flash('success', 'Username updated successfully');
+            res.json({ success: true });
+          });
+        }
+      );
+    });
+  } catch (error) {
+    console.error('Update username error:', error);
+    res.status(500).json({ error: 'Error updating username' });
+  }
+});
+
 // ============ ADMIN API ENDPOINTS ============
 
 // Admin: Delete user

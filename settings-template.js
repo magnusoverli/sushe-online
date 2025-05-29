@@ -92,12 +92,22 @@ const settingsTemplate = (req, data) => {
                         <div class="space-y-4">
                             <div>
                                 <label class="block text-gray-400 text-sm mb-1">Email</label>
-                                <p class="text-white">${user.email}</p>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-white" id="emailDisplay">${user.email}</p>
+                                    <button onclick="editField('email', '${user.email}')" class="text-gray-500 hover:text-gray-300 transition-colors" title="Edit email">
+                                        <i class="fas fa-pencil text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
                             
                             <div>
                                 <label class="block text-gray-400 text-sm mb-1">Username</label>
-                                <p class="text-white">${user.username}</p>
+                                <div class="flex items-center gap-2">
+                                    <p class="text-white" id="usernameDisplay">${user.username}</p>
+                                    <button onclick="editField('username', '${user.username}')" class="text-gray-500 hover:text-gray-300 transition-colors" title="Edit username">
+                                        <i class="fas fa-pencil text-sm"></i>
+                                    </button>
+                                </div>
                             </div>
                             
                             <div>
@@ -428,6 +438,112 @@ const settingsTemplate = (req, data) => {
                 // Show selected content and mark tab as active
                 document.getElementById(tabName + 'Content').classList.remove('hidden');
                 document.getElementById(tabName + 'Tab').classList.add('tab-active');
+            }
+
+            // Field editing functionality
+            let currentEditField = null;
+
+            function editField(fieldName, currentValue) {
+                // Cancel any existing edit
+                if (currentEditField) {
+                    cancelEdit();
+                }
+                
+                currentEditField = fieldName;
+                const displayElement = document.getElementById(fieldName + 'Display');
+                const container = displayElement.parentElement;
+                
+                // Create input field
+                const input = document.createElement('input');
+                input.type = fieldName === 'email' ? 'email' : 'text';
+                input.value = currentValue;
+                input.className = 'px-3 py-1 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:border-red-600 transition duration-200';
+                input.id = fieldName + 'Input';
+                
+                // Create save/cancel buttons
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = 'flex gap-2';
+                buttonContainer.innerHTML = \`
+                    <button onclick="saveField('\${fieldName}')" class="text-green-500 hover:text-green-400 transition-colors" title="Save">
+                        <i class="fas fa-check"></i>
+                    </button>
+                    <button onclick="cancelEdit()" class="text-red-500 hover:text-red-400 transition-colors" title="Cancel">
+                        <i class="fas fa-times"></i>
+                    </button>
+                \`;
+                
+                // Hide display and pencil, show input
+                container.innerHTML = '';
+                container.appendChild(input);
+                container.appendChild(buttonContainer);
+                
+                // Focus and select input
+                input.focus();
+                input.select();
+                
+                // Handle Enter/Escape keys
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        saveField(fieldName);
+                    } else if (e.key === 'Escape') {
+                        cancelEdit();
+                    }
+                });
+            }
+
+            function cancelEdit() {
+                if (!currentEditField) return;
+                
+                // Reload to restore original state
+                window.location.reload();
+            }
+
+            async function saveField(fieldName) {
+                const input = document.getElementById(fieldName + 'Input');
+                const newValue = input.value.trim();
+                
+                if (!newValue) {
+                    alert(\`\${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} cannot be empty\`);
+                    return;
+                }
+                
+                // Validation
+                if (fieldName === 'email') {
+                    const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+                    if (!emailRegex.test(newValue)) {
+                        alert('Please enter a valid email address');
+                        return;
+                    }
+                } else if (fieldName === 'username') {
+                    if (newValue.length < 3 || newValue.length > 30) {
+                        alert('Username must be between 3 and 30 characters');
+                        return;
+                    }
+                    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+                    if (!usernameRegex.test(newValue)) {
+                        alert('Username can only contain letters, numbers, and underscores');
+                        return;
+                    }
+                }
+                
+                try {
+                    const response = await fetch('/settings/update-' + fieldName, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ [fieldName]: newValue })
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (response.ok) {
+                        window.location.reload();
+                    } else {
+                        alert(result.error || \`Error updating \${fieldName}\`);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert(\`Error updating \${fieldName}\`);
+                }
             }
 
             ${isAdmin ? `

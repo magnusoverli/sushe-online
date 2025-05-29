@@ -121,7 +121,7 @@ body {
 
 /* Ensure the table takes full height */
 .album-rows-container {
-  min-height: calc(100vh - 200px);
+  min-height: calc(100vh - 280px);
 }
 
 /* Make sure text doesn't overflow */

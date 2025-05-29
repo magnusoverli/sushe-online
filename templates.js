@@ -313,13 +313,9 @@ const invalidTokenTemplate = () => `
 // Component: Sidebar - Updated with clickable account link
 const sidebarComponent = (req) => `
   <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-    <div class="p-6 border-b border-gray-800">
-      <h1 class="metal-title text-2xl font-bold text-red-600 glow-red">SuShe Online</h1>
-    </div>
-    
     <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
       <div class="flex-1">
-        <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Lists</h3>
+        <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Your Lists</h3>
         <ul id="listNav" class="space-y-1">
           <!-- Lists will be populated here -->
         </ul>
@@ -327,30 +323,17 @@ const sidebarComponent = (req) => `
       
       <div class="mt-6 pt-6 border-t border-gray-800">
         <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
-          + Create List
+          <i class="fas fa-plus mr-2"></i>Create List
         </button>
         <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-          + Import List
+          <i class="fas fa-file-import mr-2"></i>Import List
         </button>
         <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-          DELETE All Lists
+          <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
         </button>
         <input type="file" id="fileInput" accept=".json" style="display: none;">
-        <div id="storageInfo" class="text-xs text-gray-500 mt-2 text-center"></div>
       </div>
     </nav>
-    
-    <div class="p-4 border-t border-gray-800">
-      <a href="/settings" class="flex items-center justify-between text-sm hover:bg-gray-800 p-2 rounded transition-colors">
-        <span class="text-gray-400">${req.user.username || req.user.email}</span>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-500">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>
-        </svg>
-      </a>
-      <a href="/logout" class="block text-red-500 hover:text-red-400 transition duration-200 text-sm mt-2 p-2 hover:bg-gray-800 rounded">
-        Logout
-      </a>
-    </div>
   </div>
 `;
 
@@ -488,21 +471,21 @@ const mainContentComponent = () => `
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-    <button id="downloadListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
-      Download List
+    <button id="downloadListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-download mr-2 w-4 text-center"></i>Download List
     </button>
-    <button id="renameListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors">
-      Rename List
+    <button id="renameListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-edit mr-2 w-4 text-center"></i>Rename List
     </button>
-    <button id="deleteListOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors">
-      Delete List
+    <button id="deleteListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
+      <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
     </button>
   </div>
   
   <!-- Context Menu for Albums -->
   <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-    <button id="removeAlbumOption" class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors">
-      Remove from List
+    <button id="removeAlbumOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
+      <i class="fas fa-times mr-2 w-4 text-center"></i>Remove from List
     </button>
   </div>
 `;
@@ -878,13 +861,42 @@ const spotifyTemplate = (req) => `
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SuShe Online</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link href="/styles/output.css" rel="stylesheet">
   <link href="/styles/spotify-app.css" rel="stylesheet">
 </head>
 <body class="bg-black text-gray-200">
-  <div class="flex h-screen">
-    ${sidebarComponent(req)}
-    ${mainContentComponent()}
+  <div class="flex flex-col h-screen">
+    <!-- Unified Header (same style as settings page) -->
+    <header class="bg-gray-900 border-b border-gray-800 shadow-lg z-20">
+      <div class="px-4 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <h1 class="text-xl font-bold text-red-600 hover:text-red-500 metal-title">SuShe</h1>
+            <span class="text-gray-500">/</span>
+            <span class="text-xl font-semibold">My Lists</span>
+          </div>
+          <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-400">
+              ${req.user.role === 'admin' ? '<i class="fas fa-crown text-yellow-500 mr-2"></i>' : ''}
+              ${req.user.email}
+            </span>
+            <a href="/settings" class="text-gray-400 hover:text-white" title="Settings">
+              <i class="fas fa-cog text-xl"></i>
+            </a>
+            <a href="/logout" class="text-gray-400 hover:text-red-500" title="Logout">
+              <i class="fas fa-sign-out-alt text-xl"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+    
+    <!-- Main Content Area (sidebar + album view) -->
+    <div class="flex flex-1 overflow-hidden">
+      ${sidebarComponent(req)}
+      ${mainContentComponent()}
+    </div>
   </div>
   
   <!-- Toast container -->
