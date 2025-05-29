@@ -77,8 +77,8 @@ const htmlTemplate = (content, title = 'SuShe Auth') => `
 </html>
 `;
 
-// Registration form template
-const registerTemplate = (req) => `
+// Registration form template - Updated with flash parameter
+const registerTemplate = (req, flash) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">Join SuShe Online</h1>
@@ -86,19 +86,37 @@ const registerTemplate = (req) => `
     
     <form method="post" action="/register" class="space-y-6">
       <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
-          Password
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
+          Email Address
         </label>
         <input 
           class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-          name="password" 
-          id="password"
-          type="password" 
-          placeholder="••••••••" 
+          name="email" 
+          id="email"
+          type="email" 
+          placeholder="your@email.com" 
           required 
-          autocomplete="current-password"
+          autocomplete="email"
         />
       </div>
+      
+      <div>
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="username">
+          Username
+        </label>
+        <input 
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          name="username" 
+          id="username"
+          type="text" 
+          placeholder="Choose a username" 
+          required 
+          autocomplete="username"
+          minlength="3"
+          maxlength="30"
+        />
+      </div>
+      
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
           Password
@@ -114,6 +132,23 @@ const registerTemplate = (req) => `
           minlength="8"
         />
       </div>
+      
+      <div>
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="confirmPassword">
+          Confirm Password
+        </label>
+        <input 
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          name="confirmPassword" 
+          id="confirmPassword"
+          type="password" 
+          placeholder="••••••••" 
+          required 
+          autocomplete="new-password"
+          minlength="8"
+        />
+      </div>
+      
       <button 
         class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
@@ -122,18 +157,19 @@ const registerTemplate = (req) => `
       </button>
     </form>
     
-    ${req.flash('error').length ? `<p class="text-red-500 text-sm mt-4 text-center">${req.flash('error')}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
+        Already have an account? 
         <a href="/login" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Return to login</a>
       </p>
     </div>
   </div>
 `;
 
-// Login form template
-const loginTemplate = (req) => `
+// Login form template - Updated with flash parameter
+const loginTemplate = (req, flash) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOG IN</h1>
@@ -181,8 +217,8 @@ const loginTemplate = (req) => `
       </button>
     </form>
     
-    ${req.flash('error').length ? `<p class="text-red-500 text-sm mt-4 text-center">${req.flash('error')}</p>` : ''}
-    ${req.flash('success').length ? `<p class="text-green-500 text-sm mt-4 text-center">${req.flash('success')}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
+    ${flash.success && flash.success.length ? `<p class="text-green-500 text-sm mt-4 text-center">${flash.success[0]}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -193,8 +229,8 @@ const loginTemplate = (req) => `
   </div>
 `;
 
-// Forgot password template
-const forgotPasswordTemplate = (req) => `
+// Forgot password template - Updated with flash parameter
+const forgotPasswordTemplate = (req, flash) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">Forgot password</h1>
@@ -222,7 +258,8 @@ const forgotPasswordTemplate = (req) => `
       </button>
     </form>
     
-    ${req.flash('info').length ? `<p class="text-blue-400 text-sm mt-4 text-center">${req.flash('info')}</p>` : ''}
+    ${flash.info && flash.info.length ? `<p class="text-blue-400 text-sm mt-4 text-center">${flash.info[0]}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -273,7 +310,7 @@ const invalidTokenTemplate = () => `
   </div>
 `;
 
-// Component: Sidebar
+// Component: Sidebar - Updated to show username
 const sidebarComponent = (req) => `
   <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
     <div class="p-6 border-b border-gray-800">
@@ -305,7 +342,7 @@ const sidebarComponent = (req) => `
     
     <div class="p-4 border-t border-gray-800">
       <div class="flex items-center justify-between text-sm">
-        <span class="text-gray-400">${req.user.email}</span>
+        <span class="text-gray-400">${req.user.username || req.user.email}</span>
         <a href="/logout" class="text-red-500 hover:text-red-400 transition duration-200">Logout</a>
       </div>
     </div>

@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const NedbStore = require('connect-nedb-session')(session);
-const flash = require('connect-flash');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const Datastore = require('@seald-io/nedb');
@@ -44,7 +43,7 @@ const lists = new Datastore({
 lists.ensureIndex({ fieldName: 'userId' });
 lists.ensureIndex({ fieldName: 'name' });
 
-// Passport configuration (same as before)
+// Passport configuration
 passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
   console.log('Login attempt for email:', email);
   
@@ -107,7 +106,36 @@ app.use(session({
   name: 'sushe.sid' // Custom session name
 }));
 
-app.use(flash());
+// Custom flash middleware (replaces connect-flash)
+app.use((req, res, next) => {
+  // Initialize flash in session if it doesn't exist
+  if (!req.session.flash) {
+    req.session.flash = {};
+  }
+  
+  // Make flash messages available to templates via res.locals
+  res.locals.flash = req.session.flash;
+  
+  // Clear flash messages after making them available
+  req.session.flash = {};
+  
+  // Add flash method to request object
+  req.flash = (type, message) => {
+    // If called with just type, return messages of that type (getter)
+    if (message === undefined) {
+      return res.locals.flash[type] || [];
+    }
+    
+    // Otherwise, add message (setter)
+    if (!req.session.flash[type]) {
+      req.session.flash[type] = [];
+    }
+    req.session.flash[type].push(message);
+  };
+  
+  next();
+});
+
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -123,56 +151,107 @@ function ensureAuthAPI(req, res, next) {
   res.status(401).json({ error: 'Unauthorized' });
 }
 
-// Registration form (same as before)
+// Registration form
 app.get('/register', (req, res) => {
-  res.send(htmlTemplate(registerTemplate(req), 'Join the KVLT - Black Metal Auth'));
+  res.send(htmlTemplate(registerTemplate(req, res.locals.flash), 'Join the KVLT - Black Metal Auth'));
 });
 
 app.post('/register', async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, username, password, confirmPassword } = req.body;
     
-    if (!email || !password) {
-      req.flash('error', 'Email and password are required');
+    // Validate all fields are present
+    if (!email || !username || !password || !confirmPassword) {
+      req.flash('error', 'All fields are required');
       return res.redirect('/register');
     }
     
+    // Check passwords match
+    if (password !== confirmPassword) {
+      req.flash('error', 'Passwords do not match');
+      return res.redirect('/register');
+    }
+    
+    // Validate email format (basic check)
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      req.flash('error', 'Please enter a valid email address');
+      return res.redirect('/register');
+    }
+    
+    // Validate username length
+    if (username.length < 3 || username.length > 30) {
+      req.flash('error', 'Username must be between 3 and 30 characters');
+      return res.redirect('/register');
+    }
+    
+    // Validate username format (alphanumeric and underscores only)
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(username)) {
+      req.flash('error', 'Username can only contain letters, numbers, and underscores');
+      return res.redirect('/register');
+    }
+    
+    // Validate password length
     if (password.length < 8) {
       req.flash('error', 'Password must be at least 8 characters');
       return res.redirect('/register');
     }
     
-    users.findOne({ email }, async (err, existing) => {
+    // Check if email already exists
+    users.findOne({ email }, async (err, existingEmailUser) => {
       if (err) {
         console.error('Database error during registration:', err);
         req.flash('error', 'Registration error. Please try again.');
         return res.redirect('/register');
       }
       
-      if (existing) {
+      if (existingEmailUser) {
         req.flash('error', 'Email already registered');
         return res.redirect('/register');
       }
       
-      try {
-        const hash = await bcrypt.hash(password, 12);
+      // Check if username already exists
+      users.findOne({ username }, async (err, existingUsernameUser) => {
+        if (err) {
+          console.error('Database error during registration:', err);
+          req.flash('error', 'Registration error. Please try again.');
+          return res.redirect('/register');
+        }
         
-        users.insert({ email, hash }, (err, newUser) => {
-          if (err) {
-            console.error('Insert error during registration:', err);
-            req.flash('error', 'Registration error. Please try again.');
-            return res.redirect('/register');
-          }
+        if (existingUsernameUser) {
+          req.flash('error', 'Username already taken');
+          return res.redirect('/register');
+        }
+        
+        try {
+          // Hash the password
+          const hash = await bcrypt.hash(password, 12);
           
-          console.log('New user registered:', email);
-          req.flash('success', 'Registration successful! Please login.');
-          res.redirect('/login');
-        });
-      } catch (hashErr) {
-        console.error('Password hashing error during registration:', hashErr);
-        req.flash('error', 'Registration error. Please try again.');
-        res.redirect('/register');
-      }
+          // Create the new user
+          users.insert({ 
+            email, 
+            username, 
+            hash,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }, (err, newUser) => {
+            if (err) {
+              console.error('Insert error during registration:', err);
+              req.flash('error', 'Registration error. Please try again.');
+              return res.redirect('/register');
+            }
+            
+            console.log('New user registered:', email, 'username:', username);
+            req.flash('success', 'Registration successful! Please login.');
+            res.redirect('/login');
+          });
+        } catch (hashErr) {
+          console.error('Password hashing error during registration:', hashErr);
+          req.flash('error', 'Registration error. Please try again.');
+          res.redirect('/register');
+        }
+      });
     });
   } catch (error) {
     console.error('Registration error:', error);
@@ -181,9 +260,9 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Login form (same as before)
+// Login form
 app.get('/login', (req, res) => {
-  res.send(htmlTemplate(loginTemplate(req), 'SuShe Online'));
+  res.send(htmlTemplate(loginTemplate(req, res.locals.flash), 'SuShe Online'));
 });
 
 app.post('/login', (req, res, next) => {
@@ -324,9 +403,9 @@ app.delete('/api/lists', ensureAuthAPI, (req, res) => {
   });
 });
 
-// Forgot password routes (same as before)
+// Forgot password routes
 app.get('/forgot', (req, res) => {
-  res.send(htmlTemplate(forgotPasswordTemplate(req), 'Password Recovery - Black Metal Auth'));
+  res.send(htmlTemplate(forgotPasswordTemplate(req, res.locals.flash), 'Password Recovery - Black Metal Auth'));
 });
 
 app.post('/forgot', (req, res) => {
@@ -405,7 +484,7 @@ app.post('/forgot', (req, res) => {
   });
 });
 
-// Reset password routes (same as before)
+// Reset password routes
 app.get('/reset/:token', (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, (err, user) => {
     if (!user) {

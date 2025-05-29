@@ -615,9 +615,6 @@ video {
 .mb-8 {
   margin-bottom: 2rem;
 }
-.ml-2 {
-  margin-left: 0.5rem;
-}
 .mt-1 {
   margin-top: 0.25rem;
 }
@@ -972,6 +969,9 @@ video {
 .text-center {
   text-align: center;
 }
+.text-right {
+  text-align: right;
+}
 .text-2xl {
   font-size: 1.5rem;
   line-height: 2rem;
@@ -1169,13 +1169,6 @@ video {
 .focus\:outline-none:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
-}
-.focus\:ring-red-600:focus {
-  --tw-ring-opacity: 1;
-  --tw-ring-color: rgb(220 38 38 / var(--tw-ring-opacity, 1));
-}
-.focus\:ring-offset-0:focus {
-  --tw-ring-offset-width: 0px;
 }
 .group:hover .group-hover\:scale-105 {
   --tw-scale-x: 1.05;
