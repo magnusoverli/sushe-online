@@ -341,7 +341,7 @@ const sidebarComponent = (req) => `
     </nav>
     
     <div class="p-4 border-t border-gray-800">
-      <a href="/account" class="flex items-center justify-between text-sm hover:bg-gray-800 p-2 rounded transition-colors">
+      <a href="/settings" class="flex items-center justify-between text-sm hover:bg-gray-800 p-2 rounded transition-colors">
         <span class="text-gray-400">${req.user.username || req.user.email}</span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-500">
           <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"></path>

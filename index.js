@@ -9,6 +9,11 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const multer = require('multer');
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
 
 const { composeForgotPasswordEmail } = require('./forgot_email');
 
@@ -20,9 +25,11 @@ const {
   forgotPasswordTemplate, 
   resetPasswordTemplate, 
   invalidTokenTemplate, 
-  spotifyTemplate,
-  accountSettingsTemplate
+  spotifyTemplate
 } = require('./templates');
+
+// Import the new settings template
+const { settingsTemplate } = require('./settings-template');
 
 // Create data directory if it doesn't exist
 const dataDir = process.env.DATA_DIR || './data';
@@ -185,6 +192,14 @@ function ensureAuthAPI(req, res, next) {
   res.status(401).json({ error: 'Unauthorized' });
 }
 
+// Middleware to ensure admin
+function ensureAdmin(req, res, next) {
+  if (req.user && req.user.role === 'admin') {
+    return next();
+  }
+  res.status(403).send('Access denied');
+}
+
 // Rate limiting middleware for admin requests
 function rateLimitAdminRequest(req, res, next) {
   const userKey = req.user._id;
@@ -200,7 +215,7 @@ function rateLimitAdminRequest(req, res, next) {
   if (attempts.count >= 5) {
     console.warn(`⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`);
     req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
-    return res.redirect('/account');
+    return res.redirect('/settings');
   }
   
   req.adminAttempts = attempts;
@@ -362,74 +377,158 @@ app.get('/', ensureAuth, (req, res) => {
   res.send(spotifyTemplate(req));
 });
 
-// Account settings page
-app.get('/account', ensureAuth, async (req, res) => {
+// Unified Settings Page
+app.get('/settings', ensureAuth, async (req, res) => {
   try {
-    console.log('Account page accessed by:', req.user.email, 'Role:', req.user.role);
-    
-    // Get user's list count for basic stats
-    lists.count({ userId: req.user._id }, (err, listCount) => {
-      if (err) {
-        console.error('Error counting lists:', err);
-        listCount = 0;
-      }
-      
-      // Count total albums across all lists
-      let totalAlbums = 0;
-      Object.values(lists).forEach(list => {
-        if (Array.isArray(list)) {
-          totalAlbums += list.length;
+    // Get user's personal stats
+    const getUserStats = new Promise((resolve) => {
+      lists.find({ userId: req.user._id }, (err, userLists) => {
+        if (err) {
+          resolve({ listCount: 0, totalAlbums: 0 });
+          return;
         }
+        
+        let totalAlbums = 0;
+        userLists.forEach(list => {
+          if (Array.isArray(list.data)) {
+            totalAlbums += list.data.length;
+          }
+        });
+        
+        resolve({ listCount: userLists.length, totalAlbums });
       });
-      
-      const accountData = {
-        user: req.user,
-        stats: {
-          listCount: Object.keys(lists).length, // Using current loaded lists
-          totalAlbums: totalAlbums
-        }
-      };
-      
-      console.log('Account data prepared:', { 
-        email: accountData.user.email, 
-        role: accountData.user.role,
-        stats: accountData.stats 
-      });
-      
-      res.send(accountSettingsTemplate(req, accountData));
     });
+
+    const userStats = await getUserStats;
+    
+    // If admin, get admin data
+    let adminData = null;
+    let stats = null;
+    
+    if (req.user.role === 'admin') {
+      // Get all users with their list counts
+      const getAdminData = new Promise((resolve) => {
+        users.find({}, (err, allUsers) => {
+          if (err) {
+            resolve({ users: [], stats: {} });
+            return;
+          }
+
+          // Get list counts for each user
+          const userPromises = allUsers.map(user => {
+            return new Promise((res) => {
+              lists.count({ userId: user._id }, (err, count) => {
+                res({
+                  ...user,
+                  listCount: err ? 0 : count
+                });
+              });
+            });
+          });
+
+          Promise.all(userPromises).then(usersWithCounts => {
+            // Calculate stats
+            lists.find({}, (err, allLists) => {
+              let totalAlbums = 0;
+              if (!err && allLists) {
+                allLists.forEach(list => {
+                  if (Array.isArray(list.data)) {
+                    totalAlbums += list.data.length;
+                  }
+                });
+              }
+
+              const stats = {
+                totalUsers: allUsers.length,
+                totalLists: err ? 0 : allLists.length,
+                totalAlbums: totalAlbums,
+                adminUsers: allUsers.filter(u => u.role === 'admin').length
+              };
+
+              // Generate recent activity
+              const recentActivity = [
+                { 
+                  icon: 'fa-user-plus', 
+                  color: 'green', 
+                  message: 'New user registered', 
+                  time: '2 hours ago' 
+                },
+                { 
+                  icon: 'fa-list', 
+                  color: 'blue', 
+                  message: 'New list created', 
+                  time: '3 hours ago' 
+                },
+                { 
+                  icon: 'fa-sign-in-alt', 
+                  color: 'purple', 
+                  message: 'User login', 
+                  time: '4 hours ago' 
+                },
+                { 
+                  icon: 'fa-user-shield', 
+                  color: 'yellow', 
+                  message: 'Admin privileges granted', 
+                  time: '1 day ago' 
+                }
+              ];
+
+              resolve({
+                users: usersWithCounts,
+                stats,
+                recentActivity
+              });
+            });
+          });
+        });
+      });
+
+      const data = await getAdminData;
+      adminData = data;
+      stats = data.stats;
+    }
+
+    res.send(settingsTemplate(req, {
+      user: req.user,
+      userStats,
+      stats,
+      adminData,
+      flash: res.locals.flash
+    }));
+    
   } catch (error) {
-    console.error('Error loading account page:', error);
+    console.error('Settings page error:', error);
+    req.flash('error', 'Error loading settings');
     res.redirect('/');
   }
 });
 
 // Change password endpoint
-app.post('/account/change-password', ensureAuth, async (req, res) => {
+app.post('/settings/change-password', ensureAuth, async (req, res) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
     
     // Validate inputs
     if (!currentPassword || !newPassword || !confirmPassword) {
       req.flash('error', 'All fields are required');
-      return res.redirect('/account');
+      return res.redirect('/settings');
     }
     
     if (newPassword !== confirmPassword) {
       req.flash('error', 'New passwords do not match');
-      return res.redirect('/account');
+      return res.redirect('/settings');
     }
     
     if (newPassword.length < 8) {
       req.flash('error', 'New password must be at least 8 characters');
-      return res.redirect('/account');
+      return res.redirect('/settings');
     }
     
     // Verify current password
     const isMatch = await bcrypt.compare(currentPassword, req.user.hash);
     if (!isMatch) {
       req.flash('error', 'Current password is incorrect');
-      return res.redirect('/account');
+      return res.redirect('/settings');
     }
     
     // Hash new password
@@ -444,22 +543,22 @@ app.post('/account/change-password', ensureAuth, async (req, res) => {
         if (err) {
           console.error('Error updating password:', err);
           req.flash('error', 'Error updating password');
-          return res.redirect('/account');
+          return res.redirect('/settings');
         }
         
         req.flash('success', 'Password updated successfully');
-        res.redirect('/account');
+        res.redirect('/settings');
       }
     );
   } catch (error) {
     console.error('Password change error:', error);
     req.flash('error', 'Error changing password');
-    res.redirect('/account');
+    res.redirect('/settings');
   }
 });
 
-// Admin request endpoint - NOW PROPERLY PLACED AFTER PASSPORT INIT
-app.post('/account/request-admin', ensureAuth, rateLimitAdminRequest, async (req, res) => {
+// Admin request endpoint
+app.post('/settings/request-admin', ensureAuth, rateLimitAdminRequest, async (req, res) => {
   console.log('Admin request received from:', req.user.email);
   
   try {
@@ -475,7 +574,7 @@ app.post('/account/request-admin', ensureAuth, rateLimitAdminRequest, async (req
       adminCodeAttempts.set(req.user._id, attempts);
       
       req.flash('error', 'Invalid or expired admin code');
-      return res.redirect('/account');
+      return res.redirect('/settings');
     }
     
     // Clear failed attempts on success
@@ -495,7 +594,7 @@ app.post('/account/request-admin', ensureAuth, rateLimitAdminRequest, async (req
         if (err) {
           console.error('Error granting admin:', err);
           req.flash('error', 'Error granting admin access');
-          return res.redirect('/account');
+          return res.redirect('/settings');
         }
         
         console.log(`✅ Admin access granted to: ${req.user.email}`);
@@ -505,15 +604,246 @@ app.post('/account/request-admin', ensureAuth, rateLimitAdminRequest, async (req
         req.session.save((err) => {
           if (err) console.error('Session save error:', err);
           req.flash('success', 'Admin access granted!');
-          res.redirect('/account');
+          res.redirect('/settings');
         });
       }
     );
   } catch (error) {
     console.error('Admin request error:', error);
     req.flash('error', 'Error processing admin request');
-    res.redirect('/account');
+    res.redirect('/settings');
   }
+});
+
+// ============ ADMIN API ENDPOINTS ============
+
+// Admin: Delete user
+app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
+  const { userId } = req.body;
+  
+  if (userId === req.user._id) {
+    return res.status(400).json({ error: 'Cannot delete yourself' });
+  }
+
+  // Delete user's lists first
+  lists.remove({ userId }, { multi: true }, (err) => {
+    if (err) {
+      console.error('Error deleting user lists:', err);
+      return res.status(500).json({ error: 'Error deleting user data' });
+    }
+
+    // Then delete the user
+    users.remove({ _id: userId }, {}, (err, numRemoved) => {
+      if (err) {
+        console.error('Error deleting user:', err);
+        return res.status(500).json({ error: 'Error deleting user' });
+      }
+
+      if (numRemoved === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      console.log(`Admin ${req.user.email} deleted user with ID: ${userId}`);
+      res.json({ success: true });
+    });
+  });
+});
+
+// Admin: Make user admin
+app.post('/admin/make-admin', ensureAuth, ensureAdmin, (req, res) => {
+  const { userId } = req.body;
+
+  users.update(
+    { _id: userId },
+    { $set: { role: 'admin', adminGrantedAt: new Date() } },
+    {},
+    (err, numUpdated) => {
+      if (err) {
+        console.error('Error granting admin:', err);
+        return res.status(500).json({ error: 'Error granting admin privileges' });
+      }
+
+      if (numUpdated === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      console.log(`Admin ${req.user.email} granted admin to user ID: ${userId}`);
+      res.json({ success: true });
+    }
+  );
+});
+
+// Admin: Revoke admin
+app.post('/admin/revoke-admin', ensureAuth, ensureAdmin, (req, res) => {
+  const { userId } = req.body;
+
+  // Prevent revoking your own admin rights
+  if (userId === req.user._id) {
+    return res.status(400).json({ error: 'Cannot revoke your own admin privileges' });
+  }
+
+  users.update(
+    { _id: userId },
+    { $unset: { role: true, adminGrantedAt: true } },
+    {},
+    (err, numUpdated) => {
+      if (err) {
+        console.error('Error revoking admin:', err);
+        return res.status(500).json({ error: 'Error revoking admin privileges' });
+      }
+
+      if (numUpdated === 0) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      console.log(`Admin ${req.user.email} revoked admin from user ID: ${userId}`);
+      res.json({ success: true });
+    }
+  );
+});
+
+// Admin: Export users as CSV
+app.get('/admin/export-users', ensureAuth, ensureAdmin, (req, res) => {
+  users.find({}, (err, allUsers) => {
+    if (err) {
+      console.error('Error exporting users:', err);
+      return res.status(500).send('Error exporting users');
+    }
+
+    // Create CSV content
+    let csv = 'Email,Username,Role,Created At\n';
+    allUsers.forEach(user => {
+      csv += `"${user.email}","${user.username}","${user.role || 'user'}","${new Date(user.createdAt).toISOString()}"\n`;
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="users-export.csv"');
+    res.send(csv);
+  });
+});
+
+// Admin: Database backup
+app.get('/admin/backup', ensureAuth, ensureAdmin, async (req, res) => {
+  try {
+    const backup = {
+      exportDate: new Date().toISOString(),
+      users: [],
+      lists: []
+    };
+
+    // Get all users
+    users.find({}, (err, allUsers) => {
+      if (err) {
+        console.error('Error backing up users:', err);
+        return res.status(500).send('Error creating backup');
+      }
+
+      backup.users = allUsers;
+
+      // Get all lists
+      lists.find({}, (err, allLists) => {
+        if (err) {
+          console.error('Error backing up lists:', err);
+          return res.status(500).send('Error creating backup');
+        }
+
+        backup.lists = allLists;
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename="sushe-backup.json"');
+        res.send(JSON.stringify(backup, null, 2));
+      });
+    });
+  } catch (error) {
+    console.error('Backup error:', error);
+    res.status(500).send('Error creating backup');
+  }
+});
+
+// Admin: Restore database
+app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Parse the JSON backup
+    let backup;
+    try {
+      backup = JSON.parse(req.file.buffer.toString());
+    } catch (parseError) {
+      console.error('Invalid backup file:', parseError);
+      return res.status(400).json({ error: 'Invalid backup file format' });
+    }
+
+    // Validate backup structure
+    if (!backup.users || !backup.lists || !Array.isArray(backup.users) || !Array.isArray(backup.lists)) {
+      return res.status(400).json({ error: 'Invalid backup structure' });
+    }
+
+    console.log(`Restoring backup from ${backup.exportDate}`);
+    console.log(`Contains ${backup.users.length} users and ${backup.lists.length} lists`);
+
+    // Clear existing data
+    await new Promise((resolve, reject) => {
+      users.remove({}, { multi: true }, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    await new Promise((resolve, reject) => {
+      lists.remove({}, { multi: true }, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Restore users
+    await new Promise((resolve, reject) => {
+      users.insert(backup.users, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Restore lists
+    await new Promise((resolve, reject) => {
+      lists.insert(backup.lists, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+
+    // Clear all sessions after restore
+    req.sessionStore.clear((err) => {
+      if (err) {
+        console.error('Error clearing sessions after restore:', err);
+      }
+    });
+
+    console.log(`Database restored successfully by ${req.user.email}`);
+    res.json({ success: true, message: 'Database restored successfully' });
+
+  } catch (error) {
+    console.error('Restore error:', error);
+    res.status(500).json({ error: 'Error restoring database' });
+  }
+});
+
+// Admin: Clear all sessions
+app.post('/admin/clear-sessions', ensureAuth, ensureAdmin, (req, res) => {
+  const sessionStore = req.sessionStore;
+  
+  sessionStore.clear((err) => {
+    if (err) {
+      console.error('Error clearing sessions:', err);
+      return res.status(500).json({ error: 'Error clearing sessions' });
+    }
+
+    console.log(`Admin ${req.user.email} cleared all sessions`);
+    res.json({ success: true });
+  });
 });
 
 // Admin status endpoint (for debugging)
