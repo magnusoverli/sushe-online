@@ -107,27 +107,6 @@ app.use(session({
   name: 'sushe.sid' // Custom session name
 }));
 
-app.get('/debug/users', async (req, res) => {
-  if (process.env.NODE_ENV !== 'production') {
-    users.find({}, (err, allUsers) => {
-      if (err) {
-        return res.json({ error: err.message });
-      }
-      
-      const sanitizedUsers = allUsers.map(u => ({
-        email: u.email,
-        hasHash: !!u.hash,
-        hashLength: u.hash ? u.hash.length : 0,
-        _id: u._id
-      }));
-      
-      res.json({ users: sanitizedUsers });
-    });
-  } else {
-    res.status(404).send('Not found');
-  }
-});
-
 app.use(flash());
 app.use(passport.initialize());
 app.use(passport.session());

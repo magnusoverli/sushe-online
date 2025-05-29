@@ -216,12 +216,6 @@ input[list]::-webkit-list-button {
   cursor: default;
 }
 
-/* Loading states */
-.loading {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
 /* Toast notifications */
 .toast {
   position: fixed;
