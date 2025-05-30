@@ -120,7 +120,7 @@ function generateAdminCode() {
       console.log(colors.cyan + '╟' + '─'.repeat(INNER_WIDTH) + '╢' + colors.reset);
       const usedTimeAgo = Math.floor((Date.now() - lastCodeUsedAt) / 1000);
       const timeAgoStr = usedTimeAgo < 60 ? `${usedTimeAgo}s ago` : `${Math.floor(usedTimeAgo / 60)}m ago`;
-      console.log(colors.cyan + '║' + colors.reset + leftAlignText('Last used by', lastCodeUsedBy, '', colors.gray) + colors.cyan + '║' + colors.reset);
+      console.log(colors.cyan + '║' + colors.reset + leftAlignText('Previous code used by', lastCodeUsedBy, '', colors.gray) + colors.cyan + '║' + colors.reset);
       console.log(colors.cyan + '║' + colors.reset + leftAlignText('Used', timeAgoStr, '', colors.gray) + colors.cyan + '║' + colors.reset);
     }
     
