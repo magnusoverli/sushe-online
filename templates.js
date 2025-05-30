@@ -1,3 +1,66 @@
+// Shared header component
+const headerComponent = (user, currentPage = 'home', options = {}) => {
+  const isAdmin = user.role === 'admin';
+  
+  // Default options
+  const {
+    showHomeLink = currentPage !== 'home',
+    showSettingsLink = currentPage !== 'settings',
+    showAccountLink = currentPage !== 'account'
+  } = options;
+  
+  // Determine the page title and breadcrumb
+  let pageTitle = '';
+  switch (currentPage) {
+    case 'home':
+      pageTitle = 'My Lists';
+      break;
+    case 'settings':
+      pageTitle = 'Settings';
+      break;
+    case 'admin':
+      pageTitle = 'Admin Dashboard';
+      break;
+    default:
+      pageTitle = currentPage;
+  }
+  
+  return `
+    <header class="bg-gray-900 border-b border-gray-800 shadow-lg">
+      <div class="container mx-auto px-4 py-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-4">
+            <a href="/" class="text-xl font-bold text-red-600 hover:text-red-500">SuShe</a>
+            ${pageTitle ? `
+              <span class="text-gray-500">/</span>
+              <h1 class="text-xl font-semibold">${pageTitle}</h1>
+            ` : ''}
+          </div>
+          <div class="flex items-center space-x-4">
+            <span class="text-sm text-gray-400">
+              ${isAdmin ? '<i class="fas fa-crown text-yellow-500 mr-2"></i>' : ''}
+              ${user.email}
+            </span>
+            ${showHomeLink ? `
+              <a href="/" class="text-gray-400 hover:text-white" title="Home">
+                <i class="fas fa-home text-xl"></i>
+              </a>
+            ` : ''}
+            ${showSettingsLink ? `
+              <a href="/settings" class="text-gray-400 hover:text-white" title="Settings">
+                <i class="fas fa-cog text-xl"></i>
+              </a>
+            ` : ''}
+            <a href="/logout" class="text-gray-400 hover:text-red-500" title="Logout">
+              <i class="fas fa-sign-out-alt text-xl"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+  `;
+};
+
 // Base HTML template with Black Metal Spotify-inspired theme
 const htmlTemplate = (content, title = 'SuShe Auth') => `
 <!DOCTYPE html>
@@ -437,11 +500,10 @@ const importConflictModalComponent = () => `
 const mainContentComponent = () => `
   <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Header -->
-    <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-6">
+    <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-4">
       <div class="flex items-center justify-between">
         <div>
-          <h2 id="listTitle" class="text-3xl font-bold">Select a list to begin</h2>
-          <p id="listInfo" class="text-gray-400 mt-1"></p>
+          <h2 id="listTitle" class="text-2xl font-bold">Select a list to begin</h2>
         </div>
         <button id="addAlbumBtn" class="hidden bg-red-600 hover:bg-red-700 text-white p-3 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -853,7 +915,7 @@ const accountSettingsTemplate = (req, data) => `
 </html>
 `;
 
-// Main Spotify template - now composed of smaller parts
+// Main Spotify template - Updated to use shared header
 const spotifyTemplate = (req) => `
 <!DOCTYPE html>
 <html lang="en">
@@ -867,30 +929,7 @@ const spotifyTemplate = (req) => `
 </head>
 <body class="bg-black text-gray-200">
   <div class="flex flex-col h-screen">
-    <!-- Unified Header (same style as settings page) -->
-    <header class="bg-gray-900 border-b border-gray-800 shadow-lg z-20">
-      <div class="px-4 py-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <h1 class="text-xl font-bold text-red-600 hover:text-red-500 metal-title">SuShe</h1>
-            <span class="text-gray-500">/</span>
-            <span class="text-xl font-semibold">My Lists</span>
-          </div>
-          <div class="flex items-center space-x-4">
-            <span class="text-sm text-gray-400">
-              ${req.user.role === 'admin' ? '<i class="fas fa-crown text-yellow-500 mr-2"></i>' : ''}
-              ${req.user.email}
-            </span>
-            <a href="/settings" class="text-gray-400 hover:text-white" title="Settings">
-              <i class="fas fa-cog text-xl"></i>
-            </a>
-            <a href="/logout" class="text-gray-400 hover:text-red-500" title="Logout">
-              <i class="fas fa-sign-out-alt text-xl"></i>
-            </a>
-          </div>
-        </div>
-      </div>
-    </header>
+    ${headerComponent(req.user, 'home')}
     
     <!-- Main Content Area (sidebar + album view) -->
     <div class="flex flex-1 overflow-hidden">
@@ -923,5 +962,6 @@ module.exports = {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
-  accountSettingsTemplate
+  accountSettingsTemplate,
+  headerComponent  // Export the new shared header
 };

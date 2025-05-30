@@ -851,12 +851,8 @@ function selectList(listName) {
   
   document.getElementById('listTitle').textContent = listName;
   
-  // Calculate total points for the list
-  const totalPoints = list.reduce((sum, _, index) => {
-    return sum + getPointsForPosition(index + 1);
-  }, 0);
-  
-  document.getElementById('listInfo').textContent = `${list.length} albums • ${totalPoints} total points`;
+  // Remove this line since we're no longer showing stats:
+  // document.getElementById('listInfo').textContent = `${list.length} albums • ${totalPoints} total points`;
   
   displayAlbums(list);
   updateListNav();

@@ -1,4 +1,6 @@
 // admin-template.js
+const { headerComponent } = require('./templates');
+
 const adminTemplate = (req, data) => {
   const { users, stats, recentActivity, flash } = data;
   
@@ -9,8 +11,8 @@ const adminTemplate = (req, data) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Admin Dashboard - SuShe</title>
-        <script src="https://cdn.tailwindcss.com"></script>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <link href="/styles/output.css" rel="stylesheet">
         <style>
             .admin-card {
                 background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
@@ -22,30 +24,7 @@ const adminTemplate = (req, data) => {
         </style>
     </head>
     <body class="bg-black text-gray-300">
-        <!-- Header -->
-        <header class="bg-gray-900 border-b border-gray-800 shadow-lg">
-            <div class="container mx-auto px-4 py-4">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center space-x-4">
-                        <a href="/" class="text-xl font-bold text-red-600 hover:text-red-500">SuShe</a>
-                        <span class="text-gray-500">/</span>
-                        <h1 class="text-xl font-semibold">Admin Dashboard</h1>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <span class="text-sm text-gray-400">
-                            <i class="fas fa-crown text-yellow-500 mr-2"></i>
-                            ${req.user.email}
-                        </span>
-                        <a href="/account" class="text-gray-400 hover:text-white">
-                            <i class="fas fa-user-circle text-xl"></i>
-                        </a>
-                        <a href="/logout" class="text-gray-400 hover:text-red-500">
-                            <i class="fas fa-sign-out-alt text-xl"></i>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </header>
+        ${headerComponent(req.user, 'admin')}
 
         <div class="container mx-auto px-4 py-8">
             <!-- Flash Messages -->
@@ -61,41 +40,41 @@ const adminTemplate = (req, data) => {
             ` : ''}
 
             <!-- Stats Overview -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-                <div class="stat-card rounded-lg p-6">
+            <div class="flex flex-wrap gap-4 mb-8">
+                <div class="stat-card rounded-lg px-4 py-3 flex-1 min-w-[150px]">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-gray-500 text-sm">Total Users</p>
-                            <p class="text-3xl font-bold text-white">${stats.totalUsers}</p>
+                            <p class="text-gray-500 text-xs">Total Users</p>
+                            <p class="text-2xl font-bold text-white">${stats.totalUsers}</p>
                         </div>
-                        <i class="fas fa-users text-blue-500 text-3xl opacity-50"></i>
+                        <i class="fas fa-users text-blue-500 text-xl opacity-50"></i>
                     </div>
                 </div>
-                <div class="stat-card rounded-lg p-6">
+                <div class="stat-card rounded-lg px-4 py-3 flex-1 min-w-[150px]">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-gray-500 text-sm">Total Lists</p>
-                            <p class="text-3xl font-bold text-white">${stats.totalLists}</p>
+                            <p class="text-gray-500 text-xs">Total Lists</p>
+                            <p class="text-2xl font-bold text-white">${stats.totalLists}</p>
                         </div>
-                        <i class="fas fa-list text-green-500 text-3xl opacity-50"></i>
+                        <i class="fas fa-list text-green-500 text-xl opacity-50"></i>
                     </div>
                 </div>
-                <div class="stat-card rounded-lg p-6">
+                <div class="stat-card rounded-lg px-4 py-3 flex-1 min-w-[150px]">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-gray-500 text-sm">Total Albums</p>
-                            <p class="text-3xl font-bold text-white">${stats.totalAlbums}</p>
+                            <p class="text-gray-500 text-xs">Total Albums</p>
+                            <p class="text-2xl font-bold text-white">${stats.totalAlbums}</p>
                         </div>
-                        <i class="fas fa-compact-disc text-purple-500 text-3xl opacity-50"></i>
+                        <i class="fas fa-compact-disc text-purple-500 text-xl opacity-50"></i>
                     </div>
                 </div>
-                <div class="stat-card rounded-lg p-6">
+                <div class="stat-card rounded-lg px-4 py-3 flex-1 min-w-[150px]">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-gray-500 text-sm">Admin Users</p>
-                            <p class="text-3xl font-bold text-white">${stats.adminUsers}</p>
+                            <p class="text-gray-500 text-xs">Admin Users</p>
+                            <p class="text-2xl font-bold text-white">${stats.adminUsers}</p>
                         </div>
-                        <i class="fas fa-crown text-yellow-500 text-3xl opacity-50"></i>
+                        <i class="fas fa-crown text-yellow-500 text-xl opacity-50"></i>
                     </div>
                 </div>
             </div>
