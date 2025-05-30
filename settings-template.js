@@ -90,6 +90,68 @@ const settingsTemplate = (req, data) => {
             .toast.info {
                 background-color: #3b82f6;
             }
+            
+            /* Action cards */
+            .action-card {
+                background: linear-gradient(145deg, #0f0f0f, #1f1f1f);
+                border: 1px solid #2a2a2a;
+                transition: all 0.2s ease;
+                cursor: pointer;
+            }
+            
+            .action-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                border-color: #dc2626;
+            }
+            
+            /* Form styling */
+            .form-group {
+                background: linear-gradient(145deg, #0a0a0a, #1a1a1a);
+                border: 1px solid #2a2a2a;
+                border-radius: 0.5rem;
+                padding: 1rem;
+                transition: all 0.2s ease;
+            }
+            
+            .form-group:hover {
+                border-color: #3a3a3a;
+            }
+            
+            .form-group:focus-within {
+                border-color: #dc2626;
+                box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2);
+            }
+            
+            /* Info cards */
+            .info-card {
+                background: linear-gradient(145deg, #0f0f0f, #1f1f1f);
+                border: 1px solid #2a2a2a;
+                padding: 1.5rem;
+                border-radius: 0.5rem;
+                position: relative;
+                overflow: hidden;
+            }
+            
+            .info-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 4px;
+                height: 100%;
+                background: linear-gradient(to bottom, #dc2626, #7f1d1d);
+            }
+            
+            /* Edit button styling */
+            .edit-btn {
+                opacity: 0;
+                transition: all 0.2s ease;
+            }
+            
+            .info-item:hover .edit-btn {
+                opacity: 1;
+            }
         </style>
     </head>
     <body class="bg-black text-gray-300">
@@ -112,167 +174,265 @@ const settingsTemplate = (req, data) => {
 
             <!-- Account Tab Content -->
             <div id="accountContent" class="tab-content">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    <!-- Account Information -->
-                    <div class="settings-card rounded-lg p-6">
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
-                            Account Information
-                        </h2>
+                <!-- User Stats Overview -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fas fa-chart-line mr-2 text-emerald-500"></i>
+                        Your Statistics
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="stat-card rounded-lg px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-xs">Total Lists</p>
+                                    <p class="text-2xl font-bold text-white">${userStats.listCount}</p>
+                                    <p class="text-xs text-gray-400 mt-1">Created by you</p>
+                                </div>
+                                <i class="fas fa-list text-purple-500 text-xl opacity-50"></i>
+                            </div>
+                        </div>
                         
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-1">Email</label>
-                                <div class="flex items-center gap-2">
-                                    <p class="text-white" id="emailDisplay">${user.email}</p>
-                                    <button onclick="editField('email', '${user.email}')" class="text-gray-500 hover:text-gray-300 transition-colors" title="Edit email">
-                                        <i class="fas fa-pencil text-sm"></i>
-                                    </button>
+                        <div class="stat-card rounded-lg px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-xs">Total Albums</p>
+                                    <p class="text-2xl font-bold text-white">${userStats.totalAlbums}</p>
+                                    <p class="text-xs text-gray-400 mt-1">In your collection</p>
                                 </div>
+                                <i class="fas fa-compact-disc text-indigo-500 text-xl opacity-50"></i>
                             </div>
-                            
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-1">Username</label>
-                                <div class="flex items-center gap-2">
-                                    <p class="text-white" id="usernameDisplay">${user.username}</p>
-                                    <button onclick="editField('username', '${user.username}')" class="text-gray-500 hover:text-gray-300 transition-colors" title="Edit username">
-                                        <i class="fas fa-pencil text-sm"></i>
-                                    </button>
+                        </div>
+                        
+                        <div class="stat-card rounded-lg px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-xs">Member Since</p>
+                                    <p class="text-lg font-bold text-white">${new Date(user.createdAt).getFullYear()}</p>
+                                    <p class="text-xs text-gray-400 mt-1">${Math.floor((new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24))} days</p>
                                 </div>
+                                <i class="fas fa-calendar-alt text-blue-500 text-xl opacity-50"></i>
                             </div>
-                            
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-1">Member Since</label>
-                                <p class="text-white">${new Date(user.createdAt).toLocaleDateString('en-US', { 
-                                    year: 'numeric', 
-                                    month: 'long', 
-                                    day: 'numeric' 
-                                })}</p>
-                            </div>
-                            
-                            <div class="pt-4 border-t border-gray-700">
-                                <label class="block text-gray-400 text-sm mb-1">Your Stats</label>
-                                <p class="text-white">${userStats.listCount} lists • ${userStats.totalAlbums} total albums</p>
-                            </div>
-                            
-                            ${isAdmin ? `
-                                <div class="pt-4 border-t border-gray-700">
-                                    <label class="block text-gray-400 text-sm mb-1">Admin Status</label>
-                                    <p class="text-yellow-500">
-                                        <i class="fas fa-crown mr-1"></i>
-                                        Administrator
+                        </div>
+                        
+                        <div class="stat-card rounded-lg px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-gray-500 text-xs">Account Type</p>
+                                    <p class="text-lg font-bold ${isAdmin ? 'text-yellow-500' : 'text-white'}">
+                                        ${isAdmin ? 'Admin' : 'User'}
                                     </p>
-                                    ${user.adminGrantedAt ? `
-                                        <p class="text-xs text-gray-500 mt-1">
-                                            Granted: ${new Date(user.adminGrantedAt).toLocaleDateString()}
-                                        </p>
-                                    ` : ''}
+                                    <p class="text-xs text-gray-400 mt-1">${isAdmin ? 'Full access' : 'Standard access'}</p>
                                 </div>
-                            ` : ''}
+                                <i class="fas ${isAdmin ? 'fa-crown text-yellow-500' : 'fa-user text-gray-500'} text-xl opacity-50"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Account Information Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                    <!-- Personal Information Card -->
+                    <div>
+                        <h2 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-id-card mr-2 text-blue-500"></i>
+                            Personal Information
+                        </h2>
+                        <div class="info-card">
+                            <div class="space-y-4">
+                                <div class="info-item">
+                                    <label class="block text-gray-500 text-xs uppercase tracking-wider mb-1">Email Address</label>
+                                    <div class="flex items-center justify-between group">
+                                        <p class="text-white text-lg" id="emailDisplay">${user.email}</p>
+                                        <button onclick="editField('email', '${user.email}')" class="edit-btn text-gray-500 hover:text-gray-300 transition-colors ml-2" title="Edit email">
+                                            <i class="fas fa-pencil text-sm"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="info-item">
+                                    <label class="block text-gray-500 text-xs uppercase tracking-wider mb-1">Username</label>
+                                    <div class="flex items-center justify-between group">
+                                        <p class="text-white text-lg" id="usernameDisplay">${user.username}</p>
+                                        <button onclick="editField('username', '${user.username}')" class="edit-btn text-gray-500 hover:text-gray-300 transition-colors ml-2" title="Edit username">
+                                            <i class="fas fa-pencil text-sm"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="pt-4 border-t border-gray-800">
+                                    <label class="block text-gray-500 text-xs uppercase tracking-wider mb-1">Account Created</label>
+                                    <p class="text-white">${new Date(user.createdAt).toLocaleDateString('en-US', { 
+                                        year: 'numeric', 
+                                        month: 'long', 
+                                        day: 'numeric' 
+                                    })}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Change Password -->
-                    <div class="settings-card rounded-lg p-6">
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-key mr-2 text-emerald-500"></i>
-                            Change Password
+                    <!-- Security Settings Card -->
+                    <div>
+                        <h2 class="text-xl font-semibold mb-4 flex items-center mt-8 lg:mt-0">
+                            <i class="fas fa-shield-alt mr-2 text-green-500"></i>
+                            Security Settings
                         </h2>
+                        <div class="settings-card rounded-lg p-6">
+                            <form method="post" action="/settings/change-password" class="space-y-4">
+                                <div class="form-group">
+                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="currentPassword">
+                                        Current Password
+                                    </label>
+                                    <input 
+                                        type="password" 
+                                        id="currentPassword"
+                                        name="currentPassword"
+                                        class="w-full px-3 py-2 bg-gray-900 border-0 text-white placeholder-gray-600 focus:outline-none"
+                                        placeholder="Enter current password"
+                                        required
+                                    />
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="newPassword">
+                                        New Password
+                                    </label>
+                                    <input 
+                                        type="password" 
+                                        id="newPassword"
+                                        name="newPassword"
+                                        class="w-full px-3 py-2 bg-gray-900 border-0 text-white placeholder-gray-600 focus:outline-none"
+                                        placeholder="Enter new password"
+                                        required
+                                        minlength="8"
+                                    />
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="confirmPassword">
+                                        Confirm New Password
+                                    </label>
+                                    <input 
+                                        type="password" 
+                                        id="confirmPassword"
+                                        name="confirmPassword"
+                                        class="w-full px-3 py-2 bg-gray-900 border-0 text-white placeholder-gray-600 focus:outline-none"
+                                        placeholder="Confirm new password"
+                                        required
+                                        minlength="8"
+                                    />
+                                </div>
+                                
+                                <button 
+                                    type="submit"
+                                    class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded transition duration-200 transform hover:scale-105"
+                                >
+                                    <i class="fas fa-key mr-2"></i>Update Password
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Section -->
+                <div class="mb-8">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <i class="fas fa-bolt mr-2 text-yellow-500"></i>
+                        Quick Actions
+                    </h2>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div class="action-card rounded-lg p-4" onclick="window.location.href='/'">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-white font-semibold">My Lists</p>
+                                    <p class="text-xs text-gray-400 mt-1">View and manage your album lists</p>
+                                </div>
+                                <i class="fas fa-arrow-right text-gray-500 text-lg"></i>
+                            </div>
+                        </div>
                         
-                        <form method="post" action="/settings/change-password" class="space-y-4">
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-2" for="currentPassword">
-                                    Current Password
-                                </label>
-                                <input 
-                                    type="password" 
-                                    id="currentPassword"
-                                    name="currentPassword"
-                                    class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                                    required
-                                />
+                        <div class="action-card rounded-lg p-4" onclick="window.location.href='/logout'">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-white font-semibold">Sign Out</p>
+                                    <p class="text-xs text-gray-400 mt-1">Log out of your account</p>
+                                </div>
+                                <i class="fas fa-sign-out-alt text-gray-500 text-lg"></i>
                             </div>
-                            
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-2" for="newPassword">
-                                    New Password
-                                </label>
-                                <input 
-                                    type="password" 
-                                    id="newPassword"
-                                    name="newPassword"
-                                    class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                                    required
-                                    minlength="8"
-                                />
+                        </div>
+                        
+                        ${!isAdmin ? `
+                            <div class="action-card rounded-lg p-4" onclick="document.getElementById('adminAccessSection').scrollIntoView({ behavior: 'smooth' })">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-white font-semibold">Request Admin</p>
+                                        <p class="text-xs text-gray-400 mt-1">Get administrator access</p>
+                                    </div>
+                                    <i class="fas fa-crown text-gray-500 text-lg"></i>
+                                </div>
                             </div>
-                            
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-2" for="confirmPassword">
-                                    Confirm New Password
-                                </label>
-                                <input 
-                                    type="password" 
-                                    id="confirmPassword"
-                                    name="confirmPassword"
-                                    class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                                    required
-                                    minlength="8"
-                                />
+                        ` : `
+                            <div class="action-card rounded-lg p-4" onclick="showTab('admin')">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-white font-semibold">Admin Panel</p>
+                                        <p class="text-xs text-gray-400 mt-1">Manage users and system</p>
+                                    </div>
+                                    <i class="fas fa-cog text-gray-500 text-lg"></i>
+                                </div>
                             </div>
-                            
-                            <button 
-                                type="submit"
-                                class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-6 rounded transition duration-200"
-                            >
-                                Update Password
-                            </button>
-                        </form>
+                        `}
                     </div>
                 </div>
 
                 <!-- Request Admin Access (only show if not already admin) -->
                 ${!isAdmin ? `
-                    <div class="settings-card rounded-lg p-6 mt-8">
+                    <div id="adminAccessSection">
                         <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-crown mr-2 text-yellow-500"></i>
-                            Request Admin Access
+                            <i class="fas fa-crown mr-2 text-orange-500"></i>
+                            Administrator Access
                         </h2>
-                        
-                        <div class="bg-gray-800/50 border border-gray-700 rounded p-4 mb-4">
-                            <p class="text-gray-300 text-sm mb-2">
-                                If you have server access, you can request admin privileges by entering the current admin code from the console.
-                            </p>
-                            <p class="text-gray-400 text-xs">
-                                The code is displayed in the server console and rotates every 5 minutes.
-                            </p>
-                        </div>
-                        
-                        <form method="post" action="/settings/request-admin" class="space-y-4">
-                            <div>
-                                <label class="block text-gray-400 text-sm mb-2" for="adminCode">
-                                    Admin Code
-                                </label>
-                                <input 
-                                    type="text" 
-                                    id="adminCode"
-                                    name="code"
-                                    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 font-mono uppercase text-lg tracking-wider"
-                                    placeholder="XXXXXXXX"
-                                    maxlength="8"
-                                    required
-                                    autocomplete="off"
-                                />
-                                <p class="text-xs text-gray-500 mt-1">Enter the 8-character code from the server console</p>
+                        <div class="settings-card rounded-lg p-6">
+                            <div class="stat-card rounded-lg p-4 mb-6">
+                                <div class="flex items-start gap-3">
+                                    <i class="fas fa-info-circle text-blue-500 text-lg mt-1"></i>
+                                    <div>
+                                        <p class="text-gray-300 text-sm mb-2">
+                                            Administrator access grants full control over the system, including user management and database operations.
+                                        </p>
+                                        <p class="text-gray-400 text-xs">
+                                            To request admin access, you'll need the current admin code from the server console. This code rotates every 5 minutes for security.
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
                             
-                            <button 
-                                type="submit"
-                                class="bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded transition duration-200"
-                            >
-                                Become Admin
-                            </button>
-                        </form>
+                            <form method="post" action="/settings/request-admin" class="space-y-4">
+                                <div class="form-group">
+                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="adminCode">
+                                        <i class="fas fa-key mr-1"></i>Admin Access Code
+                                    </label>
+                                    <input 
+                                        type="text" 
+                                        id="adminCode"
+                                        name="code"
+                                        class="w-full px-3 py-3 bg-transparent border-0 text-white placeholder-gray-600 focus:outline-none font-mono uppercase text-xl tracking-widest text-center"
+                                        placeholder="XXXXXXXX"
+                                        maxlength="8"
+                                        required
+                                        autocomplete="off"
+                                    />
+                                    <p class="text-xs text-gray-500 mt-2 text-center">Enter the 8-character code from the server console</p>
+                                </div>
+                                
+                                <button 
+                                    type="submit"
+                                    class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+                                >
+                                    <i class="fas fa-shield-alt mr-2"></i>Request Admin Access
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 ` : ''}
             </div>
