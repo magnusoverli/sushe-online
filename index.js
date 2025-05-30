@@ -509,56 +509,198 @@ app.get('/settings', ensureAuth, async (req, res) => {
           });
 
           Promise.all(userPromises).then(usersWithCounts => {
-            // Calculate stats
-            lists.find({}, (err, allLists) => {
+            // Calculate all statistics
+            lists.find({}, async (err, allLists) => {
               let totalAlbums = 0;
+              const genreCounts = new Map();
+              
+              // Calculate active users (last 7 days)
+              const sevenDaysAgo = new Date();
+              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+              let activeUsers = 0;
+              
+              // Calculate user growth (compare this week vs last week)
+              const twoWeeksAgo = new Date();
+              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+              
+              const usersThisWeek = allUsers.filter(u => new Date(u.createdAt) >= sevenDaysAgo).length;
+              const usersLastWeek = allUsers.filter(u => {
+                const createdAt = new Date(u.createdAt);
+                return createdAt >= twoWeeksAgo && createdAt < sevenDaysAgo;
+              }).length;
+              
+              const userGrowth = usersLastWeek > 0 
+                ? Math.round(((usersThisWeek - usersLastWeek) / usersLastWeek) * 100)
+                : (usersThisWeek > 0 ? 100 : 0);
+              
               if (!err && allLists) {
+                // Process all lists
                 allLists.forEach(list => {
+                  // Check if list was updated in last 7 days (active user)
+                  if (list.updatedAt && new Date(list.updatedAt) >= sevenDaysAgo) {
+                    const userIndex = allUsers.findIndex(u => u._id === list.userId);
+                    if (userIndex !== -1 && !allUsers[userIndex].counted) {
+                      allUsers[userIndex].counted = true;
+                      activeUsers++;
+                    }
+                  }
+                  
                   if (Array.isArray(list.data)) {
                     totalAlbums += list.data.length;
+                    
+                    // Count genres
+                    list.data.forEach(album => {
+                      // Count primary genre
+                      if (album.genre_1 || album.genre) {
+                        const genre = album.genre_1 || album.genre;
+                        if (genre && genre !== '' && genre !== 'Genre 1') {
+                          genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
+                        }
+                      }
+                      
+                      // Count secondary genre
+                      if (album.genre_2 && album.genre_2 !== '' && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-') {
+                        genreCounts.set(album.genre_2, (genreCounts.get(album.genre_2) || 0) + 1);
+                      }
+                    });
                   }
                 });
+              }
+
+              // Get top genres
+              const topGenres = Array.from(genreCounts.entries())
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+              // Get top users by list count
+              const topUsers = usersWithCounts
+                .filter(u => u.listCount > 0)
+                .sort((a, b) => b.listCount - a.listCount)
+                .slice(0, 5);
+
+              // Calculate database size (approximate)
+              let dbSize = 'N/A';
+              try {
+                const fs = require('fs');
+                const dbPath = path.join(dataDir, 'users.db');
+                const listsDbPath = path.join(dataDir, 'lists.db');
+                
+                if (fs.existsSync(dbPath) && fs.existsSync(listsDbPath)) {
+                  const usersSize = fs.statSync(dbPath).size;
+                  const listsSize = fs.statSync(listsDbPath).size;
+                  const totalSize = usersSize + listsSize;
+                  
+                  // Convert to human readable
+                  if (totalSize < 1024 * 1024) {
+                    dbSize = `${Math.round(totalSize / 1024)} KB`;
+                  } else {
+                    dbSize = `${(totalSize / (1024 * 1024)).toFixed(1)} MB`;
+                  }
+                }
+              } catch (e) {
+                console.error('Error calculating DB size:', e);
+              }
+
+              // Count active sessions
+              let activeSessions = 0;
+              try {
+                const sessionPath = path.join(dataDir, 'sessions');
+                if (require('fs').existsSync(sessionPath)) {
+                  const sessionFiles = require('fs').readdirSync(sessionPath);
+                  activeSessions = sessionFiles.filter(f => f.endsWith('.json')).length;
+                }
+              } catch (e) {
+                console.error('Error counting sessions:', e);
               }
 
               const stats = {
                 totalUsers: allUsers.length,
                 totalLists: err ? 0 : allLists.length,
                 totalAlbums: totalAlbums,
-                adminUsers: allUsers.filter(u => u.role === 'admin').length
+                adminUsers: allUsers.filter(u => u.role === 'admin').length,
+                activeUsers,
+                userGrowth,
+                dbSize,
+                activeSessions,
+                topGenres,
+                topUsers
               };
 
-              // Generate recent activity
-              const recentActivity = [
-                { 
-                  icon: 'fa-user-plus', 
-                  color: 'green', 
-                  message: 'New user registered', 
-                  time: '2 hours ago' 
-                },
-                { 
-                  icon: 'fa-list', 
-                  color: 'blue', 
-                  message: 'New list created', 
-                  time: '3 hours ago' 
-                },
-                { 
-                  icon: 'fa-sign-in-alt', 
-                  color: 'purple', 
-                  message: 'User login', 
-                  time: '4 hours ago' 
-                },
-                { 
-                  icon: 'fa-user-shield', 
-                  color: 'yellow', 
-                  message: 'Admin privileges granted', 
-                  time: '1 day ago' 
-                }
-              ];
+              // Generate real recent activity based on actual data
+              const recentActivity = [];
+              
+              // Find recent user registrations
+              const recentUsers = allUsers
+                .filter(u => u.createdAt)
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .slice(0, 2);
+              
+              recentUsers.forEach(user => {
+                const timeAgo = getTimeAgo(new Date(user.createdAt));
+                recentActivity.push({
+                  icon: 'fa-user-plus',
+                  color: 'green',
+                  message: `New user: ${user.username}`,
+                  time: timeAgo
+                });
+              });
+              
+              // Find recent list creations
+              const recentLists = allLists
+                .filter(l => l.createdAt)
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+                .slice(0, 2);
+              
+              recentLists.forEach(list => {
+                const timeAgo = getTimeAgo(new Date(list.createdAt));
+                recentActivity.push({
+                  icon: 'fa-list',
+                  color: 'blue',
+                  message: `New list: ${list.name}`,
+                  time: timeAgo
+                });
+              });
+              
+              // Find recent admin grants
+              const recentAdmins = allUsers
+                .filter(u => u.role === 'admin' && u.adminGrantedAt)
+                .sort((a, b) => new Date(b.adminGrantedAt) - new Date(a.adminGrantedAt))
+                .slice(0, 1);
+              
+              recentAdmins.forEach(admin => {
+                const timeAgo = getTimeAgo(new Date(admin.adminGrantedAt));
+                recentActivity.push({
+                  icon: 'fa-user-shield',
+                  color: 'yellow',
+                  message: `Admin granted: ${admin.username}`,
+                  time: timeAgo
+                });
+              });
+              
+              // Sort by time and take the most recent 4
+              recentActivity.sort((a, b) => {
+                // This is a simplified sort - in production you'd want to store actual timestamps
+                const timeValues = { 'just now': 0, 'minutes ago': 1, 'hour': 2, 'hours ago': 3, 'day': 4, 'days ago': 5 };
+                const aValue = Object.keys(timeValues).find(key => a.time.includes(key)) || 6;
+                const bValue = Object.keys(timeValues).find(key => b.time.includes(key)) || 6;
+                return timeValues[aValue] - timeValues[bValue];
+              });
+              
+              // Ensure we have at least 4 items (pad with defaults if needed)
+              while (recentActivity.length < 4) {
+                recentActivity.push({
+                  icon: 'fa-clock',
+                  color: 'gray',
+                  message: 'No recent activity',
+                  time: '-'
+                });
+              }
 
               resolve({
                 users: usersWithCounts,
                 stats,
-                recentActivity
+                recentActivity: recentActivity.slice(0, 4)
               });
             });
           });
@@ -584,6 +726,28 @@ app.get('/settings', ensureAuth, async (req, res) => {
     res.redirect('/');
   }
 });
+
+function getTimeAgo(date) {
+  const seconds = Math.floor((new Date() - date) / 1000);
+  
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
+  if (seconds < 86400) {
+    const hours = Math.floor(seconds / 3600);
+    return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  }
+  if (seconds < 2592000) {
+    const days = Math.floor(seconds / 86400);
+    return days === 1 ? '1 day ago' : `${days} days ago`;
+  }
+  if (seconds < 31536000) {
+    const months = Math.floor(seconds / 2592000);
+    return months === 1 ? '1 month ago' : `${months} months ago`;
+  }
+  
+  const years = Math.floor(seconds / 31536000);
+  return years === 1 ? '1 year ago' : `${years} years ago`;
+}
 
 // Change password endpoint
 app.post('/settings/change-password', ensureAuth, async (req, res) => {
@@ -920,6 +1084,27 @@ app.get('/admin/export-users', ensureAuth, ensureAdmin, (req, res) => {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename="users-export.csv"');
     res.send(csv);
+  });
+});
+
+// Admin: Get user lists
+app.get('/admin/user-lists/:userId', ensureAuth, ensureAdmin, (req, res) => {
+  const { userId } = req.params;
+  
+  lists.find({ userId }, (err, userLists) => {
+    if (err) {
+      console.error('Error fetching user lists:', err);
+      return res.status(500).json({ error: 'Error fetching user lists' });
+    }
+    
+    const listsData = userLists.map(list => ({
+      name: list.name,
+      albumCount: Array.isArray(list.data) ? list.data.length : 0,
+      createdAt: list.createdAt,
+      updatedAt: list.updatedAt
+    }));
+    
+    res.json({ lists: listsData });
   });
 });
 
