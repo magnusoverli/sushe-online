@@ -21,6 +21,24 @@ const ITUNES_BATCH_SIZE = 5;
 const COVERART_BATCH_SIZE = 3;
 const DEEZER_BATCH_SIZE = 5;
 
+window.openAddAlbumModal = function() {
+  if (!currentList) {
+    showToast('Please select a list first', 'error');
+    return;
+  }
+  
+  // Optimization 3: Warm up connections when modal opens
+  warmupConnections();
+  
+  modal.classList.remove('hidden');
+  modalElements.artistSearchInput.value = '';
+  modalElements.artistSearchInput.focus();
+  resetModalState();
+  
+  // Populate country dropdown when modal opens (countries should be loaded by now)
+  populateCountryDropdown();
+};
+
 // Queue for managing concurrent requests
 class RequestQueue {
   constructor(batchSize) {
@@ -584,10 +602,7 @@ function initializeAddAlbumFeature() {
     cancelBtn: document.getElementById('cancelManualEntry')
   };
   
-  const addAlbumBtn = document.getElementById('addAlbumBtn');
-  if (addAlbumBtn) {
-    addAlbumBtn.onclick = openAddAlbumModal;
-  }
+  // Button setup removed - now handled in displayAlbums
   
   modalElements.closeModalBtn.onclick = closeAddAlbumModal;
   modal.onclick = (e) => {

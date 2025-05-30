@@ -637,20 +637,24 @@ function initializeContextMenu() {
         // If we're currently viewing this list, clear the view
         if (currentList === currentContextList) {
           currentList = null;
-          document.getElementById('listTitle').textContent = 'Select a list to begin';
-          document.getElementById('listInfo').textContent = '';
+          
+          // Hide the list name in header
+          const headerSeparator = document.getElementById('headerSeparator');
+          const headerListName = document.getElementById('headerListName');
+          const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
+          
+          if (headerSeparator && headerListName && headerAddAlbumBtn) {
+            headerSeparator.classList.add('hidden');
+            headerListName.classList.add('hidden');
+            headerAddAlbumBtn.classList.add('hidden');
+          }
+          
           document.getElementById('albumContainer').innerHTML = `
             <div class="text-center text-gray-500 mt-20">
               <p class="text-xl mb-2">No list selected</p>
               <p class="text-sm">Create or import a list to get started</p>
             </div>
           `;
-          
-          // Hide the add album button
-          const addAlbumBtn = document.getElementById('addAlbumBtn');
-          if (addAlbumBtn) {
-            addAlbumBtn.classList.add('hidden');
-          }
         }
         
         // Update the navigation
@@ -967,19 +971,18 @@ function selectList(listName) {
   currentList = listName;
   const list = lists[listName];
   
-  document.getElementById('listTitle').textContent = listName;
+  // Update the header with the list name
+  const headerSeparator = document.getElementById('headerSeparator');
+  const headerListName = document.getElementById('headerListName');
   
-  // Remove this line since we're no longer showing stats:
-  // document.getElementById('listInfo').textContent = `${list.length} albums • ${totalPoints} total points`;
+  if (headerSeparator && headerListName) {
+    headerSeparator.classList.remove('hidden');
+    headerListName.classList.remove('hidden');
+    headerListName.textContent = listName;
+  }
   
   displayAlbums(list);
   updateListNav();
-  
-  // Show the add album button when a list is selected
-  const addAlbumBtn = document.getElementById('addAlbumBtn');
-  if (addAlbumBtn) {
-    addAlbumBtn.classList.remove('hidden');
-  }
 }
 
 // Make genre editable with datalist
@@ -1179,7 +1182,7 @@ function displayAlbums(albums) {
     container.innerHTML = `
       <div class="text-center text-gray-500 mt-20">
         <p class="text-xl mb-2">This list is empty</p>
-        <p class="text-sm">Click the + button above to add albums from MusicBrainz</p>
+        <p class="text-sm">Click the + button to add albums from MusicBrainz</p>
       </div>
     `;
     return;
@@ -1188,9 +1191,10 @@ function displayAlbums(albums) {
   const table = document.createElement('div');
   table.className = 'w-full relative';
   
-  // Header - now using album-grid class
+  // Header - now using album-grid class with button column
   const header = document.createElement('div');
   header.className = 'album-grid gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+  header.style.alignItems = 'center'; // Add this inline style
   header.innerHTML = `
     <div class="text-center">#</div>
     <div></div>
@@ -1200,6 +1204,14 @@ function displayAlbums(albums) {
     <div>Genre 1</div>
     <div>Genre 2</div>
     <div>Comment</div>
+    <div class="flex justify-center">
+      <button id="addAlbumBtn" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+    </div>
   `;
   table.appendChild(header);
   
@@ -1272,6 +1284,7 @@ function displayAlbums(albums) {
       <div class="flex items-center comment-cell">
         <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
       </div>
+      <div></div> <!-- Empty cell for button column -->
     `;
     
     // Add click handler to country cell
@@ -1326,6 +1339,12 @@ function displayAlbums(albums) {
   
   table.appendChild(rowsContainer);
   container.appendChild(table);
+  
+  // Re-initialize the add album button since we just created it
+  const addAlbumBtn = document.getElementById('addAlbumBtn');
+  if (addAlbumBtn && window.openAddAlbumModal) {
+    addAlbumBtn.onclick = window.openAddAlbumModal;
+  }
   
   // Initialize drag and drop
   if (window.DragDropManager) {
@@ -1418,20 +1437,24 @@ document.getElementById('clearBtn').onclick = async () => {
       await clearAllLists();
       currentList = null;
       updateListNav();
-      document.getElementById('listTitle').textContent = 'Select a list to begin';
-      document.getElementById('listInfo').textContent = '';
+      
+      // Hide the list name in header
+      const headerSeparator = document.getElementById('headerSeparator');
+      const headerListName = document.getElementById('headerListName');
+      const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
+      
+      if (headerSeparator && headerListName && headerAddAlbumBtn) {
+        headerSeparator.classList.add('hidden');
+        headerListName.classList.add('hidden');
+        headerAddAlbumBtn.classList.add('hidden');
+      }
+      
       document.getElementById('albumContainer').innerHTML = `
         <div class="text-center text-gray-500 mt-20">
           <p class="text-xl mb-2">No list selected</p>
           <p class="text-sm">Create or import a list to get started</p>
         </div>
       `;
-      
-      // Hide the add album button
-      const addAlbumBtn = document.getElementById('addAlbumBtn');
-      if (addAlbumBtn) {
-        addAlbumBtn.classList.add('hidden');
-      }
       
       showToast('All lists cleared');
     } catch (error) {

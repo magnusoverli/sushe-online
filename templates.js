@@ -31,7 +31,10 @@ const headerComponent = (user, currentPage = 'home', options = {}) => {
         <div class="flex items-center justify-between">
           <div class="flex items-center space-x-4">
             <a href="/" class="text-xl font-bold text-red-600 hover:text-red-500">SuShe</a>
-            ${pageTitle ? `
+            ${currentPage === 'home' ? `
+              <span id="headerSeparator" class="text-gray-500 hidden">/</span>
+              <h1 id="headerListName" class="text-xl font-semibold hidden"></h1>
+            ` : pageTitle ? `
               <span class="text-gray-500">/</span>
               <h1 class="text-xl font-semibold">${pageTitle}</h1>
             ` : ''}
@@ -499,22 +502,7 @@ const importConflictModalComponent = () => `
 // Component: Main Content Area
 const mainContentComponent = () => `
   <div class="flex-1 flex flex-col overflow-hidden">
-    <!-- Header -->
-    <div class="bg-gray-900/50 backdrop-blur-sm border-b border-gray-800 p-4">
-      <div class="flex items-center justify-between">
-        <div>
-          <h2 id="listTitle" class="text-2xl font-bold">Select a list to begin</h2>
-        </div>
-        <button id="addAlbumBtn" class="hidden bg-red-600 hover:bg-red-700 text-white p-3 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
-      </div>
-    </div>
-    
-    <!-- Album List -->
+    <!-- Album List (removed the header section) -->
     <div class="flex-1 overflow-y-auto">
       <div id="dropZone" class="drop-zone min-h-full p-6">
         <div id="albumContainer">
