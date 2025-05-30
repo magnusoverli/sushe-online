@@ -439,11 +439,11 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       if (coverArt && !currentLoadingController?.signal.aborted) {
         coverContainer.innerHTML = `
           <img src="${coverArt}" 
-               alt="${releaseGroups[index].title}" 
-               class="w-full h-full object-cover group-hover:scale-105 transition-transform" 
-               loading="lazy" 
-               crossorigin="anonymous"
-               onerror="this.onerror=null; this.parentElement.innerHTML='<svg width=\\'48\\' height=\\'48\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg>'">
+              alt="${releaseGroups[index].title}" 
+              class="w-16 h-16 object-cover rounded-full" 
+              loading="lazy" 
+              crossorigin="anonymous"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'">
         `;
         releaseGroups[index].coverArt = coverArt;
         coverContainer.dataset.loaded = 'true';
@@ -688,7 +688,7 @@ async function performArtistSearch() {
       return;
     }
     
-    displayArtistResults(artists);
+    await displayArtistResults(artists);  // Add await here
   } catch (error) {
     console.error('Error searching artists:', error);
     showToast('Error searching artists', 'error');
@@ -697,23 +697,103 @@ async function performArtistSearch() {
   }
 }
 
+// Search Deezer for artist image
+async function searchArtistImage(artistName) {
+  try {
+    const searchQuery = artistName.replace(/[^\w\s]/g, ' ').trim();
+    const url = `${DEEZER_PROXY}?q=${encodeURIComponent(searchQuery)}`;
+    
+    const response = await fetch(url, {
+      credentials: 'same-origin'
+    });
+    
+    if (!response.ok) {
+      return null;
+    }
+    
+    const data = await response.json();
+    
+    if (data.data && data.data.length > 0) {
+      // Try to find the best matching artist from album results
+      const artistImages = new Map();
+      
+      data.data.forEach(album => {
+        if (album.artist && album.artist.picture_medium) {
+          const artistNameLower = album.artist.name.toLowerCase();
+          const searchNameLower = artistName.toLowerCase();
+          
+          // Prioritize exact matches
+          if (artistNameLower === searchNameLower) {
+            artistImages.set(album.artist.name, album.artist.picture_medium);
+          } else if (artistNameLower.includes(searchNameLower) || searchNameLower.includes(artistNameLower)) {
+            // Also consider partial matches
+            if (!artistImages.has(album.artist.name)) {
+              artistImages.set(album.artist.name, album.artist.picture_medium);
+            }
+          }
+        }
+      });
+      
+      // Return the first (best) match
+      if (artistImages.size > 0) {
+        return artistImages.values().next().value;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error fetching artist image:', error);
+    return null;
+  }
+}
+
 // Display artist results with hover preloading
-function displayArtistResults(artists) {
+async function displayArtistResults(artists) {
   modalElements.artistList.innerHTML = '';
   
-  artists.forEach(artist => {
+  for (const artist of artists) {
     const artistEl = document.createElement('div');
-    artistEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors';
+    artistEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
     
     const disambiguation = artist.disambiguation ? ` <span class="text-gray-500 text-sm">(${artist.disambiguation})</span>` : '';
-    const country = artist.country ? ` • ${artist.country}` : '';
-    const lifeSpan = artist['life-span'];
-    const years = lifeSpan ? ` • ${lifeSpan.begin || '?'} - ${lifeSpan.ended ? lifeSpan.end || '?' : 'present'}` : '';
     
+    // Resolve country code to full name
+    let countryDisplay = '';
+    if (artist.country) {
+      const fullCountryName = await resolveCountryCode(artist.country);
+      countryDisplay = ` • ${fullCountryName || artist.country}`;
+    }
+    
+    // Create initial structure with placeholder
     artistEl.innerHTML = `
-      <div class="font-medium text-white">${artist.name}${disambiguation}</div>
-      <div class="text-sm text-gray-400 mt-1">${artist.type || 'Artist'}${country}${years}</div>
+      <div class="artist-image-container flex-shrink-0">
+        <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-white">${artist.name}${disambiguation}</div>
+        <div class="text-sm text-gray-400 mt-1">${artist.type || 'Artist'}${countryDisplay}</div>
+      </div>
     `;
+    
+    // Fetch artist image asynchronously
+    searchArtistImage(artist.name).then(imageUrl => {
+      if (imageUrl) {
+        const imageContainer = artistEl.querySelector('.artist-image-container');
+        imageContainer.innerHTML = `
+          <img 
+            src="${imageUrl}" 
+            alt="${artist.name}" 
+            class="w-16 h-16 rounded-full object-cover"
+            onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
+          >
+        `;
+      }
+    });
     
     // Optimization 1: Preload on hover
     let preloadTimeout;
@@ -729,7 +809,7 @@ function displayArtistResults(artists) {
     
     artistEl.onclick = () => selectArtist(artist);
     modalElements.artistList.appendChild(artistEl);
-  });
+  }
   
   showArtistResults();
 }
@@ -840,6 +920,9 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
   
+  // Change the albumList class from grid to vertical list
+  modalElements.albumList.className = 'space-y-2';
+  
   // Reset background loading state
   isBackgroundLoading = false;
   
@@ -852,7 +935,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   
   releaseGroups.forEach((rg, index) => {
     const albumEl = document.createElement('div');
-    albumEl.className = 'bg-gray-800 rounded overflow-hidden hover:bg-gray-700 cursor-pointer transition-colors group relative';
+    albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
     albumEl.dataset.albumIndex = index;
     
     const releaseDate = formatReleaseDate(rg['first-release-date']);
@@ -865,18 +948,18 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
           NEW
         </div>
       ` : ''}
-      <div class="aspect-square bg-gray-900 flex items-center justify-center overflow-hidden album-cover-container">
-        <div class="animate-pulse">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+      <div class="album-cover-container flex-shrink-0 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center">
+        <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <circle cx="8.5" cy="8.5" r="1.5"></circle>
             <polyline points="21 15 16 10 5 21"></polyline>
           </svg>
         </div>
       </div>
-      <div class="p-3">
-        <div class="font-medium text-white text-sm truncate" title="${rg.title}">${rg.title}</div>
-        <div class="text-xs text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-white truncate" title="${rg.title}">${rg.title}</div>
+        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
       </div>
     `;
     
