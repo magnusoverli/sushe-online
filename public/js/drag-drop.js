@@ -116,23 +116,53 @@ const DragDropManager = (function() {
     
     const rowsContainer = this.querySelector('.album-rows-container') || this;
     
+    // Calculate the final drop index
     let dropIndex = lastValidDropIndex;
+    
+    // Get the actual number of album rows (excluding placeholder)
+    const albumRows = rowsContainer.querySelectorAll('.album-row:not(.drag-placeholder)');
+    const maxIndex = albumRows.length - 1;
+    
+    // Adjust drop index if dragging from before the drop position
     if (draggedIndex < dropIndex) {
       dropIndex--;
     }
     
+    // Ensure drop index is within valid bounds
+    dropIndex = Math.max(0, Math.min(dropIndex, maxIndex));
+    
+    // Only proceed if the position actually changed
     if (dropIndex !== draggedIndex) {
       try {
-        // First, immediately update the DOM by moving the dragged element
+        // Remove the placeholder first
         if (placeholder && placeholder.parentNode) {
-          // Insert the dragged element where the placeholder is
-          placeholder.parentNode.insertBefore(draggedElement, placeholder);
-          // Remove the placeholder
           placeholder.parentNode.removeChild(placeholder);
           placeholder = null;
         }
         
-        // Show the dragged element in its new position
+        // Calculate where to insert the dragged element
+        const allRows = Array.from(rowsContainer.querySelectorAll('.album-row:not(.dragging)'));
+        
+        // Determine the reference element for insertion
+        let referenceElement = null;
+        if (dropIndex < allRows.length) {
+          // Adjust reference based on original position
+          if (draggedIndex < dropIndex) {
+            referenceElement = allRows[dropIndex];
+          } else {
+            referenceElement = allRows[dropIndex];
+          }
+        }
+        
+        // Insert the dragged element at the new position
+        if (referenceElement) {
+          rowsContainer.insertBefore(draggedElement, referenceElement);
+        } else {
+          // If no reference element, append to the end
+          rowsContainer.appendChild(draggedElement);
+        }
+        
+        // Show the dragged element
         draggedElement.style.display = '';
         draggedElement.classList.remove('dragging');
         
@@ -154,6 +184,16 @@ const DragDropManager = (function() {
           saveCallback(null, null, true); // Third parameter indicates error/rebuild needed
         }
       }
+    } else {
+      // Position didn't change, just clean up
+      if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.removeChild(placeholder);
+        placeholder = null;
+      }
+      
+      // Show the dragged element in its original position
+      draggedElement.style.display = '';
+      draggedElement.classList.remove('dragging');
     }
     
     // Clean up drag state
