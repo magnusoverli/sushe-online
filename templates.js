@@ -657,7 +657,7 @@ const addAlbumModalComponent = () => `
       <!-- Modal Content -->
       <div class="flex-1 overflow-hidden flex flex-col">
         <!-- Search Section -->
-        <div class="p-6 border-b border-gray-800">
+        <div id="searchSection" class="p-6 border-b border-gray-800">
           <div class="flex gap-4">
             <input 
               type="text" 

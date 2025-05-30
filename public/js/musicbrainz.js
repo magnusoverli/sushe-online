@@ -637,6 +637,12 @@ function showManualEntryForm() {
   modalElements.searchLoading.classList.add('hidden');
   modalElements.searchEmpty.classList.add('hidden');
   
+  // Hide the search section
+  const searchSection = document.getElementById('searchSection');
+  if (searchSection) {
+    searchSection.classList.add('hidden');
+  }
+  
   // Show manual entry form
   manualEntryElements.manualEntryForm.classList.remove('hidden');
   
@@ -648,6 +654,12 @@ function showManualEntryForm() {
 function hideManualEntryForm() {
   manualEntryElements.manualEntryForm.classList.add('hidden');
   modalElements.searchEmpty.classList.remove('hidden');
+  
+  // Show the search section again
+  const searchSection = document.getElementById('searchSection');
+  if (searchSection) {
+    searchSection.classList.remove('hidden');
+  }
   
   // Reset form
   manualEntryElements.form.reset();
@@ -844,6 +856,12 @@ function resetModalState() {
   modalElements.searchEmpty.classList.remove('hidden');
   modalElements.artistList.innerHTML = '';
   modalElements.albumList.innerHTML = '';
+  
+  // Show the search section
+  const searchSection = document.getElementById('searchSection');
+  if (searchSection) {
+    searchSection.classList.remove('hidden');
+  }
   
   // Reset manual entry
   if (manualEntryElements.manualEntryForm) {
