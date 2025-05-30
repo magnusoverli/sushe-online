@@ -116,7 +116,7 @@ const settingsTemplate = (req, data) => {
                     <!-- Account Information -->
                     <div class="settings-card rounded-lg p-6">
                         <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-info-circle mr-2 text-gray-500"></i>
+                            <i class="fas fa-info-circle mr-2 text-blue-500"></i>
                             Account Information
                         </h2>
                         
@@ -175,7 +175,7 @@ const settingsTemplate = (req, data) => {
                     <!-- Change Password -->
                     <div class="settings-card rounded-lg p-6">
                         <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-key mr-2 text-gray-500"></i>
+                            <i class="fas fa-key mr-2 text-emerald-500"></i>
                             Change Password
                         </h2>
                         
@@ -235,7 +235,7 @@ const settingsTemplate = (req, data) => {
                 ${!isAdmin ? `
                     <div class="settings-card rounded-lg p-6 mt-8">
                         <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-crown mr-2 text-gray-500"></i>
+                            <i class="fas fa-crown mr-2 text-yellow-500"></i>
                             Request Admin Access
                         </h2>
                         
@@ -280,156 +280,156 @@ const settingsTemplate = (req, data) => {
             <!-- Admin Tab Content (only for admins) -->
             ${isAdmin ? `
                 <div id="adminContent" class="tab-content hidden">
-                    <!-- Enhanced Stats Overview -->
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-8">
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Total Users</p>
-                                    <p class="text-2xl font-bold text-white">${stats.totalUsers}</p>
-                                    ${stats.userGrowth !== undefined ? `
-                                        <p class="text-xs ${stats.userGrowth >= 0 ? 'trend-up' : 'trend-down'} mt-1">
-                                            <i class="fas fa-arrow-${stats.userGrowth >= 0 ? 'up' : 'down'} text-xs"></i> 
-                                            ${Math.abs(stats.userGrowth)}% this week
-                                        </p>
-                                    ` : ''}
-                                </div>
-                                <i class="fas fa-users text-blue-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Active Users (7d)</p>
-                                    <p class="text-2xl font-bold text-white">${stats.activeUsers || 0}</p>
-                                    <p class="text-xs text-gray-400 mt-1">
-                                        ${stats.totalUsers > 0 ? Math.round((stats.activeUsers || 0) / stats.totalUsers * 100) : 0}% of total
-                                    </p>
-                                </div>
-                                <i class="fas fa-chart-line text-green-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Total Lists</p>
-                                    <p class="text-2xl font-bold text-white">${stats.totalLists}</p>
-                                    <p class="text-xs text-gray-400 mt-1">
-                                        ~${stats.totalUsers > 0 ? Math.round(stats.totalLists / stats.totalUsers) : 0} per user
-                                    </p>
-                                </div>
-                                <i class="fas fa-list text-purple-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Total Albums</p>
-                                    <p class="text-2xl font-bold text-white">${stats.totalAlbums}</p>
-                                    <p class="text-xs text-gray-400 mt-1">
-                                        ~${stats.totalLists > 0 ? Math.round(stats.totalAlbums / stats.totalLists) : 0} per list
-                                    </p>
-                                </div>
-                                <i class="fas fa-compact-disc text-indigo-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Database Size</p>
-                                    <p class="text-2xl font-bold text-white">${stats.dbSize || 'N/A'}</p>
-                                    <p class="text-xs text-gray-400 mt-1">
-                                        ${stats.activeSessions || 0} active sessions
-                                    </p>
-                                </div>
-                                <i class="fas fa-database text-orange-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Quick Stats Row -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                        <!-- Top Genres -->
-                        <div class="stat-card rounded-lg p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold flex items-center">
-                                    <i class="fas fa-music mr-2 text-gray-500"></i>
-                                    Top Genres
-                                </h3>
-                            </div>
-                            <div class="space-y-3">
-                                ${stats.topGenres && stats.topGenres.length > 0 ? stats.topGenres.slice(0, 5).map((genre, index) => `
-                                    <div class="flex items-center justify-between">
-                                        <span class="text-sm text-gray-300">${index + 1}. ${genre.name || 'Unknown'}</span>
-                                        <div class="flex items-center gap-2">
-                                            <div class="w-24 bg-gray-800 rounded-full h-2">
-                                                <div class="bg-red-600 h-2 rounded-full" style="width: ${genre.percentage}%"></div>
-                                            </div>
-                                            <span class="text-xs text-gray-500 w-10 text-right">${genre.count}</span>
-                                        </div>
-                                    </div>
-                                `).join('') : '<p class="text-gray-500 text-sm">No genre data available</p>'}
-                            </div>
-                        </div>
-                        
-                        <!-- Most Active Users -->
-                        <div class="stat-card rounded-lg p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-lg font-semibold flex items-center">
-                                    <i class="fas fa-trophy mr-2 text-gray-500"></i>
-                                    Most Active Users
-                                </h3>
-                            </div>
-                            <div class="space-y-3">
-                                ${stats.topUsers && stats.topUsers.length > 0 ? stats.topUsers.slice(0, 5).map((u, index) => `
-                                    <div class="flex items-center justify-between">
-                                        <div class="flex items-center gap-2">
-                                            <span class="text-${index === 0 ? 'yellow' : index === 1 ? 'gray' : index === 2 ? 'orange' : 'gray'}-500">
-                                                <i class="fas fa-${index === 0 ? 'crown' : 'medal'} text-sm"></i>
-                                            </span>
-                                            <span class="text-sm text-gray-300 truncate max-w-xs">${u.username}</span>
-                                        </div>
-                                        <span class="text-xs text-gray-400">${u.listCount} lists</span>
-                                    </div>
-                                `).join('') : '<p class="text-gray-500 text-sm">No user data available</p>'}
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activity - Updated to match stat-card style -->
+                    <!-- Statistics Section -->
                     <div class="mb-8">
                         <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-clock mr-2 text-gray-500"></i>
+                            <i class="fas fa-chart-bar mr-2 text-blue-500"></i>
+                            Statistics
+                        </h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Total Users</p>
+                                        <p class="text-2xl font-bold text-white">${stats.totalUsers}</p>
+                                        ${stats.userGrowth !== undefined ? `
+                                            <p class="text-xs ${stats.userGrowth >= 0 ? 'trend-up' : 'trend-down'} mt-1">
+                                                <i class="fas fa-arrow-${stats.userGrowth >= 0 ? 'up' : 'down'} text-xs"></i> 
+                                                ${Math.abs(stats.userGrowth)}% this week
+                                            </p>
+                                        ` : ''}
+                                    </div>
+                                    <i class="fas fa-users text-blue-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Active Users (7d)</p>
+                                        <p class="text-2xl font-bold text-white">${stats.activeUsers || 0}</p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            ${stats.totalUsers > 0 ? Math.round((stats.activeUsers || 0) / stats.totalUsers * 100) : 0}% of total
+                                        </p>
+                                    </div>
+                                    <i class="fas fa-chart-line text-green-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Total Lists</p>
+                                        <p class="text-2xl font-bold text-white">${stats.totalLists}</p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            ~${stats.totalUsers > 0 ? Math.round(stats.totalLists / stats.totalUsers) : 0} per user
+                                        </p>
+                                    </div>
+                                    <i class="fas fa-list text-purple-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Total Albums</p>
+                                        <p class="text-2xl font-bold text-white">${stats.totalAlbums}</p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            ~${stats.totalLists > 0 ? Math.round(stats.totalAlbums / stats.totalLists) : 0} per list
+                                        </p>
+                                    </div>
+                                    <i class="fas fa-compact-disc text-indigo-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Database Size</p>
+                                        <p class="text-2xl font-bold text-white">${stats.dbSize || 'N/A'}</p>
+                                        <p class="text-xs text-gray-400 mt-1">
+                                            ${stats.activeSessions || 0} active sessions
+                                        </p>
+                                    </div>
+                                    <i class="fas fa-database text-orange-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Recent Activity Section -->
+                    <div class="mb-8">
+                        <h2 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-clock mr-2 text-amber-500"></i>
                             Recent Activity
                         </h2>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                            <!-- Activity Cards -->
                             ${adminData.recentActivity.map(activity => `
-                                <div class="stat-card rounded-lg p-4">
-                                    <div class="flex items-start justify-between">
-                                        <div class="flex items-start space-x-3">
-                                            <div class="flex-shrink-0 mt-1">
-                                                <i class="fas ${activity.icon} text-${activity.color}-500 text-lg"></i>
-                                            </div>
-                                            <div class="flex-1">
-                                                <p class="text-sm text-gray-200">${activity.message}</p>
-                                                <p class="text-xs text-gray-500 mt-1">${activity.time}</p>
-                                            </div>
+                                <div class="stat-card rounded-lg px-4 py-3">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <p class="text-gray-500 text-xs">${activity.time}</p>
+                                            <p class="text-base font-medium text-white mt-1">${activity.message}</p>
                                         </div>
+                                        <i class="fas ${activity.icon} text-${activity.color}-500 text-xl opacity-50"></i>
                                     </div>
                                 </div>
                             `).join('')}
+                            
+                            <!-- Top Genres Card -->
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-gray-500 text-xs">Top Genres</p>
+                                    <i class="fas fa-music text-pink-500 text-xl opacity-50"></i>
+                                </div>
+                                <div class="space-y-1">
+                                    ${stats.topGenres && stats.topGenres.length > 0 ? stats.topGenres.slice(0, 3).map((genre, index) => `
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-sm text-gray-300 truncate">${index + 1}. ${genre.name || 'Unknown'}</span>
+                                            <span class="text-xs text-gray-500">${genre.count}</span>
+                                        </div>
+                                    `).join('') : '<p class="text-gray-500 text-sm">No data</p>'}
+                                </div>
+                            </div>
+                            
+                            <!-- Most Active Users Card -->
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-gray-500 text-xs">Most Active Users</p>
+                                    <i class="fas fa-trophy text-yellow-500 text-xl opacity-50"></i>
+                                </div>
+                                <div class="space-y-1">
+                                    ${stats.topUsers && stats.topUsers.length > 0 ? stats.topUsers.slice(0, 3).map((u, index) => `
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-sm text-gray-300 truncate">${u.username}</span>
+                                            <span class="text-xs text-gray-500">${u.listCount}</span>
+                                        </div>
+                                    `).join('') : '<p class="text-gray-500 text-sm">No data</p>'}
+                                </div>
+                            </div>
+                            
+                            <!-- Admin Logs Card -->
+                            <div class="stat-card rounded-lg px-4 py-3">
+                                <div class="flex items-center justify-between mb-2">
+                                    <p class="text-gray-500 text-xs">Latest Admin Action</p>
+                                    <i class="fas fa-history text-cyan-500 text-xl opacity-50"></i>
+                                </div>
+                                <div>
+                                    ${stats.adminLogs && stats.adminLogs.length > 0 ? `
+                                        <p class="text-sm text-gray-300">${stats.adminLogs[0].action}</p>
+                                        <p class="text-xs text-gray-500 mt-1">${stats.adminLogs[0].admin}</p>
+                                    ` : '<p class="text-gray-500 text-sm">No actions yet</p>'}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- Users Table with Search -->
+                    <!-- User Management Section -->
                     <div class="settings-card rounded-lg p-6 mb-8">
                         <div class="flex items-center justify-between mb-6">
                             <h2 class="text-xl font-semibold flex items-center">
-                                <i class="fas fa-users mr-2 text-gray-500"></i>
+                                <i class="fas fa-users mr-2 text-purple-500"></i>
                                 User Management
                             </h2>
                         </div>
@@ -507,49 +507,47 @@ const settingsTemplate = (req, data) => {
                         </div>
                     </div>
 
-                    <!-- Admin Actions -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                        <!-- Database Actions -->
-                        <div class="settings-card rounded-lg p-6">
-                            <h2 class="text-xl font-semibold mb-4 flex items-center">
-                                <i class="fas fa-database mr-2 text-gray-500"></i>
-                                Database Actions
-                            </h2>
-                            <div class="space-y-3">
-                                <button onclick="backupDatabase()" class="w-full p-3 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-600/50 rounded-lg text-blue-400 text-left">
-                                    <i class="fas fa-download text-lg mb-1"></i>
-                                    <p class="font-semibold">Backup Database</p>
-                                    <p class="text-xs text-gray-500">Download complete snapshot</p>
-                                </button>
-                                <button onclick="document.getElementById('restoreFile').click()" class="w-full p-3 bg-green-600/20 hover:bg-green-600/30 border border-green-600/50 rounded-lg text-green-400 text-left">
-                                    <i class="fas fa-upload text-lg mb-1"></i>
-                                    <p class="font-semibold">Restore Database</p>
-                                    <p class="text-xs text-gray-500">Upload backup file</p>
-                                </button>
-                                <button onclick="clearSessions()" class="w-full p-3 bg-orange-600/20 hover:bg-orange-600/30 border border-orange-600/50 rounded-lg text-orange-400 text-left">
-                                    <i class="fas fa-broom text-lg mb-1"></i>
-                                    <p class="font-semibold">Clear Sessions</p>
-                                    <p class="text-xs text-gray-500">Force all users to re-login</p>
-                                </button>
-                            </div>
-                            <input type="file" id="restoreFile" accept=".json" style="display: none;" onchange="restoreDatabase(event)">
-                        </div>
-                        
-                        <!-- Admin Activity Log -->
-                        <div class="settings-card rounded-lg p-6">
-                            <h2 class="text-xl font-semibold mb-4 flex items-center">
-                                <i class="fas fa-history mr-2 text-gray-500"></i>
-                                Admin Activity Log
-                            </h2>
-                            <div class="space-y-2 max-h-64 overflow-y-auto">
-                                ${stats.adminLogs && stats.adminLogs.length > 0 ? stats.adminLogs.map(log => `
-                                    <div class="text-sm border-b border-gray-800 pb-2 last:border-0">
-                                        <p class="text-gray-300">${log.action}</p>
-                                        <p class="text-xs text-gray-500">${log.admin} • ${log.time}</p>
+                    <!-- Admin Actions Section -->
+                    <div class="mb-8">
+                        <h2 class="text-xl font-semibold mb-4 flex items-center">
+                            <i class="fas fa-tools mr-2 text-red-500"></i>
+                            Admin Actions
+                        </h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="stat-card rounded-lg px-4 py-3 cursor-pointer hover:scale-105 transition-transform" onclick="backupDatabase()">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Database</p>
+                                        <p class="text-lg font-semibold text-white">Backup</p>
+                                        <p class="text-xs text-gray-400 mt-1">Download snapshot</p>
                                     </div>
-                                `).join('') : '<p class="text-gray-500 text-sm">No admin activity recorded yet</p>'}
+                                    <i class="fas fa-download text-blue-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card rounded-lg px-4 py-3 cursor-pointer hover:scale-105 transition-transform" onclick="document.getElementById('restoreFile').click()">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Database</p>
+                                        <p class="text-lg font-semibold text-white">Restore</p>
+                                        <p class="text-xs text-gray-400 mt-1">Upload backup</p>
+                                    </div>
+                                    <i class="fas fa-upload text-green-500 text-xl opacity-50"></i>
+                                </div>
+                            </div>
+                            
+                            <div class="stat-card rounded-lg px-4 py-3 cursor-pointer hover:scale-105 transition-transform" onclick="clearSessions()">
+                                <div class="flex items-center justify-between">
+                                    <div>
+                                        <p class="text-gray-500 text-xs">Sessions</p>
+                                        <p class="text-lg font-semibold text-white">Clear All</p>
+                                        <p class="text-xs text-gray-400 mt-1">Force re-login</p>
+                                    </div>
+                                    <i class="fas fa-broom text-orange-500 text-xl opacity-50"></i>
+                                </div>
                             </div>
                         </div>
+                        <input type="file" id="restoreFile" accept=".json" style="display: none;" onchange="restoreDatabase(event)">
                     </div>
                 </div>
             ` : ''}
