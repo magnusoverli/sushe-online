@@ -440,15 +440,18 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       const coverArt = await getCoverArt(releaseGroups[index].id, artistName, releaseGroups[index].title);
       
       if (coverArt && !currentLoadingController?.signal.aborted) {
+        // Store the cover URL immediately
+        releaseGroups[index].coverArt = coverArt;
+        
+        // Then update the DOM
         coverContainer.innerHTML = `
           <img src="${coverArt}" 
               alt="${releaseGroups[index].title}" 
               class="w-16 h-16 object-cover rounded-full" 
               loading="lazy" 
               crossorigin="anonymous"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'">
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'; delete window.currentReleaseGroups[${index}].coverArt;">
         `;
-        releaseGroups[index].coverArt = coverArt;
         coverContainer.dataset.loaded = 'true';
       }
       
@@ -1125,6 +1128,9 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
   
+  // Store releaseGroups globally for access in addAlbumToList
+  window.currentReleaseGroups = releaseGroups;
+  
   // Change the albumList class from grid to vertical list
   modalElements.albumList.className = 'space-y-2';
   
@@ -1142,6 +1148,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
     const albumEl = document.createElement('div');
     albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
     albumEl.dataset.albumIndex = index;
+    albumEl.dataset.albumId = rg.id; // Add album ID for easier lookup
     
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
@@ -1168,12 +1175,40 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       </div>
     `;
     
-    albumEl.onclick = () => addAlbumToList(rg);
+    // Modified click handler to ensure cover is available
+    albumEl.onclick = async () => {
+      // Check if cover is already loaded in DOM but not in data
+      const imgEl = albumEl.querySelector('.album-cover-container img');
+      if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg') && !rg.coverArt) {
+        rg.coverArt = imgEl.src;
+      }
+      
+      // If still no cover, try to load it before adding
+      if (!rg.coverArt) {
+        const coverContainer = albumEl.querySelector('.album-cover-container');
+        coverContainer.innerHTML = '<div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>';
+        
+        try {
+          const coverArt = await getCoverArt(rg.id, currentArtist.name, rg.title);
+          if (coverArt) {
+            rg.coverArt = coverArt;
+          }
+        } catch (error) {
+          console.error('Error loading cover before add:', error);
+        }
+      }
+      
+      addAlbumToList(rg);
+    };
+    
     modalElements.albumList.appendChild(albumEl);
     
     // Start observing this element for lazy loading
     observer.observe(albumEl);
   });
+  
+  // Store reference to current release groups
+  window.currentReleaseGroups = releaseGroups;
   
   // Also immediately check for visible albums
   requestAnimationFrame(() => {
@@ -1211,10 +1246,44 @@ async function addAlbumToList(releaseGroup) {
       comments: ''
   };
   
-  // Continue with cover art fetching...
-  if (releaseGroup.coverArt) {
+  // Enhanced cover art retrieval
+  let coverArtUrl = releaseGroup.coverArt;
+  
+  // If not in the data structure, check if it's already loaded in the DOM
+  if (!coverArtUrl) {
+    // Find the album element in the list
+    const albumElements = document.querySelectorAll('[data-album-index]');
+    for (let el of albumElements) {
+      if (parseInt(el.dataset.albumIndex) === releaseGroups.indexOf(releaseGroup)) {
+        const imgEl = el.querySelector('.album-cover-container img');
+        if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
+          coverArtUrl = imgEl.src;
+          // Store it back in the releaseGroup for consistency
+          releaseGroup.coverArt = coverArtUrl;
+          break;
+        }
+      }
+    }
+  }
+  
+  // If still no cover, try fetching it directly
+  if (!coverArtUrl) {
+    showToast('Fetching album cover...', 'info');
     try {
-      const response = await fetch(releaseGroup.coverArt);
+      coverArtUrl = await getCoverArt(releaseGroup.id, currentArtist.name, releaseGroup.title);
+      if (coverArtUrl) {
+        // Store it for future use
+        releaseGroup.coverArt = coverArtUrl;
+      }
+    } catch (error) {
+      console.error('Error fetching cover art:', error);
+    }
+  }
+  
+  // Process cover art if found
+  if (coverArtUrl) {
+    try {
+      const response = await fetch(coverArtUrl);
       const blob = await response.blob();
       
       if (!blob.type.startsWith('image/')) {
@@ -1242,6 +1311,7 @@ async function addAlbumToList(releaseGroup) {
       addAlbumToCurrentList(album);
     }
   } else {
+    // No cover art available
     addAlbumToCurrentList(album);
   }
 }
