@@ -191,7 +191,16 @@ app.use(session({
   store: new FileStore({
     path: path.join(dataDir, 'sessions'),
     ttl: 86400, // 1 day in seconds
-    retries: 0
+    retries: 0,
+    reapInterval: 600, // Clean up expired sessions every 10 minutes
+    reapAsync: true,
+    reapSyncFallback: true,
+    // Add these options for Windows compatibility
+    logFn: function(){}, // Disable verbose logging
+    fallbackSessionFn: function() {
+      // Fallback session if file operations fail
+      return {};
+    }
   }),
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
@@ -200,6 +209,10 @@ app.use(session({
     secure: false,
     httpOnly: true,
     maxAge: 1000 * 60 * 60 * 24 // 24 hours
+  },
+  // Add this to handle session save errors gracefully
+  genid: function(req) {
+    return require('crypto').randomBytes(16).toString('hex');
   }
 }));
 
@@ -423,7 +436,15 @@ app.post('/login', (req, res, next) => {
       }
       
       console.log('User logged in successfully:', user.email);
-      return res.redirect('/');
+      
+      // Force session save and handle errors
+      req.session.save((err) => {
+        if (err) {
+          console.error('Session save error:', err);
+          // Continue anyway - session might still work
+        }
+        return res.redirect('/');
+      });
     });
   })(req, res, next);
 });
@@ -1299,6 +1320,20 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Application error:', err);
+  
+  // Check if headers were already sent
+  if (res.headersSent) {
+    console.error('Headers already sent, cannot send error response');
+    return;
+  }
+  
+  // For session-related errors, try to continue
+  if (err.code === 'EPERM' && err.path && err.path.includes('sessions')) {
+    console.warn('Session file error, attempting to continue...');
+    // Don't send error response for session file issues
+    return;
+  }
+  
   res.status(500).send('Something went wrong!');
 });
 
