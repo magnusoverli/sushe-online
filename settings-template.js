@@ -26,24 +26,45 @@ const settingsTemplate = (req, data) => {
                 background: linear-gradient(145deg, #1f1f1f, #2a2a2a);
                 border-bottom: 2px solid #dc2626;
             }
+            
+            /* Toast notifications */
+            .toast {
+                position: fixed;
+                bottom: 2rem;
+                right: 2rem;
+                background-color: #1f2937;
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 0.5rem;
+                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+                transform: translateY(100%);
+                opacity: 0;
+                transition: all 0.3s ease;
+                z-index: 50;
+            }
+            
+            .toast.show {
+                transform: translateY(0);
+                opacity: 1;
+            }
+            
+            .toast.error {
+                background-color: #dc2626;
+            }
+            
+            .toast.success {
+                background-color: #059669;
+            }
+            
+            .toast.info {
+                background-color: #3b82f6;
+            }
         </style>
     </head>
     <body class="bg-black text-gray-300">
         ${headerComponent(user, 'settings')}
 
         <div class="container mx-auto px-4 py-8">
-            <!-- Flash Messages -->
-            ${flash.success ? `
-                <div class="bg-green-900/50 border border-green-600 text-green-400 px-4 py-3 rounded mb-6">
-                    <i class="fas fa-check-circle mr-2"></i>${flash.success}
-                </div>
-            ` : ''}
-            ${flash.error ? `
-                <div class="bg-red-900/50 border border-red-600 text-red-400 px-4 py-3 rounded mb-6">
-                    <i class="fas fa-exclamation-circle mr-2"></i>${flash.error}
-                </div>
-            ` : ''}
-
             <!-- Tab Navigation -->
             <div class="settings-card rounded-lg mb-8 p-1">
                 <nav class="flex space-x-1">
@@ -386,6 +407,9 @@ const settingsTemplate = (req, data) => {
             ` : ''}
         </div>
 
+        <!-- Toast container -->
+        <div id="toast" class="toast"></div>
+
         <!-- Delete Confirmation Modal -->
         ${isAdmin ? `
             <div id="deleteModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
@@ -402,6 +426,24 @@ const settingsTemplate = (req, data) => {
         ` : ''}
 
         <script>
+            // Toast notification function
+            function showToast(message, type = 'success') {
+                const toast = document.getElementById('toast');
+                toast.textContent = message;
+                toast.className = 'toast ' + type;
+                setTimeout(() => toast.classList.add('show'), 10);
+                setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            }
+
+            // Check for flash messages and convert to toast on page load
+            document.addEventListener('DOMContentLoaded', () => {
+                ${flash.success ? `showToast('${flash.success}', 'success');` : ''}
+                ${flash.error ? `showToast('${flash.error}', 'error');` : ''}
+                ${flash.info ? `showToast('${flash.info}', 'info');` : ''}
+            });
+
             // Tab switching
             function showTab(tabName) {
                 // Hide all content
@@ -482,7 +524,7 @@ const settingsTemplate = (req, data) => {
                 const newValue = input.value.trim();
                 
                 if (!newValue) {
-                    alert(\`\${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} cannot be empty\`);
+                    showToast(\`\${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} cannot be empty\`, 'error');
                     return;
                 }
                 
@@ -490,17 +532,17 @@ const settingsTemplate = (req, data) => {
                 if (fieldName === 'email') {
                     const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
                     if (!emailRegex.test(newValue)) {
-                        alert('Please enter a valid email address');
+                        showToast('Please enter a valid email address', 'error');
                         return;
                     }
                 } else if (fieldName === 'username') {
                     if (newValue.length < 3 || newValue.length > 30) {
-                        alert('Username must be between 3 and 30 characters');
+                        showToast('Username must be between 3 and 30 characters', 'error');
                         return;
                     }
                     const usernameRegex = /^[a-zA-Z0-9_]+$/;
                     if (!usernameRegex.test(newValue)) {
-                        alert('Username can only contain letters, numbers, and underscores');
+                        showToast('Username can only contain letters, numbers, and underscores', 'error');
                         return;
                     }
                 }
@@ -517,11 +559,11 @@ const settingsTemplate = (req, data) => {
                     if (response.ok) {
                         window.location.reload();
                     } else {
-                        alert(result.error || \`Error updating \${fieldName}\`);
+                        showToast(result.error || \`Error updating \${fieldName}\`, 'error');
                     }
                 } catch (error) {
                     console.error('Error:', error);
-                    alert(\`Error updating \${fieldName}\`);
+                    showToast(\`Error updating \${fieldName}\`, 'error');
                 }
             }
 
@@ -552,11 +594,11 @@ const settingsTemplate = (req, data) => {
                         if (response.ok) {
                             window.location.reload();
                         } else {
-                            alert('Error deleting user');
+                            showToast('Error deleting user', 'error');
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        alert('Error deleting user');
+                        showToast('Error deleting user', 'error');
                     }
                     closeDeleteModal();
                 }
@@ -573,11 +615,11 @@ const settingsTemplate = (req, data) => {
                             if (response.ok) {
                                 window.location.reload();
                             } else {
-                                alert('Error granting admin privileges');
+                                showToast('Error granting admin privileges', 'error');
                             }
                         } catch (error) {
                             console.error('Error:', error);
-                            alert('Error granting admin privileges');
+                            showToast('Error granting admin privileges', 'error');
                         }
                     }
                 }
@@ -594,11 +636,11 @@ const settingsTemplate = (req, data) => {
                             if (response.ok) {
                                 window.location.reload();
                             } else {
-                                alert('Error revoking admin privileges');
+                                showToast('Error revoking admin privileges', 'error');
                             }
                         } catch (error) {
                             console.error('Error:', error);
-                            alert('Error revoking admin privileges');
+                            showToast('Error revoking admin privileges', 'error');
                         }
                     }
                 }
@@ -632,14 +674,16 @@ const settingsTemplate = (req, data) => {
                         const result = await response.json();
                         
                         if (response.ok) {
-                            alert('Database restored successfully! All users will need to log in again.');
-                            window.location.href = '/login';
+                            showToast('Database restored successfully! Logging out...', 'success');
+                            setTimeout(() => {
+                                window.location.href = '/login';
+                            }, 2000);
                         } else {
-                            alert(result.error || 'Error restoring database');
+                            showToast(result.error || 'Error restoring database', 'error');
                         }
                     } catch (error) {
                         console.error('Error:', error);
-                        alert('Error restoring database');
+                        showToast('Error restoring database', 'error');
                     }
                     
                     event.target.value = '';
@@ -650,12 +694,14 @@ const settingsTemplate = (req, data) => {
                         try {
                             const response = await fetch('/admin/clear-sessions', { method: 'POST' });
                             if (response.ok) {
-                                alert('Sessions cleared. You will be logged out.');
-                                window.location.href = '/login';
+                                showToast('Sessions cleared. Logging out...', 'success');
+                                setTimeout(() => {
+                                    window.location.href = '/login';
+                                }, 2000);
                             }
                         } catch (error) {
                             console.error('Error:', error);
-                            alert('Error clearing sessions');
+                            showToast('Error clearing sessions', 'error');
                         }
                     }
                 }
