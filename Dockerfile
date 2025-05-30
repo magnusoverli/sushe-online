@@ -1,23 +1,22 @@
 FROM node:24-alpine
 
-# Set production environment - CRITICAL for performance
-ENV NODE_ENV=production
-
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
 # Install ALL dependencies (including dev) for the build
+# Don't set NODE_ENV yet so we get devDependencies
 RUN npm ci
 
 # Copy source files
 COPY . .
 
-# Build CSS
+# Build CSS (needs devDependencies)
 RUN npm run build:css
 
-# Remove dev dependencies after build
+# NOW set production environment and remove dev dependencies
+ENV NODE_ENV=production
 RUN npm prune --production
 
 # Create data directory and set permissions
