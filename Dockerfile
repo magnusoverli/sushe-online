@@ -1,35 +1,36 @@
-# Use Node.js LTS version
 FROM node:24-alpine
 
-# Set working directory
+# Set production environment - CRITICAL for performance
+ENV NODE_ENV=production
+
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies
-RUN npm ci --omit=dev
+# Install ALL dependencies (including dev) for the build
+RUN npm ci
 
-# Copy the rest of the application
+# Copy source files
 COPY . .
 
-# Build CSS (since you're using Tailwind)
-RUN npm install -D tailwindcss postcss postcss-cli autoprefixer
+# Build CSS
 RUN npm run build:css
 
-# Clean up dev dependencies
+# Remove dev dependencies after build
 RUN npm prune --production
 
-# Create a directory for data persistence and set permissions
+# Create data directory and set permissions
 RUN mkdir -p /app/data && \
     chown -R node:node /app/data && \
     chown -R node:node /app
 
-# Expose the port your app runs on
+# Node.js optimizations
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 EXPOSE 3000
 
-# Use node user (security best practice)
 USER node
 
-# Start the application
+# Use exec form for better signal handling
 CMD ["node", "index.js"]
