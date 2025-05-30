@@ -842,6 +842,40 @@ const addAlbumModalComponent = () => `
   </div>
 `;
 
+// Component: Confirmation Modal
+const confirmationModalComponent = () => `
+  <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 id="confirmationTitle" class="text-xl font-bold text-white">Confirm Action</h3>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-6">
+        <p id="confirmationMessage" class="text-gray-300"></p>
+        <p id="confirmationSubMessage" class="text-sm text-gray-500 mt-2"></p>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
+        <button 
+          id="confirmationCancelBtn" 
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition duration-200"
+        >
+          Cancel
+        </button>
+        <button 
+          id="confirmationConfirmBtn" 
+          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
 // Account Settings Template
 const accountSettingsTemplate = (req, data) => `
 <!DOCTYPE html>
@@ -1072,6 +1106,7 @@ const spotifyTemplate = (req) => `
   ${renameListModalComponent()}
   ${addAlbumModalComponent()}
   ${importConflictModalComponent()}
+  ${confirmationModalComponent()}
   
   <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>

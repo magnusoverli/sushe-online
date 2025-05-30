@@ -5,6 +5,7 @@ let availableGenres = [];
 let availableCountries = [];
 let pendingImportData = null;
 let pendingImportFilename = null;
+let confirmationCallback = null;
 
 // Context menu variables
 let currentContextList = null;
@@ -42,6 +43,32 @@ document.addEventListener('contextmenu', (e) => {
 // Helper function to get points for a position
 function getPointsForPosition(position) {
   return POSITION_POINTS[position] || 1; // Default to 1 point for positions > 40
+}
+
+function showConfirmation(title, message, subMessage, confirmText = 'Confirm', onConfirm = null) {
+  const modal = document.getElementById('confirmationModal');
+  const titleEl = document.getElementById('confirmationTitle');
+  const messageEl = document.getElementById('confirmationMessage');
+  const subMessageEl = document.getElementById('confirmationSubMessage');
+  const confirmBtn = document.getElementById('confirmationConfirmBtn');
+  
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  subMessageEl.textContent = subMessage || '';
+  confirmBtn.textContent = confirmText;
+  
+  confirmationCallback = onConfirm;
+  
+  modal.classList.remove('hidden');
+  
+  // Focus the confirm button for keyboard navigation
+  setTimeout(() => confirmBtn.focus(), 100);
+}
+
+function hideConfirmation() {
+  const modal = document.getElementById('confirmationModal');
+  modal.classList.add('hidden');
+  confirmationCallback = null;
 }
 
 // Standardize date formats for release dates
@@ -653,31 +680,38 @@ function initializeAlbumContextMenu() {
     
     if (currentContextAlbum === null) return;
     
-    // Confirm deletion
+    // Get album details for the confirmation message
     const album = lists[currentList][currentContextAlbum];
-    if (confirm(`Are you sure you want to remove "${album.album}" by ${album.artist} from this list?`)) {
-      try {
-        // Remove from the list
-        lists[currentList].splice(currentContextAlbum, 1);
-        
-        // Save to server
-        await saveList(currentList, lists[currentList]);
-        
-        // Update display
-        selectList(currentList);
-        
-        showToast(`Removed "${album.album}" from the list`);
-      } catch (error) {
-        console.error('Error removing album:', error);
-        showToast('Error removing album', 'error');
-        
-        // Reload the list to ensure consistency
-        await loadLists();
-        selectList(currentList);
-      }
-    }
     
-    currentContextAlbum = null;
+    showConfirmation(
+      'Remove Album',
+      `Remove "${album.album}" by ${album.artist}?`,
+      'This will remove the album from this list.',
+      'Remove',
+      async () => {
+        try {
+          // Remove from the list
+          lists[currentList].splice(currentContextAlbum, 1);
+          
+          // Save to server
+          await saveList(currentList, lists[currentList]);
+          
+          // Update display
+          selectList(currentList);
+          
+          showToast(`Removed "${album.album}" from the list`);
+        } catch (error) {
+          console.error('Error removing album:', error);
+          showToast('Error removing album', 'error');
+          
+          // Reload the list to ensure consistency
+          await loadLists();
+          selectList(currentList);
+        }
+        
+        currentContextAlbum = null;
+      }
+    );
   };
 }
 
@@ -1414,7 +1448,39 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeAlbumContextMenu();
       initializeCreateList();
       initializeRenameList();
-      initializeImportConflictHandling(); // Add this line
+      initializeImportConflictHandling();
+      
+      // Initialize confirmation modal handlers
+      const confirmModal = document.getElementById('confirmationModal');
+      const cancelBtn = document.getElementById('confirmationCancelBtn');
+      const confirmBtn = document.getElementById('confirmationConfirmBtn');
+      
+      if (confirmModal && cancelBtn && confirmBtn) {
+        // Cancel button
+        cancelBtn.onclick = hideConfirmation;
+        
+        // Confirm button
+        confirmBtn.onclick = () => {
+          if (confirmationCallback) {
+            confirmationCallback();
+          }
+          hideConfirmation();
+        };
+        
+        // Click outside to close
+        confirmModal.onclick = (e) => {
+          if (e.target === confirmModal) {
+            hideConfirmation();
+          }
+        };
+        
+        // ESC key to close
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && !confirmModal.classList.contains('hidden')) {
+            hideConfirmation();
+          }
+        });
+      }
     })
     .catch(err => {
       console.error('Failed to initialize:', err);
