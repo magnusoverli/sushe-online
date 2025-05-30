@@ -9,6 +9,9 @@ const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
 
+// Manual entry elements
+let manualEntryElements = {};
+
 // Cache for searches to avoid duplicate requests
 const itunesCache = new Map();
 const deezerCache = new Map();
@@ -566,6 +569,18 @@ function initializeAddAlbumFeature() {
     backToArtists: document.getElementById('backToArtists')
   };
   
+  // Manual entry elements
+  manualEntryElements = {
+    manualEntryBtn: document.getElementById('manualEntryBtn'),
+    manualEntryForm: document.getElementById('manualEntryForm'),
+    backToSearch: document.getElementById('backToSearch'),
+    form: document.getElementById('manualAlbumForm'),
+    coverArtInput: document.getElementById('manualCoverArt'),
+    coverPreview: document.getElementById('coverPreview'),
+    countrySelect: document.getElementById('manualCountry'),
+    cancelBtn: document.getElementById('cancelManualEntry')
+  };
+  
   const addAlbumBtn = document.getElementById('addAlbumBtn');
   if (addAlbumBtn) {
     addAlbumBtn.onclick = openAddAlbumModal;
@@ -594,11 +609,188 @@ function initializeAddAlbumFeature() {
     modalElements.albumResults.classList.add('hidden');
   };
   
+  // Manual entry handlers
+  manualEntryElements.manualEntryBtn.onclick = showManualEntryForm;
+  manualEntryElements.backToSearch.onclick = hideManualEntryForm;
+  manualEntryElements.cancelBtn.onclick = hideManualEntryForm;
+  manualEntryElements.form.onsubmit = handleManualSubmit;
+  manualEntryElements.coverArtInput.onchange = handleCoverArtUpload;
+  
+  // Populate country dropdown
+  populateCountryDropdown();
+  
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
       closeAddAlbumModal();
     }
   });
+}
+
+// New functions for manual entry
+function showManualEntryForm() {
+  // Hide all other views
+  modalElements.artistResults.classList.add('hidden');
+  modalElements.albumResults.classList.add('hidden');
+  modalElements.searchLoading.classList.add('hidden');
+  modalElements.searchEmpty.classList.add('hidden');
+  
+  // Show manual entry form
+  manualEntryElements.manualEntryForm.classList.remove('hidden');
+  
+  // Reset form
+  manualEntryElements.form.reset();
+  resetCoverPreview();
+}
+
+function hideManualEntryForm() {
+  manualEntryElements.manualEntryForm.classList.add('hidden');
+  modalElements.searchEmpty.classList.remove('hidden');
+  
+  // Reset form
+  manualEntryElements.form.reset();
+  resetCoverPreview();
+}
+
+function populateCountryDropdown() {
+  const select = manualEntryElements.countrySelect;
+  
+  // Clear existing options except the first one
+  while (select.options.length > 1) {
+    select.remove(1);
+  }
+  
+  // Add countries from the global availableCountries array
+  // Remove 'window.' prefix since availableCountries is available in the global scope
+  if (typeof availableCountries !== 'undefined' && availableCountries) {
+    availableCountries.forEach(country => {
+      const option = document.createElement('option');
+      option.value = country;
+      option.textContent = country;
+      select.appendChild(option);
+    });
+  }
+}
+
+function resetCoverPreview() {
+  manualEntryElements.coverPreview.innerHTML = `
+    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+      <polyline points="21 15 16 10 5 21"></polyline>
+    </svg>
+  `;
+}
+
+async function handleCoverArtUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  
+  // Validate file size (5MB max)
+  if (file.size > 5 * 1024 * 1024) {
+    showToast('Image file size must be less than 5MB', 'error');
+    e.target.value = '';
+    return;
+  }
+  
+  // Validate file type
+  if (!file.type.startsWith('image/')) {
+    showToast('Please select a valid image file', 'error');
+    e.target.value = '';
+    return;
+  }
+  
+  // Show preview
+  const reader = new FileReader();
+  reader.onload = function(event) {
+    manualEntryElements.coverPreview.innerHTML = `
+      <img src="${event.target.result}" alt="Cover preview" class="w-full h-full object-cover rounded">
+    `;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleManualSubmit(e) {
+  e.preventDefault();
+  
+  const formData = new FormData(manualEntryElements.form);
+  
+  // Validate required fields
+  const artist = formData.get('artist').trim();
+  const albumTitle = formData.get('album').trim();
+  
+  if (!artist || !albumTitle) {
+    showToast('Artist and Album title are required', 'error');
+    return;
+  }
+  
+  // Create album object
+  const album = {
+    artist: artist,
+    album: albumTitle,
+    album_id: 'manual-' + Date.now(), // Generate a unique ID for manual entries
+    release_date: formData.get('release_date') || '',
+    country: formData.get('country') || '',
+    genre_1: '',
+    genre_2: '',
+    comments: ''
+  };
+  
+  // Handle cover art if uploaded
+  const coverArtFile = formData.get('cover_art');
+  if (coverArtFile && coverArtFile.size > 0) {
+    showToast('Processing cover art...', 'info');
+    
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      
+      reader.onloadend = async function() {
+        const base64data = reader.result;
+        album.cover_image = base64data.split(',')[1];
+        album.cover_image_format = coverArtFile.type.split('/')[1].toUpperCase();
+        
+        // Add to list
+        await finishManualAdd(album);
+      };
+      
+      reader.onerror = function() {
+        console.error('Error reading cover art');
+        showToast('Error processing cover art', 'error');
+      };
+      
+      reader.readAsDataURL(coverArtFile);
+    } catch (error) {
+      console.error('Error processing cover art:', error);
+      showToast('Error processing cover art', 'error');
+    }
+  } else {
+    // No cover art, add directly
+    await finishManualAdd(album);
+  }
+}
+
+async function finishManualAdd(album) {
+  try {
+    // Add to current list
+    lists[currentList].push(album);
+    
+    // Save to server
+    await saveList(currentList, lists[currentList]);
+    
+    // Refresh the list view
+    selectList(currentList);
+    
+    // Close modal
+    closeAddAlbumModal();
+    
+    showToast(`Added "${album.album}" by ${album.artist} to the list`);
+  } catch (error) {
+    console.error('Error adding manual album:', error);
+    showToast('Error adding album to list', 'error');
+    
+    // Remove from list on error
+    lists[currentList].pop();
+  }
 }
 
 function openAddAlbumModal() {
@@ -614,6 +806,9 @@ function openAddAlbumModal() {
   modalElements.artistSearchInput.value = '';
   modalElements.artistSearchInput.focus();
   resetModalState();
+  
+  // Populate country dropdown when modal opens (countries should be loaded by now)
+  populateCountryDropdown();
 }
 
 function closeAddAlbumModal() {
@@ -646,6 +841,16 @@ function resetModalState() {
   modalElements.searchEmpty.classList.remove('hidden');
   modalElements.artistList.innerHTML = '';
   modalElements.albumList.innerHTML = '';
+  
+  // Reset manual entry
+  if (manualEntryElements.manualEntryForm) {
+    manualEntryElements.manualEntryForm.classList.add('hidden');
+    if (manualEntryElements.form) {
+      manualEntryElements.form.reset();
+    }
+    resetCoverPreview();
+  }
+  
   currentArtist = null;
 }
 

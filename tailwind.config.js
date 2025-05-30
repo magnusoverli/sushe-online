@@ -9,6 +9,12 @@ module.exports = {
     "./templates.js"
   ],
   safelist: [
+    'max-w-2xl',
+    'w-24',
+    'h-24',
+    'object-cover',
+    'hidden',
+    'text-red-500',
     'absolute',
     'top-2',
     'right-2',
