@@ -1200,6 +1200,7 @@ const spotifyTemplate = (req) => `
     // Make header component available to JavaScript
     window.headerComponent = ${headerComponent.toString()};
     window.currentUser = ${JSON.stringify(req.user)};
+    window.lastSelectedList = ${JSON.stringify(req.user.lastSelectedList || null)};
 
     // Mobile-specific functions
     function toggleMobileLists() {

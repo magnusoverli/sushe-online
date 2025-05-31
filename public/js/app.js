@@ -1054,14 +1054,29 @@ async function selectList(listName) {
     console.log('Selecting list:', listName);
     currentList = listName;
     
+    // Save the last selected list to the server
+    try {
+      await apiCall('/api/user/last-list', {
+        method: 'POST',
+        body: JSON.stringify({ listName })
+      });
+    } catch (error) {
+      // Don't block list selection if saving preference fails
+      console.warn('Failed to save list preference:', error);
+    }
+    
     // Update the header with current list name
     updateMobileHeader();
     
     // Update the active state in the list navigation
     updateListNav();
     
-    // Rest of the existing selectList code...
-    await loadAlbums();
+    // Update the header title
+    updateHeaderTitle(listName);
+    
+    // Display the albums
+    displayAlbums(lists[listName]);
+    
   } catch (error) {
     console.error('Error selecting list:', error);
     showToast('Error loading list', 'error');
@@ -1778,6 +1793,12 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeCreateList();
       initializeRenameList();
       initializeImportConflictHandling();
+      
+      // Auto-load last selected list if available
+      if (window.lastSelectedList && lists[window.lastSelectedList]) {
+        console.log('Auto-loading last selected list:', window.lastSelectedList);
+        selectList(window.lastSelectedList);
+      }
       
       // Initialize confirmation modal handlers
       const confirmModal = document.getElementById('confirmationModal');

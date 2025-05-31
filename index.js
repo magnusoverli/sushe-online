@@ -248,6 +248,7 @@ app.use((req, res, next) => {
   next();
 });
 
+
 // Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
@@ -407,6 +408,28 @@ app.post('/register', async (req, res) => {
     req.flash('error', 'Registration error. Please try again.');
     res.redirect('/register');
   }
+});
+
+app.post('/api/user/last-list', ensureAuthAPI, (req, res) => {
+  const { listName } = req.body;
+  
+  users.update(
+    { _id: req.user._id },
+    { $set: { lastSelectedList: listName, updatedAt: new Date() } },
+    {},
+    (err) => {
+      if (err) {
+        console.error('Error updating last selected list:', err);
+        return res.status(500).json({ error: 'Error updating last selected list' });
+      }
+      
+      // Update the session user object
+      req.user.lastSelectedList = listName;
+      req.session.save();
+      
+      res.json({ success: true });
+    }
+  );
 });
 
 // Login routes
@@ -1326,6 +1349,22 @@ app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
     
     if (numRemoved === 0) {
       return res.status(404).json({ error: 'List not found' });
+    }
+    
+    // If this was the user's last selected list, clear it
+    if (req.user.lastSelectedList === name) {
+      users.update(
+        { _id: req.user._id },
+        { $unset: { lastSelectedList: true } },
+        {},
+        (updateErr) => {
+          if (updateErr) {
+            console.error('Error clearing last selected list:', updateErr);
+          }
+          req.user.lastSelectedList = null;
+          req.session.save();
+        }
+      );
     }
     
     res.json({ success: true, message: 'List deleted' });
