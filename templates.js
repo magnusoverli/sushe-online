@@ -868,28 +868,6 @@ const spotifyTemplate = (req) => `
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
     @media (max-width: 1023px) {
-      /* Sorting feedback */
-      .album-card {
-        position: relative;
-      }
-      
-      .album-card::before {
-        content: '⋮⋮';
-        position: absolute;
-        left: 4px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #4B5563;
-        font-size: 20px;
-        line-height: 0.5;
-        opacity: 0.5;
-      }
-      
-      /* Adjust card padding to accommodate grip indicator */
-      .album-card > div {
-        margin-left: 20px;
-      }
-      
       /* Sortable states */
       .sortable-ghost {
         opacity: 0.4;
@@ -897,8 +875,31 @@ const spotifyTemplate = (req) => `
       
       .sortable-drag {
         opacity: 0.9 !important;
-        transform: rotate(2deg);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        transform: rotate(1deg) scale(1.02);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+        z-index: 9999;
+      }
+      
+      .sortable-chosen {
+        background-color: rgba(55, 65, 81, 0.5);
+      }
+      
+      /* Ensure drag handle is always accessible */
+      .drag-handle {
+        touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+      }
+      
+      /* Prevent any interference with drag */
+      .album-card {
+        touch-action: pan-y;
+        position: relative;
+      }
+      
+      .album-card.sortable-drag {
+        touch-action: none;
       }
 
       body {

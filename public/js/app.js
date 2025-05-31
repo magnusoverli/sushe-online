@@ -974,43 +974,49 @@ function initializeMobileSorting(container) {
     return;
   }
   
+  // Clean up any existing sortable instance
+  if (container._sortable) {
+    container._sortable.destroy();
+  }
+  
   // Find the container with the album cards
   const sortableContainer = container.querySelector('.mobile-album-list') || container;
   
+  // Create sortable with mobile-optimized settings
   const sortable = Sortable.create(sortableContainer, {
     animation: 150,
-    ghostClass: 'opacity-50',
-    chosenClass: 'bg-gray-800 shadow-2xl',
-    dragClass: 'opacity-90 rotate-2 scale-105',
     handle: '.drag-handle',
-    delay: 100, // Slight delay to distinguish from tap
-    delayOnTouchOnly: true,
-    forceFallback: true, // Better mobile support
+    preventOnFilter: true,
+    forceFallback: true,
+    fallbackClass: 'sortable-drag',
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    delay: 0,
+    delayOnTouchOnly: false,
+    touchStartThreshold: 0,
     
-    // Store the initial index
     onStart: function(evt) {
-      evt.item.dataset.startIndex = evt.oldIndex;
-      // Add visual feedback
-      evt.item.classList.add('z-10');
+      // Store original index
+      evt.item.dataset.originalIndex = evt.oldIndex;
+      document.body.style.overflow = 'hidden'; // Prevent scrolling while dragging
     },
     
-    // Remove visual feedback
     onEnd: function(evt) {
-      evt.item.classList.remove('z-10');
+      document.body.style.overflow = ''; // Restore scrolling
     },
     
-    // Handle the actual reordering
     onUpdate: async function(evt) {
-      const draggedIndex = parseInt(evt.item.dataset.startIndex);
-      const dropIndex = evt.newIndex;
+      const oldIndex = parseInt(evt.item.dataset.originalIndex);
+      const newIndex = evt.newIndex;
       
-      if (draggedIndex === dropIndex) return;
+      if (oldIndex === newIndex) return;
       
       try {
         // Update the data array
         const list = lists[currentList];
-        const [movedItem] = list.splice(draggedIndex, 1);
-        list.splice(dropIndex, 0, movedItem);
+        const [movedItem] = list.splice(oldIndex, 1);
+        list.splice(newIndex, 0, movedItem);
         
         // Save to server
         await saveList(currentList, list);
@@ -1031,7 +1037,7 @@ function initializeMobileSorting(container) {
     }
   });
   
-  // Store sortable instance for cleanup if needed
+  // Store sortable instance
   container._sortable = sortable;
 }
 
@@ -1552,49 +1558,63 @@ function displayAlbums(albums) {
       if (comment === 'Comment') comment = '';
       
       card.innerHTML = `
-        <div class="flex gap-3 max-w-full">
-          <div class="drag-handle absolute left-1 top-0 bottom-0 w-6 flex items-center justify-center text-gray-500">
-            <span class="text-xl leading-3">⋮⋮</span>
-          </div>
-          <div class="flex-shrink-0 ml-6">
-            ${album.cover_image ? `
-              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
-                  alt="${albumName}" 
-                  class="w-20 h-20 rounded object-cover shadow-lg"
-                  loading="lazy">
-            ` : `
-              <div class="w-20 h-20 bg-gray-800 rounded shadow-lg flex items-center justify-center">
-                <i class="fas fa-compact-disc text-2xl text-gray-600"></i>
-              </div>
-            `}
+        <div class="flex items-stretch h-full">
+          <!-- Larger, more accessible drag handle -->
+          <div class="drag-handle flex-shrink-0 w-12 bg-gray-800/50 flex items-center justify-center cursor-move select-none" style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="pointer-events-none">
+              <circle cx="9" cy="5" r="1" fill="currentColor"/>
+              <circle cx="9" cy="12" r="1" fill="currentColor"/>
+              <circle cx="9" cy="19" r="1" fill="currentColor"/>
+              <circle cx="15" cy="5" r="1" fill="currentColor"/>
+              <circle cx="15" cy="12" r="1" fill="currentColor"/>
+              <circle cx="15" cy="19" r="1" fill="currentColor"/>
+            </svg>
           </div>
           
-          <div class="flex-1 min-w-0 overflow-hidden">
-            <div class="flex justify-between items-start gap-2">
+          <!-- Main content -->
+          <div class="flex-1 p-4">
+            <div class="flex gap-3">
+              <div class="flex-shrink-0">
+                ${album.cover_image ? `
+                  <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
+                      alt="${albumName}" 
+                      class="w-20 h-20 rounded object-cover shadow-lg"
+                      loading="lazy">
+                ` : `
+                  <div class="w-20 h-20 bg-gray-800 rounded shadow-lg flex items-center justify-center">
+                    <i class="fas fa-compact-disc text-2xl text-gray-600"></i>
+                  </div>
+                `}
+              </div>
+              
               <div class="flex-1 min-w-0 overflow-hidden">
-                <h3 class="font-semibold text-white text-lg truncate pr-2">${albumName}</h3>
-                <p class="text-sm text-gray-400 truncate">${artist}</p>
-                <p class="text-xs text-gray-500 mt-1 truncate">
-                  ${releaseDate} ${country ? `• ${country}` : ''}
-                </p>
+                <div class="flex justify-between items-start gap-2">
+                  <div class="flex-1 min-w-0 overflow-hidden">
+                    <h3 class="font-semibold text-white text-lg truncate pr-2">${albumName}</h3>
+                    <p class="text-sm text-gray-400 truncate">${artist}</p>
+                    <p class="text-xs text-gray-500 mt-1 truncate">
+                      ${releaseDate} ${country ? `• ${country}` : ''}
+                    </p>
+                  </div>
+                  <button onclick="event.stopPropagation(); showMobileAlbumMenu(${index})" class="flex-shrink-0 p-2 -m-2">
+                    <i class="fas fa-ellipsis-v text-gray-400"></i>
+                  </button>
+                </div>
+                
+                ${genre1 || genre2 ? `
+                  <div class="mt-2 text-xs text-gray-500 truncate">
+                    <i class="fas fa-music mr-1"></i>
+                    ${genre1} ${genre2 ? `/ ${genre2}` : ''}
+                  </div>
+                ` : ''}
+                
+                ${comment ? `
+                  <div class="mt-2 text-xs text-gray-400 italic line-clamp-2">
+                    <i class="fas fa-comment mr-1"></i>${comment}
+                  </div>
+                ` : ''}
               </div>
-              <button onclick="event.stopPropagation(); showMobileAlbumMenu(${index})" class="flex-shrink-0 p-2 -m-2 touch-manipulation">
-                <i class="fas fa-ellipsis-v text-gray-400"></i>
-              </button>
             </div>
-            
-            ${genre1 || genre2 ? `
-              <div class="mt-2 text-xs text-gray-500 truncate">
-                <i class="fas fa-music mr-1"></i>
-                ${genre1} ${genre2 ? `/ ${genre2}` : ''}
-              </div>
-            ` : ''}
-            
-            ${comment ? `
-              <div class="mt-2 text-xs text-gray-400 italic line-clamp-2">
-                <i class="fas fa-comment mr-1"></i>${comment}
-              </div>
-            ` : ''}
           </div>
         </div>
       `;
