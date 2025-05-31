@@ -989,11 +989,76 @@ function initializeMobileSorting(container) {
   // Find the container with the album cards
   const sortableContainer = container.querySelector('.mobile-album-list') || container;
   
-  // Find the scrollable parent (the one with overflow-y-auto)
-  const scrollableParent = sortableContainer.closest('.overflow-y-auto') || 
-                          document.querySelector('#mobileAlbumContainer')?.parentElement;
+  // Find the actual scrollable container
+  let scrollableParent = sortableContainer.closest('.overflow-y-auto');
   
-  // Create sortable with mobile-optimized settings
+  if (!scrollableParent) {
+    const mobileContainer = document.querySelector('#mobileAlbumContainer');
+    if (mobileContainer) {
+      scrollableParent = mobileContainer.parentElement;
+    }
+  }
+  
+  // Get the bottom nav height
+  const getBottomNavHeight = () => {
+    const bottomNav = document.querySelector('nav.fixed.bottom-0');
+    if (bottomNav && !bottomNav.classList.contains('hidden')) {
+      return bottomNav.offsetHeight;
+    }
+    return 0;
+  };
+  
+  // Force render function to ensure content is visible during scroll
+  const forceRenderOnScroll = () => {
+    if (scrollableParent) {
+      const scrollTop = scrollableParent.scrollTop;
+      const scrollHeight = scrollableParent.scrollHeight;
+      
+      // Force the browser to recalculate and render
+      void scrollableParent.offsetHeight;
+      
+      // If we're near the bottom, ensure bottom content is rendered
+      if (scrollTop + scrollableParent.clientHeight >= scrollHeight - 200) {
+        sortableContainer.style.minHeight = sortableContainer.scrollHeight + 'px';
+        requestAnimationFrame(() => {
+          sortableContainer.style.minHeight = '';
+        });
+      }
+    }
+  };
+  
+  // Custom auto-scroll implementation
+  let autoScrollInterval = null;
+  let scrollSpeed = 0;
+  
+  const startAutoScroll = (direction, speed) => {
+    if (autoScrollInterval) return;
+    
+    autoScrollInterval = setInterval(() => {
+      if (scrollableParent) {
+        const currentScroll = scrollableParent.scrollTop;
+        const newScroll = currentScroll + (direction * speed);
+        
+        if (direction > 0) {
+          const maxScroll = scrollableParent.scrollHeight - scrollableParent.clientHeight;
+          scrollableParent.scrollTop = Math.min(newScroll, maxScroll);
+        } else {
+          scrollableParent.scrollTop = Math.max(newScroll, 0);
+        }
+        
+        forceRenderOnScroll();
+      }
+    }, 16);
+  };
+  
+  const stopAutoScroll = () => {
+    if (autoScrollInterval) {
+      clearInterval(autoScrollInterval);
+      autoScrollInterval = null;
+    }
+  };
+  
+  // Create sortable with enhanced settings
   const sortable = Sortable.create(sortableContainer, {
     animation: 150,
     handle: '.drag-handle',
@@ -1007,30 +1072,67 @@ function initializeMobileSorting(container) {
     delayOnTouchOnly: false,
     touchStartThreshold: 0,
     
-    // Auto-scrolling configuration
-    scroll: true, // Enable auto-scrolling
-    scrollSensitivity: 80, // Distance in pixels from edge to start scrolling
-    scrollSpeed: 10, // Scrolling speed multiplier
-    bubbleScroll: true, // Apply scrolling to parent elements
-    
-    // Specify the scrollable element if we found one
-    scrollEl: scrollableParent,
+    // Disable built-in auto-scroll
+    scroll: false,
     
     onStart: function(evt) {
-      // Store original index
       evt.item.dataset.originalIndex = evt.oldIndex;
-      document.body.style.overflow = 'hidden'; // Prevent scrolling while dragging
+      document.body.style.overflow = 'hidden';
       
-      // Add a class to the scrollable parent to enhance scrolling behavior
       if (scrollableParent) {
         scrollableParent.classList.add('sortable-scrolling');
+        
+        // Pre-render all content
+        const cards = sortableContainer.querySelectorAll('.album-card');
+        cards.forEach(card => {
+          void card.offsetHeight;
+        });
       }
     },
     
-    onEnd: function(evt) {
-      document.body.style.overflow = ''; // Restore scrolling
+    onMove: function(evt) {
+      if (!scrollableParent) return;
       
-      // Remove the scrolling class
+      // Get current touch/mouse position
+      const touch = evt.originalEvent.touches ? evt.originalEvent.touches[0] : evt.originalEvent;
+      const clientY = touch.clientY;
+      
+      // Get the ACTUAL visible area (accounting for bottom nav)
+      const containerRect = scrollableParent.getBoundingClientRect();
+      const bottomNavHeight = getBottomNavHeight();
+      
+      // Adjust the effective bottom of the container
+      const effectiveBottom = containerRect.bottom - bottomNavHeight;
+      
+      // Define scroll zones
+      const scrollZoneSize = 60; // Slightly smaller for mobile
+      const topScrollZone = containerRect.top + scrollZoneSize;
+      const bottomScrollZone = effectiveBottom - scrollZoneSize;
+      
+      // Check if we're in a scroll zone based on touch position
+      if (clientY < topScrollZone && clientY > containerRect.top) {
+        // In top scroll zone - scroll up
+        const intensity = (topScrollZone - clientY) / scrollZoneSize;
+        scrollSpeed = Math.max(5, Math.min(20, intensity * 20));
+        startAutoScroll(-1, scrollSpeed);
+      } else if (clientY > bottomScrollZone && clientY < effectiveBottom) {
+        // In bottom scroll zone - scroll down
+        const intensity = (clientY - bottomScrollZone) / scrollZoneSize;
+        scrollSpeed = Math.max(5, Math.min(20, intensity * 20));
+        startAutoScroll(1, scrollSpeed);
+      } else {
+        // Not in scroll zone or beyond bounds
+        stopAutoScroll();
+      }
+      
+      // Force render to ensure content is visible
+      forceRenderOnScroll();
+    },
+    
+    onEnd: function(evt) {
+      stopAutoScroll();
+      document.body.style.overflow = '';
+      
       if (scrollableParent) {
         scrollableParent.classList.remove('sortable-scrolling');
       }
@@ -1043,20 +1145,16 @@ function initializeMobileSorting(container) {
       if (oldIndex === newIndex) return;
       
       try {
-        // Update the data array
         const list = lists[currentList];
         const [movedItem] = list.splice(oldIndex, 1);
         list.splice(newIndex, 0, movedItem);
         
-        // Save to server
         await saveList(currentList, list);
         
-        // Update all cards' data-index attributes AND position numbers
+        // Update position numbers
         const cards = sortableContainer.querySelectorAll('.album-card');
         cards.forEach((card, index) => {
           card.dataset.index = index;
-          
-          // Update the visible position number
           const positionElement = card.querySelector('.w-12.flex.items-center.justify-center');
           if (positionElement) {
             positionElement.textContent = index + 1;
@@ -1067,7 +1165,6 @@ function initializeMobileSorting(container) {
       } catch (error) {
         console.error('Error saving reorder:', error);
         showToast('Error saving changes', 'error');
-        // Reload to restore correct order
         selectList(currentList);
       }
     }

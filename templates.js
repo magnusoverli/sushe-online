@@ -986,6 +986,56 @@ const spotifyTemplate = (req) => `
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
     @media (max-width: 1023px) {
+      /* Debug: Visualize scroll zones (remove in production) */
+      .sortable-scrolling::before,
+      .sortable-scrolling::after {
+        content: '';
+        position: fixed;
+        left: 0;
+        right: 0;
+        height: 60px;
+        pointer-events: none;
+        z-index: 9998;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+      
+      .sortable-scrolling::before {
+        top: 0;
+        background: linear-gradient(to bottom, rgba(220, 38, 38, 0.2), transparent);
+      }
+      
+      .sortable-scrolling::after {
+        bottom: var(--bottom-nav-height, 60px); /* Adjust based on actual nav height */
+        background: linear-gradient(to top, rgba(220, 38, 38, 0.2), transparent);
+      }
+      
+      /* Show zones when dragging */
+      .sortable-drag ~ .sortable-scrolling::before,
+      .sortable-drag ~ .sortable-scrolling::after {
+        opacity: 1;
+      }
+      /* Smooth scroll behavior during sort */
+      .sortable-scrolling {
+        scroll-behavior: auto !important; /* Disable smooth scroll during drag */
+      }
+      
+      /* Ensure all content is rendered */
+      .mobile-album-list {
+        will-change: transform;
+        transform: translateZ(0); /* Force GPU acceleration */
+      }
+      
+      /* Pre-render off-screen content */
+      .album-card {
+        will-change: transform;
+        contain: layout style;
+      }
+      
+      /* Ensure scrollable container has proper height */
+      #mobileAlbumContainer {
+        min-height: 100%;
+      }
 
       .whitespace-nowrap {
         white-space: nowrap;
