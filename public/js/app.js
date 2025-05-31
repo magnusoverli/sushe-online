@@ -1544,7 +1544,7 @@ function displayAlbums(albums) {
       cardWrapper.className = 'album-card-wrapper';
       
       const card = document.createElement('div');
-      card.className = 'album-card bg-gray-900 border-b border-gray-800 p-4 touch-manipulation transition-all cursor-move relative';
+      card.className = 'album-card bg-gray-900 border-b border-gray-800 touch-manipulation transition-all cursor-move relative overflow-hidden';
       card.dataset.index = index;
       
       const albumName = album.album || 'Unknown Album';
@@ -1558,63 +1558,61 @@ function displayAlbums(albums) {
       if (comment === 'Comment') comment = '';
       
       card.innerHTML = `
-        <div class="flex items-stretch h-full">
-          <!-- Larger, more accessible drag handle -->
-          <div class="drag-handle flex-shrink-0 w-12 bg-gray-800/50 flex items-center justify-center cursor-move select-none" style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" class="pointer-events-none">
-              <circle cx="9" cy="5" r="1" fill="currentColor"/>
-              <circle cx="9" cy="12" r="1" fill="currentColor"/>
-              <circle cx="9" cy="19" r="1" fill="currentColor"/>
-              <circle cx="15" cy="5" r="1" fill="currentColor"/>
-              <circle cx="15" cy="12" r="1" fill="currentColor"/>
-              <circle cx="15" cy="19" r="1" fill="currentColor"/>
-            </svg>
+        <div class="flex items-center h-full">
+          <!-- Album cover on the left -->
+          <div class="flex-shrink-0 p-3">
+            ${album.cover_image ? `
+              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
+                  alt="${albumName}" 
+                  class="w-16 h-16 rounded-lg object-cover shadow-md"
+                  loading="lazy">
+            ` : `
+              <div class="w-16 h-16 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
+                <i class="fas fa-compact-disc text-xl text-gray-600"></i>
+              </div>
+            `}
           </div>
           
           <!-- Main content -->
-          <div class="flex-1 p-4">
-            <div class="flex gap-3">
-              <div class="flex-shrink-0">
-                ${album.cover_image ? `
-                  <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
-                      alt="${albumName}" 
-                      class="w-20 h-20 rounded object-cover shadow-lg"
-                      loading="lazy">
-                ` : `
-                  <div class="w-20 h-20 bg-gray-800 rounded shadow-lg flex items-center justify-center">
-                    <i class="fas fa-compact-disc text-2xl text-gray-600"></i>
-                  </div>
-                `}
-              </div>
-              
-              <div class="flex-1 min-w-0 overflow-hidden">
-                <div class="flex justify-between items-start gap-2">
-                  <div class="flex-1 min-w-0 overflow-hidden">
-                    <h3 class="font-semibold text-white text-lg truncate pr-2">${albumName}</h3>
-                    <p class="text-sm text-gray-400 truncate">${artist}</p>
-                    <p class="text-xs text-gray-500 mt-1 truncate">
-                      ${releaseDate} ${country ? `• ${country}` : ''}
-                    </p>
-                  </div>
-                  <button onclick="event.stopPropagation(); showMobileAlbumMenu(${index})" class="flex-shrink-0 p-2 -m-2">
-                    <i class="fas fa-ellipsis-v text-gray-400"></i>
-                  </button>
+          <div class="flex-1 min-w-0 py-3 pr-3">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex-1 min-w-0">
+                <h3 class="font-semibold text-white text-base leading-tight truncate">${albumName}</h3>
+                <p class="text-sm text-gray-400 truncate mt-0.5">${artist}</p>
+                
+                <!-- Metadata row -->
+                <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
+                  ${releaseDate ? `<span>${releaseDate}</span>` : ''}
+                  ${releaseDate && country ? `<span>•</span>` : ''}
+                  ${country ? `<span>${country}</span>` : ''}
+                  ${(releaseDate || country) && (genre1 || genre2) ? `<span>•</span>` : ''}
+                  ${genre1 || genre2 ? `<span class="truncate">${genre1}${genre2 ? ` / ${genre2}` : ''}</span>` : ''}
                 </div>
                 
-                ${genre1 || genre2 ? `
-                  <div class="mt-2 text-xs text-gray-500 truncate">
-                    <i class="fas fa-music mr-1"></i>
-                    ${genre1} ${genre2 ? `/ ${genre2}` : ''}
-                  </div>
-                ` : ''}
-                
                 ${comment ? `
-                  <div class="mt-2 text-xs text-gray-400 italic line-clamp-2">
-                    <i class="fas fa-comment mr-1"></i>${comment}
-                  </div>
+                  <p class="text-xs text-gray-400 italic mt-1 line-clamp-1">${comment}</p>
                 ` : ''}
               </div>
+              
+              <!-- Actions on the right -->
+              <button onclick="event.stopPropagation(); showMobileAlbumMenu(${index})" 
+                      class="flex-shrink-0 p-2 -m-2 text-gray-400 active:text-gray-200">
+                <i class="fas fa-ellipsis-v"></i>
+              </button>
             </div>
+          </div>
+          
+          <!-- Subtle drag handle on far right edge -->
+          <div class="drag-handle flex-shrink-0 w-8 h-full flex items-center justify-center cursor-move select-none text-gray-600 border-l border-gray-800/50" 
+              style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+            <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
+              <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
+              <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+              <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
+              <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
+              <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+              <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
+            </svg>
           </div>
         </div>
       `;

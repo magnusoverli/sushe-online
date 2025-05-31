@@ -872,7 +872,38 @@ const spotifyTemplate = (req) => `
       .sortable-ghost {
         opacity: 0.4;
       }
+
+      .album-card:active {
+        background-color: rgba(31, 41, 55, 0.5);
+      }
       
+      /* Make drag handle more subtle until needed */
+      .drag-handle {
+        transition: background-color 0.2s;
+      }
+      
+      .album-card:active .drag-handle,
+      .sortable-chosen .drag-handle {
+        background-color: rgba(220, 38, 38, 0.1);
+      }
+      
+      .drag-handle svg {
+        transition: opacity 0.2s;
+      }
+      
+      .album-card:active .drag-handle svg,
+      .sortable-chosen .drag-handle svg {
+        opacity: 1;
+      }
+      
+      /* Improve line clamping */
+      .line-clamp-1 {
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
       .sortable-drag {
         opacity: 0.9 !important;
         transform: rotate(1deg) scale(1.02);
