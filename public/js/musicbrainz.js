@@ -823,24 +823,6 @@ async function finishManualAdd(album) {
   }
 }
 
-function openAddAlbumModal() {
-  if (!currentList) {
-    showToast('Please select a list first', 'error');
-    return;
-  }
-  
-  // Optimization 3: Warm up connections when modal opens
-  warmupConnections();
-  
-  modal.classList.remove('hidden');
-  modalElements.artistSearchInput.value = '';
-  modalElements.artistSearchInput.focus();
-  resetModalState();
-  
-  // Populate country dropdown when modal opens (countries should be loaded by now)
-  populateCountryDropdown();
-}
-
 function closeAddAlbumModal() {
   if (currentLoadingController) {
     currentLoadingController.abort();
