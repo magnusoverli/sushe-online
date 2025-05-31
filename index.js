@@ -151,7 +151,8 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
     
     if (!user) {
       console.log('Login failed: Unknown email -', email);
-      return done(null, false, { message: 'Unknown email' });
+      // Don't reveal that the email doesn't exist
+      return done(null, false, { message: 'Invalid email or password' });
     }
     
     console.log('User found:', { email: user.email, hasHash: !!user.hash });
@@ -166,7 +167,8 @@ passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, don
       
       if (!isMatch) {
         console.log('Login failed: Bad password for', email);
-        return done(null, false, { message: 'Bad password' });
+        // Same message as unknown email for security
+        return done(null, false, { message: 'Invalid email or password' });
       }
       
       console.log('Login successful for:', email);
