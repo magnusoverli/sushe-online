@@ -740,13 +740,15 @@ function getTimeAgo(date) {
     const days = Math.floor(seconds / 86400);
     return days === 1 ? '1 day ago' : `${days} days ago`;
   }
-  if (seconds < 31536000) {
-    const months = Math.floor(seconds / 2592000);
-    return months === 1 ? '1 month ago' : `${months} months ago`;
-  }
   
-  const years = Math.floor(seconds / 31536000);
-  return years === 1 ? '1 year ago' : `${years} years ago`;
+  // For "recent activity", cap at months - anything older isn't really "recent"
+  const months = Math.floor(seconds / 2592000);
+  if (months === 0) return '< 1 month ago';
+  if (months === 1) return '1 month ago';
+  if (months < 12) return `${months} months ago`;
+  
+  // For anything over a year, just show "over a year ago" for recent activity
+  return 'over a year ago';
 }
 
 // Change password endpoint
