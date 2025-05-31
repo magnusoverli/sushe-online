@@ -19,6 +19,8 @@ const POSITION_POINTS = {
     31: 10, 32: 9, 33: 8, 34: 7, 35: 6, 36: 5, 37: 4, 38: 3, 39: 2, 40: 1
 };
 
+window.selectList = selectList;
+
 // Hide context menu when clicking elsewhere
 document.addEventListener('click', () => {
   const contextMenu = document.getElementById('contextMenu');
@@ -920,69 +922,112 @@ function openRenameModal(listName) {
 // Update sidebar navigation
 function updateListNav() {
   const nav = document.getElementById('listNav');
-  nav.innerHTML = '';
+  const mobileNav = document.getElementById('mobileListNav');
   
-  Object.keys(lists).forEach(listName => {
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <button class="w-full text-left px-3 py-2 rounded text-sm hover:bg-gray-800 transition duration-200 ${currentList === listName ? 'bg-gray-800 text-red-500' : 'text-gray-300'}">
-        ${listName}
-      </button>
-    `;
+  const createListItems = (container, isMobile = false) => {
+    container.innerHTML = '';
     
-    const button = li.querySelector('button');
-    
-    // Left click - select list
-    button.onclick = () => selectList(listName);
-    
-    // Right click - show context menu
-    button.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    Object.keys(lists).forEach(listName => {
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <button class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 ${currentList === listName ? 'bg-gray-800 text-red-500' : 'text-gray-300'}">
+          ${listName}
+        </button>
+      `;
       
-      currentContextList = listName;
+      const button = li.querySelector('button');
       
-      const contextMenu = document.getElementById('contextMenu');
-      if (!contextMenu) return;
+      if (!isMobile) {
+        // Desktop: keep right-click
+        button.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          // ... existing context menu code ...
+        });
+      } else {
+        // Mobile: long press
+        let pressTimer;
+        button.addEventListener('touchstart', (e) => {
+          pressTimer = setTimeout(() => {
+            showMobileListMenu(listName);
+          }, 500);
+        });
+        button.addEventListener('touchend', () => clearTimeout(pressTimer));
+      }
       
-      // Position the context menu at cursor
-      contextMenu.style.left = `${e.clientX}px`;
-      contextMenu.style.top = `${e.clientY}px`;
-      contextMenu.classList.remove('hidden');
+      button.onclick = () => {
+        selectList(listName);
+        if (isMobile) toggleMobileLists();
+      };
       
-      // Adjust position if menu goes off-screen
-      setTimeout(() => {
-        const rect = contextMenu.getBoundingClientRect();
-        if (rect.right > window.innerWidth) {
-          contextMenu.style.left = `${e.clientX - rect.width}px`;
-        }
-        if (rect.bottom > window.innerHeight) {
-          contextMenu.style.top = `${e.clientY - rect.height}px`;
-        }
-      }, 0);
+      container.appendChild(li);
     });
-    
-    nav.appendChild(li);
-  });
+  };
+  
+  createListItems(nav);
+  if (mobileNav) createListItems(mobileNav, true);
 }
 
 // Select and display a list
 function selectList(listName) {
+  console.log('selectList called with:', listName);
   currentList = listName;
-  const list = lists[listName];
   
-  // Update the header with the list name
-  const headerSeparator = document.getElementById('headerSeparator');
-  const headerListName = document.getElementById('headerListName');
-  
-  if (headerSeparator && headerListName) {
-    headerSeparator.classList.remove('hidden');
-    headerListName.classList.remove('hidden');
-    headerListName.textContent = listName;
+  if (lists[listName]) {
+    console.log('List found, albums count:', lists[listName].length);
+    displayAlbums(lists[listName]);
+  } else {
+    console.log('List not found!');
   }
   
-  displayAlbums(list);
   updateListNav();
+  updateHeaderTitle(listName);
+}
+
+
+function showMobileAlbumMenu(index) {
+  const album = lists[currentList][index];
+  
+  const actionSheet = document.createElement('div');
+  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+  actionSheet.innerHTML = `
+    <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl">
+      <div class="p-4">
+        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+        <h3 class="font-semibold text-white mb-1">${album.album}</h3>
+        <p class="text-sm text-gray-400 mb-4">${album.artist}</p>
+        
+        <button onclick="editMobileAlbum(${index}); this.closest('.fixed').remove();" 
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
+        </button>
+        
+        <button onclick="if(confirm('Remove this album?')) { removeAlbum(${index}); this.closest('.fixed').remove(); }" 
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+          <i class="fas fa-trash mr-3"></i>Remove from List
+        </button>
+        
+        <button onclick="this.closest('.fixed').remove()" 
+                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(actionSheet);
+}
+
+// Mobile edit form
+function editMobileAlbum(index) {
+  // Show a mobile-friendly edit form
+  // This replaces the inline editing on desktop
+}
+
+function removeAlbum(index) {
+  lists[currentList].splice(index, 1);
+  saveList(currentList, lists[currentList]);
+  selectList(currentList);
+  showToast('Album removed');
 }
 
 // Make genre editable with datalist
@@ -1175,201 +1220,309 @@ function makeCommentEditable(commentDiv, albumIndex) {
 
 // Display albums function with editable genres and comments
 function displayAlbums(albums) {
+  console.log('displayAlbums called, mobile:', window.innerWidth < 1024, 'albums:', albums?.length);
   const container = document.getElementById('albumContainer');
+  console.log('Container found:', !!container);
+  const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
+  
   container.innerHTML = '';
   
   if (!albums || albums.length === 0) {
     container.innerHTML = `
-      <div class="text-center text-gray-500 mt-20">
+      <div class="text-center text-gray-500 mt-20 px-4">
         <p class="text-xl mb-2">This list is empty</p>
-        <p class="text-sm">Click the + button to add albums from MusicBrainz</p>
+        <p class="text-sm">Click the + button to add albums${isMobile ? ' from the bottom menu' : ''}</p>
       </div>
     `;
     return;
   }
 
-  const table = document.createElement('div');
-  table.className = 'w-full relative';
-  
-  // Header - now using album-grid class with button column
-  const header = document.createElement('div');
-  header.className = 'album-grid gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
-  header.style.alignItems = 'center'; // Add this inline style
-  header.innerHTML = `
-    <div class="text-center">#</div>
-    <div></div>
-    <div>Album</div>
-    <div>Artist</div>
-    <div>Country</div>
-    <div>Genre 1</div>
-    <div>Genre 2</div>
-    <div>Comment</div>
-    <div class="flex justify-center">
-      <button id="addAlbumBtn" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-      </button>
-    </div>
-  `;
-  table.appendChild(header);
-  
-  const rowsContainer = document.createElement('div');
-  rowsContainer.className = 'album-rows-container relative';
-  
-  albums.forEach((album, index) => {
-    const row = document.createElement('div');
-    row.className = 'album-row album-grid gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
-    row.dataset.index = index;
+  if (!isMobile) {
+    // Desktop view - your existing code
+    const table = document.createElement('div');
+    table.className = 'w-full relative';
     
-    const position = index + 1;
-    const albumName = album.album || 'Unknown Album';
-    const artist = album.artist || 'Unknown Artist';
-    const country = album.country || '';
-    const genre1 = album.genre_1 || album.genre || '';
-    
-    // Handle genre_2: show empty if it's missing, "Genre 2", or "-"
-    let genre2 = album.genre_2 || '';
-    if (genre2 === 'Genre 2' || genre2 === '-') {
-      genre2 = '';
-    }
-    
-    // Handle comment: show empty if it's "Comment" or missing
-    let comment = album.comments || album.comment || '';
-    if (comment === 'Comment') {
-      comment = '';
-    }
-    
-    const releaseDate = formatReleaseDate(album.release_date || '');
-    const coverImage = album.cover_image || '';
-    const imageFormat = album.cover_image_format || 'PNG';
-    
-    row.innerHTML = `
-      <div class="flex items-center justify-center text-gray-400 font-medium">${position}</div>
-      <div class="flex items-center">
-        <div class="album-cover-container">
-          ${coverImage ? `
-            <img src="data:image/${imageFormat};base64,${coverImage}" 
-                alt="${albumName}" 
-                class="album-cover rounded shadow-lg"
-                loading="lazy"
-                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
-            >
-          ` : `
-            <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-              </svg>
-            </div>
-          `}
-        </div>
+    // Header - now using album-grid class with button column
+    const header = document.createElement('div');
+    header.className = 'album-grid gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+    header.style.alignItems = 'center';
+    header.innerHTML = `
+      <div class="text-center">#</div>
+      <div></div>
+      <div>Album</div>
+      <div>Artist</div>
+      <div>Country</div>
+      <div>Genre 1</div>
+      <div>Genre 2</div>
+      <div>Comment</div>
+      <div class="flex justify-center">
+        <button id="addAlbumBtn" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
       </div>
-      <div class="flex flex-col justify-center min-w-0">
-        <div class="font-medium text-white truncate">${albumName}</div>
-        <div class="text-xs text-gray-400">${releaseDate}</div>
-      </div>
-      <div class="flex items-center text-gray-300 truncate">${artist}</div>
-      <div class="flex items-center country-cell">
-        <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${country}</span>
-      </div>
-      <div class="flex items-center genre-cell genre-1-cell">
-        <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${genre1}</span>
-      </div>
-      <div class="flex items-center genre-cell genre-2-cell">
-        <span class="text-sm text-gray-400 truncate cursor-pointer hover:text-gray-100">${genre2}</span>
-      </div>
-      <div class="flex items-center comment-cell">
-        <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
-      </div>
-      <div></div> <!-- Empty cell for button column -->
     `;
+    table.appendChild(header);
     
-    // Add click handler to country cell
-    const countryCell = row.querySelector('.country-cell');
-    countryCell.onclick = () => makeCountryEditable(countryCell, index);
+    const rowsContainer = document.createElement('div');
+    rowsContainer.className = 'album-rows-container relative';
     
-    // Add click handlers to genre cells
-    const genre1Cell = row.querySelector('.genre-1-cell');
-    genre1Cell.onclick = () => makeGenreEditable(genre1Cell, index, 'genre_1');
+    albums.forEach((album, index) => {
+      const row = document.createElement('div');
+      row.className = 'album-row album-grid gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
+      row.dataset.index = index;
+      
+      const position = index + 1;
+      const albumName = album.album || 'Unknown Album';
+      const artist = album.artist || 'Unknown Artist';
+      const country = album.country || '';
+      const genre1 = album.genre_1 || album.genre || '';
+      
+      let genre2 = album.genre_2 || '';
+      if (genre2 === 'Genre 2' || genre2 === '-') {
+        genre2 = '';
+      }
+      
+      let comment = album.comments || album.comment || '';
+      if (comment === 'Comment') {
+        comment = '';
+      }
+      
+      const releaseDate = formatReleaseDate(album.release_date || '');
+      const coverImage = album.cover_image || '';
+      const imageFormat = album.cover_image_format || 'PNG';
+      
+      row.innerHTML = `
+        <div class="flex items-center justify-center text-gray-400 font-medium">${position}</div>
+        <div class="flex items-center">
+          <div class="album-cover-container">
+            ${coverImage ? `
+              <img src="data:image/${imageFormat};base64,${coverImage}" 
+                  alt="${albumName}" 
+                  class="album-cover rounded shadow-lg"
+                  loading="lazy"
+                  onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+              >
+            ` : `
+              <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                  <polyline points="21 15 16 10 5 21"></polyline>
+                </svg>
+              </div>
+            `}
+          </div>
+        </div>
+        <div class="flex flex-col justify-center min-w-0">
+          <div class="font-medium text-white truncate">${albumName}</div>
+          <div class="text-xs text-gray-400">${releaseDate}</div>
+        </div>
+        <div class="flex items-center text-gray-300 truncate">${artist}</div>
+        <div class="flex items-center country-cell">
+          <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${country}</span>
+        </div>
+        <div class="flex items-center genre-cell genre-1-cell">
+          <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${genre1}</span>
+        </div>
+        <div class="flex items-center genre-cell genre-2-cell">
+          <span class="text-sm text-gray-400 truncate cursor-pointer hover:text-gray-100">${genre2}</span>
+        </div>
+        <div class="flex items-center comment-cell">
+          <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
+        </div>
+        <div></div> <!-- Empty cell for button column -->
+      `;
+      
+      // Add click handler to country cell
+      const countryCell = row.querySelector('.country-cell');
+      countryCell.onclick = () => makeCountryEditable(countryCell, index);
+      
+      // Add click handlers to genre cells
+      const genre1Cell = row.querySelector('.genre-1-cell');
+      genre1Cell.onclick = () => makeGenreEditable(genre1Cell, index, 'genre_1');
+      
+      const genre2Cell = row.querySelector('.genre-2-cell');
+      genre2Cell.onclick = () => makeGenreEditable(genre2Cell, index, 'genre_2');
+      
+      // Add click handler to comment cell
+      const commentCell = row.querySelector('.comment-cell');
+      commentCell.onclick = () => makeCommentEditable(commentCell, index);
+      
+      // Make row draggable using DragDropManager
+      if (window.DragDropManager) {
+        window.DragDropManager.makeRowDraggable(row);
+      }
+      
+      // Right-click handler for album rows
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        currentContextAlbum = index;
+        
+        const contextMenu = document.getElementById('albumContextMenu');
+        if (!contextMenu) return;
+        
+        contextMenu.style.left = `${e.clientX}px`;
+        contextMenu.style.top = `${e.clientY}px`;
+        contextMenu.classList.remove('hidden');
+        
+        setTimeout(() => {
+          const rect = contextMenu.getBoundingClientRect();
+          if (rect.right > window.innerWidth) {
+            contextMenu.style.left = `${e.clientX - rect.width}px`;
+          }
+          if (rect.bottom > window.innerHeight) {
+            contextMenu.style.top = `${e.clientY - rect.height}px`;
+          }
+        }, 0);
+      });
+      
+      rowsContainer.appendChild(row);
+    });
     
-    const genre2Cell = row.querySelector('.genre-2-cell');
-    genre2Cell.onclick = () => makeGenreEditable(genre2Cell, index, 'genre_2');
+    table.appendChild(rowsContainer);
+    container.appendChild(table);
     
-    // Add click handler to comment cell
-    const commentCell = row.querySelector('.comment-cell');
-    commentCell.onclick = () => makeCommentEditable(commentCell, index);
-    
-    // Make row draggable using DragDropManager
-    if (window.DragDropManager) {
-      window.DragDropManager.makeRowDraggable(row);
+    // Re-initialize the add album button
+    const addAlbumBtn = document.getElementById('addAlbumBtn');
+    if (addAlbumBtn && window.openAddAlbumModal) {
+      addAlbumBtn.onclick = window.openAddAlbumModal;
     }
     
-    // Right-click handler for album rows
-    row.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
+    // Initialize drag and drop
+    if (window.DragDropManager) {
+      window.DragDropManager.initialize();
       
-      currentContextAlbum = index;
-      
-      const contextMenu = document.getElementById('albumContextMenu');
-      if (!contextMenu) return;
-      
-      // Position the context menu at cursor
-      contextMenu.style.left = `${e.clientX}px`;
-      contextMenu.style.top = `${e.clientY}px`;
-      contextMenu.classList.remove('hidden');
-      
-      // Adjust position if menu goes off-screen
-      setTimeout(() => {
-        const rect = contextMenu.getBoundingClientRect();
-        if (rect.right > window.innerWidth) {
-          contextMenu.style.left = `${e.clientX - rect.width}px`;
+      window.DragDropManager.setupDropHandler(async (draggedIndex, dropIndex, needsRebuild) => {
+        if (needsRebuild) {
+          displayAlbums(lists[currentList]);
+          return;
         }
-        if (rect.bottom > window.innerHeight) {
-          contextMenu.style.top = `${e.clientY - rect.height}px`;
-        }
-      }, 0);
-    });
-    
-    rowsContainer.appendChild(row);
-  });
-  
-  table.appendChild(rowsContainer);
-  container.appendChild(table);
-  
-  // Re-initialize the add album button since we just created it
-  const addAlbumBtn = document.getElementById('addAlbumBtn');
-  if (addAlbumBtn && window.openAddAlbumModal) {
-    addAlbumBtn.onclick = window.openAddAlbumModal;
-  }
-  
-  // Initialize drag and drop
-  if (window.DragDropManager) {
-    window.DragDropManager.initialize();
-    
-    // Set up the drop handler callback
-    window.DragDropManager.setupDropHandler(async (draggedIndex, dropIndex, needsRebuild) => {
-      if (needsRebuild) {
-        // Rebuild the display on error
-        displayAlbums(lists[currentList]);
-        return;
-      }
-      
-      if (draggedIndex !== null && dropIndex !== null) {
-        // Update the data to match the new DOM order
-        const list = lists[currentList];
-        const [movedItem] = list.splice(draggedIndex, 1);
-        list.splice(dropIndex, 0, movedItem);
         
-        // Save to server
-        await saveList(currentList, list);
-      }
+        if (draggedIndex !== null && dropIndex !== null) {
+          const list = lists[currentList];
+          const [movedItem] = list.splice(draggedIndex, 1);
+          list.splice(dropIndex, 0, movedItem);
+          
+          await saveList(currentList, list);
+        }
+      });
+    }
+  } else {
+    // Mobile view - card-based layout
+    const mobileContainer = document.createElement('div');
+    mobileContainer.className = 'pb-20'; // Space for bottom nav
+    
+    albums.forEach((album, index) => {
+      const card = document.createElement('div');
+      card.className = 'bg-gray-900 border-b border-gray-800 p-4 touch-manipulation';
+      
+      const albumName = album.album || 'Unknown Album';
+      const artist = album.artist || 'Unknown Artist';
+      const releaseDate = formatReleaseDate(album.release_date || '');
+      const country = album.country || '';
+      const genre1 = album.genre_1 || album.genre || '';
+      let genre2 = album.genre_2 || '';
+      if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
+      let comment = album.comments || album.comment || '';
+      if (comment === 'Comment') comment = '';
+      
+      card.innerHTML = `
+        <div class="flex gap-3">
+          <div class="flex-shrink-0">
+            ${album.cover_image ? `
+              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
+                   alt="${albumName}" 
+                   class="w-20 h-20 rounded object-cover shadow-lg"
+                   loading="lazy">
+            ` : `
+              <div class="w-20 h-20 bg-gray-800 rounded shadow-lg flex items-center justify-center">
+                <i class="fas fa-compact-disc text-2xl text-gray-600"></i>
+              </div>
+            `}
+          </div>
+          
+          <div class="flex-1 min-w-0">
+            <div class="flex justify-between items-start">
+              <div class="flex-1 mr-2">
+                <h3 class="font-semibold text-white text-lg truncate">${albumName}</h3>
+                <p class="text-sm text-gray-400 truncate">${artist}</p>
+                <p class="text-xs text-gray-500 mt-1">
+                  ${releaseDate} ${country ? `• ${country}` : ''}
+                </p>
+              </div>
+              <button onclick="showMobileAlbumMenu(${index})" class="p-2 -m-2 touch-manipulation">
+                <i class="fas fa-ellipsis-v text-gray-400"></i>
+              </button>
+            </div>
+            
+            ${genre1 || genre2 ? `
+              <div class="mt-2 text-xs text-gray-500">
+                <i class="fas fa-music mr-1"></i>
+                ${genre1} ${genre2 ? `/ ${genre2}` : ''}
+              </div>
+            ` : ''}
+            
+            ${comment ? `
+              <div class="mt-2 text-xs text-gray-400 italic line-clamp-2">
+                <i class="fas fa-comment mr-1"></i>${comment}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+      
+      mobileContainer.appendChild(card);
     });
+    
+    container.appendChild(mobileContainer);
   }
 }
+
+// Add this function to handle mobile album actions
+window.showMobileAlbumMenu = function(index) {
+  const album = lists[currentList][index];
+  
+  const actionSheet = document.createElement('div');
+  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+  actionSheet.innerHTML = `
+    <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+      <div class="p-4">
+        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+        <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
+        <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
+        
+        <button onclick="showMobileEditForm(${index}); this.closest('.fixed').remove();" 
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
+        </button>
+        
+        <button onclick="this.closest('.fixed').remove(); setTimeout(() => { currentContextAlbum = ${index}; document.getElementById('removeAlbumOption').click(); }, 100);" 
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+          <i class="fas fa-trash mr-3"></i>Remove from List
+        </button>
+        
+        <button onclick="this.closest('.fixed').remove()" 
+                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(actionSheet);
+};
+
+// Mobile edit form (basic implementation)
+window.showMobileEditForm = function(index) {
+  // This would show a mobile-friendly edit form
+  // For now, we'll just show a toast
+  showToast('Edit functionality coming soon for mobile', 'info');
+};
 
 // File import
 document.getElementById('importBtn').onclick = () => {

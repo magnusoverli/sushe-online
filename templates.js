@@ -857,20 +857,106 @@ const spotifyTemplate = (req) => `
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <title>SuShe Online</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link href="/styles/output.css" rel="stylesheet">
   <link href="/styles/spotify-app.css" rel="stylesheet">
+  <style>
+    @media (max-width: 1023px) {
+      body {
+        overscroll-behavior: contain;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      
+      /* Ensure modals work on mobile */
+      .modal-content {
+        max-height: calc(100vh - 2rem);
+        margin: 1rem;
+      }
+    }
+  </style>
 </head>
 <body class="bg-black text-gray-200">
   <div class="flex flex-col h-screen">
     ${headerComponent(req.user, 'home')}
     
-    <!-- Main Content Area (sidebar + album view) -->
-    <div class="flex flex-1 overflow-hidden">
+    <!-- Desktop Layout (hidden on mobile) -->
+    <div class="hidden lg:flex flex-1 overflow-hidden">
       ${sidebarComponent(req)}
       ${mainContentComponent()}
+    </div>
+    
+    <!-- Mobile Layout (hidden on desktop) -->
+    <div class="lg:hidden flex-1 overflow-hidden">
+      <div class="flex-1 overflow-y-auto pb-16">
+        <div id="dropZone" class="drop-zone min-h-full">
+          <div id="albumContainer">
+            <!-- Albums will be displayed here -->
+            <div class="text-center text-gray-500 mt-20 px-4">
+              <p class="text-xl mb-2">No list selected</p>
+              <p class="text-sm">Select a list from the menu</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Mobile Bottom Navigation -->
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 z-40 safe-area-bottom">
+      <div class="flex justify-around items-center">
+        <button onclick="toggleMobileLists()" class="flex-1 py-3 px-3 flex flex-col items-center">
+          <i class="fas fa-list text-lg"></i>
+          <span class="text-xs mt-1">Lists</span>
+        </button>
+        <button onclick="document.getElementById('fileInput').click()" class="flex-1 py-3 px-3 flex flex-col items-center">
+          <i class="fas fa-file-import text-lg"></i>
+          <span class="text-xs mt-1">Import</span>
+        </button>
+        <button id="mobileAddAlbumBtn" class="flex-1 py-3 px-3 flex flex-col items-center">
+          <i class="fas fa-plus-circle text-lg text-red-600"></i>
+          <span class="text-xs mt-1">Add</span>
+        </button>
+      </div>
+    </nav>
+    
+    <!-- Mobile Lists Drawer -->
+    <div id="mobileListsDrawer" class="lg:hidden fixed inset-0 z-50 hidden">
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black bg-opacity-50" onclick="toggleMobileLists()"></div>
+      
+      <!-- Drawer -->
+      <div class="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-900 border-r border-gray-800 overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="p-4 border-b border-gray-800">
+          <div class="flex justify-between items-center">
+            <h2 class="text-xl font-bold text-white">Your Lists</h2>
+            <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 hover:text-white">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+        </div>
+        
+        <!-- Lists -->
+        <div class="flex-1 overflow-y-auto p-4">
+          <ul id="mobileListNav" class="space-y-1">
+            <!-- Lists will be populated here -->
+          </ul>
+        </div>
+        
+        <!-- Actions -->
+        <div class="p-4 border-t border-gray-800 space-y-2 safe-area-bottom">
+          <button id="mobileCreateListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
+            <i class="fas fa-plus mr-2"></i>Create List
+          </button>
+          <button id="mobileClearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
+            <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
+          </button>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -887,6 +973,157 @@ const spotifyTemplate = (req) => `
   <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>
   <script src="/js/app.js"></script>
+  
+  <script>
+    // Mobile-specific functions
+    function toggleMobileLists() {
+      const drawer = document.getElementById('mobileListsDrawer');
+      drawer.classList.toggle('hidden');
+    }
+    
+    // Initialize mobile buttons
+    document.addEventListener('DOMContentLoaded', () => {
+      // Mobile add album button
+      const mobileAddBtn = document.getElementById('mobileAddAlbumBtn');
+      if (mobileAddBtn && window.openAddAlbumModal) {
+        mobileAddBtn.onclick = window.openAddAlbumModal;
+      }
+      
+      // Mobile create list button
+      const mobileCreateBtn = document.getElementById('mobileCreateListBtn');
+      if (mobileCreateBtn) {
+        mobileCreateBtn.onclick = () => {
+          toggleMobileLists();
+          document.getElementById('createListBtn').click();
+        };
+      }
+      
+      // Mobile clear button
+      const mobileClearBtn = document.getElementById('mobileClearBtn');
+      if (mobileClearBtn) {
+        mobileClearBtn.onclick = () => {
+          toggleMobileLists();
+          document.getElementById('clearBtn').click();
+        };
+      }
+      
+      // Update list nav to include mobile
+      const originalUpdateListNav = window.updateListNav;
+      window.updateListNav = function() {
+        originalUpdateListNav();
+        updateMobileListNav();
+      };
+      
+      // Initialize mobile nav
+      updateMobileListNav();
+    });
+    
+    function updateMobileListNav() {
+      const mobileNav = document.getElementById('mobileListNav');
+      if (!mobileNav) return;
+      
+      mobileNav.innerHTML = '';
+      
+      Object.keys(lists).forEach(listName => {
+        const li = document.createElement('li');
+        const isActive = currentList === listName;
+        
+        const listButton = document.createElement('button');
+        listButton.className = 'flex-1 text-left px-3 py-3 rounded text-sm hover:bg-gray-800 transition duration-200 ' + 
+                              (isActive ? 'bg-gray-800 text-red-500' : 'text-gray-300');
+        listButton.textContent = listName;
+        listButton.onclick = () => {
+          selectList(listName);
+          toggleMobileLists();
+        };
+        
+        const menuButton = document.createElement('button');
+        menuButton.className = 'p-3 text-gray-400 hover:text-white';
+        menuButton.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
+        menuButton.onclick = (e) => {
+          e.stopPropagation();
+          showMobileListMenu(listName);
+        };
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center';
+        wrapper.appendChild(listButton);
+        wrapper.appendChild(menuButton);
+        
+        li.appendChild(wrapper);
+        mobileNav.appendChild(li);
+      });
+    }
+    
+    // Mobile list menu (action sheet)
+    function showMobileListMenu(listName) {
+      const actionSheet = document.createElement('div');
+      actionSheet.className = 'fixed inset-0 z-[60] lg:hidden';
+      actionSheet.innerHTML = \`
+        <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
+        <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+          <div class="p-4">
+            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+            <h3 class="font-semibold text-white mb-4">\${listName}</h3>
+            
+            <button onclick="downloadList('\${listName}'); this.closest('.fixed').remove();" 
+                    class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+              <i class="fas fa-download mr-3 text-gray-400"></i>Download List
+            </button>
+            
+            <button onclick="openRenameModal('\${listName}'); this.closest('.fixed').remove(); toggleMobileLists();" 
+                    class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+              <i class="fas fa-edit mr-3 text-gray-400"></i>Rename List
+            </button>
+            
+            <button onclick="if(confirm('Delete this list?')) { deleteList('\${listName}'); this.closest('.fixed').remove(); toggleMobileLists(); }" 
+                    class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+              <i class="fas fa-trash mr-3"></i>Delete List
+            </button>
+            
+            <button onclick="this.closest('.fixed').remove()" 
+                    class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+              Cancel
+            </button>
+          </div>
+        </div>
+      \`;
+      document.body.appendChild(actionSheet);
+    }
+    
+    // Helper functions for mobile actions
+    function downloadList(listName) {
+      // Trigger the existing download functionality
+      window.currentContextList = listName;
+      document.getElementById('downloadListOption').click();
+    }
+    
+    async function deleteList(listName) {
+      try {
+        await apiCall(\`/api/lists/\${encodeURIComponent(listName)}\`, {
+          method: 'DELETE'
+        });
+        
+        delete lists[listName];
+        
+        if (currentList === listName) {
+          currentList = null;
+          document.getElementById('albumContainer').innerHTML = \`
+            <div class="text-center text-gray-500 mt-20 px-4">
+              <p class="text-xl mb-2">No list selected</p>
+              <p class="text-sm">Select a list from the menu</p>
+            </div>
+          \`;
+        }
+        
+        updateListNav();
+        showToast(\`List "\${listName}" deleted\`);
+      } catch (error) {
+        console.error('Error deleting list:', error);
+        showToast('Error deleting list', 'error');
+      }
+    }
+  </script>
 </body>
 </html>
 `;

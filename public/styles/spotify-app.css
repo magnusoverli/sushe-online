@@ -19,6 +19,30 @@
   --cover-art-size: 100px;  /* Maximum size for cover art */
 }
 
+/* Prevent overscroll on mobile */
+@media (max-width: 1023px) {
+  body {
+    overscroll-behavior: none;
+  }
+  
+  /* Larger touch targets */
+  button {
+    min-height: 44px;
+  }
+  
+  /* Prevent text selection on interactive elements */
+  .album-row, button {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  
+  /* Bottom padding for fixed nav */
+  .main-content {
+    padding-bottom: 4rem;
+  }
+}
+
 /* Define the album grid class */
 .album-grid {
   display: grid;
