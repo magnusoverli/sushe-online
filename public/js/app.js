@@ -673,6 +673,13 @@ function initializeContextMenu() {
   };
 }
 
+function updateMobileHeader() {
+  const headerContainer = document.getElementById('dynamicHeader');
+  if (headerContainer && window.currentUser) {
+    headerContainer.innerHTML = window.headerComponent(window.currentUser, 'home', currentList || '');
+  }
+}
+
 // Initialize album context menu
 function initializeAlbumContextMenu() {
   const contextMenu = document.getElementById('albumContextMenu');
@@ -1042,29 +1049,23 @@ function initializeMobileSorting(container) {
 }
 
 // Select and display a list
-function selectList(listName) {
-  console.log('selectList called with:', listName);
-  
-  // Clean up any existing sortable instance
-  const mobileContainer = document.getElementById('mobileAlbumContainer');
-  if (mobileContainer && mobileContainer._sortable) {
-    mobileContainer._sortable.destroy();
-    mobileContainer._sortable = null;
+async function selectList(listName) {
+  try {
+    console.log('Selecting list:', listName);
+    currentList = listName;
+    
+    // Update the header with current list name
+    updateMobileHeader();
+    
+    // Update the active state in the list navigation
+    updateListNav();
+    
+    // Rest of the existing selectList code...
+    await loadAlbums();
+  } catch (error) {
+    console.error('Error selecting list:', error);
+    showToast('Error loading list', 'error');
   }
-  
-  currentList = listName;
-  
-  if (lists[listName]) {
-    console.log('List found, albums count:', lists[listName].length);
-    displayAlbums(lists[listName]);
-    // Force a check after a delay
-    setTimeout(ensureAlbumsVisible, 500);
-  } else {
-    console.log('List not found!');
-  }
-  
-  updateListNav();
-  updateHeaderTitle(listName);
 }
 
 
@@ -1580,14 +1581,18 @@ function displayAlbums(albums) {
                 <h3 class="font-semibold text-white text-base leading-tight truncate">${albumName}</h3>
                 <p class="text-sm text-gray-400 truncate mt-0.5">${artist}</p>
                 
-                <!-- Metadata row -->
+                <!-- Date and Country row -->
                 <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                  ${releaseDate ? `<span>${releaseDate}</span>` : ''}
-                  ${releaseDate && country ? `<span>•</span>` : ''}
-                  ${country ? `<span>${country}</span>` : ''}
-                  ${(releaseDate || country) && (genre1 || genre2) ? `<span>•</span>` : ''}
-                  ${genre1 || genre2 ? `<span class="truncate">${genre1}${genre2 ? ` / ${genre2}` : ''}</span>` : ''}
+                  <span class="whitespace-nowrap">${releaseDate}</span>
+                  ${country ? `<span>• ${country}</span>` : ''}
                 </div>
+                
+                <!-- Genres row (if any) -->
+                ${genre1 || genre2 ? `
+                  <div class="text-xs text-gray-500 truncate">
+                    ${genre1}${genre2 ? ` / ${genre2}` : ''}
+                  </div>
+                ` : ''}
                 
                 ${comment ? `
                   <p class="text-xs text-gray-400 italic mt-1 line-clamp-1">${comment}</p>

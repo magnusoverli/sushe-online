@@ -1,68 +1,52 @@
 // Shared header component
-const headerComponent = (user, currentPage = 'home', options = {}) => {
-  const isAdmin = user.role === 'admin';
-  
-  // Default options
-  const {
-    showHomeLink = currentPage !== 'home',
-    showSettingsLink = currentPage !== 'settings',
-    showAccountLink = currentPage !== 'account'
-  } = options;
-  
-  // Determine the page title and breadcrumb
-  let pageTitle = '';
-  switch (currentPage) {
-    case 'home':
-      pageTitle = 'My Lists';
-      break;
-    case 'settings':
-      pageTitle = 'Settings';
-      break;
-    case 'admin':
-      pageTitle = 'Admin Dashboard';
-      break;
-    default:
-      pageTitle = currentPage;
-  }
-  
-  return `
-    <header class="bg-gray-900 border-b border-gray-800 shadow-lg">
-      <div class="container mx-auto px-4 py-4">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <a href="/" class="text-xl font-bold text-red-600 hover:text-red-500">SuShe</a>
-            ${currentPage === 'home' ? `
-              <span id="headerSeparator" class="text-gray-500 hidden">/</span>
-              <h1 id="headerListName" class="text-xl font-semibold hidden"></h1>
-            ` : pageTitle ? `
-              <span class="text-gray-500">/</span>
-              <h1 class="text-xl font-semibold">${pageTitle}</h1>
-            ` : ''}
-          </div>
-          <div class="flex items-center space-x-4">
-            <span class="text-sm text-gray-400">
-              ${isAdmin ? '<i class="fas fa-crown text-yellow-500 mr-2"></i>' : ''}
-              ${user.email}
-            </span>
-            ${showHomeLink ? `
-              <a href="/" class="text-gray-400 hover:text-white" title="Home">
-                <i class="fas fa-home text-xl"></i>
-              </a>
-            ` : ''}
-            ${showSettingsLink ? `
-              <a href="/settings" class="text-gray-400 hover:text-white" title="Settings">
-                <i class="fas fa-cog text-xl"></i>
-              </a>
-            ` : ''}
-            <a href="/logout" class="text-gray-400 hover:text-red-500" title="Logout">
-              <i class="fas fa-sign-out-alt text-xl"></i>
-            </a>
-          </div>
-        </div>
+const headerComponent = (user, activeSection = 'home', currentListName = '') => `
+  <header class="bg-gray-900 border-b border-gray-800 z-50">
+    <!-- Desktop Header -->
+    <div class="hidden lg:flex items-center justify-between py-4 px-6">
+      <div class="flex items-center gap-8">
+        <a href="/" class="text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
+        <nav class="flex gap-6">
+          <a href="/" class="${activeSection === 'home' ? 'text-red-600' : 'text-gray-300 hover:text-white'} transition duration-200">
+            <i class="fas fa-home mr-2"></i>Home
+          </a>
+          <a href="/reviews" class="${activeSection === 'reviews' ? 'text-red-600' : 'text-gray-300 hover:text-white'} transition duration-200">
+            <i class="fas fa-star mr-2"></i>Reviews
+          </a>
+        </nav>
       </div>
-    </header>
-  `;
-};
+      
+      <div class="flex items-center gap-6">
+        <span class="text-sm text-gray-400">${user?.email}</span>
+        <a href="/auth/logout" class="text-gray-400 hover:text-white transition duration-200" title="Logout">
+          <i class="fas fa-sign-out-alt text-lg"></i>
+        </a>
+        <a href="/settings" class="text-gray-400 hover:text-white transition duration-200" title="Settings">
+          <i class="fas fa-cog text-lg"></i>
+        </a>
+      </div>
+    </div>
+    
+    <!-- Mobile Header -->
+    <div class="lg:hidden flex items-center justify-between p-3 gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <a href="/" class="text-xl font-bold text-red-600 flex-shrink-0">SuShe</a>
+        ${currentListName ? `
+          <span class="text-gray-600 flex-shrink-0">/</span>
+          <span class="text-sm text-yellow-500 font-medium truncate">${currentListName}</span>
+        ` : ''}
+      </div>
+      
+      <div class="flex items-center gap-1 flex-shrink-0">
+        <a href="/settings" class="p-2 text-gray-400 active:text-white" title="Settings">
+          <i class="fas fa-cog text-lg"></i>
+        </a>
+        <a href="/auth/logout" class="p-2 text-gray-400 active:text-white" title="Logout">
+          <i class="fas fa-sign-out-alt text-lg"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+`;
 
 // Base HTML template with Black Metal Spotify-inspired theme
 const htmlTemplate = (content, title = 'SuShe Auth') => `
@@ -228,7 +212,7 @@ const loginTemplate = (req, flash) => `
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOG IN</h1>
     </div>
     
-    <form method="post" action="/login" class="space-y-6">
+    <form method="post" action="/login" class="space-y-6" id="loginForm">
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
           Email Address
@@ -241,37 +225,77 @@ const loginTemplate = (req, flash) => `
           placeholder="your@email.com" 
           required 
           autocomplete="email"
+          value="${req.session.attemptedEmail || ''}"
         />
+        <p class="text-xs text-gray-500 mt-1 hidden" id="emailError">Please enter a valid email address</p>
       </div>
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
           Password
         </label>
-        <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-          name="password" 
-          id="password"
-          type="password" 
-          placeholder="••••••••" 
-          required 
-          autocomplete="current-password"
-        />
+        <div class="relative">
+          <input 
+            class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 pr-12"
+            name="password" 
+            id="password"
+            type="password" 
+            placeholder="••••••••" 
+            required 
+            autocomplete="current-password"
+          />
+          <button type="button" id="togglePassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+            <i class="fas fa-eye"></i>
+          </button>
+        </div>
+        <p class="text-xs text-gray-500 mt-1 hidden" id="passwordError">Password is required</p>
       </div>
       
-      <div class="text-right">
+      <div class="flex items-center justify-between">
+        <label class="flex items-center text-sm text-gray-400">
+          <input type="checkbox" name="remember" class="mr-2 rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-red-600 focus:ring-offset-0">
+          Remember me
+        </label>
         <a href="/forgot" class="text-sm text-gray-400 hover:text-red-500 transition duration-200">Forgot password?</a>
       </div>
       
       <button 
-        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         type="submit"
+        id="loginButton"
       >
-        Sign In
+        <span id="buttonText">Sign In</span>
+        <span id="buttonLoader" class="hidden">
+          <i class="fas fa-spinner fa-spin mr-2"></i>Signing in...
+        </span>
       </button>
     </form>
     
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
-    ${flash.success && flash.success.length ? `<p class="text-green-500 text-sm mt-4 text-center">${flash.success[0]}</p>` : ''}
+    ${flash.error && flash.error.length ? `
+      <div class="mt-4 p-3 bg-red-900/20 border border-red-800 rounded">
+        <p class="text-red-400 text-sm flex items-center">
+          <i class="fas fa-exclamation-circle mr-2"></i>
+          ${flash.error[0]}
+        </p>
+      </div>
+    ` : ''}
+    
+    ${flash.success && flash.success.length ? `
+      <div class="mt-4 p-3 bg-green-900/20 border border-green-800 rounded">
+        <p class="text-green-400 text-sm flex items-center">
+          <i class="fas fa-check-circle mr-2"></i>
+          ${flash.success[0]}
+        </p>
+      </div>
+    ` : ''}
+    
+    ${flash.info && flash.info.length ? `
+      <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded">
+        <p class="text-blue-400 text-sm flex items-center">
+          <i class="fas fa-info-circle mr-2"></i>
+          ${flash.info[0]}
+        </p>
+      </div>
+    ` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -280,6 +304,100 @@ const loginTemplate = (req, flash) => `
       </p>
     </div>
   </div>
+  
+  <script>
+    // Client-side validation and UI enhancements
+    document.addEventListener('DOMContentLoaded', function() {
+      const form = document.getElementById('loginForm');
+      const emailInput = document.getElementById('email');
+      const passwordInput = document.getElementById('password');
+      const emailError = document.getElementById('emailError');
+      const passwordError = document.getElementById('passwordError');
+      const loginButton = document.getElementById('loginButton');
+      const buttonText = document.getElementById('buttonText');
+      const buttonLoader = document.getElementById('buttonLoader');
+      const togglePassword = document.getElementById('togglePassword');
+      
+      // Focus on password field if email is pre-filled
+      if (emailInput.value) {
+        passwordInput.focus();
+      } else {
+        emailInput.focus();
+      }
+      
+      // Toggle password visibility
+      togglePassword.addEventListener('click', function() {
+        const type = passwordInput.type === 'password' ? 'text' : 'password';
+        passwordInput.type = type;
+        this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+      });
+      
+      // Email validation
+      emailInput.addEventListener('blur', function() {
+        const email = this.value.trim();
+        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+        
+        if (email && !emailRegex.test(email)) {
+          emailError.classList.remove('hidden');
+          this.classList.add('border-red-600');
+        } else {
+          emailError.classList.add('hidden');
+          this.classList.remove('border-red-600');
+        }
+      });
+      
+      // Password validation
+      passwordInput.addEventListener('blur', function() {
+        if (!this.value) {
+          passwordError.classList.remove('hidden');
+          this.classList.add('border-red-600');
+        } else {
+          passwordError.classList.add('hidden');
+          this.classList.remove('border-red-600');
+        }
+      });
+      
+      // Form submission
+      form.addEventListener('submit', function(e) {
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+        
+        // Validate
+        let hasError = false;
+        
+        if (!email || !emailRegex.test(email)) {
+          emailError.classList.remove('hidden');
+          emailInput.classList.add('border-red-600');
+          hasError = true;
+        }
+        
+        if (!password) {
+          passwordError.classList.remove('hidden');
+          passwordInput.classList.add('border-red-600');
+          hasError = true;
+        }
+        
+        if (hasError) {
+          e.preventDefault();
+          return;
+        }
+        
+        // Show loading state
+        loginButton.disabled = true;
+        buttonText.classList.add('hidden');
+        buttonLoader.classList.remove('hidden');
+      });
+      
+      // Enter key navigation
+      emailInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter' && this.value) {
+          e.preventDefault();
+          passwordInput.focus();
+        }
+      });
+    });
+  </script>
 `;
 
 // Forgot password template - Updated with flash parameter
@@ -868,6 +986,20 @@ const spotifyTemplate = (req) => `
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
     @media (max-width: 1023px) {
+
+      .whitespace-nowrap {
+        white-space: nowrap;
+      }
+      
+      /* Reduce overall card height slightly */
+      .album-card {
+        min-height: auto;
+      }
+      
+      /* Adjust padding for bottom nav consideration */
+      .pb-20 {
+        padding-bottom: 4rem !important; /* Reduced from 5rem */
+      }
       /* Sortable states */
       .sortable-ghost {
         opacity: 0.4;
@@ -971,7 +1103,9 @@ const spotifyTemplate = (req) => `
 </head>
 <body class="bg-black text-gray-200">
   <div class="flex flex-col h-screen">
-    ${headerComponent(req.user, 'home')}
+    <div id="dynamicHeader">
+      ${headerComponent(req.user, 'home', '')}
+    </div>
     
     <!-- Desktop Layout (hidden on mobile) -->
     <div class="hidden lg:flex flex-1 overflow-hidden">
@@ -995,17 +1129,17 @@ const spotifyTemplate = (req) => `
     <!-- Mobile Bottom Navigation -->
     <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 z-40 safe-area-bottom">
       <div class="flex justify-around items-center">
-        <button onclick="toggleMobileLists()" class="flex-1 py-3 px-3 flex flex-col items-center">
+        <button onclick="toggleMobileLists()" class="flex-1 py-2 px-3 flex flex-col items-center">
           <i class="fas fa-list text-lg"></i>
-          <span class="text-xs mt-1">Lists</span>
+          <span class="text-xs mt-0.5">Lists</span>
         </button>
-        <button onclick="document.getElementById('fileInput').click()" class="flex-1 py-3 px-3 flex flex-col items-center">
+        <button onclick="document.getElementById('fileInput').click()" class="flex-1 py-2 px-3 flex flex-col items-center">
           <i class="fas fa-file-import text-lg"></i>
-          <span class="text-xs mt-1">Import</span>
+          <span class="text-xs mt-0.5">Import</span>
         </button>
-        <button id="mobileAddAlbumBtn" class="flex-1 py-3 px-3 flex flex-col items-center">
+        <button id="mobileAddAlbumBtn" class="flex-1 py-2 px-3 flex flex-col items-center">
           <i class="fas fa-plus-circle text-lg text-red-600"></i>
-          <span class="text-xs mt-1">Add</span>
+          <span class="text-xs mt-0.5">Add</span>
         </button>
       </div>
     </nav>
@@ -1062,6 +1196,11 @@ const spotifyTemplate = (req) => `
   <script src="/js/app.js"></script>
   
   <script>
+
+    // Make header component available to JavaScript
+    window.headerComponent = ${headerComponent.toString()};
+    window.currentUser = ${JSON.stringify(req.user)};
+
     // Mobile-specific functions
     function toggleMobileLists() {
       const drawer = document.getElementById('mobileListsDrawer');
