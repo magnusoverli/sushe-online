@@ -1028,10 +1028,16 @@ function initializeMobileSorting(container) {
         // Save to server
         await saveList(currentList, list);
         
-        // Update all cards' data-index attributes
+        // Update all cards' data-index attributes AND position numbers
         const cards = sortableContainer.querySelectorAll('.album-card');
         cards.forEach((card, index) => {
           card.dataset.index = index;
+          
+          // Update the visible position number
+          const positionElement = card.querySelector('.w-12.flex.items-center.justify-center');
+          if (positionElement) {
+            positionElement.textContent = index + 1;
+          }
         });
         
         showToast('List reordered');
@@ -1575,8 +1581,13 @@ function displayAlbums(albums) {
       
       card.innerHTML = `
         <div class="flex items-center h-full">
-          <!-- Album cover on the left -->
-          <div class="flex-shrink-0 p-3">
+          <!-- Position number on the far left -->
+          <div class="flex-shrink-0 w-12 flex items-center justify-center text-gray-500 font-medium text-sm">
+            ${index + 1}
+          </div>
+          
+          <!-- Album cover -->
+          <div class="flex-shrink-0 p-3 pl-0">
             ${album.cover_image ? `
               <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
                   alt="${albumName}" 
