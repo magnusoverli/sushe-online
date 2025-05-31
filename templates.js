@@ -863,10 +863,44 @@ const spotifyTemplate = (req) => `
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <title>SuShe Online</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
   <link href="/styles/output.css" rel="stylesheet">
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
     @media (max-width: 1023px) {
+      /* Sorting feedback */
+      .album-card {
+        position: relative;
+      }
+      
+      .album-card::before {
+        content: '⋮⋮';
+        position: absolute;
+        left: 4px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #4B5563;
+        font-size: 20px;
+        line-height: 0.5;
+        opacity: 0.5;
+      }
+      
+      /* Adjust card padding to accommodate grip indicator */
+      .album-card > div {
+        margin-left: 20px;
+      }
+      
+      /* Sortable states */
+      .sortable-ghost {
+        opacity: 0.4;
+      }
+      
+      .sortable-drag {
+        opacity: 0.9 !important;
+        transform: rotate(2deg);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+
       body {
         overscroll-behavior: contain;
         -webkit-user-select: none;

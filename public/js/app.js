@@ -967,9 +967,85 @@ function updateListNav() {
   if (mobileNav) createListItems(mobileNav, true);
 }
 
+// Initialize SortableJS for mobile album sorting
+function initializeMobileSorting(container) {
+  if (!window.Sortable) {
+    console.error('SortableJS not loaded');
+    return;
+  }
+  
+  // Find the container with the album cards
+  const sortableContainer = container.querySelector('.mobile-album-list') || container;
+  
+  const sortable = Sortable.create(sortableContainer, {
+    animation: 150,
+    ghostClass: 'opacity-50',
+    chosenClass: 'bg-gray-800 shadow-2xl',
+    dragClass: 'opacity-90 rotate-2 scale-105',
+    handle: '.drag-handle',
+    delay: 100, // Slight delay to distinguish from tap
+    delayOnTouchOnly: true,
+    forceFallback: true, // Better mobile support
+    
+    // Store the initial index
+    onStart: function(evt) {
+      evt.item.dataset.startIndex = evt.oldIndex;
+      // Add visual feedback
+      evt.item.classList.add('z-10');
+    },
+    
+    // Remove visual feedback
+    onEnd: function(evt) {
+      evt.item.classList.remove('z-10');
+    },
+    
+    // Handle the actual reordering
+    onUpdate: async function(evt) {
+      const draggedIndex = parseInt(evt.item.dataset.startIndex);
+      const dropIndex = evt.newIndex;
+      
+      if (draggedIndex === dropIndex) return;
+      
+      try {
+        // Update the data array
+        const list = lists[currentList];
+        const [movedItem] = list.splice(draggedIndex, 1);
+        list.splice(dropIndex, 0, movedItem);
+        
+        // Save to server
+        await saveList(currentList, list);
+        
+        // Update all cards' data-index attributes
+        const cards = sortableContainer.querySelectorAll('.album-card');
+        cards.forEach((card, index) => {
+          card.dataset.index = index;
+        });
+        
+        showToast('List reordered');
+      } catch (error) {
+        console.error('Error saving reorder:', error);
+        showToast('Error saving changes', 'error');
+        // Reload to restore correct order
+        selectList(currentList);
+      }
+    }
+  });
+  
+  // Store sortable instance for cleanup if needed
+  container._sortable = sortable;
+}
+
 // Select and display a list
 function selectList(listName) {
   console.log('selectList called with:', listName);
+  
+  // Clean up any existing sortable instance
+  const mobileContainer = document.getElementById('mobileAlbumContainer');
+  if (mobileContainer && mobileContainer._sortable) {
+    mobileContainer._sortable.destroy();
+    mobileContainer._sortable = null;
+  }
+  
   currentList = listName;
   
   if (lists[listName]) {
@@ -1452,14 +1528,18 @@ function displayAlbums(albums) {
       });
     }
   } else {
-    // Mobile view - card-based layout
+    // Mobile view - card-based layout with SortableJS
     console.log('Building mobile view for', albums.length, 'albums');
     const mobileContainer = document.createElement('div');
-    mobileContainer.className = 'pb-20'; // Space for bottom nav
+    mobileContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
     
     albums.forEach((album, index) => {
+      const cardWrapper = document.createElement('div');
+      cardWrapper.className = 'album-card-wrapper';
+      
       const card = document.createElement('div');
-      card.className = 'bg-gray-900 border-b border-gray-800 p-4 touch-manipulation';
+      card.className = 'album-card bg-gray-900 border-b border-gray-800 p-4 touch-manipulation transition-all cursor-move relative';
+      card.dataset.index = index;
       
       const albumName = album.album || 'Unknown Album';
       const artist = album.artist || 'Unknown Artist';
@@ -1473,7 +1553,10 @@ function displayAlbums(albums) {
       
       card.innerHTML = `
         <div class="flex gap-3 max-w-full">
-          <div class="flex-shrink-0">
+          <div class="drag-handle absolute left-1 top-0 bottom-0 w-6 flex items-center justify-center text-gray-500">
+            <span class="text-xl leading-3">⋮⋮</span>
+          </div>
+          <div class="flex-shrink-0 ml-6">
             ${album.cover_image ? `
               <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
                   alt="${albumName}" 
@@ -1495,7 +1578,7 @@ function displayAlbums(albums) {
                   ${releaseDate} ${country ? `• ${country}` : ''}
                 </p>
               </div>
-              <button onclick="showMobileAlbumMenu(${index})" class="flex-shrink-0 p-2 -m-2 touch-manipulation">
+              <button onclick="event.stopPropagation(); showMobileAlbumMenu(${index})" class="flex-shrink-0 p-2 -m-2 touch-manipulation">
                 <i class="fas fa-ellipsis-v text-gray-400"></i>
               </button>
             </div>
@@ -1516,11 +1599,15 @@ function displayAlbums(albums) {
         </div>
       `;
       
-      mobileContainer.appendChild(card);
+      cardWrapper.appendChild(card);
+      mobileContainer.appendChild(cardWrapper);
     });
     
     container.appendChild(mobileContainer);
     console.log('Mobile container appended with', albums.length, 'albums');
+    
+    // Initialize SortableJS for mobile
+    initializeMobileSorting(mobileContainer);
   }
   
   console.log('displayAlbums completed');
