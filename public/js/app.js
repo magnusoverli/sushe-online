@@ -975,6 +975,8 @@ function selectList(listName) {
   if (lists[listName]) {
     console.log('List found, albums count:', lists[listName].length);
     displayAlbums(lists[listName]);
+    // Force a check after a delay
+    setTimeout(ensureAlbumsVisible, 500);
   } else {
     console.log('List not found!');
   }
@@ -1015,6 +1017,23 @@ function showMobileAlbumMenu(index) {
     </div>
   `;
   document.body.appendChild(actionSheet);
+}
+
+function updateHeaderTitle(listName) {
+  const headerSeparator = document.getElementById('headerSeparator');
+  const headerListName = document.getElementById('headerListName');
+  const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
+  
+  if (listName && headerSeparator && headerListName) {
+    headerSeparator.classList.remove('hidden');
+    headerListName.classList.remove('hidden');
+    headerListName.textContent = listName;
+    
+    // Also show the add album button in header if it exists
+    if (headerAddAlbumBtn) {
+      headerAddAlbumBtn.classList.remove('hidden');
+    }
+  }
 }
 
 // Mobile edit form
@@ -1218,14 +1237,34 @@ function makeCommentEditable(commentDiv, albumIndex) {
   });
 }
 
+function ensureAlbumsVisible() {
+  const container = document.getElementById('albumContainer');
+  if (container && container.children.length === 0 && currentList && lists[currentList]) {
+    console.log('Force re-rendering albums...');
+    displayAlbums(lists[currentList]);
+  }
+}
+
 // Display albums function with editable genres and comments
 function displayAlbums(albums) {
   console.log('displayAlbums called, mobile:', window.innerWidth < 1024, 'albums:', albums?.length);
-  const container = document.getElementById('albumContainer');
-  console.log('Container found:', !!container);
+  
   const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
   
+  // Get the correct container based on viewport
+  const container = isMobile 
+    ? document.getElementById('mobileAlbumContainer') 
+    : document.getElementById('albumContainer');
+    
+  console.log('Container found:', !!container, 'Container ID:', container?.id);
+  
+  if (!container) {
+    console.error('Album container not found!');
+    return;
+  }
+  
   container.innerHTML = '';
+  console.log('Container cleared, about to add albums...');
   
   if (!albums || albums.length === 0) {
     container.innerHTML = `
@@ -1414,6 +1453,7 @@ function displayAlbums(albums) {
     }
   } else {
     // Mobile view - card-based layout
+    console.log('Building mobile view for', albums.length, 'albums');
     const mobileContainer = document.createElement('div');
     mobileContainer.className = 'pb-20'; // Space for bottom nav
     
@@ -1432,13 +1472,13 @@ function displayAlbums(albums) {
       if (comment === 'Comment') comment = '';
       
       card.innerHTML = `
-        <div class="flex gap-3">
+        <div class="flex gap-3 max-w-full">
           <div class="flex-shrink-0">
             ${album.cover_image ? `
               <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
-                   alt="${albumName}" 
-                   class="w-20 h-20 rounded object-cover shadow-lg"
-                   loading="lazy">
+                  alt="${albumName}" 
+                  class="w-20 h-20 rounded object-cover shadow-lg"
+                  loading="lazy">
             ` : `
               <div class="w-20 h-20 bg-gray-800 rounded shadow-lg flex items-center justify-center">
                 <i class="fas fa-compact-disc text-2xl text-gray-600"></i>
@@ -1446,22 +1486,22 @@ function displayAlbums(albums) {
             `}
           </div>
           
-          <div class="flex-1 min-w-0">
-            <div class="flex justify-between items-start">
-              <div class="flex-1 mr-2">
-                <h3 class="font-semibold text-white text-lg truncate">${albumName}</h3>
+          <div class="flex-1 min-w-0 overflow-hidden">
+            <div class="flex justify-between items-start gap-2">
+              <div class="flex-1 min-w-0 overflow-hidden">
+                <h3 class="font-semibold text-white text-lg truncate pr-2">${albumName}</h3>
                 <p class="text-sm text-gray-400 truncate">${artist}</p>
-                <p class="text-xs text-gray-500 mt-1">
+                <p class="text-xs text-gray-500 mt-1 truncate">
                   ${releaseDate} ${country ? `• ${country}` : ''}
                 </p>
               </div>
-              <button onclick="showMobileAlbumMenu(${index})" class="p-2 -m-2 touch-manipulation">
+              <button onclick="showMobileAlbumMenu(${index})" class="flex-shrink-0 p-2 -m-2 touch-manipulation">
                 <i class="fas fa-ellipsis-v text-gray-400"></i>
               </button>
             </div>
             
             ${genre1 || genre2 ? `
-              <div class="mt-2 text-xs text-gray-500">
+              <div class="mt-2 text-xs text-gray-500 truncate">
                 <i class="fas fa-music mr-1"></i>
                 ${genre1} ${genre2 ? `/ ${genre2}` : ''}
               </div>
@@ -1480,7 +1520,10 @@ function displayAlbums(albums) {
     });
     
     container.appendChild(mobileContainer);
+    console.log('Mobile container appended with', albums.length, 'albums');
   }
+  
+  console.log('displayAlbums completed');
 }
 
 // Add this function to handle mobile album actions

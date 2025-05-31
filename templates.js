@@ -363,6 +363,7 @@ const invalidTokenTemplate = () => `
   </div>
 `;
 
+
 // Component: Sidebar - Updated with clickable account link
 const sidebarComponent = (req) => `
   <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
@@ -872,6 +873,28 @@ const spotifyTemplate = (req) => `
         user-select: none;
       }
       
+      /* Prevent horizontal scrolling */
+      #mobileAlbumContainer {
+        width: 100%;
+        overflow-x: hidden;
+      }
+      
+      /* Ensure cards don't overflow */
+      #mobileAlbumContainer > div {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+      
+      /* Fix for iOS momentum scrolling */
+      .overflow-y-auto {
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      /* Ensure proper height calculation with bottom nav */
+      .pb-20 {
+        padding-bottom: 5rem !important; /* Account for bottom nav + safe area */
+      }
+      
       /* Ensure modals work on mobile */
       .modal-content {
         max-height: calc(100vh - 2rem);
@@ -891,15 +914,13 @@ const spotifyTemplate = (req) => `
     </div>
     
     <!-- Mobile Layout (hidden on desktop) -->
-    <div class="lg:hidden flex-1 overflow-hidden">
-      <div class="flex-1 overflow-y-auto pb-16">
-        <div id="dropZone" class="drop-zone min-h-full">
-          <div id="albumContainer">
-            <!-- Albums will be displayed here -->
-            <div class="text-center text-gray-500 mt-20 px-4">
-              <p class="text-xl mb-2">No list selected</p>
-              <p class="text-sm">Select a list from the menu</p>
-            </div>
+    <div class="lg:hidden flex flex-col flex-1 overflow-hidden">
+      <div class="flex-1 overflow-y-auto pb-20">
+        <div id="mobileAlbumContainer" class="min-h-full">
+          <!-- Albums will be displayed here -->
+          <div class="text-center text-gray-500 mt-20 px-4">
+            <p class="text-xl mb-2">No list selected</p>
+            <p class="text-sm">Select a list from the menu</p>
           </div>
         </div>
       </div>
@@ -985,10 +1006,17 @@ const spotifyTemplate = (req) => `
     document.addEventListener('DOMContentLoaded', () => {
       // Mobile add album button
       const mobileAddBtn = document.getElementById('mobileAddAlbumBtn');
-      if (mobileAddBtn && window.openAddAlbumModal) {
-        mobileAddBtn.onclick = window.openAddAlbumModal;
+      if (mobileAddBtn) {
+        mobileAddBtn.onclick = () => {
+          if (!currentList) {
+            showToast('Please select a list first', 'error');
+            return;
+          }
+          if (window.openAddAlbumModal) {
+            window.openAddAlbumModal();
+          }
+        };
       }
-      
       // Mobile create list button
       const mobileCreateBtn = document.getElementById('mobileCreateListBtn');
       if (mobileCreateBtn) {
@@ -1033,8 +1061,12 @@ const spotifyTemplate = (req) => `
                               (isActive ? 'bg-gray-800 text-red-500' : 'text-gray-300');
         listButton.textContent = listName;
         listButton.onclick = () => {
-          selectList(listName);
+          // Close the drawer first for better UX
           toggleMobileLists();
+          // Then select the list with a small delay to ensure DOM is ready
+          setTimeout(() => {
+            selectList(listName);
+          }, 150); // Wait for drawer animation to complete
         };
         
         const menuButton = document.createElement('button');
@@ -1108,12 +1140,18 @@ const spotifyTemplate = (req) => `
         
         if (currentList === listName) {
           currentList = null;
-          document.getElementById('albumContainer').innerHTML = \`
+          // Update both containers
+          const desktopContainer = document.getElementById('albumContainer');
+          const mobileContainer = document.getElementById('mobileAlbumContainer');
+          const emptyHTML = \`
             <div class="text-center text-gray-500 mt-20 px-4">
               <p class="text-xl mb-2">No list selected</p>
               <p class="text-sm">Select a list from the menu</p>
             </div>
           \`;
+          
+          if (desktopContainer) desktopContainer.innerHTML = emptyHTML;
+          if (mobileContainer) mobileContainer.innerHTML = emptyHTML;
         }
         
         updateListNav();
