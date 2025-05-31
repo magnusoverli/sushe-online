@@ -989,6 +989,10 @@ function initializeMobileSorting(container) {
   // Find the container with the album cards
   const sortableContainer = container.querySelector('.mobile-album-list') || container;
   
+  // Find the scrollable parent (the one with overflow-y-auto)
+  const scrollableParent = sortableContainer.closest('.overflow-y-auto') || 
+                          document.querySelector('#mobileAlbumContainer')?.parentElement;
+  
   // Create sortable with mobile-optimized settings
   const sortable = Sortable.create(sortableContainer, {
     animation: 150,
@@ -1003,14 +1007,33 @@ function initializeMobileSorting(container) {
     delayOnTouchOnly: false,
     touchStartThreshold: 0,
     
+    // Auto-scrolling configuration
+    scroll: true, // Enable auto-scrolling
+    scrollSensitivity: 80, // Distance in pixels from edge to start scrolling
+    scrollSpeed: 10, // Scrolling speed multiplier
+    bubbleScroll: true, // Apply scrolling to parent elements
+    
+    // Specify the scrollable element if we found one
+    scrollEl: scrollableParent,
+    
     onStart: function(evt) {
       // Store original index
       evt.item.dataset.originalIndex = evt.oldIndex;
       document.body.style.overflow = 'hidden'; // Prevent scrolling while dragging
+      
+      // Add a class to the scrollable parent to enhance scrolling behavior
+      if (scrollableParent) {
+        scrollableParent.classList.add('sortable-scrolling');
+      }
     },
     
     onEnd: function(evt) {
       document.body.style.overflow = ''; // Restore scrolling
+      
+      // Remove the scrolling class
+      if (scrollableParent) {
+        scrollableParent.classList.remove('sortable-scrolling');
+      }
     },
     
     onUpdate: async function(evt) {
