@@ -9,15 +9,12 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
           <a href="/" class="${activeSection === 'home' ? 'text-red-600' : 'text-gray-300 hover:text-white'} transition duration-200">
             <i class="fas fa-home mr-2"></i>Home
           </a>
-          <a href="/reviews" class="${activeSection === 'reviews' ? 'text-red-600' : 'text-gray-300 hover:text-white'} transition duration-200">
-            <i class="fas fa-star mr-2"></i>Reviews
-          </a>
         </nav>
       </div>
       
       <div class="flex items-center gap-6">
         <span class="text-sm text-gray-400">${user?.email}</span>
-        <a href="/auth/logout" class="text-gray-400 hover:text-white transition duration-200" title="Logout">
+        <a href="/logout" class="text-gray-400 hover:text-white transition duration-200" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
         <a href="/settings" class="text-gray-400 hover:text-white transition duration-200" title="Settings">
@@ -40,7 +37,7 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
         <a href="/settings" class="p-2 text-gray-400 active:text-white" title="Settings">
           <i class="fas fa-cog text-lg"></i>
         </a>
-        <a href="/auth/logout" class="p-2 text-gray-400 active:text-white" title="Logout">
+        <a href="/logout" class="p-2 text-gray-400 active:text-white" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
