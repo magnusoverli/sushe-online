@@ -174,8 +174,6 @@ const DragDropManager = (function() {
           await saveCallback(draggedIndex, dropIndex);
         }
         
-        showToast('Reordered successfully');
-        
       } catch (error) {
         console.error('Error saving reorder:', error);
         showToast('Error saving changes', 'error');
