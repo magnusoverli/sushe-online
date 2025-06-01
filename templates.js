@@ -737,8 +737,217 @@ const renameListModalComponent = () => `
 const addAlbumModalComponent = () => `
   <!-- Desktop Modal -->
   <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <!-- Desktop Modal Content -->
     <div class="hidden lg:flex bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex-col">
-      <!-- Original desktop modal content here... -->
+      <!-- Desktop Header -->
+      <div class="flex items-center justify-between p-6 border-b border-gray-800">
+        <h3 class="text-2xl font-bold text-white">Add Album to List</h3>
+        <button id="closeModalBtn" class="text-gray-400 hover:text-white transition duration-200">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      
+      <!-- Desktop Content -->
+      <div class="flex-1 overflow-hidden flex flex-col">
+        <!-- Search Section -->
+        <div id="searchSection" class="p-6 border-b border-gray-800">
+          <div class="max-w-2xl mx-auto">
+            <div class="flex gap-3">
+              <input 
+                type="text" 
+                id="artistSearchInput" 
+                placeholder="Search for an artist..." 
+                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+              >
+              <button 
+                id="searchArtistBtn" 
+                class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded transition duration-200 font-semibold whitespace-nowrap"
+              >
+                <i class="fas fa-search mr-2"></i>Search
+              </button>
+            </div>
+            
+            <!-- Manual Entry Link -->
+            <div class="text-center mt-3">
+              <button id="manualEntryBtn" class="text-gray-400 hover:text-red-500 text-sm transition-colors">
+                Can't find your album? Add it manually →
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Results Section -->
+        <div class="flex-1 overflow-y-auto">
+          <!-- Artist Results -->
+          <div id="artistResults" class="hidden p-6">
+            <div class="max-w-4xl mx-auto">
+              <h4 class="text-lg font-semibold text-gray-300 mb-4">Select an Artist</h4>
+              <div id="artistList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <!-- Artist results will be populated here -->
+              </div>
+            </div>
+          </div>
+          
+          <!-- Album Results -->
+          <div id="albumResults" class="hidden">
+            <div class="sticky top-0 bg-gray-900 p-6 border-b border-gray-800 z-10 backdrop-blur-sm bg-opacity-95">
+              <div class="max-w-4xl mx-auto">
+                <button id="backToArtists" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
+                  <i class="fas fa-arrow-left"></i>
+                  <span>Back to artists</span>
+                </button>
+              </div>
+            </div>
+            
+            <div class="p-6">
+              <div class="max-w-4xl mx-auto">
+                <h4 class="text-lg font-semibold text-gray-300 mb-4">Select an Album</h4>
+                <div id="albumList" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <!-- Album results will be populated here -->
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Manual Entry Form -->
+          <div id="manualEntryForm" class="hidden p-6">
+            <div class="max-w-2xl mx-auto">
+              <div class="mb-6">
+                <button id="backToSearch" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
+                  <i class="fas fa-arrow-left"></i>
+                  <span>Back to search</span>
+                </button>
+              </div>
+              
+              <h4 class="text-lg font-semibold text-gray-300 mb-6">Add Album Manually</h4>
+              
+              <form id="manualAlbumForm" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <!-- Artist Name -->
+                  <div>
+                    <label class="block text-gray-400 text-sm font-medium mb-2" for="manualArtist">
+                      Artist Name <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      id="manualArtist" 
+                      name="artist"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      placeholder="Enter artist name"
+                      required
+                    >
+                  </div>
+                  
+                  <!-- Album Title -->
+                  <div>
+                    <label class="block text-gray-400 text-sm font-medium mb-2" for="manualAlbum">
+                      Album Title <span class="text-red-500">*</span>
+                    </label>
+                    <input 
+                      type="text" 
+                      id="manualAlbum" 
+                      name="album"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      placeholder="Enter album title"
+                      required
+                    >
+                  </div>
+                  
+                  <!-- Release Date -->
+                  <div>
+                    <label class="block text-gray-400 text-sm font-medium mb-2" for="manualReleaseDate">
+                      Release Date
+                    </label>
+                    <input 
+                      type="date" 
+                      id="manualReleaseDate" 
+                      name="release_date"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                    >
+                  </div>
+                  
+                  <!-- Country -->
+                  <div>
+                    <label class="block text-gray-400 text-sm font-medium mb-2" for="manualCountry">
+                      Country
+                    </label>
+                    <select 
+                      id="manualCountry" 
+                      name="country"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:border-red-600 transition duration-200"
+                    >
+                      <option value="">Select a country...</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <!-- Cover Art Upload -->
+                <div>
+                  <label class="block text-gray-400 text-sm font-medium mb-2">
+                    Cover Art
+                  </label>
+                  <div class="flex items-start gap-4">
+                    <div id="coverPreview" class="w-32 h-32 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 flex-shrink-0">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                        <polyline points="21 15 16 10 5 21"></polyline>
+                      </svg>
+                    </div>
+                    <div class="flex-1">
+                      <input 
+                        type="file" 
+                        id="manualCoverArt" 
+                        name="cover_art"
+                        accept="image/*"
+                        class="hidden"
+                      >
+                      <button 
+                        type="button"
+                        onclick="document.getElementById('manualCoverArt').click()"
+                        class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+                      >
+                        <i class="fas fa-upload mr-2"></i>Choose Image
+                      </button>
+                      <p class="text-xs text-gray-500 mt-2">Upload album cover art (max 5MB)</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <!-- Submit Buttons -->
+                <div class="flex gap-3 justify-end pt-4">
+                  <button 
+                    type="button"
+                    id="cancelManualEntry" 
+                    class="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    class="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+                  >
+                    Add Album
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+          
+          <!-- Loading State -->
+          <div id="searchLoading" class="hidden text-center py-20">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+            <p class="text-gray-400 mt-4">Searching...</p>
+          </div>
+          
+          <!-- Empty State -->
+          <div id="searchEmpty" class="text-center py-20 text-gray-500">
+            <i class="fas fa-search text-5xl mb-4 opacity-50"></i>
+            <p class="text-lg">Search for an artist to add albums</p>
+            <p class="text-sm mt-2">Or add an album manually</p>
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- Mobile Full-Screen Sheet -->
