@@ -1331,7 +1331,7 @@ async function selectList(listName) {
     displayAlbums(lists[listName]);
     
     // Show/hide FAB based on whether a list is selected (mobile only)
-    const fab = document.getElementById('mobileFAB');
+    const fab = document.getElementById('addAlbumFAB');
     if (fab) {
       fab.style.display = listName ? 'flex' : 'none';
     }
