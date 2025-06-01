@@ -1824,9 +1824,182 @@ window.showMobileAlbumMenu = function(index) {
 
 // Mobile edit form (basic implementation)
 window.showMobileEditForm = function(index) {
-  // This would show a mobile-friendly edit form
-  // For now, we'll just show a toast
-  showToast('Edit functionality coming soon for mobile', 'info');
+  const album = lists[currentList][index];
+  
+  // Create the edit modal
+  const editModal = document.createElement('div');
+  editModal.className = 'fixed inset-0 z-50 lg:hidden bg-gray-900 flex flex-col';
+  editModal.innerHTML = `
+    <!-- Header -->
+    <div class="flex items-center justify-between p-4 border-b border-gray-800">
+      <button onclick="this.closest('.fixed').remove()" class="p-2 -m-2 text-gray-400 hover:text-white">
+        <i class="fas fa-times text-xl"></i>
+      </button>
+      <h3 class="text-lg font-semibold text-white">Edit Album</h3>
+      <button id="mobileEditSaveBtn" class="text-red-500 font-semibold">Save</button>
+    </div>
+    
+    <!-- Form Content -->
+    <div class="flex-1 overflow-y-auto">
+      <form id="mobileEditForm" class="p-4 space-y-4">
+        <!-- Album Cover Preview -->
+        ${album.cover_image ? `
+          <div class="flex justify-center mb-4">
+            <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
+                 alt="${album.album}" 
+                 class="w-32 h-32 rounded-lg object-cover shadow-md">
+          </div>
+        ` : ''}
+        
+        <!-- Artist Name -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Artist</label>
+          <input 
+            type="text" 
+            id="editArtist" 
+            value="${album.artist || ''}"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            placeholder="Artist name"
+          >
+        </div>
+        
+        <!-- Album Title -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Album</label>
+          <input 
+            type="text" 
+            id="editAlbum" 
+            value="${album.album || ''}"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            placeholder="Album title"
+          >
+        </div>
+        
+        <!-- Release Date -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Release Date</label>
+          <input 
+            type="date" 
+            id="editReleaseDate" 
+            value="${album.release_date ? (album.release_date.length === 4 ? album.release_date + '-01-01' : album.release_date) : ''}"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          >
+        </div>
+        
+        <!-- Country - Native Select -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Country</label>
+          <select 
+            id="editCountry" 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none"
+            style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e'); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem;"
+          >
+            <option value="">Select a country...</option>
+            ${availableCountries.map(country => 
+              `<option value="${country}" ${country === album.country ? 'selected' : ''}>${country}</option>`
+            ).join('')}
+          </select>
+        </div>
+        
+        <!-- Genre 1 - Native Select -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Primary Genre</label>
+          <select 
+            id="editGenre1" 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none"
+            style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e'); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem;"
+          >
+            <option value="">Select a genre...</option>
+            ${availableGenres.map(genre => 
+              `<option value="${genre}" ${genre === (album.genre_1 || album.genre) ? 'selected' : ''}>${genre}</option>`
+            ).join('')}
+          </select>
+        </div>
+        
+        <!-- Genre 2 - Native Select -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Secondary Genre</label>
+          <select 
+            id="editGenre2" 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none"
+            style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e'); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem;"
+          >
+            <option value="">None (optional)</option>
+            ${availableGenres.map(genre => {
+              const currentGenre2 = album.genre_2 && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-' ? album.genre_2 : '';
+              return `<option value="${genre}" ${genre === currentGenre2 ? 'selected' : ''}>${genre}</option>`;
+            }).join('')}
+          </select>
+        </div>
+        
+        <!-- Comments -->
+        <div>
+          <label class="block text-gray-400 text-sm mb-2">Comments</label>
+          <textarea 
+            id="editComments" 
+            rows="3"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
+            placeholder="Add your notes..."
+          >${album.comments || album.comment || ''}</textarea>
+        </div>
+        
+        <!-- Spacer for bottom padding -->
+        <div class="h-4"></div>
+      </form>
+    </div>
+  `;
+  
+  document.body.appendChild(editModal);
+  
+  // Handle save
+  document.getElementById('mobileEditSaveBtn').onclick = async function() {
+    // Gather all the values
+    const updatedAlbum = {
+      ...album,
+      artist: document.getElementById('editArtist').value.trim(),
+      album: document.getElementById('editAlbum').value.trim(),
+      release_date: document.getElementById('editReleaseDate').value,
+      country: document.getElementById('editCountry').value,
+      genre_1: document.getElementById('editGenre1').value,
+      genre: document.getElementById('editGenre1').value, // Keep both for compatibility
+      genre_2: document.getElementById('editGenre2').value,
+      comments: document.getElementById('editComments').value.trim(),
+      comment: document.getElementById('editComments').value.trim() // Keep both for compatibility
+    };
+    
+    // Validate required fields
+    if (!updatedAlbum.artist || !updatedAlbum.album) {
+      showToast('Artist and Album are required', 'error');
+      return;
+    }
+    
+    // Update the album in the list
+    lists[currentList][index] = updatedAlbum;
+    
+    try {
+      // Save to server
+      await saveList(currentList, lists[currentList]);
+      
+      // Update the display
+      selectList(currentList);
+      
+      // Close the modal
+      editModal.remove();
+      
+      showToast('Album updated successfully');
+    } catch (error) {
+      console.error('Error saving album:', error);
+      showToast('Error saving changes', 'error');
+      
+      // Revert changes on error
+      lists[currentList][index] = album;
+    }
+  };
+  
+  // Focus on first input
+  setTimeout(() => {
+    document.getElementById('editArtist').focus();
+  }, 100);
 };
 
 // File import
