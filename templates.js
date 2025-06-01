@@ -1691,7 +1691,7 @@ const spotifyTemplate = (req) => `
             <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
             <h3 class="font-semibold text-white mb-4">\${listName}</h3>
             
-            <button onclick="downloadList('\${listName}'); this.closest('.fixed').remove();" 
+            <button onclick="downloadListAsJSON('\${listName}'); this.closest('.fixed').remove();" 
                     class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
               <i class="fas fa-download mr-3 text-gray-400"></i>Download List
             </button>
@@ -1714,13 +1714,6 @@ const spotifyTemplate = (req) => `
         </div>
       \`;
       document.body.appendChild(actionSheet);
-    }
-    
-    // Helper functions for mobile actions
-    function downloadList(listName) {
-      // Trigger the existing download functionality
-      window.currentContextList = listName;
-      document.getElementById('downloadListOption').click();
     }
     
     async function deleteList(listName) {

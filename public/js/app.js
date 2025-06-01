@@ -183,6 +183,85 @@ async function loadCountries() {
   }
 }
 
+async function downloadListAsJSON(listName) {
+  try {
+    // Get the list data
+    const listData = lists[listName];
+    
+    if (!listData) {
+      showToast('List not found', 'error');
+      return;
+    }
+    
+    // Create a copy with rank added based on position
+    const exportData = listData.map((album, index) => {
+      const exported = { ...album };
+      exported.rank = index + 1;
+      exported.points = getPointsForPosition(index + 1);
+      return exported;
+    });
+    
+    // Convert to JSON with pretty formatting
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    
+    // Create blob and file
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const fileName = `${listName}.json`;
+    
+    // Check if we're on mobile and if Web Share API is available
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile && navigator.share) {
+      try {
+        // Create a File object (required for sharing files)
+        const file = new File([blob], fileName, { type: 'application/json' });
+        
+        // Check if the browser can share files
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: listName,
+            text: `Album list export: ${listName}`
+          });
+          showToast('List shared successfully');
+          return;
+        }
+      } catch (shareError) {
+        console.log('Share API failed, falling back to download:', shareError);
+        // Fall through to regular download
+      }
+    }
+    
+    // Regular download for desktop or if share fails
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    
+    // For iOS Safari, we need to handle this slightly differently
+    if (window.navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
+      // iOS devices
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    }
+    
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+    
+    showToast(`Downloaded "${listName}"`);
+    
+  } catch (error) {
+    console.error('Error downloading/sharing list:', error);
+    showToast('Error downloading list', 'error');
+  }
+}
+
 // Initialize import conflict handling
 function initializeImportConflictHandling() {
   const conflictModal = document.getElementById('importConflictModal');
@@ -568,45 +647,7 @@ function initializeContextMenu() {
     
     if (!currentContextList) return;
     
-    try {
-      // Get the list data
-      const listData = lists[currentContextList];
-      
-      // Create a copy with rank added based on position
-      const exportData = listData.map((album, index) => {
-        const exported = { ...album };
-        // Add rank based on position (1-indexed)
-        exported.rank = index + 1;
-        // Add points for this position
-        exported.points = getPointsForPosition(index + 1);
-        return exported;
-      });
-      
-      // Convert to JSON with pretty formatting
-      const jsonStr = JSON.stringify(exportData, null, 2);
-      
-      // Create blob and download link
-      const blob = new Blob([jsonStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      
-      // Create temporary download link
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${currentContextList}.json`;
-      
-      // Trigger download
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      showToast(`Downloaded "${currentContextList}"`);
-    } catch (error) {
-      console.error('Error downloading list:', error);
-      showToast('Error downloading list', 'error');
-    }
+    downloadListAsJSON(currentContextList);
     
     currentContextList = null;
   };
