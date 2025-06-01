@@ -948,7 +948,28 @@ function updateListNav() {
         // Desktop: keep right-click
         button.addEventListener('contextmenu', (e) => {
           e.preventDefault();
-          // ... existing context menu code ...
+          e.stopPropagation();
+          
+          currentContextList = listName;
+          
+          const contextMenu = document.getElementById('contextMenu');
+          if (!contextMenu) return;
+          
+          // Position the menu at cursor
+          contextMenu.style.left = `${e.clientX}px`;
+          contextMenu.style.top = `${e.clientY}px`;
+          contextMenu.classList.remove('hidden');
+          
+          // Adjust position if menu goes off screen
+          setTimeout(() => {
+            const rect = contextMenu.getBoundingClientRect();
+            if (rect.right > window.innerWidth) {
+              contextMenu.style.left = `${e.clientX - rect.width}px`;
+            }
+            if (rect.bottom > window.innerHeight) {
+              contextMenu.style.top = `${e.clientY - rect.height}px`;
+            }
+          }, 0);
         });
       } else {
         // Mobile: long press
