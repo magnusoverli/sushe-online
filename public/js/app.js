@@ -1603,15 +1603,12 @@ function ensureAlbumsVisible() {
 }
 
 // Display albums function with editable genres and comments
+// Display albums function with editable genres and comments
 function displayAlbums(albums) {
   console.log('displayAlbums called, mobile:', window.innerWidth < 1024, 'albums:', albums?.length);
   
   const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
-  
-  // Get the correct container based on viewport
-  const container = isMobile 
-    ? document.getElementById('mobileAlbumContainer') 
-    : document.getElementById('albumContainer');
+  const container = document.getElementById('albumContainer');
     
   console.log('Container found:', !!container, 'Container ID:', container?.id);
   
@@ -1627,18 +1624,18 @@ function displayAlbums(albums) {
     container.innerHTML = `
       <div class="text-center text-gray-500 mt-20 px-4">
         <p class="text-xl mb-2">This list is empty</p>
-        <p class="text-sm">Click the + button to add albums${isMobile ? ' from the bottom menu' : ''}</p>
+        <p class="text-sm">Click the + button to add albums${isMobile ? '' : ' or use the Add Album button'}</p>
       </div>
     `;
     return;
   }
 
   if (!isMobile) {
-    // Desktop view - your existing code
+    // Desktop view - table layout
     const table = document.createElement('div');
     table.className = 'w-full relative';
     
-    // Header - now using album-grid class with button column
+    // Header - using album-grid class
     const header = document.createElement('div');
     header.className = 'album-grid gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
     header.style.alignItems = 'center';
@@ -1898,6 +1895,17 @@ function displayAlbums(albums) {
   }
   
   console.log('displayAlbums completed');
+}
+
+function createAlbumCard(album, index) {
+  const card = document.createElement('div');
+  card.className = 'album-card bg-gray-900 border-b border-gray-800 p-3 lg:p-0';
+  card.dataset.index = index;
+  
+  // Use the same data, just styled differently
+  card.innerHTML = `...`;
+  
+  return card;
 }
 
 // Add this function to handle mobile album actions

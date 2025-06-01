@@ -832,76 +832,69 @@ const renameListModalComponent = () => `
   </div>
 `;
 
-// Component: Add Album Modal
+// Component: Add Album Modal - Consolidated Version
 const addAlbumModalComponent = () => `
-  <!-- Desktop Modal -->
-  <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <!-- Desktop Modal Content -->
-    <div class="hidden lg:flex bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex-col">
-      <!-- Desktop Header -->
-      <div class="flex items-center justify-between p-6 border-b border-gray-800">
-        <h3 class="text-2xl font-bold text-white">Add Album to List</h3>
-        <button id="closeModalBtn" class="text-gray-400 hover:text-white transition duration-200">
+  <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center lg:p-4">
+    <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col">
+      <!-- Unified Header -->
+      <div class="flex items-center justify-between p-4 lg:p-6 border-b border-gray-800">
+        <button id="closeModalBtn" class="lg:hidden p-2 -m-2 text-gray-400 hover:text-white">
+          <i class="fas fa-arrow-left text-xl"></i>
+        </button>
+        <h3 class="text-lg lg:text-2xl font-semibold lg:font-bold text-white flex-1 lg:flex-none text-center lg:text-left">
+          Add Album
+        </h3>
+        <button id="closeModalBtnDesktop" class="hidden lg:block text-gray-400 hover:text-white transition duration-200">
           <i class="fas fa-times text-xl"></i>
         </button>
+        <div class="lg:hidden w-10"></div>
       </div>
       
-      <!-- Desktop Content -->
+      <!-- Unified Content -->
       <div class="flex-1 overflow-hidden flex flex-col">
         <!-- Search Section -->
-        <div id="searchSection" class="p-6 border-b border-gray-800">
-          <div class="max-w-2xl mx-auto">
-            <!-- New: Search mode toggle -->
-            <div class="flex justify-center mb-4">
+        <div id="searchSection" class="p-4 lg:p-6 border-b border-gray-800">
+          <div class="max-w-2xl mx-auto space-y-3">
+            <!-- Search mode toggle -->
+            <div class="flex justify-center">
               <div class="inline-flex bg-gray-800 rounded-lg p-1">
-                <button 
-                  id="searchModeArtist" 
-                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn active"
-                  data-mode="artist"
-                >
+                <button class="search-mode-btn px-4 py-2 text-sm font-medium rounded-md transition-colors active" data-mode="artist">
                   <i class="fas fa-user mr-2"></i>Artist
                 </button>
-                <button 
-                  id="searchModeAlbum" 
-                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn"
-                  data-mode="album"
-                >
+                <button class="search-mode-btn px-4 py-2 text-sm font-medium rounded-md transition-colors" data-mode="album">
                   <i class="fas fa-compact-disc mr-2"></i>Album
                 </button>
               </div>
             </div>
             
-            <div class="flex gap-3">
+            <div class="flex flex-col lg:flex-row gap-3">
               <input 
                 type="text" 
                 id="artistSearchInput" 
                 placeholder="Search for an artist..." 
-                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
               >
               <button 
                 id="searchArtistBtn" 
-                class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded transition duration-200 font-semibold whitespace-nowrap"
+                class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition duration-200 font-semibold whitespace-nowrap"
               >
                 <i class="fas fa-search mr-2"></i>Search
               </button>
             </div>
             
-            <!-- Manual Entry Link -->
-            <div class="text-center mt-3">
-              <button id="manualEntryBtn" class="text-gray-400 hover:text-red-500 text-sm transition-colors">
-                Can't find your album? Add it manually →
-              </button>
-            </div>
+            <button id="manualEntryBtn" class="w-full text-gray-400 hover:text-red-500 text-sm transition-colors py-2">
+              Can't find your album? Add it manually →
+            </button>
           </div>
         </div>
         
         <!-- Results Section -->
         <div class="flex-1 overflow-y-auto">
           <!-- Artist Results -->
-          <div id="artistResults" class="hidden p-6">
+          <div id="artistResults" class="hidden p-4 lg:p-6">
             <div class="max-w-4xl mx-auto">
-              <h4 class="text-lg font-semibold text-gray-300 mb-4">Select an Artist</h4>
-              <div id="artistList" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <h4 class="text-base lg:text-lg font-semibold text-gray-300 mb-3 lg:mb-4">Select an Artist</h4>
+              <div id="artistList" class="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 <!-- Artist results will be populated here -->
               </div>
             </div>
@@ -909,7 +902,7 @@ const addAlbumModalComponent = () => `
           
           <!-- Album Results -->
           <div id="albumResults" class="hidden">
-            <div class="sticky top-0 bg-gray-900 p-6 border-b border-gray-800 z-10 backdrop-blur-sm bg-opacity-95">
+            <div class="sticky top-0 bg-gray-900 p-4 lg:p-6 border-b border-gray-800 z-10 backdrop-blur-sm bg-opacity-95">
               <div class="max-w-4xl mx-auto">
                 <button id="backToArtists" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
                   <i class="fas fa-arrow-left"></i>
@@ -918,10 +911,10 @@ const addAlbumModalComponent = () => `
               </div>
             </div>
             
-            <div class="p-6">
+            <div class="p-4 lg:p-6">
               <div class="max-w-4xl mx-auto">
-                <h4 class="text-lg font-semibold text-gray-300 mb-4">Select an Album</h4>
-                <div id="albumList" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <h4 class="text-base lg:text-lg font-semibold text-gray-300 mb-3 lg:mb-4">Select an Album</h4>
+                <div id="albumList" class="grid grid-cols-2 lg:space-y-3 gap-3 lg:gap-0 lg:block">
                   <!-- Album results will be populated here -->
                 </div>
               </div>
@@ -929,19 +922,19 @@ const addAlbumModalComponent = () => `
           </div>
           
           <!-- Manual Entry Form -->
-          <div id="manualEntryForm" class="hidden p-6">
+          <div id="manualEntryForm" class="hidden p-4 lg:p-6">
             <div class="max-w-2xl mx-auto">
-              <div class="mb-6">
+              <div class="mb-4 lg:mb-6">
                 <button id="backToSearch" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
                   <i class="fas fa-arrow-left"></i>
                   <span>Back to search</span>
                 </button>
               </div>
               
-              <h4 class="text-lg font-semibold text-gray-300 mb-6">Add Album Manually</h4>
+              <h4 class="text-base lg:text-lg font-semibold text-gray-300 mb-4 lg:mb-6">Add Album Manually</h4>
               
               <form id="manualAlbumForm" class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <!-- Artist Name -->
                   <div>
                     <label class="block text-gray-400 text-sm font-medium mb-2" for="manualArtist">
@@ -951,7 +944,7 @@ const addAlbumModalComponent = () => `
                       type="text" 
                       id="manualArtist" 
                       name="artist"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
                       placeholder="Enter artist name"
                       required
                     >
@@ -966,7 +959,7 @@ const addAlbumModalComponent = () => `
                       type="text" 
                       id="manualAlbum" 
                       name="album"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
                       placeholder="Enter album title"
                       required
                     >
@@ -981,7 +974,7 @@ const addAlbumModalComponent = () => `
                       type="date" 
                       id="manualReleaseDate" 
                       name="release_date"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
                     >
                   </div>
                   
@@ -993,7 +986,7 @@ const addAlbumModalComponent = () => `
                     <select 
                       id="manualCountry" 
                       name="country"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200"
                     >
                       <option value="">Select a country...</option>
                     </select>
@@ -1006,8 +999,9 @@ const addAlbumModalComponent = () => `
                     Cover Art
                   </label>
                   <div class="flex items-start gap-4">
-                    <div id="coverPreview" class="w-32 h-32 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 flex-shrink-0">
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+                    <div id="coverPreview" class="w-20 h-20 lg:w-32 lg:h-32 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 flex-shrink-0">
+                      <i class="fas fa-image text-2xl text-gray-600 lg:hidden"></i>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600 hidden lg:block">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                         <circle cx="8.5" cy="8.5" r="1.5"></circle>
                         <polyline points="21 15 16 10 5 21"></polyline>
@@ -1024,27 +1018,27 @@ const addAlbumModalComponent = () => `
                       <button 
                         type="button"
                         onclick="document.getElementById('manualCoverArt').click()"
-                        class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+                        class="w-full lg:w-auto px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition duration-200"
                       >
-                        <i class="fas fa-upload mr-2"></i>Choose Image
+                        <i class="fas fa-camera lg:fas lg:fa-upload mr-2"></i>Choose Image
                       </button>
-                      <p class="text-xs text-gray-500 mt-2">Upload album cover art (max 5MB)</p>
+                      <p class="text-xs text-gray-500 mt-1 lg:mt-2">Max 5MB</p>
                     </div>
                   </div>
                 </div>
                 
                 <!-- Submit Buttons -->
-                <div class="flex gap-3 justify-end pt-4">
+                <div class="flex gap-3 justify-end pt-4 pb-safe">
                   <button 
                     type="button"
                     id="cancelManualEntry" 
-                    class="px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+                    class="flex-1 lg:flex-none px-4 lg:px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition duration-200"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
-                    class="px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+                    class="flex-1 lg:flex-none px-6 lg:px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition duration-200 font-semibold"
                   >
                     Add Album
                   </button>
@@ -1055,228 +1049,15 @@ const addAlbumModalComponent = () => `
           
           <!-- Loading State -->
           <div id="searchLoading" class="hidden text-center py-20">
-            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+            <div class="inline-block animate-spin rounded-full h-10 w-10 lg:h-12 lg:w-12 border-b-2 border-red-600"></div>
             <p class="text-gray-400 mt-4">Searching...</p>
           </div>
           
           <!-- Empty State -->
-          <div id="searchEmpty" class="text-center py-20 text-gray-500">
-            <i class="fas fa-search text-5xl mb-4 opacity-50"></i>
-            <p class="text-lg">Search for an artist or album to add to your list</p>
+          <div id="searchEmpty" class="text-center py-20 text-gray-500 px-4">
+            <i class="fas fa-search text-4xl lg:text-5xl mb-4 opacity-50"></i>
+            <p class="text-base lg:text-lg">Search for an artist or album to add to your list</p>
             <p class="text-sm mt-2">Or add an album manually</p>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- Mobile Full-Screen Sheet -->
-    <div class="lg:hidden fixed inset-0 bg-gray-900 flex flex-col">
-      <!-- Mobile Header -->
-      <div class="flex items-center justify-between p-4 border-b border-gray-800">
-        <button id="closeMobileModalBtn" class="p-2 -m-2 text-gray-400 hover:text-white">
-          <i class="fas fa-arrow-left text-xl"></i>
-        </button>
-        <h3 class="text-lg font-semibold text-white">Add Album</h3>
-        <div class="w-10"></div> <!-- Spacer for centering -->
-      </div>
-      
-      <!-- Mobile Content -->
-      <div class="flex-1 overflow-hidden flex flex-col">
-        <!-- Search Section -->
-        <div id="mobileSearchSection" class="p-4 border-b border-gray-800">
-          <div class="space-y-3">
-            <!-- Add Search mode toggle for mobile -->
-            <div class="flex justify-center">
-              <div class="inline-flex bg-gray-800 rounded-lg p-1">
-                <button 
-                  id="mobileSearchModeArtist" 
-                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn active"
-                  data-mode="artist"
-                >
-                  <i class="fas fa-user mr-2"></i>Artist
-                </button>
-                <button 
-                  id="mobileSearchModeAlbum" 
-                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn"
-                  data-mode="album"
-                >
-                  <i class="fas fa-compact-disc mr-2"></i>Album
-                </button>
-              </div>
-            </div>
-            
-            <input 
-              type="text" 
-              id="mobileArtistSearchInput" 
-              placeholder="Search for an artist..." 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-            >
-            <button 
-              id="mobileSearchArtistBtn" 
-              class="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition duration-200 font-semibold"
-            >
-              <i class="fas fa-search mr-2"></i>Search
-            </button>
-            
-            <!-- Manual Entry Link -->
-            <button id="mobileManualEntryBtn" class="w-full text-gray-400 hover:text-red-500 text-sm transition-colors py-2">
-              Can't find your album? Add it manually →
-            </button>
-          </div>
-        </div>
-        
-        <!-- Results Section -->
-        <div class="flex-1 overflow-y-auto">
-          <!-- Artist Results -->
-          <div id="mobileArtistResults" class="hidden p-4">
-            <h4 class="text-base font-semibold text-gray-300 mb-3">Select an Artist</h4>
-            <div id="mobileArtistList" class="space-y-2">
-              <!-- Artist results will be populated here -->
-            </div>
-          </div>
-          
-          <!-- Album Results -->
-          <div id="mobileAlbumResults" class="hidden">
-            <div class="sticky top-0 bg-gray-900 p-4 border-b border-gray-800 z-10">
-              <button id="mobileBackToArtists" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
-                <i class="fas fa-arrow-left"></i>
-                <span>Back to artists</span>
-              </button>
-            </div>
-            
-            <div class="p-4">
-              <h4 class="text-base font-semibold text-gray-300 mb-3">Select an Album</h4>
-              <div id="mobileAlbumList" class="grid grid-cols-2 gap-3">
-                <!-- Album results with 2 columns on mobile -->
-              </div>
-            </div>
-          </div>
-          
-          <!-- Manual Entry Form -->
-          <div id="mobileManualEntryForm" class="hidden p-4">
-            <div class="mb-4">
-              <button id="mobileBackToSearch" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
-                <i class="fas fa-arrow-left"></i>
-                <span>Back to search</span>
-              </button>
-            </div>
-            
-            <h4 class="text-base font-semibold text-gray-300 mb-4">Add Album Manually</h4>
-            
-            <form id="mobileManualAlbumForm" class="space-y-4">
-              <!-- Artist Name -->
-              <div>
-                <label class="block text-gray-400 text-sm mb-2" for="mobileManualArtist">
-                  Artist Name <span class="text-red-500">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  id="mobileManualArtist" 
-                  name="artist"
-                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                  required
-                >
-              </div>
-              
-              <!-- Album Title -->
-              <div>
-                <label class="block text-gray-400 text-sm mb-2" for="mobileManualAlbum">
-                  Album Title <span class="text-red-500">*</span>
-                </label>
-                <input 
-                  type="text" 
-                  id="mobileManualAlbum" 
-                  name="album"
-                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                  required
-                >
-              </div>
-              
-              <!-- Release Date -->
-              <div>
-                <label class="block text-gray-400 text-sm mb-2" for="mobileManualReleaseDate">
-                  Release Date
-                </label>
-                <input 
-                  type="date" 
-                  id="mobileManualReleaseDate" 
-                  name="release_date"
-                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                >
-              </div>
-              
-              <!-- Country -->
-              <div>
-                <label class="block text-gray-400 text-sm mb-2" for="mobileManualCountry">
-                  Country
-                </label>
-                <select 
-                  id="mobileManualCountry" 
-                  name="country"
-                  class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200"
-                >
-                  <option value="">Select a country...</option>
-                </select>
-              </div>
-              
-              <!-- Cover Art Upload -->
-              <div>
-                <label class="block text-gray-400 text-sm mb-2">
-                  Cover Art
-                </label>
-                <div class="flex items-center gap-4">
-                  <div id="mobileCoverPreview" class="w-20 h-20 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700">
-                    <i class="fas fa-image text-2xl text-gray-600"></i>
-                  </div>
-                  <div class="flex-1">
-                    <input 
-                      type="file" 
-                      id="mobileManualCoverArt" 
-                      name="cover_art"
-                      accept="image/*"
-                      class="hidden"
-                    >
-                    <button 
-                      type="button"
-                      onclick="document.getElementById('mobileManualCoverArt').click()"
-                      class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition duration-200 w-full"
-                    >
-                      <i class="fas fa-camera mr-2"></i>Choose Image
-                    </button>
-                    <p class="text-xs text-gray-500 mt-1">Max 5MB</p>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Submit Buttons -->
-              <div class="flex gap-3 pt-4 pb-safe">
-                <button 
-                  type="button"
-                  id="mobileCancelManualEntry" 
-                  class="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition duration-200"
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  class="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition duration-200 font-semibold"
-                >
-                  Add Album
-                </button>
-              </div>
-            </form>
-          </div>
-          
-          <!-- Loading State -->
-          <div id="mobileSearchLoading" class="hidden text-center py-20">
-            <div class="inline-block animate-spin rounded-full h-10 w-10 border-b-2 border-red-600"></div>
-            <p class="text-gray-400 mt-4">Searching...</p>
-          </div>
-          
-          <!-- Empty State -->
-          <div id="mobileSearchEmpty" class="text-center py-20 text-gray-500 px-4">
-            <i class="fas fa-search text-4xl mb-4 opacity-50"></i>
-            <p>Search for an artist or album to add to your list</p>
           </div>
         </div>
       </div>
@@ -1318,7 +1099,7 @@ const confirmationModalComponent = () => `
   </div>
 `;
 
-// Main Spotify template - Updated to use shared header
+// Main Spotify template - Consolidated version
 const spotifyTemplate = (req) => `
 <!DOCTYPE html>
 <html lang="en">
@@ -1344,7 +1125,7 @@ const spotifyTemplate = (req) => `
       --accent-subtle: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.1)};
     }
     
-    /* Apply accent color throughout the app */
+    /* Apply accent color throughout */
     .text-red-600, .text-red-500, .text-red-400 { 
       color: var(--accent-color) !important; 
     }
@@ -1363,289 +1144,192 @@ const spotifyTemplate = (req) => `
     .focus\\:border-red-600:focus { 
       border-color: var(--accent-color) !important; 
     }
+    
+    /* Responsive layout system */
+    .app-layout {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    
+    .main-content {
+      display: grid;
+      grid-template-columns: 0 1fr; /* Mobile: no sidebar */
+      overflow: hidden;
+    }
+    
+    @media (min-width: 1024px) {
+      .main-content {
+        grid-template-columns: 16rem 1fr; /* Desktop: 256px sidebar */
+      }
+    }
+    
+    /* Responsive utilities */
     @media (max-width: 1023px) {
-
-    input[type="date"] {
-      -webkit-appearance: none;
-      appearance: none;
-      display: block;
-      width: 100%;
-    }
-
-    /* Style empty date inputs to match filled ones */
-    input[type="date"]:not([value]),
-    input[type="date"][value=""] {
-      color: #6b7280; /* gray-500 to match placeholder text */
+      .desktop-only { display: none !important; }
+      .mobile-hidden { display: none !important; }
     }
     
-    /* Hide the default calendar icon on webkit browsers */
-    input[type="date"]::-webkit-calendar-picker-indicator {
-      background: transparent;
-      bottom: 0;
-      color: transparent;
-      cursor: pointer;
-      height: auto;
-      left: 0;
-      position: absolute;
-      right: 0;
-      top: 0;
-      width: auto;
+    @media (min-width: 1024px) {
+      .mobile-only { display: none !important; }
+      .desktop-hidden { display: none !important; }
     }
     
-    /* Ensure consistent height and padding */
-    input[type="date"]::-webkit-datetime-edit {
-      padding: 0;
+    /* Sidebar responsive behavior */
+    .sidebar {
+      width: 0;
+      overflow: hidden;
+      transition: none;
     }
     
-    input[type="date"]::-webkit-datetime-edit-fields-wrapper {
-      padding: 0;
+    @media (min-width: 1024px) {
+      .sidebar {
+        width: 16rem;
+        overflow: visible;
+      }
     }
-    /* Mobile modal styles */
-    .pb-safe {
-      padding-bottom: env(safe-area-inset-bottom, 1rem);
+    
+    /* FAB styling */
+    #addAlbumFAB {
+      box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4), 
+                  0 2px 4px 0 rgba(0, 0, 0, 0.2);
     }
-
-    /* Album grid for mobile */
-    #mobileAlbumList .album-item {
-      aspect-ratio: 1;
+    
+    #addAlbumFAB:active {
+      box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.4);
     }
-
-    /* Touch-friendly sizing */
-    #mobileArtistList button,
-    #mobileAlbumList button {
-      min-height: 60px;
+    
+    /* Album container responsive padding */
+    #albumContainer {
+      padding-bottom: 1rem;
     }
-
-    /* Sticky header for album results */
-    #mobileAlbumResults .sticky {
-      backdrop-filter: blur(10px);
-      background-color: rgba(17, 24, 39, 0.95);
+    
+    @media (max-width: 1023px) {
+      #albumContainer {
+        padding-bottom: 5rem; /* Space for FAB on mobile */
+      }
     }
-      /* FAB styling */
-      #mobileFAB {
-        box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4), 
-                    0 2px 4px 0 rgba(0, 0, 0, 0.2);
+    
+    /* Safe areas for iOS */
+    .safe-area-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    /* Sortable enhancements */
+    .sortable-ghost {
+      opacity: 0.4;
+    }
+    
+    .sortable-drag {
+      opacity: 0.9 !important;
+      transform: rotate(1deg) scale(1.02);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+      z-index: 9999;
+    }
+    
+    .sortable-chosen {
+      background-color: rgba(55, 65, 81, 0.5);
+    }
+    
+    /* Touch optimization */
+    @media (max-width: 1023px) {
+      .touch-target {
+        min-height: 44px;
       }
       
-      #mobileFAB:active {
-        box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.4);
-      }
-      
-      /* Ensure content scrolls all the way to bottom with space for FAB */
-      #mobileAlbumContainer {
-        padding-bottom: 5rem; /* Space for FAB */
-      }
-      
-      /* Safe area for iOS devices */
-      .safe-area-bottom {
-        padding-bottom: env(safe-area-inset-bottom);
-      }
-
-      /* Debug: Visualize scroll zones (remove in production) */
-      .sortable-scrolling::before,
-      .sortable-scrolling::after {
-        content: '';
-        position: fixed;
-        left: 0;
-        right: 0;
-        height: 100px; /* Increased from 60px */
-        pointer-events: none;
-        z-index: 9998;
-        opacity: 0;
-        transition: opacity 0.2s;
-      }
-      
-
-      
-      .sortable-scrolling::after {
-        bottom: 0;
-        background: linear-gradient(to top, 
-          rgba(220, 38, 38, 0.3) 0%, 
-          rgba(220, 38, 38, 0.15) 50%, 
-          transparent 100%);
-      }
-      
-      /* Show zones when actively dragging */
-      .sortable-drag ~ * .sortable-scrolling::before,
-      .sortable-drag ~ * .sortable-scrolling::after,
-      .sortable-scrolling.sortable-drag-active::before,
-      .sortable-scrolling.sortable-drag-active::after {
-        opacity: 1;
-      }
-
-      /* Add a class when dragging to make zones visible */
-      body.sorting-active .sortable-scrolling::before,
-      body.sorting-active .sortable-scrolling::after {
-        opacity: 0.5;
-      }
-      /* Smooth scroll behavior during sort */
-      .sortable-scrolling {
-        position: relative;
-      }
-      
-      /* Ensure all content is rendered */
-      .mobile-album-list {
-        will-change: transform;
-        transform: translateZ(0); /* Force GPU acceleration */
-      }
-      
-      /* Pre-render off-screen content */
-      .album-card {
-        will-change: transform;
-        contain: layout style;
-      }
-      
-      /* Ensure scrollable container has proper height */
-      #mobileAlbumContainer {
-        min-height: 100%;
-      }
-
-      .whitespace-nowrap {
-        white-space: nowrap;
-      }
-      
-      /* Reduce overall card height slightly */
-      .album-card {
-        min-height: auto;
-      }
-      
-      /* Sortable states */
-      .sortable-ghost {
-        opacity: 0.4;
-      }
-
-      .album-card:active {
-        background-color: rgba(31, 41, 55, 0.5);
-      }
-      
-      /* Make drag handle more subtle until needed */
-      .drag-handle {
-        transition: background-color 0.2s;
-      }
-      
-      .album-card:active .drag-handle,
-      .sortable-chosen .drag-handle {
-        background-color: rgba(220, 38, 38, 0.1);
-      }
-      
-      .drag-handle svg {
-        transition: opacity 0.2s;
-      }
-      
-      .album-card:active .drag-handle svg,
-      .sortable-chosen .drag-handle svg {
-        opacity: 1;
-      }
-      
-      /* Improve line clamping */
-      .line-clamp-1 {
-        display: -webkit-box;
-        -webkit-line-clamp: 1;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      
-      .sortable-drag {
-        opacity: 0.9 !important;
-        transform: rotate(1deg) scale(1.02);
-        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
-        z-index: 9999;
-      }
-      
-      .sortable-chosen {
-        background-color: rgba(55, 65, 81, 0.5);
-      }
-      
-      /* Ensure drag handle is always accessible */
-      .drag-handle {
-        touch-action: none;
-        -webkit-user-select: none;
-        user-select: none;
-        -webkit-touch-callout: none;
-      }
-      
-      /* Prevent any interference with drag */
-      .album-card {
-        touch-action: pan-y;
-        position: relative;
-      }
-      
-      .album-card.sortable-drag {
-        touch-action: none;
-      }
-
       body {
         overscroll-behavior: contain;
         -webkit-user-select: none;
         user-select: none;
       }
-      
-      /* Prevent horizontal scrolling */
-      #mobileAlbumContainer {
-        width: 100%;
-        overflow-x: hidden;
-      }
-      
-      /* Ensure cards don't overflow */
-      #mobileAlbumContainer > div {
-        max-width: 100%;
-        overflow-x: hidden;
-      }
-      
-      /* Fix for iOS momentum scrolling */
-      .overflow-y-auto {
-        -webkit-overflow-scrolling: touch;
-      }
-      
-      /* Ensure modals work on mobile */
-      .modal-content {
-        max-height: calc(100vh - 2rem);
-        margin: 1rem;
-      }
     }
   </style>
 </head>
 <body class="bg-black text-gray-200">
-  <div class="flex flex-col h-screen">
-    <div id="dynamicHeader">
-      ${headerComponent(req.user, 'home', '')}
-    </div>
-    
-    <!-- Desktop Layout (hidden on mobile) -->
-    <div class="hidden lg:flex flex-1 overflow-hidden">
-      ${sidebarComponent(req)}
-      ${mainContentComponent()}
-    </div>
-    
-    <!-- Mobile Layout (hidden on desktop) -->
-    <div class="lg:hidden flex flex-col flex-1 overflow-hidden">
-      <div class="flex-1 overflow-y-auto">
-        <div id="mobileAlbumContainer" class="min-h-full">
-          <!-- Albums will be displayed here -->
-          <div class="text-center text-gray-500 mt-20 px-4">
-            <p class="text-xl mb-2">No list selected</p>
-            <p class="text-sm">Select a list from the menu</p>
-          </div>
+  <div class="app-layout">
+    <!-- Unified Header -->
+    <header class="bg-gray-900 border-b border-gray-800 z-50">
+      <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-6">
+        <!-- Mobile menu button / Desktop logo -->
+        <div class="flex items-center gap-2 lg:gap-8">
+          <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
+            <i class="fas fa-bars text-lg"></i>
+          </button>
+          <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
+          
+          <!-- Desktop navigation -->
+          <nav class="hidden lg:flex gap-6">
+            <a href="/" class="text-red-600 transition duration-200">
+              <i class="fas fa-home mr-2"></i>Home
+            </a>
+          </nav>
+        </div>
+        
+        <!-- Current list name (mobile only) -->
+        <div class="mobile-only flex items-center gap-2 min-w-0 flex-1 mx-2">
+          <span id="headerListName" class="text-sm text-yellow-500 font-medium truncate ${req.user.lastSelectedList ? '' : 'hidden'}">
+            ${req.user.lastSelectedList || ''}
+          </span>
+        </div>
+        
+        <!-- User menu -->
+        <div class="flex items-center gap-2 lg:gap-6">
+          <span class="hidden lg:inline text-sm text-gray-400">${req.user?.email}</span>
+          <a href="/settings" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
+            <i class="fas fa-cog text-lg"></i>
+          </a>
+          <a href="/logout" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
+            <i class="fas fa-sign-out-alt text-lg"></i>
+          </a>
         </div>
       </div>
-    </div>
-
-    <!-- Floating Action Button (FAB) -->
-    <button 
-      id="mobileFAB" 
-      class="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
-      style="display: none;"
-      onclick="if(window.openAddAlbumModal) window.openAddAlbumModal()"
-    >
-      <i class="fas fa-plus text-xl"></i>
-    </button>
-
+    </header>
     
-    <!-- Mobile Lists Drawer -->
-    <div id="mobileListsDrawer" class="lg:hidden fixed inset-0 z-50 hidden">
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <!-- Sidebar (responsive) -->
+      <aside class="sidebar bg-gray-900 border-r border-gray-800 flex flex-col">
+        <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
+          <div class="flex-1">
+            <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Your Lists</h3>
+            <ul id="listNav" class="space-y-1">
+              <!-- Lists will be populated here -->
+            </ul>
+          </div>
+          
+          <div class="mt-6 pt-6 border-t border-gray-800">
+            <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
+              <i class="fas fa-plus mr-2"></i>Create List
+            </button>
+            <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+              <i class="fas fa-file-import mr-2"></i>Import List
+            </button>
+            <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
+              <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
+            </button>
+            <input type="file" id="fileInput" accept=".json" style="display: none;">
+          </div>
+        </nav>
+      </aside>
+      
+      <!-- Album Display Area -->
+      <main class="flex-1 overflow-hidden">
+        <div class="h-full overflow-y-auto">
+          <div id="albumContainer" class="min-h-full p-4 lg:p-6">
+            <!-- Albums will be displayed here -->
+            <div class="text-center text-gray-500 mt-20">
+              <p class="text-xl mb-2">No list selected</p>
+              <p class="text-sm">Create or import a list to get started</p>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+    
+    <!-- Mobile Menu Drawer -->
+    <div id="mobileMenu" class="mobile-only fixed inset-0 z-50 hidden">
       <!-- Backdrop -->
-      <div class="absolute inset-0 bg-black bg-opacity-50" onclick="toggleMobileLists()"></div>
+      <div class="absolute inset-0 bg-black bg-opacity-50" onclick="toggleMobileMenu()"></div>
       
       <!-- Drawer -->
       <div class="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-900 border-r border-gray-800 overflow-hidden flex flex-col">
@@ -1653,7 +1337,7 @@ const spotifyTemplate = (req) => `
         <div class="p-4 border-b border-gray-800">
           <div class="flex justify-between items-center">
             <h2 class="text-xl font-bold text-white">Your Lists</h2>
-            <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 hover:text-white">
+            <button onclick="toggleMobileMenu()" class="p-2 -m-2 text-gray-400 hover:text-white">
               <i class="fas fa-times text-xl"></i>
             </button>
           </div>
@@ -1661,11 +1345,11 @@ const spotifyTemplate = (req) => `
         
         <!-- Quick Actions -->
         <div class="p-4 border-b border-gray-800 space-y-2">
-          <button onclick="document.getElementById('fileInput').click(); toggleMobileLists();" 
+          <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
                   class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 text-left">
             <i class="fas fa-file-import mr-2"></i>Import List
           </button>
-          <button id="mobileCreateListBtn" 
+          <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
                   class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 text-left">
             <i class="fas fa-plus mr-2"></i>Create New List
           </button>
@@ -1674,13 +1358,14 @@ const spotifyTemplate = (req) => `
         <!-- Lists -->
         <div class="flex-1 overflow-y-auto p-4">
           <ul id="mobileListNav" class="space-y-1">
-            <!-- Lists will be populated here -->
+            <!-- Mobile list items will be populated here -->
           </ul>
         </div>
         
         <!-- Footer Actions -->
         <div class="p-4 border-t border-gray-800 safe-area-bottom">
-          <button id="mobileClearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
+          <button onclick="document.getElementById('clearBtn').click(); toggleMobileMenu();" 
+                  class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
             <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
           </button>
         </div>
@@ -1688,9 +1373,20 @@ const spotifyTemplate = (req) => `
     </div>
   </div>
   
+  <!-- Floating Action Button (Mobile Only) -->
+  <button 
+    id="addAlbumFAB" 
+    class="mobile-only fixed bottom-6 right-6 w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
+    style="display: none;"
+    onclick="if(window.openAddAlbumModal) window.openAddAlbumModal()"
+  >
+    <i class="fas fa-plus text-xl"></i>
+  </button>
+  
   <!-- Toast container -->
   <div id="toast" class="toast"></div>
   
+  <!-- Modals -->
   ${contextMenusComponent()}
   ${createListModalComponent()}
   ${renameListModalComponent()}
@@ -1703,189 +1399,162 @@ const spotifyTemplate = (req) => `
   <script src="/js/app.js"></script>
 
   <script>
-    // Make header component available to JavaScript
-    window.headerComponent = ${headerComponent.toString()};
+    // Global state
     window.currentUser = ${JSON.stringify(req.user)};
     window.lastSelectedList = ${JSON.stringify(req.user.lastSelectedList || null)};
-
-    // Mobile-specific functions
-    function toggleMobileLists() {
-      const drawer = document.getElementById('mobileListsDrawer');
-      drawer.classList.toggle('hidden');
+    
+    // Mobile menu toggle
+    function toggleMobileMenu() {
+      const menu = document.getElementById('mobileMenu');
+      menu.classList.toggle('hidden');
     }
     
-    // Initialize mobile functionality
+    // Initialize the app
     document.addEventListener('DOMContentLoaded', () => {
-      // Mobile-specific initialization
-      if (window.innerWidth < 1024) {
-        // Initialize FAB visibility based on current list
-        const fab = document.getElementById('mobileFAB');
-        if (fab) {
-          // Show FAB if there's already a current list
-          if (window.currentList) {
-            fab.style.display = 'flex';
-          }
-          
-          // Ensure FAB has click handler
-          fab.onclick = () => {
-            if (!currentList) {
-              showToast('Please select a list first', 'error');
-              return;
-            }
-            if (window.openAddAlbumModal) {
-              window.openAddAlbumModal();
-            }
-          };
-        }
-      }
-      
-      // Mobile create list button
-      const mobileCreateBtn = document.getElementById('mobileCreateListBtn');
-      if (mobileCreateBtn) {
-        mobileCreateBtn.onclick = () => {
-          toggleMobileLists();
-          document.getElementById('createListBtn').click();
-        };
-      }
-      
-      // Mobile clear button
-      const mobileClearBtn = document.getElementById('mobileClearBtn');
-      if (mobileClearBtn) {
-        mobileClearBtn.onclick = () => {
-          toggleMobileLists();
-          document.getElementById('clearBtn').click();
-        };
-      }
-      
-      // Update list nav to include mobile
+      // Update the list navigation to include mobile
       const originalUpdateListNav = window.updateListNav;
       window.updateListNav = function() {
-        originalUpdateListNav();
-        updateMobileListNav();
+        if (originalUpdateListNav) originalUpdateListNav();
+        
+        // Update mobile navigation
+        const mobileNav = document.getElementById('mobileListNav');
+        if (mobileNav) {
+          mobileNav.innerHTML = '';
+          
+          Object.keys(lists).forEach(listName => {
+            const li = document.createElement('li');
+            const isActive = currentList === listName;
+            
+            li.innerHTML = \`
+              <div class="flex items-center group">
+                <button 
+                  onclick="selectList('\${listName}'); toggleMobileMenu();"
+                  class="flex-1 text-left px-3 py-3 rounded text-sm hover:bg-gray-800 transition duration-200 \${isActive ? 'bg-gray-800 text-red-500' : 'text-gray-300'}"
+                >
+                  \${listName}
+                </button>
+                <button 
+                  onclick="event.stopPropagation(); showListMenu('\${listName}');"
+                  class="p-3 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 lg:opacity-100 transition-opacity"
+                >
+                  <i class="fas fa-ellipsis-v"></i>
+                </button>
+              </div>
+            \`;
+            
+            mobileNav.appendChild(li);
+          });
+        }
       };
       
-      // Initialize mobile nav
-      updateMobileListNav();
-    });
-    
-    function updateMobileListNav() {
-      const mobileNav = document.getElementById('mobileListNav');
-      if (!mobileNav) return;
-      
-      mobileNav.innerHTML = '';
-      
-      Object.keys(lists).forEach(listName => {
-        const li = document.createElement('li');
-        const isActive = currentList === listName;
+      // Override selectList to handle responsive behavior
+      const originalSelectList = window.selectList;
+      window.selectList = async function(listName) {
+        await originalSelectList(listName);
         
-        const listButton = document.createElement('button');
-        listButton.className = 'flex-1 text-left px-3 py-3 rounded text-sm hover:bg-gray-800 transition duration-200 ' + 
-                              (isActive ? 'bg-gray-800 text-red-500' : 'text-gray-300');
-        listButton.textContent = listName;
-        listButton.onclick = () => {
-          // Close the drawer first for better UX
-          toggleMobileLists();
-          // Then select the list with a small delay to ensure DOM is ready
-          setTimeout(() => {
-            selectList(listName);
-          }, 150); // Wait for drawer animation to complete
-        };
-        
-        const menuButton = document.createElement('button');
-        menuButton.className = 'p-3 text-gray-400 hover:text-white';
-        menuButton.innerHTML = '<i class="fas fa-ellipsis-v"></i>';
-        menuButton.onclick = (e) => {
-          e.stopPropagation();
-          showMobileListMenu(listName);
-        };
-        
-        const wrapper = document.createElement('div');
-        wrapper.className = 'flex items-center';
-        wrapper.appendChild(listButton);
-        wrapper.appendChild(menuButton);
-        
-        li.appendChild(wrapper);
-        mobileNav.appendChild(li);
-      });
-    }
-    
-    // Mobile list menu (action sheet)
-    function showMobileListMenu(listName) {
-      const actionSheet = document.createElement('div');
-      actionSheet.className = 'fixed inset-0 z-[60] lg:hidden';
-      actionSheet.innerHTML = \`
-        <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
-        <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-          <div class="p-4">
-            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
-            <h3 class="font-semibold text-white mb-4">\${listName}</h3>
-            
-            <button onclick="downloadListAsJSON('\${listName}'); this.closest('.fixed').remove();" 
-                    class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-              <i class="fas fa-download mr-3 text-gray-400"></i>Download List
-            </button>
-            
-            <button onclick="openRenameModal('\${listName}'); this.closest('.fixed').remove(); toggleMobileLists();" 
-                    class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-              <i class="fas fa-edit mr-3 text-gray-400"></i>Rename List
-            </button>
-            
-            <button onclick="if(confirm('Delete this list?')) { deleteList('\${listName}'); this.closest('.fixed').remove(); toggleMobileLists(); }" 
-                    class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
-              <i class="fas fa-trash mr-3"></i>Delete List
-            </button>
-            
-            <button onclick="this.closest('.fixed').remove()" 
-                    class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
-              Cancel
-            </button>
-          </div>
-        </div>
-      \`;
-      document.body.appendChild(actionSheet);
-    }
-    
-    async function deleteList(listName) {
-      try {
-        await apiCall(\`/api/lists/\${encodeURIComponent(listName)}\`, {
-          method: 'DELETE'
-        });
-        
-        delete lists[listName];
-        
-        if (currentList === listName) {
-          currentList = null;
-          
-          // Update mobile header
-          updateMobileHeader();
-          
-          // Hide FAB when no list is selected
-          const fab = document.getElementById('mobileFAB');
-          if (fab) {
-            fab.style.display = 'none';
-          }
-          
-          // Update both containers
-          const desktopContainer = document.getElementById('albumContainer');
-          const mobileContainer = document.getElementById('mobileAlbumContainer');
-          const emptyHTML = \`
-            <div class="text-center text-gray-500 mt-20 px-4">
-              <p class="text-xl mb-2">No list selected</p>
-              <p class="text-sm">Select a list from the menu</p>
-            </div>
-          \`;
-          
-          if (desktopContainer) desktopContainer.innerHTML = emptyHTML;
-          if (mobileContainer) mobileContainer.innerHTML = emptyHTML;
+        // Update mobile header
+        const headerListName = document.getElementById('headerListName');
+        if (headerListName) {
+          headerListName.textContent = listName || '';
+          headerListName.classList.toggle('hidden', !listName);
         }
         
-        updateListNav();
-        showToast(\`List "\${listName}" deleted\`);
-      } catch (error) {
-        console.error('Error deleting list:', error);
-        showToast('Error deleting list', 'error');
+        // Show/hide FAB
+        const fab = document.getElementById('addAlbumFAB');
+        if (fab) {
+          fab.style.display = listName ? 'flex' : 'none';
+        }
+      };
+      
+      // Mobile list menu (unified for both mobile and desktop)
+      window.showListMenu = function(listName) {
+        const isMobile = window.innerWidth < 1024;
+        
+        if (isMobile) {
+          // Mobile action sheet
+          const actionSheet = document.createElement('div');
+          actionSheet.className = 'fixed inset-0 z-[60]';
+          actionSheet.innerHTML = \`
+            <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
+            <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+              <div class="p-4">
+                <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+                <h3 class="font-semibold text-white mb-4">\${listName}</h3>
+                
+                <button onclick="downloadListAsJSON('\${listName}'); this.closest('.fixed').remove();" 
+                        class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  <i class="fas fa-download mr-3 text-gray-400"></i>Download List
+                </button>
+                
+                <button onclick="openRenameModal('\${listName}'); this.closest('.fixed').remove();" 
+                        class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  <i class="fas fa-edit mr-3 text-gray-400"></i>Rename List
+                </button>
+                
+                <button onclick="if(confirm('Delete this list?')) { document.getElementById('deleteListOption').click(); currentContextList='\${listName}'; } this.closest('.fixed').remove();" 
+                        class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+                  <i class="fas fa-trash mr-3"></i>Delete List
+                </button>
+                
+                <button onclick="this.closest('.fixed').remove()" 
+                        class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          \`;
+          document.body.appendChild(actionSheet);
+        } else {
+          // Desktop context menu
+          currentContextList = listName;
+          const contextMenu = document.getElementById('contextMenu');
+          const rect = event.currentTarget.getBoundingClientRect();
+          
+          contextMenu.style.left = rect.right + 'px';
+          contextMenu.style.top = rect.top + 'px';
+          contextMenu.classList.remove('hidden');
+          
+          // Adjust position if menu goes off screen
+          setTimeout(() => {
+            const menuRect = contextMenu.getBoundingClientRect();
+            if (menuRect.right > window.innerWidth) {
+              contextMenu.style.left = (rect.left - menuRect.width) + 'px';
+            }
+            if (menuRect.bottom > window.innerHeight) {
+              contextMenu.style.top = (window.innerHeight - menuRect.height - 10) + 'px';
+            }
+          }, 0);
+        }
+      };
+      
+      // Handle right-click on desktop list items
+      if (window.innerWidth >= 1024) {
+        document.addEventListener('contextmenu', (e) => {
+          const listButton = e.target.closest('#listNav button');
+          if (listButton) {
+            e.preventDefault();
+            const listName = listButton.textContent.trim();
+            currentContextList = listName;
+            
+            const contextMenu = document.getElementById('contextMenu');
+            contextMenu.style.left = e.clientX + 'px';
+            contextMenu.style.top = e.clientY + 'px';
+            contextMenu.classList.remove('hidden');
+            
+            // Adjust position if menu goes off screen
+            setTimeout(() => {
+              const rect = contextMenu.getBoundingClientRect();
+              if (rect.right > window.innerWidth) {
+                contextMenu.style.left = (e.clientX - rect.width) + 'px';
+              }
+              if (rect.bottom > window.innerHeight) {
+                contextMenu.style.top = (e.clientY - rect.height) + 'px';
+              }
+            }, 0);
+          }
+        });
       }
-    }
+    });
   </script>
 </body>
 </html>
