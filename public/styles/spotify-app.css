@@ -343,3 +343,21 @@ body.desktop-dragging #albumContainer.drag-active::before,
 body.desktop-dragging #albumContainer.drag-active::after {
   opacity: 0.5;
 }
+
+.search-mode-btn {
+  transition: all 0.2s ease;
+}
+
+.search-mode-btn.active {
+  background-color: rgba(55, 65, 81, 1);
+  color: white;
+}
+
+.search-mode-btn:not(.active) {
+  color: rgba(156, 163, 175, 1);
+}
+
+.search-mode-btn:not(.active):hover {
+  background-color: rgba(55, 65, 81, 0.5);
+  color: rgba(229, 231, 235, 1);
+}

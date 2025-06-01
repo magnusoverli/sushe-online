@@ -12,6 +12,8 @@ const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
 // Manual entry elements
 let manualEntryElements = {};
 
+let searchMode = 'artist';
+
 // Cache for searches to avoid duplicate requests
 const itunesCache = new Map();
 const deezerCache = new Map();
@@ -152,9 +154,48 @@ async function rateLimitedFetch(url) {
 
 // Search for artists
 async function searchArtists(query) {
-  const url = `${MUSICBRAINZ_API}/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=10`;
+  // Request aliases in the inc parameter
+  const url = `${MUSICBRAINZ_API}/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=10&inc=aliases`;
   const data = await rateLimitedFetch(url);
   return data.artists || [];
+}
+
+// Add this function to sort and prioritize search results
+function prioritizeSearchResults(artists, searchQuery) {
+  const query = searchQuery.toLowerCase();
+  
+  return artists.map(artist => {
+    let score = 0;
+    const displayName = formatArtistDisplayName(artist);
+    
+    // High priority: Exact name match in Latin
+    if (artist.name.toLowerCase() === query) {
+      score += 100;
+    }
+    
+    // High priority: Latin script name
+    if (!hasNonLatinCharacters(artist.name)) {
+      score += 50;
+    }
+    
+    // Medium priority: Has Latin transliteration
+    if (displayName.primary !== displayName.original && !displayName.warning) {
+      score += 30;
+    }
+    
+    // Medium priority: Name contains search query
+    if (artist.name.toLowerCase().includes(query)) {
+      score += 20;
+    }
+    
+    // Low priority: Disambiguation contains query
+    if (artist.disambiguation && artist.disambiguation.toLowerCase().includes(query)) {
+      score += 10;
+    }
+    
+    return { ...artist, _searchScore: score };
+  })
+  .sort((a, b) => b._searchScore - a._searchScore);
 }
 
 // Get release groups - ONLY pure Albums and EPs (no secondary types)
@@ -585,6 +626,209 @@ function setupIntersectionObserver(releaseGroups, artistName) {
   return imageObserver;
 }
 
+function initializeSearchMode() {
+  const artistBtn = document.getElementById('searchModeArtist');
+  const albumBtn = document.getElementById('searchModeAlbum');
+  const searchInput = modalElements.artistSearchInput;
+  const searchButton = modalElements.searchArtistBtn;
+  
+  // Mobile elements
+  const mobileArtistBtn = document.getElementById('mobileSearchModeArtist');
+  const mobileAlbumBtn = document.getElementById('mobileSearchModeAlbum');
+  const mobileSearchInput = modalElements.artistSearchInput;
+  
+  function updateSearchMode(mode) {
+    searchMode = mode;
+    
+    // Update button states
+    document.querySelectorAll('.search-mode-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.mode === mode);
+      btn.classList.toggle('bg-gray-700', btn.dataset.mode === mode);
+      btn.classList.toggle('text-white', btn.dataset.mode === mode);
+      btn.classList.toggle('text-gray-400', btn.dataset.mode !== mode);
+    });
+    
+    // Update search placeholder
+    const placeholder = mode === 'artist' 
+      ? 'Search for an artist...' 
+      : 'Search for an album...';
+    
+    if (searchInput) searchInput.placeholder = placeholder;
+    if (mobileSearchInput) mobileSearchInput.placeholder = placeholder;
+    
+    // Clear previous results
+    resetModalState();
+  }
+  
+  // Add click handlers
+  if (artistBtn) {
+    artistBtn.onclick = () => updateSearchMode('artist');
+    albumBtn.onclick = () => updateSearchMode('album');
+  }
+  
+  if (mobileArtistBtn) {
+    mobileArtistBtn.onclick = () => updateSearchMode('artist');
+    mobileAlbumBtn.onclick = () => updateSearchMode('album');
+  }
+}
+
+async function performSearch() {
+  const query = modalElements.artistSearchInput.value.trim();
+  if (!query) {
+    showToast(`Please enter ${searchMode === 'artist' ? 'an artist' : 'an album'} name`, 'error');
+    return;
+  }
+  
+  showLoading();
+  
+  try {
+    if (searchMode === 'artist') {
+      const artists = await searchArtists(query);
+      
+      if (artists.length === 0) {
+        modalElements.searchLoading.classList.add('hidden');
+        modalElements.searchEmpty.classList.remove('hidden');
+        modalElements.searchEmpty.innerHTML = '<p>No artists found. Try a different search.</p>';
+        return;
+      }
+      
+      await displayArtistResults(artists);
+    } else {
+      // Album search mode
+      const albums = await searchAlbums(query);
+      
+      if (albums.length === 0) {
+        modalElements.searchLoading.classList.add('hidden');
+        modalElements.searchEmpty.classList.remove('hidden');
+        modalElements.searchEmpty.innerHTML = '<p>No albums found. Try a different search.</p>';
+        return;
+      }
+      
+      await displayDirectAlbumResults(albums);
+    }
+  } catch (error) {
+    console.error(`Error searching ${searchMode}s:`, error);
+    showToast(`Error searching ${searchMode}s`, 'error');
+    modalElements.searchLoading.classList.add('hidden');
+    modalElements.searchEmpty.classList.remove('hidden');
+  }
+}
+
+async function displayDirectAlbumResults(releaseGroups) {
+  showAlbumResults();
+  modalElements.albumList.innerHTML = '';
+  
+  // Hide the back button since we're not coming from artist selection
+  modalElements.backToArtists.style.display = 'none';
+  
+  // Store releaseGroups globally
+  window.currentReleaseGroups = releaseGroups;
+  
+  modalElements.albumList.className = 'space-y-3';
+  
+  isBackgroundLoading = false;
+  
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  
+  for (const rg of releaseGroups) {
+    const albumEl = document.createElement('div');
+    albumEl.dataset.albumIndex = releaseGroups.indexOf(rg);
+    albumEl.dataset.albumId = rg.id;
+    
+    // Get artist credits for this release group
+    const artistCredits = rg['artist-credit'] || [];
+    const artistNames = artistCredits.map(credit => credit.name || credit.artist?.name || 'Unknown Artist');
+    const artistDisplay = artistNames.join(', ');
+    
+    const releaseDate = formatReleaseDate(rg['first-release-date']);
+    const albumType = rg['primary-type'];
+    const isNewRelease = rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
+    
+    albumEl.className = 'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
+    
+    albumEl.innerHTML = `
+      ${isNewRelease ? `
+        <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
+          NEW
+        </div>
+      ` : ''}
+      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md">
+        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center animate-pulse">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </div>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
+        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
+        <div class="text-xs text-gray-500 mt-1">${artistDisplay}</div>
+      </div>
+    `;
+    
+    // Store artist info for album addition
+    rg._artistDisplay = artistDisplay;
+    rg._artistCredit = artistCredits[0]; // Use first artist for metadata
+    
+    // Click handler
+    albumEl.onclick = async () => {
+      const coverContainer = albumEl.querySelector('.album-cover-container');
+      coverContainer.innerHTML = `
+        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        </div>
+      `;
+      
+      // Prepare a minimal artist object for compatibility
+      const primaryArtist = artistCredits[0];
+      currentArtist = {
+        name: primaryArtist?.name || primaryArtist?.artist?.name || 'Unknown Artist',
+        id: primaryArtist?.artist?.id || null,
+        country: '' // We'll need to fetch this if needed
+      };
+      
+      // Load cover art if not already loaded
+      if (!rg.coverArt) {
+        try {
+          const coverArt = await getCoverArt(rg.id, currentArtist.name, rg.title);
+          if (coverArt) {
+            rg.coverArt = coverArt;
+          }
+        } catch (error) {
+          console.error('Error loading cover before add:', error);
+        }
+      }
+      
+      addAlbumToList(rg);
+    };
+    
+    modalElements.albumList.appendChild(albumEl);
+    
+    // Start lazy loading covers
+    requestAnimationFrame(() => {
+      getCoverArt(rg.id, artistDisplay, rg.title).then(coverArt => {
+        if (coverArt && !currentLoadingController?.signal.aborted) {
+          rg.coverArt = coverArt;
+          const coverContainer = albumEl.querySelector('.album-cover-container');
+          if (coverContainer) {
+            coverContainer.innerHTML = `
+              <img src="${coverArt}" 
+                  alt="${rg.title}" 
+                  class="w-20 h-20 object-cover rounded-lg" 
+                  loading="lazy" 
+                  crossorigin="anonymous">
+            `;
+          }
+        }
+      });
+    });
+  }
+}
+
 // Initialize modal
 function initializeAddAlbumFeature() {
   modal = document.getElementById('addAlbumModal');
@@ -992,7 +1236,10 @@ async function performArtistSearch() {
       return;
     }
     
-    await displayArtistResults(artists);  // Add await here
+    // Prioritize results to show Latin-script and better matches first
+    const prioritizedArtists = prioritizeSearchResults(artists, query);
+    
+    await displayArtistResults(prioritizedArtists);
   } catch (error) {
     console.error('Error searching artists:', error);
     showToast('Error searching artists', 'error');
@@ -1056,13 +1303,27 @@ async function displayArtistResults(artists) {
   modalElements.artistList.innerHTML = '';
   
   // Desktop now uses the same list-style layout as mobile
-  modalElements.artistList.className = 'space-y-3'; // Changed from grid to vertical list
+  modalElements.artistList.className = 'space-y-3';
   
   for (const artist of artists) {
     const artistEl = document.createElement('div');
     artistEl.className = 'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
     
-    const disambiguation = artist.disambiguation ? ` <span class="text-gray-500 text-sm">(${artist.disambiguation})</span>` : '';
+    // Format the artist name intelligently
+    const displayName = formatArtistDisplayName(artist);
+    
+    // Build disambiguation/secondary text
+    let secondaryText = '';
+    if (displayName.secondary) {
+      secondaryText = displayName.secondary;
+    }
+    
+    // Add any additional disambiguation that's not already shown
+    if (artist.disambiguation && 
+        artist.disambiguation !== displayName.secondary && 
+        artist.disambiguation !== displayName.primary) {
+      secondaryText += secondaryText ? ` • ${artist.disambiguation}` : artist.disambiguation;
+    }
     
     // Resolve country code to full name
     let countryDisplay = '';
@@ -1082,7 +1343,11 @@ async function displayArtistResults(artists) {
         </div>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="font-medium text-white">${artist.name}${disambiguation}</div>
+        <div class="font-medium text-white">
+          ${displayName.primary}
+          ${displayName.warning ? '<i class="fas fa-exclamation-triangle text-yellow-500 text-xs ml-2" title="Non-Latin script - no Latin version found"></i>' : ''}
+        </div>
+        ${secondaryText ? `<div class="text-sm text-gray-400 mt-1">${secondaryText}</div>` : ''}
         <div class="text-sm text-gray-400 mt-1">${artist.type || 'Artist'}${countryDisplay}</div>
       </div>
       <div class="flex-shrink-0">
@@ -1090,14 +1355,21 @@ async function displayArtistResults(artists) {
       </div>
     `;
     
-    // Fetch artist image asynchronously
-    searchArtistImage(artist.name).then(imageUrl => {
+    // Store the original artist data with enhanced display info
+    const enhancedArtist = {
+      ...artist,
+      _displayName: displayName
+    };
+    
+    // Fetch artist image asynchronously (using the Latin name if available for better results)
+    const searchName = displayName.original && !displayName.warning ? displayName.primary : artist.name;
+    searchArtistImage(searchName).then(imageUrl => {
       if (imageUrl) {
         const imageContainer = artistEl.querySelector('.artist-image-container');
         imageContainer.innerHTML = `
           <img 
             src="${imageUrl}" 
-            alt="${artist.name}" 
+            alt="${displayName.primary}" 
             class="w-16 h-16 rounded-full object-cover"
             onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
           >
@@ -1110,14 +1382,14 @@ async function displayArtistResults(artists) {
     artistEl.addEventListener('mouseenter', () => {
       preloadTimeout = setTimeout(() => {
         preloadArtistAlbums(artist);
-      }, 300); // 300ms delay to avoid loading on quick mouse movements
+      }, 300);
     });
     
     artistEl.addEventListener('mouseleave', () => {
       clearTimeout(preloadTimeout);
     });
     
-    artistEl.onclick = () => selectArtist(artist);
+    artistEl.onclick = () => selectArtist(enhancedArtist);
     modalElements.artistList.appendChild(artistEl);
   }
   
@@ -1125,13 +1397,19 @@ async function displayArtistResults(artists) {
 }
 
 async function selectArtist(artist) {
-  currentArtist = artist;
+  // Use the enhanced artist with display name
+  currentArtist = artist._displayName ? {
+    ...artist,
+    name: artist._displayName.primary, // Use the Latin name for album displays
+    originalName: artist.name // Keep the original for API calls
+  } : artist;
+  
   showLoading();
   
   currentLoadingController = new AbortController();
   
   try {
-    // Check if we have preloaded data
+    // Use original ID for API calls
     let releaseGroups = preloadCache.get(artist.id);
     
     if (!releaseGroups) {
@@ -1157,6 +1435,7 @@ async function selectArtist(artist) {
     showArtistResults();
   }
 }
+
 async function resolveCountryCode(countryCode) {
   if (!countryCode || countryCode.length !== 2) {
     return '';
@@ -1224,6 +1503,47 @@ async function resolveCountryCode(countryCode) {
     console.error('Error resolving country code:', error);
     return '';
   }
+}
+
+async function searchAlbums(query) {
+  const url = `${MUSICBRAINZ_API}/release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=20`;
+  const data = await rateLimitedFetch(url);
+  
+  let releaseGroups = data['release-groups'] || [];
+  
+  // Filter and sort similar to getArtistReleaseGroups
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  
+  releaseGroups = releaseGroups.filter(rg => {
+    const primaryType = rg['primary-type'];
+    const secondaryTypes = rg['secondary-types'] || [];
+    const releaseDate = rg['first-release-date'];
+    
+    const isValidType = (primaryType === 'Album' || primaryType === 'EP') && secondaryTypes.length === 0;
+    
+    if (!releaseDate) return false;
+    
+    let comparableDate = releaseDate;
+    if (releaseDate.length === 4) {
+      comparableDate = `${releaseDate}-12-31`;
+    } else if (releaseDate.length === 7) {
+      const [year, month] = releaseDate.split('-');
+      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+      comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
+    }
+    
+    return isValidType && comparableDate <= todayStr;
+  });
+  
+  // Sort by relevance (MusicBrainz already does this) and then by date
+  releaseGroups.sort((a, b) => {
+    const dateA = a['first-release-date'] || '0000';
+    const dateB = b['first-release-date'] || '0000';
+    return dateB.localeCompare(dateA);
+  });
+  
+  return releaseGroups;
 }
 
 function displayAlbumResultsWithLazyLoading(releaseGroups) {
@@ -1443,6 +1763,119 @@ async function addAlbumToCurrentList(album) {
     showToast('Error adding album to list', 'error');
     
     lists[currentList].pop();
+  }
+}
+
+function hasNonLatinCharacters(str) {
+  if (!str) return false;
+  // Check if more than 50% of alphabetic characters are non-Latin
+  const alphaChars = str.match(/\p{L}/gu) || [];
+  const nonLatinChars = str.match(/[^\u0000-\u024F\u1E00-\u1EFF]/gu) || [];
+  return alphaChars.length > 0 && (nonLatinChars.length / alphaChars.length) > 0.5;
+}
+
+// Helper to extract Latin name from various sources
+function extractLatinName(artist) {
+  let latinName = null;
+  
+  // Strategy 1: Check if sort-name is different and contains Latin characters
+  if (artist['sort-name'] && artist['sort-name'] !== artist.name) {
+    if (!hasNonLatinCharacters(artist['sort-name'])) {
+      // sort-name might be "Lastname, Firstname" format, so clean it up
+      const sortName = artist['sort-name'];
+      if (sortName.includes(',')) {
+        // Reverse "Lastname, Firstname" to "Firstname Lastname"
+        const parts = sortName.split(',').map(p => p.trim());
+        if (parts.length === 2) {
+          latinName = `${parts[1]} ${parts[0]}`;
+        } else {
+          latinName = sortName;
+        }
+      } else {
+        latinName = sortName;
+      }
+    }
+  }
+  
+  // Strategy 2: Check name for parentheses pattern (e.g., "מזמור (Mizmor)")
+  if (!latinName && artist.name) {
+    const nameParenMatch = artist.name.match(/\(([^)]+)\)/);
+    if (nameParenMatch) {
+      const extracted = nameParenMatch[1].trim();
+      if (!hasNonLatinCharacters(extracted)) {
+        latinName = extracted;
+      }
+    }
+  }
+  
+  // Strategy 3: Check disambiguation for Latin version
+  if (!latinName && artist.disambiguation) {
+    // Sometimes the entire disambiguation is the Latin name
+    if (!hasNonLatinCharacters(artist.disambiguation)) {
+      // But only if it looks like a name, not a description
+      const looksLikeName = !artist.disambiguation.includes(' ') || 
+                           artist.disambiguation.split(' ').length <= 3;
+      if (looksLikeName && !artist.disambiguation.toLowerCase().includes('group') && 
+          !artist.disambiguation.toLowerCase().includes('band')) {
+        latinName = artist.disambiguation;
+      }
+    }
+  }
+  
+  // Strategy 4: Check aliases if available
+  if (!latinName && artist.aliases && Array.isArray(artist.aliases)) {
+    for (const alias of artist.aliases) {
+      if (alias.name && !hasNonLatinCharacters(alias.name)) {
+        // Prefer primary aliases or those marked as artist name
+        if (alias.primary || alias.type === 'Artist name') {
+          latinName = alias.name;
+          break;
+        }
+      }
+    }
+    // If no primary alias found, use any Latin alias
+    if (!latinName) {
+      const latinAlias = artist.aliases.find(a => a.name && !hasNonLatinCharacters(a.name));
+      if (latinAlias) {
+        latinName = latinAlias.name;
+      }
+    }
+  }
+  
+  return latinName;
+}
+
+// Helper to format artist display name
+function formatArtistDisplayName(artist) {
+  const hasNonLatin = hasNonLatinCharacters(artist.name);
+  
+  if (!hasNonLatin) {
+    // Name is already in Latin script
+    return {
+      primary: artist.name,
+      secondary: artist.disambiguation || null,
+      original: artist.name
+    };
+  }
+  
+  // Try to extract Latin version using multiple strategies
+  const latinName = extractLatinName(artist);
+  
+  if (latinName) {
+    // Show Latin name as primary, original as secondary
+    return {
+      primary: latinName,
+      secondary: artist.name,
+      original: artist.name
+    };
+  } else {
+    // No Latin version found, show as-is with warning
+    return {
+      primary: artist.name,
+      secondary: 'Non-Latin script',
+      original: artist.name,
+      warning: true
+    };
   }
 }
 

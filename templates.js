@@ -752,6 +752,26 @@ const addAlbumModalComponent = () => `
         <!-- Search Section -->
         <div id="searchSection" class="p-6 border-b border-gray-800">
           <div class="max-w-2xl mx-auto">
+            <!-- New: Search mode toggle -->
+            <div class="flex justify-center mb-4">
+              <div class="inline-flex bg-gray-800 rounded-lg p-1">
+                <button 
+                  id="searchModeArtist" 
+                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn active"
+                  data-mode="artist"
+                >
+                  <i class="fas fa-user mr-2"></i>Artist
+                </button>
+                <button 
+                  id="searchModeAlbum" 
+                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn"
+                  data-mode="album"
+                >
+                  <i class="fas fa-compact-disc mr-2"></i>Album
+                </button>
+              </div>
+            </div>
+            
             <div class="flex gap-3">
               <input 
                 type="text" 
