@@ -228,84 +228,39 @@ const settingsTemplate = (req, options) => {
             </form>
           </div>
           
-          <!-- Accent Color Settings -->
-          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-            <h3 class="text-lg font-semibold text-white mb-4">
-              <i class="fas fa-palette mr-2 text-gray-400"></i>
-              Theme Color
-            </h3>
-            
-            <p class="text-sm text-gray-400 mb-4">
-              Choose your preferred accent color for the interface
-            </p>
-            
-            <!-- Preset Colors -->
-            <div class="grid grid-cols-4 sm:grid-cols-8 gap-3 mb-4">
-              ${[
-                { name: 'Blood Red', value: '#dc2626' },
-                { name: 'Purple Void', value: '#9333ea' },
-                { name: 'Frost Blue', value: '#3b82f6' },
-                { name: 'Forest Green', value: '#10b981' },
-                { name: 'Sunset Orange', value: '#f97316' },
-                { name: 'Ocean Teal', value: '#14b8a6' },
-                { name: 'Rose Pink', value: '#f43f5e' },
-                { name: 'Golden', value: '#eab308' }
-              ].map(color => `
-                <button 
-                  onclick="updateAccentColor('${color.value}')"
-                  class="group relative h-12 w-full rounded-lg border-2 transition-all hover:scale-110 ${
-                    user.accentColor === color.value ? 'border-white ring-2 ring-offset-2 ring-offset-gray-900 ring-white' : 'border-gray-700 hover:border-gray-500'
-                  }"
-                  style="background-color: ${color.value}"
-                  title="${color.name}"
-                >
-                  ${user.accentColor === color.value ? 
-                    '<i class="fas fa-check text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-sm"></i>' : 
-                    ''
-                  }
-                </button>
-              `).join('')}
-            </div>
-            
-            <!-- Custom Color Picker -->
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-3 border-t border-gray-800">
-              <label class="text-sm text-gray-400 whitespace-nowrap">Custom color:</label>
-              <div class="flex items-center gap-3 w-full sm:w-auto">
-                <input 
-                  type="color" 
-                  id="customAccentColor" 
-                  value="${user.accentColor || '#dc2626'}"
-                  class="h-10 w-20 bg-gray-800 border border-gray-700 rounded cursor-pointer hover:border-gray-600"
-                >
-                <button 
-                  onclick="updateAccentColor(document.getElementById('customAccentColor').value)"
-                  class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200 whitespace-nowrap"
-                >
-                  Apply Custom
-                </button>
-                <button 
-                  onclick="resetAccentColor()"
-                  class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm rounded transition duration-200 whitespace-nowrap"
-                >
-                  Reset
-                </button>
-              </div>
-            </div>
-            
-            <!-- Live Preview -->
-            <div class="mt-4 p-4 bg-gray-800 rounded-lg">
-              <p class="text-xs text-gray-500 mb-2">Preview:</p>
-              <div class="flex items-center gap-3 flex-wrap">
-                <button class="px-3 py-1 text-white text-sm rounded transition-colors" 
-                        style="background-color: var(--accent-color)">
-                  Button
-                </button>
-                <span style="color: var(--accent-color)">Accent Text</span>
-                <div class="h-8 w-8 rounded border-2" 
-                     style="border-color: var(--accent-color)"></div>
-              </div>
-            </div>
-          </div>
+        <!-- Accent Color Settings -->
+        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <h3 class="text-lg font-semibold text-white mb-4">
+            <i class="fas fa-palette mr-2 text-gray-400"></i>
+            Theme Color
+        </h3>
+        
+        <p class="text-sm text-gray-400 mb-4">
+            Choose your preferred accent color for the interface
+        </p>
+        
+        <!-- Custom Color Picker -->
+        <div class="flex items-center gap-3">
+            <label class="text-sm text-gray-400">Color:</label>
+            <input 
+            type="color" 
+            id="customAccentColor" 
+            value="${user.accentColor || '#dc2626'}"
+            class="h-10 w-20 bg-gray-800 border border-gray-700 rounded cursor-pointer hover:border-gray-600"
+            >
+            <button 
+            onclick="updateAccentColor(document.getElementById('customAccentColor').value)"
+            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200"
+            >
+            Apply
+            </button>
+            <button 
+            onclick="resetAccentColor()"
+            class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm rounded transition duration-200"
+            >
+            Reset to Default
+            </button>
+        </div>
         </div>
         
         <!-- Statistics & Admin Section -->
