@@ -14,7 +14,7 @@ const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
-
+const { adjustColor, colorWithOpacity } = require('./color-utils');
 const { composeForgotPasswordEmail } = require('./forgot_email');
 
 //
@@ -383,6 +383,7 @@ app.post('/register', async (req, res) => {
             email, 
             username, 
             hash,
+            accentColor: '#dc2626',
             createdAt: new Date(),
             updatedAt: new Date()
           }, (err, newUser) => {
@@ -749,6 +750,44 @@ app.get('/settings', ensureAuth, async (req, res) => {
     console.error('Settings page error:', error);
     req.flash('error', 'Error loading settings');
     res.redirect('/');
+  }
+});
+
+// Update accent color endpoint
+app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
+  try {
+    const { accentColor } = req.body;
+    
+    // Validate hex color format
+    const hexColorRegex = /^#[0-9A-F]{6}$/i;
+    if (!hexColorRegex.test(accentColor)) {
+      return res.status(400).json({ error: 'Invalid color format. Please use hex format (#RRGGBB)' });
+    }
+    
+    // Update user's accent color
+    users.update(
+      { _id: req.user._id },
+      { $set: { accentColor, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating accent color:', err);
+          return res.status(500).json({ error: 'Error updating theme color' });
+        }
+        
+        // Update session
+        req.user.accentColor = accentColor;
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          res.json({ success: true });
+        });
+        
+        console.log(`User ${req.user.email} updated accent color to ${accentColor}`);
+      }
+    );
+  } catch (error) {
+    console.error('Update accent color error:', error);
+    res.status(500).json({ error: 'Error updating theme color' });
   }
 });
 

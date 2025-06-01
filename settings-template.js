@@ -1,1124 +1,975 @@
-// settings-template.js
+// Import the header component at the top of the file
 const { headerComponent } = require('./templates');
 
-const settingsTemplate = (req, data) => {
-  const { user, stats, userStats, adminData, flash } = data;
-  const isAdmin = user.role === 'admin';
+// Settings page template
+const settingsTemplate = (req, options) => {
+  const { user, userStats, stats, adminData, flash } = options;
   
   return `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Settings - SuShe</title>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-        <link href="/styles/output.css" rel="stylesheet">
-        <style>
-            .settings-card {
-                background: linear-gradient(145deg, #1a1a1a, #2d2d2d);
-                border: 1px solid #333;
-            }
-            .stat-card {
-                background: linear-gradient(145deg, #0f0f0f, #1f1f1f);
-                border: 1px solid #2a2a2a;
-                transition: all 0.2s ease;
-            }
-
-            .stat-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            }
-            .tab-active {
-                background: linear-gradient(145deg, #1f1f1f, #2a2a2a);
-                border-bottom: 2px solid #dc2626;
-            }
-            
-            /* Progress bar */
-            .progress-bar {
-                background: #0a0a0a;
-                border-radius: 9999px;
-                height: 8px;
-                overflow: hidden;
-            }
-            .progress-fill {
-                background: #dc2626;
-                height: 100%;
-                border-radius: 9999px;
-                transition: width 0.3s ease;
-            }
-            
-            /* Trend indicators */
-            .trend-up { color: #10b981; }
-            .trend-down { color: #ef4444; }
-            .trend-neutral { color: #6b7280; }
-            
-            /* User list modal */
-            .modal-backdrop {
-                backdrop-filter: blur(4px);
-            }
-            
-            /* Toast notifications */
-            .toast {
-                position: fixed;
-                bottom: 2rem;
-                right: 2rem;
-                background-color: #1f2937;
-                color: white;
-                padding: 1rem 1.5rem;
-                border-radius: 0.5rem;
-                box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-                transform: translateY(100%);
-                opacity: 0;
-                transition: all 0.3s ease;
-                z-index: 50;
-            }
-            
-            .toast.show {
-                transform: translateY(0);
-                opacity: 1;
-            }
-            
-            .toast.error {
-                background-color: #dc2626;
-            }
-            
-            .toast.success {
-                background-color: #059669;
-            }
-            
-            .toast.info {
-                background-color: #3b82f6;
-            }
-            
-            /* Action cards */
-            .action-card {
-                background: linear-gradient(145deg, #0f0f0f, #1f1f1f);
-                border: 1px solid #2a2a2a;
-                transition: all 0.2s ease;
-                cursor: pointer;
-            }
-            
-            .action-card:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                border-color: #dc2626;
-            }
-            
-            /* Form styling */
-            .form-group {
-                background: linear-gradient(145deg, #0a0a0a, #1a1a1a);
-                border: 1px solid #2a2a2a;
-                border-radius: 0.5rem;
-                padding: 1rem;
-                transition: all 0.2s ease;
-            }
-            
-            .form-group:hover {
-                border-color: #3a3a3a;
-            }
-            
-            .form-group:focus-within {
-                border-color: #dc2626;
-                box-shadow: 0 0 0 1px rgba(220, 38, 38, 0.2);
-            }
-            
-            /* Info cards */
-            .info-card {
-                background: linear-gradient(145deg, #0f0f0f, #1f1f1f);
-                border: 1px solid #2a2a2a;
-                padding: 1.5rem;
-                border-radius: 0.5rem;
-                position: relative;
-                overflow: hidden;
-            }
-            
-            .info-card::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 4px;
-                height: 100%;
-                background: linear-gradient(to bottom, #dc2626, #7f1d1d);
-            }
-            
-            /* Edit button styling */
-            .edit-btn {
-                opacity: 0;
-                transition: all 0.2s ease;
-            }
-            
-            .info-item:hover .edit-btn {
-                opacity: 1;
-            }
-        </style>
-    </head>
-    <body class="bg-black text-gray-300">
-        ${headerComponent(user, 'settings')}
-
-        <div class="container mx-auto px-4 py-8">
-            <!-- Tab Navigation -->
-            <div class="settings-card rounded-lg mb-8 p-1">
-                <nav class="flex space-x-1">
-                    <button onclick="showTab('account')" id="accountTab" class="tab-button flex-1 px-4 py-3 rounded text-sm font-medium transition-all tab-active">
-                        <i class="fas fa-user mr-2"></i>Account
-                    </button>
-                    ${isAdmin ? `
-                        <button onclick="showTab('admin')" id="adminTab" class="tab-button flex-1 px-4 py-3 rounded text-sm font-medium transition-all">
-                            <i class="fas fa-shield-alt mr-2"></i>Admin Dashboard
-                        </button>
-                    ` : ''}
-                </nav>
-            </div>
-
-            <!-- Account Tab Content -->
-            <div id="accountContent" class="tab-content">
-                <!-- User Stats Overview -->
-                <div class="mb-8">
-                    <h2 class="text-xl font-semibold mb-4 flex items-center">
-                        <i class="fas fa-chart-line mr-2 text-emerald-500"></i>
-                        Your Statistics
-                    </h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Total Lists</p>
-                                    <p class="text-2xl font-bold text-white">${userStats.listCount}</p>
-                                    <p class="text-xs text-gray-400 mt-1">Created by you</p>
-                                </div>
-                                <i class="fas fa-list text-purple-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Total Albums</p>
-                                    <p class="text-2xl font-bold text-white">${userStats.totalAlbums}</p>
-                                    <p class="text-xs text-gray-400 mt-1">In your collection</p>
-                                </div>
-                                <i class="fas fa-compact-disc text-indigo-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Member Since</p>
-                                    <p class="text-lg font-bold text-white">${new Date(user.createdAt).getFullYear()}</p>
-                                    <p class="text-xs text-gray-400 mt-1">${Math.floor((new Date() - new Date(user.createdAt)) / (1000 * 60 * 60 * 24))} days</p>
-                                </div>
-                                <i class="fas fa-calendar-alt text-blue-500 text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="stat-card rounded-lg px-4 py-3">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-gray-500 text-xs">Account Type</p>
-                                    <p class="text-lg font-bold ${isAdmin ? 'text-yellow-500' : 'text-white'}">
-                                        ${isAdmin ? 'Admin' : 'User'}
-                                    </p>
-                                    <p class="text-xs text-gray-400 mt-1">${isAdmin ? 'Full access' : 'Standard access'}</p>
-                                </div>
-                                <i class="fas ${isAdmin ? 'fa-crown text-yellow-500' : 'fa-user text-gray-500'} text-xl opacity-50"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Account Information Section -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-                    <!-- Personal Information Card -->
-                    <div>
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-id-card mr-2 text-blue-500"></i>
-                            Personal Information
-                        </h2>
-                        <div class="info-card">
-                            <div class="space-y-4">
-                                <div class="info-item">
-                                    <label class="block text-gray-500 text-xs uppercase tracking-wider mb-1">Email Address</label>
-                                    <div class="flex items-center justify-between group">
-                                        <p class="text-white text-lg" id="emailDisplay">${user.email}</p>
-                                        <button onclick="editField('email', '${user.email}')" class="edit-btn text-gray-500 hover:text-gray-300 transition-colors ml-2" title="Edit email">
-                                            <i class="fas fa-pencil text-sm"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="info-item">
-                                    <label class="block text-gray-500 text-xs uppercase tracking-wider mb-1">Username</label>
-                                    <div class="flex items-center justify-between group">
-                                        <p class="text-white text-lg" id="usernameDisplay">${user.username}</p>
-                                        <button onclick="editField('username', '${user.username}')" class="edit-btn text-gray-500 hover:text-gray-300 transition-colors ml-2" title="Edit username">
-                                            <i class="fas fa-pencil text-sm"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                
-                                <div class="pt-4 border-t border-gray-800">
-                                    <label class="block text-gray-500 text-xs uppercase tracking-wider mb-1">Account Created</label>
-                                    <p class="text-white">${new Date(user.createdAt).toLocaleDateString('en-US', { 
-                                        year: 'numeric', 
-                                        month: 'long', 
-                                        day: 'numeric' 
-                                    })}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Security Settings Card -->
-                    <div>
-                        <h2 class="text-xl font-semibold mb-4 flex items-center mt-8 lg:mt-0">
-                            <i class="fas fa-shield-alt mr-2 text-green-500"></i>
-                            Security Settings
-                        </h2>
-                        <div class="settings-card rounded-lg p-6">
-                            <form method="post" action="/settings/change-password" class="space-y-4">
-                                <div class="form-group">
-                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="currentPassword">
-                                        Current Password
-                                    </label>
-                                    <input 
-                                        type="password" 
-                                        id="currentPassword"
-                                        name="currentPassword"
-                                        class="w-full px-3 py-2 bg-gray-900 border-0 text-white placeholder-gray-600 focus:outline-none"
-                                        placeholder="Enter current password"
-                                        required
-                                    />
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="newPassword">
-                                        New Password
-                                    </label>
-                                    <input 
-                                        type="password" 
-                                        id="newPassword"
-                                        name="newPassword"
-                                        class="w-full px-3 py-2 bg-gray-900 border-0 text-white placeholder-gray-600 focus:outline-none"
-                                        placeholder="Enter new password"
-                                        required
-                                        minlength="8"
-                                    />
-                                </div>
-                                
-                                <div class="form-group">
-                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="confirmPassword">
-                                        Confirm New Password
-                                    </label>
-                                    <input 
-                                        type="password" 
-                                        id="confirmPassword"
-                                        name="confirmPassword"
-                                        class="w-full px-3 py-2 bg-gray-900 border-0 text-white placeholder-gray-600 focus:outline-none"
-                                        placeholder="Confirm new password"
-                                        required
-                                        minlength="8"
-                                    />
-                                </div>
-                                
-                                <button 
-                                    type="submit"
-                                    class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded transition duration-200 transform hover:scale-105"
-                                >
-                                    <i class="fas fa-key mr-2"></i>Update Password
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions Section -->
-                <div class="mb-8">
-                    <h2 class="text-xl font-semibold mb-4 flex items-center">
-                        <i class="fas fa-bolt mr-2 text-yellow-500"></i>
-                        Quick Actions
-                    </h2>
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div class="action-card rounded-lg p-4" onclick="window.location.href='/'">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-white font-semibold">My Lists</p>
-                                    <p class="text-xs text-gray-400 mt-1">View and manage your album lists</p>
-                                </div>
-                                <i class="fas fa-arrow-right text-gray-500 text-lg"></i>
-                            </div>
-                        </div>
-                        
-                        <div class="action-card rounded-lg p-4" onclick="window.location.href='/logout'">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <p class="text-white font-semibold">Sign Out</p>
-                                    <p class="text-xs text-gray-400 mt-1">Log out of your account</p>
-                                </div>
-                                <i class="fas fa-sign-out-alt text-gray-500 text-lg"></i>
-                            </div>
-                        </div>
-                        
-                        ${!isAdmin ? `
-                            <div class="action-card rounded-lg p-4" onclick="document.getElementById('adminAccessSection').scrollIntoView({ behavior: 'smooth' })">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-white font-semibold">Request Admin</p>
-                                        <p class="text-xs text-gray-400 mt-1">Get administrator access</p>
-                                    </div>
-                                    <i class="fas fa-crown text-gray-500 text-lg"></i>
-                                </div>
-                            </div>
-                        ` : `
-                            <div class="action-card rounded-lg p-4" onclick="showTab('admin')">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-white font-semibold">Admin Panel</p>
-                                        <p class="text-xs text-gray-400 mt-1">Manage users and system</p>
-                                    </div>
-                                    <i class="fas fa-cog text-gray-500 text-lg"></i>
-                                </div>
-                            </div>
-                        `}
-                    </div>
-                </div>
-
-                <!-- Request Admin Access (only show if not already admin) -->
-                ${!isAdmin ? `
-                    <div id="adminAccessSection">
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-crown mr-2 text-orange-500"></i>
-                            Administrator Access
-                        </h2>
-                        <div class="settings-card rounded-lg p-6">
-                            <div class="stat-card rounded-lg p-4 mb-6">
-                                <div class="flex items-start gap-3">
-                                    <i class="fas fa-info-circle text-blue-500 text-lg mt-1"></i>
-                                    <div>
-                                        <p class="text-gray-300 text-sm mb-2">
-                                            Administrator access grants full control over the system, including user management and database operations.
-                                        </p>
-                                        <p class="text-gray-400 text-xs">
-                                            To request admin access, you'll need the current admin code from the server console. This code rotates every 5 minutes for security.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <form method="post" action="/settings/request-admin" class="space-y-4">
-                                <div class="form-group">
-                                    <label class="block text-gray-400 text-xs uppercase tracking-wider mb-2" for="adminCode">
-                                        <i class="fas fa-key mr-1"></i>Admin Access Code
-                                    </label>
-                                    <input 
-                                        type="text" 
-                                        id="adminCode"
-                                        name="code"
-                                        class="w-full px-3 py-3 bg-transparent border-0 text-white placeholder-gray-600 focus:outline-none font-mono uppercase text-xl tracking-widest text-center"
-                                        placeholder="XXXXXXXX"
-                                        maxlength="8"
-                                        required
-                                        autocomplete="off"
-                                    />
-                                    <p class="text-xs text-gray-500 mt-2 text-center">Enter the 8-character code from the server console</p>
-                                </div>
-                                
-                                <button 
-                                    type="submit"
-                                    class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
-                                >
-                                    <i class="fas fa-shield-alt mr-2"></i>Request Admin Access
-                                </button>
-                            </form>
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-
-            <!-- Admin Tab Content (only for admins) -->
-            ${isAdmin ? `
-                <div id="adminContent" class="tab-content hidden">
-                    <!-- Statistics Section -->
-                    <div class="mb-8">
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-chart-bar mr-2 text-blue-500"></i>
-                            Statistics
-                        </h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Total Users</p>
-                                        <p class="text-2xl font-bold text-white">${stats.totalUsers}</p>
-                                        ${stats.userGrowth !== undefined ? `
-                                            <p class="text-xs ${stats.userGrowth >= 0 ? 'trend-up' : 'trend-down'} mt-1">
-                                                <i class="fas fa-arrow-${stats.userGrowth >= 0 ? 'up' : 'down'} text-xs"></i> 
-                                                ${Math.abs(stats.userGrowth)}% this week
-                                            </p>
-                                        ` : ''}
-                                    </div>
-                                    <i class="fas fa-users text-blue-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Active Users (7d)</p>
-                                        <p class="text-2xl font-bold text-white">${stats.activeUsers || 0}</p>
-                                        <p class="text-xs text-gray-400 mt-1">
-                                            ${stats.totalUsers > 0 ? Math.round((stats.activeUsers || 0) / stats.totalUsers * 100) : 0}% of total
-                                        </p>
-                                    </div>
-                                    <i class="fas fa-chart-line text-green-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Total Lists</p>
-                                        <p class="text-2xl font-bold text-white">${stats.totalLists}</p>
-                                        <p class="text-xs text-gray-400 mt-1">
-                                            ~${stats.totalUsers > 0 ? Math.round(stats.totalLists / stats.totalUsers) : 0} per user
-                                        </p>
-                                    </div>
-                                    <i class="fas fa-list text-purple-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Total Albums</p>
-                                        <p class="text-2xl font-bold text-white">${stats.totalAlbums}</p>
-                                        <p class="text-xs text-gray-400 mt-1">
-                                            ~${stats.totalLists > 0 ? Math.round(stats.totalAlbums / stats.totalLists) : 0} per list
-                                        </p>
-                                    </div>
-                                    <i class="fas fa-compact-disc text-indigo-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Database Size</p>
-                                        <p class="text-2xl font-bold text-white">${stats.dbSize || 'N/A'}</p>
-                                        <p class="text-xs text-gray-400 mt-1">
-                                            ${stats.activeSessions || 0} active sessions
-                                        </p>
-                                    </div>
-                                    <i class="fas fa-database text-orange-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Recent Activity Section -->
-                    <div class="mb-8">
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-clock mr-2 text-amber-500"></i>
-                            Recent Activity
-                        </h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                            <!-- Activity Cards -->
-                            ${adminData.recentActivity.map(activity => `
-                                <div class="stat-card rounded-lg px-4 py-3">
-                                    <div class="flex items-center justify-between">
-                                        <div>
-                                            <p class="text-gray-500 text-xs">${activity.time}</p>
-                                            <p class="text-base font-medium text-white mt-1">${activity.message}</p>
-                                        </div>
-                                        <i class="fas ${activity.icon} text-${activity.color}-500 text-xl opacity-50"></i>
-                                    </div>
-                                </div>
-                            `).join('')}
-                            
-                            <!-- Top Genres Card -->
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between mb-2">
-                                    <p class="text-gray-500 text-xs">Top Genres</p>
-                                    <i class="fas fa-music text-pink-500 text-xl opacity-50"></i>
-                                </div>
-                                <div class="space-y-1">
-                                    ${stats.topGenres && stats.topGenres.length > 0 ? stats.topGenres.slice(0, 3).map((genre, index) => `
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-sm text-gray-300 truncate">${index + 1}. ${genre.name || 'Unknown'}</span>
-                                            <span class="text-xs text-gray-500">${genre.count}</span>
-                                        </div>
-                                    `).join('') : '<p class="text-gray-500 text-sm">No data</p>'}
-                                </div>
-                            </div>
-                            
-                            <!-- Most Active Users Card -->
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between mb-2">
-                                    <p class="text-gray-500 text-xs">Most Active Users</p>
-                                    <i class="fas fa-trophy text-yellow-500 text-xl opacity-50"></i>
-                                </div>
-                                <div class="space-y-1">
-                                    ${stats.topUsers && stats.topUsers.length > 0 ? stats.topUsers.slice(0, 3).map((u, index) => `
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-sm text-gray-300 truncate">${u.username}</span>
-                                            <span class="text-xs text-gray-500">${u.listCount}</span>
-                                        </div>
-                                    `).join('') : '<p class="text-gray-500 text-sm">No data</p>'}
-                                </div>
-                            </div>
-                            
-                            <!-- Admin Logs Card -->
-                            <div class="stat-card rounded-lg px-4 py-3">
-                                <div class="flex items-center justify-between mb-2">
-                                    <p class="text-gray-500 text-xs">Latest Admin Action</p>
-                                    <i class="fas fa-history text-cyan-500 text-xl opacity-50"></i>
-                                </div>
-                                <div>
-                                    ${stats.adminLogs && stats.adminLogs.length > 0 ? `
-                                        <p class="text-sm text-gray-300">${stats.adminLogs[0].action}</p>
-                                        <p class="text-xs text-gray-500 mt-1">${stats.adminLogs[0].admin}</p>
-                                    ` : '<p class="text-gray-500 text-sm">No actions yet</p>'}
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- User Management Section -->
-                    <div class="settings-card rounded-lg p-6 mb-8">
-                        <div class="flex items-center justify-between mb-6">
-                            <h2 class="text-xl font-semibold flex items-center">
-                                <i class="fas fa-users mr-2 text-purple-500"></i>
-                                User Management
-                            </h2>
-                        </div>
-                        
-                        <!-- Search Bar -->
-                        <div class="mb-4">
-                            <input 
-                                type="text" 
-                                id="userSearch" 
-                                placeholder="Search users by email or username..." 
-                                onkeyup="filterUsers()"
-                                class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-                            >
-                        </div>
-
-                        <div class="overflow-x-auto">
-                            <table class="w-full" id="usersTable">
-                                <thead>
-                                    <tr class="text-left border-b border-gray-700">
-                                        <th class="pb-3 text-gray-400">Email</th>
-                                        <th class="pb-3 text-gray-400">Username</th>
-                                        <th class="pb-3 text-gray-400">Role</th>
-                                        <th class="pb-3 text-gray-400">Lists</th>
-                                        <th class="pb-3 text-gray-400">Joined</th>
-                                        <th class="pb-3 text-gray-400 text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="usersTableBody">
-                                    ${adminData.users.map(u => `
-                                        <tr class="border-b border-gray-800 hover:bg-gray-900/50 user-row">
-                                            <td class="py-3 user-email">${u.email}</td>
-                                            <td class="py-3 user-username">${u.username}</td>
-                                            <td class="py-3">
-                                                ${u.role === 'admin' ? 
-                                                    '<span class="text-xs bg-yellow-600/20 text-yellow-500 px-2 py-1 rounded">Admin</span>' : 
-                                                    '<span class="text-xs bg-gray-600/20 text-gray-400 px-2 py-1 rounded">User</span>'
-                                                }
-                                            </td>
-                                            <td class="py-3">${u.listCount}</td>
-                                            <td class="py-3 text-sm text-gray-500">${new Date(u.createdAt).toLocaleDateString()}</td>
-                                            <td class="py-3 text-center">
-                                                <div class="flex justify-center space-x-2">
-                                                    <button onclick="viewUserLists('${u._id}', '${u.username}')" 
-                                                        class="text-blue-500 hover:text-blue-400 text-sm" 
-                                                        title="View Lists">
-                                                        <i class="fas fa-list"></i>
-                                                    </button>
-                                                    ${u._id !== user._id ? `
-                                                        ${u.role !== 'admin' ? `
-                                                            <button onclick="makeAdmin('${u._id}')" 
-                                                                class="text-yellow-500 hover:text-yellow-400 text-sm" 
-                                                                title="Grant Admin">
-                                                                <i class="fas fa-crown"></i>
-                                                            </button>
-                                                        ` : `
-                                                            <button onclick="revokeAdmin('${u._id}')" 
-                                                                class="text-gray-500 hover:text-gray-400 text-sm" 
-                                                                title="Revoke Admin">
-                                                                <i class="fas fa-user-minus"></i>
-                                                            </button>
-                                                        `}
-                                                        <button onclick="confirmDelete('${u._id}', '${u.email}')" 
-                                                            class="text-red-500 hover:text-red-400 text-sm"
-                                                            title="Delete User">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    ` : '<span class="text-gray-600 text-sm">(You)</span>'}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                            <p id="noUsersFound" class="hidden text-center text-gray-500 py-4">No users found matching your search.</p>
-                        </div>
-                    </div>
-
-                    <!-- Admin Actions Section -->
-                    <div class="mb-8">
-                        <h2 class="text-xl font-semibold mb-4 flex items-center">
-                            <i class="fas fa-tools mr-2 text-red-500"></i>
-                            Admin Actions
-                        </h2>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <div class="stat-card rounded-lg px-4 py-3 cursor-pointer hover:scale-105 transition-transform" onclick="backupDatabase()">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Database</p>
-                                        <p class="text-lg font-semibold text-white">Backup</p>
-                                        <p class="text-xs text-gray-400 mt-1">Download snapshot</p>
-                                    </div>
-                                    <i class="fas fa-download text-blue-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card rounded-lg px-4 py-3 cursor-pointer hover:scale-105 transition-transform" onclick="document.getElementById('restoreFile').click()">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Database</p>
-                                        <p class="text-lg font-semibold text-white">Restore</p>
-                                        <p class="text-xs text-gray-400 mt-1">Upload backup</p>
-                                    </div>
-                                    <i class="fas fa-upload text-green-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                            
-                            <div class="stat-card rounded-lg px-4 py-3 cursor-pointer hover:scale-105 transition-transform" onclick="clearSessions()">
-                                <div class="flex items-center justify-between">
-                                    <div>
-                                        <p class="text-gray-500 text-xs">Sessions</p>
-                                        <p class="text-lg font-semibold text-white">Clear All</p>
-                                        <p class="text-xs text-gray-400 mt-1">Force re-login</p>
-                                    </div>
-                                    <i class="fas fa-broom text-orange-500 text-xl opacity-50"></i>
-                                </div>
-                            </div>
-                        </div>
-                        <input type="file" id="restoreFile" accept=".json" style="display: none;" onchange="restoreDatabase(event)">
-                    </div>
-                </div>
-            ` : ''}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - SuShe Online</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="/styles/output.css" rel="stylesheet">
+  <style>
+    /* CSS Custom Properties for theming */
+    :root {
+      --accent-color: ${user?.accentColor || '#dc2626'};
+      --accent-hover: ${adjustColor(user?.accentColor || '#dc2626', -30)};
+      --accent-light: ${adjustColor(user?.accentColor || '#dc2626', 40)};
+      --accent-dark: ${adjustColor(user?.accentColor || '#dc2626', -50)};
+      --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
+      --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
+      --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.1)};
+    }
+    
+    /* Apply accent color throughout */
+    .text-red-600, .text-red-500, .text-red-400 { 
+      color: var(--accent-color) !important; 
+    }
+    .bg-red-600, .bg-red-500 { 
+      background-color: var(--accent-color) !important; 
+    }
+    .hover\\:bg-red-700:hover, .hover\\:bg-red-600:hover { 
+      background-color: var(--accent-hover) !important; 
+    }
+    .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
+      color: var(--accent-color) !important; 
+    }
+    .border-red-600, .border-red-500 { 
+      border-color: var(--accent-color) !important; 
+    }
+    .focus\\:border-red-600:focus { 
+      border-color: var(--accent-color) !important; 
+    }
+  </style>
+</head>
+<body class="bg-black text-gray-200">
+  <div class="min-h-screen flex flex-col">
+    ${headerComponent(user, 'settings')}
+    
+    <div class="flex-1 p-4 lg:p-8 max-w-6xl mx-auto w-full">
+      <h1 class="text-3xl font-bold text-white mb-8">Settings</h1>
+      
+      <!-- Flash Messages -->
+      ${flash.error && flash.error.length ? `
+        <div class="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg">
+          <p class="text-red-400 flex items-center">
+            <i class="fas fa-exclamation-circle mr-2"></i>
+            ${flash.error[0]}
+          </p>
         </div>
-
-        <!-- Toast container -->
-        <div id="toast" class="toast"></div>
-
-        <!-- Delete Confirmation Modal -->
-        ${isAdmin ? `
-            <div id="deleteModal" class="hidden fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-                <div class="bg-gray-900 p-6 rounded-lg max-w-md border border-gray-700">
-                    <h3 class="text-xl font-semibold mb-4 text-red-500">Confirm Deletion</h3>
-                    <p class="text-gray-400 mb-6">Are you sure you want to delete user <span id="deleteUserEmail" class="font-semibold text-white"></span>?</p>
-                    <p class="text-sm text-gray-500 mb-6">This will permanently delete the user and all their lists.</p>
-                    <div class="flex justify-end space-x-3">
-                        <button onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Cancel</button>
-                        <button id="confirmDeleteBtn" class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded">Delete User</button>
-                    </div>
+      ` : ''}
+      
+      ${flash.success && flash.success.length ? `
+        <div class="mb-6 p-4 bg-green-900/20 border border-green-800 rounded-lg">
+          <p class="text-green-400 flex items-center">
+            <i class="fas fa-check-circle mr-2"></i>
+            ${flash.success[0]}
+          </p>
+        </div>
+      ` : ''}
+      
+      <div class="grid gap-6 lg:grid-cols-2">
+        <!-- Personal Settings Section -->
+        <div class="space-y-6">
+          <h2 class="text-xl font-semibold text-gray-300 mb-4">Personal Settings</h2>
+          
+          <!-- Account Info -->
+          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+            <h3 class="text-lg font-semibold text-white mb-4">
+              <i class="fas fa-user mr-2 text-gray-400"></i>
+              Account Information
+            </h3>
+            
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Email</label>
+                <div class="flex items-center gap-2">
+                  <input 
+                    type="email" 
+                    id="emailInput"
+                    value="${user.email}" 
+                    class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white"
+                    readonly
+                  >
+                  <button 
+                    onclick="editEmail()"
+                    id="editEmailBtn"
+                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button 
+                    onclick="saveEmail()"
+                    id="saveEmailBtn"
+                    class="hidden px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition duration-200"
+                  >
+                    <i class="fas fa-check"></i>
+                  </button>
+                  <button 
+                    onclick="cancelEmailEdit()"
+                    id="cancelEmailBtn"
+                    class="hidden px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200"
+                  >
+                    <i class="fas fa-times"></i>
+                  </button>
                 </div>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Username</label>
+                <div class="flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    id="usernameInput"
+                    value="${user.username}" 
+                    class="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white"
+                    readonly
+                  >
+                  <button 
+                    onclick="editUsername()"
+                    id="editUsernameBtn"
+                    class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200"
+                  >
+                    <i class="fas fa-edit"></i>
+                  </button>
+                  <button 
+                    onclick="saveUsername()"
+                    id="saveUsernameBtn"
+                    class="hidden px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition duration-200"
+                  >
+                    <i class="fas fa-check"></i>
+                  </button>
+                  <button 
+                    onclick="cancelUsernameEdit()"
+                    id="cancelUsernameBtn"
+                    class="hidden px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200"
+                  >
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Role</label>
+                <div class="flex items-center gap-2">
+                  <span class="text-white">${user.role === 'admin' ? 'Administrator' : 'User'}</span>
+                  ${user.role === 'admin' ? '<i class="fas fa-shield-alt text-yellow-500"></i>' : ''}
+                </div>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-1">Member Since</label>
+                <span class="text-white">${new Date(user.createdAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Change Password -->
+          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+            <h3 class="text-lg font-semibold text-white mb-4">
+              <i class="fas fa-lock mr-2 text-gray-400"></i>
+              Change Password
+            </h3>
+            
+            <form action="/settings/change-password" method="POST" class="space-y-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2" for="currentPassword">
+                  Current Password
+                </label>
+                <input 
+                  type="password" 
+                  name="currentPassword" 
+                  id="currentPassword"
+                  class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2" for="newPassword">
+                  New Password
+                </label>
+                <input 
+                  type="password" 
+                  name="newPassword" 
+                  id="newPassword"
+                  class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600"
+                  minlength="8"
+                  required
+                >
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2" for="confirmPassword">
+                  Confirm New Password
+                </label>
+                <input 
+                  type="password" 
+                  name="confirmPassword" 
+                  id="confirmPassword"
+                  class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600"
+                  minlength="8"
+                  required
+                >
+              </div>
+              
+              <button 
+                type="submit"
+                class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition duration-200"
+              >
+                Update Password
+              </button>
+            </form>
+          </div>
+          
+          <!-- Accent Color Settings -->
+          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+            <h3 class="text-lg font-semibold text-white mb-4">
+              <i class="fas fa-palette mr-2 text-gray-400"></i>
+              Theme Color
+            </h3>
+            
+            <p class="text-sm text-gray-400 mb-4">
+              Choose your preferred accent color for the interface
+            </p>
+            
+            <!-- Preset Colors -->
+            <div class="grid grid-cols-4 sm:grid-cols-8 gap-3 mb-4">
+              ${[
+                { name: 'Blood Red', value: '#dc2626' },
+                { name: 'Purple Void', value: '#9333ea' },
+                { name: 'Frost Blue', value: '#3b82f6' },
+                { name: 'Forest Green', value: '#10b981' },
+                { name: 'Sunset Orange', value: '#f97316' },
+                { name: 'Ocean Teal', value: '#14b8a6' },
+                { name: 'Rose Pink', value: '#f43f5e' },
+                { name: 'Golden', value: '#eab308' }
+              ].map(color => `
+                <button 
+                  onclick="updateAccentColor('${color.value}')"
+                  class="group relative h-12 w-full rounded-lg border-2 transition-all hover:scale-110 ${
+                    user.accentColor === color.value ? 'border-white ring-2 ring-offset-2 ring-offset-gray-900 ring-white' : 'border-gray-700 hover:border-gray-500'
+                  }"
+                  style="background-color: ${color.value}"
+                  title="${color.name}"
+                >
+                  ${user.accentColor === color.value ? 
+                    '<i class="fas fa-check text-white absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-sm"></i>' : 
+                    ''
+                  }
+                </button>
+              `).join('')}
             </div>
             
-            <!-- User Lists Modal -->
-            <div id="userListsModal" class="hidden fixed inset-0 bg-black/80 modal-backdrop flex items-center justify-center z-50 p-4">
-                <div class="bg-gray-900 rounded-lg max-w-2xl w-full max-h-[80vh] border border-gray-700 flex flex-col">
-                    <div class="p-6 border-b border-gray-700">
-                        <h3 class="text-xl font-semibold text-white">User Lists</h3>
-                        <p class="text-sm text-gray-400 mt-1">Viewing lists for: <span id="viewingUsername" class="text-gray-300"></span></p>
-                    </div>
-                    <div class="flex-1 overflow-y-auto p-6">
-                        <div id="userListsContent" class="space-y-3">
-                            <!-- Lists will be populated here -->
-                        </div>
-                    </div>
-                    <div class="p-6 border-t border-gray-700">
-                        <button onclick="closeUserListsModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded">Close</button>
-                    </div>
-                </div>
+            <!-- Custom Color Picker -->
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3 pt-3 border-t border-gray-800">
+              <label class="text-sm text-gray-400 whitespace-nowrap">Custom color:</label>
+              <div class="flex items-center gap-3 w-full sm:w-auto">
+                <input 
+                  type="color" 
+                  id="customAccentColor" 
+                  value="${user.accentColor || '#dc2626'}"
+                  class="h-10 w-20 bg-gray-800 border border-gray-700 rounded cursor-pointer hover:border-gray-600"
+                >
+                <button 
+                  onclick="updateAccentColor(document.getElementById('customAccentColor').value)"
+                  class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200 whitespace-nowrap"
+                >
+                  Apply Custom
+                </button>
+                <button 
+                  onclick="resetAccentColor()"
+                  class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 text-sm rounded transition duration-200 whitespace-nowrap"
+                >
+                  Reset
+                </button>
+              </div>
             </div>
-        ` : ''}
-
-        <script>
-            // Toast notification function
-            function showToast(message, type = 'success') {
-                const toast = document.getElementById('toast');
-                toast.textContent = message;
-                toast.className = 'toast ' + type;
-                setTimeout(() => toast.classList.add('show'), 10);
-                setTimeout(() => {
-                    toast.classList.remove('show');
-                }, 3000);
-            }
-
-            // Check for flash messages and convert to toast on page load
-            document.addEventListener('DOMContentLoaded', () => {
-                ${flash.success ? `showToast('${flash.success}', 'success');` : ''}
-                ${flash.error ? `showToast('${flash.error}', 'error');` : ''}
-                ${flash.info ? `showToast('${flash.info}', 'info');` : ''}
-            });
-
-            // Tab switching
-            function showTab(tabName) {
-                // Hide all content
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.add('hidden');
-                });
-                
-                // Remove active class from all tabs
-                document.querySelectorAll('.tab-button').forEach(tab => {
-                    tab.classList.remove('tab-active');
-                });
-                
-                // Show selected content and mark tab as active
-                document.getElementById(tabName + 'Content').classList.remove('hidden');
-                document.getElementById(tabName + 'Tab').classList.add('tab-active');
-            }
-
-            // Field editing functionality
-            let currentEditField = null;
-
-            function editField(fieldName, currentValue) {
-                // Cancel any existing edit
-                if (currentEditField) {
-                    cancelEdit();
-                }
-                
-                currentEditField = fieldName;
-                const displayElement = document.getElementById(fieldName + 'Display');
-                const container = displayElement.parentElement;
-                
-                // Create input field
-                const input = document.createElement('input');
-                input.type = fieldName === 'email' ? 'email' : 'text';
-                input.value = currentValue;
-                input.className = 'px-3 py-1 bg-gray-800 border border-gray-700 rounded text-white focus:outline-none focus:border-red-600 transition duration-200';
-                input.id = fieldName + 'Input';
-                
-                // Create save/cancel buttons
-                const buttonContainer = document.createElement('div');
-                buttonContainer.className = 'flex gap-2';
-                buttonContainer.innerHTML = \`
-                    <button onclick="saveField('\${fieldName}')" class="text-green-500 hover:text-green-400 transition-colors" title="Save">
-                        <i class="fas fa-check"></i>
-                    </button>
-                    <button onclick="cancelEdit()" class="text-red-500 hover:text-red-400 transition-colors" title="Cancel">
-                        <i class="fas fa-times"></i>
-                    </button>
-                \`;
-                
-                // Hide display and pencil, show input
-                container.innerHTML = '';
-                container.appendChild(input);
-                container.appendChild(buttonContainer);
-                
-                // Focus and select input
-                input.focus();
-                input.select();
-                
-                // Handle Enter/Escape keys
-                input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        saveField(fieldName);
-                    } else if (e.key === 'Escape') {
-                        cancelEdit();
-                    }
-                });
-            }
-
-            function cancelEdit() {
-                if (!currentEditField) return;
-                
-                // Reload to restore original state
-                window.location.reload();
-            }
-
-            async function saveField(fieldName) {
-                const input = document.getElementById(fieldName + 'Input');
-                const newValue = input.value.trim();
-                
-                if (!newValue) {
-                    showToast(\`\${fieldName.charAt(0).toUpperCase() + fieldName.slice(1)} cannot be empty\`, 'error');
-                    return;
-                }
-                
-                // Validation
-                if (fieldName === 'email') {
-                    const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-                    if (!emailRegex.test(newValue)) {
-                        showToast('Please enter a valid email address', 'error');
-                        return;
-                    }
-                } else if (fieldName === 'username') {
-                    if (newValue.length < 3 || newValue.length > 30) {
-                        showToast('Username must be between 3 and 30 characters', 'error');
-                        return;
-                    }
-                    const usernameRegex = /^[a-zA-Z0-9_]+$/;
-                    if (!usernameRegex.test(newValue)) {
-                        showToast('Username can only contain letters, numbers, and underscores', 'error');
-                        return;
-                    }
-                }
-                
-                try {
-                    const response = await fetch('/settings/update-' + fieldName, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ [fieldName]: newValue })
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (response.ok) {
-                        window.location.reload();
-                    } else {
-                        showToast(result.error || \`Error updating \${fieldName}\`, 'error');
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                    showToast(\`Error updating \${fieldName}\`, 'error');
-                }
-            }
-
-            ${isAdmin ? `
-                let deleteUserId = null;
-
-                // User search functionality
-                function filterUsers() {
-                    const searchInput = document.getElementById('userSearch');
-                    const filter = searchInput.value.toLowerCase();
-                    const rows = document.getElementsByClassName('user-row');
-                    const noResults = document.getElementById('noUsersFound');
-                    let visibleCount = 0;
-                    
-                    for (let row of rows) {
-                        const email = row.querySelector('.user-email').textContent.toLowerCase();
-                        const username = row.querySelector('.user-username').textContent.toLowerCase();
-                        
-                        if (email.includes(filter) || username.includes(filter)) {
-                            row.style.display = '';
-                            visibleCount++;
-                        } else {
-                            row.style.display = 'none';
-                        }
-                    }
-                    
-                    // Show/hide no results message
-                    if (visibleCount === 0 && filter.length > 0) {
-                        document.getElementById('usersTableBody').style.display = 'none';
-                        noResults.classList.remove('hidden');
-                    } else {
-                        document.getElementById('usersTableBody').style.display = '';
-                        noResults.classList.add('hidden');
-                    }
-                }
-
-                // View user lists
-                async function viewUserLists(userId, username) {
-                    document.getElementById('viewingUsername').textContent = username;
-                    document.getElementById('userListsContent').innerHTML = '<p class="text-gray-500">Loading lists...</p>';
-                    document.getElementById('userListsModal').classList.remove('hidden');
-                    
-                    try {
-                        const response = await fetch('/admin/user-lists/' + userId);
-                        const data = await response.json();
-                        
-                        if (response.ok) {
-                            const content = document.getElementById('userListsContent');
-                            if (data.lists && data.lists.length > 0) {
-                                content.innerHTML = data.lists.map(list => \`
-                                    <div class="bg-gray-800 rounded p-4">
-                                        <div class="flex justify-between items-start">
-                                            <div>
-                                                <h4 class="font-semibold text-white">\${list.name}</h4>
-                                                <p class="text-sm text-gray-400 mt-1">\${list.albumCount} albums</p>
-                                                <p class="text-xs text-gray-500 mt-1">Created: \${new Date(list.createdAt).toLocaleDateString()}</p>
-                                            </div>
-                                            <div class="text-right">
-                                                <p class="text-sm text-gray-400">Last updated</p>
-                                                <p class="text-xs text-gray-500">\${new Date(list.updatedAt).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                \`).join('');
-                            } else {
-                                content.innerHTML = '<p class="text-gray-500 text-center">This user has no lists yet.</p>';
+            
+            <!-- Live Preview -->
+            <div class="mt-4 p-4 bg-gray-800 rounded-lg">
+              <p class="text-xs text-gray-500 mb-2">Preview:</p>
+              <div class="flex items-center gap-3 flex-wrap">
+                <button class="px-3 py-1 text-white text-sm rounded transition-colors" 
+                        style="background-color: var(--accent-color)">
+                  Button
+                </button>
+                <span style="color: var(--accent-color)">Accent Text</span>
+                <div class="h-8 w-8 rounded border-2" 
+                     style="border-color: var(--accent-color)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Statistics & Admin Section -->
+        <div class="space-y-6">
+          <!-- Your Statistics -->
+          <div>
+            <h2 class="text-xl font-semibold text-gray-300 mb-4">Your Statistics</h2>
+            <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <p class="text-gray-400 text-sm">Total Lists</p>
+                  <p class="text-2xl font-bold text-white">${userStats.listCount}</p>
+                </div>
+                <div>
+                  <p class="text-gray-400 text-sm">Total Albums</p>
+                  <p class="text-2xl font-bold text-white">${userStats.totalAlbums}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          ${user.role !== 'admin' ? `
+            <!-- Request Admin Access -->
+            <div>
+              <h2 class="text-xl font-semibold text-gray-300 mb-4">Admin Access</h2>
+              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <p class="text-sm text-gray-400 mb-4">
+                  Enter the admin code to gain administrator privileges.
+                </p>
+                <form action="/settings/request-admin" method="POST" class="space-y-4">
+                  <div>
+                    <input 
+                      type="text" 
+                      name="code" 
+                      placeholder="Enter admin code..."
+                      class="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 uppercase"
+                      maxlength="8"
+                      required
+                    >
+                  </div>
+                  <button 
+                    type="submit"
+                    class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded transition duration-200"
+                  >
+                    Request Admin Access
+                  </button>
+                </form>
+              </div>
+            </div>
+          ` : `
+            <!-- Admin Panel -->
+            <div>
+              <h2 class="text-xl font-semibold text-gray-300 mb-4">
+                <i class="fas fa-shield-alt text-yellow-500 mr-2"></i>
+                Admin Panel
+              </h2>
+              
+              <!-- System Stats -->
+              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                <h3 class="text-lg font-semibold text-white mb-4">System Statistics</h3>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <p class="text-gray-400 text-sm">Total Users</p>
+                    <p class="text-2xl font-bold text-white">${stats.totalUsers}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">Total Lists</p>
+                    <p class="text-2xl font-bold text-white">${stats.totalLists}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">Total Albums</p>
+                    <p class="text-2xl font-bold text-white">${stats.totalAlbums}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">Admin Users</p>
+                    <p class="text-2xl font-bold text-white">${stats.adminUsers}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">Active Users (7d)</p>
+                    <p class="text-2xl font-bold text-white">${stats.activeUsers}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">User Growth</p>
+                    <p class="text-2xl font-bold ${stats.userGrowth >= 0 ? 'text-green-500' : 'text-red-500'}">
+                      ${stats.userGrowth >= 0 ? '+' : ''}${stats.userGrowth}%
+                    </p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">Database Size</p>
+                    <p class="text-2xl font-bold text-white">${stats.dbSize}</p>
+                  </div>
+                  <div>
+                    <p class="text-gray-400 text-sm">Active Sessions</p>
+                    <p class="text-2xl font-bold text-white">${stats.activeSessions}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Top Genres -->
+              ${stats.topGenres && stats.topGenres.length > 0 ? `
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                  <h3 class="text-lg font-semibold text-white mb-4">Top Genres</h3>
+                  <div class="space-y-2">
+                    ${stats.topGenres.map((genre, index) => `
+                      <div class="flex items-center justify-between">
+                        <span class="text-gray-300">${index + 1}. ${genre.name}</span>
+                        <span class="text-gray-500">${genre.count} albums</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+              
+              <!-- Admin Actions -->
+              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Admin Actions</h3>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button 
+                    onclick="if(confirm('Export all users as CSV?')) window.location.href='/admin/export-users'"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
+                  >
+                    <i class="fas fa-download mr-2"></i>Export Users
+                  </button>
+                  <button 
+                    onclick="if(confirm('Download complete database backup?')) window.location.href='/admin/backup'"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
+                  >
+                    <i class="fas fa-database mr-2"></i>Backup Database
+                  </button>
+                  <button 
+                    onclick="showRestoreModal()"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
+                  >
+                    <i class="fas fa-upload mr-2"></i>Restore Backup
+                  </button>
+                  <button 
+                    onclick="if(confirm('Clear all active sessions? This will log out all users.')) clearSessions()"
+                    class="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition duration-200 text-sm"
+                  >
+                    <i class="fas fa-sign-out-alt mr-2"></i>Clear Sessions
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Recent Activity -->
+              ${adminData?.recentActivity ? `
+                <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                  <h3 class="text-lg font-semibold text-white mb-4">Recent Activity</h3>
+                  <div class="space-y-3">
+                    ${adminData.recentActivity.map(activity => `
+                      <div class="flex items-center gap-3 text-sm">
+                        <i class="fas ${activity.icon} text-${activity.color}-500"></i>
+                        <span class="text-gray-300 flex-1">${activity.message}</span>
+                        <span class="text-gray-500 text-xs">${activity.time}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
+              
+              <!-- User Management -->
+              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+                <h3 class="text-lg font-semibold text-white mb-4">User Management</h3>
+                <div class="overflow-x-auto">
+                  <table class="w-full">
+                    <thead>
+                      <tr class="text-left border-b border-gray-800">
+                        <th class="pb-2 text-sm font-medium text-gray-400">User</th>
+                        <th class="pb-2 text-sm font-medium text-gray-400">Lists</th>
+                        <th class="pb-2 text-sm font-medium text-gray-400">Role</th>
+                        <th class="pb-2 text-sm font-medium text-gray-400">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                      ${adminData.users.map(u => `
+                        <tr>
+                          <td class="py-3">
+                            <div>
+                              <p class="text-sm text-white">${u.username}</p>
+                              <p class="text-xs text-gray-500">${u.email}</p>
+                            </div>
+                          </td>
+                          <td class="py-3">
+                            <span class="text-sm text-gray-300">${u.listCount}</span>
+                          </td>
+                          <td class="py-3">
+                            ${u.role === 'admin' ? 
+                              '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded">Admin</span>' : 
+                              '<span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">User</span>'
                             }
-                        } else {
-                            showToast('Error loading user lists', 'error');
-                            closeUserListsModal();
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        showToast('Error loading user lists', 'error');
-                        closeUserListsModal();
-                    }
-                }
-
-                function closeUserListsModal() {
-                    document.getElementById('userListsModal').classList.add('hidden');
-                }
-
-                function confirmDelete(userId, email) {
-                    deleteUserId = userId;
-                    document.getElementById('deleteUserEmail').textContent = email;
-                    document.getElementById('deleteModal').classList.remove('hidden');
-                    
-                    document.getElementById('confirmDeleteBtn').onclick = () => deleteUser(userId);
-                }
-
-                function closeDeleteModal() {
-                    document.getElementById('deleteModal').classList.add('hidden');
-                    deleteUserId = null;
-                }
-
-                async function deleteUser(userId) {
-                    try {
-                        const response = await fetch('/admin/delete-user', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ userId })
-                        });
-                        
-                        if (response.ok) {
-                            window.location.reload();
-                        } else {
-                            showToast('Error deleting user', 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        showToast('Error deleting user', 'error');
-                    }
-                    closeDeleteModal();
-                }
-
-                async function makeAdmin(userId) {
-                    if (confirm('Grant admin privileges to this user?')) {
-                        try {
-                            const response = await fetch('/admin/make-admin', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId })
-                            });
-                            
-                            if (response.ok) {
-                                window.location.reload();
-                            } else {
-                                showToast('Error granting admin privileges', 'error');
-                            }
-                        } catch (error) {
-                            console.error('Error:', error);
-                            showToast('Error granting admin privileges', 'error');
-                        }
-                    }
-                }
-
-                async function revokeAdmin(userId) {
-                    if (confirm('Revoke admin privileges from this user?')) {
-                        try {
-                            const response = await fetch('/admin/revoke-admin', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ userId })
-                            });
-                            
-                            if (response.ok) {
-                                window.location.reload();
-                            } else {
-                                showToast('Error revoking admin privileges', 'error');
-                            }
-                        } catch (error) {
-                            console.error('Error:', error);
-                            showToast('Error revoking admin privileges', 'error');
-                        }
-                    }
-                }
-
-                async function backupDatabase() {
-                    window.location.href = '/admin/backup';
-                }
-
-                async function restoreDatabase(event) {
-                    const file = event.target.files[0];
-                    if (!file) return;
-
-                    if (!confirm('WARNING: This will replace ALL current data with the backup. Continue?')) {
-                        event.target.value = '';
-                        return;
-                    }
-
-                    const formData = new FormData();
-                    formData.append('backup', file);
-
-                    try {
-                        const response = await fetch('/admin/restore', {
-                            method: 'POST',
-                            body: formData
-                        });
-
-                        const result = await response.json();
-                        
-                        if (response.ok) {
-                            showToast('Database restored successfully! Logging out...', 'success');
-                            setTimeout(() => {
-                                window.location.href = '/login';
-                            }, 2000);
-                        } else {
-                            showToast(result.error || 'Error restoring database', 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error:', error);
-                        showToast('Error restoring database', 'error');
-                    }
-                    
-                    event.target.value = '';
-                }
-
-                async function clearSessions() {
-                    if (confirm('This will log out all users including yourself. Continue?')) {
-                        try {
-                            const response = await fetch('/admin/clear-sessions', { method: 'POST' });
-                            if (response.ok) {
-                                showToast('Sessions cleared. Logging out...', 'success');
-                                setTimeout(() => {
-                                    window.location.href = '/login';
-                                }, 2000);
-                            }
-                        } catch (error) {
-                            console.error('Error:', error);
-                            showToast('Error clearing sessions', 'error');
-                        }
-                    }
-                }
-
-                // Click outside to close modals
-                window.onclick = function(event) {
-                    const deleteModal = document.getElementById('deleteModal');
-                    const userListsModal = document.getElementById('userListsModal');
-                    
-                    if (event.target === deleteModal) {
-                        closeDeleteModal();
-                    }
-                    if (event.target === userListsModal) {
-                        closeUserListsModal();
-                    }
-                }
-            ` : ''}
-        </script>
-    </body>
-    </html>
+                          </td>
+                          <td class="py-3">
+                            <div class="flex gap-2">
+                              ${u._id !== user._id ? `
+                                ${u.role !== 'admin' ? `
+                                  <button 
+                                    onclick="makeAdmin('${u._id}')"
+                                    class="text-xs text-blue-400 hover:text-blue-300"
+                                    title="Make Admin"
+                                  >
+                                    <i class="fas fa-user-shield"></i>
+                                  </button>
+                                ` : `
+                                  <button 
+                                    onclick="revokeAdmin('${u._id}')"
+                                    class="text-xs text-yellow-400 hover:text-yellow-300"
+                                    title="Revoke Admin"
+                                  >
+                                    <i class="fas fa-user-times"></i>
+                                  </button>
+                                `}
+                                <button 
+                                  onclick="viewUserLists('${u._id}')"
+                                  class="text-xs text-gray-400 hover:text-gray-300"
+                                  title="View Lists"
+                                >
+                                  <i class="fas fa-list"></i>
+                                </button>
+                                <button 
+                                  onclick="deleteUser('${u._id}')"
+                                  class="text-xs text-red-400 hover:text-red-300"
+                                  title="Delete User"
+                                >
+                                  <i class="fas fa-trash"></i>
+                                </button>
+                              ` : '<span class="text-xs text-gray-600">Current User</span>'}
+                            </div>
+                          </td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          `}
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Restore Modal -->
+  <div id="restoreModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-xl font-bold text-white">Restore Database Backup</h3>
+      </div>
+      
+      <form id="restoreForm" enctype="multipart/form-data" class="p-6">
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-gray-400 mb-2">
+            Select backup file (.json)
+          </label>
+          <input 
+            type="file" 
+            name="backup"
+            accept=".json"
+            required
+            class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
+          >
+        </div>
+        
+        <div class="bg-yellow-900/20 border border-yellow-800 rounded p-3 mb-4">
+          <p class="text-yellow-400 text-sm">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            Warning: This will replace all current data!
+          </p>
+        </div>
+        
+        <div class="flex gap-3 justify-end">
+          <button 
+            type="button"
+            onclick="document.getElementById('restoreModal').classList.add('hidden')"
+            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200"
+          >
+            Cancel
+          </button>
+          <button 
+            type="submit"
+            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200"
+          >
+            Restore Backup
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Toast container -->
+  <div id="toast" class="toast"></div>
+  
+  <script>
+    // Toast function
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = 'toast ' + type;
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+    
+    // Edit email functionality
+    function editEmail() {
+      const input = document.getElementById('emailInput');
+      const editBtn = document.getElementById('editEmailBtn');
+      const saveBtn = document.getElementById('saveEmailBtn');
+      const cancelBtn = document.getElementById('cancelEmailBtn');
+      
+      input.removeAttribute('readonly');
+      input.focus();
+      input.select();
+      
+      editBtn.classList.add('hidden');
+      saveBtn.classList.remove('hidden');
+      cancelBtn.classList.remove('hidden');
+    }
+    
+    function cancelEmailEdit() {
+      const input = document.getElementById('emailInput');
+      const editBtn = document.getElementById('editEmailBtn');
+      const saveBtn = document.getElementById('saveEmailBtn');
+      const cancelBtn = document.getElementById('cancelEmailBtn');
+      
+      input.value = '${user.email}';
+      input.setAttribute('readonly', true);
+      
+      editBtn.classList.remove('hidden');
+      saveBtn.classList.add('hidden');
+      cancelBtn.classList.add('hidden');
+    }
+    
+    async function saveEmail() {
+      const input = document.getElementById('emailInput');
+      const newEmail = input.value.trim();
+      
+      try {
+        const response = await fetch('/settings/update-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: newEmail }),
+          credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showToast('Email updated successfully');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Error updating email', 'error');
+          cancelEmailEdit();
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showToast('Error updating email', 'error');
+        cancelEmailEdit();
+      }
+    }
+    
+    // Edit username functionality
+    function editUsername() {
+      const input = document.getElementById('usernameInput');
+      const editBtn = document.getElementById('editUsernameBtn');
+      const saveBtn = document.getElementById('saveUsernameBtn');
+      const cancelBtn = document.getElementById('cancelUsernameBtn');
+      
+      input.removeAttribute('readonly');
+      input.focus();
+      input.select();
+      
+      editBtn.classList.add('hidden');
+      saveBtn.classList.remove('hidden');
+      cancelBtn.classList.remove('hidden');
+    }
+    
+    function cancelUsernameEdit() {
+      const input = document.getElementById('usernameInput');
+      const editBtn = document.getElementById('editUsernameBtn');
+      const saveBtn = document.getElementById('saveUsernameBtn');
+      const cancelBtn = document.getElementById('cancelUsernameBtn');
+      
+      input.value = '${user.username}';
+      input.setAttribute('readonly', true);
+      
+      editBtn.classList.remove('hidden');
+      saveBtn.classList.add('hidden');
+      cancelBtn.classList.add('hidden');
+    }
+    
+    async function saveUsername() {
+      const input = document.getElementById('usernameInput');
+      const newUsername = input.value.trim();
+      
+      try {
+        const response = await fetch('/settings/update-username', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: newUsername }),
+          credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showToast('Username updated successfully');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Error updating username', 'error');
+          cancelUsernameEdit();
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        showToast('Error updating username', 'error');
+        cancelUsernameEdit();
+      }
+    }
+    
+    // Accent color functions
+    async function updateAccentColor(color) {
+      try {
+        // Validate hex color
+        if (!/^#[0-9A-F]{6}$/i.test(color)) {
+          showToast('Invalid color format', 'error');
+          return;
+        }
+        
+        // Update CSS variables immediately for instant feedback
+        document.documentElement.style.setProperty('--accent-color', color);
+        document.documentElement.style.setProperty('--accent-hover', adjustColorJS(color, -30));
+        document.documentElement.style.setProperty('--accent-light', adjustColorJS(color, 40));
+        document.documentElement.style.setProperty('--accent-dark', adjustColorJS(color, -50));
+        document.documentElement.style.setProperty('--accent-shadow', color + '66');
+        document.documentElement.style.setProperty('--accent-glow', color + '80');
+        document.documentElement.style.setProperty('--accent-subtle', color + '1A');
+        
+        // Send to server
+        const response = await fetch('/settings/update-accent-color', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ accentColor: color }),
+          credentials: 'same-origin'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+          showToast('Theme color updated!');
+          // Reload the page to fully apply the new color
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Error updating color', 'error');
+          // Revert the color if server update failed
+          location.reload();
+        }
+      } catch (error) {
+        console.error('Error updating accent color:', error);
+        showToast('Error updating color', 'error');
+        location.reload();
+      }
+    }
+    
+    function resetAccentColor() {
+      updateAccentColor('#dc2626');
+    }
+    
+    // Client-side color adjustment function
+    function adjustColorJS(color, amount) {
+      const num = parseInt(color.replace("#", ""), 16);
+      const amt = Math.round(2.55 * amount);
+      const R = (num >> 16) + amt;
+      const G = (num >> 8 & 0x00FF) + amt;
+      const B = (num & 0x0000FF) + amt;
+      return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255))
+        .toString(16).slice(1);
+    }
+    
+    ${user.role === 'admin' ? `
+      // Admin functions
+      async function makeAdmin(userId) {
+        if (!confirm('Grant admin privileges to this user?')) return;
+        
+        try {
+          const response = await fetch('/admin/make-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Admin privileges granted');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(data.error || 'Error granting admin', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error granting admin', 'error');
+        }
+      }
+      
+      async function revokeAdmin(userId) {
+        if (!confirm('Revoke admin privileges from this user?')) return;
+        
+        try {
+          const response = await fetch('/admin/revoke-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Admin privileges revoked');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(data.error || 'Error revoking admin', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error revoking admin', 'error');
+        }
+      }
+      
+      async function deleteUser(userId) {
+        if (!confirm('Permanently delete this user and all their data?')) return;
+        
+        try {
+          const response = await fetch('/admin/delete-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('User deleted successfully');
+            setTimeout(() => location.reload(), 1000);
+          } else {
+            showToast(data.error || 'Error deleting user', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error deleting user', 'error');
+        }
+      }
+      
+      async function viewUserLists(userId) {
+        try {
+          const response = await fetch(\`/admin/user-lists/\${userId}\`, {
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.lists) {
+            const listInfo = data.lists.map(list => 
+              \`• \${list.name}: \${list.albumCount} albums\`
+            ).join('\\n');
+            
+            alert(\`User's Lists:\\n\\n\${listInfo || 'No lists found'}\`);
+          } else {
+            showToast('Error fetching user lists', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error fetching user lists', 'error');
+        }
+      }
+      
+      async function clearSessions() {
+        try {
+          const response = await fetch('/admin/clear-sessions', {
+            method: 'POST',
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('All sessions cleared');
+            setTimeout(() => window.location.href = '/login', 2000);
+          } else {
+            showToast('Error clearing sessions', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error clearing sessions', 'error');
+        }
+      }
+      
+      function showRestoreModal() {
+        document.getElementById('restoreModal').classList.remove('hidden');
+      }
+      
+      // Handle restore form submission
+      document.getElementById('restoreForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        if (!confirm('This will replace ALL current data. Are you absolutely sure?')) {
+          return;
+        }
+        
+        const formData = new FormData(e.target);
+        
+        try {
+          const response = await fetch('/admin/restore', {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Database restored successfully');
+            setTimeout(() => window.location.href = '/login', 2000);
+          } else {
+            showToast(data.error || 'Error restoring database', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error restoring database', 'error');
+        }
+        
+        document.getElementById('restoreModal').classList.add('hidden');
+      });
+    ` : ''}
+  </script>
+</body>
+</html>
   `;
 };
+
+// Helper functions that need to be imported or defined
+function adjustColor(color, amount) {
+  const num = parseInt(color.replace("#", ""), 16);
+  const amt = Math.round(2.55 * amount);
+  const R = (num >> 16) + amt;
+  const G = (num >> 8 & 0x00FF) + amt;
+  const B = (num & 0x0000FF) + amt;
+  return "#" + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+    (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+    (B < 255 ? B < 1 ? 0 : B : 255))
+    .toString(16).slice(1);
+}
+
+function colorWithOpacity(color, opacity) {
+  const num = parseInt(color.replace("#", ""), 16);
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
 
 module.exports = { settingsTemplate };

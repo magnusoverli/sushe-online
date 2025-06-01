@@ -1,3 +1,5 @@
+const { adjustColor, colorWithOpacity } = require('./color-utils');
+
 // Shared header component
 const headerComponent = (user, activeSection = 'home', currentListName = '') => `
   <header class="bg-gray-900 border-b border-gray-800 z-50">
@@ -57,7 +59,10 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
 `;
 
 // Base HTML template with Black Metal Spotify-inspired theme
-const htmlTemplate = (content, title = 'SuShe Auth') => `
+const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
+  const accentColor = user?.accentColor || '#dc2626';
+  
+  return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -66,12 +71,51 @@ const htmlTemplate = (content, title = 'SuShe Auth') => `
   <title>${title}</title>
   <link href="/styles/output.css" rel="stylesheet">
   <style>
+    /* CSS Custom Properties for theming */
+    :root {
+      --accent-color: ${accentColor};
+      --accent-hover: ${adjustColor(accentColor, -30)};
+      --accent-light: ${adjustColor(accentColor, 40)};
+      --accent-dark: ${adjustColor(accentColor, -50)};
+      --accent-shadow: ${colorWithOpacity(accentColor, 0.4)};
+      --accent-glow: ${colorWithOpacity(accentColor, 0.5)};
+      --accent-subtle: ${colorWithOpacity(accentColor, 0.1)};
+    }
+    
+    /* Override Tailwind classes with CSS variables */
+    .text-red-600, .text-red-500, .text-red-400 { 
+      color: var(--accent-color) !important; 
+    }
+    .bg-red-600, .bg-red-500 { 
+      background-color: var(--accent-color) !important; 
+    }
+    .hover\\:bg-red-700:hover, .hover\\:bg-red-600:hover { 
+      background-color: var(--accent-hover) !important; 
+    }
+    .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
+      color: var(--accent-color) !important; 
+    }
+    .border-red-600, .border-red-500 { 
+      border-color: var(--accent-color) !important; 
+    }
+    .focus\\:border-red-600:focus { 
+      border-color: var(--accent-color) !important; 
+    }
+    .ring-red-600 { 
+      --tw-ring-color: var(--accent-color) !important; 
+    }
+    
+    /* Update box shadows */
+    .spotify-input:focus {
+      box-shadow: 0 0 0 3px var(--accent-shadow);
+    }
+    
     /* Custom black metal inspired fonts and effects */
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
     
     .metal-title {
       font-family: 'Cinzel', serif;
-      text-shadow: 0 0 20px rgba(220, 38, 38, 0.5);
+      text-shadow: 0 0 20px var(--accent-glow);
     }
     
     .glow-red {
@@ -79,12 +123,58 @@ const htmlTemplate = (content, title = 'SuShe Auth') => `
     }
     
     @keyframes glow {
-      from { text-shadow: 0 0 10px #dc2626, 0 0 20px #dc2626, 0 0 30px #dc2626; }
-      to { text-shadow: 0 0 20px #dc2626, 0 0 30px #dc2626, 0 0 40px #dc2626; }
+      from { 
+        text-shadow: 0 0 10px var(--accent-color), 
+                     0 0 20px var(--accent-color), 
+                     0 0 30px var(--accent-color); 
+      }
+      to { 
+        text-shadow: 0 0 20px var(--accent-color), 
+                     0 0 30px var(--accent-color), 
+                     0 0 40px var(--accent-color); 
+      }
     }
     
-    .spotify-input:focus {
-      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.4);
+    /* Update other accent-colored elements */
+    .bg-red-900 { background-color: var(--accent-dark) !important; }
+    .bg-red-800 { background-color: var(--accent-dark) !important; }
+    
+    /* Subtle background glows */
+    .accent-glow-top {
+      background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%);
+    }
+    
+    /* Toast notifications with accent */
+    .toast.error {
+      background-color: var(--accent-color);
+    }
+    
+    /* NEW badge with accent */
+    .bg-red-600.text-white.text-xs {
+      background-color: var(--accent-color) !important;
+    }
+    
+    /* Mobile FAB with accent */
+    #mobileFAB {
+      background-color: var(--accent-color) !important;
+    }
+    #mobileFAB:hover {
+      background-color: var(--accent-hover) !important;
+    }
+    
+    /* Drag placeholder with accent */
+    .album-row.drag-placeholder {
+      background-color: var(--accent-subtle);
+      border-color: var(--accent-color);
+    }
+    
+    /* SortableJS drag zones */
+    .sortable-scrolling::before,
+    .sortable-scrolling::after {
+      background: linear-gradient(to bottom, 
+        var(--accent-shadow) 0%, 
+        var(--accent-subtle) 50%, 
+        transparent 100%);
     }
     
     /* Custom scrollbar */
@@ -111,9 +201,9 @@ const htmlTemplate = (content, title = 'SuShe Auth') => `
   <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black"></div>
   <div class="noise absolute inset-0"></div>
   
-  <!-- Subtle red accent glow -->
-  <div class="absolute top-0 left-1/4 w-96 h-96 bg-red-900 rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
-  <div class="absolute bottom-0 right-1/4 w-96 h-96 bg-red-800 rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
+  <!-- Subtle accent glow -->
+  <div class="absolute top-0 left-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
+  <div class="absolute bottom-0 right-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
   
   <div class="relative z-10 max-w-md w-full px-4">
     ${content}
@@ -121,9 +211,10 @@ const htmlTemplate = (content, title = 'SuShe Auth') => `
 </body>
 </html>
 `;
+};
 
 // Registration form template - Updated with flash parameter
-const registerTemplate = (req, flash) => `
+const registerTemplate = (req, flash) => htmlTemplate(`
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">Join SuShe Online</h1>
@@ -211,10 +302,10 @@ const registerTemplate = (req, flash) => `
       </p>
     </div>
   </div>
-`;
+`, 'Join SuShe Online', null);
 
 // Login form template - Updated with flash parameter
-const loginTemplate = (req, flash) => `
+const loginTemplate = (req, flash) => htmlTemplate(`
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOG IN</h1>
@@ -406,7 +497,7 @@ const loginTemplate = (req, flash) => `
       });
     });
   </script>
-`;
+`, 'SuShe Online', req.user);
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
@@ -1242,6 +1333,36 @@ const spotifyTemplate = (req) => `
   <link href="/styles/output.css" rel="stylesheet">
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
+    /* CSS Custom Properties for theming */
+    :root {
+      --accent-color: ${req.user?.accentColor || '#dc2626'};
+      --accent-hover: ${adjustColor(req.user?.accentColor || '#dc2626', -30)};
+      --accent-light: ${adjustColor(req.user?.accentColor || '#dc2626', 40)};
+      --accent-dark: ${adjustColor(req.user?.accentColor || '#dc2626', -50)};
+      --accent-shadow: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.4)};
+      --accent-glow: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.5)};
+      --accent-subtle: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.1)};
+    }
+    
+    /* Apply accent color throughout the app */
+    .text-red-600, .text-red-500, .text-red-400 { 
+      color: var(--accent-color) !important; 
+    }
+    .bg-red-600, .bg-red-500 { 
+      background-color: var(--accent-color) !important; 
+    }
+    .hover\\:bg-red-700:hover, .hover\\:bg-red-600:hover { 
+      background-color: var(--accent-hover) !important; 
+    }
+    .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
+      color: var(--accent-color) !important; 
+    }
+    .border-red-600, .border-red-500 { 
+      border-color: var(--accent-color) !important; 
+    }
+    .focus\\:border-red-600:focus { 
+      border-color: var(--accent-color) !important; 
+    }
     @media (max-width: 1023px) {
 
     input[type="date"] {
