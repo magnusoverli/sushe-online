@@ -1828,20 +1828,20 @@ window.showMobileEditForm = function(index) {
   
   // Create the edit modal
   const editModal = document.createElement('div');
-  editModal.className = 'fixed inset-0 z-50 lg:hidden bg-gray-900 flex flex-col';
+  editModal.className = 'fixed inset-0 z-50 lg:hidden bg-gray-900 flex flex-col overflow-hidden';
   editModal.innerHTML = `
     <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b border-gray-800">
+    <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
       <button onclick="this.closest('.fixed').remove()" class="p-2 -m-2 text-gray-400 hover:text-white">
         <i class="fas fa-times text-xl"></i>
       </button>
-      <h3 class="text-lg font-semibold text-white">Edit Album</h3>
-      <button id="mobileEditSaveBtn" class="text-red-500 font-semibold">Save</button>
+      <h3 class="text-lg font-semibold text-white flex-1 text-center px-4">Edit Album</h3>
+      <button id="mobileEditSaveBtn" class="text-red-500 font-semibold whitespace-nowrap">Save</button>
     </div>
     
     <!-- Form Content -->
-    <div class="flex-1 overflow-y-auto">
-      <form id="mobileEditForm" class="p-4 space-y-4">
+    <div class="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch">
+      <form id="mobileEditForm" class="p-4 space-y-4 max-w-full">
         <!-- Album Cover Preview -->
         ${album.cover_image ? `
           <div class="flex justify-center mb-4">
@@ -1852,7 +1852,7 @@ window.showMobileEditForm = function(index) {
         ` : ''}
         
         <!-- Artist Name -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Artist</label>
           <input 
             type="text" 
@@ -1864,7 +1864,7 @@ window.showMobileEditForm = function(index) {
         </div>
         
         <!-- Album Title -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Album</label>
           <input 
             type="text" 
@@ -1876,7 +1876,7 @@ window.showMobileEditForm = function(index) {
         </div>
         
         <!-- Release Date -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Release Date</label>
           <input 
             type="date" 
@@ -1887,53 +1887,71 @@ window.showMobileEditForm = function(index) {
         </div>
         
         <!-- Country - Native Select -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Country</label>
-          <select 
-            id="editCountry" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none"
-            style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e'); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem;"
-          >
-            <option value="">Select a country...</option>
-            ${availableCountries.map(country => 
-              `<option value="${country}" ${country === album.country ? 'selected' : ''}>${country}</option>`
-            ).join('')}
-          </select>
+          <div class="relative">
+            <select 
+              id="editCountry" 
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
+            >
+              <option value="">Select a country...</option>
+              ${availableCountries.map(country => 
+                `<option value="${country}" ${country === album.country ? 'selected' : ''}>${country}</option>`
+              ).join('')}
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </div>
+          </div>
         </div>
         
         <!-- Genre 1 - Native Select -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Primary Genre</label>
-          <select 
-            id="editGenre1" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none"
-            style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e'); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem;"
-          >
-            <option value="">Select a genre...</option>
-            ${availableGenres.map(genre => 
-              `<option value="${genre}" ${genre === (album.genre_1 || album.genre) ? 'selected' : ''}>${genre}</option>`
-            ).join('')}
-          </select>
+          <div class="relative">
+            <select 
+              id="editGenre1" 
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
+            >
+              <option value="">Select a genre...</option>
+              ${availableGenres.map(genre => 
+                `<option value="${genre}" ${genre === (album.genre_1 || album.genre) ? 'selected' : ''}>${genre}</option>`
+              ).join('')}
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </div>
+          </div>
         </div>
         
         <!-- Genre 2 - Native Select -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Secondary Genre</label>
-          <select 
-            id="editGenre2" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none"
-            style="background-image: url('data:image/svg+xml;charset=UTF-8,%3csvg xmlns=%27http://www.w3.org/2000/svg%27 fill=%27none%27 viewBox=%270 0 20 20%27%3e%3cpath stroke=%27%236b7280%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27 stroke-width=%271.5%27 d=%27M6 8l4 4 4-4%27/%3e%3c/svg%3e'); background-position: right 0.7rem center; background-repeat: no-repeat; background-size: 1.5em 1.5em; padding-right: 2.5rem;"
-          >
-            <option value="">None (optional)</option>
-            ${availableGenres.map(genre => {
-              const currentGenre2 = album.genre_2 && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-' ? album.genre_2 : '';
-              return `<option value="${genre}" ${genre === currentGenre2 ? 'selected' : ''}>${genre}</option>`;
-            }).join('')}
-          </select>
+          <div class="relative">
+            <select 
+              id="editGenre2" 
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
+            >
+              <option value="">None (optional)</option>
+              ${availableGenres.map(genre => {
+                const currentGenre2 = album.genre_2 && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-' ? album.genre_2 : '';
+                return `<option value="${genre}" ${genre === currentGenre2 ? 'selected' : ''}>${genre}</option>`;
+              }).join('')}
+            </select>
+            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </div>
+          </div>
         </div>
         
         <!-- Comments -->
-        <div>
+        <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Comments</label>
           <textarea 
             id="editComments" 
@@ -1951,7 +1969,7 @@ window.showMobileEditForm = function(index) {
   
   document.body.appendChild(editModal);
   
-  // Handle save
+  // Handle save (rest of the code remains the same)
   document.getElementById('mobileEditSaveBtn').onclick = async function() {
     // Gather all the values
     const updatedAlbum = {
