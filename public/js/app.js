@@ -1160,8 +1160,6 @@ function initializeMobileSorting(container) {
             positionElement.textContent = index + 1;
           }
         });
-        
-        showToast('List reordered');
       } catch (error) {
         console.error('Error saving reorder:', error);
         showToast('Error saving changes', 'error');
@@ -1881,9 +1879,11 @@ window.showMobileEditForm = function(index) {
           <input 
             type="date" 
             id="editReleaseDate" 
-            value="${album.release_date ? (album.release_date.length === 4 ? album.release_date + '-01-01' : album.release_date) : ''}"
+            value="${album.release_date ? (album.release_date.length === 4 ? album.release_date + '-01-01' : album.release_date) : new Date().toISOString().split('T')[0]}"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            style="display: block; width: 100%; min-height: 48px; -webkit-appearance: none;"
           >
+          ${!album.release_date ? '<p class="text-xs text-gray-500 mt-1">No date set - defaulting to today</p>' : ''}
         </div>
         
         <!-- Country - Native Select -->
@@ -1968,7 +1968,30 @@ window.showMobileEditForm = function(index) {
   `;
   
   document.body.appendChild(editModal);
-  
+
+  // Handle date input placeholder
+  const dateInput = document.getElementById('editReleaseDate');
+  const placeholder = document.getElementById('datePlaceholder');
+
+  if (dateInput && placeholder) {
+    // Hide placeholder when date input is focused or has value
+    dateInput.addEventListener('focus', () => {
+      placeholder.style.display = 'none';
+    });
+    
+    dateInput.addEventListener('blur', () => {
+      if (!dateInput.value) {
+        placeholder.style.display = 'flex';
+      }
+    });
+    
+    dateInput.addEventListener('change', () => {
+      if (dateInput.value) {
+        placeholder.style.display = 'none';
+      }
+    });
+  }
+
   // Handle save (rest of the code remains the same)
   document.getElementById('mobileEditSaveBtn').onclick = async function() {
     // Gather all the values

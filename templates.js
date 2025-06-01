@@ -987,6 +987,41 @@ const spotifyTemplate = (req) => `
   <style>
     @media (max-width: 1023px) {
 
+    input[type="date"] {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      width: 100%;
+    }
+
+    /* Style empty date inputs to match filled ones */
+    input[type="date"]:not([value]),
+    input[type="date"][value=""] {
+      color: #6b7280; /* gray-500 to match placeholder text */
+    }
+    
+    /* Hide the default calendar icon on webkit browsers */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+      background: transparent;
+      bottom: 0;
+      color: transparent;
+      cursor: pointer;
+      height: auto;
+      left: 0;
+      position: absolute;
+      right: 0;
+      top: 0;
+      width: auto;
+    }
+    
+    /* Ensure consistent height and padding */
+    input[type="date"]::-webkit-datetime-edit {
+      padding: 0;
+    }
+    
+    input[type="date"]::-webkit-datetime-edit-fields-wrapper {
+      padding: 0;
+    }
     /* Mobile modal styles */
     .pb-safe {
       padding-bottom: env(safe-area-inset-bottom, 1rem);
