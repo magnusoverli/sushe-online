@@ -1055,9 +1055,12 @@ async function searchArtistImage(artistName) {
 async function displayArtistResults(artists) {
   modalElements.artistList.innerHTML = '';
   
+  // Desktop now uses the same list-style layout as mobile
+  modalElements.artistList.className = 'space-y-3'; // Changed from grid to vertical list
+  
   for (const artist of artists) {
     const artistEl = document.createElement('div');
-    artistEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
+    artistEl.className = 'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
     
     const disambiguation = artist.disambiguation ? ` <span class="text-gray-500 text-sm">(${artist.disambiguation})</span>` : '';
     
@@ -1081,6 +1084,9 @@ async function displayArtistResults(artists) {
       <div class="flex-1 min-w-0">
         <div class="font-medium text-white">${artist.name}${disambiguation}</div>
         <div class="text-sm text-gray-400 mt-1">${artist.type || 'Artist'}${countryDisplay}</div>
+      </div>
+      <div class="flex-shrink-0">
+        <i class="fas fa-chevron-right text-gray-500"></i>
       </div>
     `;
     
@@ -1227,11 +1233,8 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   // Store releaseGroups globally for access in addAlbumToList
   window.currentReleaseGroups = releaseGroups;
   
-  // Detect if mobile
-  const isMobile = window.innerWidth < 1024;
-  
-  // Set appropriate class based on platform - both use same layout now
-  modalElements.albumList.className = 'space-y-2';
+  // Desktop now uses the same list-style layout as mobile
+  modalElements.albumList.className = 'space-y-3'; // Changed from grid to vertical list
   
   // Reset background loading state
   isBackgroundLoading = false;
@@ -1252,8 +1255,8 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
     const albumType = rg['primary-type'];
     const isNewRelease = rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
     
-    // Use same layout for both mobile and desktop now
-    albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
+    // Use horizontal card layout like mobile
+    albumEl.className = 'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
     
     albumEl.innerHTML = `
       ${isNewRelease ? `
@@ -1261,8 +1264,8 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
           NEW
         </div>
       ` : ''}
-      <div class="album-cover-container flex-shrink-0 w-16 h-16 ${isMobile ? 'rounded' : 'rounded-full'} overflow-hidden flex items-center justify-center">
-        <div class="w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center animate-pulse">
+      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md">
+        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center animate-pulse">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
             <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -1271,17 +1274,18 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
         </div>
       </div>
       <div class="flex-1 min-w-0">
-        <div class="font-medium text-white truncate" title="${rg.title}">${rg.title}</div>
+        <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
         <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
+        <div class="text-xs text-gray-500 mt-1">${currentArtist.name}</div>
       </div>
     `;
     
-    // Click handler - same for both mobile and desktop
+    // Click handler
     albumEl.onclick = async () => {
       // Show loading state
       const coverContainer = albumEl.querySelector('.album-cover-container');
       coverContainer.innerHTML = `
-        <div class="w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center">
+        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
         </div>
       `;
