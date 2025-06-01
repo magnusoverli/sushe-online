@@ -776,6 +776,20 @@ function getTimeAgo(date) {
   return 'over a year ago';
 }
 
+// One-time migration to add accentColor to existing users
+users.update(
+  { accentColor: { $exists: false } },
+  { $set: { accentColor: '#dc2626' } },
+  { multi: true },
+  (err, numUpdated) => {
+    if (err) {
+      console.error('Error migrating accent colors:', err);
+    } else if (numUpdated > 0) {
+      console.log(`Migrated ${numUpdated} users with default accent color`);
+    }
+  }
+);
+
 // Change password endpoint
 app.post('/settings/change-password', ensureAuth, async (req, res) => {
   try {
