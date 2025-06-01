@@ -27,16 +27,26 @@ window.openAddAlbumModal = function() {
     return;
   }
   
-  // Optimization 3: Warm up connections when modal opens
+  // Warm up connections
   warmupConnections();
   
   modal.classList.remove('hidden');
-  modalElements.artistSearchInput.value = '';
-  modalElements.artistSearchInput.focus();
+  
+  // Focus the appropriate search input
+  if (modalElements.artistSearchInput) {
+    modalElements.artistSearchInput.value = '';
+    modalElements.artistSearchInput.focus();
+  }
+  
   resetModalState();
   
-  // Populate country dropdown when modal opens (countries should be loaded by now)
+  // Populate country dropdown when modal opens
   populateCountryDropdown();
+  
+  // On mobile, prevent body scroll when modal is open
+  if (window.innerWidth < 1024) {
+    document.body.style.overflow = 'hidden';
+  }
 };
 
 // Queue for managing concurrent requests
@@ -577,39 +587,81 @@ function setupIntersectionObserver(releaseGroups, artistName) {
 // Initialize modal
 function initializeAddAlbumFeature() {
   modal = document.getElementById('addAlbumModal');
-  modalElements = {
-    artistSearchInput: document.getElementById('artistSearchInput'),
-    searchArtistBtn: document.getElementById('searchArtistBtn'),
-    closeModalBtn: document.getElementById('closeModalBtn'),
-    artistResults: document.getElementById('artistResults'),
-    albumResults: document.getElementById('albumResults'),
-    artistList: document.getElementById('artistList'),
-    albumList: document.getElementById('albumList'),
-    searchLoading: document.getElementById('searchLoading'),
-    searchEmpty: document.getElementById('searchEmpty'),
-    backToArtists: document.getElementById('backToArtists')
-  };
   
-  // Manual entry elements
-  manualEntryElements = {
-    manualEntryBtn: document.getElementById('manualEntryBtn'),
-    manualEntryForm: document.getElementById('manualEntryForm'),
-    backToSearch: document.getElementById('backToSearch'),
-    form: document.getElementById('manualAlbumForm'),
-    coverArtInput: document.getElementById('manualCoverArt'),
-    coverPreview: document.getElementById('coverPreview'),
-    countrySelect: document.getElementById('manualCountry'),
-    cancelBtn: document.getElementById('cancelManualEntry')
-  };
+  // Detect if mobile and set appropriate elements
+  const isMobile = window.innerWidth < 1024;
   
-  // Button setup removed - now handled in displayAlbums
+  if (isMobile) {
+    // Mobile elements
+    modalElements = {
+      artistSearchInput: document.getElementById('mobileArtistSearchInput'),
+      searchArtistBtn: document.getElementById('mobileSearchArtistBtn'),
+      closeModalBtn: document.getElementById('closeMobileModalBtn'),
+      artistResults: document.getElementById('mobileArtistResults'),
+      albumResults: document.getElementById('mobileAlbumResults'),
+      artistList: document.getElementById('mobileArtistList'),
+      albumList: document.getElementById('mobileAlbumList'),
+      searchLoading: document.getElementById('mobileSearchLoading'),
+      searchEmpty: document.getElementById('mobileSearchEmpty'),
+      backToArtists: document.getElementById('mobileBackToArtists')
+    };
+    
+    // Mobile manual entry elements
+    manualEntryElements = {
+      manualEntryBtn: document.getElementById('mobileManualEntryBtn'),
+      manualEntryForm: document.getElementById('mobileManualEntryForm'),
+      backToSearch: document.getElementById('mobileBackToSearch'),
+      form: document.getElementById('mobileManualAlbumForm'),
+      coverArtInput: document.getElementById('mobileManualCoverArt'),
+      coverPreview: document.getElementById('mobileCoverPreview'),
+      countrySelect: document.getElementById('mobileManualCountry'),
+      cancelBtn: document.getElementById('mobileCancelManualEntry')
+    };
+  } else {
+    // Desktop elements
+    modalElements = {
+      artistSearchInput: document.getElementById('artistSearchInput'),
+      searchArtistBtn: document.getElementById('searchArtistBtn'),
+      closeModalBtn: document.getElementById('closeModalBtn'),
+      artistResults: document.getElementById('artistResults'),
+      albumResults: document.getElementById('albumResults'),
+      artistList: document.getElementById('artistList'),
+      albumList: document.getElementById('albumList'),
+      searchLoading: document.getElementById('searchLoading'),
+      searchEmpty: document.getElementById('searchEmpty'),
+      backToArtists: document.getElementById('backToArtists')
+    };
+    
+    // Desktop manual entry elements
+    manualEntryElements = {
+      manualEntryBtn: document.getElementById('manualEntryBtn'),
+      manualEntryForm: document.getElementById('manualEntryForm'),
+      backToSearch: document.getElementById('backToSearch'),
+      form: document.getElementById('manualAlbumForm'),
+      coverArtInput: document.getElementById('manualCoverArt'),
+      coverPreview: document.getElementById('coverPreview'),
+      countrySelect: document.getElementById('manualCountry'),
+      cancelBtn: document.getElementById('cancelManualEntry')
+    };
+  }
   
+  // Check if all elements exist
+  if (!modal || !modalElements.closeModalBtn) {
+    console.error('Add album modal elements not found');
+    return;
+  }
+  
+  // Common event handlers (work for both mobile and desktop)
   modalElements.closeModalBtn.onclick = closeAddAlbumModal;
-  modal.onclick = (e) => {
-    if (e.target === modal) {
-      closeAddAlbumModal();
-    }
-  };
+  
+  // Modal backdrop click (only for desktop)
+  if (!isMobile) {
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        closeAddAlbumModal();
+      }
+    };
+  }
   
   modalElements.searchArtistBtn.onclick = performArtistSearch;
   modalElements.artistSearchInput.onkeypress = (e) => {
@@ -628,20 +680,37 @@ function initializeAddAlbumFeature() {
   };
   
   // Manual entry handlers
-  manualEntryElements.manualEntryBtn.onclick = showManualEntryForm;
-  manualEntryElements.backToSearch.onclick = hideManualEntryForm;
-  manualEntryElements.cancelBtn.onclick = hideManualEntryForm;
-  manualEntryElements.form.onsubmit = handleManualSubmit;
-  manualEntryElements.coverArtInput.onchange = handleCoverArtUpload;
+  if (manualEntryElements.manualEntryBtn) {
+    manualEntryElements.manualEntryBtn.onclick = showManualEntryForm;
+  }
+  
+  if (manualEntryElements.backToSearch) {
+    manualEntryElements.backToSearch.onclick = hideManualEntryForm;
+  }
+  
+  if (manualEntryElements.cancelBtn) {
+    manualEntryElements.cancelBtn.onclick = hideManualEntryForm;
+  }
+  
+  if (manualEntryElements.form) {
+    manualEntryElements.form.onsubmit = handleManualSubmit;
+  }
+  
+  if (manualEntryElements.coverArtInput) {
+    manualEntryElements.coverArtInput.onchange = handleCoverArtUpload;
+  }
   
   // Populate country dropdown
   populateCountryDropdown();
   
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      closeAddAlbumModal();
-    }
-  });
+  // ESC key to close (desktop only)
+  if (!isMobile) {
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+        closeAddAlbumModal();
+      }
+    });
+  }
 }
 
 // New functions for manual entry
@@ -653,7 +722,7 @@ function showManualEntryForm() {
   modalElements.searchEmpty.classList.add('hidden');
   
   // Hide the search section
-  const searchSection = document.getElementById('searchSection');
+  const searchSection = document.getElementById(window.innerWidth < 1024 ? 'mobileSearchSection' : 'searchSection');
   if (searchSection) {
     searchSection.classList.add('hidden');
   }
@@ -664,6 +733,9 @@ function showManualEntryForm() {
   // Reset form
   manualEntryElements.form.reset();
   resetCoverPreview();
+  
+  // Populate country dropdown (in case it wasn't populated yet)
+  populateCountryDropdown();
 }
 
 function hideManualEntryForm() {
@@ -671,7 +743,7 @@ function hideManualEntryForm() {
   modalElements.searchEmpty.classList.remove('hidden');
   
   // Show the search section again
-  const searchSection = document.getElementById('searchSection');
+  const searchSection = document.getElementById(window.innerWidth < 1024 ? 'mobileSearchSection' : 'searchSection');
   if (searchSection) {
     searchSection.classList.remove('hidden');
   }
@@ -684,13 +756,14 @@ function hideManualEntryForm() {
 function populateCountryDropdown() {
   const select = manualEntryElements.countrySelect;
   
+  if (!select) return;
+  
   // Clear existing options except the first one
   while (select.options.length > 1) {
     select.remove(1);
   }
   
   // Add countries from the global availableCountries array
-  // Remove 'window.' prefix since availableCountries is available in the global scope
   if (typeof availableCountries !== 'undefined' && availableCountries) {
     availableCountries.forEach(country => {
       const option = document.createElement('option');
@@ -702,13 +775,15 @@ function populateCountryDropdown() {
 }
 
 function resetCoverPreview() {
-  manualEntryElements.coverPreview.innerHTML = `
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-      <circle cx="8.5" cy="8.5" r="1.5"></circle>
-      <polyline points="21 15 16 10 5 21"></polyline>
-    </svg>
-  `;
+  const defaultContent = window.innerWidth < 1024 
+    ? '<i class="fas fa-image text-2xl text-gray-600"></i>'
+    : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <circle cx="8.5" cy="8.5" r="1.5"></circle>
+        <polyline points="21 15 16 10 5 21"></polyline>
+      </svg>`;
+  
+  manualEntryElements.coverPreview.innerHTML = defaultContent;
 }
 
 async function handleCoverArtUpload(e) {
@@ -844,6 +919,11 @@ function closeAddAlbumModal() {
   
   modal.classList.add('hidden');
   resetModalState();
+  
+  // Restore body scroll on mobile
+  if (window.innerWidth < 1024) {
+    document.body.style.overflow = '';
+  }
 }
 
 function resetModalState() {
@@ -1146,8 +1226,11 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   // Store releaseGroups globally for access in addAlbumToList
   window.currentReleaseGroups = releaseGroups;
   
-  // Change the albumList class from grid to vertical list
-  modalElements.albumList.className = 'space-y-2';
+  // Detect if mobile
+  const isMobile = window.innerWidth < 1024;
+  
+  // Set appropriate class based on platform
+  modalElements.albumList.className = isMobile ? 'grid grid-cols-2 gap-3' : 'space-y-2';
   
   // Reset background loading state
   isBackgroundLoading = false;
@@ -1161,37 +1244,87 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   
   releaseGroups.forEach((rg, index) => {
     const albumEl = document.createElement('div');
-    albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
     albumEl.dataset.albumIndex = index;
-    albumEl.dataset.albumId = rg.id; // Add album ID for easier lookup
+    albumEl.dataset.albumId = rg.id;
     
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
     const isNewRelease = rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
     
-    albumEl.innerHTML = `
-      ${isNewRelease ? `
-        <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
-          NEW
+    if (isMobile) {
+      // Mobile layout - card style
+      albumEl.className = 'bg-gray-800 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:bg-gray-700 active:scale-95 relative';
+      
+      albumEl.innerHTML = `
+        ${isNewRelease ? `
+          <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
+            NEW
+          </div>
+        ` : ''}
+        <div class="aspect-square relative bg-gray-900">
+          <div class="album-cover-container absolute inset-0 flex items-center justify-center">
+            <div class="w-full h-full bg-gray-700 flex items-center justify-center animate-pulse">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
+          </div>
         </div>
-      ` : ''}
-      <div class="album-cover-container flex-shrink-0 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center">
-        <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
+        <div class="p-3">
+          <div class="font-medium text-white text-sm truncate" title="${rg.title}">${rg.title}</div>
+          <div class="text-xs text-gray-400 mt-1">${releaseDate}</div>
+          <div class="text-xs text-gray-500">${albumType}</div>
         </div>
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="font-medium text-white truncate" title="${rg.title}">${rg.title}</div>
-        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
-      </div>
-    `;
+      `;
+    } else {
+      // Desktop layout - horizontal list
+      albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
+      
+      albumEl.innerHTML = `
+        ${isNewRelease ? `
+          <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
+            NEW
+          </div>
+        ` : ''}
+        <div class="album-cover-container flex-shrink-0 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center">
+          <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="font-medium text-white truncate" title="${rg.title}">${rg.title}</div>
+          <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
+        </div>
+      `;
+    }
     
-    // Modified click handler to ensure cover is available
+    // Click handler - same for both mobile and desktop
     albumEl.onclick = async () => {
+      // Show loading state
+      if (isMobile) {
+        // For mobile, show loading in the card
+        const coverContainer = albumEl.querySelector('.album-cover-container');
+        coverContainer.innerHTML = `
+          <div class="w-full h-full bg-gray-700 flex items-center justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        `;
+      } else {
+        // For desktop, show loading in the circular container
+        const coverContainer = albumEl.querySelector('.album-cover-container');
+        coverContainer.innerHTML = `
+          <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+        `;
+      }
+      
       // Check if cover is already loaded in DOM but not in data
       const imgEl = albumEl.querySelector('.album-cover-container img');
       if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg') && !rg.coverArt) {
@@ -1200,9 +1333,6 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       
       // If still no cover, try to load it before adding
       if (!rg.coverArt) {
-        const coverContainer = albumEl.querySelector('.album-cover-container');
-        coverContainer.innerHTML = '<div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center"><div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div></div>';
-        
         try {
           const coverArt = await getCoverArt(rg.id, currentArtist.name, rg.title);
           if (coverArt) {
@@ -1242,6 +1372,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
     });
   });
 }
+
 
 async function addAlbumToList(releaseGroup) {
   // Show initial loading message
