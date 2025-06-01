@@ -1302,7 +1302,12 @@ async function selectList(listName) {
     console.log('Selecting list:', listName);
     currentList = listName;
     
-    // Save the last selected list to the server
+    // Save to localStorage immediately (synchronous)
+    if (listName) {
+      localStorage.setItem('lastSelectedList', listName);
+    }
+    
+    // Save the last selected list to the server (keep existing code)
     try {
       await apiCall('/api/user/last-list', {
         method: 'POST',
@@ -2254,10 +2259,19 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeRenameList();
       initializeImportConflictHandling();
       
-      // Auto-load last selected list if available
-      if (window.lastSelectedList && lists[window.lastSelectedList]) {
-        console.log('Auto-loading last selected list:', window.lastSelectedList);
-        selectList(window.lastSelectedList);
+      // Check localStorage first, then fall back to server value
+      const localLastList = localStorage.getItem('lastSelectedList');
+      const serverLastList = window.lastSelectedList;
+      
+      // Prioritize local storage if it exists and is valid
+      if (localLastList && lists[localLastList]) {
+        console.log('Auto-loading last selected list from localStorage:', localLastList);
+        selectList(localLastList);
+      } else if (serverLastList && lists[serverLastList]) {
+        console.log('Auto-loading last selected list from server:', serverLastList);
+        selectList(serverLastList);
+        // Also update localStorage with server value
+        localStorage.setItem('lastSelectedList', serverLastList);
       }
       
       // Initialize confirmation modal handlers
@@ -2296,6 +2310,13 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to initialize:', err);
       showToast('Failed to initialize', 'error');
     });
+});
+
+// Add this right after the DOMContentLoaded event listener
+window.addEventListener('beforeunload', () => {
+  if (currentList) {
+    localStorage.setItem('lastSelectedList', currentList);
+  }
 });
 
 // Make showToast globally available
