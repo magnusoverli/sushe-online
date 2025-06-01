@@ -26,20 +26,28 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
     <!-- Mobile Header -->
     <div class="lg:hidden flex items-center justify-between p-3 gap-2">
       <div class="flex items-center gap-2 min-w-0">
-        <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 active:text-white">
-          <i class="fas fa-bars text-lg"></i>
-        </button>
+        ${activeSection === 'home' ? `
+          <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 active:text-white">
+            <i class="fas fa-bars text-lg"></i>
+          </button>
+        ` : `
+          <a href="/" class="p-2 -m-2 text-gray-400 active:text-white">
+            <i class="fas fa-arrow-left text-lg"></i>
+          </a>
+        `}
         <a href="/" class="text-xl font-bold text-red-600 flex-shrink-0 ml-2">SuShe</a>
-        ${currentListName ? `
+        ${currentListName && activeSection === 'home' ? `
           <span class="text-gray-600 flex-shrink-0">/</span>
           <span class="text-sm text-yellow-500 font-medium truncate">${currentListName}</span>
         ` : ''}
       </div>
       
       <div class="flex items-center gap-1 flex-shrink-0">
-        <a href="/settings" class="p-2 text-gray-400 active:text-white" title="Settings">
-          <i class="fas fa-cog text-lg"></i>
-        </a>
+        ${activeSection !== 'settings' ? `
+          <a href="/settings" class="p-2 text-gray-400 active:text-white" title="Settings">
+            <i class="fas fa-cog text-lg"></i>
+          </a>
+        ` : ''}
         <a href="/logout" class="p-2 text-gray-400 active:text-white" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
