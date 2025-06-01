@@ -26,7 +26,10 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
     <!-- Mobile Header -->
     <div class="lg:hidden flex items-center justify-between p-3 gap-2">
       <div class="flex items-center gap-2 min-w-0">
-        <a href="/" class="text-xl font-bold text-red-600 flex-shrink-0">SuShe</a>
+        <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 active:text-white">
+          <i class="fas fa-bars text-lg"></i>
+        </button>
+        <a href="/" class="text-xl font-bold text-red-600 flex-shrink-0 ml-2">SuShe</a>
         ${currentListName ? `
           <span class="text-gray-600 flex-shrink-0">/</span>
           <span class="text-sm text-yellow-500 font-medium truncate">${currentListName}</span>
@@ -983,6 +986,26 @@ const spotifyTemplate = (req) => `
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
     @media (max-width: 1023px) {
+      /* FAB styling */
+      #mobileFAB {
+        box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4), 
+                    0 2px 4px 0 rgba(0, 0, 0, 0.2);
+      }
+      
+      #mobileFAB:active {
+        box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.4);
+      }
+      
+      /* Ensure content scrolls all the way to bottom with space for FAB */
+      #mobileAlbumContainer {
+        padding-bottom: 5rem; /* Space for FAB */
+      }
+      
+      /* Safe area for iOS devices */
+      .safe-area-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
+      }
+
       /* Debug: Visualize scroll zones (remove in production) */
       .sortable-scrolling::before,
       .sortable-scrolling::after {
@@ -1003,7 +1026,7 @@ const spotifyTemplate = (req) => `
       }
       
       .sortable-scrolling::after {
-        bottom: var(--bottom-nav-height, 60px); /* Adjust based on actual nav height */
+        bottom: 0; /* Changed from var(--bottom-nav-height, 60px) since no bottom nav */
         background: linear-gradient(to top, rgba(220, 38, 38, 0.2), transparent);
       }
       
@@ -1012,6 +1035,7 @@ const spotifyTemplate = (req) => `
       .sortable-drag ~ .sortable-scrolling::after {
         opacity: 1;
       }
+      
       /* Smooth scroll behavior during sort */
       .sortable-scrolling {
         scroll-behavior: auto !important; /* Disable smooth scroll during drag */
@@ -1043,10 +1067,6 @@ const spotifyTemplate = (req) => `
         min-height: auto;
       }
       
-      /* Adjust padding for bottom nav consideration */
-      .pb-20 {
-        padding-bottom: 4rem !important; /* Reduced from 5rem */
-      }
       /* Sortable states */
       .sortable-ghost {
         opacity: 0.4;
@@ -1083,6 +1103,7 @@ const spotifyTemplate = (req) => `
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      
       .sortable-drag {
         opacity: 0.9 !important;
         transform: rotate(1deg) scale(1.02);
@@ -1135,11 +1156,6 @@ const spotifyTemplate = (req) => `
         -webkit-overflow-scrolling: touch;
       }
       
-      /* Ensure proper height calculation with bottom nav */
-      .pb-20 {
-        padding-bottom: 5rem !important; /* Account for bottom nav + safe area */
-      }
-      
       /* Ensure modals work on mobile */
       .modal-content {
         max-height: calc(100vh - 2rem);
@@ -1162,7 +1178,7 @@ const spotifyTemplate = (req) => `
     
     <!-- Mobile Layout (hidden on desktop) -->
     <div class="lg:hidden flex flex-col flex-1 overflow-hidden">
-      <div class="flex-1 overflow-y-auto pb-20">
+      <div class="flex-1 overflow-y-auto">
         <div id="mobileAlbumContainer" class="min-h-full">
           <!-- Albums will be displayed here -->
           <div class="text-center text-gray-500 mt-20 px-4">
@@ -1172,24 +1188,17 @@ const spotifyTemplate = (req) => `
         </div>
       </div>
     </div>
-    
-    <!-- Mobile Bottom Navigation -->
-    <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-gray-800 z-40 safe-area-bottom">
-      <div class="flex justify-around items-center">
-        <button onclick="toggleMobileLists()" class="flex-1 py-2 px-3 flex flex-col items-center">
-          <i class="fas fa-list text-lg"></i>
-          <span class="text-xs mt-0.5">Lists</span>
-        </button>
-        <button onclick="document.getElementById('fileInput').click()" class="flex-1 py-2 px-3 flex flex-col items-center">
-          <i class="fas fa-file-import text-lg"></i>
-          <span class="text-xs mt-0.5">Import</span>
-        </button>
-        <button id="mobileAddAlbumBtn" class="flex-1 py-2 px-3 flex flex-col items-center">
-          <i class="fas fa-plus-circle text-lg text-red-600"></i>
-          <span class="text-xs mt-0.5">Add</span>
-        </button>
-      </div>
-    </nav>
+
+    <!-- Floating Action Button (FAB) -->
+    <button 
+      id="mobileFAB" 
+      class="lg:hidden fixed bottom-6 right-6 w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
+      style="display: none;"
+      onclick="if(window.openAddAlbumModal) window.openAddAlbumModal()"
+    >
+      <i class="fas fa-plus text-xl"></i>
+    </button>
+
     
     <!-- Mobile Lists Drawer -->
     <div id="mobileListsDrawer" class="lg:hidden fixed inset-0 z-50 hidden">
@@ -1208,6 +1217,18 @@ const spotifyTemplate = (req) => `
           </div>
         </div>
         
+        <!-- Quick Actions -->
+        <div class="p-4 border-b border-gray-800 space-y-2">
+          <button onclick="document.getElementById('fileInput').click(); toggleMobileLists();" 
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 text-left">
+            <i class="fas fa-file-import mr-2"></i>Import List
+          </button>
+          <button id="mobileCreateListBtn" 
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 text-left">
+            <i class="fas fa-plus mr-2"></i>Create New List
+          </button>
+        </div>
+        
         <!-- Lists -->
         <div class="flex-1 overflow-y-auto p-4">
           <ul id="mobileListNav" class="space-y-1">
@@ -1215,11 +1236,8 @@ const spotifyTemplate = (req) => `
           </ul>
         </div>
         
-        <!-- Actions -->
-        <div class="p-4 border-t border-gray-800 space-y-2 safe-area-bottom">
-          <button id="mobileCreateListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
-            <i class="fas fa-plus mr-2"></i>Create List
-          </button>
+        <!-- Footer Actions -->
+        <div class="p-4 border-t border-gray-800 safe-area-bottom">
           <button id="mobileClearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
             <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
           </button>
@@ -1241,9 +1259,8 @@ const spotifyTemplate = (req) => `
   <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>
   <script src="/js/app.js"></script>
-  
-  <script>
 
+  <script>
     // Make header component available to JavaScript
     window.headerComponent = ${headerComponent.toString()};
     window.currentUser = ${JSON.stringify(req.user)};
@@ -1255,21 +1272,31 @@ const spotifyTemplate = (req) => `
       drawer.classList.toggle('hidden');
     }
     
-    // Initialize mobile buttons
+    // Initialize mobile functionality
     document.addEventListener('DOMContentLoaded', () => {
-      // Mobile add album button
-      const mobileAddBtn = document.getElementById('mobileAddAlbumBtn');
-      if (mobileAddBtn) {
-        mobileAddBtn.onclick = () => {
-          if (!currentList) {
-            showToast('Please select a list first', 'error');
-            return;
+      // Mobile-specific initialization
+      if (window.innerWidth < 1024) {
+        // Initialize FAB visibility based on current list
+        const fab = document.getElementById('mobileFAB');
+        if (fab) {
+          // Show FAB if there's already a current list
+          if (window.currentList) {
+            fab.style.display = 'flex';
           }
-          if (window.openAddAlbumModal) {
-            window.openAddAlbumModal();
-          }
-        };
+          
+          // Ensure FAB has click handler
+          fab.onclick = () => {
+            if (!currentList) {
+              showToast('Please select a list first', 'error');
+              return;
+            }
+            if (window.openAddAlbumModal) {
+              window.openAddAlbumModal();
+            }
+          };
+        }
       }
+      
       // Mobile create list button
       const mobileCreateBtn = document.getElementById('mobileCreateListBtn');
       if (mobileCreateBtn) {
@@ -1393,6 +1420,16 @@ const spotifyTemplate = (req) => `
         
         if (currentList === listName) {
           currentList = null;
+          
+          // Update mobile header
+          updateMobileHeader();
+          
+          // Hide FAB when no list is selected
+          const fab = document.getElementById('mobileFAB');
+          if (fab) {
+            fab.style.display = 'none';
+          }
+          
           // Update both containers
           const desktopContainer = document.getElementById('albumContainer');
           const mobileContainer = document.getElementById('mobileAlbumContainer');

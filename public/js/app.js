@@ -1203,6 +1203,12 @@ async function selectList(listName) {
     // Display the albums
     displayAlbums(lists[listName]);
     
+    // Show/hide FAB based on whether a list is selected (mobile only)
+    const fab = document.getElementById('mobileFAB');
+    if (fab) {
+      fab.style.display = listName ? 'flex' : 'none';
+    }
+    
   } catch (error) {
     console.error('Error selecting list:', error);
     showToast('Error loading list', 'error');
