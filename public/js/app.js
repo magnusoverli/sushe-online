@@ -1646,14 +1646,6 @@ function displayAlbums(albums) {
       <div>Genre 1</div>
       <div>Genre 2</div>
       <div>Comment</div>
-      <div class="flex justify-center">
-        <button id="addAlbumBtn" class="bg-red-600 hover:bg-red-700 text-white p-1.5 rounded-full transition duration-200 transform hover:scale-105" title="Add Album">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </button>
-      </div>
     `;
     table.appendChild(header);
     
@@ -1724,7 +1716,6 @@ function displayAlbums(albums) {
         <div class="flex items-center comment-cell">
           <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
         </div>
-        <div></div> <!-- Empty cell for button column -->
       `;
       
       // Add click handler to country cell

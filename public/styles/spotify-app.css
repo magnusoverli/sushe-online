@@ -2,7 +2,7 @@
 
 /* Album grid column configuration */
 :root {
-  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr 0.15fr;
+  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
   /* Column descriptions:
      Position number
      Album cover
