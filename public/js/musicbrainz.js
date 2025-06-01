@@ -472,13 +472,14 @@ function setupIntersectionObserver(releaseGroups, artistName) {
         releaseGroups[index].coverArt = coverArt;
         
         // Then update the DOM
+        const isMobile = window.innerWidth < 1024;
         coverContainer.innerHTML = `
           <img src="${coverArt}" 
               alt="${releaseGroups[index].title}" 
-              class="w-16 h-16 object-cover rounded-full" 
+              class="w-16 h-16 object-cover ${isMobile ? 'rounded' : 'rounded-full'}" 
               loading="lazy" 
               crossorigin="anonymous"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'; delete window.currentReleaseGroups[${index}].coverArt;">
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center animate-pulse\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'; delete window.currentReleaseGroups[${index}].coverArt;">
         `;
         coverContainer.dataset.loaded = 'true';
       }
@@ -1229,8 +1230,8 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   // Detect if mobile
   const isMobile = window.innerWidth < 1024;
   
-  // Set appropriate class based on platform
-  modalElements.albumList.className = isMobile ? 'grid grid-cols-2 gap-3' : 'space-y-2';
+  // Set appropriate class based on platform - both use same layout now
+  modalElements.albumList.className = 'space-y-2';
   
   // Reset background loading state
   isBackgroundLoading = false;
@@ -1251,79 +1252,39 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
     const albumType = rg['primary-type'];
     const isNewRelease = rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
     
-    if (isMobile) {
-      // Mobile layout - card style
-      albumEl.className = 'bg-gray-800 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 hover:bg-gray-700 active:scale-95 relative';
-      
-      albumEl.innerHTML = `
-        ${isNewRelease ? `
-          <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
-            NEW
-          </div>
-        ` : ''}
-        <div class="aspect-square relative bg-gray-900">
-          <div class="album-cover-container absolute inset-0 flex items-center justify-center">
-            <div class="w-full h-full bg-gray-700 flex items-center justify-center animate-pulse">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                <polyline points="21 15 16 10 5 21"></polyline>
-              </svg>
-            </div>
-          </div>
+    // Use same layout for both mobile and desktop now
+    albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
+    
+    albumEl.innerHTML = `
+      ${isNewRelease ? `
+        <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
+          NEW
         </div>
-        <div class="p-3">
-          <div class="font-medium text-white text-sm truncate" title="${rg.title}">${rg.title}</div>
-          <div class="text-xs text-gray-400 mt-1">${releaseDate}</div>
-          <div class="text-xs text-gray-500">${albumType}</div>
+      ` : ''}
+      <div class="album-cover-container flex-shrink-0 w-16 h-16 ${isMobile ? 'rounded' : 'rounded-full'} overflow-hidden flex items-center justify-center">
+        <div class="w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center animate-pulse">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
         </div>
-      `;
-    } else {
-      // Desktop layout - horizontal list
-      albumEl.className = 'p-4 bg-gray-800 rounded hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4 relative';
-      
-      albumEl.innerHTML = `
-        ${isNewRelease ? `
-          <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
-            NEW
-          </div>
-        ` : ''}
-        <div class="album-cover-container flex-shrink-0 w-16 h-16 rounded-full overflow-hidden flex items-center justify-center">
-          <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-          </div>
-        </div>
-        <div class="flex-1 min-w-0">
-          <div class="font-medium text-white truncate" title="${rg.title}">${rg.title}</div>
-          <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
-        </div>
-      `;
-    }
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-medium text-white truncate" title="${rg.title}">${rg.title}</div>
+        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
+      </div>
+    `;
     
     // Click handler - same for both mobile and desktop
     albumEl.onclick = async () => {
       // Show loading state
-      if (isMobile) {
-        // For mobile, show loading in the card
-        const coverContainer = albumEl.querySelector('.album-cover-container');
-        coverContainer.innerHTML = `
-          <div class="w-full h-full bg-gray-700 flex items-center justify-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-          </div>
-        `;
-      } else {
-        // For desktop, show loading in the circular container
-        const coverContainer = albumEl.querySelector('.album-cover-container');
-        coverContainer.innerHTML = `
-          <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-          </div>
-        `;
-      }
+      const coverContainer = albumEl.querySelector('.album-cover-container');
+      coverContainer.innerHTML = `
+        <div class="w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        </div>
+      `;
       
       // Check if cover is already loaded in DOM but not in data
       const imgEl = albumEl.querySelector('.album-cover-container img');
