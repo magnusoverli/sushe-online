@@ -297,3 +297,49 @@ input[list]::-webkit-list-button {
   display: block;
   padding: 0.125rem 0;
 }
+
+/* Desktop drag scroll zones */
+#albumContainer.drag-active {
+  position: relative;
+}
+
+#albumContainer.drag-active::before,
+#albumContainer.drag-active::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  height: 80px;
+  pointer-events: none;
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+#albumContainer.drag-active::before {
+  top: 0;
+  background: linear-gradient(to bottom, 
+    rgba(220, 38, 38, 0.2) 0%, 
+    rgba(220, 38, 38, 0.1) 50%, 
+    transparent 100%);
+}
+
+#albumContainer.drag-active::after {
+  bottom: 0;
+  background: linear-gradient(to top, 
+    rgba(220, 38, 38, 0.2) 0%, 
+    rgba(220, 38, 38, 0.1) 50%, 
+    transparent 100%);
+}
+
+/* Show zones when dragging */
+#albumContainer.drag-active.dragging-active::before,
+#albumContainer.drag-active.dragging-active::after {
+  opacity: 1;
+}
+
+/* Add class to container during drag */
+body.desktop-dragging #albumContainer.drag-active::before,
+body.desktop-dragging #albumContainer.drag-active::after {
+  opacity: 0.5;
+}

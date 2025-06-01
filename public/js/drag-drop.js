@@ -5,6 +5,12 @@ const DragDropManager = (function() {
   let draggedIndex = null;
   let placeholder = null;
   let lastValidDropIndex = null;
+  
+  // Auto-scroll state
+  let autoScrollInterval = null;
+  let currentScrollSpeed = 0;
+  let scrollAcceleration = 1;
+  let scrollableContainer = null;
 
   // Initialize drag and drop for container
   function initialize() {
@@ -14,6 +20,55 @@ const DragDropManager = (function() {
     container.addEventListener('dragover', handleContainerDragOver);
     container.addEventListener('drop', handleContainerDrop);
     container.addEventListener('dragleave', handleContainerDragLeave);
+  }
+
+  // Enhanced auto-scroll implementation
+  function startAutoScroll(direction, speed) {
+    if (autoScrollInterval) {
+      clearInterval(autoScrollInterval);
+    }
+    
+    currentScrollSpeed = speed;
+    scrollAcceleration = 1;
+    
+    autoScrollInterval = setInterval(() => {
+      if (scrollableContainer) {
+        // Gradually increase speed for smoother acceleration
+        if (scrollAcceleration < 2.5) {
+          scrollAcceleration += 0.05;
+        }
+        
+        const adjustedSpeed = currentScrollSpeed * scrollAcceleration;
+        const currentScroll = scrollableContainer.scrollTop;
+        const newScroll = currentScroll + (direction * adjustedSpeed);
+        
+        if (direction > 0) {
+          const maxScroll = scrollableContainer.scrollHeight - scrollableContainer.clientHeight;
+          scrollableContainer.scrollTop = Math.min(newScroll, maxScroll);
+          
+          // Stop if we've reached the bottom
+          if (scrollableContainer.scrollTop >= maxScroll) {
+            stopAutoScroll();
+          }
+        } else {
+          scrollableContainer.scrollTop = Math.max(newScroll, 0);
+          
+          // Stop if we've reached the top
+          if (scrollableContainer.scrollTop <= 0) {
+            stopAutoScroll();
+          }
+        }
+      }
+    }, 16); // 60fps
+  }
+  
+  function stopAutoScroll() {
+    if (autoScrollInterval) {
+      clearInterval(autoScrollInterval);
+      autoScrollInterval = null;
+      currentScrollSpeed = 0;
+      scrollAcceleration = 1;
+    }
   }
 
   // Drag handlers
@@ -27,10 +82,12 @@ const DragDropManager = (function() {
     draggedElement = this;
     draggedIndex = parseInt(this.dataset.index);
     
+    // Find the scrollable container (the parent with overflow-y-auto)
+    scrollableContainer = this.closest('.overflow-y-auto') || document.getElementById('albumContainer').parentElement;
+    
     placeholder = document.createElement('div');
-    placeholder.className = 'album-row drag-placeholder grid grid-cols-[50px_60px_1fr_0.8fr_0.5fr_0.6fr_0.6fr_1.2fr] gap-4 px-4 py-3 border-b border-gray-800';
+    placeholder.className = 'album-row drag-placeholder album-grid gap-4 px-4 py-3 border-b border-gray-800';
     placeholder.style.height = this.offsetHeight + 'px';
-    placeholder.innerHTML = '<div class="col-span-full text-center text-gray-500">Drop album here</div>';
     
     this.classList.add('dragging');
     
@@ -48,6 +105,65 @@ const DragDropManager = (function() {
     e.dataTransfer.dropEffect = 'move';
     
     const rowsContainer = this.querySelector('.album-rows-container') || this;
+    
+    // Enhanced auto-scroll logic
+    if (scrollableContainer) {
+      const clientY = e.clientY;
+      const viewportHeight = window.innerHeight;
+      const containerRect = scrollableContainer.getBoundingClientRect();
+      
+      // Larger scroll zones for easier triggering (20% of viewport height each)
+      const scrollZoneSize = Math.max(80, viewportHeight * 0.2);
+      
+      // Calculate effective boundaries
+      const topBoundary = Math.max(containerRect.top, 0);
+      const bottomBoundary = Math.min(containerRect.bottom, viewportHeight);
+      
+      // Define scroll trigger zones
+      const topScrollTrigger = topBoundary + scrollZoneSize;
+      const bottomScrollTrigger = bottomBoundary - scrollZoneSize;
+      
+      // Calculate scroll speed based on position within the zone
+      let shouldScroll = false;
+      let scrollDirection = 0;
+      let scrollSpeed = 0;
+      
+      if (clientY < topScrollTrigger && clientY >= topBoundary) {
+        // In top scroll zone
+        shouldScroll = true;
+        scrollDirection = -1;
+        
+        // Calculate speed based on how deep into the zone we are
+        const zoneDepth = (topScrollTrigger - clientY) / scrollZoneSize;
+        scrollSpeed = Math.max(3, Math.min(20, zoneDepth * 20));
+        
+        // Extra boost if very close to edge
+        if (clientY < topBoundary + 30) {
+          scrollSpeed = Math.min(30, scrollSpeed * 1.5);
+        }
+      } else if (clientY > bottomScrollTrigger && clientY <= bottomBoundary) {
+        // In bottom scroll zone
+        shouldScroll = true;
+        scrollDirection = 1;
+        
+        // Calculate speed based on how deep into the zone we are
+        const zoneDepth = (clientY - bottomScrollTrigger) / scrollZoneSize;
+        scrollSpeed = Math.max(3, Math.min(20, zoneDepth * 20));
+        
+        // Extra boost if very close to edge
+        if (clientY > bottomBoundary - 30) {
+          scrollSpeed = Math.min(30, scrollSpeed * 1.5);
+        }
+      }
+      
+      if (shouldScroll) {
+        startAutoScroll(scrollDirection, scrollSpeed);
+      } else {
+        stopAutoScroll();
+      }
+    }
+    
+    // Update placeholder position
     const afterElement = getDragAfterElement(rowsContainer, e.clientY);
     
     if (!placeholder || !placeholder.parentNode) return;
@@ -69,6 +185,7 @@ const DragDropManager = (function() {
     if (e.clientX < rect.left || e.clientX > rect.right || 
         e.clientY < rect.top || e.clientY > rect.bottom) {
       this.classList.remove('drag-active');
+      stopAutoScroll();
     }
   }
 
@@ -88,6 +205,8 @@ const DragDropManager = (function() {
   }
 
   function handleDragEnd(e) {
+    stopAutoScroll();
+    
     if (draggedElement) {
       draggedElement.style.display = '';
       draggedElement.classList.remove('dragging');
@@ -104,12 +223,14 @@ const DragDropManager = (function() {
     draggedIndex = null;
     placeholder = null;
     lastValidDropIndex = null;
+    scrollableContainer = null;
   }
 
   async function handleContainerDrop(e, saveCallback) {
     e.preventDefault();
     e.stopPropagation();
     
+    stopAutoScroll();
     this.classList.remove('drag-active');
     
     if (!draggedElement || lastValidDropIndex === null || !placeholder) return;
@@ -198,6 +319,7 @@ const DragDropManager = (function() {
     draggedElement = null;
     draggedIndex = null;
     lastValidDropIndex = null;
+    scrollableContainer = null;
   }
 
   // Update positions without rebuilding

@@ -1279,32 +1279,39 @@ const spotifyTemplate = (req) => `
         position: fixed;
         left: 0;
         right: 0;
-        height: 60px;
+        height: 100px; /* Increased from 60px */
         pointer-events: none;
         z-index: 9998;
         opacity: 0;
         transition: opacity 0.2s;
       }
       
-      .sortable-scrolling::before {
-        top: 0;
-        background: linear-gradient(to bottom, rgba(220, 38, 38, 0.2), transparent);
-      }
+
       
       .sortable-scrolling::after {
-        bottom: 0; /* Changed from var(--bottom-nav-height, 60px) since no bottom nav */
-        background: linear-gradient(to top, rgba(220, 38, 38, 0.2), transparent);
+        bottom: 0;
+        background: linear-gradient(to top, 
+          rgba(220, 38, 38, 0.3) 0%, 
+          rgba(220, 38, 38, 0.15) 50%, 
+          transparent 100%);
       }
       
-      /* Show zones when dragging */
-      .sortable-drag ~ .sortable-scrolling::before,
-      .sortable-drag ~ .sortable-scrolling::after {
+      /* Show zones when actively dragging */
+      .sortable-drag ~ * .sortable-scrolling::before,
+      .sortable-drag ~ * .sortable-scrolling::after,
+      .sortable-scrolling.sortable-drag-active::before,
+      .sortable-scrolling.sortable-drag-active::after {
         opacity: 1;
       }
-      
+
+      /* Add a class when dragging to make zones visible */
+      body.sorting-active .sortable-scrolling::before,
+      body.sorting-active .sortable-scrolling::after {
+        opacity: 0.5;
+      }
       /* Smooth scroll behavior during sort */
       .sortable-scrolling {
-        scroll-behavior: auto !important; /* Disable smooth scroll during drag */
+        position: relative;
       }
       
       /* Ensure all content is rendered */

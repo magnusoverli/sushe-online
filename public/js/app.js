@@ -1027,34 +1027,59 @@ function initializeMobileSorting(container) {
     }
   };
   
-  // Custom auto-scroll implementation
+  // Enhanced auto-scroll implementation
   let autoScrollInterval = null;
-  let scrollSpeed = 0;
+  let currentScrollSpeed = 0;
+  let lastTouchY = null;
+  let scrollAcceleration = 1;
   
   const startAutoScroll = (direction, speed) => {
-    if (autoScrollInterval) return;
+    if (autoScrollInterval) {
+      clearInterval(autoScrollInterval);
+    }
+    
+    currentScrollSpeed = speed;
+    scrollAcceleration = 1;
     
     autoScrollInterval = setInterval(() => {
       if (scrollableParent) {
+        // Gradually increase speed for smoother acceleration
+        if (scrollAcceleration < 2.5) {
+          scrollAcceleration += 0.05;
+        }
+        
+        const adjustedSpeed = currentScrollSpeed * scrollAcceleration;
         const currentScroll = scrollableParent.scrollTop;
-        const newScroll = currentScroll + (direction * speed);
+        const newScroll = currentScroll + (direction * adjustedSpeed);
         
         if (direction > 0) {
           const maxScroll = scrollableParent.scrollHeight - scrollableParent.clientHeight;
           scrollableParent.scrollTop = Math.min(newScroll, maxScroll);
+          
+          // Stop if we've reached the bottom
+          if (scrollableParent.scrollTop >= maxScroll) {
+            stopAutoScroll();
+          }
         } else {
           scrollableParent.scrollTop = Math.max(newScroll, 0);
+          
+          // Stop if we've reached the top
+          if (scrollableParent.scrollTop <= 0) {
+            stopAutoScroll();
+          }
         }
         
         forceRenderOnScroll();
       }
-    }, 16);
+    }, 16); // 60fps
   };
   
   const stopAutoScroll = () => {
     if (autoScrollInterval) {
       clearInterval(autoScrollInterval);
       autoScrollInterval = null;
+      currentScrollSpeed = 0;
+      scrollAcceleration = 1;
     }
   };
   
@@ -1078,9 +1103,12 @@ function initializeMobileSorting(container) {
     onStart: function(evt) {
       evt.item.dataset.originalIndex = evt.oldIndex;
       document.body.style.overflow = 'hidden';
+      document.body.classList.add('sorting-active'); // Add this
+      lastTouchY = null;
       
       if (scrollableParent) {
         scrollableParent.classList.add('sortable-scrolling');
+        scrollableParent.classList.add('sortable-drag-active'); // Add this
         
         // Pre-render all content
         const cards = sortableContainer.querySelectorAll('.album-card');
@@ -1097,44 +1125,78 @@ function initializeMobileSorting(container) {
       const touch = evt.originalEvent.touches ? evt.originalEvent.touches[0] : evt.originalEvent;
       const clientY = touch.clientY;
       
-      // Get the ACTUAL visible area (accounting for bottom nav)
+      // Store for velocity calculation
+      lastTouchY = clientY;
+      
+      // Get viewport dimensions
+      const viewportHeight = window.innerHeight;
       const containerRect = scrollableParent.getBoundingClientRect();
-      const bottomNavHeight = getBottomNavHeight();
       
-      // Adjust the effective bottom of the container
-      const effectiveBottom = containerRect.bottom - bottomNavHeight;
+      // Larger scroll zones for easier triggering (25% of viewport height each)
+      const scrollZoneSize = Math.max(100, viewportHeight * 0.25);
       
-      // Define scroll zones
-      const scrollZoneSize = 60; // Slightly smaller for mobile
-      const topScrollZone = containerRect.top + scrollZoneSize;
-      const bottomScrollZone = effectiveBottom - scrollZoneSize;
+      // Calculate effective boundaries
+      const topBoundary = Math.max(containerRect.top, 0);
+      const bottomBoundary = Math.min(containerRect.bottom, viewportHeight);
       
-      // Check if we're in a scroll zone based on touch position
-      if (clientY < topScrollZone && clientY > containerRect.top) {
-        // In top scroll zone - scroll up
-        const intensity = (topScrollZone - clientY) / scrollZoneSize;
-        scrollSpeed = Math.max(5, Math.min(20, intensity * 20));
-        startAutoScroll(-1, scrollSpeed);
-      } else if (clientY > bottomScrollZone && clientY < effectiveBottom) {
-        // In bottom scroll zone - scroll down
-        const intensity = (clientY - bottomScrollZone) / scrollZoneSize;
-        scrollSpeed = Math.max(5, Math.min(20, intensity * 20));
-        startAutoScroll(1, scrollSpeed);
+      // Define scroll trigger zones
+      const topScrollTrigger = topBoundary + scrollZoneSize;
+      const bottomScrollTrigger = bottomBoundary - scrollZoneSize;
+      
+      // Calculate scroll speed based on position within the zone
+      let shouldScroll = false;
+      let scrollDirection = 0;
+      let scrollSpeed = 0;
+      
+      if (clientY < topScrollTrigger && clientY >= topBoundary) {
+        // In top scroll zone
+        shouldScroll = true;
+        scrollDirection = -1;
+        
+        // Calculate speed based on how deep into the zone we are
+        const zoneDepth = (topScrollTrigger - clientY) / scrollZoneSize;
+        scrollSpeed = Math.max(3, Math.min(25, zoneDepth * 25));
+        
+        // Extra boost if very close to edge
+        if (clientY < topBoundary + 30) {
+          scrollSpeed = Math.min(35, scrollSpeed * 1.5);
+        }
+      } else if (clientY > bottomScrollTrigger && clientY <= bottomBoundary) {
+        // In bottom scroll zone
+        shouldScroll = true;
+        scrollDirection = 1;
+        
+        // Calculate speed based on how deep into the zone we are
+        const zoneDepth = (clientY - bottomScrollTrigger) / scrollZoneSize;
+        scrollSpeed = Math.max(3, Math.min(25, zoneDepth * 25));
+        
+        // Extra boost if very close to edge
+        if (clientY > bottomBoundary - 30) {
+          scrollSpeed = Math.min(35, scrollSpeed * 1.5);
+        }
+      }
+      
+      if (shouldScroll) {
+        startAutoScroll(scrollDirection, scrollSpeed);
       } else {
-        // Not in scroll zone or beyond bounds
         stopAutoScroll();
       }
       
       // Force render to ensure content is visible
       forceRenderOnScroll();
+      
+      // REMOVED: return false; - This was preventing the drag operation!
     },
     
     onEnd: function(evt) {
       stopAutoScroll();
       document.body.style.overflow = '';
+      document.body.classList.remove('sorting-active'); // Add this
+      lastTouchY = null;
       
       if (scrollableParent) {
         scrollableParent.classList.remove('sortable-scrolling');
+        scrollableParent.classList.remove('sortable-drag-active'); // Add this
       }
     },
     
