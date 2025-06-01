@@ -34,6 +34,9 @@ window.openAddAlbumModal = function() {
   
   modal.classList.remove('hidden');
   
+  // Reset search mode to artist when opening the modal
+  searchMode = 'artist';
+  
   // Focus the appropriate search input
   if (modalElements.artistSearchInput) {
     modalElements.artistSearchInput.value = '';
@@ -656,17 +659,28 @@ function initializeSearchMode() {
     if (searchInput) searchInput.placeholder = placeholder;
     if (mobileSearchInput) mobileSearchInput.placeholder = placeholder;
     
-    // Clear previous results
-    resetModalState();
+    // Update search button text
+    const buttonText = mode === 'artist' ? 'Search Artists' : 'Search Albums';
+    if (modalElements.searchArtistBtn) {
+      modalElements.searchArtistBtn.innerHTML = `<i class="fas fa-search mr-2"></i>${buttonText}`;
+    }
+    
+    // Clear previous results WITHOUT calling resetModalState
+    modalElements.artistResults.classList.add('hidden');
+    modalElements.albumResults.classList.add('hidden');
+    modalElements.searchLoading.classList.add('hidden');
+    modalElements.searchEmpty.classList.remove('hidden');
+    modalElements.artistList.innerHTML = '';
+    modalElements.albumList.innerHTML = '';
   }
   
   // Add click handlers
-  if (artistBtn) {
+  if (artistBtn && albumBtn) {
     artistBtn.onclick = () => updateSearchMode('artist');
     albumBtn.onclick = () => updateSearchMode('album');
   }
   
-  if (mobileArtistBtn) {
+  if (mobileArtistBtn && mobileAlbumBtn) {
     mobileArtistBtn.onclick = () => updateSearchMode('artist');
     mobileAlbumBtn.onclick = () => updateSearchMode('album');
   }
@@ -692,7 +706,9 @@ async function performSearch() {
         return;
       }
       
-      await displayArtistResults(artists);
+      // Prioritize results to show Latin-script and better matches first
+      const prioritizedArtists = prioritizeSearchResults(artists, query);
+      await displayArtistResults(prioritizedArtists);
     } else {
       // Album search mode
       const albums = await searchAlbums(query);
@@ -719,7 +735,9 @@ async function displayDirectAlbumResults(releaseGroups) {
   modalElements.albumList.innerHTML = '';
   
   // Hide the back button since we're not coming from artist selection
-  modalElements.backToArtists.style.display = 'none';
+  if (modalElements.backToArtists) {
+    modalElements.backToArtists.style.display = 'none';
+  }
   
   // Store releaseGroups globally
   window.currentReleaseGroups = releaseGroups;
@@ -786,7 +804,7 @@ async function displayDirectAlbumResults(releaseGroups) {
       // Prepare a minimal artist object for compatibility
       const primaryArtist = artistCredits[0];
       currentArtist = {
-        name: primaryArtist?.name || primaryArtist?.artist?.name || 'Unknown Artist',
+        name: artistDisplay,
         id: primaryArtist?.artist?.id || null,
         country: '' // We'll need to fetch this if needed
       };
@@ -820,7 +838,14 @@ async function displayDirectAlbumResults(releaseGroups) {
                   alt="${rg.title}" 
                   class="w-20 h-20 object-cover rounded-lg" 
                   loading="lazy" 
-                  crossorigin="anonymous">
+                  crossorigin="anonymous"
+                  onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center\\'>\\
+                    <svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'>\\
+                      <rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect>\\
+                      <circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle>\\
+                      <polyline points=\\'21 15 16 10 5 21\\'></polyline>\\
+                    </svg>\\
+                  </div>';">
             `;
           }
         }
@@ -908,10 +933,11 @@ function initializeAddAlbumFeature() {
     };
   }
   
-  modalElements.searchArtistBtn.onclick = performArtistSearch;
+  // Fix: Connect to performSearch instead of performArtistSearch
+  modalElements.searchArtistBtn.onclick = performSearch;
   modalElements.artistSearchInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
-      performArtistSearch();
+      performSearch();
     }
   };
   
@@ -956,6 +982,9 @@ function initializeAddAlbumFeature() {
       }
     });
   }
+  
+  // Initialize search mode toggle
+  initializeSearchMode();
 }
 
 // New functions for manual entry
@@ -1179,8 +1208,28 @@ function resetModalState() {
   modalElements.artistList.innerHTML = '';
   modalElements.albumList.innerHTML = '';
   
+  // Don't reset search mode here - it should maintain its current state
+  // Only reset to artist when opening the modal fresh
+  
+  // Update button states to match current search mode
+  document.querySelectorAll('.search-mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.mode === searchMode);
+    btn.classList.toggle('bg-gray-700', btn.dataset.mode === searchMode);
+    btn.classList.toggle('text-white', btn.dataset.mode === searchMode);
+    btn.classList.toggle('text-gray-400', btn.dataset.mode !== searchMode);
+  });
+  
+  // Update placeholder to match current mode
+  const placeholder = searchMode === 'artist' 
+    ? 'Search for an artist...' 
+    : 'Search for an album...';
+  
+  if (modalElements.artistSearchInput) {
+    modalElements.artistSearchInput.placeholder = placeholder;
+  }
+  
   // Show the search section
-  const searchSection = document.getElementById('searchSection');
+  const searchSection = document.getElementById(window.innerWidth < 1024 ? 'mobileSearchSection' : 'searchSection');
   if (searchSection) {
     searchSection.classList.remove('hidden');
   }
@@ -1215,37 +1264,6 @@ function showAlbumResults() {
   modalElements.searchLoading.classList.add('hidden');
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.remove('hidden');
-}
-
-async function performArtistSearch() {
-  const query = modalElements.artistSearchInput.value.trim();
-  if (!query) {
-    showToast('Please enter an artist name', 'error');
-    return;
-  }
-  
-  showLoading();
-  
-  try {
-    const artists = await searchArtists(query);
-    
-    if (artists.length === 0) {
-      modalElements.searchLoading.classList.add('hidden');
-      modalElements.searchEmpty.classList.remove('hidden');
-      modalElements.searchEmpty.innerHTML = '<p>No artists found. Try a different search.</p>';
-      return;
-    }
-    
-    // Prioritize results to show Latin-script and better matches first
-    const prioritizedArtists = prioritizeSearchResults(artists, query);
-    
-    await displayArtistResults(prioritizedArtists);
-  } catch (error) {
-    console.error('Error searching artists:', error);
-    showToast('Error searching artists', 'error');
-    modalElements.searchLoading.classList.add('hidden');
-    modalElements.searchEmpty.classList.remove('hidden');
-  }
 }
 
 // Search Deezer for artist image

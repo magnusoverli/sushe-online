@@ -963,7 +963,7 @@ const addAlbumModalComponent = () => `
           <!-- Empty State -->
           <div id="searchEmpty" class="text-center py-20 text-gray-500">
             <i class="fas fa-search text-5xl mb-4 opacity-50"></i>
-            <p class="text-lg">Search for an artist to add albums</p>
+            <p class="text-lg">Search for an artist or album to add to your list</p>
             <p class="text-sm mt-2">Or add an album manually</p>
           </div>
         </div>
@@ -986,6 +986,26 @@ const addAlbumModalComponent = () => `
         <!-- Search Section -->
         <div id="mobileSearchSection" class="p-4 border-b border-gray-800">
           <div class="space-y-3">
+            <!-- Add Search mode toggle for mobile -->
+            <div class="flex justify-center">
+              <div class="inline-flex bg-gray-800 rounded-lg p-1">
+                <button 
+                  id="mobileSearchModeArtist" 
+                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn active"
+                  data-mode="artist"
+                >
+                  <i class="fas fa-user mr-2"></i>Artist
+                </button>
+                <button 
+                  id="mobileSearchModeAlbum" 
+                  class="px-4 py-2 text-sm font-medium rounded-md transition-colors search-mode-btn"
+                  data-mode="album"
+                >
+                  <i class="fas fa-compact-disc mr-2"></i>Album
+                </button>
+              </div>
+            </div>
+            
             <input 
               type="text" 
               id="mobileArtistSearchInput" 
@@ -996,7 +1016,7 @@ const addAlbumModalComponent = () => `
               id="mobileSearchArtistBtn" 
               class="w-full bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition duration-200 font-semibold"
             >
-              <i class="fas fa-search mr-2"></i>Search Artists
+              <i class="fas fa-search mr-2"></i>Search
             </button>
             
             <!-- Manual Entry Link -->
@@ -1157,7 +1177,7 @@ const addAlbumModalComponent = () => `
           <!-- Empty State -->
           <div id="mobileSearchEmpty" class="text-center py-20 text-gray-500 px-4">
             <i class="fas fa-search text-4xl mb-4 opacity-50"></i>
-            <p>Search for an artist to add albums</p>
+            <p>Search for an artist or album to add to your list</p>
           </div>
         </div>
       </div>
