@@ -1769,12 +1769,6 @@ function displayAlbums(albums) {
     table.appendChild(rowsContainer);
     container.appendChild(table);
     
-    // Re-initialize the add album button
-    const addAlbumBtn = document.getElementById('addAlbumBtn');
-    if (addAlbumBtn && window.openAddAlbumModal) {
-      addAlbumBtn.onclick = window.openAddAlbumModal;
-    }
-    
     // Initialize drag and drop
     if (window.DragDropManager) {
       window.DragDropManager.initialize();
