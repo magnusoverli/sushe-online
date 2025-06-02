@@ -1,22 +1,68 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* Album grid column configuration */
+/* Album grid column configuration with responsive behavior */
 :root {
-  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
-  /* Column descriptions:
-     Position number
-     Album cover
-     Album name/date
-     Artist
-     Country
-     Genre 1
-     Genre 2
-     Comment
-     Add button (new)
-  */
+  /* Default grid for narrow desktop screens */
+  --album-grid-columns: minmax(2.5rem, 0.1fr) minmax(80px, 0.18fr) minmax(200px, 0.85fr) minmax(150px, 0.85fr) minmax(100px, 0.5fr) minmax(100px, 0.5fr) minmax(100px, 0.5fr) minmax(150px, 1.3fr);
   
   /* Cover art size configuration */
-  --cover-art-size: 100px;  /* Maximum size for cover art */
+  --cover-art-size: 72px;  /* Increased default size for desktop */
+}
+
+/* Standard desktop screens */
+@media (min-width: 1400px) {
+  :root {
+    --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+    --cover-art-size: 110px;  /* Increased from 100px */
+  }
+}
+
+/* Narrow desktop screens (1024px - 1400px) */
+@media (min-width: 1024px) and (max-width: 1400px) {
+  :root {
+    --album-grid-columns: 40px 72px minmax(150px, 1fr) minmax(120px, 0.8fr) minmax(80px, 0.5fr) minmax(80px, 0.5fr) minmax(80px, 0.5fr) minmax(100px, 1fr);
+    --cover-art-size: 56px;  /* Increased from 50px */
+  }
+  
+  /* Reduce font sizes slightly */
+  .album-grid {
+    font-size: 0.875rem; /* 14px instead of 16px */
+  }
+  
+  /* Adjust padding for narrow screens */
+  .album-grid {
+    gap: 0.75rem; /* 12px instead of 16px */
+  }
+  
+  .album-row,
+  .album-grid.px-4 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+/* Very narrow desktop screens (1024px - 1200px) */
+@media (min-width: 1024px) and (max-width: 1200px) {
+  :root {
+    --album-grid-columns: 35px 56px minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(70px, 0.4fr) minmax(70px, 0.4fr) minmax(70px, 0.4fr) minmax(80px, 0.8fr);
+    --cover-art-size: 44px;  /* Increased from 40px */
+  }
+  
+  /* Further reduce font sizes */
+  .album-grid {
+    font-size: 0.8125rem; /* 13px */
+  }
+  
+  /* Hide genre 2 column on very narrow screens */
+  .album-grid > div:nth-child(7),
+  .album-row > div:nth-child(7) {
+    display: none;
+  }
+  
+  /* Adjust grid to account for hidden column */
+  :root {
+    --album-grid-columns: 35px 56px minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(80px, 0.5fr) minmax(80px, 0.5fr) minmax(100px, 1fr);
+  }
 }
 
 /* Prevent overscroll on mobile */
@@ -47,20 +93,44 @@
 .album-grid {
   display: grid;
   grid-template-columns: var(--album-grid-columns);
+  align-items: center;
+}
+
+/* Fix alignment issues with flex items inside grid cells */
+.album-grid > div,
+.album-row > div {
+  min-width: 0; /* Prevent grid blowout */
+  display: flex;
+  align-items: center;
+}
+
+/* Special handling for cells that need different alignment */
+.album-grid > div:nth-child(3), /* Album name column */
+.album-row > div:nth-child(3) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Ensure the date text stays with album name */
+.album-row > div:nth-child(3) > div {
+  width: 100%;
 }
 
 /* Cover art container */
 .album-cover-container {
   width: 100%;
   max-width: var(--cover-art-size);
-  aspect-ratio: 1 / 1;  /* Ensures square aspect ratio */
+  height: var(--cover-art-size);
+  aspect-ratio: 1 / 1;
 }
 
 /* Cover art styling */
 .album-cover {
   width: 100%;
   height: 100%;
-  object-fit: cover;  /* Ensures image fills container while maintaining aspect ratio */
+  object-fit: contain;  /* Maintains aspect ratio */
 }
 
 /* Placeholder cover styling */
@@ -116,6 +186,43 @@ body {
   position: relative;
 }
 
+/* Subtle background enhancement for desktop only */
+@media (min-width: 1024px) {
+  #albumContainer {
+    background-image: 
+      linear-gradient(180deg, rgba(17, 24, 39, 0.3) 0%, transparent 40%),
+      repeating-linear-gradient(
+        90deg,
+        transparent,
+        transparent 199px,
+        rgba(55, 65, 81, 0.08) 199px,
+        rgba(55, 65, 81, 0.08) 200px
+      ),
+      repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 79px,
+        rgba(55, 65, 81, 0.05) 79px,
+        rgba(55, 65, 81, 0.05) 80px
+      );
+    background-color: #000;
+  }
+  
+  /* Add a subtle noise texture overlay */
+  #albumContainer::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    opacity: 0.015;
+    background-image: 
+      repeating-conic-gradient(#fff 0%, transparent 0.0003%, transparent 0.00075%, #fff 0.001%);
+    pointer-events: none;
+  }
+}
+
 #albumContainer.drag-active {
   background-color: rgba(220, 38, 38, 0.03);
 }
@@ -127,9 +234,44 @@ body {
   user-select: none;
 }
 
-.album-row:hover:not(.dragging) {
-  background-color: rgba(31, 41, 55, 0.3);
-  transform: translateX(2px);
+/* Reduced vertical padding for desktop */
+@media (min-width: 1024px) {
+  .album-row {
+    padding-top: 0.5rem !important;  /* Reduced from 0.75rem (py-3) */
+    padding-bottom: 0.5rem !important;
+  }
+  
+  /* Adjust header padding to match */
+  .album-grid.px-4.py-3 {
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+}
+
+/* Enhanced hover effect with subtle background */
+@media (min-width: 1024px) {
+  .album-row:hover:not(.dragging) {
+    background-color: rgba(31, 41, 55, 0.4);
+    transform: translateX(2px);
+    box-shadow: inset 0 0 0 1px rgba(55, 65, 81, 0.2);
+  }
+  
+  /* Subtle border enhancement for desktop */
+  .album-row {
+    border-bottom-color: rgba(55, 65, 81, 0.15);  /* Slightly more visible border */
+  }
+  
+  /* Remove border from last row */
+  .album-rows-container .album-row:last-child {
+    border-bottom: none;
+  }
+}
+
+/* Hover state adjustments for narrow desktop screens */
+@media (min-width: 1024px) and (max-width: 1400px) {
+  .album-row:hover:not(.dragging) {
+    transform: translateX(1px); /* Reduced movement on narrow screens */
+  }
 }
 
 .album-row.dragging {
@@ -141,12 +283,30 @@ body {
   background-color: rgba(220, 38, 38, 0.1);
   border: 2px dashed #dc2626;
   opacity: 0.8;
-  min-height: 64px;
+  min-height: 48px;  /* Reduced from 64px */
+}
+
+/* Ensure minimum heights for rows */
+@media (min-width: 1024px) {
+  .album-row {
+    min-height: calc(var(--cover-art-size) + 0.5rem);  /* Reduced padding */
+  }
 }
 
 /* Ensure the table takes full height */
 .album-rows-container {
   min-height: calc(100vh - 280px);
+}
+
+/* Responsive padding adjustments */
+@media (min-width: 1024px) and (max-width: 1280px) {
+  #albumContainer {
+    padding: 1rem; /* Reduce padding on narrow screens */
+  }
+  
+  .album-rows-container {
+    min-height: calc(100vh - 240px); /* Adjust for smaller padding */
+  }
 }
 
 /* Make sure text doesn't overflow */
@@ -205,6 +365,25 @@ body {
   padding: 0.125rem 0;
 }
 
+/* Responsive adjustments for specific columns */
+@media (min-width: 1024px) and (max-width: 1400px) {
+  /* Position number column */
+  .album-grid > div:first-child,
+  .album-row > div:first-child {
+    justify-self: center;
+  }
+  
+  /* Comment column adjustments */
+  .comment-cell {
+    font-size: 0.75rem; /* 12px */
+  }
+  
+  /* Genre cells adjustments */
+  .genre-cell {
+    font-size: 0.75rem; /* 12px */
+  }
+}
+
 /* Datalist input styling */
 input[list] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
@@ -239,6 +418,15 @@ input[list]::-webkit-list-button {
 .album-row:has(input[list]),
 .album-row:has(textarea) {
   cursor: default;
+}
+
+/* Ensure interactive elements remain accessible */
+.album-row input[type="text"],
+.album-row input[list],
+.album-row textarea,
+.album-row select {
+  min-width: 60px; /* Minimum width for inputs */
+  font-size: inherit; /* Use the same font size as the grid */
 }
 
 /* Toast notifications */
@@ -296,6 +484,12 @@ input[list]::-webkit-list-button {
 .country-cell span {
   display: block;
   padding: 0.125rem 0;
+}
+
+/* Fix for very long text in narrow columns */
+.album-grid .text-sm,
+.album-row .text-sm {
+  line-height: 1.2; /* Tighter line height for narrow columns */
 }
 
 /* Desktop drag scroll zones */
