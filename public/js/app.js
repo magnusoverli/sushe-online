@@ -1637,7 +1637,7 @@ function displayAlbums(albums) {
     
     // Header - using album-grid class
     const header = document.createElement('div');
-    header.className = 'album-grid gap-4 px-4 py-3 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+    header.className = 'album-grid gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
     header.style.alignItems = 'center';
     header.innerHTML = `
       <div class="text-center">#</div>
@@ -1656,7 +1656,7 @@ function displayAlbums(albums) {
     
     albums.forEach((album, index) => {
       const row = document.createElement('div');
-      row.className = 'album-row album-grid gap-4 px-4 py-3 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
+      row.className = 'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
       row.dataset.index = index;
       
       const position = index + 1;
