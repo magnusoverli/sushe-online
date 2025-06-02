@@ -555,3 +555,75 @@ body.desktop-dragging #albumContainer.drag-active::after {
   background-color: rgba(55, 65, 81, 0.5);
   color: rgba(229, 231, 235, 1);
 }
+
+/* Sidebar collapse functionality */
+.sidebar {
+  width: 16rem; /* 256px */
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 3rem; /* 48px - just wide enough for the toggle button */
+}
+
+/* Hide everything except the toggle button when collapsed */
+.sidebar.collapsed nav {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0.2s;
+}
+
+/* Hide the title when collapsed */
+.sidebar.collapsed .sidebar-title {
+  opacity: 0;
+  visibility: hidden;
+  width: 0;
+  transition: opacity 0.2s, visibility 0.2s, width 0.2s;
+}
+
+/* Center the toggle button when collapsed */
+.sidebar.collapsed #sidebarToggle {
+  margin: 0 auto;
+}
+
+/* Rotate toggle arrow */
+.sidebar.collapsed #sidebarToggle i {
+  transform: rotate(180deg);
+}
+
+/* Adjust the toggle button container when collapsed */
+.sidebar.collapsed > div:first-child {
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+/* Adjust main content grid when sidebar is collapsed */
+@media (min-width: 1024px) {
+  .main-content {
+    grid-template-columns: 16rem 1fr; /* Default */
+    transition: grid-template-columns 0.3s ease;
+  }
+  
+  .main-content.sidebar-collapsed {
+    grid-template-columns: 3rem 1fr; /* Collapsed - matches sidebar width */
+  }
+}
+
+/* Make the toggle button more prominent */
+#sidebarToggle {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+#sidebarToggle:hover {
+  background-color: #374151; /* Slightly lighter on hover */
+}
+
+/* Optional: Add a subtle border to the collapsed sidebar for better visibility */
+.sidebar.collapsed {
+  border-right: 1px solid #374151;
+}

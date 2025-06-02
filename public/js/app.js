@@ -978,8 +978,9 @@ function updateListNav() {
     Object.keys(lists).forEach(listName => {
       const li = document.createElement('li');
       li.innerHTML = `
-        <button class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 ${currentList === listName ? 'bg-gray-800 text-red-500' : 'text-gray-300'}">
-          ${listName}
+        <button class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 ${currentList === listName ? 'bg-gray-800 text-red-500' : 'text-gray-300'} flex items-center">
+          <i class="fas fa-list mr-2 flex-shrink-0"></i>
+          <span class="truncate">${listName}</span>
         </button>
       `;
       
@@ -2259,6 +2260,43 @@ document.getElementById('clearBtn').onclick = async () => {
 };
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Sidebar collapse functionality
+  function initializeSidebarCollapse() {
+    const sidebar = document.getElementById('sidebar');
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const mainContent = document.querySelector('.main-content');
+    
+    if (!sidebar || !sidebarToggle || !mainContent) return;
+    
+    // Check localStorage for saved state
+    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    
+    // Apply initial state
+    if (isCollapsed) {
+      sidebar.classList.add('collapsed');
+      mainContent.classList.add('sidebar-collapsed');
+    }
+    
+    // Toggle handler
+    sidebarToggle.addEventListener('click', () => {
+      const isCurrentlyCollapsed = sidebar.classList.contains('collapsed');
+      
+      if (isCurrentlyCollapsed) {
+        sidebar.classList.remove('collapsed');
+        mainContent.classList.remove('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'false');
+      } else {
+        sidebar.classList.add('collapsed');
+        mainContent.classList.add('sidebar-collapsed');
+        localStorage.setItem('sidebarCollapsed', 'true');
+      }
+    });
+  }
+
+  // Initialize sidebar collapse first
+  initializeSidebarCollapse();
+  
+  // Load all required data and initialize features
   Promise.all([loadGenres(), loadCountries(), loadLists()])
     .then(() => {
       initializeContextMenu();
@@ -2319,7 +2357,6 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Failed to initialize', 'error');
     });
 });
-
 // Add this right after the DOMContentLoaded event listener
 window.addEventListener('beforeunload', () => {
   if (currentList) {
