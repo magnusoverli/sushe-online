@@ -1013,7 +1013,7 @@ function showManualEntryForm() {
 }
 
 function hideManualEntryForm() {
-  manualEntryElements.manualEntryForm.classList.add('hidden');
+  modalElements.manualEntryForm.classList.add('hidden');
   modalElements.searchEmpty.classList.remove('hidden');
   
   // Show the search section again
@@ -1023,12 +1023,12 @@ function hideManualEntryForm() {
   }
   
   // Reset form
-  manualEntryElements.form.reset();
+  modalElements.form.reset();
   resetCoverPreview();
 }
 
 function populateCountryDropdown() {
-  const select = manualEntryElements.countrySelect;
+  const select = modalElements.countrySelect;
   
   if (!select) return;
   
@@ -1057,7 +1057,7 @@ function resetCoverPreview() {
         <polyline points="21 15 16 10 5 21"></polyline>
       </svg>`;
   
-  manualEntryElements.coverPreview.innerHTML = defaultContent;
+  modalElements.coverPreview.innerHTML = defaultContent;
 }
 
 async function handleCoverArtUpload(e) {
