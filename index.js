@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
+const { exec } = require('child_process');
 const multer = require('multer');
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -1261,12 +1262,30 @@ app.post('/admin/themes/upload', ensureAuth, ensureAdmin, upload.single('theme')
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    if (!req.file.originalname.endsWith('.css')) {
-      return res.status(400).json({ error: 'Only CSS files allowed' });
+    if (!req.file.originalname.endsWith('.js')) {
+      return res.status(400).json({ error: 'Only tailwind.config.js files allowed' });
     }
-    const safeName = Date.now() + '_' + req.file.originalname.replace(/[^a-z0-9.-]/gi, '_');
-    fs.writeFileSync(path.join(themesDir, safeName), req.file.buffer);
-    const doc = await themesAsync.insert({ name: req.file.originalname.replace(/\.css$/i, ''), filename: safeName, createdAt: new Date(), active: false });
+
+    const base = Date.now() + '_' + req.file.originalname.replace(/[^a-z0-9.-]/gi, '_').replace(/\.js$/i, '');
+    const tempConfig = path.join(themesDir, base + '.js');
+    const outputCss = path.join(themesDir, base + '.css');
+
+    fs.writeFileSync(tempConfig, req.file.buffer);
+
+    await new Promise((resolve, reject) => {
+      exec(`npx tailwindcss -i ./src/styles/input.css -c ${tempConfig} -o ${outputCss} --minify`, (error, stdout, stderr) => {
+        if (error) {
+          console.error('Tailwind build error:', stderr);
+          reject(error);
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    fs.unlinkSync(tempConfig);
+
+    const doc = await themesAsync.insert({ name: req.file.originalname.replace(/\.js$/i, ''), filename: path.basename(outputCss), createdAt: new Date(), active: false });
     res.json({ success: true, theme: doc });
   } catch (err) {
     console.error('Error uploading theme:', err);

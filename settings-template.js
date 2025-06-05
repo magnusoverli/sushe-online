@@ -410,7 +410,7 @@ const settingsTemplate = (req, options) => {
               <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                 <h3 class="text-lg font-semibold text-white mb-4">Themes</h3>
                 <form id="themeUploadForm" class="flex items-center gap-2 mb-4" enctype="multipart/form-data">
-                  <input type="file" name="theme" accept=".css" class="text-sm text-gray-400">
+                  <input type="file" name="theme" accept=".js" class="text-sm text-gray-400" title="Upload tailwind.config.js">
                   <button type="submit" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">
                     <i class="fas fa-upload mr-1"></i>Upload
                   </button>
