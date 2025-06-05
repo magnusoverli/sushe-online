@@ -1580,8 +1580,8 @@ const spotifyTemplate = (req) => `
       if (isMobile !== lastIsMobile) {
         lastIsMobile = isMobile;
         if (typeof updateListNav === 'function') updateListNav();
-        if (window.currentList && window.lists && window.lists[window.currentList]) {
-          displayAlbums(window.lists[window.currentList]);
+        if (typeof currentList !== 'undefined' && typeof lists !== 'undefined' && lists[currentList]) {
+          displayAlbums(lists[currentList]);
         }
       }
     });
