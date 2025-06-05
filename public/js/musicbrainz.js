@@ -1002,10 +1002,10 @@ function showManualEntryForm() {
   }
   
   // Show manual entry form
-  manualEntryElements.manualEntryForm.classList.remove('hidden');
+  modalElements.manualEntryForm.classList.remove('hidden');
   
   // Reset form
-  manualEntryElements.form.reset();
+  modalElements.form.reset();
   resetCoverPreview();
   
   // Populate country dropdown (in case it wasn't populated yet)
