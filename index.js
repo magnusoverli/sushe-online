@@ -205,8 +205,16 @@ app.use(session({
     // Add these options for Windows compatibility
     logFn: function(){}, // Disable verbose logging
     fallbackSessionFn: function() {
-      // Fallback session if file operations fail
-      return {};
+      // Provide a minimal session object to avoid errors
+      return {
+        cookie: {
+          originalMaxAge: null,
+          expires: null,
+          secure: false,
+          httpOnly: true,
+          path: '/'
+        }
+      };
     }
   }),
   secret: process.env.SESSION_SECRET || 'your-secret-key',
