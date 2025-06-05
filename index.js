@@ -46,10 +46,15 @@ const users = new Datastore({
   filename: path.join(dataDir, 'users.db'), 
   autoload: true 
 });
-const lists = new Datastore({ 
-  filename: path.join(dataDir, 'lists.db'), 
-  autoload: true 
+const lists = new Datastore({
+  filename: path.join(dataDir, 'lists.db'),
+  autoload: true
 });
+
+// Promisified DB helpers for async/await
+const promisifyDatastore = require('./db-utils');
+const usersAsync = promisifyDatastore(users);
+const listsAsync = promisifyDatastore(lists);
 
 // Create indexes for better performance
 lists.ensureIndex({ fieldName: 'userId' });
@@ -481,109 +486,69 @@ app.get('/', ensureAuth, (req, res) => {
 app.get('/settings', ensureAuth, async (req, res) => {
   try {
     // Get user's personal stats
-    const getUserStats = new Promise((resolve) => {
-      lists.find({ userId: req.user._id }, (err, userLists) => {
-        if (err) {
-          resolve({ listCount: 0, totalAlbums: 0 });
-          return;
-        }
-        
-        let totalAlbums = 0;
-        userLists.forEach(list => {
-          if (Array.isArray(list.data)) {
-            totalAlbums += list.data.length;
-          }
-        });
-        
-        resolve({ listCount: userLists.length, totalAlbums });
-      });
-    });
-
-    const userStats = await getUserStats;
+    const userLists = await listsAsync.find({ userId: req.user._id });
+    const userStats = {
+      listCount: userLists.length,
+      totalAlbums: userLists.reduce((sum, l) => sum + (Array.isArray(l.data) ? l.data.length : 0), 0)
+    };
     
     // If admin, get admin data
     let adminData = null;
     let stats = null;
     
     if (req.user.role === 'admin') {
-      // Get all users with their list counts
-      const getAdminData = new Promise((resolve) => {
-        users.find({}, (err, allUsers) => {
-          if (err) {
-            resolve({ users: [], stats: {} });
-            return;
+      const allUsers = await usersAsync.find({});
+      const usersWithCounts = await Promise.all(allUsers.map(async (user) => ({
+        ...user,
+        listCount: await listsAsync.count({ userId: user._id })
+      })));
+      const allLists = await listsAsync.find({});
+
+      let totalAlbums = 0;
+      const genreCounts = new Map();
+
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      let activeUsers = 0;
+
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+      const usersThisWeek = allUsers.filter(u => new Date(u.createdAt) >= sevenDaysAgo).length;
+      const usersLastWeek = allUsers.filter(u => {
+        const createdAt = new Date(u.createdAt);
+        return createdAt >= twoWeeksAgo && createdAt < sevenDaysAgo;
+      }).length;
+
+      const userGrowth = usersLastWeek > 0
+        ? Math.round(((usersThisWeek - usersLastWeek) / usersLastWeek) * 100)
+        : (usersThisWeek > 0 ? 100 : 0);
+
+      allLists.forEach(list => {
+        if (list.updatedAt && new Date(list.updatedAt) >= sevenDaysAgo) {
+          const userIndex = allUsers.findIndex(u => u._id === list.userId);
+          if (userIndex !== -1 && !allUsers[userIndex].counted) {
+            allUsers[userIndex].counted = true;
+            activeUsers++;
           }
+        }
 
-          // Get list counts for each user
-          const userPromises = allUsers.map(user => {
-            return new Promise((res) => {
-              lists.count({ userId: user._id }, (err, count) => {
-                res({
-                  ...user,
-                  listCount: err ? 0 : count
-                });
-              });
-            });
-          });
-
-          Promise.all(userPromises).then(usersWithCounts => {
-            // Calculate all statistics
-            lists.find({}, async (err, allLists) => {
-              let totalAlbums = 0;
-              const genreCounts = new Map();
-              
-              // Calculate active users (last 7 days)
-              const sevenDaysAgo = new Date();
-              sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-              let activeUsers = 0;
-              
-              // Calculate user growth (compare this week vs last week)
-              const twoWeeksAgo = new Date();
-              twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-              
-              const usersThisWeek = allUsers.filter(u => new Date(u.createdAt) >= sevenDaysAgo).length;
-              const usersLastWeek = allUsers.filter(u => {
-                const createdAt = new Date(u.createdAt);
-                return createdAt >= twoWeeksAgo && createdAt < sevenDaysAgo;
-              }).length;
-              
-              const userGrowth = usersLastWeek > 0 
-                ? Math.round(((usersThisWeek - usersLastWeek) / usersLastWeek) * 100)
-                : (usersThisWeek > 0 ? 100 : 0);
-              
-              if (!err && allLists) {
-                // Process all lists
-                allLists.forEach(list => {
-                  // Check if list was updated in last 7 days (active user)
-                  if (list.updatedAt && new Date(list.updatedAt) >= sevenDaysAgo) {
-                    const userIndex = allUsers.findIndex(u => u._id === list.userId);
-                    if (userIndex !== -1 && !allUsers[userIndex].counted) {
-                      allUsers[userIndex].counted = true;
-                      activeUsers++;
-                    }
-                  }
-                  
-                  if (Array.isArray(list.data)) {
-                    totalAlbums += list.data.length;
-                    
-                    // Count genres
-                    list.data.forEach(album => {
-                      // Count primary genre
-                      if (album.genre_1 || album.genre) {
-                        const genre = album.genre_1 || album.genre;
-                        if (genre && genre !== '' && genre !== 'Genre 1') {
-                          genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
-                        }
-                      }
-                      
-                      // Count secondary genre
-                      if (album.genre_2 && album.genre_2 !== '' && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-') {
-                        genreCounts.set(album.genre_2, (genreCounts.get(album.genre_2) || 0) + 1);
-                      }
-                    });
-                  }
-                });
+        if (Array.isArray(list.data)) {
+          totalAlbums += list.data.length;
+          list.data.forEach(album => {
+            if (album.genre_1 || album.genre) {
+              const genre = album.genre_1 || album.genre;
+              if (genre && genre !== '' && genre !== 'Genre 1') {
+                genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
               }
+            }
+
+            if (album.genre_2 && album.genre_2 !== '' && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-') {
+              genreCounts.set(album.genre_2, (genreCounts.get(album.genre_2) || 0) + 1);
+            }
+          });
+        }
+      });
 
               // Get top genres
               const topGenres = Array.from(genreCounts.entries())
@@ -632,18 +597,18 @@ app.get('/settings', ensureAuth, async (req, res) => {
                 console.error('Error counting sessions:', e);
               }
 
-              const stats = {
-                totalUsers: allUsers.length,
-                totalLists: err ? 0 : allLists.length,
-                totalAlbums: totalAlbums,
-                adminUsers: allUsers.filter(u => u.role === 'admin').length,
-                activeUsers,
-                userGrowth,
-                dbSize,
-                activeSessions,
-                topGenres,
-                topUsers
-              };
+      const stats = {
+        totalUsers: allUsers.length,
+        totalLists: allLists.length,
+        totalAlbums,
+        adminUsers: allUsers.filter(u => u.role === 'admin').length,
+        activeUsers,
+        userGrowth,
+        dbSize,
+        activeSessions,
+        topGenres,
+        topUsers
+      };
 
               // Generate real recent activity based on actual data
               const recentActivity = [];
@@ -715,19 +680,12 @@ app.get('/settings', ensureAuth, async (req, res) => {
                 });
               }
 
-              resolve({
-                users: usersWithCounts,
-                stats,
-                recentActivity: recentActivity.slice(0, 4)
-              });
-            });
-          });
-        });
-      });
-
-      const data = await getAdminData;
-      adminData = data;
-      stats = data.stats;
+      adminData = {
+        users: usersWithCounts,
+        stats,
+        recentActivity: recentActivity.slice(0, 4)
+      };
+      stats = adminData.stats;
     }
 
     res.send(settingsTemplate(req, {
@@ -1179,33 +1137,13 @@ app.get('/admin/backup', ensureAuth, ensureAdmin, async (req, res) => {
   try {
     const backup = {
       exportDate: new Date().toISOString(),
-      users: [],
-      lists: []
+      users: await usersAsync.find({}),
+      lists: await listsAsync.find({})
     };
 
-    // Get all users
-    users.find({}, (err, allUsers) => {
-      if (err) {
-        console.error('Error backing up users:', err);
-        return res.status(500).send('Error creating backup');
-      }
-
-      backup.users = allUsers;
-
-      // Get all lists
-      lists.find({}, (err, allLists) => {
-        if (err) {
-          console.error('Error backing up lists:', err);
-          return res.status(500).send('Error creating backup');
-        }
-
-        backup.lists = allLists;
-
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', 'attachment; filename="sushe-backup.json"');
-        res.send(JSON.stringify(backup, null, 2));
-      });
-    });
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', 'attachment; filename="sushe-backup.json"');
+    res.send(JSON.stringify(backup, null, 2));
   } catch (error) {
     console.error('Backup error:', error);
     res.status(500).send('Error creating backup');
@@ -1237,35 +1175,12 @@ app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), asy
     console.log(`Contains ${backup.users.length} users and ${backup.lists.length} lists`);
 
     // Clear existing data
-    await new Promise((resolve, reject) => {
-      users.remove({}, { multi: true }, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    await usersAsync.remove({}, { multi: true });
+    await listsAsync.remove({}, { multi: true });
 
-    await new Promise((resolve, reject) => {
-      lists.remove({}, { multi: true }, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    // Restore users
-    await new Promise((resolve, reject) => {
-      users.insert(backup.users, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
-
-    // Restore lists
-    await new Promise((resolve, reject) => {
-      lists.insert(backup.lists, (err) => {
-        if (err) reject(err);
-        else resolve();
-      });
-    });
+    // Restore users and lists
+    await usersAsync.insert(backup.users);
+    await listsAsync.insert(backup.lists);
 
     // Clear all sessions after restore
     req.sessionStore.clear((err) => {
