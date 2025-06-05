@@ -18,17 +18,16 @@ FROM node:24-alpine
 WORKDIR /app
 
 # Install only production dependencies
-COPY package*.json ./
+COPY --chown=node:node package*.json ./
 RUN npm ci --omit=dev
 
 # Copy application files and built assets from the builder stage
-COPY --from=builder /app ./
+COPY --chown=node:node --from=builder /app ./
 
 # Runtime configuration
 ENV NODE_ENV=production
 RUN mkdir -p /app/data && \
-    chown -R node:node /app/data && \
-    chown -R node:node /app
+    chown node:node /app/data
 
 # Node.js optimizations
 ENV NODE_OPTIONS="--max-old-space-size=512"
