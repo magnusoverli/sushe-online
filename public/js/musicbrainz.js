@@ -599,62 +599,6 @@ function setupIntersectionObserver(releaseGroups, artistName) {
   return imageObserver;
 }
 
-function initializeSearchMode() {
-  const artistBtn = document.getElementById('searchModeArtist');
-  const albumBtn = document.getElementById('searchModeAlbum');
-  const searchInput = modalElements.artistSearchInput;
-  const searchButton = modalElements.searchArtistBtn;
-  
-  // Mobile elements
-  const mobileArtistBtn = document.getElementById('mobileSearchModeArtist');
-  const mobileAlbumBtn = document.getElementById('mobileSearchModeAlbum');
-  const mobileSearchInput = modalElements.artistSearchInput;
-  
-  function updateSearchMode(mode) {
-    searchMode = mode;
-    
-    // Update button states
-    document.querySelectorAll('.search-mode-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.mode === mode);
-      btn.classList.toggle('bg-gray-700', btn.dataset.mode === mode);
-      btn.classList.toggle('text-white', btn.dataset.mode === mode);
-      btn.classList.toggle('text-gray-400', btn.dataset.mode !== mode);
-    });
-    
-    // Update search placeholder
-    const placeholder = mode === 'artist' 
-      ? 'Search for an artist...' 
-      : 'Search for an album...';
-    
-    if (searchInput) searchInput.placeholder = placeholder;
-    if (mobileSearchInput) mobileSearchInput.placeholder = placeholder;
-    
-    // Update search button text
-    const buttonText = mode === 'artist' ? 'Search Artists' : 'Search Albums';
-    if (modalElements.searchArtistBtn) {
-      modalElements.searchArtistBtn.innerHTML = `<i class="fas fa-search mr-2"></i>${buttonText}`;
-    }
-    
-    // Clear previous results WITHOUT calling resetModalState
-    modalElements.artistResults.classList.add('hidden');
-    modalElements.albumResults.classList.add('hidden');
-    modalElements.searchLoading.classList.add('hidden');
-    modalElements.searchEmpty.classList.remove('hidden');
-    modalElements.artistList.innerHTML = '';
-    modalElements.albumList.innerHTML = '';
-  }
-  
-  // Add click handlers
-  if (artistBtn && albumBtn) {
-    artistBtn.onclick = () => updateSearchMode('artist');
-    albumBtn.onclick = () => updateSearchMode('album');
-  }
-  
-  if (mobileArtistBtn && mobileAlbumBtn) {
-    mobileArtistBtn.onclick = () => updateSearchMode('artist');
-    mobileAlbumBtn.onclick = () => updateSearchMode('album');
-  }
-}
 
 async function performSearch() {
   const query = modalElements.artistSearchInput.value.trim();

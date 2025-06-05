@@ -1344,38 +1344,6 @@ async function selectList(listName) {
 }
 
 
-function showMobileAlbumMenu(index) {
-  const album = lists[currentList][index];
-  
-  const actionSheet = document.createElement('div');
-  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
-  actionSheet.innerHTML = `
-    <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
-    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl">
-      <div class="p-4">
-        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
-        <h3 class="font-semibold text-white mb-1">${album.album}</h3>
-        <p class="text-sm text-gray-400 mb-4">${album.artist}</p>
-        
-        <button onclick="editMobileAlbum(${index}); this.closest('.fixed').remove();" 
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
-        </button>
-        
-        <button onclick="if(confirm('Remove this album?')) { removeAlbum(${index}); this.closest('.fixed').remove(); }" 
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
-          <i class="fas fa-trash mr-3"></i>Remove from List
-        </button>
-        
-        <button onclick="this.closest('.fixed').remove()" 
-                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
-          Cancel
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(actionSheet);
-}
 
 function updateHeaderTitle(listName) {
   const headerSeparator = document.getElementById('headerSeparator');
@@ -1595,13 +1563,6 @@ function makeCommentEditable(commentDiv, albumIndex) {
   });
 }
 
-function ensureAlbumsVisible() {
-  const container = document.getElementById('albumContainer');
-  if (container && container.children.length === 0 && currentList && lists[currentList]) {
-    console.log('Force re-rendering albums...');
-    displayAlbums(lists[currentList]);
-  }
-}
 
 // Display albums function with editable genres and comments
 // Display albums function with editable genres and comments
@@ -1906,16 +1867,6 @@ function displayAlbums(albums) {
   console.log('displayAlbums completed');
 }
 
-function createAlbumCard(album, index) {
-  const card = document.createElement('div');
-  card.className = 'album-card bg-gray-900 border-b border-gray-800 p-3 lg:p-0';
-  card.dataset.index = index;
-  
-  // Use the same data, just styled differently
-  card.innerHTML = `...`;
-  
-  return card;
-}
 
 // Add this function to handle mobile album actions
 window.showMobileAlbumMenu = function(index) {
