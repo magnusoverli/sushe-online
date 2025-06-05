@@ -597,7 +597,7 @@ app.get('/settings', ensureAuth, async (req, res) => {
                 console.error('Error counting sessions:', e);
               }
 
-      const stats = {
+      stats = {
         totalUsers: allUsers.length,
         totalLists: allLists.length,
         totalAlbums,
@@ -685,7 +685,6 @@ app.get('/settings', ensureAuth, async (req, res) => {
         stats,
         recentActivity: recentActivity.slice(0, 4)
       };
-      stats = adminData.stats;
     }
 
     res.send(settingsTemplate(req, {
