@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const fs = require('fs');
 const multer = require('multer');
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -28,8 +29,9 @@ const {
   loginTemplate, 
   forgotPasswordTemplate, 
   resetPasswordTemplate, 
-  invalidTokenTemplate, 
-  spotifyTemplate
+  invalidTokenTemplate,
+  spotifyTemplate,
+  setThemeFile
 } = require('./templates');
 
 // Import the new settings template
@@ -39,6 +41,10 @@ const { settingsTemplate } = require('./settings-template');
 const dataDir = process.env.DATA_DIR || './data';
 if (!require('fs').existsSync(dataDir)) {
   require('fs').mkdirSync(dataDir, { recursive: true });
+}
+const themesDir = path.join('public', 'themes');
+if (!require('fs').existsSync(themesDir)) {
+  require('fs').mkdirSync(themesDir, { recursive: true });
 }
 
 // Initialize NeDB databases
@@ -50,15 +56,42 @@ const lists = new Datastore({
   filename: path.join(dataDir, 'lists.db'),
   autoload: true
 });
+const themes = new Datastore({
+  filename: path.join(dataDir, 'themes.db'),
+  autoload: true
+});
 
 // Promisified DB helpers for async/await
 const promisifyDatastore = require('./db-utils');
 const usersAsync = promisifyDatastore(users);
 const listsAsync = promisifyDatastore(lists);
+const themesAsync = promisifyDatastore(themes);
 
 // Create indexes for better performance
 lists.ensureIndex({ fieldName: 'userId' });
 lists.ensureIndex({ fieldName: 'name' });
+
+let activeThemeFile = 'default.css';
+(async () => {
+  try {
+    const count = await themesAsync.count({});
+    if (count === 0) {
+      const src = path.join('public', 'styles', 'output.css');
+      const dest = path.join(themesDir, 'default.css');
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, dest);
+      } else {
+        fs.writeFileSync(dest, '');
+      }
+      await themesAsync.insert({ name: 'Default', filename: 'default.css', active: true, createdAt: new Date() });
+    }
+    const active = await themesAsync.findOne({ active: true });
+    activeThemeFile = active?.filename || 'default.css';
+    setThemeFile(activeThemeFile);
+  } catch (err) {
+    console.error('Theme initialization error:', err);
+  }
+})();
 
 // Admin code variables
 const adminCodeAttempts = new Map(); // Track failed attempts
@@ -1210,6 +1243,51 @@ app.post('/admin/clear-sessions', ensureAuth, ensureAdmin, (req, res) => {
     console.log(`Admin ${req.user.email} cleared all sessions`);
     res.json({ success: true });
   });
+});
+
+// Admin: Theme management
+app.get('/admin/themes/list', ensureAuth, ensureAdmin, async (req, res) => {
+  try {
+    const all = await themesAsync.find({});
+    res.json({ themes: all });
+  } catch (err) {
+    console.error('Error listing themes:', err);
+    res.status(500).json({ error: 'Error listing themes' });
+  }
+});
+
+app.post('/admin/themes/upload', ensureAuth, ensureAdmin, upload.single('theme'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    if (!req.file.originalname.endsWith('.css')) {
+      return res.status(400).json({ error: 'Only CSS files allowed' });
+    }
+    const safeName = Date.now() + '_' + req.file.originalname.replace(/[^a-z0-9.-]/gi, '_');
+    fs.writeFileSync(path.join(themesDir, safeName), req.file.buffer);
+    const doc = await themesAsync.insert({ name: req.file.originalname.replace(/\.css$/i, ''), filename: safeName, createdAt: new Date(), active: false });
+    res.json({ success: true, theme: doc });
+  } catch (err) {
+    console.error('Error uploading theme:', err);
+    res.status(500).json({ error: 'Error uploading theme' });
+  }
+});
+
+app.post('/admin/themes/activate', ensureAuth, ensureAdmin, async (req, res) => {
+  try {
+    const { themeId } = req.body;
+    const theme = await themesAsync.findOne({ _id: themeId });
+    if (!theme) return res.status(404).json({ error: 'Theme not found' });
+    await themesAsync.update({}, { $set: { active: false } }, { multi: true });
+    await themesAsync.update({ _id: themeId }, { $set: { active: true } });
+    activeThemeFile = theme.filename;
+    setThemeFile(activeThemeFile);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error activating theme:', err);
+    res.status(500).json({ error: 'Error activating theme' });
+  }
 });
 
 // Admin status endpoint (for debugging)

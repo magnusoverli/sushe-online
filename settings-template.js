@@ -1,5 +1,5 @@
-// Import the header component and color utilities at the top of the file
-const { headerComponent } = require('./templates');
+// Import the header component and theme helpers
+const { headerComponent, getThemeFile } = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
@@ -15,6 +15,7 @@ const settingsTemplate = (req, options) => {
   <title>Settings - SuShe Online</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link href="/styles/output.css" rel="stylesheet">
+  ${getThemeFile() ? `<link href="/themes/${getThemeFile()}" rel="stylesheet">` : ''}
   <style>
     /* CSS Custom Properties for theming */
     :root {
@@ -396,12 +397,27 @@ const settingsTemplate = (req, options) => {
                   >
                     <i class="fas fa-upload mr-2"></i>Restore Backup
                   </button>
-                  <button 
+                  <button
                     onclick="if(confirm('Clear all active sessions? This will log out all users.')) clearSessions()"
                     class="px-4 py-2 bg-red-700 hover:bg-red-600 text-white rounded transition duration-200 text-sm"
                   >
                     <i class="fas fa-sign-out-alt mr-2"></i>Clear Sessions
                   </button>
+                </div>
+              </div>
+
+              <!-- Theme Management -->
+              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                <h3 class="text-lg font-semibold text-white mb-4">Themes</h3>
+                <form id="themeUploadForm" class="flex items-center gap-2 mb-4" enctype="multipart/form-data">
+                  <input type="file" name="theme" accept=".css" class="text-sm text-gray-400">
+                  <button type="submit" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">
+                    <i class="fas fa-upload mr-1"></i>Upload
+                  </button>
+                </form>
+                <div class="flex items-center gap-2">
+                  <select id="themeSelect" class="flex-1 bg-gray-800 border border-gray-700 text-white p-2 rounded"></select>
+                  <button id="activateThemeBtn" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">Activate</button>
                 </div>
               </div>
               
@@ -900,6 +916,41 @@ const settingsTemplate = (req, options) => {
         
         document.getElementById('restoreModal').classList.add('hidden');
       });
+
+      // Theme upload and activation
+      async function loadThemes() {
+        const res = await fetch('/admin/themes/list', { credentials: 'same-origin' });
+        const data = await res.json();
+        const select = document.getElementById('themeSelect');
+        select.innerHTML = data.themes.map(t => `<option value="${t._id}" ${t.active ? 'selected' : ''}>${t.name}</option>`).join('');
+      }
+
+      document.getElementById('themeUploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const res = await fetch('/admin/themes/upload', { method: 'POST', body: formData, credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Theme uploaded');
+          loadThemes();
+        } else {
+          showToast(data.error || 'Error uploading theme', 'error');
+        }
+      });
+
+      document.getElementById('activateThemeBtn').addEventListener('click', async () => {
+        const themeId = document.getElementById('themeSelect').value;
+        const res = await fetch('/admin/themes/activate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ themeId }), credentials: 'same-origin' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Theme activated');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Error activating theme', 'error');
+        }
+      });
+
+      loadThemes();
     ` : ''}
   </script>
 </body>
