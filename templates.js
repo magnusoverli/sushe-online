@@ -1420,6 +1420,11 @@ const spotifyTemplate = (req) => `
       const menu = document.getElementById('mobileMenu');
       menu.classList.toggle('hidden');
     }
+
+    // Backwards compatibility for old toggle handler
+    function toggleMobileLists() {
+      toggleMobileMenu();
+    }
     
     // Initialize the app
     document.addEventListener('DOMContentLoaded', () => {
@@ -1565,6 +1570,19 @@ const spotifyTemplate = (req) => `
             }, 0);
           }
         });
+      }
+    });
+
+    // Re-render layout when viewport crosses the mobile breakpoint
+    let lastIsMobile = window.innerWidth < 1024;
+    window.addEventListener('resize', () => {
+      const isMobile = window.innerWidth < 1024;
+      if (isMobile !== lastIsMobile) {
+        lastIsMobile = isMobile;
+        if (typeof updateListNav === 'function') updateListNav();
+        if (window.currentList && window.lists && window.lists[window.currentList]) {
+          displayAlbums(window.lists[window.currentList]);
+        }
       }
     });
   </script>
