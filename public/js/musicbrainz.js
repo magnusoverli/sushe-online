@@ -1929,5 +1929,5 @@ function formatArtistDisplayName(artist) {
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(initializeAddAlbumFeature, 100);
+  initializeAddAlbumFeature();
 });
