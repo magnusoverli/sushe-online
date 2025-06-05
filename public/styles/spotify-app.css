@@ -2,68 +2,11 @@
 
 /* Album grid column configuration with responsive behavior */
 :root {
-  /* Default grid for narrow desktop screens */
-  --album-grid-columns: minmax(2.5rem, 0.1fr) minmax(80px, 0.18fr) minmax(200px, 0.85fr) minmax(150px, 0.85fr) minmax(100px, 0.5fr) minmax(100px, 0.5fr) minmax(100px, 0.5fr) minmax(150px, 1.3fr);
-  
-  /* Cover art size configuration - REDUCED */
-  --cover-art-size: 48px;  /* Reduced from 72px */
+  /* Default grid for desktop screens */
+  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+  --cover-art-size: 64px;
 }
 
-/* Standard desktop screens */
-@media (min-width: 1400px) {
-  :root {
-    --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
-    --cover-art-size: 64px;  /* Reduced from 110px */
-  }
-}
-
-/* Narrow desktop screens (1024px - 1400px) */
-@media (min-width: 1024px) and (max-width: 1400px) {
-  :root {
-    --album-grid-columns: 40px 72px minmax(150px, 1fr) minmax(120px, 0.8fr) minmax(80px, 0.5fr) minmax(80px, 0.5fr) minmax(80px, 0.5fr) minmax(100px, 1fr);
-    --cover-art-size: 40px;  /* Reduced from 56px */
-  }
-  
-  /* Reduce font sizes slightly */
-  .album-grid {
-    font-size: 0.875rem; /* 14px instead of 16px */
-  }
-  
-  /* Adjust padding for narrow screens */
-  .album-grid {
-    gap: 0.75rem; /* 12px instead of 16px */
-  }
-  
-  .album-row,
-  .album-grid.px-4 {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-}
-
-/* Very narrow desktop screens (1024px - 1200px) */
-@media (min-width: 1024px) and (max-width: 1200px) {
-  :root {
-    --album-grid-columns: 35px 56px minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(70px, 0.4fr) minmax(70px, 0.4fr) minmax(70px, 0.4fr) minmax(80px, 0.8fr);
-    --cover-art-size: 36px;  /* Reduced from 44px */
-  }
-  
-  /* Further reduce font sizes */
-  .album-grid {
-    font-size: 0.8125rem; /* 13px */
-  }
-  
-  /* Hide genre 2 column on very narrow screens */
-  .album-grid > div:nth-child(7),
-  .album-row > div:nth-child(7) {
-    display: none;
-  }
-  
-  /* Adjust grid to account for hidden column */
-  :root {
-    --album-grid-columns: 35px 56px minmax(120px, 1fr) minmax(100px, 0.8fr) minmax(80px, 0.5fr) minmax(80px, 0.5fr) minmax(100px, 1fr);
-  }
-}
 
 /* Prevent overscroll on mobile */
 @media (max-width: 1023px) {
@@ -267,12 +210,6 @@ body {
   }
 }
 
-/* Hover state adjustments for narrow desktop screens */
-@media (min-width: 1024px) and (max-width: 1400px) {
-  .album-row:hover:not(.dragging) {
-    transform: translateX(1px); /* Reduced movement on narrow screens */
-  }
-}
 
 .album-row.dragging {
   opacity: 0.2;
@@ -298,16 +235,6 @@ body {
   min-height: calc(100vh - 280px);
 }
 
-/* Responsive padding adjustments */
-@media (min-width: 1024px) and (max-width: 1280px) {
-  #albumContainer {
-    padding: 1rem; /* Reduce padding on narrow screens */
-  }
-  
-  .album-rows-container {
-    min-height: calc(100vh - 240px); /* Adjust for smaller padding */
-  }
-}
 
 /* Make sure text doesn't overflow */
 .truncate {
@@ -365,24 +292,6 @@ body {
   padding: 0.125rem 0;
 }
 
-/* Responsive adjustments for specific columns */
-@media (min-width: 1024px) and (max-width: 1400px) {
-  /* Position number column */
-  .album-grid > div:first-child,
-  .album-row > div:first-child {
-    justify-self: center;
-  }
-  
-  /* Comment column adjustments */
-  .comment-cell {
-    font-size: 0.75rem; /* 12px */
-  }
-  
-  /* Genre cells adjustments */
-  .genre-cell {
-    font-size: 0.75rem; /* 12px */
-  }
-}
 
 /* Datalist input styling */
 input[list] {
