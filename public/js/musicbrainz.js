@@ -9,8 +9,6 @@ const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
 
-// Manual entry elements
-let manualEntryElements = {};
 
 let searchMode = 'artist';
 
@@ -1081,7 +1079,7 @@ async function handleCoverArtUpload(e) {
   // Show preview
   const reader = new FileReader();
   reader.onload = function(event) {
-    manualEntryElements.coverPreview.innerHTML = `
+    modalElements.coverPreview.innerHTML = `
       <img src="${event.target.result}" alt="Cover preview" class="w-full h-full object-cover rounded">
     `;
   };
@@ -1091,7 +1089,7 @@ async function handleCoverArtUpload(e) {
 async function handleManualSubmit(e) {
   e.preventDefault();
   
-  const formData = new FormData(manualEntryElements.form);
+  const formData = new FormData(modalElements.form);
   
   // Validate required fields
   const artist = formData.get('artist').trim();
@@ -1235,10 +1233,10 @@ function resetModalState() {
   }
   
   // Reset manual entry
-  if (manualEntryElements.manualEntryForm) {
-    manualEntryElements.manualEntryForm.classList.add('hidden');
-    if (manualEntryElements.form) {
-      manualEntryElements.form.reset();
+  if (modalElements.manualEntryForm) {
+    modalElements.manualEntryForm.classList.add('hidden');
+    if (modalElements.form) {
+      modalElements.form.reset();
     }
     resetCoverPreview();
   }
