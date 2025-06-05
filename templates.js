@@ -1450,9 +1450,9 @@ const spotifyTemplate = (req) => `
                 >
                   \${listName}
                 </button>
-                <button 
+                <button
                   onclick="event.stopPropagation(); showListMenu('\${listName}');"
-                  class="p-3 text-gray-400 hover:text-white opacity-0 group-hover:opacity-100 lg:opacity-100 transition-opacity"
+                  class="p-3 text-gray-400 hover:text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                 >
                   <i class="fas fa-ellipsis-v"></i>
                 </button>
