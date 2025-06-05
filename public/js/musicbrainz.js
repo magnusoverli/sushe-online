@@ -996,7 +996,7 @@ function showManualEntryForm() {
   modalElements.searchEmpty.classList.add('hidden');
   
   // Hide the search section
-  const searchSection = document.getElementById(window.innerWidth < 1024 ? 'mobileSearchSection' : 'searchSection');
+  const searchSection = document.getElementById('searchSection');
   if (searchSection) {
     searchSection.classList.add('hidden');
   }
@@ -1017,7 +1017,7 @@ function hideManualEntryForm() {
   modalElements.searchEmpty.classList.remove('hidden');
   
   // Show the search section again
-  const searchSection = document.getElementById(window.innerWidth < 1024 ? 'mobileSearchSection' : 'searchSection');
+  const searchSection = document.getElementById('searchSection');
   if (searchSection) {
     searchSection.classList.remove('hidden');
   }
@@ -1229,7 +1229,7 @@ function resetModalState() {
   }
   
   // Show the search section
-  const searchSection = document.getElementById(window.innerWidth < 1024 ? 'mobileSearchSection' : 'searchSection');
+  const searchSection = document.getElementById('searchSection');
   if (searchSection) {
     searchSection.classList.remove('hidden');
   }
