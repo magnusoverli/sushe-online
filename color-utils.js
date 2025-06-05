@@ -30,4 +30,4 @@ function colorWithOpacity(color, opacity) {
   return rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})` : color;
 }
 
-module.exports = { adjustColor, hexToRgb, colorWithOpacity };
+module.exports = { adjustColor, colorWithOpacity };
