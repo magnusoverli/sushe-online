@@ -19,7 +19,9 @@ WORKDIR /app
 
 # Install only production dependencies
 COPY --chown=node:node package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    && npm cache clean --force \
+    && apk add --no-cache curl
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
@@ -33,6 +35,9 @@ RUN mkdir -p /app/data && \
 ENV NODE_OPTIONS="--max-old-space-size=512"
 
 EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:3000/ || exit 1
 
 USER node
 
