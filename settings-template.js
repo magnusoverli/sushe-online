@@ -52,7 +52,7 @@ const settingsTemplate = (req, options) => {
   <div class="min-h-screen flex flex-col">
     ${headerComponent(user, 'settings')}
     
-    <div class="flex-1 p-4 lg:p-8 max-w-6xl mx-auto w-full">
+    <div class="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
       <h1 class="text-3xl font-bold text-white mb-8">Settings</h1>
       
       <!-- Flash Messages -->
@@ -74,7 +74,7 @@ const settingsTemplate = (req, options) => {
         </div>
       ` : ''}
       
-      <div class="grid gap-6 lg:grid-cols-2">
+      <div class="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <!-- Personal Settings Section -->
         <div class="space-y-6">
           <h2 class="text-xl font-semibold text-gray-300 mb-4">Personal Settings</h2>
@@ -269,7 +269,7 @@ const settingsTemplate = (req, options) => {
           <div>
             <h2 class="text-xl font-semibold text-gray-300 mb-4">Your Statistics</h2>
             <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 <div>
                   <p class="text-gray-400 text-sm">Total Lists</p>
                   <p class="text-2xl font-bold text-white">${userStats.listCount}</p>
@@ -321,7 +321,7 @@ const settingsTemplate = (req, options) => {
               <!-- System Stats -->
               <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                 <h3 class="text-lg font-semibold text-white mb-4">System Statistics</h3>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   <div>
                     <p class="text-gray-400 text-sm">Total Users</p>
                     <p class="text-2xl font-bold text-white">${stats.totalUsers}</p>
@@ -377,7 +377,7 @@ const settingsTemplate = (req, options) => {
               <!-- Admin Actions -->
               <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                 <h3 class="text-lg font-semibold text-white mb-4">Admin Actions</h3>
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   <button 
                     onclick="if(confirm('Export all users as CSV?')) window.location.href='/admin/export-users'"
                     class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
