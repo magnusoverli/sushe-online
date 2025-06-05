@@ -15,6 +15,7 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
 const { composeForgotPasswordEmail } = require('./forgot_email');
+const { isValidEmail, isValidUsername, isValidPassword } = require('./validators');
 
 //
 let lastCodeUsedBy = null;
@@ -321,28 +322,20 @@ app.post('/register', async (req, res) => {
       return res.redirect('/register');
     }
     
-    // Validate email format (basic check)
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+    // Validate email format
+    if (!isValidEmail(email)) {
       req.flash('error', 'Please enter a valid email address');
       return res.redirect('/register');
     }
-    
-    // Validate username length
-    if (username.length < 3 || username.length > 30) {
-      req.flash('error', 'Username must be between 3 and 30 characters');
+
+    // Validate username format/length
+    if (!isValidUsername(username)) {
+      req.flash('error', 'Username can only contain letters, numbers, and underscores and must be 3-30 characters');
       return res.redirect('/register');
     }
-    
-    // Validate username format (alphanumeric and underscores only)
-    const usernameRegex = /^[a-zA-Z0-9_]+$/;
-    if (!usernameRegex.test(username)) {
-      req.flash('error', 'Username can only contain letters, numbers, and underscores');
-      return res.redirect('/register');
-    }
-    
+
     // Validate password length
-    if (password.length < 8) {
+    if (!isValidPassword(password)) {
       req.flash('error', 'Password must be at least 8 characters');
       return res.redirect('/register');
     }
@@ -844,7 +837,7 @@ app.post('/settings/change-password', ensureAuth, async (req, res) => {
       return res.redirect('/settings');
     }
     
-    if (newPassword.length < 8) {
+    if (!isValidPassword(newPassword)) {
       req.flash('error', 'New password must be at least 8 characters');
       return res.redirect('/settings');
     }
@@ -958,9 +951,8 @@ app.post('/settings/update-email', ensureAuth, async (req, res) => {
     if (!email || !email.trim()) {
       return res.status(400).json({ error: 'Email is required' });
     }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
+
+    if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'Invalid email format' });
     }
     
@@ -1011,14 +1003,9 @@ app.post('/settings/update-username', ensureAuth, async (req, res) => {
     if (!username || !username.trim()) {
       return res.status(400).json({ error: 'Username is required' });
     }
-    
-    if (username.length < 3 || username.length > 30) {
-      return res.status(400).json({ error: 'Username must be between 3 and 30 characters' });
-    }
-    
-    const usernameRegex = /^[a-zA-Z0-9_]+$/;
-    if (!usernameRegex.test(username)) {
-      return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores' });
+
+    if (!isValidUsername(username)) {
+      return res.status(400).json({ error: 'Username can only contain letters, numbers, and underscores and must be 3-30 characters' });
     }
     
     // Check if username is already taken by another user
