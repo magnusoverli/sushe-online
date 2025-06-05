@@ -922,7 +922,7 @@ const settingsTemplate = (req, options) => {
         const res = await fetch('/admin/themes/list', { credentials: 'same-origin' });
         const data = await res.json();
         const select = document.getElementById('themeSelect');
-        select.innerHTML = data.themes.map(t => `<option value="${t._id}" ${t.active ? 'selected' : ''}>${t.name}</option>`).join('');
+        select.innerHTML = data.themes.map(t => '<option value="' + t._id + '" ' + (t.active ? 'selected' : '') + '>' + t.name + '</option>').join('');
       }
 
       document.getElementById('themeUploadForm').addEventListener('submit', async (e) => {
