@@ -1663,13 +1663,21 @@ function displayAlbums(albums) {
       const position = index + 1;
       const albumName = album.album || 'Unknown Album';
       const artist = album.artist || 'Unknown Artist';
+
       const country = album.country || '';
+      const countryDisplay = country || 'Country';
+      const countryClass = country ? 'text-gray-300' : 'text-gray-500 italic';
+
       const genre1 = album.genre_1 || album.genre || '';
-      
+      const genre1Display = genre1 || 'Genre 1';
+      const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-500 italic';
+
       let genre2 = album.genre_2 || '';
       if (genre2 === 'Genre 2' || genre2 === '-') {
         genre2 = '';
       }
+      const genre2Display = genre2 || 'Genre 2';
+      const genre2Class = genre2 ? 'text-gray-400' : 'text-gray-500 italic';
       
       let comment = album.comments || album.comment || '';
       if (comment === 'Comment') {
@@ -1708,13 +1716,13 @@ function displayAlbums(albums) {
         </div>
         <div class="flex items-center text-gray-300 truncate">${artist}</div>
         <div class="flex items-center country-cell">
-          <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${country}</span>
+          <span class="text-sm ${countryClass} truncate cursor-pointer hover:text-gray-100">${countryDisplay}</span>
         </div>
         <div class="flex items-center genre-cell genre-1-cell">
-          <span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${genre1}</span>
+          <span class="text-sm ${genre1Class} truncate cursor-pointer hover:text-gray-100">${genre1Display}</span>
         </div>
         <div class="flex items-center genre-cell genre-2-cell">
-          <span class="text-sm text-gray-400 truncate cursor-pointer hover:text-gray-100">${genre2}</span>
+          <span class="text-sm ${genre2Class} truncate cursor-pointer hover:text-gray-100">${genre2Display}</span>
         </div>
         <div class="flex items-center comment-cell">
           <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
