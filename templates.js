@@ -1,5 +1,14 @@
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
+// Active theme file set from the main application
+let currentThemeFile = null;
+function setThemeFile(filename) {
+  currentThemeFile = filename;
+}
+function getThemeFile() {
+  return currentThemeFile;
+}
+
 // Shared header component
 const headerComponent = (user, activeSection = 'home', currentListName = '') => `
   <header class="bg-gray-900 border-b border-gray-800 z-50">
@@ -70,6 +79,7 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
   <link href="/styles/output.css" rel="stylesheet">
+  ${currentThemeFile ? `<link href="/themes/${currentThemeFile}" rel="stylesheet">` : ''}
   <style>
     /* CSS Custom Properties for theming */
     :root {
@@ -1112,6 +1122,7 @@ const spotifyTemplate = (req) => `
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
   <link href="/styles/output.css" rel="stylesheet">
+  ${currentThemeFile ? `<link href="/themes/${currentThemeFile}" rel="stylesheet">` : ''}
   <link href="/styles/spotify-app.css" rel="stylesheet">
   <style>
     /* CSS Custom Properties for theming */
@@ -1598,5 +1609,7 @@ module.exports = {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
-  headerComponent
+  headerComponent,
+  setThemeFile,
+  getThemeFile
 };
