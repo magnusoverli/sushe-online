@@ -770,13 +770,14 @@ async function displayDirectAlbumResults(releaseGroups) {
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
         </div>
       `;
-      
-      // Prepare a minimal artist object for compatibility
+
       const primaryArtist = artistCredits[0];
+      const combinedCountries = await getCombinedArtistCountries(artistCredits);
+
       currentArtist = {
         name: artistDisplay,
         id: primaryArtist?.artist?.id || null,
-        country: '' // We'll need to fetch this if needed
+        country: combinedCountries
       };
       
       // Load cover art if not already loaded
@@ -1578,6 +1579,30 @@ async function resolveCountryCode(countryCode) {
   }
 }
 
+// Get combined country names for multiple artists
+async function getCombinedArtistCountries(artistCredits) {
+  const countries = [];
+
+  for (const credit of artistCredits) {
+    const id = credit.artist?.id;
+    if (!id) continue;
+
+    try {
+      const artistData = await rateLimitedFetch(`${MUSICBRAINZ_API}/artist/${id}?fmt=json`);
+      if (artistData && artistData.country) {
+        const name = await resolveCountryCode(artistData.country);
+        if (name && !countries.includes(name)) {
+          countries.push(name);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching artist country:', err);
+    }
+  }
+
+  return countries.join(' / ');
+}
+
 async function searchAlbums(query) {
   const url = `${MUSICBRAINZ_API}/release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=20`;
   const data = await rateLimitedFetch(url);
@@ -1736,9 +1761,15 @@ async function addAlbumToList(releaseGroup) {
   // Show initial loading message
   showToast('Adding album...', 'info');
   
-  // Resolve the country code to full name
-  const resolvedCountry = await resolveCountryCode(currentArtist.country);
-  
+  let resolvedCountry = '';
+  if (currentArtist.country) {
+    if (currentArtist.country.length === 2) {
+      resolvedCountry = await resolveCountryCode(currentArtist.country);
+    } else {
+      resolvedCountry = currentArtist.country;
+    }
+  }
+
   const album = {
       artist: currentArtist.name,
       album: releaseGroup.title,
