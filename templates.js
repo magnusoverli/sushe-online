@@ -1150,7 +1150,7 @@ const spotifyTemplate = (req) => `
       display: grid;
       grid-template-rows: auto 1fr;
       height: 100vh;
-      height: 100dvh;
+      height: calc(var(--vh, 1vh) * 100);
     }
     
     .main-content {
@@ -1415,6 +1415,15 @@ const spotifyTemplate = (req) => `
     // Global state
     window.currentUser = ${JSON.stringify(req.user)};
     window.lastSelectedList = ${JSON.stringify(req.user.lastSelectedList || null)};
+
+    function updateViewportHeight() {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
+
+    updateViewportHeight();
+    window.addEventListener('resize', updateViewportHeight);
+    window.addEventListener('orientationchange', updateViewportHeight);
     
     // Mobile menu toggle
     function toggleMobileMenu() {
