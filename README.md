@@ -16,6 +16,7 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - **Admin mode** protected by a rotating access code printed to the server console. Admins can view site statistics, manage users and create backups.
 - **Custom theme** support allowing each user to pick an accent colour.
 - **REST API** endpoints for list management and a proxy for Deezer API requests.
+- **Gzip compression** for API and page responses to improve performance.
 
 ## Development
 1. Install dependencies:

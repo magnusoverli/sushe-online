@@ -9,6 +9,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
+const compression = require('compression');
 const multer = require('multer');
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -190,6 +191,7 @@ const app = express();
 
 // Basic Express middleware
 app.use(express.static('public'));
+app.use(compression());
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
