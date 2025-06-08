@@ -6,7 +6,8 @@
     "start": "node index.js",
     "dev": "concurrently \"npm run watch:css\" \"nodemon --ignore data/ --ignore *.log index.js\"",
     "build:css": "postcss src/styles/input.css -o public/styles/output.css",
-    "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch"
+    "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
+    "test": "node --test"
   },
   "dependencies": {
     "@seald-io/nedb": "^4.1.1",
