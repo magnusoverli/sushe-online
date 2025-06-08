@@ -2,6 +2,12 @@
 
 SuShe Online is a Node.js + Express application for managing album lists with a black metal aesthetic.
 
+The project targets **Node.js 22** for both development and production. The included Docker configuration uses Node 22 exclusively.
+
+The `Dockerfile` uses a multi-stage build. The `builder` stage installs all dependencies and compiles assets, then a second `runtime` stage copies the built files into a clean Node 22 image containing only production dependencies.
+
+Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mounts to reuse the npm cache between builds. Set `DOCKER_BUILDKIT=1` when running `docker compose build` to enable this optimization.
+
 ## Features
 - **User accounts** with registration, login and session handling using Passport.js and express-session.
 - **Password reset** via email using Nodemailer.

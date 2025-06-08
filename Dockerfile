@@ -1,10 +1,12 @@
+# ----- Build stage -----
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
 # Copy package files and install all dependencies (dev included)
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefer-offline --no-audit
 
 # Copy the rest of the source and build assets
 COPY . .
@@ -13,13 +15,15 @@ RUN npm run build:css
 # Remove node_modules so they are not copied to the final image
 RUN rm -rf node_modules
 
-FROM node:24-alpine
+# ----- Runtime stage -----
+FROM node:22-alpine AS runtime
 
 WORKDIR /app
 
 # Install only production dependencies
 COPY --chown=node:node package*.json ./
-RUN npm ci --omit=dev \
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --omit=dev --prefer-offline --no-audit \
     && npm cache clean --force \
     && apk add --no-cache curl
 
