@@ -1192,8 +1192,9 @@ const spotifyTemplate = (req) => `
     
     /* FAB styling */
     #addAlbumFAB {
-      box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4), 
+      box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4),
                   0 2px 4px 0 rgba(0, 0, 0, 0.2);
+      bottom: calc(1.5rem + env(safe-area-inset-bottom));
     }
     
     #addAlbumFAB:active {
@@ -1202,12 +1203,12 @@ const spotifyTemplate = (req) => `
     
     /* Album container responsive padding */
     #albumContainer {
-      padding-bottom: 1rem;
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     }
-    
+
     @media (max-width: 1023px) {
       #albumContainer {
-        padding-bottom: 5rem; /* Space for FAB on mobile */
+        padding-bottom: calc(5rem + env(safe-area-inset-bottom)); /* Space for FAB on mobile */
       }
     }
     
@@ -1387,10 +1388,10 @@ const spotifyTemplate = (req) => `
   </div>
   
   <!-- Floating Action Button -->
-  <button 
-    id="addAlbumFAB" 
+  <button
+    id="addAlbumFAB"
     class="fixed bottom-6 right-6 w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
-    style="display: none;"
+    style="display: none; bottom: calc(1.5rem + env(safe-area-inset-bottom));"
     onclick="if(window.openAddAlbumModal) window.openAddAlbumModal()"
   >
     <i class="fas fa-plus text-xl"></i>
