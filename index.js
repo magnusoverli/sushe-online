@@ -1500,11 +1500,15 @@ async function start() {
   await initStores();
   // One-time migration to add accentColor to existing users
   try {
-    const migrated = await users.update(
-      { accentColor: { $exists: false } },
-      { $set: { accentColor: '#dc2626' } },
-      { multi: true }
-    );
+    // Fetch all users and update those missing an accent color
+    const allUsers = await usersAsync.find({});
+    let migrated = 0;
+    for (const u of allUsers) {
+      if (!u.accentColor) {
+        await usersAsync.update({ _id: u._id }, { $set: { accentColor: '#dc2626' } });
+        migrated++;
+      }
+    }
     if (migrated > 0) {
       console.log(`Migrated ${migrated} users with default accent color`);
     }
