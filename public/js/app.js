@@ -1630,6 +1630,9 @@ function displayAlbums(albums) {
       const row = document.createElement('div');
       row.className = 'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
       row.dataset.index = index;
+      // Explicitly mark rows as draggable to ensure SortableJS
+      // activates correctly in desktop view
+      row.setAttribute('draggable', 'true');
       
       const position = index + 1;
       const albumName = album.album || 'Unknown Album';
@@ -1758,10 +1761,12 @@ function displayAlbums(albums) {
     albums.forEach((album, index) => {
       const cardWrapper = document.createElement('div');
       cardWrapper.className = 'album-card-wrapper';
-      
+
       const card = document.createElement('div');
       card.className = 'album-card bg-gray-900 border-b border-gray-800 touch-manipulation transition-all cursor-move relative overflow-hidden';
       card.dataset.index = index;
+      // Ensure cards are draggable in fallback mode as well
+      card.setAttribute('draggable', 'true');
       
       const albumName = album.album || 'Unknown Album';
       const artist = album.artist || 'Unknown Artist';
