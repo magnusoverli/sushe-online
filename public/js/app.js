@@ -1045,7 +1045,8 @@ function updateListNav() {
 function initializeSorting(container) {
   console.debug('Initializing sorting for container', container);
   if (!window.Sortable) {
-    console.error('SortableJS not loaded');
+    console.error('SortableJS not loaded; using basic drag-and-drop fallback');
+    enableBasicDragDrop(container);
     return;
   }
   
@@ -1309,9 +1310,74 @@ function initializeSorting(container) {
   }
 
   const sortable = Sortable.create(sortableContainer, sortableOptions);
-  
+
   // Store sortable instance
   container._sortable = sortable;
+}
+
+// Basic HTML5 drag-and-drop fallback when SortableJS isn't available
+function enableBasicDragDrop(container) {
+  const dragContainer = container.querySelector('.mobile-album-list') || container;
+
+  Array.from(dragContainer.children).forEach(el => {
+    if (el.classList.contains('album-row') || el.classList.contains('album-card')) {
+      el.setAttribute('draggable', 'true');
+    }
+  });
+
+  let draggedEl = null;
+  let startIndex = null;
+
+  dragContainer.addEventListener('dragstart', (e) => {
+    const row = e.target.closest('.album-row, .album-card');
+    if (!row) return;
+    draggedEl = row;
+    startIndex = Array.from(dragContainer.children).indexOf(row);
+    row.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+
+  dragContainer.addEventListener('dragover', (e) => {
+    if (!draggedEl) return;
+    e.preventDefault();
+    const target = e.target.closest('.album-row, .album-card');
+    if (!target || target === draggedEl) return;
+    const rect = target.getBoundingClientRect();
+    const after = (e.clientY - rect.top) > rect.height / 2;
+    dragContainer.insertBefore(draggedEl, after ? target.nextSibling : target);
+  });
+
+  const finishDrag = async () => {
+    if (!draggedEl) return;
+    const endIndex = Array.from(dragContainer.children).indexOf(draggedEl);
+    draggedEl.classList.remove('dragging');
+    updateIndices(dragContainer);
+    if (startIndex !== endIndex) {
+      const list = lists[currentList];
+      const [moved] = list.splice(startIndex, 1);
+      list.splice(endIndex, 0, moved);
+      await saveList(currentList, list);
+    }
+    draggedEl = null;
+  };
+
+  dragContainer.addEventListener('drop', (e) => {
+    e.preventDefault();
+    finishDrag();
+  });
+
+  dragContainer.addEventListener('dragend', finishDrag);
+}
+
+function updateIndices(container) {
+  const rows = container.querySelectorAll('.album-row, .album-card');
+  rows.forEach((row, index) => {
+    row.dataset.index = index;
+    const positionElement = row.querySelector('.w-12.flex.items-center.justify-center');
+    if (positionElement) {
+      positionElement.textContent = index + 1;
+    }
+  });
 }
 
 // Select and display a list
