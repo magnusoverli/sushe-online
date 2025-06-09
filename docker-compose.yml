@@ -12,9 +12,19 @@ services:
       - BASE_URL=${BASE_URL}
       - PORT=3000
       - DATA_DIR=/app/data
+      - REDIS_URL=redis://redis:6379
     volumes:
       - sushe-data:/app/data
     restart: unless-stopped
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
 
 volumes:
   sushe-data:
+  redis-data:

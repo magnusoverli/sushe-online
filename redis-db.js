@@ -2,7 +2,8 @@ const { createClient } = require('redis');
 const crypto = require('crypto');
 
 async function initRedis() {
-  const client = createClient();
+  const redisUrl = process.env.REDIS_URL;
+  const client = redisUrl ? createClient({ url: redisUrl }) : createClient();
   await client.connect();
   return client;
 }
