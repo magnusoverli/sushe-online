@@ -39,11 +39,15 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
 - `PORT` – server port (defaults to `3000`).
+- `REDIS_URL` – Redis connection string (`redis://localhost:6379` by default).
 
 ## Running with Docker
 A `Dockerfile` and `docker-compose.yml` are included. You can build and start the app with:
 ```bash
 docker compose up --build
 ```
+
+The compose setup now includes a `redis` service which the app uses for
+persistent storage.
 
 The admin access code is displayed in the server logs and rotates every five minutes.
