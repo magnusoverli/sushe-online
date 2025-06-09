@@ -1,10 +1,10 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
-const FileStore = require('session-file-store')(session);
+const RedisStore = require('connect-redis').default;
+const { initRedis, createStores } = require('./redis-db');
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-const Datastore = require('@seald-io/nedb');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -42,24 +42,60 @@ if (!require('fs').existsSync(dataDir)) {
   require('fs').mkdirSync(dataDir, { recursive: true });
 }
 
-// Initialize NeDB databases
-const users = new Datastore({ 
-  filename: path.join(dataDir, 'users.db'), 
-  autoload: true 
-});
-const lists = new Datastore({
-  filename: path.join(dataDir, 'lists.db'),
-  autoload: true
-});
+// Initialize Redis stores (with migration from NeDB)
+const fs = require('fs');
+let redisClient;
+let users;
+let lists;
+let usersAsync;
+let listsAsync;
 
-// Promisified DB helpers for async/await
-const promisifyDatastore = require('./db-utils');
-const usersAsync = promisifyDatastore(users);
-const listsAsync = promisifyDatastore(lists);
+async function migrateNeDB(client) {
+  const migratedFlag = path.join(dataDir, '.redis_migrated');
+  if (fs.existsSync(migratedFlag)) return;
 
-// Create indexes for better performance
-lists.ensureIndex({ fieldName: 'userId' });
-lists.ensureIndex({ fieldName: 'name' });
+  const userDb = path.join(dataDir, 'users.db');
+  if (fs.existsSync(userDb)) {
+    const lines = fs.readFileSync(userDb, 'utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      const doc = JSON.parse(line);
+      await client.hSet('users', doc._id, JSON.stringify(doc));
+      await client.set(`email:${doc.email}`, doc._id);
+      await client.set(`username:${doc.username}`, doc._id);
+    }
+  }
+
+  const listDb = path.join(dataDir, 'lists.db');
+  if (fs.existsSync(listDb)) {
+    const lines = fs.readFileSync(listDb, 'utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      const doc = JSON.parse(line);
+      await client.hSet('lists', doc._id, JSON.stringify(doc));
+      if (doc.userId) await client.sAdd(`user_lists:${doc.userId}`, doc._id);
+    }
+  }
+
+  const sessionsDir = path.join(dataDir, 'sessions');
+  if (fs.existsSync(sessionsDir)) {
+    const files = fs.readdirSync(sessionsDir);
+    for (const f of files) {
+      const content = fs.readFileSync(path.join(sessionsDir, f), 'utf8');
+      await client.set(`sess:${f}`, content);
+    }
+  }
+
+  fs.writeFileSync(migratedFlag, 'migrated');
+}
+
+async function initStores() {
+  redisClient = await initRedis();
+  await migrateNeDB(redisClient);
+  ({ users, lists } = createStores(redisClient));
+  usersAsync = users;
+  listsAsync = lists;
+}
+
+// No indexes needed with Redis implementation
 
 // Admin code variables
 const adminCodeAttempts = new Map(); // Track failed attempts
@@ -189,36 +225,15 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 // Create Express app
 const app = express();
 
-// Basic Express middleware
-app.use(express.static('public'));
+// Basic Express middleware with caching for static assets
+app.use(express.static('public', { maxAge: '1d', etag: true }));
 app.use(compression());
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
 // Session middleware
 app.use(session({
-  store: new FileStore({
-    path: path.join(dataDir, 'sessions'),
-    ttl: 86400, // 1 day in seconds
-    retries: 0,
-    reapInterval: 600, // Clean up expired sessions every 10 minutes
-    reapAsync: true,
-    reapSyncFallback: true,
-    // Add these options for Windows compatibility
-    logFn: function(){}, // Disable verbose logging
-    fallbackSessionFn: function() {
-      // Provide a minimal session object to avoid errors
-      return {
-        cookie: {
-          originalMaxAge: null,
-          expires: null,
-          secure: false,
-          httpOnly: true,
-          path: '/'
-        }
-      };
-    }
-  }),
+  store: new RedisStore({ client: redisClient }),
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
@@ -595,14 +610,11 @@ app.get('/settings', ensureAuth, async (req, res) => {
                 console.error('Error calculating DB size:', e);
               }
 
-              // Count active sessions
+              // Count active sessions in Redis
               let activeSessions = 0;
               try {
-                const sessionPath = path.join(dataDir, 'sessions');
-                if (require('fs').existsSync(sessionPath)) {
-                  const sessionFiles = require('fs').readdirSync(sessionPath);
-                  activeSessions = sessionFiles.filter(f => f.endsWith('.json')).length;
-                }
+                const keys = await redisClient.keys('sess:*');
+                activeSessions = keys.length;
               } catch (e) {
                 console.error('Error counting sessions:', e);
               }
@@ -1528,9 +1540,14 @@ app.use((err, req, res, next) => {
   res.status(500).send('Something went wrong!');
 });
 
-// Start server
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-  console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
-});
+// Start server after initializing stores
+async function start() {
+  await initStores();
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
+    console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+  });
+}
+
+start();
