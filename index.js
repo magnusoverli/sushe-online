@@ -1552,6 +1552,9 @@ async function start() {
       if (message === undefined) {
         return res.locals.flash[type] || [];
       }
+      if (!req.session.flash) {
+        req.session.flash = {};
+      }
       if (!req.session.flash[type]) {
         req.session.flash[type] = [];
       }
