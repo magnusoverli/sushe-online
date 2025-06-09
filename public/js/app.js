@@ -1043,6 +1043,7 @@ function updateListNav() {
 
 // Initialize SortableJS for album sorting (used on all devices)
 function initializeSorting(container) {
+  console.debug('Initializing sorting for container', container);
   if (!window.Sortable) {
     console.error('SortableJS not loaded');
     return;
@@ -1101,6 +1102,7 @@ function initializeSorting(container) {
   let scrollAcceleration = 1;
   
   const startAutoScroll = (direction, speed) => {
+    console.debug('Auto-scroll started', { direction, speed });
     if (autoScrollInterval) {
       clearInterval(autoScrollInterval);
     }
@@ -1147,6 +1149,7 @@ function initializeSorting(container) {
       autoScrollInterval = null;
       currentScrollSpeed = 0;
       scrollAcceleration = 1;
+      console.debug('Auto-scroll stopped');
     }
   };
   
@@ -1167,6 +1170,7 @@ function initializeSorting(container) {
     scroll: false,
     
     onStart: function(evt) {
+      console.debug('Drag started', { index: evt.oldIndex });
       evt.item.dataset.originalIndex = evt.oldIndex;
       document.body.style.overflow = 'hidden';
       document.body.classList.add('sorting-active'); // Add this
@@ -1185,6 +1189,7 @@ function initializeSorting(container) {
     },
     
     onMove: function(evt) {
+      console.debug('Dragging', { index: evt.dragged ? evt.dragged.dataset.index : evt.oldIndex });
       if (!scrollableParent) return;
       
       // Get current touch/mouse position
@@ -1255,6 +1260,7 @@ function initializeSorting(container) {
     },
     
     onEnd: function(evt) {
+      console.debug('Drag ended');
       stopAutoScroll();
       document.body.style.overflow = '';
       document.body.classList.remove('sorting-active'); // Add this
@@ -1267,6 +1273,7 @@ function initializeSorting(container) {
     },
     
     onUpdate: async function(evt) {
+      console.debug('Drag update', { from: evt.oldIndex, to: evt.newIndex });
       const oldIndex = parseInt(evt.item.dataset.originalIndex);
       const newIndex = evt.newIndex;
       
@@ -1717,8 +1724,12 @@ function displayAlbums(albums) {
       // Add click handler to comment cell
       const commentCell = row.querySelector('.comment-cell');
       commentCell.onclick = () => makeCommentEditable(commentCell, index);
-      
-      
+
+      // Debug logging for drag start attempts on desktop
+      row.addEventListener('pointerdown', () => {
+        console.debug('Pointer down on album row', index);
+      });
+
       // Right-click handler for album rows
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();
