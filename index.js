@@ -231,58 +231,6 @@ app.use(compression());
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-// Session middleware
-app.use(session({
-  store: new RedisStore({ client: redisClient }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 // 24 hours
-  },
-  // Add this to handle session save errors gracefully
-  genid: function(req) {
-    return require('crypto').randomBytes(16).toString('hex');
-  }
-}));
-
-// Custom flash middleware
-app.use((req, res, next) => {
-  // Initialize flash in session if it doesn't exist
-  if (!req.session.flash) {
-    req.session.flash = {};
-  }
-  
-  // Make flash messages available to templates via res.locals
-  res.locals.flash = req.session.flash;
-  
-  // Clear flash messages after making them available
-  req.session.flash = {};
-  
-  // Add flash method to request object
-  req.flash = (type, message) => {
-    // If called with just type, return messages of that type (getter)
-    if (message === undefined) {
-      return res.locals.flash[type] || [];
-    }
-    
-    // Otherwise, add message (setter)
-    if (!req.session.flash[type]) {
-      req.session.flash[type] = [];
-    }
-    req.session.flash[type].push(message);
-  };
-  
-  next();
-});
-
-
-// Initialize Passport
-app.use(passport.initialize());
-app.use(passport.session());
-
 // ============ MIDDLEWARE FUNCTIONS ============
 
 // Middleware to protect routes
@@ -1543,6 +1491,44 @@ app.use((err, req, res, next) => {
 // Start server after initializing stores
 async function start() {
   await initStores();
+  // Session and authentication middleware must run after Redis is ready
+  app.use(session({
+    store: new RedisStore({ client: redisClient }),
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false,
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24 // 24 hours
+    },
+    genid: function(req) {
+      return require('crypto').randomBytes(16).toString('hex');
+    }
+  }));
+
+  // Custom flash middleware now that sessions are available
+  app.use((req, res, next) => {
+    if (!req.session.flash) {
+      req.session.flash = {};
+    }
+    res.locals.flash = req.session.flash;
+    req.session.flash = {};
+    req.flash = (type, message) => {
+      if (message === undefined) {
+        return res.locals.flash[type] || [];
+      }
+      if (!req.session.flash[type]) {
+        req.session.flash[type] = [];
+      }
+      req.session.flash[type].push(message);
+    };
+    next();
+  });
+
+  // Initialize Passport after sessions
+  app.use(passport.initialize());
+  app.use(passport.session());
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
