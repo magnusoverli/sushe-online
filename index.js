@@ -1297,6 +1297,45 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
   });
 });
 
+// Log a reorder action for a list
+app.post('/api/lists/:name/reorder', ensureAuthAPI, (req, res) => {
+  const { name } = req.params;
+  const { oldIndex, newIndex } = req.body;
+
+  if (typeof oldIndex !== 'number' || typeof newIndex !== 'number') {
+    return res.status(400).json({ error: 'Invalid indices' });
+  }
+
+  lists.findOne({ userId: req.user._id, name }, (err, listDoc) => {
+    if (err) {
+      console.error('Error logging reorder:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+    if (!listDoc) {
+      return res.status(404).json({ error: 'List not found' });
+    }
+
+    const history = Array.isArray(listDoc.reorderHistory)
+      ? listDoc.reorderHistory.slice()
+      : [];
+    history.push({ oldIndex, newIndex, timestamp: new Date() });
+    if (history.length > 20) history.shift();
+
+    lists.update(
+      { _id: listDoc._id },
+      { $set: { reorderHistory: history, updatedAt: new Date() } },
+      {},
+      (updateErr) => {
+        if (updateErr) {
+          console.error('Error updating reorder history:', updateErr);
+          return res.status(500).json({ error: 'Error logging reorder' });
+        }
+        res.json({ success: true });
+      }
+    );
+  });
+});
+
 // Delete a specific list
 app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
   const { name } = req.params;
