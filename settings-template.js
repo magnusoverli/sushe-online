@@ -4,7 +4,7 @@ const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
 const settingsTemplate = (req, options) => {
-  const { user, userStats, stats, adminData, flash } = options;
+  const { user, userStats, stats, adminData, flash = {} } = options;
   
   return `
 <!DOCTYPE html>

@@ -214,7 +214,7 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
 };
 
 // Registration form template - Updated with flash parameter
-const registerTemplate = (req, flash) => htmlTemplate(`
+const registerTemplate = (req, flash = {}) => htmlTemplate(`
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">Join SuShe Online</h1>
@@ -305,7 +305,7 @@ const registerTemplate = (req, flash) => htmlTemplate(`
 `, 'Join SuShe Online', null);
 
 // Login form template - Updated with flash parameter
-const loginTemplate = (req, flash) => htmlTemplate(`
+const loginTemplate = (req, flash = {}) => htmlTemplate(`
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOG IN</h1>
@@ -500,7 +500,7 @@ const loginTemplate = (req, flash) => htmlTemplate(`
 `, 'SuShe Online', req.user);
 
 // Forgot password template - Updated with flash parameter
-const forgotPasswordTemplate = (req, flash) => `
+const forgotPasswordTemplate = (req, flash = {}) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">Forgot password</h1>
