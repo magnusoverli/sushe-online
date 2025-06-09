@@ -58,10 +58,20 @@ async function migrateNeDB(client) {
   if (fs.existsSync(userDb)) {
     const lines = fs.readFileSync(userDb, 'utf8').split('\n').filter(Boolean);
     for (const line of lines) {
-      const doc = JSON.parse(line);
+      let doc;
+      try {
+        doc = JSON.parse(line);
+      } catch (err) {
+        console.error('Failed to parse user line during migration:', line, err);
+        continue;
+      }
+      if (!doc || !doc._id) {
+        console.warn('Skipping user entry without _id:', line);
+        continue;
+      }
       await client.hSet('users', doc._id, JSON.stringify(doc));
-      await client.set(`email:${doc.email}`, doc._id);
-      await client.set(`username:${doc.username}`, doc._id);
+      if (doc.email) await client.set(`email:${doc.email}`, doc._id);
+      if (doc.username) await client.set(`username:${doc.username}`, doc._id);
     }
   }
 
@@ -69,7 +79,17 @@ async function migrateNeDB(client) {
   if (fs.existsSync(listDb)) {
     const lines = fs.readFileSync(listDb, 'utf8').split('\n').filter(Boolean);
     for (const line of lines) {
-      const doc = JSON.parse(line);
+      let doc;
+      try {
+        doc = JSON.parse(line);
+      } catch (err) {
+        console.error('Failed to parse list line during migration:', line, err);
+        continue;
+      }
+      if (!doc || !doc._id) {
+        console.warn('Skipping list entry without _id:', line);
+        continue;
+      }
       await client.hSet('lists', doc._id, JSON.stringify(doc));
       if (doc.userId) await client.sAdd(`user_lists:${doc.userId}`, doc._id);
     }
