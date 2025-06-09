@@ -734,19 +734,6 @@ function getTimeAgo(date) {
   return 'over a year ago';
 }
 
-// One-time migration to add accentColor to existing users
-users.update(
-  { accentColor: { $exists: false } },
-  { $set: { accentColor: '#dc2626' } },
-  { multi: true },
-  (err, numUpdated) => {
-    if (err) {
-      console.error('Error migrating accent colors:', err);
-    } else if (numUpdated > 0) {
-      console.log(`Migrated ${numUpdated} users with default accent color`);
-    }
-  }
-);
 
 // Change password endpoint
 app.post('/settings/change-password', ensureAuth, async (req, res) => {
@@ -1491,6 +1478,19 @@ app.use((err, req, res, next) => {
 // Start server after initializing stores
 async function start() {
   await initStores();
+  // One-time migration to add accentColor to existing users
+  try {
+    const migrated = await users.update(
+      { accentColor: { $exists: false } },
+      { $set: { accentColor: '#dc2626' } },
+      { multi: true }
+    );
+    if (migrated > 0) {
+      console.log(`Migrated ${migrated} users with default accent color`);
+    }
+  } catch (err) {
+    console.error('Error migrating accent colors:', err);
+  }
   // Session and authentication middleware must run after Redis is ready
   app.use(session({
     store: new RedisStore({ client: redisClient }),
