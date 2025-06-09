@@ -1408,7 +1408,6 @@ const spotifyTemplate = (req) => `
   ${importConflictModalComponent()}
   ${confirmationModalComponent()}
   
-  <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>
   <script src="/js/app.js"></script>
 
