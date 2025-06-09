@@ -12,7 +12,7 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - **User accounts** with registration, login and session handling using Passport.js and express-session.
 - **Password reset** via email using Nodemailer.
 - **Spotify-like interface** for browsing and editing your lists. Drag and drop albums to reorder and import data from MusicBrainz, iTunes and Deezer.
-- **Persistent storage** using NeDB databases stored locally in the `data` directory.
+- **Persistent storage** backed by Redis. Existing NeDB data will be migrated automatically on first start.
 - **Admin mode** protected by a rotating access code printed to the server console. Admins can view site statistics, manage users and create backups.
 - **Custom theme** support allowing each user to pick an accent colour.
 - **REST API** endpoints for list management and a proxy for Deezer API requests.
@@ -35,7 +35,7 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 
 ## Environment variables
 - `SESSION_SECRET` – session encryption secret.
-- `DATA_DIR` – directory where NeDB stores databases (`./data` by default).
+- `DATA_DIR` – directory containing legacy NeDB files for migration (`./data` by default).
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
 - `PORT` – server port (defaults to `3000`).
