@@ -1154,10 +1154,13 @@ function initializeSorting(container) {
   };
   
   // Create sortable with enhanced settings
+  const isTouchDevice = window.matchMedia('(pointer: coarse)').matches ||
+                        navigator.maxTouchPoints > 0;
+
   const sortableOptions = {
     animation: 150,
     preventOnFilter: true,
-    forceFallback: true,
+    forceFallback: isTouchDevice,
     fallbackClass: 'sortable-drag',
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
