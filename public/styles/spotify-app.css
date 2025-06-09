@@ -368,6 +368,10 @@ input[list]::-webkit-list-button {
   background-color: #059669;
 }
 
+.toast.info {
+  background-color: #2563eb;
+}
+
 /* Line clamp for comments */
 .line-clamp-2 {
   display: -webkit-box;
