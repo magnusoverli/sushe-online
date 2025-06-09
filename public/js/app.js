@@ -587,15 +587,9 @@ async function loadLists() {
   }
 }
 
-// Pending save timers per list
-const saveTimers = {};
 
 // Internal helper to send data to the server
 async function flushListSave(name) {
-  if (saveTimers[name]) {
-    clearTimeout(saveTimers[name]);
-    delete saveTimers[name];
-  }
 
   const data = lists[name];
   try {
@@ -621,7 +615,7 @@ async function logReorder(name, oldIndex, newIndex) {
   }
 }
 
-// Save list to server (debounced)
+// Save list to server immediately
 async function saveList(name, data) {
   // Clean up any stored points/ranks before saving
   const cleanedData = data.map(album => {
@@ -632,12 +626,7 @@ async function saveList(name, data) {
   });
 
   lists[name] = cleanedData;
-
-  if (saveTimers[name]) {
-    clearTimeout(saveTimers[name]);
-  }
-
-  saveTimers[name] = setTimeout(() => flushListSave(name), 1000);
+  await flushListSave(name);
 }
 
 // Delete all lists from server
@@ -2336,26 +2325,3 @@ document.addEventListener('DOMContentLoaded', () => {
     .catch(err => {
       console.error('Failed to initialize:', err);
       showToast('Failed to initialize', 'error');
-    });
-});
-
-// Flush any pending saves before the user leaves the page
-window.addEventListener('beforeunload', () => {
-  Object.keys(saveTimers).forEach((name) => {
-    const data = lists[name];
-    if (saveTimers[name]) {
-      clearTimeout(saveTimers[name]);
-      delete saveTimers[name];
-    }
-
-    if (!data) return;
-
-    fetch(`/api/lists/${encodeURIComponent(name)}`, {
-      method: 'POST',
-      body: JSON.stringify({ data }),
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      keepalive: true
-    });
-  });
-});
