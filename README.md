@@ -50,4 +50,14 @@ docker compose up --build
 The compose setup now includes a `redis` service which the app uses for
 persistent storage.
 
+Redis may print a warning about `vm.overcommit_memory` when it starts. If you
+see this, enable memory overcommit on the host by running:
+
+```bash
+sudo sysctl -w vm.overcommit_memory=1
+```
+
+You can also persist the setting by adding `vm.overcommit_memory=1` to
+`/etc/sysctl.conf` or by using the `sysctls` option in `docker-compose.yml`.
+
 The admin access code is displayed in the server logs and rotates every five minutes.
