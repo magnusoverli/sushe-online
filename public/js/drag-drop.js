@@ -18,7 +18,9 @@ const DragDropManager = (function() {
     if (!container) return;
     
     container.addEventListener('dragover', handleContainerDragOver);
-    container.addEventListener('drop', handleContainerDrop);
+    // Drop handler is registered via setupDropHandler so that a save callback
+    // can be provided. Avoid adding it here to prevent duplicate listeners
+    // which would clear drag state before the save callback runs.
     container.addEventListener('dragleave', handleContainerDragLeave);
   }
 
