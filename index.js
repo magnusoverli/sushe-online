@@ -460,6 +460,7 @@ app.post('/login', (req, res, next) => {
           console.error('Session save error:', err);
           // Continue anyway - session might still work
         }
+        req.flash('success', 'Logged in successfully');
         return res.redirect('/');
       });
     });
@@ -468,12 +469,15 @@ app.post('/login', (req, res, next) => {
 
 // Logout
 app.get('/logout', (req, res) => {
-  req.logout(() => res.redirect('/login'));
+  req.logout(() => {
+    req.flash('info', 'You have been logged out');
+    res.redirect('/login');
+  });
 });
 
 // Home (protected) - Spotify-like interface
 app.get('/', ensureAuth, (req, res) => {
-  res.send(spotifyTemplate(req));
+  res.send(spotifyTemplate(req, res.locals.flash));
 });
 
 // Unified Settings Page

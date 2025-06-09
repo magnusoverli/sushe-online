@@ -1122,7 +1122,7 @@ const confirmationModalComponent = () => `
 `;
 
 // Main Spotify template - Consolidated version
-const spotifyTemplate = (req) => `
+const spotifyTemplate = (req, flash = {}) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1462,6 +1462,11 @@ const spotifyTemplate = (req) => `
     
     // Initialize the app
     document.addEventListener('DOMContentLoaded', () => {
+      const flash = ${JSON.stringify(flash)};
+      if (flash.error) flash.error.forEach(m => showToast(m, 'error'));
+      if (flash.success) flash.success.forEach(m => showToast(m, 'success'));
+      if (flash.info) flash.info.forEach(m => showToast(m, 'info'));
+
       // Update the list navigation to include mobile
       const originalUpdateListNav = window.updateListNav;
       window.updateListNav = function() {
