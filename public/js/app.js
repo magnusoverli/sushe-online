@@ -609,6 +609,18 @@ async function flushListSave(name) {
   }
 }
 
+// Log a reorder event to the server
+async function logReorder(name, oldIndex, newIndex) {
+  try {
+    await apiCall(`/api/lists/${encodeURIComponent(name)}/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ oldIndex, newIndex })
+    });
+  } catch (error) {
+    console.error('Error logging reorder:', error);
+  }
+}
+
 // Save list to server (debounced)
 async function saveList(name, data) {
   // Clean up any stored points/ranks before saving
@@ -1282,7 +1294,10 @@ function initializeMobileSorting(container) {
         const list = lists[currentList];
         const [movedItem] = list.splice(oldIndex, 1);
         list.splice(newIndex, 0, movedItem);
-        
+
+        // Log reorder immediately
+        logReorder(currentList, oldIndex, newIndex);
+
         await saveList(currentList, list);
         
         // Update position numbers
@@ -1754,12 +1769,15 @@ function displayAlbums(albums) {
           displayAlbums(lists[currentList]);
           return;
         }
-        
+
         if (draggedIndex !== null && dropIndex !== null) {
           const list = lists[currentList];
           const [movedItem] = list.splice(draggedIndex, 1);
           list.splice(dropIndex, 0, movedItem);
-          
+
+          // Log reorder action
+          logReorder(currentList, draggedIndex, dropIndex);
+
           await saveList(currentList, list);
         }
       });
