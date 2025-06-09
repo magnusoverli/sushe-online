@@ -468,8 +468,12 @@ app.post('/login', (req, res, next) => {
 });
 
 // Logout
-app.get('/logout', (req, res) => {
-  req.logout(() => {
+app.get('/logout', (req, res, next) => {
+  req.logout((err) => {
+    if (err) { return next(err); }
+    if (!req.session.flash) {
+      req.session.flash = {};
+    }
     req.flash('info', 'You have been logged out');
     res.redirect('/login');
   });
