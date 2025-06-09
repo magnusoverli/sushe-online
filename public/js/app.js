@@ -549,16 +549,6 @@ async function loadGenres() {
   }
 }
 
-// Toast notification
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('toast');
-  toast.textContent = message;
-  toast.className = 'toast ' + type;
-  setTimeout(() => toast.classList.add('show'), 10);
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 3000);
-}
 
 // API helper functions
 async function apiCall(url, options = {}) {
@@ -2322,6 +2312,3 @@ window.addEventListener('beforeunload', () => {
     localStorage.setItem('lastSelectedList', currentList);
   }
 });
-
-// Make showToast globally available
-window.showToast = showToast;

@@ -143,6 +143,29 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
     .accent-glow-top {
       background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%);
     }
+
+    /* Toast notifications */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background-color: #1f2937;
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 0.5rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      transform: translateY(100%);
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 50;
+    }
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    .toast.success {
+      background-color: #059669;
+    }
     
     /* Toast notifications with accent */
     .toast.error {
@@ -292,15 +315,23 @@ const registerTemplate = (req, flash = {}) => htmlTemplate(`
         Create Account
       </button>
     </form>
-    
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
-    
+
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
-        Already have an account? 
+        Already have an account?
         <a href="/login" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Return to login</a>
       </p>
     </div>
+    <div id="toast" class="toast"></div>
+    <script src="/js/toast.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const flash = ${JSON.stringify(flash)};
+        if (flash.error) flash.error.forEach(m => showToast(m, 'error'));
+        if (flash.success) flash.success.forEach(m => showToast(m, 'success'));
+        if (flash.info) flash.info.forEach(m => showToast(m, 'info'));
+      });
+    </script>
   </div>
 `, 'Join SuShe Online', null);
 
@@ -369,32 +400,6 @@ const loginTemplate = (req, flash = {}) => htmlTemplate(`
       </button>
     </form>
     
-    ${flash.error && flash.error.length ? `
-      <div class="mt-4 p-3 bg-red-900/20 border border-red-800 rounded">
-        <p class="text-red-400 text-sm flex items-center">
-          <i class="fas fa-exclamation-circle mr-2"></i>
-          ${flash.error[0]}
-        </p>
-      </div>
-    ` : ''}
-    
-    ${flash.success && flash.success.length ? `
-      <div class="mt-4 p-3 bg-green-900/20 border border-green-800 rounded">
-        <p class="text-green-400 text-sm flex items-center">
-          <i class="fas fa-check-circle mr-2"></i>
-          ${flash.success[0]}
-        </p>
-      </div>
-    ` : ''}
-    
-    ${flash.info && flash.info.length ? `
-      <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded">
-        <p class="text-blue-400 text-sm flex items-center">
-          <i class="fas fa-info-circle mr-2"></i>
-          ${flash.info[0]}
-        </p>
-      </div>
-    ` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -402,8 +407,18 @@ const loginTemplate = (req, flash = {}) => htmlTemplate(`
         <a href="/register" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">REGISTER</a>
       </p>
     </div>
+    <div id="toast" class="toast"></div>
+    <script src="/js/toast.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const flash = ${JSON.stringify(flash)};
+        if (flash.error) flash.error.forEach(m => showToast(m, 'error'));
+        if (flash.success) flash.success.forEach(m => showToast(m, 'success'));
+        if (flash.info) flash.info.forEach(m => showToast(m, 'info'));
+      });
+    </script>
   </div>
-  
+
   <script>
     // Client-side validation and UI enhancements
     document.addEventListener('DOMContentLoaded', function() {
@@ -528,14 +543,21 @@ const forgotPasswordTemplate = (req, flash = {}) => `
       </button>
     </form>
     
-    ${flash.info && flash.info.length ? `<p class="text-blue-400 text-sm mt-4 text-center">${flash.info[0]}</p>` : ''}
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
-    
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
         <a href="/login" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">Return to login</a>
       </p>
     </div>
+    <div id="toast" class="toast"></div>
+    <script src="/js/toast.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', () => {
+        const flash = ${JSON.stringify(flash)};
+        if (flash.error) flash.error.forEach(m => showToast(m, 'error'));
+        if (flash.success) flash.success.forEach(m => showToast(m, 'success'));
+        if (flash.info) flash.info.forEach(m => showToast(m, 'info'));
+      });
+    </script>
   </div>
 `;
 
@@ -1411,6 +1433,7 @@ const spotifyTemplate = (req) => `
   <script src="/js/drag-drop.js"></script>
   <script src="/js/musicbrainz.js"></script>
   <script src="/js/app.js"></script>
+  <script src="/js/toast.js"></script>
 
   <script>
     // Global state

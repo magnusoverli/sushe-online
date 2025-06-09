@@ -55,24 +55,7 @@ const settingsTemplate = (req, options) => {
     <div class="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
       <h1 class="text-3xl font-bold text-white mb-8">Settings</h1>
       
-      <!-- Flash Messages -->
-      ${flash.error && flash.error.length ? `
-        <div class="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg">
-          <p class="text-red-400 flex items-center">
-            <i class="fas fa-exclamation-circle mr-2"></i>
-            ${flash.error[0]}
-          </p>
-        </div>
-      ` : ''}
-      
-      ${flash.success && flash.success.length ? `
-        <div class="mb-6 p-4 bg-green-900/20 border border-green-800 rounded-lg">
-          <p class="text-green-400 flex items-center">
-            <i class="fas fa-check-circle mr-2"></i>
-            ${flash.success[0]}
-          </p>
-        </div>
-      ` : ''}
+
       
       <div class="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
         <!-- Personal Settings Section -->
@@ -551,18 +534,15 @@ const settingsTemplate = (req, options) => {
   
   <!-- Toast container -->
   <div id="toast" class="toast"></div>
-  
+
+  <script src="/js/toast.js"></script>
   <script>
-    // Toast function
-    function showToast(message, type = 'success') {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.className = 'toast ' + type;
-      setTimeout(() => toast.classList.add('show'), 10);
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 3000);
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+      const flash = ${JSON.stringify(flash)};
+      if (flash.error) flash.error.forEach(m => showToast(m, 'error'));
+      if (flash.success) flash.success.forEach(m => showToast(m, 'success'));
+      if (flash.info) flash.info.forEach(m => showToast(m, 'info'));
+    });
     
     // Edit email functionality
     function editEmail() {
