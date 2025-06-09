@@ -370,14 +370,15 @@ app.post('/register', async (req, res) => {
           const hash = await bcrypt.hash(password, 12);
           
           // Create the new user
-          users.insert({ 
-            email, 
-            username, 
-            hash,
-            accentColor: '#dc2626',
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }, (err, newUser) => {
+      users.insert({
+        email,
+        username,
+        hash,
+        accentColor: '#dc2626',
+        sidebarCollapsed: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }, (err, newUser) => {
             if (err) {
               console.error('Insert error during registration:', err);
               req.flash('error', 'Registration error. Please try again.');
@@ -419,6 +420,26 @@ app.post('/api/user/last-list', ensureAuthAPI, (req, res) => {
       req.user.lastSelectedList = listName;
       req.session.save();
       
+      res.json({ success: true });
+    }
+  );
+});
+
+app.post('/api/user/sidebar', ensureAuthAPI, (req, res) => {
+  const { collapsed } = req.body;
+
+  users.update(
+    { _id: req.user._id },
+    { $set: { sidebarCollapsed: !!collapsed, updatedAt: new Date() } },
+    {},
+    (err) => {
+      if (err) {
+        console.error('Error updating sidebar state:', err);
+        return res.status(500).json({ error: 'Error updating sidebar state' });
+      }
+
+      req.user.sidebarCollapsed = !!collapsed;
+      req.session.save();
       res.json({ success: true });
     }
   );

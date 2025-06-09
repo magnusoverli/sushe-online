@@ -587,26 +587,45 @@ async function loadLists() {
   }
 }
 
-// Save list to server
-async function saveList(name, data) {
+// Pending save timers per list
+const saveTimers = {};
+
+// Internal helper to send data to the server
+async function flushListSave(name) {
+  if (saveTimers[name]) {
+    clearTimeout(saveTimers[name]);
+    delete saveTimers[name];
+  }
+
+  const data = lists[name];
   try {
-    // Clean up any stored points/ranks before saving
-    const cleanedData = data.map(album => {
-      const cleaned = { ...album };
-      delete cleaned.points;
-      delete cleaned.rank;
-      return cleaned;
-    });
-    
     await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
       method: 'POST',
-      body: JSON.stringify({ data: cleanedData })
+      body: JSON.stringify({ data })
     });
-    lists[name] = cleanedData;
   } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
   }
+}
+
+// Save list to server (debounced)
+async function saveList(name, data) {
+  // Clean up any stored points/ranks before saving
+  const cleanedData = data.map(album => {
+    const cleaned = { ...album };
+    delete cleaned.points;
+    delete cleaned.rank;
+    return cleaned;
+  });
+
+  lists[name] = cleanedData;
+
+  if (saveTimers[name]) {
+    clearTimeout(saveTimers[name]);
+  }
+
+  saveTimers[name] = setTimeout(() => flushListSave(name), 1000);
 }
 
 // Delete all lists from server
@@ -1293,12 +1312,7 @@ async function selectList(listName) {
     console.log('Selecting list:', listName);
     currentList = listName;
     
-    // Save to localStorage immediately (synchronous)
-    if (listName) {
-      localStorage.setItem('lastSelectedList', listName);
-    }
-    
-    // Save the last selected list to the server (keep existing code)
+    // Persist last selected list to the server
     try {
       await apiCall('/api/user/last-list', {
         method: 'POST',
@@ -2217,8 +2231,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (!sidebar || !sidebarToggle || !mainContent) return;
     
-    // Check localStorage for saved state
-    const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    // Use server provided state
+    const isCollapsed = window.currentUser && window.currentUser.sidebarCollapsed;
     
     // Apply initial state
     if (isCollapsed) {
@@ -2233,11 +2247,19 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isCurrentlyCollapsed) {
         sidebar.classList.remove('collapsed');
         mainContent.classList.remove('sidebar-collapsed');
-        localStorage.setItem('sidebarCollapsed', 'false');
+        apiCall('/api/user/sidebar', {
+          method: 'POST',
+          body: JSON.stringify({ collapsed: false })
+        });
+        if (window.currentUser) window.currentUser.sidebarCollapsed = false;
       } else {
         sidebar.classList.add('collapsed');
         mainContent.classList.add('sidebar-collapsed');
-        localStorage.setItem('sidebarCollapsed', 'true');
+        apiCall('/api/user/sidebar', {
+          method: 'POST',
+          body: JSON.stringify({ collapsed: true })
+        });
+        if (window.currentUser) window.currentUser.sidebarCollapsed = true;
       }
     });
   }
@@ -2254,19 +2276,11 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeRenameList();
       initializeImportConflictHandling();
       
-      // Check localStorage first, then fall back to server value
-      const localLastList = localStorage.getItem('lastSelectedList');
       const serverLastList = window.lastSelectedList;
-      
-      // Prioritize local storage if it exists and is valid
-      if (localLastList && lists[localLastList]) {
-        console.log('Auto-loading last selected list from localStorage:', localLastList);
-        selectList(localLastList);
-      } else if (serverLastList && lists[serverLastList]) {
+
+      if (serverLastList && lists[serverLastList]) {
         console.log('Auto-loading last selected list from server:', serverLastList);
         selectList(serverLastList);
-        // Also update localStorage with server value
-        localStorage.setItem('lastSelectedList', serverLastList);
       }
       
       // Initialize confirmation modal handlers
@@ -2306,9 +2320,24 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast('Failed to initialize', 'error');
     });
 });
-// Add this right after the DOMContentLoaded event listener
+
+// Flush any pending saves before the user leaves the page
 window.addEventListener('beforeunload', () => {
-  if (currentList) {
-    localStorage.setItem('lastSelectedList', currentList);
-  }
+  Object.keys(saveTimers).forEach((name) => {
+    const data = lists[name];
+    if (saveTimers[name]) {
+      clearTimeout(saveTimers[name]);
+      delete saveTimers[name];
+    }
+
+    if (!data) return;
+
+    fetch(`/api/lists/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: JSON.stringify({ data }),
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      keepalive: true
+    });
+  });
 });
