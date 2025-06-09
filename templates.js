@@ -1443,6 +1443,7 @@ const spotifyTemplate = (req, flash = {}) => `
     // Global state
     window.currentUser = ${JSON.stringify(req.user)};
     window.lastSelectedList = ${JSON.stringify(req.user.lastSelectedList || null)};
+    window.sidebarCollapsed = ${req.user.sidebarCollapsed ? 'true' : 'false'};
 
     function updateViewportHeight() {
       const vh = window.innerHeight * 0.01;
