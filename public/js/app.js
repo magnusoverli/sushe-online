@@ -1041,8 +1041,8 @@ function updateListNav() {
   if (mobileNav) createListItems(mobileNav, true);
 }
 
-// Initialize SortableJS for mobile album sorting
-function initializeMobileSorting(container) {
+// Initialize SortableJS for album sorting (used on all devices)
+function initializeSorting(container) {
   if (!window.Sortable) {
     console.error('SortableJS not loaded');
     return;
@@ -1709,10 +1709,6 @@ function displayAlbums(albums) {
       const commentCell = row.querySelector('.comment-cell');
       commentCell.onclick = () => makeCommentEditable(commentCell, index);
       
-      // Make row draggable using DragDropManager
-      if (window.DragDropManager) {
-        window.DragDropManager.makeRowDraggable(row);
-      }
       
       // Right-click handler for album rows
       row.addEventListener('contextmenu', (e) => {
@@ -1745,25 +1741,8 @@ function displayAlbums(albums) {
     table.appendChild(rowsContainer);
     container.appendChild(table);
     
-    // Initialize drag and drop
-    if (window.DragDropManager) {
-      window.DragDropManager.initialize();
-      
-      window.DragDropManager.setupDropHandler(async (draggedIndex, dropIndex, needsRebuild) => {
-        if (needsRebuild) {
-          displayAlbums(lists[currentList]);
-          return;
-        }
-        
-        if (draggedIndex !== null && dropIndex !== null) {
-          const list = lists[currentList];
-          const [movedItem] = list.splice(draggedIndex, 1);
-          list.splice(dropIndex, 0, movedItem);
-          
-          await saveList(currentList, list);
-        }
-      });
-    }
+    // Use SortableJS for drag and drop on desktop as well
+    initializeSorting(rowsContainer);
   } else {
     // Mobile view - card-based layout with SortableJS
     console.log('Building mobile view for', albums.length, 'albums');
@@ -1865,7 +1844,7 @@ function displayAlbums(albums) {
     console.log('Mobile container appended with', albums.length, 'albums');
     
     // Initialize SortableJS for mobile
-    initializeMobileSorting(mobileContainer);
+    initializeSorting(mobileContainer);
   }
   
   console.log('displayAlbums completed');
