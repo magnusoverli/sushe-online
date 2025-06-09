@@ -298,6 +298,7 @@ function rateLimitAdminRequest(req, res, next) {
 }
 
 // ============ ROUTES ============
+function setupRoutes() {
 
 // Registration routes
 app.get('/register', (req, res) => {
@@ -1494,6 +1495,7 @@ app.use((err, req, res, next) => {
   
   res.status(500).send('Something went wrong!');
 });
+}
 
 // Start server after initializing stores
 async function start() {
@@ -1553,6 +1555,7 @@ async function start() {
   // Initialize Passport after sessions
   app.use(passport.initialize());
   app.use(passport.session());
+  setupRoutes();
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
     console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
