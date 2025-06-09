@@ -59,16 +59,27 @@ function createStores(client) {
     },
     async insert(doc, cb) {
       try {
-        if (!doc._id) doc._id = crypto.randomBytes(12).toString('hex');
-        await client.hSet(usersKey, doc._id, JSON.stringify(doc));
-        if (doc.email) await client.set(`email:${doc.email}`, doc._id);
-        if (doc.username) await client.set(`username:${doc.username}`, doc._id);
+        const handle = async d => {
+          if (!d._id) d._id = crypto.randomBytes(12).toString('hex');
+          await client.hSet(usersKey, d._id, JSON.stringify(d));
+          if (d.email) await client.set(`email:${d.email}`, d._id);
+          if (d.username) await client.set(`username:${d.username}`, d._id);
+        };
+
+        if (Array.isArray(doc)) {
+          for (const d of doc) await handle(d);
+          if (cb) cb(null, doc); else return doc;
+          return;
+        }
+
+        await handle(doc);
         if (cb) cb(null, doc); else return doc;
       } catch (err) {
         if (cb) cb(err); else throw err;
       }
     },
-    async update(query, update, cb) {
+    async update(query, update, options, cb) {
+      if (typeof options === 'function') { cb = options; options = {}; }
       try {
         const doc = await this.findOne(query);
         if (!doc) { if (cb) cb(null, 0); else return 0; return; }
@@ -84,7 +95,8 @@ function createStores(client) {
         if (cb) cb(err); else throw err;
       }
     },
-    async remove(query, cb) {
+    async remove(query, options, cb) {
+      if (typeof options === 'function') { cb = options; options = {}; }
       try {
         if (query._id) {
           const doc = await this.findOne({_id: query._id});
@@ -155,15 +167,26 @@ function createStores(client) {
     },
     async insert(doc, cb) {
       try {
-        if (!doc._id) doc._id = crypto.randomBytes(12).toString('hex');
-        await client.hSet(listsKey, doc._id, JSON.stringify(doc));
-        if (doc.userId) await client.sAdd(`user_lists:${doc.userId}`, doc._id);
+        const handle = async d => {
+          if (!d._id) d._id = crypto.randomBytes(12).toString('hex');
+          await client.hSet(listsKey, d._id, JSON.stringify(d));
+          if (d.userId) await client.sAdd(`user_lists:${d.userId}`, d._id);
+        };
+
+        if (Array.isArray(doc)) {
+          for (const d of doc) await handle(d);
+          if (cb) cb(null, doc); else return doc;
+          return;
+        }
+
+        await handle(doc);
         if (cb) cb(null, doc); else return doc;
       } catch (err) {
         if (cb) cb(err); else throw err;
       }
     },
-    async update(query, update, cb) {
+    async update(query, update, options, cb) {
+      if (typeof options === 'function') { cb = options; options = {}; }
       try {
         const doc = await this.findOne(query);
         if (!doc) { if (cb) cb(null, 0); else return 0; return; }
@@ -177,7 +200,8 @@ function createStores(client) {
         if (cb) cb(err); else throw err;
       }
     },
-    async remove(query, cb) {
+    async remove(query, options, cb) {
+      if (typeof options === 'function') { cb = options; options = {}; }
       try {
         if (query._id) {
           const doc = await this.findOne({_id: query._id});
