@@ -166,7 +166,11 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
     .toast.success {
       background-color: #059669;
     }
-    
+
+    .toast.info {
+      background-color: #2563eb;
+    }
+
     /* Toast notifications with accent */
     .toast.error {
       background-color: var(--accent-color);
