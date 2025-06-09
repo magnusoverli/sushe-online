@@ -1151,9 +1151,8 @@ function initializeSorting(container) {
   };
   
   // Create sortable with enhanced settings
-  const sortable = Sortable.create(sortableContainer, {
+  const sortableOptions = {
     animation: 150,
-    handle: '.drag-handle',
     preventOnFilter: true,
     forceFallback: true,
     fallbackClass: 'sortable-drag',
@@ -1163,7 +1162,7 @@ function initializeSorting(container) {
     delay: 0,
     delayOnTouchOnly: false,
     touchStartThreshold: 0,
-    
+
     // Disable built-in auto-scroll
     scroll: false,
     
@@ -1295,7 +1294,14 @@ function initializeSorting(container) {
         selectList(currentList);
       }
     }
-  });
+  };
+
+  // Only require a handle if one exists in the container
+  if (sortableContainer.querySelector('.drag-handle')) {
+    sortableOptions.handle = '.drag-handle';
+  }
+
+  const sortable = Sortable.create(sortableContainer, sortableOptions);
   
   // Store sortable instance
   container._sortable = sortable;
