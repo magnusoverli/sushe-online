@@ -324,7 +324,7 @@ const loginTemplate = (req, flash) => htmlTemplate(`
           placeholder="your@email.com" 
           required 
           autocomplete="email"
-          value="${req.session.attemptedEmail || ''}"
+          value="${(req.session && req.session.attemptedEmail) || ''}"
         />
         <p class="text-xs text-gray-500 mt-1 hidden" id="emailError">Please enter a valid email address</p>
       </div>
