@@ -569,7 +569,9 @@ async function apiCall(url, options = {}) {
         'Content-Type': 'application/json',
         ...options.headers
       },
-      credentials: 'same-origin'
+      credentials: 'same-origin',
+      // Allow requests to complete even if the page unloads
+      keepalive: options.keepalive || false
     });
     
     if (!response.ok) {
@@ -610,7 +612,9 @@ async function saveList(name, data) {
     
     await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
       method: 'POST',
-      body: JSON.stringify({ data: cleanedData })
+      body: JSON.stringify({ data: cleanedData }),
+      // Use keepalive so the request isn't aborted on refresh
+      keepalive: true
     });
     lists[name] = cleanedData;
   } catch (error) {
