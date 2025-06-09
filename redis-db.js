@@ -204,13 +204,23 @@ function createStores(client) {
       if (typeof options === 'function') { cb = options; options = {}; }
       try {
         if (query._id) {
-          const doc = await this.findOne({_id: query._id});
+          const doc = await this.findOne({ _id: query._id });
           if (!doc) { if (cb) cb(null, 0); else return 0; return; }
           await client.hDel(listsKey, doc._id);
           await client.sRem(`user_lists:${doc.userId}`, doc._id);
           if (cb) cb(null, 1); else return 1;
           return;
         }
+
+        if (query.userId && query.name) {
+          const doc = await this.findOne({ userId: query.userId, name: query.name });
+          if (!doc) { if (cb) cb(null, 0); else return 0; return; }
+          await client.hDel(listsKey, doc._id);
+          await client.sRem(`user_lists:${doc.userId}`, doc._id);
+          if (cb) cb(null, 1); else return 1;
+          return;
+        }
+
         if (query.userId && !query.name) {
           const ids = await client.sMembers(`user_lists:${query.userId}`);
           for (const id of ids) {
@@ -220,11 +230,13 @@ function createStores(client) {
           if (cb) cb(null, ids.length); else return ids.length;
           return;
         }
+
         if (Object.keys(query).length === 0) {
           await client.del(listsKey);
           if (cb) cb(null, 1); else return 1;
           return;
         }
+
         if (cb) cb(null, 0); else return 0;
       } catch (err) {
         if (cb) cb(err); else throw err;
