@@ -588,6 +588,32 @@ async function apiCall(url, options = {}) {
   }
 }
 
+// Fetch link preview metadata
+async function fetchLinkPreview(url) {
+  try {
+    return await apiCall(`/api/unfurl?url=${encodeURIComponent(url)}`);
+  } catch (err) {
+    console.error('Link preview error:', err);
+    return null;
+  }
+}
+
+function attachLinkPreview(container, comment) {
+  const urlMatch = comment && comment.match(/https?:\/\/\S+/);
+  if (!urlMatch) return;
+  const url = urlMatch[0];
+  const previewEl = document.createElement('div');
+  previewEl.className = 'mt-2 text-xs bg-gray-800 rounded';
+  previewEl.textContent = 'Loading preview...';
+  container.appendChild(previewEl);
+  fetchLinkPreview(url).then(data => {
+    if (!data) { previewEl.remove(); return; }
+    const img = data.image ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded flex-shrink-0" alt="">` : '';
+    const desc = data.description ? `<div class="text-gray-400 truncate">${data.description}</div>` : '';
+    previewEl.innerHTML = `<a href="${url}" target="_blank" class="flex gap-2 p-2 items-center">${img}<div class="min-w-0"><div class="font-semibold text-gray-100 truncate">${data.title || url}</div>${desc}</div></a>`;
+  }).catch(() => previewEl.remove());
+}
+
 // Load lists from server
 async function loadLists() {
   try {
@@ -1750,6 +1776,8 @@ function displayAlbums(albums) {
       // Add click handler to comment cell
       const commentCell = row.querySelector('.comment-cell');
       commentCell.onclick = () => makeCommentEditable(commentCell, index);
+
+      attachLinkPreview(commentCell, comment);
       
       // Make row draggable using DragDropManager
       if (window.DragDropManager) {
@@ -1900,8 +1928,10 @@ function displayAlbums(albums) {
           </div>
         </div>
       `;
-      
+
       cardWrapper.appendChild(card);
+      const contentDiv = card.querySelector('.flex-1.min-w-0');
+      if (contentDiv) attachLinkPreview(contentDiv, comment);
       mobileContainer.appendChild(cardWrapper);
     });
     
