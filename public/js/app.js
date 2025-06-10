@@ -1018,12 +1018,20 @@ function updateListNav() {
       } else {
         // Mobile: long press
         let pressTimer;
-        button.addEventListener('touchstart', (e) => {
-          pressTimer = setTimeout(() => {
-            showMobileListMenu(listName);
-          }, 500);
-        });
-        button.addEventListener('touchend', () => clearTimeout(pressTimer));
+        button.addEventListener(
+          'touchstart',
+          (e) => {
+            pressTimer = setTimeout(() => {
+              showMobileListMenu(listName);
+            }, 500);
+          },
+          { passive: true }
+        );
+        button.addEventListener(
+          'touchend',
+          () => clearTimeout(pressTimer),
+          { passive: true }
+        );
       }
       
       button.onclick = () => {
