@@ -1384,17 +1384,6 @@ app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
   });
 });
 
-// Delete all lists for current user
-app.delete('/api/lists', ensureAuthAPI, (req, res) => {
-  lists.remove({ userId: req.user._id }, { multi: true }, (err, numRemoved) => {
-    if (err) {
-      console.error('Error clearing lists:', err);
-      return res.status(500).json({ error: 'Error clearing lists' });
-    }
-    
-    res.json({ success: true, message: `Deleted ${numRemoved} lists` });
-  });
-});
 
 // ============ PASSWORD RESET ROUTES ============
 

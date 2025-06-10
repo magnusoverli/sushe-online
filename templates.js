@@ -603,9 +603,6 @@ const sidebarComponent = (req) => `
         <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
           <i class="fas fa-file-import mr-2"></i>Import List
         </button>
-        <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-          <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
-        </button>
         <input type="file" id="fileInput" accept=".json" style="display: none;">
       </div>
     </nav>
@@ -1329,9 +1326,6 @@ const spotifyTemplate = (req) => `
           <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2 flex items-center">
             <i class="fas fa-file-import mr-2"></i><span>Import List</span>
           </button>
-          <button id="clearBtn" class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2 flex items-center">
-            <i class="fas fa-trash-alt mr-2"></i><span>Delete All Lists</span>
-          </button>
           <input type="file" id="fileInput" accept=".json" style="display: none;">
         </div>
       </nav>
@@ -1388,12 +1382,7 @@ const spotifyTemplate = (req) => `
         </div>
         
         <!-- Footer Actions -->
-        <div class="p-4 border-t border-gray-800 safe-area-bottom">
-          <button onclick="document.getElementById('clearBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-red-700 text-gray-300 py-3 px-4 rounded text-sm transition duration-200">
-            <i class="fas fa-trash-alt mr-2"></i>Delete All Lists
-          </button>
-        </div>
+        <div class="p-4 border-t border-gray-800 safe-area-bottom"></div>
       </div>
     </div>
   </div>
