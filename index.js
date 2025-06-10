@@ -1729,6 +1729,71 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
   }
 });
 
+// Search Spotify for an album and return the ID
+app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
+  if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
+    return res.status(400).json({ error: 'Not authenticated with Spotify' });
+  }
+
+  const { artist, album } = req.query;
+  if (!artist || !album) {
+    return res.status(400).json({ error: 'artist and album are required' });
+  }
+
+  try {
+    const query = `album:${album} artist:${artist}`;
+    const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
+    const resp = await fetch(url, {
+      headers: { Authorization: `Bearer ${req.user.spotifyAuth.access_token}` }
+    });
+    if (!resp.ok) {
+      throw new Error(`Spotify API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    if (!data.albums || !data.albums.items.length) {
+      return res.status(404).json({ error: 'Album not found' });
+    }
+    res.json({ id: data.albums.items[0].id });
+  } catch (err) {
+    console.error('Spotify search error:', err);
+    res.status(500).json({ error: 'Failed to search Spotify' });
+  }
+});
+
+// Search Tidal for an album and return the ID
+app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
+  if (!req.user.tidalAuth || !req.user.tidalAuth.access_token) {
+    return res.status(400).json({ error: 'Not authenticated with Tidal' });
+  }
+
+  const { artist, album } = req.query;
+  if (!artist || !album) {
+    return res.status(400).json({ error: 'artist and album are required' });
+  }
+
+  try {
+    const query = `${artist} ${album}`;
+    const url = `https://api.tidal.com/v1/search/albums?query=${encodeURIComponent(query)}&limit=1`;
+    const resp = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+        'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
+      }
+    });
+    if (!resp.ok) {
+      throw new Error(`Tidal API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    if (!data.items || !data.items.length) {
+      return res.status(404).json({ error: 'Album not found' });
+    }
+    res.json({ id: data.items[0].id });
+  } catch (err) {
+    console.error('Tidal search error:', err);
+    res.status(500).json({ error: 'Failed to search Tidal' });
+  }
+});
+
 // Fetch metadata for link previews
 app.get('/api/unfurl', ensureAuthAPI, async (req, res) => {
   try {
