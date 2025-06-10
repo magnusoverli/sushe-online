@@ -766,8 +766,9 @@ function initializeAlbumContextMenu() {
   const contextMenu = document.getElementById('albumContextMenu');
   const removeOption = document.getElementById('removeAlbumOption');
   const editOption = document.getElementById('editAlbumOption');
+  const playOption = document.getElementById('playAlbumOption');
 
-  if (!contextMenu || !removeOption || !editOption) return;
+  if (!contextMenu || !removeOption || !editOption || !playOption) return;
 
   // Handle edit option click
   editOption.onclick = () => {
@@ -776,6 +777,13 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
 
     showMobileEditForm(currentContextAlbum);
+  };
+
+  // Handle play option click
+  playOption.onclick = () => {
+    contextMenu.classList.add('hidden');
+    if (currentContextAlbum === null) return;
+    playAlbum(currentContextAlbum);
   };
   
   // Handle remove option click
@@ -817,6 +825,59 @@ function initializeAlbumContextMenu() {
       }
     );
   };
+}
+
+// Play the selected album on the connected music service
+function playAlbum(index) {
+  const album = lists[currentList][index];
+  if (!album) return;
+
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+
+  const chooseService = () => {
+    return new Promise(resolve => {
+      if (hasSpotify && hasTidal) {
+        showConfirmation('Play Album', 'Which service would you like to use?', '', 'Spotify', () => resolve('spotify'));
+        const cancelBtn = document.getElementById('confirmationCancelBtn');
+        const originalCancel = cancelBtn.onclick;
+        cancelBtn.onclick = () => { hideConfirmation(); resolve('tidal'); cancelBtn.onclick = originalCancel; };
+      } else if (hasSpotify) {
+        resolve('spotify');
+      } else if (hasTidal) {
+        resolve('tidal');
+      } else {
+        showToast('No music service connected', 'error');
+        resolve(null);
+      }
+    });
+  };
+
+  chooseService().then(service => {
+    hideConfirmation();
+    if (!service) return;
+
+    const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
+    const endpoint = service === 'spotify' ? '/api/spotify/album' : '/api/tidal/album';
+
+    fetch(`${endpoint}?${query}`, { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.id) {
+          if (service === 'spotify') {
+            window.location.href = `https://open.spotify.com/album/${data.id}`;
+          } else {
+            window.location.href = `tidal://album/${data.id}`;
+          }
+        } else {
+          showToast('Album not found on ' + service, 'error');
+        }
+      })
+      .catch(err => {
+        console.error('Play album error:', err);
+        showToast('Failed to open album', 'error');
+      });
+  });
 }
 
 // Create list functionality
@@ -1963,12 +2024,17 @@ window.showMobileAlbumMenu = function(indexOrElement) {
         <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
         <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
         
-        <button onclick="showMobileEditForm(${index}); this.closest('.fixed').remove();" 
+        <button onclick="showMobileEditForm(${index}); this.closest('.fixed').remove();"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
           <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
         </button>
-        
-        <button onclick="this.closest('.fixed').remove(); setTimeout(() => { currentContextAlbum = ${index}; document.getElementById('removeAlbumOption').click(); }, 100);" 
+
+        <button onclick="this.closest('.fixed').remove(); playAlbum(${index});"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
+        </button>
+
+        <button onclick="this.closest('.fixed').remove(); setTimeout(() => { currentContextAlbum = ${index}; document.getElementById('removeAlbumOption').click(); }, 100);"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
           <i class="fas fa-trash mr-3"></i>Remove from List
         </button>
