@@ -39,6 +39,10 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
 - `PORT` – server port (defaults to `3000`).
+- `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` – credentials for Spotify OAuth.
+- `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
+- `TIDAL_CLIENT_ID` and `TIDAL_CLIENT_SECRET` – credentials for Tidal OAuth.
+- `TIDAL_REDIRECT_URI` – callback URL registered with Tidal.
 
 ## Running with Docker
 A `Dockerfile` and `docker-compose.yml` are included. You can build and start the app with:

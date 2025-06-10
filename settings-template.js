@@ -262,7 +262,35 @@ const settingsTemplate = (req, options) => {
             </button>
         </div>
         </div>
-        
+
+        <!-- Music Service Integration -->
+        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+          <h3 class="text-lg font-semibold text-white mb-4">
+            <i class="fas fa-music mr-2 text-gray-400"></i>
+            Music Services
+          </h3>
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-white">Spotify</span>
+              ${user.spotifyAuth ? `
+                <span class="text-green-500 text-sm mr-2">Connected</span>
+                <a href="/auth/spotify/disconnect" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">Disconnect</a>
+              ` : `
+                <a href="/auth/spotify" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
+              `}
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-white">Tidal</span>
+              ${user.tidalAuth ? `
+                <span class="text-green-500 text-sm mr-2">Connected</span>
+                <a href="/auth/tidal/disconnect" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">Disconnect</a>
+              ` : `
+                <a href="/auth/tidal" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
+              `}
+            </div>
+          </div>
+        </div>
+
         <!-- Statistics & Admin Section -->
         <div class="space-y-6">
           <!-- Your Statistics -->
