@@ -841,7 +841,14 @@ function playAlbum(index) {
         showConfirmation('Play Album', 'Which service would you like to use?', '', 'Spotify', () => resolve('spotify'));
         const cancelBtn = document.getElementById('confirmationCancelBtn');
         const originalCancel = cancelBtn.onclick;
-        cancelBtn.onclick = () => { hideConfirmation(); resolve('tidal'); cancelBtn.onclick = originalCancel; };
+        const originalText = cancelBtn.textContent;
+        cancelBtn.textContent = 'Tidal';
+        cancelBtn.onclick = () => {
+          hideConfirmation();
+          resolve('tidal');
+          cancelBtn.onclick = originalCancel;
+          cancelBtn.textContent = originalText;
+        };
       } else if (hasSpotify) {
         resolve('spotify');
       } else if (hasTidal) {
