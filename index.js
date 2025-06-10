@@ -35,6 +35,7 @@ const {
 
 // Import the new settings template
 const { settingsTemplate } = require('./settings-template');
+const { isTokenValid } = require('./auth-utils');
 
 // Create data directory if it doesn't exist
 const dataDir = process.env.DATA_DIR || './data';
@@ -530,6 +531,11 @@ app.get('/', ensureAuth, (req, res) => {
 // Unified Settings Page
 app.get('/settings', ensureAuth, async (req, res) => {
   try {
+    const spotifyValid = isTokenValid(req.user.spotifyAuth);
+    const tidalValid = isTokenValid(req.user.tidalAuth);
+
+    if (!spotifyValid) delete req.user.spotifyAuth;
+    if (!tidalValid) delete req.user.tidalAuth;
     // Get user's personal stats
     const userLists = await listsAsync.find({ userId: req.user._id });
     const userStats = {
@@ -737,7 +743,9 @@ app.get('/settings', ensureAuth, async (req, res) => {
       userStats,
       stats,
       adminData,
-      flash: res.locals.flash
+      flash: res.locals.flash,
+      spotifyValid,
+      tidalValid
     }));
     
   } catch (error) {
@@ -1129,6 +1137,9 @@ app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
       body: params.toString()
     });
     const token = await resp.json();
+    if (token && token.expires_in) {
+      token.expires_at = Date.now() + token.expires_in * 1000;
+    }
     users.update(
       { _id: req.user._id },
       { $set: { spotifyAuth: token, updatedAt: new Date() } },
@@ -1198,6 +1209,9 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
       body: params.toString()
     });
     const token = await resp.json();
+    if (token && token.expires_in) {
+      token.expires_at = Date.now() + token.expires_in * 1000;
+    }
     delete req.session.tidalCodeVerifier;
     users.update(
       { _id: req.user._id },
@@ -1731,7 +1745,8 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
 
 // Search Spotify for an album and return the ID
 app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
-  if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
+  if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token ||
+      (req.user.spotifyAuth.expires_at && req.user.spotifyAuth.expires_at <= Date.now())) {
     return res.status(400).json({ error: 'Not authenticated with Spotify' });
   }
 
@@ -1762,7 +1777,8 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
 
 // Search Tidal for an album and return the ID
 app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
-  if (!req.user.tidalAuth || !req.user.tidalAuth.access_token) {
+  if (!req.user.tidalAuth || !req.user.tidalAuth.access_token ||
+      (req.user.tidalAuth.expires_at && req.user.tidalAuth.expires_at <= Date.now())) {
     return res.status(400).json({ error: 'Not authenticated with Tidal' });
   }
 
