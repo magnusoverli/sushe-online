@@ -95,6 +95,21 @@ function generateCodeChallenge(verifier) {
     .replace(/=+$/, '');
 }
 
+function sanitizeUser(user) {
+  if (!user) return null;
+  const { _id, email, username, accentColor, lastSelectedList, role } = user;
+  return {
+    _id,
+    email,
+    username,
+    accentColor,
+    lastSelectedList,
+    role,
+    spotifyAuth: !!user.spotifyAuth,
+    tidalAuth: !!user.tidalAuth
+  };
+}
+
 // Admin code variables
 const adminCodeAttempts = new Map(); // Track failed attempts
 let adminCode = null;
@@ -525,7 +540,7 @@ app.get('/logout', (req, res) => {
 
 // Home (protected) - Spotify-like interface
 app.get('/', ensureAuth, (req, res) => {
-  res.send(spotifyTemplate(req));
+  res.send(spotifyTemplate(sanitizeUser(req.user)));
 });
 
 // Unified Settings Page
@@ -739,7 +754,7 @@ app.get('/settings', ensureAuth, async (req, res) => {
     }
 
     res.send(settingsTemplate(req, {
-      user: req.user,
+      user: sanitizeUser(req.user),
       userStats,
       stats,
       adminData,
