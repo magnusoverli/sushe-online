@@ -607,6 +607,8 @@ async function saveList(name, data) {
       delete cleaned.rank;
       return cleaned;
     });
+
+    console.debug('saveList', name, cleanedData);
     
     await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
       method: 'POST',
@@ -1744,18 +1746,20 @@ function displayAlbums(albums) {
     // Initialize drag and drop
     if (window.DragDropManager) {
       window.DragDropManager.initialize();
-      
+
       window.DragDropManager.setupDropHandler(async (draggedIndex, dropIndex, needsRebuild) => {
+        console.debug('Drop handler invoked', { draggedIndex, dropIndex, needsRebuild });
         if (needsRebuild) {
           displayAlbums(lists[currentList]);
           return;
         }
-        
+
         if (draggedIndex !== null && dropIndex !== null) {
+          console.debug('Reordering list', { list: currentList, from: draggedIndex, to: dropIndex });
           const list = lists[currentList];
           const [movedItem] = list.splice(draggedIndex, 1);
           list.splice(dropIndex, 0, movedItem);
-          
+
           await saveList(currentList, list);
         }
       });
