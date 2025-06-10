@@ -1,6 +1,7 @@
 // Global variables
 let currentList = null;
 let lists = {};
+let listEventSource = null;
 let availableGenres = [];
 let availableCountries = [];
 let pendingImportData = null;
@@ -619,6 +620,30 @@ async function saveList(name, data) {
     showToast('Error saving list', 'error');
     throw error;
   }
+}
+
+function subscribeToList(name) {
+  if (listEventSource) {
+    listEventSource.close();
+    listEventSource = null;
+  }
+  if (!name) return;
+
+  listEventSource = new EventSource(`/api/lists/subscribe/${encodeURIComponent(name)}`);
+  listEventSource.addEventListener('update', (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      lists[name] = data;
+      if (currentList === name) {
+        displayAlbums(data);
+      }
+    } catch (err) {
+      console.error('Failed to parse SSE update', err);
+    }
+  });
+  listEventSource.onerror = (err) => {
+    console.error('SSE error', err);
+  };
 }
 
 // Delete all lists from server
@@ -1312,6 +1337,7 @@ async function selectList(listName) {
   try {
     console.log('Selecting list:', listName);
     currentList = listName;
+    subscribeToList(listName);
     
     // Save to localStorage immediately (synchronous)
     if (listName) {
@@ -2338,6 +2364,9 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('beforeunload', () => {
   if (currentList) {
     localStorage.setItem('lastSelectedList', currentList);
+  }
+  if (listEventSource) {
+    listEventSource.close();
   }
 });
 

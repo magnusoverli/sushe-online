@@ -61,6 +61,20 @@ const listsAsync = promisifyDatastore(lists);
 lists.ensureIndex({ fieldName: 'userId' });
 lists.ensureIndex({ fieldName: 'name' });
 
+// Map of SSE subscribers keyed by `${userId}:${listName}`
+const listSubscribers = new Map();
+
+function broadcastListUpdate(userId, name, data) {
+  const key = `${userId}:${name}`;
+  const subs = listSubscribers.get(key);
+  if (subs) {
+    const payload = JSON.stringify(data);
+    for (const res of subs) {
+      res.write(`event: update\ndata: ${payload}\n\n`);
+    }
+  }
+}
+
 // Admin code variables
 const adminCodeAttempts = new Map(); // Track failed attempts
 let adminCode = null;
@@ -1251,6 +1265,28 @@ app.get('/api/lists', ensureAuthAPI, (req, res) => {
   });
 });
 
+// Server-sent events subscription for a specific list
+app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
+  const { name } = req.params;
+  const key = `${req.user._id}:${name}`;
+
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    Connection: 'keep-alive'
+  });
+  res.flushHeaders();
+  res.write('retry: 10000\n\n');
+
+  const subs = listSubscribers.get(key) || new Set();
+  subs.add(res);
+  listSubscribers.set(key, subs);
+
+  req.on('close', () => {
+    subs.delete(res);
+  });
+});
+
 // Create or update a list
 app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
   const { name } = req.params;
@@ -1279,6 +1315,7 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
             return res.status(500).json({ error: 'Error updating list' });
           }
           res.json({ success: true, message: 'List updated' });
+          broadcastListUpdate(req.user._id, name, data);
         }
       );
     } else {
@@ -1295,6 +1332,7 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
           return res.status(500).json({ error: 'Error creating list' });
         }
         res.json({ success: true, message: 'List created' });
+        broadcastListUpdate(req.user._id, name, data);
       });
     }
   });
