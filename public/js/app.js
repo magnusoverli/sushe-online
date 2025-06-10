@@ -868,7 +868,19 @@ function playAlbum(index) {
     const endpoint = service === 'spotify' ? '/api/spotify/album' : '/api/tidal/album';
 
     fetch(`${endpoint}?${query}`, { credentials: 'include' })
-      .then(r => r.json())
+      .then(async r => {
+        let data;
+        try {
+          data = await r.json();
+        } catch (_) {
+          throw new Error('Invalid response');
+        }
+
+        if (!r.ok) {
+          throw new Error(data.error || 'Request failed');
+        }
+        return data;
+      })
       .then(data => {
         if (data.id) {
           if (service === 'spotify') {
@@ -876,13 +888,15 @@ function playAlbum(index) {
           } else {
             window.location.href = `tidal://album/${data.id}`;
           }
+        } else if (data.error) {
+          showToast(data.error, 'error');
         } else {
           showToast('Album not found on ' + service, 'error');
         }
       })
       .catch(err => {
         console.error('Play album error:', err);
-        showToast('Failed to open album', 'error');
+        showToast(err.message || 'Failed to open album', 'error');
       });
   });
 }
