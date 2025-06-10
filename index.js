@@ -1558,6 +1558,38 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
   }
 });
 
+// Fetch metadata for link previews
+app.get('/api/unfurl', ensureAuthAPI, async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url) {
+      return res.status(400).json({ error: 'url query is required' });
+    }
+
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (SuSheBot)' }
+    });
+    const html = await response.text();
+
+    const getMeta = (name) => {
+      const metaTag = new RegExp(`<meta[^>]+property=[\"']og:${name}[\"'][^>]+content=[\"']([^\"']+)[\"']`, 'i').exec(html) ||
+        new RegExp(`<meta[^>]+name=[\"']${name}[\"'][^>]+content=[\"']([^\"']+)[\"']`, 'i').exec(html);
+      return metaTag ? metaTag[1] : '';
+    };
+
+    const titleTag = /<title[^>]*>([^<]*)<\/title>/i.exec(html);
+
+    res.json({
+      title: getMeta('title') || (titleTag ? titleTag[1] : ''),
+      description: getMeta('description'),
+      image: getMeta('image')
+    });
+  } catch (err) {
+    console.error('Unfurl error:', err);
+    res.status(500).json({ error: 'Failed to unfurl' });
+  }
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Application error:', err);
