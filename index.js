@@ -95,6 +95,42 @@ function generateCodeChallenge(verifier) {
     .replace(/=+$/, '');
 }
 
+// Refresh Tidal token using the refresh token
+async function refreshTidalToken(user) {
+  if (!user || !user.tidalAuth || !user.tidalAuth.refresh_token) {
+    return false;
+  }
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: user.tidalAuth.refresh_token,
+      client_id: process.env.TIDAL_CLIENT_ID || ''
+    });
+    const resp = await fetch('https://auth.tidal.com/v1/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    if (!resp.ok) {
+      console.error('Tidal refresh failed:', resp.status, await resp.text());
+      return false;
+    }
+    const token = await resp.json();
+    if (token.expires_in) {
+      token.expires_at = Date.now() + token.expires_in * 1000;
+    }
+    await usersAsync.update(
+      { _id: user._id },
+      { $set: { tidalAuth: token, updatedAt: new Date() } }
+    );
+    user.tidalAuth = token;
+    return true;
+  } catch (err) {
+    console.error('Tidal token refresh error:', err);
+    return false;
+  }
+}
+
 function sanitizeUser(user) {
   if (!user) return null;
   const { _id, email, username, accentColor, lastSelectedList, role } = user;
@@ -549,8 +585,7 @@ app.get('/settings', ensureAuth, async (req, res) => {
     const spotifyValid = isTokenValid(req.user.spotifyAuth);
     const tidalValid = isTokenValid(req.user.tidalAuth);
 
-    if (!spotifyValid) delete req.user.spotifyAuth;
-    if (!tidalValid) delete req.user.tidalAuth;
+    const sanitized = sanitizeUser(req.user);
     // Get user's personal stats
     const userLists = await listsAsync.find({ userId: req.user._id });
     const userStats = {
@@ -754,7 +789,7 @@ app.get('/settings', ensureAuth, async (req, res) => {
     }
 
     res.send(settingsTemplate(req, {
-      user: sanitizeUser(req.user),
+      user: sanitized,
       userStats,
       stats,
       adminData,
@@ -1139,6 +1174,7 @@ app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
     req.flash('error', 'Invalid Spotify state');
     return res.redirect('/settings');
   }
+  delete req.session.spotifyState;
   console.log('Spotify callback received. code:', req.query.code, 'state:', req.query.state);
   try {
     const params = new URLSearchParams({
@@ -1820,10 +1856,17 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
 
 // Search Tidal for an album and return the ID
 app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
-  if (!req.user.tidalAuth || !req.user.tidalAuth.access_token ||
-      (req.user.tidalAuth.expires_at && req.user.tidalAuth.expires_at <= Date.now())) {
-    console.warn('Tidal API request without valid token');
+  if (!req.user.tidalAuth || !req.user.tidalAuth.access_token) {
+    console.warn('Tidal API request without token');
     return res.status(400).json({ error: 'Not authenticated with Tidal' });
+  }
+
+  if (req.user.tidalAuth.expires_at && req.user.tidalAuth.expires_at <= Date.now()) {
+    const refreshed = await refreshTidalToken(req.user);
+    if (!refreshed) {
+      console.warn('Tidal token expired and refresh failed');
+      return res.status(400).json({ error: 'Not authenticated with Tidal' });
+    }
   }
 
   const { artist, album } = req.query;
