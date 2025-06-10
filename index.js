@@ -1122,6 +1122,7 @@ app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
 // ===== Music Service Authentication =====
 app.get('/auth/spotify', ensureAuth, (req, res) => {
   const state = crypto.randomBytes(8).toString('hex');
+  console.log('Starting Spotify OAuth flow, state:', state);
   req.session.spotifyState = state;
   const params = new URLSearchParams({
     client_id: process.env.SPOTIFY_CLIENT_ID || '',
@@ -1138,6 +1139,7 @@ app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
     req.flash('error', 'Invalid Spotify state');
     return res.redirect('/settings');
   }
+  console.log('Spotify callback received. code:', req.query.code, 'state:', req.query.state);
   try {
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -1151,7 +1153,16 @@ app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
     });
+    if (!resp.ok) {
+      console.error('Spotify token request failed:', resp.status, await resp.text());
+      throw new Error('Token request failed');
+    }
     const token = await resp.json();
+    console.log('Spotify token response:', {
+      access_token: token.access_token?.slice(0, 6) + '...',
+      expires_in: token.expires_in,
+      refresh: !!token.refresh_token
+    });
     if (token && token.expires_in) {
       token.expires_at = Date.now() + token.expires_in * 1000;
     }
@@ -1173,6 +1184,7 @@ app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
 });
 
 app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
+  console.log('Disconnecting Spotify for user:', req.user.email);
   users.update(
     { _id: req.user._id },
     { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } },
@@ -1188,6 +1200,7 @@ app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
 
 app.get('/auth/tidal', ensureAuth, (req, res) => {
   const state = crypto.randomBytes(8).toString('hex');
+  console.log('Starting Tidal OAuth flow, state:', state);
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
   req.session.tidalState = state;
@@ -1209,6 +1222,7 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
     req.flash('error', 'Invalid Tidal state');
     return res.redirect('/settings');
   }
+  console.log('Tidal callback received. code:', req.query.code, 'state:', req.query.state);
   delete req.session.tidalState;
   try {
     const params = new URLSearchParams({
@@ -1223,7 +1237,16 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
     });
+    if (!resp.ok) {
+      console.error('Tidal token request failed:', resp.status, await resp.text());
+      throw new Error('Token request failed');
+    }
     const token = await resp.json();
+    console.log('Tidal token response:', {
+      access_token: token.access_token?.slice(0, 6) + '...',
+      expires_in: token.expires_in,
+      refresh: !!token.refresh_token
+    });
     if (token && token.expires_in) {
       token.expires_at = Date.now() + token.expires_in * 1000;
     }
@@ -1247,6 +1270,7 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
 });
 
 app.get('/auth/tidal/disconnect', ensureAuth, (req, res) => {
+  console.log('Disconnecting Tidal for user:', req.user.email);
   users.update(
     { _id: req.user._id },
     { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
@@ -1762,6 +1786,7 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
 app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token ||
       (req.user.spotifyAuth.expires_at && req.user.spotifyAuth.expires_at <= Date.now())) {
+    console.warn('Spotify API request without valid token');
     return res.status(400).json({ error: 'Not authenticated with Spotify' });
   }
 
@@ -1769,6 +1794,7 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   if (!artist || !album) {
     return res.status(400).json({ error: 'artist and album are required' });
   }
+  console.log('Spotify album search:', artist, '-', album);
 
   try {
     const query = `album:${album} artist:${artist}`;
@@ -1783,7 +1809,9 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
     if (!data.albums || !data.albums.items.length) {
       return res.status(404).json({ error: 'Album not found' });
     }
-    res.json({ id: data.albums.items[0].id });
+    const albumId = data.albums.items[0].id;
+    console.log('Spotify search result id:', albumId);
+    res.json({ id: albumId });
   } catch (err) {
     console.error('Spotify search error:', err);
     res.status(500).json({ error: 'Failed to search Spotify' });
@@ -1794,6 +1822,7 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
 app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
   if (!req.user.tidalAuth || !req.user.tidalAuth.access_token ||
       (req.user.tidalAuth.expires_at && req.user.tidalAuth.expires_at <= Date.now())) {
+    console.warn('Tidal API request without valid token');
     return res.status(400).json({ error: 'Not authenticated with Tidal' });
   }
 
@@ -1801,6 +1830,7 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
   if (!artist || !album) {
     return res.status(400).json({ error: 'artist and album are required' });
   }
+  console.log('Tidal album search:', artist, '-', album);
 
   try {
     const query = `${artist} ${album}`;
@@ -1818,7 +1848,9 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     if (!data.items || !data.items.length) {
       return res.status(404).json({ error: 'Album not found' });
     }
-    res.json({ id: data.items[0].id });
+    const albumId = data.items[0].id;
+    console.log('Tidal search result id:', albumId);
+    res.json({ id: albumId });
   } catch (err) {
     console.error('Tidal search error:', err);
     res.status(500).json({ error: 'Failed to search Tidal' });
