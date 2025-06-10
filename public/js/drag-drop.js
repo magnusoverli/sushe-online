@@ -16,6 +16,8 @@ const DragDropManager = (function() {
   function initialize() {
     const container = document.getElementById('albumContainer');
     if (!container) return;
+
+    console.debug('DragDropManager: initialize');
     
     container.addEventListener('dragover', handleContainerDragOver);
     container.addEventListener('drop', handleContainerDrop);
@@ -78,6 +80,8 @@ const DragDropManager = (function() {
       e.preventDefault();
       return;
     }
+
+    console.debug('DragDropManager: drag start', this.dataset.index);
     
     draggedElement = this;
     draggedIndex = parseInt(this.dataset.index);
@@ -103,6 +107,8 @@ const DragDropManager = (function() {
   function handleContainerDragOver(e) {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+
+    console.debug('DragDropManager: container drag over');
     
     const rowsContainer = this.querySelector('.album-rows-container') || this;
     
@@ -182,10 +188,11 @@ const DragDropManager = (function() {
 
   function handleContainerDragLeave(e) {
     const rect = this.getBoundingClientRect();
-    if (e.clientX < rect.left || e.clientX > rect.right || 
+    if (e.clientX < rect.left || e.clientX > rect.right ||
         e.clientY < rect.top || e.clientY > rect.bottom) {
       this.classList.remove('drag-active');
       stopAutoScroll();
+      console.debug('DragDropManager: container drag leave');
     }
   }
 
@@ -206,6 +213,8 @@ const DragDropManager = (function() {
 
   function handleDragEnd(e) {
     stopAutoScroll();
+
+    console.debug('DragDropManager: drag end');
     
     if (draggedElement) {
       draggedElement.style.display = '';
@@ -229,6 +238,8 @@ const DragDropManager = (function() {
   async function handleContainerDrop(e, saveCallback) {
     e.preventDefault();
     e.stopPropagation();
+
+    console.debug('DragDropManager: container drop');
     
     stopAutoScroll();
     this.classList.remove('drag-active');
@@ -292,6 +303,7 @@ const DragDropManager = (function() {
         
         // Call the save callback if provided
         if (saveCallback) {
+          console.debug('DragDropManager: saving', { from: draggedIndex, to: dropIndex });
           await saveCallback(draggedIndex, dropIndex);
         }
         
@@ -305,6 +317,7 @@ const DragDropManager = (function() {
       }
     } else {
       // Position didn't change, just clean up
+      console.debug('DragDropManager: position unchanged');
       if (placeholder && placeholder.parentNode) {
         placeholder.parentNode.removeChild(placeholder);
         placeholder = null;
@@ -320,6 +333,7 @@ const DragDropManager = (function() {
     draggedIndex = null;
     lastValidDropIndex = null;
     scrollableContainer = null;
+    console.debug('DragDropManager: cleanup');
   }
 
   // Update positions without rebuilding
@@ -352,6 +366,7 @@ const DragDropManager = (function() {
     setupDropHandler: function(saveCallback) {
       const container = document.getElementById('albumContainer');
       if (container) {
+        console.debug('DragDropManager: setup drop handler');
         // Remove any existing drop handler
         container.removeEventListener('drop', container._dropHandler);
         
