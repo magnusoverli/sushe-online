@@ -1299,6 +1299,21 @@ app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
   });
 });
 
+// Get a single list
+app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
+  const { name } = req.params;
+  lists.findOne({ userId: req.user._id, name }, (err, list) => {
+    if (err) {
+      console.error('Error fetching list:', err);
+      return res.status(500).json({ error: 'Error fetching list' });
+    }
+    if (!list) {
+      return res.status(404).json({ error: 'List not found' });
+    }
+    res.json(list.data);
+  });
+});
+
 // Create or update a list
 app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
   const { name } = req.params;
