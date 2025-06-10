@@ -752,8 +752,18 @@ function updateMobileHeader() {
 function initializeAlbumContextMenu() {
   const contextMenu = document.getElementById('albumContextMenu');
   const removeOption = document.getElementById('removeAlbumOption');
-  
-  if (!contextMenu || !removeOption) return;
+  const editOption = document.getElementById('editAlbumOption');
+
+  if (!contextMenu || !removeOption || !editOption) return;
+
+  // Handle edit option click
+  editOption.onclick = () => {
+    contextMenu.classList.add('hidden');
+
+    if (currentContextAlbum === null) return;
+
+    showMobileEditForm(currentContextAlbum);
+  };
   
   // Handle remove option click
   removeOption.onclick = async () => {
@@ -1952,7 +1962,7 @@ window.showMobileEditForm = function(index) {
   
   // Create the edit modal
   const editModal = document.createElement('div');
-  editModal.className = 'fixed inset-0 z-50 lg:hidden bg-gray-900 flex flex-col overflow-hidden';
+  editModal.className = 'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden lg:max-w-2xl lg:mx-auto lg:my-8 lg:rounded-lg lg:shadow-2xl';
   editModal.innerHTML = `
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
