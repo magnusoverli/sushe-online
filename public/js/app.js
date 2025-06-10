@@ -1361,7 +1361,17 @@ async function selectList(listName) {
     console.log('Selecting list:', listName);
     currentList = listName;
     subscribeToList(listName);
-    
+
+    // Always fetch the latest data when a list is selected
+    if (listName) {
+      try {
+        const freshData = await apiCall(`/api/lists/${encodeURIComponent(listName)}`);
+        lists[listName] = freshData;
+      } catch (err) {
+        console.warn('Failed to fetch latest list data:', err);
+      }
+    }
+
     // Save to localStorage immediately (synchronous)
     if (listName) {
       localStorage.setItem('lastSelectedList', listName);
