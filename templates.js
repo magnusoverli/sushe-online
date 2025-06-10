@@ -503,7 +503,7 @@ const loginTemplate = (req, flash) => htmlTemplate(`
       });
     });
   </script>
-`, 'SuShe Online', req.user);
+`, 'SuShe Online', user);
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
@@ -1109,7 +1109,7 @@ const confirmationModalComponent = () => `
 `;
 
 // Main Spotify template - Consolidated version
-const spotifyTemplate = (req) => `
+const spotifyTemplate = (user) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1131,13 +1131,13 @@ const spotifyTemplate = (req) => `
   <style>
     /* CSS Custom Properties for theming */
     :root {
-      --accent-color: ${req.user?.accentColor || '#dc2626'};
-      --accent-hover: ${adjustColor(req.user?.accentColor || '#dc2626', -30)};
-      --accent-light: ${adjustColor(req.user?.accentColor || '#dc2626', 40)};
-      --accent-dark: ${adjustColor(req.user?.accentColor || '#dc2626', -50)};
-      --accent-shadow: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.4)};
-      --accent-glow: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.5)};
-      --accent-subtle: ${colorWithOpacity(req.user?.accentColor || '#dc2626', 0.1)};
+      --accent-color: ${user?.accentColor || '#dc2626'};
+      --accent-hover: ${adjustColor(user?.accentColor || '#dc2626', -30)};
+      --accent-light: ${adjustColor(user?.accentColor || '#dc2626', 40)};
+      --accent-dark: ${adjustColor(user?.accentColor || '#dc2626', -50)};
+      --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
+      --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
+      --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.1)};
     }
     
     /* Apply accent color throughout */
@@ -1284,14 +1284,14 @@ const spotifyTemplate = (req) => `
         
         <!-- Current list name (mobile only) -->
         <div class="mobile-only flex items-center gap-2 min-w-0 flex-1 mx-2">
-          <span id="headerListName" class="text-sm text-yellow-500 font-medium truncate ${req.user.lastSelectedList ? '' : 'hidden'}">
-            ${req.user.lastSelectedList || ''}
+          <span id="headerListName" class="text-sm text-yellow-500 font-medium truncate ${user.lastSelectedList ? '' : 'hidden'}">
+            ${user.lastSelectedList || ''}
           </span>
         </div>
         
         <!-- User menu -->
         <div class="flex items-center gap-2 lg:gap-6">
-          <span class="hidden lg:inline text-sm text-gray-400">${req.user?.email}</span>
+          <span class="hidden lg:inline text-sm text-gray-400">${user?.email}</span>
           <a href="/settings" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
             <i class="fas fa-cog text-lg"></i>
           </a>
@@ -1421,8 +1421,8 @@ const spotifyTemplate = (req) => `
 
   <script>
     // Global state
-    window.currentUser = ${JSON.stringify(req.user)};
-    window.lastSelectedList = ${JSON.stringify(req.user.lastSelectedList || null)};
+    window.currentUser = ${JSON.stringify(user)};
+    window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
 
     function updateViewportHeight() {
       const vh = window.innerHeight * 0.01;
