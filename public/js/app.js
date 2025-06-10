@@ -886,7 +886,7 @@ function playAlbum(index) {
           if (service === 'spotify') {
             window.location.href = `spotify:album:${data.id}`;
           } else {
-            window.location.href = `tidal://album/${data.id}`;
+            window.location.href = `https://tidal.com/browse/album/${data.id}`;
           }
         } else if (data.error) {
           showToast(data.error, 'error');

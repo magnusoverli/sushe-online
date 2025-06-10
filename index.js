@@ -1834,7 +1834,7 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
 
   try {
     const query = `${artist} ${album}`;
-    const url = `https://api.tidal.com/v1/search/albums?query=${encodeURIComponent(query)}&limit=1`;
+    const url = `https://api.tidal.com/v1/search/albums?query=${encodeURIComponent(query)}&limit=1&countryCode=US`;
     const resp = await fetch(url, {
       headers: {
         Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
