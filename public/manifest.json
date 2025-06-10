@@ -1,0 +1,15 @@
+{
+  "name": "SuShe Online",
+  "short_name": "SuShe",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "/og-image.png",
+      "sizes": "595x415",
+      "type": "image/png"
+    }
+  ]
+}

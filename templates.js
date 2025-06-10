@@ -73,6 +73,8 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
   <meta property="og:image" content="/og-image.png">
   <title>${title}</title>
   <link rel="icon" type="image/png" href="/og-image.png">
+  <link rel="apple-touch-icon" href="/og-image.png">
+  <link rel="manifest" href="/manifest.json">
   <link href="/styles/output.css" rel="stylesheet">
   <style>
     /* CSS Custom Properties for theming */
@@ -1117,6 +1119,8 @@ const spotifyTemplate = (req) => `
   <meta property="og:image" content="/og-image.png">
   <title>SuShe Online</title>
   <link rel="icon" type="image/png" href="/og-image.png">
+  <link rel="apple-touch-icon" href="/og-image.png">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
   <link href="/styles/output.css" rel="stylesheet">
