@@ -1843,7 +1843,7 @@ function displayAlbums(albums) {
               </div>
               
               <!-- Actions on the right -->
-              <button onclick="event.stopPropagation(); showMobileAlbumMenu(${index})" 
+              <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
                       class="flex-shrink-0 p-2 -m-2 text-gray-400 active:text-gray-200">
                 <i class="fas fa-ellipsis-v"></i>
               </button>
@@ -1881,7 +1881,13 @@ function displayAlbums(albums) {
 
 
 // Add this function to handle mobile album actions
-window.showMobileAlbumMenu = function(index) {
+window.showMobileAlbumMenu = function(indexOrElement) {
+  let index = indexOrElement;
+  if (typeof indexOrElement !== 'number') {
+    const card = indexOrElement.closest('.album-card');
+    if (!card) return;
+    index = parseInt(card.dataset.index);
+  }
   const album = lists[currentList][index];
   
   const actionSheet = document.createElement('div');
