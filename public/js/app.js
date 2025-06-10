@@ -884,7 +884,7 @@ function playAlbum(index) {
       .then(data => {
         if (data.id) {
           if (service === 'spotify') {
-            window.location.href = `https://open.spotify.com/album/${data.id}`;
+            window.location.href = `spotify:album:${data.id}`;
           } else {
             window.location.href = `tidal://album/${data.id}`;
           }
