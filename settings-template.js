@@ -13,6 +13,9 @@ const settingsTemplate = (req, options) => {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Settings - SuShe Online</title>
+  <link rel="icon" type="image/png" href="/og-image.png">
+  <link rel="apple-touch-icon" href="/og-image.png">
+  <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link href="/styles/output.css" rel="stylesheet">
   <style>
