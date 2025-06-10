@@ -44,6 +44,9 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - `TIDAL_CLIENT_ID` and `TIDAL_CLIENT_SECRET` – credentials for Tidal OAuth.
 - `TIDAL_REDIRECT_URI` – callback URL registered with Tidal.
 
+When running with Docker Compose, place these variables in a `.env` file or
+export them so they are available to the container.
+
 ## Running with Docker
 A `Dockerfile` and `docker-compose.yml` are included. You can build and start the app with:
 ```bash
