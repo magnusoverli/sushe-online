@@ -71,6 +71,9 @@ function broadcastListUpdate(userId, name, data) {
     const payload = JSON.stringify(data);
     for (const res of subs) {
       res.write(`event: update\ndata: ${payload}\n\n`);
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
     }
   }
 }
@@ -1273,16 +1276,25 @@ app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
   res.set({
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    Connection: 'keep-alive'
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
   });
   res.flushHeaders();
   res.write('retry: 10000\n\n');
+
+  const heartbeat = setInterval(() => {
+    res.write(':\n\n');
+    if (typeof res.flush === 'function') {
+      res.flush();
+    }
+  }, 25000);
 
   const subs = listSubscribers.get(key) || new Set();
   subs.add(res);
   listSubscribers.set(key, subs);
 
   req.on('close', () => {
+    clearInterval(heartbeat);
     subs.delete(res);
   });
 });

@@ -629,7 +629,7 @@ function subscribeToList(name) {
   }
   if (!name) return;
 
-  listEventSource = new EventSource(`/api/lists/subscribe/${encodeURIComponent(name)}`);
+  listEventSource = new EventSource(`/api/lists/subscribe/${encodeURIComponent(name)}`, { withCredentials: true });
   listEventSource.addEventListener('update', (e) => {
     try {
       const data = JSON.parse(e.data);
