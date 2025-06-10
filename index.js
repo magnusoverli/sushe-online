@@ -403,10 +403,12 @@ app.post('/register', async (req, res) => {
           const hash = await bcrypt.hash(password, 12);
           
           // Create the new user
-          users.insert({ 
-            email, 
-            username, 
+          users.insert({
+            email,
+            username,
             hash,
+            spotifyAuth: null,
+            tidalAuth: null,
             accentColor: '#dc2626',
             createdAt: new Date(),
             updatedAt: new Date()
@@ -805,6 +807,20 @@ users.update(
   }
 );
 
+// Ensure auth fields exist on existing users
+users.update(
+  { spotifyAuth: { $exists: false } },
+  { $set: { spotifyAuth: null } },
+  { multi: true },
+  () => {}
+);
+users.update(
+  { tidalAuth: { $exists: false } },
+  { $set: { tidalAuth: null } },
+  { multi: true },
+  () => {}
+);
+
 // Change password endpoint
 app.post('/settings/change-password', ensureAuth, async (req, res) => {
   try {
@@ -1062,6 +1078,133 @@ app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
       res.json({ success: true });
     });
   });
+});
+
+// ===== Music Service Authentication =====
+app.get('/auth/spotify', ensureAuth, (req, res) => {
+  const state = crypto.randomBytes(8).toString('hex');
+  req.session.spotifyState = state;
+  const params = new URLSearchParams({
+    client_id: process.env.SPOTIFY_CLIENT_ID || '',
+    response_type: 'code',
+    redirect_uri: process.env.SPOTIFY_REDIRECT_URI || '',
+    scope: 'user-read-email',
+    state
+  });
+  res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
+});
+
+app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
+  if (req.query.state !== req.session.spotifyState) {
+    req.flash('error', 'Invalid Spotify state');
+    return res.redirect('/settings');
+  }
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: req.query.code || '',
+      redirect_uri: process.env.SPOTIFY_REDIRECT_URI || '',
+      client_id: process.env.SPOTIFY_CLIENT_ID || '',
+      client_secret: process.env.SPOTIFY_CLIENT_SECRET || ''
+    });
+    const resp = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    const token = await resp.json();
+    users.update(
+      { _id: req.user._id },
+      { $set: { spotifyAuth: token, updatedAt: new Date() } },
+      {},
+      err => {
+        if (err) console.error('Spotify auth update error:', err);
+      }
+    );
+    req.user.spotifyAuth = token;
+    req.flash('success', 'Spotify connected');
+  } catch (e) {
+    console.error('Spotify auth error:', e);
+    req.flash('error', 'Failed to authenticate with Spotify');
+  }
+  res.redirect('/settings');
+});
+
+app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
+  users.update(
+    { _id: req.user._id },
+    { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } },
+    {},
+    err => {
+      if (err) console.error('Spotify disconnect error:', err);
+    }
+  );
+  delete req.user.spotifyAuth;
+  req.flash('success', 'Spotify disconnected');
+  res.redirect('/settings');
+});
+
+app.get('/auth/tidal', ensureAuth, (req, res) => {
+  const state = crypto.randomBytes(8).toString('hex');
+  req.session.tidalState = state;
+  const params = new URLSearchParams({
+    client_id: process.env.TIDAL_CLIENT_ID || '',
+    response_type: 'code',
+    redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
+    scope: 'r_usr',
+    state
+  });
+  res.redirect(`https://auth.tidal.com/authorize?${params.toString()}`);
+});
+
+app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
+  if (req.query.state !== req.session.tidalState) {
+    req.flash('error', 'Invalid Tidal state');
+    return res.redirect('/settings');
+  }
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code: req.query.code || '',
+      redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
+      client_id: process.env.TIDAL_CLIENT_ID || '',
+      client_secret: process.env.TIDAL_CLIENT_SECRET || ''
+    });
+    const resp = await fetch('https://auth.tidal.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    const token = await resp.json();
+    users.update(
+      { _id: req.user._id },
+      { $set: { tidalAuth: token, updatedAt: new Date() } },
+      {},
+      err => {
+        if (err) console.error('Tidal auth update error:', err);
+      }
+    );
+    req.user.tidalAuth = token;
+    req.flash('success', 'Tidal connected');
+  } catch (e) {
+    console.error('Tidal auth error:', e);
+    req.flash('error', 'Failed to authenticate with Tidal');
+  }
+  res.redirect('/settings');
+});
+
+app.get('/auth/tidal/disconnect', ensureAuth, (req, res) => {
+  users.update(
+    { _id: req.user._id },
+    { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
+    {},
+    err => {
+      if (err) console.error('Tidal disconnect error:', err);
+    }
+  );
+  delete req.user.tidalAuth;
+  req.flash('success', 'Tidal disconnected');
+  res.redirect('/settings');
 });
 
 // Admin: Make user admin
