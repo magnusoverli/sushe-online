@@ -22,7 +22,6 @@ const DragDropManager = (function() {
     });
     
     container.addEventListener('dragover', handleContainerDragOver);
-    container.addEventListener('drop', handleContainerDrop);
     container.addEventListener('dragleave', handleContainerDragLeave);
   }
 
@@ -419,14 +418,18 @@ const DragDropManager = (function() {
       const container = document.getElementById('albumContainer');
       if (container) {
         console.debug('DragDropManager: setup drop handler');
-        // Remove any existing drop handler
-        container.removeEventListener('drop', container._dropHandler);
-        
+
+        // Remove any existing drop handlers
+        if (container._dropHandler) {
+          container.removeEventListener('drop', container._dropHandler);
+        }
+        container.removeEventListener('drop', handleContainerDrop);
+
         // Create new handler with the callback
         container._dropHandler = function(e) {
           handleContainerDrop.call(this, e, saveCallback);
         };
-        
+
         // Add the new handler
         container.addEventListener('drop', container._dropHandler);
       }
