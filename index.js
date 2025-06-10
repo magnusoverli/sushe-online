@@ -78,6 +78,22 @@ function broadcastListUpdate(userId, name, data) {
   }
 }
 
+// ==== TIDAL PKCE Helpers ====
+function generateCodeVerifier() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function generateCodeChallenge(verifier) {
+  return crypto
+    .createHash('sha256')
+    .update(verifier)
+    .digest()
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
 // Admin code variables
 const adminCodeAttempts = new Map(); // Track failed attempts
 let adminCode = null;
@@ -1146,15 +1162,20 @@ app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
 
 app.get('/auth/tidal', ensureAuth, (req, res) => {
   const state = crypto.randomBytes(8).toString('hex');
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = generateCodeChallenge(codeVerifier);
   req.session.tidalState = state;
+  req.session.tidalCodeVerifier = codeVerifier;
   const params = new URLSearchParams({
     client_id: process.env.TIDAL_CLIENT_ID || '',
     response_type: 'code',
     redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
-    scope: 'r_usr',
+    scope: 'user.read',
+    code_challenge_method: 'S256',
+    code_challenge: codeChallenge,
     state
   });
-  res.redirect(`https://auth.tidal.com/authorize?${params.toString()}`);
+  res.redirect(`https://login.tidal.com/authorize?${params.toString()}`);
 });
 
 app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
@@ -1162,20 +1183,22 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
     req.flash('error', 'Invalid Tidal state');
     return res.redirect('/settings');
   }
+  delete req.session.tidalState;
   try {
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       code: req.query.code || '',
       redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
       client_id: process.env.TIDAL_CLIENT_ID || '',
-      client_secret: process.env.TIDAL_CLIENT_SECRET || ''
+      code_verifier: req.session.tidalCodeVerifier || ''
     });
-    const resp = await fetch('https://auth.tidal.com/token', {
+    const resp = await fetch('https://auth.tidal.com/v1/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
     });
     const token = await resp.json();
+    delete req.session.tidalCodeVerifier;
     users.update(
       { _id: req.user._id },
       { $set: { tidalAuth: token, updatedAt: new Date() } },
@@ -1189,6 +1212,7 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
   } catch (e) {
     console.error('Tidal auth error:', e);
     req.flash('error', 'Failed to authenticate with Tidal');
+    delete req.session.tidalCodeVerifier;
   }
   res.redirect('/settings');
 });
