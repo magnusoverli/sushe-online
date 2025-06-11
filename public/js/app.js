@@ -74,8 +74,8 @@ function hideConfirmation() {
   confirmationCallback = null;
 }
 
-// Show modal to choose a music service
-function showServicePicker(hasSpotify, hasTidal) {
+// Show modal to choose a music service (desktop)
+function showServicePickerDesktop(hasSpotify, hasTidal) {
   const modal = document.getElementById('serviceSelectModal');
   const spotifyBtn = document.getElementById('serviceSpotifyBtn');
   const tidalBtn = document.getElementById('serviceTidalBtn');
@@ -114,6 +114,45 @@ function showServicePicker(hasSpotify, hasTidal) {
 
     document.addEventListener('keydown', escHandler);
   });
+}
+
+// Show service picker as a bottom sheet on mobile
+function showServicePickerMobile(hasSpotify, hasTidal) {
+  return new Promise(resolve => {
+    const sheet = document.createElement('div');
+    sheet.className = 'fixed inset-0 z-50 lg:hidden';
+    sheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          ${hasSpotify ? '<button id="mobileServiceSpotify" class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded flex items-center justify-center"><i class="fab fa-spotify mr-3"></i>Spotify</button>' : ''}
+          ${hasTidal ? '<button id="mobileServiceTidal" class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded flex items-center justify-center"><i class="fas fa-wave-square mr-3"></i>Tidal</button>' : ''}
+          <button id="mobileServiceCancel" class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">Cancel</button>
+        </div>
+      </div>`;
+    document.body.appendChild(sheet);
+
+    const cleanup = () => {
+      sheet.remove();
+    };
+
+    const spotifyBtn = sheet.querySelector('#mobileServiceSpotify');
+    const tidalBtn = sheet.querySelector('#mobileServiceTidal');
+    const cancelBtn = sheet.querySelector('#mobileServiceCancel');
+
+    if (spotifyBtn) spotifyBtn.onclick = () => { cleanup(); resolve('spotify'); };
+    if (tidalBtn) tidalBtn.onclick = () => { cleanup(); resolve('tidal'); };
+    if (cancelBtn) cancelBtn.onclick = () => { cleanup(); resolve(null); };
+  });
+}
+
+// Show modal to choose a music service
+function showServicePicker(hasSpotify, hasTidal) {
+  if (window.innerWidth < 1024) {
+    return showServicePickerMobile(hasSpotify, hasTidal);
+  }
+  return showServicePickerDesktop(hasSpotify, hasTidal);
 }
 
 // Standardize date formats for release dates
