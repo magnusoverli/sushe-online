@@ -53,7 +53,9 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 
 The `/api/tidal/album` endpoint uses TIDAL's v2 `searchResults` API to look up
 an album ID. This works with the `search.read` scope and does not require the
-`r_usr` scope that older search endpoints need.
+`r_usr` scope that older search endpoints need. The user's profile is fetched
+after OAuth to store their `countryCode`, which is then used for all searches
+instead of the hard-coded `US` locale.
 
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
