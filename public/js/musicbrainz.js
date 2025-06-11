@@ -360,7 +360,15 @@ async function getCoverArtFromArchive(releaseGroupId) {
       
       if (data.images && data.images.length > 0) {
         const frontImage = data.images.find(img => img.front) || data.images[0];
-        const imageUrl = frontImage.thumbnails['250'] || frontImage.thumbnails.small || frontImage.image;
+        let imageUrl = frontImage.thumbnails['250'] || frontImage.thumbnails.small || frontImage.image;
+        // The Cover Art Archive may return image URLs using http. Since the
+        // application is served over HTTPS, using a plain http URL would trigger
+        // mixed content warnings in modern browsers. Convert any returned URL to
+        // HTTPS to avoid these warnings.
+        if (typeof imageUrl === 'string') {
+          imageUrl = imageUrl.replace(/^http:/, 'https:');
+        }
+
         sourceStats.coverart.successes++;
         return imageUrl;
       }
