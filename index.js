@@ -87,6 +87,13 @@ async function mbFetch(url) {
     }
   });
   if (!resp.ok) {
+    let body;
+    try {
+      body = await resp.text();
+    } catch {
+      body = '<no body>';
+    }
+    console.error('MusicBrainz API error', resp.status, url, body);
     throw new Error(`MusicBrainz error ${resp.status}`);
   }
   return resp.json();
