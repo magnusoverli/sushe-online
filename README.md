@@ -51,6 +51,10 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
   `recommendations.read`, `search.write`. Offline access is not granted, so
   tokens expire and must be reauthorized when they expire.
 
+The `/api/tidal/album` endpoint uses TIDAL's v2 `searchResults` API to look up
+an album ID. This works with the `search.read` scope and does not require the
+`r_usr` scope that older search endpoints need.
+
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
 
