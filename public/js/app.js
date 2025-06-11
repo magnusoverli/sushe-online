@@ -74,6 +74,48 @@ function hideConfirmation() {
   confirmationCallback = null;
 }
 
+// Show modal to choose a music service
+function showServicePicker(hasSpotify, hasTidal) {
+  const modal = document.getElementById('serviceSelectModal');
+  const spotifyBtn = document.getElementById('serviceSpotifyBtn');
+  const tidalBtn = document.getElementById('serviceTidalBtn');
+  const cancelBtn = document.getElementById('serviceCancelBtn');
+
+  if (!modal || !spotifyBtn || !tidalBtn || !cancelBtn) {
+    return Promise.resolve(null);
+  }
+
+  spotifyBtn.classList.toggle('hidden', !hasSpotify);
+  tidalBtn.classList.toggle('hidden', !hasTidal);
+
+  modal.classList.remove('hidden');
+
+  return new Promise(resolve => {
+    const cleanup = () => {
+      modal.classList.add('hidden');
+      spotifyBtn.onclick = null;
+      tidalBtn.onclick = null;
+      cancelBtn.onclick = null;
+      modal.onclick = null;
+      document.removeEventListener('keydown', escHandler);
+    };
+
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        resolve(null);
+      }
+    };
+
+    spotifyBtn.onclick = () => { cleanup(); resolve('spotify'); };
+    tidalBtn.onclick = () => { cleanup(); resolve('tidal'); };
+    cancelBtn.onclick = () => { cleanup(); resolve(null); };
+    modal.onclick = (e) => { if (e.target === modal) { cleanup(); resolve(null); } };
+
+    document.addEventListener('keydown', escHandler);
+  });
+}
+
 // Standardize date formats for release dates
 function formatReleaseDate(dateStr) {
   if (!dateStr) return '';
@@ -836,22 +878,16 @@ function playAlbum(index) {
   const hasTidal = window.currentUser?.tidalAuth;
 
   const chooseService = () => {
-    return new Promise(resolve => {
-      if (hasSpotify && hasTidal) {
-        if (confirm('Use Spotify? Click Cancel for Tidal.')) {
-          resolve('spotify');
-        } else {
-          resolve('tidal');
-        }
-      } else if (hasSpotify) {
-        resolve('spotify');
-      } else if (hasTidal) {
-        resolve('tidal');
-      } else {
-        showToast('No music service connected', 'error');
-        resolve(null);
-      }
-    });
+    if (hasSpotify && hasTidal) {
+      return showServicePicker(true, true);
+    } else if (hasSpotify) {
+      return Promise.resolve('spotify');
+    } else if (hasTidal) {
+      return Promise.resolve('tidal');
+    } else {
+      showToast('No music service connected', 'error');
+      return Promise.resolve(null);
+    }
   };
 
   chooseService().then(service => {
