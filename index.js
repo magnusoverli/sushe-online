@@ -139,6 +139,7 @@ async function fetchTracksForReleaseGroup(releaseGroupId) {
 }
 
 async function ensureAllAlbumsHaveTracks() {
+  console.log('Starting ensureAllAlbumsHaveTracks background check...');
   try {
     const allLists = await listsAsync.find({});
     for (const list of allLists) {
@@ -2094,7 +2095,9 @@ app.use((err, req, res, next) => {
 });
 
 // Kick off background check for missing album tracks
-ensureAllAlbumsHaveTracks();
+ensureAllAlbumsHaveTracks()
+  .then(() => console.log('Completed ensureAllAlbumsHaveTracks initial run'))
+  .catch(err => console.error('ensureAllAlbumsHaveTracks failed:', err));
 
 // Start server
 const PORT = process.env.PORT || 3000;
