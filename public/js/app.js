@@ -759,6 +759,17 @@ async function fetchMissingTracks(listName) {
   }
 }
 
+// Scan every list and fetch missing track data for albums
+async function scanAllListsForMissingTracks() {
+  for (const name of Object.keys(lists || {})) {
+    try {
+      await fetchMissingTracks(name);
+    } catch (err) {
+      console.error('Track scan failed for', name, err);
+    }
+  }
+}
+
 // Initialize context menu
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
@@ -2617,6 +2628,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Also update localStorage with server value
         localStorage.setItem('lastSelectedList', serverLastList);
       }
+
+      // Start a background scan for missing tracks across all lists
+      scanAllListsForMissingTracks()
+        .catch(err => console.error('Full track scan error', err));
       
       // Initialize confirmation modal handlers
       const confirmModal = document.getElementById('confirmationModal');
