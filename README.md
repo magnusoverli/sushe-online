@@ -56,6 +56,9 @@ an album ID. This works with the `search.read` scope and does not require the
 `r_usr` scope that older search endpoints need. The user's profile is fetched
 after OAuth to store their `countryCode`, which is then used for all searches
 instead of the hard-coded `US` locale.
+Note that apostrophes must be percent-encoded in the query string; the server
+manually replaces `'` with `%27` after `encodeURIComponent` so the Tidal API
+parses the request correctly.
 
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
