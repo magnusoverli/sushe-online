@@ -37,6 +37,10 @@ const {
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
 
+// MusicBrainz constants for server-side track fetching
+const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
+const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
+
 // Available music service integrations
 const musicServices = [
   { id: 'spotify', name: 'Spotify' },
@@ -99,6 +103,83 @@ function sanitizeUser(user) {
     spotifyAuth: !!user.spotifyAuth,
     tidalAuth: !!user.tidalAuth
   };
+}
+
+// ----------- Server-side track fetching utilities -----------
+let lastMBRequestTime = 0;
+const MIN_MB_INTERVAL = 1100; // 1.1s to respect rate limit
+
+async function mbFetchJson(url) {
+  const now = Date.now();
+  const since = now - lastMBRequestTime;
+  if (since < MIN_MB_INTERVAL) {
+    await new Promise(r => setTimeout(r, MIN_MB_INTERVAL - since));
+  }
+  lastMBRequestTime = Date.now();
+  const resp = await fetch(url, {
+    headers: {
+      'User-Agent': USER_AGENT,
+      'Accept': 'application/json'
+    }
+  });
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+async function getTracksForReleaseGroupServer(releaseGroupId) {
+  try {
+    const rgData = await mbFetchJson(`${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`);
+    const releases = (rgData.releases || []).slice();
+    if (!releases.length) return [];
+    releases.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
+    const releaseId = releases[0].id;
+    if (!releaseId) return [];
+    const relData = await mbFetchJson(`${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings&fmt=json`);
+    const tracks = [];
+    (relData.media || []).forEach(m => {
+      (m.tracks || []).forEach(t => {
+        tracks.push({
+          number: t.number || t.position,
+          title: t.title,
+          length: t.length || (t.recording && t.recording.length) || null
+        });
+      });
+    });
+    return tracks.sort((a, b) => parseInt(a.number) - parseInt(b.number));
+  } catch (err) {
+    console.error('Server track fetch error:', err);
+    return [];
+  }
+}
+
+async function ensureTracksForAllLists() {
+  try {
+    const allLists = await listsAsync.find({});
+    for (const list of allLists) {
+      const albums = Array.isArray(list.data) ? list.data : [];
+      let updated = false;
+      for (const album of albums) {
+        if (!album.tracks || album.tracks.length === 0) {
+          if (!album.album_id || album.album_id.startsWith('manual-')) continue;
+          const tracks = await getTracksForReleaseGroupServer(album.album_id);
+          if (Array.isArray(tracks) && tracks.length > 0) {
+            album.tracks = tracks;
+            if (album.play_track === undefined) album.play_track = null;
+            updated = true;
+          }
+        }
+      }
+      if (updated) {
+        await listsAsync.update({ _id: list._id }, { $set: { data: albums, updatedAt: new Date() } });
+      }
+    }
+  } catch (err) {
+    console.error('Failed to ensure tracks for lists:', err);
+  }
 }
 
 // Admin code variables
@@ -1993,4 +2074,10 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
   console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+
+  // After the server is up, run a background scan of all lists to
+  // ensure track information is present for every album
+  ensureTracksForAllLists().catch(err =>
+    console.error('Startup track scan failed:', err)
+  );
 });
