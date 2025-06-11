@@ -725,6 +725,40 @@ function subscribeToList(name) {
   };
 }
 
+// Fetch missing track lists for albums in a list
+async function fetchMissingTracks(listName) {
+  const albums = lists[listName];
+  if (!Array.isArray(albums)) return;
+
+  let updated = false;
+  for (const album of albums) {
+    if (!album.tracks || album.tracks.length === 0) {
+      if (!album.album_id || album.album_id.startsWith('manual-')) continue;
+      try {
+        const tracks = await getTracksForReleaseGroup(album.album_id);
+        if (Array.isArray(tracks) && tracks.length > 0) {
+          album.tracks = tracks;
+          if (album.play_track === undefined) album.play_track = null;
+          updated = true;
+        }
+      } catch (err) {
+        console.error('Failed to fetch tracks for', album.album_id, err);
+      }
+    }
+  }
+
+  if (updated) {
+    try {
+      await saveList(listName, albums);
+      if (currentList === listName) {
+        displayAlbums(albums);
+      }
+    } catch (err) {
+      console.error('Failed to save updated track data for', listName, err);
+    }
+  }
+}
+
 // Initialize context menu
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
@@ -1604,6 +1638,9 @@ async function selectList(listName) {
     
     // Display the albums
     displayAlbums(lists[listName]);
+
+    // Fetch track info for albums missing it
+    fetchMissingTracks(listName).catch(err => console.error('Track fetch error', err));
     
     // Show/hide FAB based on whether a list is selected (mobile only)
     const fab = document.getElementById('addAlbumFAB');
