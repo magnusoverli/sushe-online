@@ -737,6 +737,13 @@ const contextMenusComponent = () => `
     <button id="renameListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Rename List
     </button>
+    <div class="relative">
+      <button id="addPlaylistOption" class="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap flex items-center justify-between">
+        <span><i class="fas fa-list-ul mr-2 w-4 text-center"></i>Add as playlist...</span>
+        <i class="fas fa-caret-right ml-2"></i>
+      </button>
+      <div id="playlistSubmenu" class="hidden absolute left-full top-0 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50"></div>
+    </div>
     <button id="deleteListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
     </button>
@@ -1138,7 +1145,7 @@ const serviceSelectModalComponent = () => `
 `;
 
 // Main Spotify template - Consolidated version
-const spotifyTemplate = (user) => `
+const spotifyTemplate = (user, services = []) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1452,6 +1459,7 @@ const spotifyTemplate = (user) => `
   <script>
     // Global state
     window.currentUser = ${JSON.stringify(user)};
+    window.musicServices = ${JSON.stringify(services)};
     window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
 
     function updateViewportHeight() {
@@ -1545,23 +1553,25 @@ const spotifyTemplate = (user) => `
               <div class="p-4">
                 <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
                 <h3 class="font-semibold text-white mb-4">\${listName}</h3>
-                
-                <button onclick="downloadListAsJSON('\${listName}'); this.closest('.fixed').remove();" 
+
+                <button onclick="downloadListAsJSON('\${listName}'); this.closest('.fixed').remove();"
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
                   <i class="fas fa-download mr-3 text-gray-400"></i>Download List
                 </button>
-                
-                <button onclick="openRenameModal('\${listName}'); this.closest('.fixed').remove();" 
+
+                <button onclick="openRenameModal('\${listName}'); this.closest('.fixed').remove();"
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
                   <i class="fas fa-edit mr-3 text-gray-400"></i>Rename List
                 </button>
-                
-                <button onclick="if(confirm('Delete this list?')) { document.getElementById('deleteListOption').click(); currentContextList='\${listName}'; } this.closest('.fixed').remove();" 
+
+                <!-- playlist buttons will be inserted here -->
+
+                <button onclick="if(confirm('Delete this list?')) { document.getElementById('deleteListOption').click(); currentContextList='\${listName}'; } this.closest('.fixed').remove();"
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
                   <i class="fas fa-trash mr-3"></i>Delete List
                 </button>
-                
-                <button onclick="this.closest('.fixed').remove()" 
+
+                <button onclick="this.closest('.fixed').remove()"
                         class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
                   Cancel
                 </button>
@@ -1569,6 +1579,20 @@ const spotifyTemplate = (user) => `
             </div>
           \`;
           document.body.appendChild(actionSheet);
+
+          const container = actionSheet.querySelector('.p-4');
+          const deleteBtn = container.querySelector('button.text-red-500');
+
+          (window.musicServices || []).forEach(s => {
+            const btn = document.createElement('button');
+            btn.className = 'w-full text-left py-3 px-4 hover:bg-gray-800 rounded';
+            btn.innerHTML = `<i class="fas fa-list-ul mr-3 text-gray-400"></i>Add as playlist in ${s.name}`;
+            btn.onclick = () => {
+              addListAsPlaylist(listName, s.id);
+              actionSheet.remove();
+            };
+            container.insertBefore(btn, deleteBtn);
+          });
         } else {
           // Desktop context menu
           currentContextList = listName;

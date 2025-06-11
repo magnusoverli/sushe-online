@@ -37,6 +37,12 @@ const {
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
 
+// Available music service integrations
+const musicServices = [
+  { id: 'spotify', name: 'Spotify' },
+  { id: 'tidal', name: 'Tidal' }
+];
+
 // Create data directory if it doesn't exist
 const dataDir = process.env.DATA_DIR || './data';
 if (!require('fs').existsSync(dataDir)) {
@@ -526,7 +532,7 @@ app.get('/logout', (req, res) => {
 
 // Home (protected) - Spotify-like interface
 app.get('/', ensureAuth, (req, res) => {
-  res.send(spotifyTemplate(sanitizeUser(req.user)));
+  res.send(spotifyTemplate(sanitizeUser(req.user), musicServices));
 });
 
 // Unified Settings Page

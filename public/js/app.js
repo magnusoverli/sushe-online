@@ -28,6 +28,11 @@ document.addEventListener('click', () => {
   if (contextMenu) {
     contextMenu.classList.add('hidden');
   }
+
+  const playlistSubmenu = document.getElementById('playlistSubmenu');
+  if (playlistSubmenu) {
+    playlistSubmenu.classList.add('hidden');
+  }
   
   const albumContextMenu = document.getElementById('albumContextMenu');
   if (albumContextMenu) {
@@ -303,6 +308,12 @@ async function downloadListAsJSON(listName) {
     console.error('Error downloading/sharing list:', error);
     showToast('Error downloading list', 'error');
   }
+}
+
+// Placeholder for creating playlists on music services
+function addListAsPlaylist(listName, service) {
+  console.log('Add list as playlist', listName, service);
+  showToast('Playlist creation not implemented', 'error');
 }
 
 // Initialize import conflict handling
@@ -719,8 +730,10 @@ function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
   const downloadOption = document.getElementById('downloadListOption');
   const renameOption = document.getElementById('renameListOption');
+  const playlistOption = document.getElementById('addPlaylistOption');
+  const playlistSubmenu = document.getElementById('playlistSubmenu');
   const deleteOption = document.getElementById('deleteListOption');
-  
+
   if (!contextMenu || !deleteOption || !renameOption || !downloadOption) return;
   
   // Handle download option click
@@ -737,11 +750,45 @@ function initializeContextMenu() {
   // Handle rename option click
   renameOption.onclick = () => {
     contextMenu.classList.add('hidden');
-    
+
     if (!currentContextList) return;
-    
+
     openRenameModal(currentContextList);
   };
+
+  // Setup playlist submenu
+  if (playlistOption && playlistSubmenu) {
+    playlistSubmenu.innerHTML = '';
+    (window.musicServices || []).forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap';
+      btn.textContent = `...in ${s.name}`;
+      btn.dataset.service = s.id;
+      playlistSubmenu.appendChild(btn);
+    });
+
+    playlistOption.onmouseenter = () => playlistSubmenu.classList.remove('hidden');
+    playlistOption.onmouseleave = (e) => {
+      if (!playlistOption.contains(e.relatedTarget) && !playlistSubmenu.contains(e.relatedTarget)) {
+        playlistSubmenu.classList.add('hidden');
+      }
+    };
+    playlistSubmenu.onmouseleave = (e) => {
+      if (!playlistOption.contains(e.relatedTarget)) {
+        playlistSubmenu.classList.add('hidden');
+      }
+    };
+    playlistSubmenu.onclick = (e) => {
+      const target = e.target.closest('button');
+      if (!target) return;
+      const service = target.dataset.service;
+      playlistSubmenu.classList.add('hidden');
+      contextMenu.classList.add('hidden');
+      if (!currentContextList) return;
+      addListAsPlaylist(currentContextList, service);
+      currentContextList = null;
+    };
+  }
   
   // Handle delete option click
   deleteOption.onclick = async () => {
