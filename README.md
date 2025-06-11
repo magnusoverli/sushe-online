@@ -43,6 +43,8 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
 - `TIDAL_CLIENT_ID` – client ID for Tidal OAuth.
 - `TIDAL_REDIRECT_URI` – callback URL registered with Tidal.
+  The client ID is also sent as the `X-Tidal-Token` header on API
+  requests.
 - The TIDAL integration is authorized for the following scopes:
   `user.read`, `collection.read`, `search.read`, `playlists.write`,
   `playlists.read`, `entitlements.read`, `collection.write`, `playback`,
