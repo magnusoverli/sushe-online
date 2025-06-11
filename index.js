@@ -1892,6 +1892,21 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
   }
 });
 
+// Proxy endpoint for fetching MusicBrainz track lists
+app.get('/api/musicbrainz/tracks/:id', ensureAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const tracks = await getTracksForReleaseGroupServer(id);
+    if (!tracks || tracks.length === 0) {
+      return res.status(404).json({ error: 'Tracks not found' });
+    }
+    res.json({ tracks });
+  } catch (error) {
+    console.error('MusicBrainz proxy error:', error);
+    res.status(500).json({ error: 'Failed to fetch from MusicBrainz' });
+  }
+});
+
 // Search Spotify for an album and return the ID
 app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token ||
