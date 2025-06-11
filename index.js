@@ -90,7 +90,8 @@ function sanitizeUser(user) {
     accentColor,
     lastSelectedList,
     role,
-    spotifyAuth: !!user.spotifyAuth
+    spotifyAuth: !!user.spotifyAuth,
+    tidalAuth: !!user.tidalAuth
   };
 }
 
@@ -424,6 +425,7 @@ app.post('/register', async (req, res) => {
             username,
             hash,
             spotifyAuth: null,
+            tidalAuth: null,
             accentColor: '#dc2626',
             createdAt: new Date(),
             updatedAt: new Date()
@@ -530,6 +532,7 @@ app.get('/', ensureAuth, (req, res) => {
 app.get('/settings', ensureAuth, async (req, res) => {
   try {
     const spotifyValid = isTokenValid(req.user.spotifyAuth);
+    const tidalValid = isTokenValid(req.user.tidalAuth);
 
     const sanitized = sanitizeUser(req.user);
     // Get user's personal stats
@@ -740,7 +743,8 @@ app.get('/settings', ensureAuth, async (req, res) => {
       stats,
       adminData,
       flash: res.locals.flash,
-      spotifyValid
+      spotifyValid,
+      tidalValid
     }));
     
   } catch (error) {
@@ -830,6 +834,13 @@ users.update(
 users.update(
   { spotifyAuth: { $exists: false } },
   { $set: { spotifyAuth: null } },
+  { multi: true },
+  () => {}
+);
+
+users.update(
+  { tidalAuth: { $exists: false } },
+  { $set: { tidalAuth: null } },
   { multi: true },
   () => {}
 );
@@ -1171,6 +1182,87 @@ app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
   );
   delete req.user.spotifyAuth;
   req.flash('success', 'Spotify disconnected');
+  res.redirect('/settings');
+});
+
+// Tidal OAuth flow
+app.get('/auth/tidal', ensureAuth, (req, res) => {
+  const state = crypto.randomBytes(8).toString('hex');
+  const verifier = crypto.randomBytes(32).toString('base64url');
+  const challenge = crypto
+    .createHash('sha256')
+    .update(verifier)
+    .digest('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+  req.session.tidalState = state;
+  req.session.tidalVerifier = verifier;
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id: process.env.TIDAL_CLIENT_ID || '',
+    redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
+    scope: 'offline_access search.read',
+    code_challenge_method: 'S256',
+    code_challenge: challenge,
+    state
+  });
+  res.redirect(`https://login.tidal.com/authorize?${params.toString()}`);
+});
+
+app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
+  if (req.query.state !== req.session.tidalState) {
+    req.flash('error', 'Invalid Tidal state');
+    return res.redirect('/settings');
+  }
+  const verifier = req.session.tidalVerifier;
+  delete req.session.tidalState;
+  delete req.session.tidalVerifier;
+  try {
+    const params = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: process.env.TIDAL_CLIENT_ID || '',
+      code: req.query.code || '',
+      redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
+      code_verifier: verifier
+    });
+    const resp = await fetch('https://auth.tidal.com/v1/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    if (!resp.ok) {
+      console.error('Tidal token request failed:', resp.status, await resp.text());
+      throw new Error('Token request failed');
+    }
+    const token = await resp.json();
+    if (token && token.expires_in) {
+      token.expires_at = Date.now() + token.expires_in * 1000;
+    }
+    users.update(
+      { _id: req.user._id },
+      { $set: { tidalAuth: token, updatedAt: new Date() } },
+      {},
+      err => { if (err) console.error('Tidal auth update error:', err); }
+    );
+    req.user.tidalAuth = token;
+    req.flash('success', 'Tidal connected');
+  } catch (e) {
+    console.error('Tidal auth error:', e);
+    req.flash('error', 'Failed to authenticate with Tidal');
+  }
+  res.redirect('/settings');
+});
+
+app.get('/auth/tidal/disconnect', ensureAuth, (req, res) => {
+  users.update(
+    { _id: req.user._id },
+    { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
+    {},
+    err => { if (err) console.error('Tidal disconnect error:', err); }
+  );
+  delete req.user.tidalAuth;
+  req.flash('success', 'Tidal disconnected');
   res.redirect('/settings');
 });
 
@@ -1706,6 +1798,46 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   } catch (err) {
     console.error('Spotify search error:', err);
     res.status(500).json({ error: 'Failed to search Spotify' });
+  }
+});
+
+// Search Tidal for an album and return the ID
+app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
+  if (!req.user.tidalAuth || !req.user.tidalAuth.access_token ||
+      (req.user.tidalAuth.expires_at && req.user.tidalAuth.expires_at <= Date.now())) {
+    console.warn('Tidal API request without valid token');
+    return res.status(400).json({ error: 'Not authenticated with Tidal' });
+  }
+
+  const { artist, album } = req.query;
+  if (!artist || !album) {
+    return res.status(400).json({ error: 'artist and album are required' });
+  }
+
+  console.log('Tidal album search:', artist, '-', album);
+
+  try {
+    const query = `${album} ${artist}`;
+    const url = `https://openapi.tidal.com/searchResults/${encodeURIComponent(query)}?countryCode=US&include=albums`;
+    const resp = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+        Accept: 'application/vnd.api+json'
+      }
+    });
+    if (!resp.ok) {
+      throw new Error(`Tidal API error ${resp.status}`);
+    }
+    const data = await resp.json();
+    const albumId = data?.data?.relationships?.albums?.data?.[0]?.id;
+    if (!albumId) {
+      return res.status(404).json({ error: 'Album not found' });
+    }
+    console.log('Tidal search result id:', albumId);
+    res.json({ id: albumId });
+  } catch (err) {
+    console.error('Tidal search error:', err);
+    res.status(500).json({ error: 'Failed to search Tidal' });
   }
 });
 

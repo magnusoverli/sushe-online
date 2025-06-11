@@ -833,11 +833,20 @@ function playAlbum(index) {
   if (!album) return;
 
   const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
 
   const chooseService = () => {
     return new Promise(resolve => {
-      if (hasSpotify) {
+      if (hasSpotify && hasTidal) {
+        if (confirm('Use Spotify? Click Cancel for Tidal.')) {
+          resolve('spotify');
+        } else {
+          resolve('tidal');
+        }
+      } else if (hasSpotify) {
         resolve('spotify');
+      } else if (hasTidal) {
+        resolve('tidal');
       } else {
         showToast('No music service connected', 'error');
         resolve(null);
@@ -850,7 +859,7 @@ function playAlbum(index) {
     if (!service) return;
 
     const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
-    const endpoint = '/api/spotify/album';
+    const endpoint = service === 'spotify' ? '/api/spotify/album' : '/api/tidal/album';
 
     fetch(`${endpoint}?${query}`, { credentials: 'include' })
       .then(async r => {
@@ -868,7 +877,11 @@ function playAlbum(index) {
       })
       .then(data => {
         if (data.id) {
-          window.location.href = `spotify:album:${data.id}`;
+          if (service === 'spotify') {
+            window.location.href = `spotify:album:${data.id}`;
+          } else {
+            window.location.href = `tidal://album/${data.id}`;
+          }
         } else if (data.error) {
           showToast(data.error, 'error');
         } else {
