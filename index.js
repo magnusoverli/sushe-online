@@ -1818,18 +1818,24 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
 
   try {
     const query = `${album} ${artist}`;
-    const url = `https://openapi.tidal.com/searchResults/${encodeURIComponent(query)}?countryCode=US&include=albums`;
+    const params = new URLSearchParams({
+      q: query,
+      types: 'albums',
+      limit: 1,
+      countryCode: 'US'
+    });
+    const url = `https://api.tidal.com/v1/search?${params.toString()}`;
     const resp = await fetch(url, {
       headers: {
         Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
-        Accept: 'application/vnd.api+json'
+        Accept: 'application/vnd.tidal.v1+json'
       }
     });
     if (!resp.ok) {
       throw new Error(`Tidal API error ${resp.status}`);
     }
     const data = await resp.json();
-    const albumId = data?.data?.relationships?.albums?.data?.[0]?.id;
+    const albumId = data?.albums?.items?.[0]?.id;
     if (!albumId) {
       return res.status(404).json({ error: 'Album not found' });
     }
