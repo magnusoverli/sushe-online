@@ -1586,7 +1586,7 @@ const spotifyTemplate = (user, services = []) => `
           (window.musicServices || []).forEach(s => {
             const btn = document.createElement('button');
             btn.className = 'w-full text-left py-3 px-4 hover:bg-gray-800 rounded';
-            btn.innerHTML = `<i class="fas fa-list-ul mr-3 text-gray-400"></i>Add as playlist in ${s.name}`;
+            btn.innerHTML = \`<i class="fas fa-list-ul mr-3 text-gray-400"></i>Add as playlist in \${s.name}\`;
             btn.onclick = () => {
               addListAsPlaylist(listName, s.id);
               actionSheet.remove();
