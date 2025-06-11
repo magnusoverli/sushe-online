@@ -856,6 +856,8 @@ function initializeAlbumContextMenu() {
   const removeOption = document.getElementById('removeAlbumOption');
   const editOption = document.getElementById('editAlbumOption');
   const playOption = document.getElementById('playAlbumOption');
+  const trackOption = document.getElementById('trackSelectOption');
+  const trackSubmenu = document.getElementById('trackSubmenu');
 
   if (!contextMenu || !removeOption || !editOption || !playOption) return;
 
@@ -874,6 +876,50 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
     playAlbum(currentContextAlbum);
   };
+
+  if (trackOption && trackSubmenu) {
+    trackOption.onmouseenter = () => {
+      if (currentContextAlbum === null) return;
+      const album = lists[currentList][currentContextAlbum];
+      trackSubmenu.innerHTML = '';
+      (album.tracks || []).forEach((t, idx) => {
+        const btn = document.createElement('button');
+        btn.className = 'block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap';
+        btn.textContent = `${t.number}. ${t.title}`;
+        btn.dataset.trackIndex = idx;
+        trackSubmenu.appendChild(btn);
+      });
+      trackSubmenu.classList.remove('hidden');
+    };
+    trackOption.onmouseleave = (e) => {
+      if (!trackOption.contains(e.relatedTarget) && !trackSubmenu.contains(e.relatedTarget)) {
+        trackSubmenu.classList.add('hidden');
+      }
+    };
+    trackSubmenu.onmouseleave = (e) => {
+      if (!trackOption.contains(e.relatedTarget)) {
+        trackSubmenu.classList.add('hidden');
+      }
+    };
+    trackSubmenu.onclick = async (e) => {
+      const target = e.target.closest('button');
+      if (!target) return;
+      const idx = parseInt(target.dataset.trackIndex);
+      if (currentContextAlbum === null) return;
+      const album = lists[currentList][currentContextAlbum];
+      album.play_track = idx;
+      trackSubmenu.classList.add('hidden');
+      contextMenu.classList.add('hidden');
+      try {
+        await saveList(currentList, lists[currentList]);
+        selectList(currentList);
+        showToast(`Track set to play: ${album.tracks[idx].title}`);
+      } catch (err) {
+        console.error('Error setting track:', err);
+        showToast('Error setting track', 'error');
+      }
+    };
+  }
   
   // Handle remove option click
   removeOption.onclick = async () => {
@@ -2132,6 +2178,11 @@ window.showMobileAlbumMenu = function(indexOrElement) {
           <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
         </button>
 
+        <button onclick="this.closest('.fixed').remove(); showTrackPicker(${index});"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-music mr-3 text-gray-400"></i>Track to play...
+        </button>
+
         <button onclick="this.closest('.fixed').remove(); setTimeout(() => { currentContextAlbum = ${index}; document.getElementById('removeAlbumOption').click(); }, 100);"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
           <i class="fas fa-trash mr-3"></i>Remove from List
@@ -2145,6 +2196,45 @@ window.showMobileAlbumMenu = function(indexOrElement) {
     </div>
   `;
   document.body.appendChild(actionSheet);
+};
+
+// Show track picker sheet on mobile
+window.showTrackPicker = function(index) {
+  const album = lists[currentList][index];
+  const tracks = album.tracks || [];
+
+  const sheet = document.createElement('div');
+  sheet.className = 'fixed inset-0 z-50 lg:hidden';
+  sheet.innerHTML = `
+    <div class="absolute inset-0 bg-black bg-opacity-50" onclick="this.parentElement.remove()"></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+      <div class="p-4 max-h-[75vh] overflow-y-auto">
+        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+        <h3 class="font-semibold text-white mb-4 truncate">${album.album}</h3>
+        ${tracks.map((t, i) => `
+          <button onclick="selectMobileTrack(${index}, ${i});" class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+            ${t.number}. ${t.title}
+          </button>
+        `).join('')}
+        <button onclick="this.closest('.fixed').remove()" class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">Cancel</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(sheet);
+};
+
+window.selectMobileTrack = async function(albumIndex, trackIndex) {
+  const album = lists[currentList][albumIndex];
+  album.play_track = trackIndex;
+  try {
+    await saveList(currentList, lists[currentList]);
+    selectList(currentList);
+    showToast(`Track set to play: ${album.tracks[trackIndex].title}`);
+  } catch (err) {
+    console.error('Error setting track:', err);
+    showToast('Error setting track', 'error');
+  }
+  document.querySelector('.fixed.inset-0.z-50')?.remove();
 };
 
 // Mobile edit form (basic implementation)
