@@ -1198,11 +1198,18 @@ app.get('/auth/tidal', ensureAuth, (req, res) => {
     .replace(/\//g, '_');
   req.session.tidalState = state;
   req.session.tidalVerifier = verifier;
+  // The TIDAL application grants these scopes:
+  //   user.read, collection.read, search.read, playlists.write,
+  //   playlists.read, entitlements.read, collection.write, playback,
+  //   recommendations.read, search.write
+  // We currently only need `search.read`. The offline_access scope is not
+  // available to this app, so tokens cannot be refreshed and must be
+  // re-authorized when they expire.
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: process.env.TIDAL_CLIENT_ID || '',
     redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
-    scope: 'offline_access search.read',
+    scope: 'search.read',
     code_challenge_method: 'S256',
     code_challenge: challenge,
     state
