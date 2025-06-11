@@ -49,7 +49,7 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
   `user.read`, `collection.read`, `search.read`, `playlists.write`,
   `playlists.read`, `entitlements.read`, `collection.write`, `playback`,
   `recommendations.read`, `search.write`. Offline access is not granted, so
-  tokens expire and must be reauthorized.
+  tokens expire and must be reauthorized when they expire.
 
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
