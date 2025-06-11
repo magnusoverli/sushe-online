@@ -19,4 +19,10 @@ function isValidPassword(password) {
   return typeof password === 'string' && password.length >= 8;
 }
 
-module.exports = { isValidEmail, isValidUsername, isValidPassword };
+// Validate MusicBrainz ID (UUID format)
+function isValidMBID(id) {
+  const mbidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return typeof id === 'string' && mbidRegex.test(id);
+}
+
+module.exports = { isValidEmail, isValidUsername, isValidPassword, isValidMBID };

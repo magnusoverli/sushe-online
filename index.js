@@ -16,7 +16,7 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
 const { composeForgotPasswordEmail } = require('./forgot_email');
-const { isValidEmail, isValidUsername, isValidPassword } = require('./validators');
+const { isValidEmail, isValidUsername, isValidPassword, isValidMBID } = require('./validators');
 
 //
 let lastCodeUsedBy = null;
@@ -146,13 +146,15 @@ async function ensureAllAlbumsHaveTracks() {
       const data = Array.isArray(list.data) ? list.data : [];
       for (const album of data) {
         if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
-          const tracks = await fetchTracksForReleaseGroup(album.album_id);
-          if (tracks.length) {
-            album.tracks = tracks;
-            if (!Object.prototype.hasOwnProperty.call(album, 'play_track')) {
-              album.play_track = null;
+          if (isValidMBID(album.album_id)) {
+            const tracks = await fetchTracksForReleaseGroup(album.album_id);
+            if (tracks.length) {
+              album.tracks = tracks;
+              if (!Object.prototype.hasOwnProperty.call(album, 'play_track')) {
+                album.play_track = null;
+              }
+              updated = true;
             }
-            updated = true;
           }
         }
       }
