@@ -4,7 +4,7 @@ const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
 const settingsTemplate = (req, options) => {
-  const { user, userStats, stats, adminData, flash, spotifyValid, tidalValid } = options;
+  const { user, userStats, stats, adminData, flash, spotifyValid } = options;
   
   return `
 <!DOCTYPE html>
@@ -285,20 +285,6 @@ const settingsTemplate = (req, options) => {
                 `
               ) : `
                 <a href="/auth/spotify" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
-              `}
-            </div>
-            <div class="flex items-center justify-between">
-              <span class="text-white">Tidal</span>
-              ${user.tidalAuth ? (
-                tidalValid ? `
-                <span class="text-green-500 text-sm mr-2">Connected</span>
-                <a href="/auth/tidal/disconnect" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">Disconnect</a>
-                ` : `
-                <span class="text-yellow-500 text-sm mr-2">Reconnect required</span>
-                <a href="/auth/tidal" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm">Reconnect</a>
-                `
-              ) : `
-                <a href="/auth/tidal" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
               `}
             </div>
           </div>
