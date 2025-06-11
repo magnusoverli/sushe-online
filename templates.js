@@ -505,7 +505,7 @@ const loginTemplate = (req, flash) => htmlTemplate(`
       });
     });
   </script>
-`, 'SuShe Online', user);
+`, 'SuShe Online', req.user);
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
