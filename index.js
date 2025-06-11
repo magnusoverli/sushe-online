@@ -1878,12 +1878,24 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
   try {
     const query = `${artist} ${album}`;
     const url = `https://api.tidal.com/v1/search/albums?query=${encodeURIComponent(query)}&limit=1&countryCode=US`;
-    const resp = await fetch(url, {
+    let resp = await fetch(url, {
       headers: {
         Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
         'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
       }
     });
+    if (resp.status === 401 || resp.status === 403) {
+      console.warn('Tidal token invalid, attempting refresh');
+      const refreshed = await refreshTidalToken(req.user);
+      if (refreshed) {
+        resp = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+            'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
+          }
+        });
+      }
+    }
     if (!resp.ok) {
       throw new Error(`Tidal API error ${resp.status}`);
     }
