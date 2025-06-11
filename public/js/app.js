@@ -725,6 +725,25 @@ function subscribeToList(name) {
   };
 }
 
+// Fetch track list for an album if not already loaded
+async function fetchTracksIfNeeded(album) {
+  if (!album || (album.tracks && album.tracks.length) || !album.album_id) {
+    return;
+  }
+  try {
+    showToast('Fetching track list...', 'info');
+    const tracks = await getTracksForReleaseGroup(album.album_id);
+    if (tracks && tracks.length) {
+      album.tracks = tracks;
+      await saveList(currentList, lists[currentList]);
+      showToast('Track list added');
+    }
+  } catch (err) {
+    console.error('Track fetch error:', err);
+    showToast('Error fetching tracks', 'error');
+  }
+}
+
 // Initialize context menu
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
@@ -1990,9 +2009,12 @@ function displayAlbums(albums) {
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         currentContextAlbum = index;
-        
+
+        const album = lists[currentList][index];
+        fetchTracksIfNeeded(album);
+
         const contextMenu = document.getElementById('albumContextMenu');
         if (!contextMenu) return;
         
@@ -2157,6 +2179,7 @@ window.showMobileAlbumMenu = function(indexOrElement) {
     index = parseInt(card.dataset.index);
   }
   const album = lists[currentList][index];
+  fetchTracksIfNeeded(album);
   
   const actionSheet = document.createElement('div');
   actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
