@@ -809,8 +809,10 @@ function initializeAlbumContextMenu() {
   const removeOption = document.getElementById('removeAlbumOption');
   const editOption = document.getElementById('editAlbumOption');
   const playOption = document.getElementById('playAlbumOption');
+  const trackOption = document.getElementById('selectTrackOption');
+  const trackSubmenu = document.getElementById('trackSubmenu');
 
-  if (!contextMenu || !removeOption || !editOption || !playOption) return;
+  if (!contextMenu || !removeOption || !editOption || !playOption || !trackOption || !trackSubmenu) return;
 
   // Handle edit option click
   editOption.onclick = () => {
@@ -826,6 +828,13 @@ function initializeAlbumContextMenu() {
     contextMenu.classList.add('hidden');
     if (currentContextAlbum === null) return;
     playAlbum(currentContextAlbum);
+  };
+
+  // Handle track option click
+  trackOption.onclick = () => {
+    if (currentContextAlbum === null) return;
+    populateTrackMenu(currentContextAlbum);
+    trackSubmenu.classList.toggle('hidden');
   };
   
   // Handle remove option click
@@ -1517,7 +1526,11 @@ async function selectList(listName) {
     if (fab) {
       fab.style.display = listName ? 'flex' : 'none';
     }
-    
+
+    if (listName) {
+      fetchTrackDataForList(listName);
+    }
+
   } catch (error) {
     console.error('Error selecting list:', error);
     showToast('Error loading list', 'error');
@@ -1554,6 +1567,57 @@ function removeAlbum(index) {
   saveList(currentList, lists[currentList]);
   selectList(currentList);
   showToast('Album removed');
+}
+
+async function fetchTrackDataForList(name) {
+  const albums = lists[name];
+  if (!albums) return;
+
+  albums.forEach((album, index) => {
+    if (album.tracks && album.tracks.length > 0 && !album.needs_track_fetch) return;
+
+    album.needs_track_fetch = false;
+    trackQueue.add(async () => {
+      const tracks = await fetchTracksForAlbum(album);
+      if (tracks && tracks.length > 0) {
+        album.tracks = tracks;
+        if (album.track_to_play == null) album.track_to_play = 0;
+        await saveList(name, albums);
+        if (currentList === name) {
+          // refresh context menu if open
+          populateTrackMenu(index);
+        }
+      }
+    });
+  });
+}
+
+function populateTrackMenu(index) {
+  const album = lists[currentList][index];
+  const submenu = document.getElementById('trackSubmenu');
+  if (!submenu || !album) return;
+
+  submenu.innerHTML = '';
+
+  if (!album.tracks || album.tracks.length === 0) {
+    const loading = document.createElement('div');
+    loading.className = 'px-4 py-2 text-sm text-gray-400';
+    loading.textContent = 'Loading...';
+    submenu.appendChild(loading);
+    return;
+  }
+
+  album.tracks.forEach((t, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white whitespace-nowrap';
+    btn.textContent = `${t.number}. ${t.name} (${t.duration})`;
+    btn.onclick = () => {
+      album.track_to_play = i;
+      saveList(currentList, lists[currentList]);
+      submenu.classList.add('hidden');
+    };
+    submenu.appendChild(btn);
+  });
 }
 
 // Make genre editable with datalist
@@ -1897,9 +1961,11 @@ function displayAlbums(albums) {
       row.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        
+
         currentContextAlbum = index;
-        
+
+        populateTrackMenu(index);
+
         const contextMenu = document.getElementById('albumContextMenu');
         if (!contextMenu) return;
         
@@ -2083,6 +2149,11 @@ window.showMobileAlbumMenu = function(indexOrElement) {
         <button onclick="this.closest('.fixed').remove(); playAlbum(${index});"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
           <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
+        </button>
+
+        <button onclick="this.closest('.fixed').remove(); currentContextAlbum = ${index}; document.getElementById('selectTrackOption').click();"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-music mr-3 text-gray-400"></i>Track to Play...
         </button>
 
         <button onclick="this.closest('.fixed').remove(); setTimeout(() => { currentContextAlbum = ${index}; document.getElementById('removeAlbumOption').click(); }, 100);"

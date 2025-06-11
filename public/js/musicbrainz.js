@@ -74,6 +74,12 @@ const sourceStats = {
 const preloadCache = new Map();
 let currentPreloadController = null;
 
+// Cache for track lookups and failures
+const trackCache = new Map();
+const trackFailCache = new Set();
+const trackQueue = new RequestQueue(1);
+window.trackQueue = trackQueue;
+
 // Optimization 3: Browser Connection Optimization
 function warmupConnections() {
   const cdns = [
@@ -1109,7 +1115,10 @@ async function handleManualSubmit(e) {
     country: formData.get('country') || '',
     genre_1: '',
     genre_2: '',
-    comments: ''
+    comments: '',
+    tracks: [],
+    track_to_play: 0,
+    needs_track_fetch: true
   };
   
   // Handle cover art if uploaded
@@ -1720,7 +1729,10 @@ async function addAlbumToList(releaseGroup) {
       country: resolvedCountry,
       genre_1: '',
       genre_2: '',
-      comments: ''
+      comments: '',
+      tracks: [],
+      track_to_play: 0,
+      needs_track_fetch: true
   };
   
   // Enhanced cover art retrieval
@@ -1920,10 +1932,127 @@ function formatArtistDisplayName(artist) {
       primary: artist.name,
       secondary: 'Non-Latin script',
       original: artist.name,
-      warning: true
-    };
-  }
+    warning: true
+  };
 }
+
+// ---- Track data fetching ----
+
+function sanitizeString(str) {
+  return str.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function levenshtein(a, b) {
+  const dp = Array.from({ length: a.length + 1 }, () => []);
+  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return dp[a.length][b.length];
+}
+
+function fuzzyScore(a, b) {
+  const s1 = sanitizeString(a);
+  const s2 = sanitizeString(b);
+  const dist = levenshtein(s1, s2);
+  return 1 - dist / Math.max(s1.length, s2.length, 1);
+}
+
+async function findAlbumMBID(artist, album) {
+  const cacheKey = `${artist}::${album}`.toLowerCase();
+  if (trackCache.has(cacheKey)) return trackCache.get(cacheKey);
+  if (trackFailCache.has(cacheKey)) return null;
+
+  try {
+    const query = `artist:"${artist}" AND release:"${album}"`;
+    const url = `${MUSICBRAINZ_API}/release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=10`;
+    const data = await rateLimitedFetch(url);
+    let best = null;
+    let bestScore = 0;
+    for (const rg of data['release-groups'] || []) {
+      const rgArtist = rg['artist-credit'] && rg['artist-credit'][0]?.name || '';
+      const score = (fuzzyScore(album, rg.title) + fuzzyScore(artist, rgArtist)) / 2;
+      if (score > bestScore) {
+        bestScore = score;
+        best = rg;
+      }
+    }
+    if (best && bestScore > 0.5) {
+      trackCache.set(cacheKey, best.id);
+      return best.id;
+    }
+  } catch (err) {
+    console.error('findAlbumMBID error', err);
+  }
+  trackFailCache.add(cacheKey);
+  return null;
+}
+
+async function selectBestRelease(releaseGroupId) {
+  const priority = { 'Digital Media': 1, 'CD': 2, 'Vinyl': 3 };
+  const data = await rateLimitedFetch(`${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`);
+  const releases = data.releases || [];
+  if (releases.length === 0) return null;
+  releases.sort((a, b) => {
+    const dateA = a.date || '9999-99-99';
+    const dateB = b.date || '9999-99-99';
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    const fA = (a.media && a.media[0] && priority[a.media[0].format]) || 99;
+    const fB = (b.media && b.media[0] && priority[b.media[0].format]) || 99;
+    if (fA !== fB) return fA - fB;
+    const tA = a['track-count'] || 0;
+    const tB = b['track-count'] || 0;
+    return tB - tA;
+  });
+  return releases[0].id;
+}
+
+function formatDuration(ms) {
+  if (!ms) return '';
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+async function fetchTracksForAlbum(album) {
+  const key = album.album_id && !album.album_id.startsWith('manual-') ? album.album_id : `${album.artist}::${album.album}`;
+  if (trackCache.has(key)) return trackCache.get(key);
+  if (trackFailCache.has(key)) return null;
+
+  try {
+    let rgId = album.album_id && !album.album_id.startsWith('manual-') ? album.album_id : await findAlbumMBID(album.artist, album.album);
+    if (!rgId) { trackFailCache.add(key); return null; }
+    const releaseId = await selectBestRelease(rgId);
+    if (!releaseId) { trackFailCache.add(key); return null; }
+    const rel = await rateLimitedFetch(`${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings&fmt=json`);
+    const tracks = [];
+    (rel.media || []).forEach(m => {
+      (m.tracks || []).forEach(t => {
+        tracks.push({ number: parseInt(t.number, 10) || tracks.length + 1, name: t.title, duration: formatDuration(t.length) });
+      });
+    });
+    if (tracks.length > 0) {
+      trackCache.set(key, tracks);
+      return tracks;
+    }
+  } catch (err) {
+    console.error('fetchTracksForAlbum error', err);
+  }
+  trackFailCache.add(key);
+  return null;
+}
+
+window.fetchTracksForAlbum = fetchTracksForAlbum;
+
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
