@@ -426,6 +426,7 @@ app.post('/register', async (req, res) => {
             hash,
             spotifyAuth: null,
             tidalAuth: null,
+            tidalCountry: null,
             accentColor: '#dc2626',
             createdAt: new Date(),
             updatedAt: new Date()
@@ -845,6 +846,14 @@ users.update(
   () => {}
 );
 
+// Ensure tidalCountry exists on existing users
+users.update(
+  { tidalCountry: { $exists: false } },
+  { $set: { tidalCountry: null } },
+  { multi: true },
+  () => {}
+);
+
 
 // Change password endpoint
 app.post('/settings/change-password', ensureAuth, async (req, res) => {
@@ -1249,13 +1258,34 @@ app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
     if (token && token.expires_in) {
       token.expires_at = Date.now() + token.expires_in * 1000;
     }
+
+    let countryCode = null;
+    try {
+      const profileResp = await fetch('https://openapi.tidal.com/users/v1/me', {
+        headers: {
+          Authorization: `Bearer ${token.access_token}`,
+          Accept: 'application/vnd.api+json',
+          'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
+        }
+      });
+      if (profileResp.ok) {
+        const profile = await profileResp.json();
+        countryCode = profile.countryCode || null;
+      } else {
+        console.warn('Tidal profile request failed:', profileResp.status);
+      }
+    } catch (profileErr) {
+      console.error('Tidal profile fetch error:', profileErr);
+    }
+
     users.update(
       { _id: req.user._id },
-      { $set: { tidalAuth: token, updatedAt: new Date() } },
+      { $set: { tidalAuth: token, tidalCountry: countryCode, updatedAt: new Date() } },
       {},
       err => { if (err) console.error('Tidal auth update error:', err); }
     );
     req.user.tidalAuth = token;
+    req.user.tidalCountry = countryCode;
     req.flash('success', 'Tidal connected');
   } catch (e) {
     console.error('Tidal auth error:', e);
@@ -1832,9 +1862,39 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
   console.log('Tidal album search:', artist, '-', album);
 
   try {
+    let countryCode = req.user.tidalCountry;
+    if (!countryCode) {
+      try {
+        const profileResp = await fetch('https://openapi.tidal.com/users/v1/me', {
+          headers: {
+            Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+            Accept: 'application/vnd.api+json',
+            'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
+          }
+        });
+        if (profileResp.ok) {
+          const profile = await profileResp.json();
+          countryCode = profile.countryCode || 'US';
+          users.update(
+            { _id: req.user._id },
+            { $set: { tidalCountry: countryCode, updatedAt: new Date() } },
+            {},
+            () => {}
+          );
+          req.user.tidalCountry = countryCode;
+        } else {
+          console.warn('Tidal profile request failed:', profileResp.status);
+          countryCode = 'US';
+        }
+      } catch (profileErr) {
+        console.error('Tidal profile fetch error:', profileErr);
+        countryCode = 'US';
+      }
+    }
+
     const query = `${album} ${artist}`;
     const searchPath = encodeURIComponent(query);
-    const params = new URLSearchParams({ countryCode: 'US' });
+    const params = new URLSearchParams({ countryCode });
     const url =
       `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?` +
       params.toString();
