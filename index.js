@@ -65,6 +65,27 @@ lists.ensureIndex({ fieldName: 'name' });
 // Map of SSE subscribers keyed by `${userId}:${listName}`
 const listSubscribers = new Map();
 
+async function migrateAlbumData() {
+  try {
+    const allLists = await listsAsync.find({});
+    for (const l of allLists) {
+      let updated = false;
+      const data = (l.data || []).map(a => {
+        const album = { ...a };
+        if (!Array.isArray(album.tracks)) { album.tracks = []; album.needs_track_fetch = true; updated = true; }
+        if (album.track_to_play === undefined) { album.track_to_play = 0; updated = true; }
+        if (album.tracks.length === 0) { album.needs_track_fetch = true; }
+        return album;
+      });
+      if (updated) {
+        await listsAsync.update({ _id: l._id }, { $set: { data } });
+      }
+    }
+  } catch (err) {
+    console.error('Migration error', err);
+  }
+}
+
 function broadcastListUpdate(userId, name, data) {
   const key = `${userId}:${name}`;
   const subs = listSubscribers.get(key);
@@ -1984,7 +2005,10 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-  console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
-});
+(async () => {
+  await migrateAlbumData();
+  app.listen(PORT, () => {
+    console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
+    console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+  });
+})();
