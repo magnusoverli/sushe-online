@@ -1202,14 +1202,17 @@ app.get('/auth/tidal', ensureAuth, (req, res) => {
   //   user.read, collection.read, search.read, playlists.write,
   //   playlists.read, entitlements.read, collection.write, playback,
   //   recommendations.read, search.write
-  // We currently only need `search.read`. The offline_access scope is not
-  // available to this app, so tokens cannot be refreshed and must be
+  // The integration requests all available scopes. The `offline_access` scope
+  // is not available to this app, so tokens cannot be refreshed and must be
   // re-authorized when they expire.
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: process.env.TIDAL_CLIENT_ID || '',
     redirect_uri: process.env.TIDAL_REDIRECT_URI || '',
-    scope: 'search.read',
+    scope:
+      'user.read collection.read search.read playlists.write playlists.read ' +
+      'entitlements.read collection.write recommendations.read playback ' +
+      'search.write',
     code_challenge_method: 'S256',
     code_challenge: challenge,
     state
