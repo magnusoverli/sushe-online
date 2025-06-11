@@ -79,7 +79,6 @@ function broadcastListUpdate(userId, name, data) {
   }
 }
 
-// Removed Tidal OAuth helper functions and refresh logic
 
 function sanitizeUser(user) {
   if (!user) return null;
@@ -1175,7 +1174,6 @@ app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
   res.redirect('/settings');
 });
 
-// Removed Tidal authentication routes
 
 // Admin: Make user admin
 app.post('/admin/make-admin', ensureAuth, ensureAdmin, (req, res) => {
@@ -1711,7 +1709,6 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   }
 });
 
-// Removed Tidal album search API endpoint
 
 // Fetch metadata for link previews
 app.get('/api/unfurl', ensureAuthAPI, async (req, res) => {
