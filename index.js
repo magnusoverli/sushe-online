@@ -16,7 +16,7 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
 const { composeForgotPasswordEmail } = require('./forgot_email');
-const { isValidEmail, isValidUsername, isValidPassword } = require('./validators');
+const { isValidEmail, isValidUsername, isValidPassword, isValidMBID } = require('./validators');
 
 //
 let lastCodeUsedBy = null;
@@ -165,6 +165,7 @@ async function ensureTracksForAllLists() {
       for (const album of albums) {
         if (!album.tracks || album.tracks.length === 0) {
           if (!album.album_id || album.album_id.startsWith('manual-')) continue;
+          if (!isValidMBID(album.album_id)) continue;
           const tracks = await getTracksForReleaseGroupServer(album.album_id);
           if (Array.isArray(tracks) && tracks.length > 0) {
             album.tracks = tracks;
@@ -1896,6 +1897,9 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
 app.get('/api/musicbrainz/tracks/:id', ensureAuthAPI, async (req, res) => {
   try {
     const { id } = req.params;
+    if (!isValidMBID(id)) {
+      return res.status(400).json({ error: 'Invalid MusicBrainz ID' });
+    }
     const tracks = await getTracksForReleaseGroupServer(id);
     if (!tracks || tracks.length === 0) {
       return res.status(404).json({ error: 'Tracks not found' });

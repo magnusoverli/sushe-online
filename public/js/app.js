@@ -205,6 +205,12 @@ function formatReleaseDate(dateStr) {
   }
 }
 
+// Validate a MusicBrainz ID
+function isValidMBID(id) {
+  const mbidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+  return typeof id === 'string' && mbidRegex.test(id);
+}
+
 // Load available countries
 async function loadCountries() {
   try {
@@ -734,6 +740,7 @@ async function fetchMissingTracks(listName) {
   for (const album of albums) {
     if (!album.tracks || album.tracks.length === 0) {
       if (!album.album_id || album.album_id.startsWith('manual-')) continue;
+      if (!isValidMBID(album.album_id)) continue;
       try {
         const tracks = await getTracksForReleaseGroup(album.album_id);
         if (Array.isArray(tracks) && tracks.length > 0) {

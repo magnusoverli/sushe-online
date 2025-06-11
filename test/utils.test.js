@@ -1,7 +1,7 @@
 const assert = require('node:assert');
 const test = require('node:test');
 
-const { isValidEmail, isValidUsername, isValidPassword } = require('../validators');
+const { isValidEmail, isValidUsername, isValidPassword, isValidMBID } = require('../validators');
 const { adjustColor, colorWithOpacity } = require('../color-utils');
 const { isTokenValid } = require('../auth-utils');
 
@@ -21,6 +21,13 @@ test('isValidUsername enforces allowed characters and length', () => {
 test('isValidPassword checks minimum length', () => {
   assert.strictEqual(isValidPassword('12345678'), true);
   assert.strictEqual(isValidPassword('short'), false);
+});
+
+test('isValidMBID validates MusicBrainz IDs', () => {
+  const valid = '12345678-1234-1234-1234-1234567890ab';
+  const invalid = '5egKYbgsHtB0WSi6tLDAVu';
+  assert.strictEqual(isValidMBID(valid), true);
+  assert.strictEqual(isValidMBID(invalid), false);
 });
 
 // Color util tests
