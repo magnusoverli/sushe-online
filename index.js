@@ -68,6 +68,102 @@ const listsAsync = promisifyDatastore(lists);
 lists.ensureIndex({ fieldName: 'userId' });
 lists.ensureIndex({ fieldName: 'name' });
 
+// ==== MusicBrainz track fetching utilities ====
+const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
+const MB_MIN_INTERVAL = 1100; // 1.1s between requests
+let lastMBRequest = 0;
+
+async function mbFetch(url) {
+  const now = Date.now();
+  const wait = MB_MIN_INTERVAL - (now - lastMBRequest);
+  if (wait > 0) {
+    await new Promise(resolve => setTimeout(resolve, wait));
+  }
+  lastMBRequest = Date.now();
+  const resp = await fetch(url, {
+    headers: {
+      'User-Agent': 'SuSheOnline/1.0 (https://example.com)',
+      Accept: 'application/json'
+    }
+  });
+  if (!resp.ok) {
+    throw new Error(`MusicBrainz error ${resp.status}`);
+  }
+  return resp.json();
+}
+
+async function fetchTracksForReleaseGroup(releaseGroupId) {
+  try {
+    const rgData = await mbFetch(
+      `${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`
+    );
+    const releases = (rgData.releases || []).slice();
+    if (!releases.length) return [];
+
+    releases.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
+
+    const releaseId = releases[0].id;
+    if (!releaseId) return [];
+
+    const relData = await mbFetch(
+      `${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings&fmt=json`
+    );
+
+    const tracks = [];
+    (relData.media || []).forEach(m => {
+      (m.tracks || []).forEach(t => {
+        tracks.push({
+          number: t.number || t.position,
+          title: t.title,
+          length: t.length || (t.recording && t.recording.length) || null
+        });
+      });
+    });
+
+    return tracks.sort((a, b) => parseInt(a.number) - parseInt(b.number));
+  } catch (err) {
+    console.error('Error fetching track list:', err);
+    return [];
+  }
+}
+
+async function ensureAllAlbumsHaveTracks() {
+  try {
+    const allLists = await listsAsync.find({});
+    for (const list of allLists) {
+      let updated = false;
+      const data = Array.isArray(list.data) ? list.data : [];
+      for (const album of data) {
+        if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
+          const tracks = await fetchTracksForReleaseGroup(album.album_id);
+          if (tracks.length) {
+            album.tracks = tracks;
+            if (!Object.prototype.hasOwnProperty.call(album, 'play_track')) {
+              album.play_track = null;
+            }
+            updated = true;
+          }
+        }
+      }
+      if (updated) {
+        await listsAsync.update(
+          { _id: list._id },
+          { $set: { data, updatedAt: new Date() } }
+        );
+        console.log(
+          `Updated missing tracks for list "${list.name}" belonging to user ${list.userId}`
+        );
+      }
+    }
+  } catch (err) {
+    console.error('Error ensuring album tracks:', err);
+  }
+}
+
 // Map of SSE subscribers keyed by `${userId}:${listName}`
 const listSubscribers = new Map();
 
@@ -1987,6 +2083,9 @@ app.use((err, req, res, next) => {
   
   res.status(500).send('Something went wrong!');
 });
+
+// Kick off background check for missing album tracks
+ensureAllAlbumsHaveTracks();
 
 // Start server
 const PORT = process.env.PORT || 3000;
