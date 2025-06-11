@@ -411,39 +411,15 @@ function formatReleaseDate(date) {
   return date.split('-')[0];
 }
 
-// Fetch track list for the earliest release in a release group
+// Fetch track list for a release group using server-side proxy
 async function getTracksForReleaseGroup(releaseGroupId) {
   try {
-    // Get releases for this group
-    const rgData = await rateLimitedFetch(`${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`);
-    const releases = (rgData.releases || []).slice();
-    if (!releases.length) return [];
-
-    // Sort releases by date so we pick the earliest
-    releases.sort((a, b) => {
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return a.date.localeCompare(b.date);
-    });
-
-    const releaseId = releases[0].id;
-    if (!releaseId) return [];
-
-    // Fetch recordings for this release
-    const relData = await rateLimitedFetch(`${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings&fmt=json`);
-
-    const tracks = [];
-    (relData.media || []).forEach(m => {
-      (m.tracks || []).forEach(t => {
-        tracks.push({
-          number: t.number || t.position,
-          title: t.title,
-          length: t.length || (t.recording && t.recording.length) || null
-        });
-      });
-    });
-
-    // Ensure chronological order
+    const resp = await fetch(`/api/musicbrainz/tracks/${releaseGroupId}`);
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const data = await resp.json();
+    const tracks = data.tracks || [];
     return tracks.sort((a, b) => parseInt(a.number) - parseInt(b.number));
   } catch (err) {
     console.error('Error fetching track list:', err);
