@@ -1893,7 +1893,9 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     }
 
     const query = `${album} ${artist}`;
-    const searchPath = encodeURIComponent(query);
+    // encodeURIComponent does not escape apostrophes, which breaks the
+    // Tidal searchResults path. Replace them manually after encoding.
+    const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
     const params = new URLSearchParams({ countryCode });
     const url =
       `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?` +
