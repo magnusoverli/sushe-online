@@ -1816,6 +1816,11 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     return res.status(400).json({ error: 'Not authenticated with Tidal' });
   }
 
+  console.debug('Tidal token expires at:', req.user.tidalAuth.expires_at);
+  console.debug('Using Tidal access token:',
+    (req.user.tidalAuth.access_token || '').slice(0, 6) + '...' +
+    (req.user.tidalAuth.access_token || '').slice(-4));
+
   const { artist, album } = req.query;
   if (!artist || !album) {
     return res.status(400).json({ error: 'artist and album are required' });
@@ -1832,6 +1837,8 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
       countryCode: 'US'
     });
     const url = `https://api.tidal.com/v1/search?${params.toString()}`;
+    console.debug('Tidal search URL:', url);
+    console.debug('Tidal client ID header:', (process.env.TIDAL_CLIENT_ID || '').slice(0, 6) + '...');
     const resp = await fetch(url, {
       headers: {
         Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
@@ -1839,10 +1846,14 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
         'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
       }
     });
+    console.debug('Tidal response status:', resp.status);
     if (!resp.ok) {
+      const body = await resp.text().catch(() => '<body read failed>');
+      console.warn('Tidal API request failed:', resp.status, body);
       throw new Error(`Tidal API error ${resp.status}`);
     }
     const data = await resp.json();
+    console.debug('Tidal API response body:', JSON.stringify(data, null, 2));
     const albumId = data?.albums?.items?.[0]?.id;
     if (!albumId) {
       return res.status(404).json({ error: 'Album not found' });
