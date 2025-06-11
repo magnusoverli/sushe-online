@@ -1,4 +1,6 @@
 const { adjustColor, colorWithOpacity } = require('./color-utils');
+const { version: assetVersion } = require('./package.json');
+const asset = (p) => `${p}?v=${assetVersion}`;
 
 // Shared header component
 const headerComponent = (user, activeSection = 'home', currentListName = '') => `
@@ -75,7 +77,7 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
   <link rel="icon" type="image/png" href="/og-image.png">
   <link rel="apple-touch-icon" href="/og-image.png">
   <link rel="manifest" href="/manifest.json">
-  <link href="/styles/output.css" rel="stylesheet">
+  <link href="${asset('/styles/output.css')}" rel="stylesheet">
   <style>
     /* CSS Custom Properties for theming */
     :root {
@@ -1153,8 +1155,8 @@ const spotifyTemplate = (user) => `
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-  <link href="/styles/output.css" rel="stylesheet">
-  <link href="/styles/spotify-app.css" rel="stylesheet">
+  <link href="${asset('/styles/output.css')}" rel="stylesheet">
+  <link href="${asset('/styles/spotify-app.css')}" rel="stylesheet">
   <style>
     /* CSS Custom Properties for theming */
     :root {
@@ -1443,9 +1445,9 @@ const spotifyTemplate = (user) => `
   ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
   
-  <script src="/js/drag-drop.js"></script>
-  <script src="/js/musicbrainz.js"></script>
-  <script src="/js/app.js"></script>
+  <script src="${asset('/js/drag-drop.js')}"></script>
+  <script src="${asset('/js/musicbrainz.js')}"></script>
+  <script src="${asset('/js/app.js')}"></script>
 
   <script>
     // Global state
