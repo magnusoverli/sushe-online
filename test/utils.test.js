@@ -1,7 +1,7 @@
 const assert = require('node:assert');
 const test = require('node:test');
 
-const { isValidEmail, isValidUsername, isValidPassword } = require('../validators');
+const { isValidEmail, isValidUsername, isValidPassword, isValidMBID } = require('../validators');
 const { adjustColor, colorWithOpacity } = require('../color-utils');
 const { isTokenValid } = require('../auth-utils');
 
@@ -33,6 +33,13 @@ test('adjustColor brightens and darkens colors', () => {
 test('colorWithOpacity converts hex to rgba with opacity', () => {
   assert.strictEqual(colorWithOpacity('#ff0000', 0.5), 'rgba(255, 0, 0, 0.5)');
   assert.strictEqual(colorWithOpacity('invalid', 0.5), 'invalid');
+});
+
+test('isValidMBID validates MusicBrainz IDs', () => {
+  const good = 'cc197bad-dc9c-440d-a5b5-d52ba2e14234';
+  const bad = 'manual-123';
+  assert.strictEqual(isValidMBID(good), true);
+  assert.strictEqual(isValidMBID(bad), false);
 });
 
 test('isTokenValid checks expiration and presence', () => {
