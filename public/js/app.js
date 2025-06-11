@@ -833,26 +833,11 @@ function playAlbum(index) {
   if (!album) return;
 
   const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
 
   const chooseService = () => {
     return new Promise(resolve => {
-      if (hasSpotify && hasTidal) {
-        showConfirmation('Play Album', 'Which service would you like to use?', '', 'Spotify', () => resolve('spotify'));
-        const cancelBtn = document.getElementById('confirmationCancelBtn');
-        const originalCancel = cancelBtn.onclick;
-        const originalText = cancelBtn.textContent;
-        cancelBtn.textContent = 'Tidal';
-        cancelBtn.onclick = () => {
-          hideConfirmation();
-          resolve('tidal');
-          cancelBtn.onclick = originalCancel;
-          cancelBtn.textContent = originalText;
-        };
-      } else if (hasSpotify) {
+      if (hasSpotify) {
         resolve('spotify');
-      } else if (hasTidal) {
-        resolve('tidal');
       } else {
         showToast('No music service connected', 'error');
         resolve(null);
@@ -865,7 +850,7 @@ function playAlbum(index) {
     if (!service) return;
 
     const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
-    const endpoint = service === 'spotify' ? '/api/spotify/album' : '/api/tidal/album';
+    const endpoint = '/api/spotify/album';
 
     fetch(`${endpoint}?${query}`, { credentials: 'include' })
       .then(async r => {
@@ -883,11 +868,7 @@ function playAlbum(index) {
       })
       .then(data => {
         if (data.id) {
-          if (service === 'spotify') {
-            window.location.href = `spotify:album:${data.id}`;
-          } else {
-            window.location.href = `https://tidal.com/browse/album/${data.id}`;
-          }
+          window.location.href = `spotify:album:${data.id}`;
         } else if (data.error) {
           showToast(data.error, 'error');
         } else {

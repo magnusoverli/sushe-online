@@ -41,8 +41,6 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - `PORT` – server port (defaults to `3000`).
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` – credentials for Spotify OAuth.
 - `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
-- `TIDAL_CLIENT_ID` and `TIDAL_CLIENT_SECRET` – credentials for Tidal OAuth.
-- `TIDAL_REDIRECT_URI` – callback URL registered with Tidal.
 
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
