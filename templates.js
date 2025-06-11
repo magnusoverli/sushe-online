@@ -1108,6 +1108,33 @@ const confirmationModalComponent = () => `
   </div>
 `;
 
+// Component: Service Select Modal
+const serviceSelectModalComponent = () => `
+  <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-xl font-bold text-white">Choose Service</h3>
+      </div>
+
+      <!-- Modal Content -->
+      <div class="p-6 space-y-3">
+        <button id="serviceSpotifyBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200 flex items-center justify-center">
+          <i class="fab fa-spotify mr-2"></i>Spotify
+        </button>
+        <button id="serviceTidalBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200 flex items-center justify-center">
+          <i class="fas fa-wave-square mr-2"></i>Tidal
+        </button>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800">
+        <button id="serviceCancelBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200">Cancel</button>
+      </div>
+    </div>
+  </div>
+`;
+
 // Main Spotify template - Consolidated version
 const spotifyTemplate = (user) => `
 <!DOCTYPE html>
@@ -1413,6 +1440,7 @@ const spotifyTemplate = (user) => `
   ${renameListModalComponent()}
   ${addAlbumModalComponent()}
   ${importConflictModalComponent()}
+  ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
   
   <script src="/js/drag-drop.js"></script>
