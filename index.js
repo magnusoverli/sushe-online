@@ -1835,7 +1835,8 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     const resp = await fetch(url, {
       headers: {
         Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
-        Accept: 'application/vnd.tidal.v1+json'
+        Accept: 'application/vnd.tidal.v1+json',
+        'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || ''
       }
     });
     if (!resp.ok) {
