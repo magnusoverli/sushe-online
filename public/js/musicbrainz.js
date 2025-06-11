@@ -411,6 +411,46 @@ function formatReleaseDate(date) {
   return date.split('-')[0];
 }
 
+// Fetch track list for the earliest release in a release group
+async function getTracksForReleaseGroup(releaseGroupId) {
+  try {
+    // Get releases for this group
+    const rgData = await rateLimitedFetch(`${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`);
+    const releases = (rgData.releases || []).slice();
+    if (!releases.length) return [];
+
+    // Sort releases by date so we pick the earliest
+    releases.sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
+
+    const releaseId = releases[0].id;
+    if (!releaseId) return [];
+
+    // Fetch recordings for this release
+    const relData = await rateLimitedFetch(`${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings&fmt=json`);
+
+    const tracks = [];
+    (relData.media || []).forEach(m => {
+      (m.tracks || []).forEach(t => {
+        tracks.push({
+          number: t.number || t.position,
+          title: t.title,
+          length: t.length || (t.recording && t.recording.length) || null
+        });
+      });
+    });
+
+    // Ensure chronological order
+    return tracks.sort((a, b) => parseInt(a.number) - parseInt(b.number));
+  } catch (err) {
+    console.error('Error fetching track list:', err);
+    return [];
+  }
+}
+
 // Optimization 1: Preload on hover
 async function preloadArtistAlbums(artist) {
   if (preloadCache.has(artist.id)) {
@@ -1722,6 +1762,10 @@ async function addAlbumToList(releaseGroup) {
       genre_2: '',
       comments: ''
   };
+
+  // Fetch track list
+  album.tracks = await getTracksForReleaseGroup(releaseGroup.id);
+  album.play_track = null;
   
   // Enhanced cover art retrieval
   let coverArtUrl = releaseGroup.coverArt;
