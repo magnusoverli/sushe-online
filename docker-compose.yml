@@ -15,6 +15,8 @@ services:
       - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
       - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
+      - TIDAL_CLIENT_ID=${TIDAL_CLIENT_ID}
+      - TIDAL_REDIRECT_URI=${TIDAL_REDIRECT_URI}
     volumes:
       - sushe-data:/app/data
     restart: unless-stopped
