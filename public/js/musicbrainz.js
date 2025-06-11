@@ -78,6 +78,7 @@ let currentPreloadController = null;
 const trackCache = new Map();
 const trackFailCache = new Set();
 const trackQueue = new RequestQueue(1);
+window.trackQueue = trackQueue;
 
 // Optimization 3: Browser Connection Optimization
 function warmupConnections() {
@@ -2049,6 +2050,8 @@ async function fetchTracksForAlbum(album) {
   trackFailCache.add(key);
   return null;
 }
+
+window.fetchTracksForAlbum = fetchTracksForAlbum;
 
 
 // Initialize when the page loads
