@@ -6,4 +6,5 @@ npm-debug.log
 .gitignore
 README.md
 .DS_Store
+public/styles/output.css
 data/
