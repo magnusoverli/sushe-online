@@ -12,7 +12,7 @@ RUN --mount=type=cache,target=/root/.npm \
 
 # Copy the rest of the source and build assets
 COPY . .
-RUN npm run build:css
+RUN npm run build
 
 # Remove node_modules so they are not copied to the final image
 RUN rm -rf node_modules

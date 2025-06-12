@@ -1445,9 +1445,7 @@ const spotifyTemplate = (user) => `
   ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
   
-  <script src="${asset('/js/drag-drop.js')}"></script>
-  <script src="${asset('/js/musicbrainz.js')}"></script>
-  <script src="${asset('/js/app.js')}"></script>
+  <script src="${asset('/js/bundle.js')}"></script>
 
   <script>
     // Global state
