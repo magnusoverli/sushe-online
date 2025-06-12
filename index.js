@@ -225,7 +225,8 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 const app = express();
 
 // Basic Express middleware
-app.use(express.static('public'));
+const ONE_YEAR = 1000 * 60 * 60 * 24 * 365;
+app.use(express.static('public', { maxAge: ONE_YEAR, immutable: true }));
 app.use(compression());
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
@@ -1999,9 +2000,22 @@ app.use((err, req, res, next) => {
   res.status(500).send('Something went wrong!');
 });
 
-// Start server
+// Start server (use HTTP/2 if certs provided)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-  console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
-});
+if (process.env.SSL_KEY && process.env.SSL_CERT) {
+  const http2 = require('http2');
+  const fs = require('fs');
+  const options = {
+    key: fs.readFileSync(process.env.SSL_KEY),
+    cert: fs.readFileSync(process.env.SSL_CERT)
+  };
+  http2.createSecureServer(options, app).listen(PORT, () => {
+    console.log(`🔥 HTTP/2 server burning at https://localhost:${PORT} 🔥`);
+    console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+  });
+} else {
+  app.listen(PORT, () => {
+    console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
+    console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+  });
+}

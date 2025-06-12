@@ -23,9 +23,9 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
    ```bash
    npm install
    ```
-2. Compile Tailwind CSS:
+2. Build frontend assets:
    ```bash
-   npm run build:css
+   npm run build
    ```
 3. Start the server in development mode with automatic reload and CSS watch:
    ```bash

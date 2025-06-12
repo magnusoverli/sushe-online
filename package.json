@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "concurrently \"npm run watch:css\" \"nodemon --ignore data/ --ignore *.log index.js\"",
-    "build:css": "postcss src/styles/input.css -o public/styles/output.css",
+    "build:css": "NODE_ENV=production postcss src/styles/input.css -o public/styles/spotify-app.css",
+    "build:js": "node build-js.js",
+    "build": "npm run build:css && npm run build:js",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "test": "node --test"
   },
@@ -28,6 +30,8 @@
     "nodemon": "^3.1.10",
     "postcss": "^8.5.3",
     "postcss-cli": "^11.0.1",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "esbuild": "^0.20.0",
+    "cssnano": "^6.0.1"
   }
 }
