@@ -17,8 +17,6 @@ const upload = multer({
 });
 const { composeForgotPasswordEmail } = require('./forgot_email');
 const { isValidEmail, isValidUsername, isValidPassword } = require('./validators');
-
-//
 let lastCodeUsedBy = null;
 let lastCodeUsedAt = null;
 
@@ -253,7 +251,14 @@ app.use(session({
       };
     }
   }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: (() => {
+    const secret = process.env.SESSION_SECRET;
+    if (!secret) {
+      console.warn('Warning: SESSION_SECRET not set. A random value will be used.');
+      return crypto.randomBytes(32).toString('hex');
+    }
+    return secret;
+  })(),
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -263,7 +268,7 @@ app.use(session({
   },
   // Add this to handle session save errors gracefully
   genid: function(req) {
-    return require('crypto').randomBytes(16).toString('hex');
+    return crypto.randomBytes(16).toString('hex');
   }
 }));
 
@@ -1718,7 +1723,9 @@ app.post('/forgot', (req, res) => {
           });
         } else {
           console.warn('SENDGRID_API_KEY not configured - password reset email not sent');
-          console.log('Reset token for testing:', token);
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Reset token for testing:', token);
+          }
         }
         
         res.redirect('/forgot');
@@ -1833,7 +1840,9 @@ app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
       return res.status(404).json({ error: 'Album not found' });
     }
     const albumId = data.albums.items[0].id;
-    console.log('Spotify search result id:', albumId);
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Spotify search result id:', albumId);
+    }
     res.json({ id: albumId });
   } catch (err) {
     console.error('Spotify search error:', err);
@@ -1849,10 +1858,12 @@ app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     return res.status(400).json({ error: 'Not authenticated with Tidal' });
   }
 
-  console.debug('Tidal token expires at:', req.user.tidalAuth.expires_at);
-  console.debug('Using Tidal access token:',
-    (req.user.tidalAuth.access_token || '').slice(0, 6) + '...' +
-    (req.user.tidalAuth.access_token || '').slice(-4));
+  if (process.env.NODE_ENV !== 'production') {
+    console.debug('Tidal token expires at:', req.user.tidalAuth.expires_at);
+    console.debug('Using Tidal access token:',
+      (req.user.tidalAuth.access_token || '').slice(0, 6) + '...' +
+      (req.user.tidalAuth.access_token || '').slice(-4));
+  }
 
   const { artist, album } = req.query;
   if (!artist || !album) {
