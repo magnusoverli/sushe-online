@@ -1,37 +1,36 @@
 # ----- Build stage -----
-FROM node:22-alpine AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
 # Copy package files and install all dependencies (dev included)
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    apk add --no-cache --virtual .build-deps python3 make g++ && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends python3 make g++ && \
     npm ci --prefer-offline --no-audit && \
-    apk del .build-deps
+    apt-get purge -y --auto-remove python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy the rest of the source and build assets
 COPY . .
 RUN npm run build
 
-# Remove node_modules so they are not copied to the final image
-RUN rm -rf node_modules
+# Remove development dependencies but keep already built modules
+RUN npm prune --omit=dev
 
 # ----- Runtime stage -----
-FROM node:22-alpine AS runtime
+FROM node:22-slim AS runtime
 
 WORKDIR /app
 
-# Install only production dependencies
-COPY --chown=node:node package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    apk add --no-cache --virtual .build-deps python3 make g++ && \
-    npm ci --omit=dev --prefer-offline --no-audit && \
-    apk del .build-deps && \
-    apk add --no-cache curl
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
 
 # Runtime configuration
 ENV NODE_ENV=production
