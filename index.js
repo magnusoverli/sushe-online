@@ -4,7 +4,6 @@ const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-const Datastore = require('@seald-io/nedb');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -41,24 +40,14 @@ if (!require('fs').existsSync(dataDir)) {
   require('fs').mkdirSync(dataDir, { recursive: true });
 }
 
-// Initialize NeDB databases
-const users = new Datastore({ 
-  filename: path.join(dataDir, 'users.db'), 
-  autoload: true 
-});
-const lists = new Datastore({
-  filename: path.join(dataDir, 'lists.db'),
-  autoload: true
-});
+// Initialize SQLite database (auto-migrates from NeDB if needed)
+const initSQLite = require('./sqlite-store');
+const { users, lists } = initSQLite(dataDir);
 
 // Promisified DB helpers for async/await
 const promisifyDatastore = require('./db-utils');
 const usersAsync = promisifyDatastore(users);
 const listsAsync = promisifyDatastore(lists);
-
-// Create indexes for better performance
-lists.ensureIndex({ fieldName: 'userId' });
-lists.ensureIndex({ fieldName: 'name' });
 
 // Map of SSE subscribers keyed by `${userId}:${listName}`
 const listSubscribers = new Map();
