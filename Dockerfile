@@ -5,8 +5,10 @@ WORKDIR /app
 
 # Copy package files and install all dependencies (dev included)
 COPY package*.json ./
+RUN apk add --no-cache python3 make g++
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit
+RUN apk del python3 make g++
 
 # Copy the rest of the source and build assets
 COPY . .
@@ -22,9 +24,10 @@ WORKDIR /app
 
 # Install only production dependencies
 COPY --chown=node:node package*.json ./
+RUN apk add --no-cache python3 make g++ curl
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --prefer-offline --no-audit \
-    && apk add --no-cache curl
+    npm ci --omit=dev --prefer-offline --no-audit
+RUN apk del python3 make g++
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
