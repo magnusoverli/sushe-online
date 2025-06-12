@@ -59,16 +59,17 @@ function buildWhere(query) {
   const params = {};
   let i = 0;
   for (const [key, val] of Object.entries(query || {})) {
+    const column = key === '_id' ? 'id' : key;
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       if ('$gt' in val) {
-        i++; const p = 'p' + i; clauses.push(`${key} > @${p}`); params[p] = val.$gt;
+        i++; const p = 'p' + i; clauses.push(`${column} > @${p}`); params[p] = val.$gt;
       } else if ('$exists' in val) {
-        clauses.push(val.$exists ? `${key} IS NOT NULL` : `${key} IS NULL`);
+        clauses.push(val.$exists ? `${column} IS NOT NULL` : `${column} IS NULL`);
       } else {
-        i++; const p = 'p' + i; clauses.push(`${key} = @${p}`); params[p] = JSON.stringify(val);
+        i++; const p = 'p' + i; clauses.push(`${column} = @${p}`); params[p] = JSON.stringify(val);
       }
     } else {
-      i++; const p = 'p' + i; clauses.push(`${key} = @${p}`); params[p] = val;
+      i++; const p = 'p' + i; clauses.push(`${column} = @${p}`); params[p] = val;
     }
   }
   if (!clauses.length) return { where: '1', params: {} };
