@@ -44,10 +44,24 @@ if (!require('fs').existsSync(dataDir)) {
 const initSQLite = require('./sqlite-store');
 const { users, lists } = initSQLite(dataDir);
 
-// Promisified DB helpers for async/await
-const promisifyDatastore = require('./db-utils');
-const usersAsync = promisifyDatastore(users);
-const listsAsync = promisifyDatastore(lists);
+// Promise-based wrappers for the database stores
+const { promisify } = require('util');
+const usersAsync = {
+  findOne: promisify(users.findOne.bind(users)),
+  find: promisify(users.find.bind(users)),
+  count: promisify(users.count.bind(users)),
+  insert: promisify(users.insert.bind(users)),
+  update: promisify(users.update.bind(users)),
+  remove: promisify(users.remove.bind(users)),
+};
+const listsAsync = {
+  findOne: promisify(lists.findOne.bind(lists)),
+  find: promisify(lists.find.bind(lists)),
+  count: promisify(lists.count.bind(lists)),
+  insert: promisify(lists.insert.bind(lists)),
+  update: promisify(lists.update.bind(lists)),
+  remove: promisify(lists.remove.bind(lists)),
+};
 
 // Map of SSE subscribers keyed by `${userId}:${listName}`
 const listSubscribers = new Map();
