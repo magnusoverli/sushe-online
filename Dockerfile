@@ -6,7 +6,6 @@ WORKDIR /app
 # Copy package files and install all dependencies (dev included)
 COPY package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
-    npm cache clean --force || true && \
     npm ci --prefer-offline --no-audit
 
 # Copy the rest of the source and build assets
@@ -25,7 +24,6 @@ WORKDIR /app
 COPY --chown=node:node package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --prefer-offline --no-audit \
-    && npm cache clean --force || true \
     && apk add --no-cache curl
 
 # Copy application files and built assets from the builder stage
