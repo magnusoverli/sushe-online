@@ -9,6 +9,8 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const compression = require('compression');
+const cluster = require('cluster');
+const os = require('os');
 const multer = require('multer');
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -1999,9 +2001,22 @@ app.use((err, req, res, next) => {
   res.status(500).send('Something went wrong!');
 });
 
-// Start server
+// Start server using clustering to utilise multiple CPU cores
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-  console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
-});
+
+if (cluster.isPrimary) {
+  const workers = parseInt(process.env.WEB_CONCURRENCY, 10) || os.cpus().length;
+  console.log(`Master ${process.pid} starting ${workers} workers`);
+  for (let i = 0; i < workers; i++) {
+    cluster.fork();
+  }
+  cluster.on('exit', (worker) => {
+    console.warn(`Worker ${worker.process.pid} exited, starting replacement`);
+    cluster.fork();
+  });
+} else {
+  app.listen(PORT, () => {
+    console.log(`🔥 Worker ${process.pid} listening at http://localhost:${PORT} 🔥`);
+    console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+  });
+}

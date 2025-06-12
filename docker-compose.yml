@@ -4,8 +4,17 @@ services:
     container_name: sushe-online
     ports:
       - "3000:3000"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1g
+        reservations:
+          cpus: '0.5'
+          memory: 512m
     environment:
       - NODE_ENV=production
+      - NODE_OPTIONS=--max-old-space-size=1024
       - SESSION_SECRET=${SESSION_SECRET}
       - SENDGRID_API_KEY=${SENDGRID_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}

@@ -39,7 +39,7 @@ RUN mkdir -p /app/data && \
     chown node:node /app/data
 
 # Node.js optimizations
-ENV NODE_OPTIONS="--max-old-space-size=512"
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 
 EXPOSE 3000
 

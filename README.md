@@ -70,3 +70,11 @@ docker compose up --build
 ```
 
 The admin access code is displayed in the server logs and rotates every five minutes.
+
+## Performance tuning
+
+The server can leverage multiple CPU cores when the `WEB_CONCURRENCY` environment
+variable is set. By default it forks one worker per available core. Memory usage
+can be increased by adjusting `NODE_OPTIONS` to a higher `--max-old-space-size`.
+The provided `docker-compose.yml` reserves two CPUs and 1&nbsp;GB of RAM but you can
+modify these values to match your host.
