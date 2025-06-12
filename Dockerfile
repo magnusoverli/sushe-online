@@ -14,24 +14,19 @@ RUN --mount=type=cache,target=/root/.npm \
 COPY . .
 RUN npm run build
 
-# Remove node_modules so they are not copied to the final image
-RUN rm -rf node_modules
+# Remove development dependencies but keep already built modules
+RUN npm prune --omit=dev
 
 # ----- Runtime stage -----
 FROM node:22-alpine AS runtime
 
 WORKDIR /app
 
-# Install only production dependencies
-COPY --chown=node:node package*.json ./
-RUN --mount=type=cache,target=/root/.npm \
-    apk add --no-cache --virtual .build-deps python3 make g++ && \
-    npm ci --omit=dev --prefer-offline --no-audit && \
-    apk del .build-deps && \
-    apk add --no-cache curl
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
+
+RUN apk add --no-cache curl
 
 # Runtime configuration
 ENV NODE_ENV=production
