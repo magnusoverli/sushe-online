@@ -23,9 +23,9 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
    ```bash
    npm install
    ```
-2. Compile Tailwind CSS:
+2. Build assets:
    ```bash
-   npm run build:css
+   npm run build
    ```
 3. Start the server in development mode with automatic reload and CSS watch:
    ```bash
@@ -50,6 +50,11 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
   `playlists.read`, `entitlements.read`, `collection.write`, `playback`,
   `recommendations.read`, `search.write`. Offline access is not granted, so
   tokens expire and must be reauthorized when they expire.
+
+- `SSL_KEY_PATH` and `SSL_CERT_PATH` – paths to TLS key and certificate if you
+  want to serve the app over HTTPS. If both are provided, the server uses them.
+- `USE_HTTP2` – set to `true` to enable HTTP/2 when TLS credentials are
+  available.
 
 The `/api/tidal/album` endpoint uses TIDAL's v2 `searchResults` API to look up
 an album ID. This works with the `search.read` scope and does not require the

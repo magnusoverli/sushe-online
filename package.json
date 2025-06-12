@@ -4,9 +4,12 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "concurrently \"npm run watch:css\" \"nodemon --ignore data/ --ignore *.log index.js\"",
+    "dev": "concurrently \"npm run watch:css\" \"npm run watch:js\" \"nodemon --ignore data/ --ignore *.log index.js\"",
     "build:css": "postcss src/styles/input.css -o public/styles/output.css",
+    "build:js": "esbuild src/js/main.js --bundle --minify --sourcemap --outfile=public/js/bundle.js",
+    "build": "npm run build:css && npm run build:js",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
+    "watch:js": "esbuild src/js/main.js --bundle --sourcemap --outfile=public/js/bundle.js --watch",
     "test": "node --test"
   },
   "dependencies": {
@@ -28,6 +31,8 @@
     "nodemon": "^3.1.10",
     "postcss": "^8.5.3",
     "postcss-cli": "^11.0.1",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "cssnano": "^6.0.2",
+    "esbuild": "^0.21.0"
   }
 }

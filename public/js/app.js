@@ -2493,3 +2493,18 @@ window.addEventListener('beforeunload', () => {
 
 // Make showToast globally available
 window.showToast = showToast;
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
+}
+
+window.addEventListener('load', () => {
+  const prefetch = () => fetch('/api/lists', { credentials: 'include' }).catch(() => {});
+  if ('requestIdleCallback' in window) {
+    requestIdleCallback(prefetch);
+  } else {
+    setTimeout(prefetch, 2000);
+  }
+});
