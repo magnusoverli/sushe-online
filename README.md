@@ -63,12 +63,6 @@ parses the request correctly.
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
 
-## Upgrading from NeDB
-Existing installations using the old NeDB backend are migrated automatically
-whenever the server starts. If `users.db` or `lists.db` are found in the
-`DATA_DIR` directory, the files are read and all documents imported into
-`sushe.sqlite`. Existing records are left untouched.
-
 ## Running with Docker
 A `Dockerfile` and `docker-compose.yml` are included. You can build and start the app with:
 ```bash

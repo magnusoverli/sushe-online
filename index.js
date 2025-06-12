@@ -40,7 +40,7 @@ if (!require('fs').existsSync(dataDir)) {
   require('fs').mkdirSync(dataDir, { recursive: true });
 }
 
-// Initialize SQLite database (imports any NeDB files on startup)
+// Initialize SQLite database
 const initSQLite = require('./sqlite-store');
 const { users, lists } = initSQLite(dataDir);
 

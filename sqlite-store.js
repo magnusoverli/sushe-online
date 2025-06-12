@@ -182,45 +182,6 @@ function initSQLite(dataDir) {
   const usersStore = new SQLiteStore(db, 'users', ['_id','email','username','hash','spotifyAuth','tidalAuth','tidalCountry','accentColor','lastSelectedList','role','resetToken','resetExpires','createdAt','updatedAt','adminGrantedAt'], ['spotifyAuth','tidalAuth']);
   const listsStore = new SQLiteStore(db, 'lists', ['_id','userId','name','data','createdAt','updatedAt'], ['data']);
 
-  const oldUsersFile = path.join(dataDir, 'users.db');
-  const oldListsFile = path.join(dataDir, 'lists.db');
-  if (fs.existsSync(oldUsersFile) || fs.existsSync(oldListsFile)) {
-    console.log('Migrating NeDB data to SQLite...');
-    const readNeDB = (p) =>
-      fs.readFileSync(p, 'utf8')
-        .split(/\n/)
-        .filter(Boolean)
-        .map(line => {
-          try { return JSON.parse(line); } catch { return null; }
-        })
-        .filter(doc => doc && !doc.$$indexCreated && !doc.$$deleted);
-    if (fs.existsSync(oldUsersFile)) {
-      for (const doc of readNeDB(oldUsersFile)) {
-        const row = usersStore.rowFromDoc(doc);
-        const cols = Object.keys(row).join(',');
-        const placeholders = Object.keys(row).map(k => '@' + k).join(',');
-        try {
-          db.prepare(`INSERT OR IGNORE INTO users (${cols}) VALUES (${placeholders})`).run(row);
-        } catch (e) {
-          console.error('Failed to insert user doc', e);
-        }
-      }
-    }
-    if (fs.existsSync(oldListsFile)) {
-      for (const doc of readNeDB(oldListsFile)) {
-        const row = listsStore.rowFromDoc(doc);
-        const cols = Object.keys(row).join(',');
-        const placeholders = Object.keys(row).map(k => '@' + k).join(',');
-        try {
-          db.prepare(`INSERT OR IGNORE INTO lists (${cols}) VALUES (${placeholders})`).run(row);
-        } catch (e) {
-          console.error('Failed to insert list doc', e);
-        }
-      }
-    }
-    console.log('Migration complete');
-  }
-
   return { users: usersStore, lists: listsStore };
 }
 
