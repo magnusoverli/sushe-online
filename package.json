@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "npm run build:css && node index.js",
     "dev": "concurrently \"npm run watch:css\" \"nodemon --ignore data/ --ignore *.log index.js\"",
     "build:css": "postcss src/styles/input.css -o public/styles/output.css",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",

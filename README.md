@@ -23,21 +23,18 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
    ```bash
    npm install
    ```
-2. Compile Tailwind CSS:
-   ```bash
-   npm run build:css
-   ```
-3. Start the server in development mode with automatic reload and CSS watch:
+2. Start the server in development mode with automatic reload and CSS watch:
    ```bash
    npm run dev
    ```
-4. Alternatively, run `npm start` to launch the server without watchers.
+3. Alternatively, run `npm start` to build the CSS once and launch the server without watchers.
 
 ## Environment variables
 - `SESSION_SECRET` – session encryption secret.
 - `DATA_DIR` – directory where NeDB stores databases (`./data` by default).
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
+- `ASSET_VERSION` – optional string appended to static asset URLs to bust browser caches. If omitted, the app uses the current timestamp.
 - `PORT` – server port (defaults to `3000`).
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` – credentials for Spotify OAuth.
 - `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
