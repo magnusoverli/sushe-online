@@ -34,6 +34,7 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
 - `DATA_DIR` – directory where NeDB stores databases (`./data` by default).
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
+- `ASSET_VERSION` – optional string appended to static asset URLs to bust browser caches. If omitted, the app uses the current timestamp.
 - `PORT` – server port (defaults to `3000`).
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` – credentials for Spotify OAuth.
 - `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
