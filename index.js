@@ -224,8 +224,16 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 const app = express();
 
 // Basic Express middleware
-app.use(express.static('public'));
+app.use(express.static('public', { maxAge: '1y', immutable: true }));
 app.use(compression());
+app.use((req, res, next) => {
+  res.set({
+    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+    Pragma: 'no-cache',
+    Expires: '0'
+  });
+  next();
+});
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
