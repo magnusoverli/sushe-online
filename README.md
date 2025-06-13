@@ -23,7 +23,7 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
    ```bash
    npm install
    ```
-2. Compile Tailwind CSS:
+2. Compile Tailwind CSS and copy the custom album grid styles:
    ```bash
    npm run build:css
    ```
