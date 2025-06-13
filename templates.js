@@ -1647,5 +1647,7 @@ module.exports = {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
-  headerComponent
+  headerComponent,
+  asset,
+  assetVersion
 };

@@ -1,5 +1,5 @@
-// Import the header component and color utilities at the top of the file
-const { headerComponent } = require('./templates');
+// Import the header component, and asset helper from templates
+const { headerComponent, asset } = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
@@ -17,7 +17,7 @@ const settingsTemplate = (req, options) => {
   <link rel="apple-touch-icon" href="/og-image.png">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <link href="/styles/output.css" rel="stylesheet">
+  <link href="${asset('/styles/output.css')}" rel="stylesheet">
   <style>
     /* CSS Custom Properties for theming */
     :root {
