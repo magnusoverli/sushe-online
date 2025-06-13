@@ -1,5 +1,6 @@
 const { adjustColor, colorWithOpacity } = require('./color-utils');
-const { version: assetVersion } = require('./package.json');
+// Use a timestamp-based asset version to avoid browser caching issues
+const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = (p) => `${p}?v=${assetVersion}`;
 
 // Shared header component

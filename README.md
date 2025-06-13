@@ -23,15 +23,11 @@ Docker builds benefit from caching with BuildKit. The `Dockerfile` uses cache mo
    ```bash
    npm install
    ```
-2. Compile Tailwind CSS:
-   ```bash
-   npm run build:css
-   ```
-3. Start the server in development mode with automatic reload and CSS watch:
+2. Start the server in development mode with automatic reload and CSS watch:
    ```bash
    npm run dev
    ```
-4. Alternatively, run `npm start` to launch the server without watchers.
+3. Alternatively, run `npm start` to build the CSS once and launch the server without watchers.
 
 ## Environment variables
 - `SESSION_SECRET` – session encryption secret.
