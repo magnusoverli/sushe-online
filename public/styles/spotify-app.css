@@ -3,7 +3,8 @@
 /* Album grid column configuration with responsive behavior */
 :root {
   /* Default grid for desktop screens */
-  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+  /*   pos   cover  album    artist   country genre1  genre2  comment */
+  --album-grid-columns: 2.5rem 4rem 2fr 2fr 7rem 7rem 7rem 1.5fr;
   --cover-art-size: 64px;
 }
 
@@ -176,6 +177,15 @@ body {
   position: relative;
   background-color: transparent;
   user-select: none;
+}
+
+/* Explicit grid layout for desktop rows */
+@media (min-width: 1024px) {
+  .album-row {
+    display: grid;
+    grid-template-columns: var(--album-grid-columns);
+    align-items: center;
+  }
 }
 
 /* Reduced vertical padding for desktop */
