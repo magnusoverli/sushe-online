@@ -59,6 +59,16 @@ parses the request correctly.
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
 
+## Caching
+
+Static files in the `public` directory are served with a one-year lifetime and
+marked `immutable`. Each asset URL includes a version string (controlled via
+`ASSET_VERSION`), so browsers fetch a new file whenever that value changes.
+
+Dynamic pages and API responses set `Cache-Control: no-store` (along with
+`Pragma: no-cache` and `Expires: 0`) to prevent cached HTML or JSON from being
+reused.
+
 ## Running with Docker
 A `Dockerfile` and `docker-compose.yml` are included. You can build and start the app with:
 ```bash
