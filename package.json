@@ -5,8 +5,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "concurrently \"npm run watch:css\" \"nodemon --ignore data/ --ignore *.log index.js\"",
-    "build:css": "postcss src/styles/input.css -o public/styles/output.css",
-    "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
+    "copy:css": "cp src/styles/spotify-app.css public/styles/spotify-app.css",
+    "build:css": "postcss src/styles/input.css -o public/styles/output.css && npm run copy:css",
+    "watch:css": "concurrently \"postcss src/styles/input.css -o public/styles/output.css --watch\" \"nodemon --watch src/styles/spotify-app.css --exec npm run copy:css\"",
     "test": "node --test"
   },
   "dependencies": {
