@@ -147,6 +147,7 @@ data/
 
 # Generated CSS files
 public/styles/output.css
+public/assets/
 
 # OS files (if not already present)
 .DS_Store
