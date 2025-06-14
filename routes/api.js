@@ -1,5 +1,5 @@
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, ensureAuth, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate } = deps;
+  const { ensureAuthAPI, ensureAuth, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
 
 // ============ API ENDPOINTS FOR LISTS ============
 
