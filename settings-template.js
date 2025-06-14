@@ -181,6 +181,7 @@ const settingsTemplate = (req, options) => {
             </h3>
             
             <form action="/settings/change-password" method="POST" class="space-y-4">
+              <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
               <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2" for="currentPassword">
                   Current Password
@@ -332,6 +333,7 @@ const settingsTemplate = (req, options) => {
                   Enter the admin code to gain administrator privileges.
                 </p>
                 <form action="/settings/request-admin" method="POST" class="space-y-4">
+                  <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
                   <div>
                     <input 
                       type="text" 
