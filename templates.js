@@ -1,7 +1,21 @@
 const { adjustColor, colorWithOpacity } = require('./color-utils');
+const fs = require('fs');
+const path = require('path');
+const ejs = require('ejs');
 // Use a timestamp-based asset version to avoid browser caching issues
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = (p) => `${p}?v=${assetVersion}`;
+
+const viewsDir = path.join(__dirname, 'views');
+// Precompile EJS templates for caching
+const layoutTemplateFn = ejs.compile(
+  fs.readFileSync(path.join(viewsDir, 'layout.ejs'), 'utf8'),
+  { filename: 'layout.ejs', cache: true }
+);
+const loginSnippetFn = ejs.compile(
+  fs.readFileSync(path.join(viewsDir, 'login.ejs'), 'utf8'),
+  { filename: 'login.ejs', cache: true }
+);
 
 // Shared header component
 const headerComponent = (user, activeSection = 'home', currentListName = '') => `
@@ -61,166 +75,16 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
   </header>
 `;
 
-// Base HTML template with Black Metal Spotify-inspired theme
-const htmlTemplate = (content, title = 'SuShe Auth', user = null) => {
-  const accentColor = user?.accentColor || '#dc2626';
-  
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta property="og:title" content="${title}">
-  <meta property="og:description" content="SuShe Online is a web app for managing album lists.">
-  <meta property="og:image" content="/og-image.png">
-  <title>${title}</title>
-  <link rel="icon" type="image/png" href="/og-image.png">
-  <link rel="apple-touch-icon" href="/og-image.png">
-  <link rel="manifest" href="/manifest.json">
-  <link href="${asset('/styles/output.css')}" rel="stylesheet">
-  <style>
-    /* CSS Custom Properties for theming */
-    :root {
-      --accent-color: ${accentColor};
-      --accent-hover: ${adjustColor(accentColor, -30)};
-      --accent-light: ${adjustColor(accentColor, 40)};
-      --accent-dark: ${adjustColor(accentColor, -50)};
-      --accent-shadow: ${colorWithOpacity(accentColor, 0.4)};
-      --accent-glow: ${colorWithOpacity(accentColor, 0.5)};
-      --accent-subtle: ${colorWithOpacity(accentColor, 0.1)};
-    }
-    
-    /* Override Tailwind classes with CSS variables */
-    .text-red-600, .text-red-500, .text-red-400 { 
-      color: var(--accent-color) !important; 
-    }
-    .bg-red-600, .bg-red-500 { 
-      background-color: var(--accent-color) !important; 
-    }
-    .hover\\:bg-red-700:hover, .hover\\:bg-red-600:hover { 
-      background-color: var(--accent-hover) !important; 
-    }
-    .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
-      color: var(--accent-color) !important; 
-    }
-    .border-red-600, .border-red-500 { 
-      border-color: var(--accent-color) !important; 
-    }
-    .focus\\:border-red-600:focus { 
-      border-color: var(--accent-color) !important; 
-    }
-    .ring-red-600 { 
-      --tw-ring-color: var(--accent-color) !important; 
-    }
-    
-    /* Update box shadows */
-    .spotify-input:focus {
-      box-shadow: 0 0 0 3px var(--accent-shadow);
-    }
-    
-    /* Custom black metal inspired fonts and effects */
-    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
-    
-    .metal-title {
-      font-family: 'Cinzel', serif;
-      text-shadow: 0 0 20px var(--accent-glow);
-    }
-    
-    .glow-red {
-      animation: glow 2s ease-in-out infinite alternate;
-    }
-    
-    @keyframes glow {
-      from { 
-        text-shadow: 0 0 10px var(--accent-color), 
-                     0 0 20px var(--accent-color), 
-                     0 0 30px var(--accent-color); 
-      }
-      to { 
-        text-shadow: 0 0 20px var(--accent-color), 
-                     0 0 30px var(--accent-color), 
-                     0 0 40px var(--accent-color); 
-      }
-    }
-    
-    /* Update other accent-colored elements */
-    .bg-red-900 { background-color: var(--accent-dark) !important; }
-    .bg-red-800 { background-color: var(--accent-dark) !important; }
-    
-    /* Subtle background glows */
-    .accent-glow-top {
-      background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%);
-    }
-    
-    /* Toast notifications with accent */
-    .toast.error {
-      background-color: var(--accent-color);
-    }
-    
-    /* NEW badge with accent */
-    .bg-red-600.text-white.text-xs {
-      background-color: var(--accent-color) !important;
-    }
-    
-    /* Mobile FAB with accent */
-    #mobileFAB {
-      background-color: var(--accent-color) !important;
-    }
-    #mobileFAB:hover {
-      background-color: var(--accent-hover) !important;
-    }
-    
-    /* Drag placeholder with accent */
-    .album-row.drag-placeholder {
-      background-color: var(--accent-subtle);
-      border-color: var(--accent-color);
-    }
-    
-    /* SortableJS drag zones */
-    .sortable-scrolling::before,
-    .sortable-scrolling::after {
-      background: linear-gradient(to bottom, 
-        var(--accent-shadow) 0%, 
-        var(--accent-subtle) 50%, 
-        transparent 100%);
-    }
-    
-    /* Custom scrollbar */
-    ::-webkit-scrollbar {
-      width: 8px;
-    }
-    
-    ::-webkit-scrollbar-track {
-      background: #111827;
-    }
-    
-    ::-webkit-scrollbar-thumb {
-      background: #374151;
-      border-radius: 4px;
-    }
-    
-    ::-webkit-scrollbar-thumb:hover {
-      background: #4b5563;
-    }
-  </style>
-</head>
-<body class="bg-black text-gray-200 min-h-screen flex items-center justify-center relative overflow-hidden">
-  <!-- Atmospheric background -->
-  <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black"></div>
-  <div class="noise absolute inset-0"></div>
-  
-  <!-- Subtle accent glow -->
-  <div class="absolute top-0 left-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
-  <div class="absolute bottom-0 right-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
-  
-  <div class="relative z-10 max-w-md w-full px-4">
-    ${content}
-  </div>
-</body>
-</html>
-`;
-};
+// Base HTML template rendered with EJS
+const htmlTemplate = (content, title = 'SuShe Auth', user = null) =>
+  layoutTemplateFn({
+    content,
+    title,
+    user,
+    asset,
+    adjustColor,
+    colorWithOpacity
+  });
 
 // Registration form template - Updated with flash parameter
 const registerTemplate = (req, flash) => htmlTemplate(`
@@ -314,201 +178,9 @@ const registerTemplate = (req, flash) => htmlTemplate(`
   </div>
 `, 'Join SuShe Online', null);
 
-// Login form template - Updated with flash parameter
-const loginTemplate = (req, flash) => htmlTemplate(`
-  <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
-    <div class="text-center mb-8">
-      <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOG IN</h1>
-    </div>
-    
-    <form method="post" action="/login" class="space-y-6" id="loginForm">
-      <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
-      <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
-          Email Address
-        </label>
-        <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
-          name="email" 
-          id="email"
-          type="email" 
-          placeholder="your@email.com" 
-          required 
-          autocomplete="email"
-          value="${req.session.attemptedEmail || ''}"
-        />
-        <p class="text-xs text-gray-500 mt-1 hidden" id="emailError">Please enter a valid email address</p>
-      </div>
-      <div>
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
-          Password
-        </label>
-        <div class="relative">
-          <input 
-            class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 pr-12"
-            name="password" 
-            id="password"
-            type="password" 
-            placeholder="••••••••" 
-            required 
-            autocomplete="current-password"
-          />
-          <button type="button" id="togglePassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
-            <i class="fas fa-eye"></i>
-          </button>
-        </div>
-        <p class="text-xs text-gray-500 mt-1 hidden" id="passwordError">Password is required</p>
-      </div>
-      
-      <div class="flex items-center justify-between">
-        <label class="flex items-center text-sm text-gray-400">
-          <input type="checkbox" name="remember" class="mr-2 rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-red-600 focus:ring-offset-0">
-          Remember me
-        </label>
-        <a href="/forgot" class="text-sm text-gray-400 hover:text-red-500 transition duration-200">Forgot password?</a>
-      </div>
-      
-      <button 
-        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-        type="submit"
-        id="loginButton"
-      >
-        <span id="buttonText">Sign In</span>
-        <span id="buttonLoader" class="hidden">
-          <i class="fas fa-spinner fa-spin mr-2"></i>Signing in...
-        </span>
-      </button>
-    </form>
-    
-    ${flash.error && flash.error.length ? `
-      <div class="mt-4 p-3 bg-red-900/20 border border-red-800 rounded">
-        <p class="text-red-400 text-sm flex items-center">
-          <i class="fas fa-exclamation-circle mr-2"></i>
-          ${flash.error[0]}
-        </p>
-      </div>
-    ` : ''}
-    
-    ${flash.success && flash.success.length ? `
-      <div class="mt-4 p-3 bg-green-900/20 border border-green-800 rounded">
-        <p class="text-green-400 text-sm flex items-center">
-          <i class="fas fa-check-circle mr-2"></i>
-          ${flash.success[0]}
-        </p>
-      </div>
-    ` : ''}
-    
-    ${flash.info && flash.info.length ? `
-      <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded">
-        <p class="text-blue-400 text-sm flex items-center">
-          <i class="fas fa-info-circle mr-2"></i>
-          ${flash.info[0]}
-        </p>
-      </div>
-    ` : ''}
-    
-    <div class="mt-8 pt-6 border-t border-gray-800">
-      <p class="text-center text-gray-500 text-sm">
-        No account? 
-        <a href="/register" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">REGISTER</a>
-      </p>
-    </div>
-  </div>
-  
-  <script>
-    // Client-side validation and UI enhancements
-    document.addEventListener('DOMContentLoaded', function() {
-      const form = document.getElementById('loginForm');
-      const emailInput = document.getElementById('email');
-      const passwordInput = document.getElementById('password');
-      const emailError = document.getElementById('emailError');
-      const passwordError = document.getElementById('passwordError');
-      const loginButton = document.getElementById('loginButton');
-      const buttonText = document.getElementById('buttonText');
-      const buttonLoader = document.getElementById('buttonLoader');
-      const togglePassword = document.getElementById('togglePassword');
-      
-      // Focus on password field if email is pre-filled
-      if (emailInput.value) {
-        passwordInput.focus();
-      } else {
-        emailInput.focus();
-      }
-      
-      // Toggle password visibility
-      togglePassword.addEventListener('click', function() {
-        const type = passwordInput.type === 'password' ? 'text' : 'password';
-        passwordInput.type = type;
-        this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
-      });
-      
-      // Email validation
-      emailInput.addEventListener('blur', function() {
-        const email = this.value.trim();
-        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-        
-        if (email && !emailRegex.test(email)) {
-          emailError.classList.remove('hidden');
-          this.classList.add('border-red-600');
-        } else {
-          emailError.classList.add('hidden');
-          this.classList.remove('border-red-600');
-        }
-      });
-      
-      // Password validation
-      passwordInput.addEventListener('blur', function() {
-        if (!this.value) {
-          passwordError.classList.remove('hidden');
-          this.classList.add('border-red-600');
-        } else {
-          passwordError.classList.add('hidden');
-          this.classList.remove('border-red-600');
-        }
-      });
-      
-      // Form submission
-      form.addEventListener('submit', function(e) {
-        const email = emailInput.value.trim();
-        const password = passwordInput.value;
-        const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
-        
-        // Validate
-        let hasError = false;
-        
-        if (!email || !emailRegex.test(email)) {
-          emailError.classList.remove('hidden');
-          emailInput.classList.add('border-red-600');
-          hasError = true;
-        }
-        
-        if (!password) {
-          passwordError.classList.remove('hidden');
-          passwordInput.classList.add('border-red-600');
-          hasError = true;
-        }
-        
-        if (hasError) {
-          e.preventDefault();
-          return;
-        }
-        
-        // Show loading state
-        loginButton.disabled = true;
-        buttonText.classList.add('hidden');
-        buttonLoader.classList.remove('hidden');
-      });
-      
-      // Enter key navigation
-      emailInput.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter' && this.value) {
-          e.preventDefault();
-          passwordInput.focus();
-        }
-      });
-    });
-  </script>
-`, 'SuShe Online', req.user);
+// Login form template rendered with EJS
+const loginTemplate = (req, flash) =>
+  loginSnippetFn({ req, flash });
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
