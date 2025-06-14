@@ -230,6 +230,7 @@ const registerTemplate = (req, flash) => htmlTemplate(`
     </div>
     
     <form method="post" action="/register" class="space-y-6">
+      <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
           Email Address
@@ -321,6 +322,7 @@ const loginTemplate = (req, flash) => htmlTemplate(`
     </div>
     
     <form method="post" action="/login" class="space-y-6" id="loginForm">
+      <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
           Email Address
@@ -516,6 +518,7 @@ const forgotPasswordTemplate = (req, flash) => `
     </div>
     
     <form method="post" action="/forgot" class="space-y-6">
+      <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
           Email Address
@@ -557,6 +560,7 @@ const resetPasswordTemplate = (token) => `
     </div>
     
     <form method="post" action="/reset/${token}" class="space-y-6">
+      <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
           New Password

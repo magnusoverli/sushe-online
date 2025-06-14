@@ -10,6 +10,8 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const compression = require('compression');
+const helmet = require('helmet');
+const csrf = require('csurf');
 const multer = require('multer');
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -222,6 +224,10 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 
 // Create Express app
 const app = express();
+const csrfProtection = csrf();
+
+// Disable Helmet's default Content Security Policy as it blocks external CDN scripts used in the UI
+app.use(helmet({ contentSecurityPolicy: false }));
 
 // Basic Express middleware
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
@@ -359,11 +365,11 @@ function rateLimitAdminRequest(req, res, next) {
 // ============ ROUTES ============
 
 // Registration routes
-app.get('/register', (req, res) => {
+app.get('/register', csrfProtection, (req, res) => {
   res.send(htmlTemplate(registerTemplate(req, res.locals.flash), 'Join the KVLT - Black Metal Auth'));
 });
 
-app.post('/register', async (req, res) => {
+app.post('/register', csrfProtection, async (req, res) => {
   try {
     const { email, username, password, confirmPassword } = req.body;
     
@@ -486,11 +492,11 @@ app.post('/api/user/last-list', ensureAuthAPI, (req, res) => {
 });
 
 // Login routes
-app.get('/login', (req, res) => {
+app.get('/login', csrfProtection, (req, res) => {
   res.send(htmlTemplate(loginTemplate(req, res.locals.flash), 'SuShe Online'));
 });
 
-app.post('/login', (req, res, next) => {
+app.post('/login', csrfProtection, (req, res, next) => {
   console.log('Login POST request received for:', req.body.email);
   
   passport.authenticate('local', (err, user, info) => {
@@ -538,7 +544,7 @@ app.get('/', ensureAuth, (req, res) => {
 });
 
 // Unified Settings Page
-app.get('/settings', ensureAuth, async (req, res) => {
+app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
   try {
     const spotifyValid = isTokenValid(req.user.spotifyAuth);
     const tidalValid = isTokenValid(req.user.tidalAuth);
@@ -864,7 +870,7 @@ users.update(
 
 
 // Change password endpoint
-app.post('/settings/change-password', ensureAuth, async (req, res) => {
+app.post('/settings/change-password', ensureAuth, csrfProtection, async (req, res) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
     
@@ -918,7 +924,7 @@ app.post('/settings/change-password', ensureAuth, async (req, res) => {
 });
 
 // Admin request endpoint
-app.post('/settings/request-admin', ensureAuth, rateLimitAdminRequest, async (req, res) => {
+app.post('/settings/request-admin', ensureAuth, csrfProtection, rateLimitAdminRequest, async (req, res) => {
   console.log('Admin request received from:', req.user.email);
   
   try {
@@ -1654,12 +1660,12 @@ app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
 // ============ PASSWORD RESET ROUTES ============
 
 // Forgot password page
-app.get('/forgot', (req, res) => {
+app.get('/forgot', csrfProtection, (req, res) => {
   res.send(htmlTemplate(forgotPasswordTemplate(req, res.locals.flash), 'Password Recovery - Black Metal Auth'));
 });
 
 // Handle forgot password submission
-app.post('/forgot', (req, res) => {
+app.post('/forgot', csrfProtection, (req, res) => {
   const { email } = req.body;
   
   if (!email) {
@@ -1736,7 +1742,7 @@ app.post('/forgot', (req, res) => {
 });
 
 // Reset password page
-app.get('/reset/:token', (req, res) => {
+app.get('/reset/:token', csrfProtection, (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, (err, user) => {
     if (!user) {
       return res.send(htmlTemplate(invalidTokenTemplate(), 'Invalid Token - Black Metal Auth'));
@@ -1746,7 +1752,7 @@ app.get('/reset/:token', (req, res) => {
 });
 
 // Handle password reset
-app.post('/reset/:token', async (req, res) => {
+app.post('/reset/:token', csrfProtection, async (req, res) => {
   users.findOne({ resetToken: req.params.token, resetExpires: { $gt: Date.now() } }, async (err, user) => {
     if (err) {
       console.error('Error finding user with reset token:', err);
