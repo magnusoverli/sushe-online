@@ -218,9 +218,8 @@ body {
 }
 
 .album-row.drag-placeholder {
-  background-color: rgba(220, 38, 38, 0.1);
-  border: 2px dashed #dc2626;
-  opacity: 0.8;
+  /* Hide the original row while dragging but keep its space */
+  opacity: 0;
   min-height: 36px;  /* Reduced from 48px */
 }
 
