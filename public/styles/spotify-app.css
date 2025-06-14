@@ -212,14 +212,16 @@ body {
 }
 
 
+
+/* Clone that follows the cursor */
 .album-row.dragging {
-  opacity: 0.2;
+  opacity: 1;
   cursor: grabbing;
 }
 
+/* Placeholder left in the list */
 .album-row.drag-placeholder {
-  /* Hide the original row while dragging but keep its space */
-  opacity: 0;
+  visibility: hidden;
   min-height: 36px;  /* Reduced from 48px */
 }
 
