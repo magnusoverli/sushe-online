@@ -217,6 +217,10 @@ body {
   cursor: grabbing;
 }
 
+body.desktop-dragging .album-row.dragging {
+  opacity: 0;
+}
+
 .album-row.drag-placeholder {
   background-color: rgba(220, 38, 38, 0.1);
   border: 2px dashed #dc2626;
