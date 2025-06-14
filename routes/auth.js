@@ -1,4 +1,5 @@
 module.exports = (app, deps) => {
+  const path = require('path');
   const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt } = deps;
 
 // ============ ROUTES ============
