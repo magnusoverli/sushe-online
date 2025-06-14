@@ -1,0 +1,181 @@
+<div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
+  <div class="text-center mb-8">
+    <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOGIN</h1>
+  </div>
+
+  <form method="post" action="/login" class="space-y-6" id="loginForm">
+    <input type="hidden" name="_csrf" value="<%= req.csrfToken() %>" />
+    <div>
+      <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="email">
+        Email Address
+      </label>
+      <input
+        class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+        name="email"
+        id="email"
+        type="email"
+        placeholder="you@email.com"
+        required
+        autocomplete="email"
+        value="<%= req.session.attemptedEmail || '' %>"
+      />
+      <p class="text-xs text-gray-500 mt-1 hidden" id="emailError">Please enter a valid email address</p>
+    </div>
+    <div>
+      <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
+        Password
+      </label>
+      <div class="relative">
+        <input
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 pr-12"
+          name="password"
+          id="password"
+          type="password"
+          placeholder="••••••••"
+          required
+          autocomplete="current-password"
+        />
+        <button type="button" id="togglePassword" class="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors">
+          <i class="fas fa-eye"></i>
+        </button>
+      </div>
+      <p class="text-xs text-gray-500 mt-1 hidden" id="passwordError">Password is required</p>
+    </div>
+
+    <div class="flex items-center justify-between">
+      <label class="flex items-center text-sm text-gray-400">
+        <input type="checkbox" name="remember" class="mr-2 rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-red-600 focus:ring-offset-0">
+        Remember me
+      </label>
+      <a href="/forgot" class="text-sm text-gray-400 hover:text-red-500 transition duration-200">Forgot password?</a>
+    </div>
+
+    <button
+      class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+      type="submit"
+      id="loginButton"
+    >
+      <span id="buttonText">Sign In</span>
+      <span id="buttonLoader" class="hidden">
+        <i class="fas fa-spinner fa-spin mr-2"></i>Signing in...
+      </span>
+    </button>
+  </form>
+
+  <% if (flash.error && flash.error.length) { %>
+    <div class="mt-4 p-3 bg-red-900/20 border border-red-800 rounded">
+      <p class="text-red-400 text-sm flex items-center">
+        <i class="fas fa-exclamation-circle mr-2"></i>
+        <%= flash.error[0] %>
+      </p>
+    </div>
+  <% } %>
+
+  <% if (flash.success && flash.success.length) { %>
+    <div class="mt-4 p-3 bg-green-900/20 border border-green-800 rounded">
+      <p class="text-green-400 text-sm flex items-center">
+        <i class="fas fa-check-circle mr-2"></i>
+        <%= flash.success[0] %>
+      </p>
+    </div>
+  <% } %>
+
+  <% if (flash.info && flash.info.length) { %>
+    <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded">
+      <p class="text-blue-400 text-sm flex items-center">
+        <i class="fas fa-info-circle mr-2"></i>
+        <%= flash.info[0] %>
+      </p>
+    </div>
+  <% } %>
+
+  <div class="mt-8 pt-6 border-t border-gray-800">
+    <p class="text-center text-gray-500 text-sm">
+      No account?
+      <a href="/register" class="text-red-500 hover:text-red-400 font-semibold transition duration-200">REGISTER</a>
+    </p>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('loginForm');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const emailError = document.getElementById('emailError');
+    const passwordError = document.getElementById('passwordError');
+    const loginButton = document.getElementById('loginButton');
+    const buttonText = document.getElementById('buttonText');
+    const buttonLoader = document.getElementById('buttonLoader');
+    const togglePassword = document.getElementById('togglePassword');
+
+    if (emailInput.value) {
+      passwordInput.focus();
+    } else {
+      emailInput.focus();
+    }
+
+    togglePassword.addEventListener('click', function() {
+      const type = passwordInput.type === 'password' ? 'text' : 'password';
+      passwordInput.type = type;
+      this.innerHTML = type === 'password' ? '<i class="fas fa-eye"></i>' : '<i class="fas fa-eye-slash"></i>';
+    });
+
+    emailInput.addEventListener('blur', function() {
+      const email = this.value.trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (email && !emailRegex.test(email)) {
+        emailError.classList.remove('hidden');
+        this.classList.add('border-red-600');
+      } else {
+        emailError.classList.add('hidden');
+        this.classList.remove('border-red-600');
+      }
+    });
+
+    passwordInput.addEventListener('blur', function() {
+      if (!this.value) {
+        passwordError.classList.remove('hidden');
+        this.classList.add('border-red-600');
+      } else {
+        passwordError.classList.add('hidden');
+        this.classList.remove('border-red-600');
+      }
+    });
+
+    form.addEventListener('submit', function(e) {
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      let hasError = false;
+
+      if (!email || !emailRegex.test(email)) {
+        emailError.classList.remove('hidden');
+        emailInput.classList.add('border-red-600');
+        hasError = true;
+      }
+
+      if (!password) {
+        passwordError.classList.remove('hidden');
+        passwordInput.classList.add('border-red-600');
+        hasError = true;
+      }
+
+      if (hasError) {
+        e.preventDefault();
+        return;
+      }
+
+      loginButton.disabled = true;
+      buttonText.classList.add('hidden');
+      buttonLoader.classList.remove('hidden');
+    });
+
+    emailInput.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter' && this.value) {
+        e.preventDefault();
+        passwordInput.focus();
+      }
+    });
+  });
+</script>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta property="og:title" content="<%= title %>">
+  <meta property="og:description" content="SuShe Online is a web app for managing album lists.">
+  <meta property="og:image" content="/og-image.png">
+  <title><%= title %></title>
+  <link rel="icon" type="image/png" href="/og-image.png">
+  <link rel="apple-touch-icon" href="/og-image.png">
+  <link rel="manifest" href="/manifest.json">
+  <link href="<%= asset('/styles/output.css') %>" rel="stylesheet">
+  <style>
+    :root {
+      --accent-color: <%= user?.accentColor || '#dc2626' %>;
+      --accent-hover: <%= adjustColor(user?.accentColor || '#dc2626', -30) %>;
+      --accent-light: <%= adjustColor(user?.accentColor || '#dc2626', 40) %>;
+      --accent-dark: <%= adjustColor(user?.accentColor || '#dc2626', -50) %>;
+      --accent-shadow: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.4) %>;
+      --accent-glow: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.5) %>;
+      --accent-subtle: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.1) %>;
+    }
+    .text-red-600, .text-red-500, .text-red-400 { color: var(--accent-color) !important; }
+    .bg-red-600, .bg-red-500 { background-color: var(--accent-color) !important; }
+    .hover\:bg-red-700:hover, .hover\:bg-red-600:hover { background-color: var(--accent-hover) !important; }
+    .hover\:text-red-500:hover, .hover\:text-red-400:hover { color: var(--accent-color) !important; }
+    .border-red-600, .border-red-500 { border-color: var(--accent-color) !important; }
+    .focus\:border-red-600:focus { border-color: var(--accent-color) !important; }
+    .ring-red-600 { --tw-ring-color: var(--accent-color) !important; }
+    .spotify-input:focus { box-shadow: 0 0 0 3px var(--accent-shadow); }
+    @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
+    .metal-title { font-family: 'Cinzel', serif; text-shadow: 0 0 20px var(--accent-glow); }
+    .glow-red { animation: glow 2s ease-in-out infinite alternate; }
+    @keyframes glow {
+      from { text-shadow: 0 0 10px var(--accent-color), 0 0 20px var(--accent-color), 0 0 30px var(--accent-color); }
+      to { text-shadow: 0 0 20px var(--accent-color), 0 0 30px var(--accent-color), 0 0 40px var(--accent-color); }
+    }
+    .bg-red-900 { background-color: var(--accent-dark) !important; }
+    .bg-red-800 { background-color: var(--accent-dark) !important; }
+    .accent-glow-top { background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%); }
+    .toast.error { background-color: var(--accent-color); }
+    .bg-red-600.text-white.text-xs { background-color: var(--accent-color) !important; }
+    #mobileFAB { background-color: var(--accent-color) !important; }
+    #mobileFAB:hover { background-color: var(--accent-hover) !important; }
+    .album-row.drag-placeholder { background-color: var(--accent-subtle); border-color: var(--accent-color); }
+    .sortable-scrolling::before,
+    .sortable-scrolling::after {
+      background: linear-gradient(to bottom, var(--accent-shadow) 0%, var(--accent-subtle) 50%, transparent 100%);
+    }
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #111827; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+  </style>
+</head>
+<body class="bg-black text-gray-200 min-h-screen flex items-center justify-center relative overflow-hidden">
+  <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black"></div>
+  <div class="noise absolute inset-0"></div>
+  <div class="absolute top-0 left-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
+  <div class="absolute bottom-0 right-1/4 w-96 h-96 accent-glow-top rounded-full filter blur-3xl opacity-10 animate-pulse"></div>
+  <div class="relative z-10 max-w-md w-full px-4">
+    <%- content %>
+  </div>
+</body>
+</html>

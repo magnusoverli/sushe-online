@@ -226,6 +226,11 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 const app = express();
 const csrfProtection = csrf();
 
+// Configure EJS view engine with caching
+app.set('views', path.join(__dirname, 'views'));
+app.set('view engine', 'ejs');
+app.set('view cache', process.env.NODE_ENV === 'production');
+
 // Disable Helmet's default Content Security Policy as it blocks external CDN scripts used in the UI
 app.use(helmet({ contentSecurityPolicy: false }));
 
