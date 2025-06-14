@@ -22,11 +22,11 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
    ```bash
    npm install
    ```
-2. Start the server in development mode with automatic reload and CSS watch:
+2. Start the server in development mode with automatic reload and CSS/JS watch:
    ```bash
    npm run dev
    ```
-3. Alternatively, run `npm start` to build the CSS once and launch the server without watchers.
+3. Alternatively, run `npm start` to build assets once and launch the server without watchers.
 
 ## Environment variables
 - `SESSION_SECRET` – session encryption secret.
