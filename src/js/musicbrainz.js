@@ -1720,7 +1720,8 @@ async function addAlbumToList(releaseGroup) {
       country: resolvedCountry,
       genre_1: '',
       genre_2: '',
-      comments: ''
+      comments: '',
+      tracks: []
   };
   
   // Enhanced cover art retrieval
@@ -1795,8 +1796,17 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   try {
+    if (album.album_id) {
+      try {
+        album.tracks = await fetchReleaseGroupTracks(album.album_id);
+      } catch (err) {
+        console.error('Failed to fetch track list:', err);
+        album.tracks = [];
+      }
+    }
+
     lists[currentList].push(album);
-    
+
     await saveList(currentList, lists[currentList]);
     
     selectList(currentList);
@@ -1811,6 +1821,40 @@ async function addAlbumToCurrentList(album) {
     lists[currentList].pop();
   }
 }
+
+// Fetch track list from MusicBrainz for a given release group
+async function fetchReleaseGroupTracks(releaseGroupId) {
+  try {
+    const rgData = await rateLimitedFetch(`${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`);
+    const releases = rgData.releases || [];
+    if (!releases.length) return [];
+    // Prefer the first official release
+    releases.sort((a, b) => {
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      return dateA.localeCompare(dateB);
+    });
+    const releaseId = releases[0].id;
+    const release = await rateLimitedFetch(`${MUSICBRAINZ_API}/release/${releaseId}?inc=recordings&fmt=json`);
+    const tracks = [];
+    if (release.media) {
+      for (const medium of release.media) {
+        if (medium.tracks) {
+          for (const track of medium.tracks) {
+            if (track.title) tracks.push(track.title);
+          }
+        }
+      }
+    }
+    return tracks;
+  } catch (err) {
+    console.error('Error fetching track list:', err);
+    return [];
+  }
+}
+
+// Expose helper for use in other modules
+window.fetchReleaseGroupTracks = fetchReleaseGroupTracks;
 
 function hasNonLatinCharacters(str) {
   if (!str) return false;
