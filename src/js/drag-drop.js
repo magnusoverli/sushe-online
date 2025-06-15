@@ -3,7 +3,7 @@ const DragDropManager = (function() {
   // Drag and drop state
   let draggedElement = null;
   let draggedIndex = null;
-  let placeholder = null;
+  let dropTargetElement = null;
   let lastValidDropIndex = null;
   
   // Auto-scroll state
@@ -93,19 +93,12 @@ const DragDropManager = (function() {
     const rowsContainer = this.parentNode;
     cachedRows = Array.from(rowsContainer.querySelectorAll('.album-row'));
     
-    placeholder = document.createElement('div');
-    placeholder.className = 'album-row drag-placeholder album-grid gap-4 px-4 py-3 border-b border-gray-800';
-    placeholder.style.height = this.offsetHeight + 'px';
-
-    
     this.classList.add('dragging');
-    
+
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/html', this.innerHTML);
-    
     requestAnimationFrame(() => {
-      this.style.display = 'none';
-      this.parentNode.insertBefore(placeholder, this.nextSibling);
+      // Keep element in flow while dragging
     });
   }
 
@@ -173,20 +166,19 @@ const DragDropManager = (function() {
       }
     }
     
-    // Update placeholder position
+    // Determine drop position without modifying the DOM
     const afterElement = getDragAfterElement(rowsContainer, e.clientY);
-    
-    if (!placeholder || !placeholder.parentNode) return;
-    
+
     if (afterElement == null) {
-      rowsContainer.appendChild(placeholder);
-      lastValidDropIndex = rowsContainer.children.length - 1;
+      const lastRow = rowsContainer.lastElementChild;
+      lastValidDropIndex = rowsContainer.children.length;
+      showDropIndicator(lastRow, 'bottom');
     } else {
-      rowsContainer.insertBefore(placeholder, afterElement);
       const allElements = Array.from(rowsContainer.children);
-      lastValidDropIndex = allElements.indexOf(placeholder);
+      lastValidDropIndex = allElements.indexOf(afterElement);
+      showDropIndicator(afterElement, 'top');
     }
-    
+
     this.classList.add('drag-active');
   }
 
@@ -196,6 +188,7 @@ const DragDropManager = (function() {
         e.clientY < rect.top || e.clientY > rect.bottom) {
       this.classList.remove('drag-active');
       stopAutoScroll();
+      clearDropIndicator();
     }
   }
 
@@ -206,7 +199,7 @@ const DragDropManager = (function() {
       : Array.from(container.querySelectorAll('.album-row'));
 
     const draggableElements = rows.filter(
-      (el) => !el.classList.contains('dragging') && !el.classList.contains('drag-placeholder')
+      (el) => !el.classList.contains('dragging')
     );
     
     return draggableElements.reduce((closest, child) => {
@@ -221,30 +214,44 @@ const DragDropManager = (function() {
     }, { offset: Number.NEGATIVE_INFINITY }).element;
   }
 
+  function showDropIndicator(targetElement, position) {
+    if (!targetElement) return;
+    if (dropTargetElement && dropTargetElement !== targetElement) {
+      clearDropIndicator();
+    }
+    dropTargetElement = targetElement;
+    const offset = position === 'bottom' ? 'calc(100% - 2px)' : '-2px';
+    targetElement.style.setProperty('--drop-indicator', offset);
+    targetElement.classList.add('drop-target');
+  }
+
+  function clearDropIndicator() {
+    if (dropTargetElement) {
+      dropTargetElement.classList.remove('drop-target');
+      dropTargetElement.style.removeProperty('--drop-indicator');
+      dropTargetElement = null;
+    }
+  }
+
   function handleDragEnd(e) {
     stopAutoScroll();
 
 
-    
+
     if (draggedElement) {
-      draggedElement.style.display = '';
       draggedElement.classList.remove('dragging');
     }
-    
-    // Only remove placeholder if it still exists (wasn't removed by drop handler)
-    if (placeholder && placeholder.parentNode) {
-      placeholder.parentNode.removeChild(placeholder);
-    }
-    
+
+    clearDropIndicator();
+
     document.getElementById('albumContainer').classList.remove('drag-active');
-    
+
     draggedElement = null;
     draggedIndex = null;
-    placeholder = null;
     lastValidDropIndex = null;
     scrollableContainer = null;
     cachedRows = [];
-    
+
   }
 
   async function handleContainerDrop(e, saveCallback) {
@@ -255,16 +262,17 @@ const DragDropManager = (function() {
     
     stopAutoScroll();
     this.classList.remove('drag-active');
+    clearDropIndicator();
     
-    if (!draggedElement || lastValidDropIndex === null || !placeholder) return;
+    if (!draggedElement || lastValidDropIndex === null) return;
     
     const rowsContainer = this.querySelector('.album-rows-container') || this;
     
     // Calculate the final drop index
     let dropIndex = lastValidDropIndex;
     
-    // Get the actual number of album rows (excluding placeholder)
-    const albumRows = rowsContainer.querySelectorAll('.album-row:not(.drag-placeholder)');
+    // Get the actual number of album rows
+    const albumRows = rowsContainer.querySelectorAll('.album-row');
     const maxIndex = albumRows.length - 1;
     
     // Adjust drop index if dragging from before the drop position
@@ -278,12 +286,6 @@ const DragDropManager = (function() {
     // Only proceed if the position actually changed
     if (dropIndex !== draggedIndex) {
       try {
-        // Remove the placeholder first
-        if (placeholder && placeholder.parentNode) {
-          placeholder.parentNode.removeChild(placeholder);
-          placeholder = null;
-        }
-        
         // Calculate where to insert the dragged element
         const allRows = Array.from(rowsContainer.querySelectorAll('.album-row:not(.dragging)'));
         
@@ -307,7 +309,6 @@ const DragDropManager = (function() {
         }
         
         // Show the dragged element
-        draggedElement.style.display = '';
         draggedElement.classList.remove('dragging');
         
         // Update all position numbers and data-index attributes
@@ -328,13 +329,7 @@ const DragDropManager = (function() {
       }
     } else {
       // Position didn't change, just clean up
-      if (placeholder && placeholder.parentNode) {
-        placeholder.parentNode.removeChild(placeholder);
-        placeholder = null;
-      }
-      
       // Show the dragged element in its original position
-      draggedElement.style.display = '';
       draggedElement.classList.remove('dragging');
     }
     
@@ -348,7 +343,7 @@ const DragDropManager = (function() {
 
   // Update positions without rebuilding
   function updateAlbumPositions(container) {
-    const rows = Array.from(container.querySelectorAll('.album-row:not(.drag-placeholder)'));
+    const rows = Array.from(container.querySelectorAll('.album-row'));
     
     rows.forEach((row, index) => {
       // Update the position number

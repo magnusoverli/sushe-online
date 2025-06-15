@@ -19,7 +19,7 @@ safelist: [
   // Drag and drop classes
   'dragging',
   'drag-active',
-  'drag-placeholder',
+  'drop-target',
   
   // Editable cell classes
   'comment-cell',
@@ -147,6 +147,7 @@ safelist: [
   'scale-105',
   'group',
   'group-hover:scale-105',
+
   
   // Animations
   'animate-spin',
