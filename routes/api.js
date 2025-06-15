@@ -315,6 +315,60 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
   }
 });
 
+// === MusicBrainz helper ===
+let lastMBRequest = 0;
+async function mbFetch(url, options) {
+  const now = Date.now();
+  const diff = now - lastMBRequest;
+  if (diff < 1100) {
+    await new Promise(r => setTimeout(r, 1100 - diff));
+  }
+  lastMBRequest = Date.now();
+  return fetch(url, options);
+}
+
+// Fetch track list for a MusicBrainz release group
+app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
+  const { id } = req.query;
+  if (!id) {
+    return res.status(400).json({ error: 'id query is required' });
+  }
+
+  const MB_API = 'https://musicbrainz.org/ws/2';
+  const headers = {
+    'User-Agent': 'KVLT Album Manager/1.0 (contact@kvlt.example.com)',
+    Accept: 'application/json'
+  };
+
+  try {
+    const relResp = await mbFetch(
+      `${MB_API}/release?release-group=${id}&inc=recordings&fmt=json&limit=100`,
+      { headers }
+    );
+    if (!relResp.ok) {
+      throw new Error(`status ${relResp.status}`);
+    }
+    const data = await relResp.json();
+    const releases = Array.isArray(data.releases) ? data.releases : [];
+    if (!releases.length) return res.json([]);
+
+    const preferred =
+      releases.find(r => r.country === 'XW') || releases[0];
+    const tracks = [];
+    if (preferred && Array.isArray(preferred.media)) {
+      preferred.media.forEach(m => {
+        (m.tracks || []).forEach(t => {
+          if (t && t.title) tracks.push(t.title);
+        });
+      });
+    }
+    return res.json(tracks);
+  } catch (error) {
+    console.error('MusicBrainz tracks error:', error);
+    res.status(500).json({ error: 'Failed to fetch tracks' });
+  }
+});
+
 // Search Spotify for an album and return the ID
 app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token ||

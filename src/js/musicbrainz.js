@@ -411,6 +411,22 @@ function formatReleaseDate(date) {
   return date.split('-')[0];
 }
 
+// Fetch tracks for a release group via our server proxy
+async function getAlbumTracks(releaseGroupId) {
+  try {
+    const resp = await fetch(`/api/musicbrainz/tracks?id=${encodeURIComponent(releaseGroupId)}`);
+    if (!resp.ok) {
+      throw new Error(`status ${resp.status}`);
+    }
+    const data = await resp.json();
+    if (Array.isArray(data)) return data;
+    return [];
+  } catch (err) {
+    console.error('Error fetching tracks:', err);
+    return [];
+  }
+}
+
 // Optimization 1: Preload on hover
 async function preloadArtistAlbums(artist) {
   if (preloadCache.has(artist.id)) {
@@ -1109,7 +1125,8 @@ async function handleManualSubmit(e) {
     country: formData.get('country') || '',
     genre_1: '',
     genre_2: '',
-    comments: ''
+    comments: '',
+    tracks: []
   };
   
   // Handle cover art if uploaded
@@ -1720,8 +1737,18 @@ async function addAlbumToList(releaseGroup) {
       country: resolvedCountry,
       genre_1: '',
       genre_2: '',
-      comments: ''
+      comments: '',
+      tracks: []
   };
+
+  try {
+    const trackList = await getAlbumTracks(releaseGroup.id);
+    if (trackList && trackList.length) {
+      album.tracks = trackList;
+    }
+  } catch (err) {
+    console.error('Error fetching tracks:', err);
+  }
   
   // Enhanced cover art retrieval
   let coverArtUrl = releaseGroup.coverArt;
@@ -1927,5 +1954,6 @@ function formatArtistDisplayName(artist) {
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
+  window.getAlbumTracks = getAlbumTracks;
   initializeAddAlbumFeature();
 });
