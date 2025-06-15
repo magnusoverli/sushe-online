@@ -661,6 +661,10 @@ async function loadLists() {
   try {
     lists = await apiCall('/api/lists');
     updateListNav();
+    // Populate missing track data in the background
+    populateMissingTracks().catch(err =>
+      console.error('Track population error:', err)
+    );
   } catch (error) {
     showToast('Error loading lists', 'error');
   }
@@ -686,6 +690,40 @@ async function saveList(name, data) {
   } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
+  }
+}
+
+// Fetch and store tracks for albums that are missing them
+async function populateMissingTracks() {
+  if (typeof window.getAlbumTracks !== 'function') return;
+
+  const listEntries = Object.entries(lists);
+  for (const [listName, albumArray] of listEntries) {
+    let changed = false;
+    for (const album of albumArray) {
+      if (
+        album.album_id &&
+        !album.album_id.startsWith('manual-') &&
+        (!Array.isArray(album.tracks) || album.tracks.length === 0)
+      ) {
+        try {
+          const tracks = await window.getAlbumTracks(album.album_id);
+          if (tracks && tracks.length) {
+            album.tracks = tracks;
+            changed = true;
+          }
+        } catch (err) {
+          console.error('Failed to fetch tracks for', album.album_id, err);
+        }
+      }
+    }
+    if (changed) {
+      try {
+        await saveList(listName, albumArray);
+      } catch (err) {
+        console.error('Failed to save list after adding tracks', err);
+      }
+    }
   }
 }
 
@@ -2204,8 +2242,8 @@ window.showMobileEditForm = function(index) {
         <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Secondary Genre</label>
           <div class="relative">
-            <select 
-              id="editGenre2" 
+            <select
+              id="editGenre2"
               class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
             >
               <option value="">None (optional)</option>
@@ -2221,11 +2259,25 @@ window.showMobileEditForm = function(index) {
             </div>
           </div>
         </div>
-        
+
+        <!-- Tracks -->
+        <div class="w-full">
+          <div class="flex items-center justify-between">
+            <label class="block text-gray-400 text-sm mb-2">Tracks</label>
+            ${album.album_id && !album.album_id.startsWith('manual-') ? `<button type="button" id="fetchTracksBtn" class="text-xs text-red-500">Fetch</button>` : ''}
+          </div>
+          <textarea
+            id="editTracks"
+            rows="4"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
+            placeholder="One track per line"
+          >${(album.tracks || []).join('\n')}</textarea>
+        </div>
+
         <!-- Comments -->
         <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Comments</label>
-          <textarea 
+          <textarea
             id="editComments" 
             rows="3"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
@@ -2240,6 +2292,28 @@ window.showMobileEditForm = function(index) {
   `;
   
   document.body.appendChild(editModal);
+
+  const fetchBtn = document.getElementById('fetchTracksBtn');
+  if (fetchBtn) {
+    fetchBtn.onclick = async () => {
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = 'Loading...';
+      try {
+        const tracks = await getAlbumTracks(album.album_id);
+        if (tracks && tracks.length) {
+          document.getElementById('editTracks').value = tracks.join('\n');
+          showToast('Tracks loaded');
+        } else {
+          showToast('No tracks found', 'error');
+        }
+      } catch (err) {
+        console.error('Track fetch error:', err);
+        showToast('Error fetching tracks', 'error');
+      }
+      fetchBtn.disabled = false;
+      fetchBtn.textContent = 'Fetch';
+    };
+  }
 
   // Handle date input placeholder
   const dateInput = document.getElementById('editReleaseDate');
@@ -2276,6 +2350,10 @@ window.showMobileEditForm = function(index) {
       genre_1: document.getElementById('editGenre1').value,
       genre: document.getElementById('editGenre1').value, // Keep both for compatibility
       genre_2: document.getElementById('editGenre2').value,
+      tracks: document.getElementById('editTracks').value
+        .split('\n')
+        .map(t => t.trim())
+        .filter(t => t !== ''),
       comments: document.getElementById('editComments').value.trim(),
       comment: document.getElementById('editComments').value.trim() // Keep both for compatibility
     };

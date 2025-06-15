@@ -411,6 +411,30 @@ function formatReleaseDate(date) {
   return date.split('-')[0];
 }
 
+// Fetch tracks for a release group
+async function getAlbumTracks(releaseGroupId) {
+  try {
+    const rg = await rateLimitedFetch(`${MUSICBRAINZ_API}/release-group/${releaseGroupId}?inc=releases&fmt=json`);
+    if (!rg.releases || rg.releases.length === 0) {
+      return [];
+    }
+    const official = rg.releases.find(r => r.status === 'Official') || rg.releases[0];
+    const release = await rateLimitedFetch(`${MUSICBRAINZ_API}/release/${official.id}?inc=recordings&fmt=json`);
+    const tracks = [];
+    if (release.media && Array.isArray(release.media)) {
+      release.media.forEach(m => {
+        (m.tracks || []).forEach(t => {
+          if (t && t.title) tracks.push(t.title);
+        });
+      });
+    }
+    return tracks;
+  } catch (err) {
+    console.error('Error fetching tracks:', err);
+    return [];
+  }
+}
+
 // Optimization 1: Preload on hover
 async function preloadArtistAlbums(artist) {
   if (preloadCache.has(artist.id)) {
@@ -1109,7 +1133,8 @@ async function handleManualSubmit(e) {
     country: formData.get('country') || '',
     genre_1: '',
     genre_2: '',
-    comments: ''
+    comments: '',
+    tracks: []
   };
   
   // Handle cover art if uploaded
@@ -1720,8 +1745,18 @@ async function addAlbumToList(releaseGroup) {
       country: resolvedCountry,
       genre_1: '',
       genre_2: '',
-      comments: ''
+      comments: '',
+      tracks: []
   };
+
+  try {
+    const trackList = await getAlbumTracks(releaseGroup.id);
+    if (trackList && trackList.length) {
+      album.tracks = trackList;
+    }
+  } catch (err) {
+    console.error('Error fetching tracks:', err);
+  }
   
   // Enhanced cover art retrieval
   let coverArtUrl = releaseGroup.coverArt;
@@ -1927,5 +1962,6 @@ function formatArtistDisplayName(artist) {
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
+  window.getAlbumTracks = getAlbumTracks;
   initializeAddAlbumFeature();
 });
