@@ -1,5 +1,5 @@
 module.exports = (app, deps) => {
-  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, adminCode, adminCodeExpiry } = deps;
+  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, adminCode, adminCodeExpiry, crypto } = deps;
 
 // ============ ADMIN API ENDPOINTS ============
 
