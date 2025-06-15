@@ -657,9 +657,28 @@ function attachLinkPreview(container, comment) {
 }
 
 // Load lists from server
+async function ensureTrackLists() {
+  for (const [name, albums] of Object.entries(lists)) {
+    let updated = false;
+    for (const album of albums) {
+      if (!album.tracks && album.album_id && !album.album_id.startsWith('manual-')) {
+        const tracks = await window.getTrackList(album.album_id);
+        if (tracks.length) {
+          album.tracks = tracks;
+          updated = true;
+        }
+      }
+    }
+    if (updated) {
+      await saveList(name, albums);
+    }
+  }
+}
+
 async function loadLists() {
   try {
     lists = await apiCall('/api/lists');
+    await ensureTrackLists();
     updateListNav();
   } catch (error) {
     showToast('Error loading lists', 'error');
@@ -2225,12 +2244,22 @@ window.showMobileEditForm = function(index) {
         <!-- Comments -->
         <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Comments</label>
-          <textarea 
-            id="editComments" 
+          <textarea
+            id="editComments"
             rows="3"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
             placeholder="Add your notes..."
           >${album.comments || album.comment || ''}</textarea>
+        </div>
+
+        <!-- Track List -->
+        <div class="w-full">
+          <label class="block text-gray-400 text-sm mb-2">Tracks</label>
+          ${album.tracks && album.tracks.length ? `
+            <ol class="list-decimal list-inside text-gray-300 space-y-1 text-sm">
+              ${album.tracks.map(t => `<li>${t}</li>`).join('')}
+            </ol>
+          ` : '<p class="text-gray-500 text-sm">Track list not available</p>'}
         </div>
         
         <!-- Spacer for bottom padding -->

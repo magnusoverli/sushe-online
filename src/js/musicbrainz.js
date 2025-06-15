@@ -411,6 +411,20 @@ function formatReleaseDate(date) {
   return date.split('-')[0];
 }
 
+// Fetch track list from MusicBrainz for a release group
+async function getTrackList(releaseGroupId) {
+  try {
+    const url = `${MUSICBRAINZ_API}/release?release-group=${releaseGroupId}&inc=recordings&fmt=json&limit=1`;
+    const data = await rateLimitedFetch(url);
+    const release = data.releases && data.releases[0];
+    const tracks = release?.media?.[0]?.tracks || [];
+    return tracks.map(t => t.title);
+  } catch (err) {
+    console.error('Error fetching track list:', err);
+    return [];
+  }
+}
+
 // Optimization 1: Preload on hover
 async function preloadArtistAlbums(artist) {
   if (preloadCache.has(artist.id)) {
@@ -1148,6 +1162,9 @@ async function handleManualSubmit(e) {
 
 async function finishManualAdd(album) {
   try {
+    if (!album.tracks) {
+      album.tracks = [];
+    }
     // Add to current list
     lists[currentList].push(album);
     
@@ -1720,7 +1737,8 @@ async function addAlbumToList(releaseGroup) {
       country: resolvedCountry,
       genre_1: '',
       genre_2: '',
-      comments: ''
+      comments: '',
+      tracks: await getTrackList(releaseGroup.id)
   };
   
   // Enhanced cover art retrieval
@@ -1795,6 +1813,9 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   try {
+    if (!album.tracks && album.album_id && !album.album_id.startsWith('manual-')) {
+      album.tracks = await getTrackList(album.album_id);
+    }
     lists[currentList].push(album);
     
     await saveList(currentList, lists[currentList]);
@@ -1929,3 +1950,6 @@ function formatArtistDisplayName(artist) {
 document.addEventListener('DOMContentLoaded', () => {
   initializeAddAlbumFeature();
 });
+
+// Expose track list helper
+window.getTrackList = getTrackList;
