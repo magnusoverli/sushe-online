@@ -377,7 +377,8 @@ const deps = {
   users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer,
   composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword,
   broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt,
-  dataDir
+  dataDir,
+  passport
 };
 
 authRoutes(app, deps);
