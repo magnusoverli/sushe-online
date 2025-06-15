@@ -217,11 +217,16 @@ body {
   cursor: grabbing;
 }
 
-.album-row.drag-placeholder {
-  background-color: rgba(220, 38, 38, 0.1);
-  border: 2px dashed #dc2626;
-  opacity: 0.8;
-  min-height: 36px;  /* Reduced from 48px */
+.album-row.drop-target::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 2px dashed #dc2626;
+  top: var(--drop-indicator, -2px);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Ensure minimum heights for rows */
