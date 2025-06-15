@@ -315,6 +315,68 @@ app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
   }
 });
 
+// Fetch track list for a MusicBrainz release group
+app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
+  const { id } = req.query;
+  if (!id) {
+    return res.status(400).json({ error: 'id query is required' });
+  }
+
+  const MB_API = 'https://musicbrainz.org/ws/2';
+  const headers = {
+    'User-Agent': 'KVLT Album Manager/1.0 (https://kvlt.example.com)',
+    Accept: 'application/json'
+  };
+
+  try {
+    const rgResp = await fetch(
+      `${MB_API}/release-group/${id}?inc=releases&fmt=json`,
+      { headers }
+    );
+    if (!rgResp.ok) {
+      throw new Error(`RG status ${rgResp.status}`);
+    }
+    const rg = await rgResp.json();
+    if (!rg.releases || !rg.releases.length) {
+      return res.json([]);
+    }
+
+    const releaseIds = [
+      ...rg.releases.filter(r => r.status === 'Official').map(r => r.id),
+      ...rg.releases.filter(r => r.status !== 'Official').map(r => r.id)
+    ];
+
+    for (const relId of releaseIds) {
+      try {
+        const relResp = await fetch(
+          `${MB_API}/release/${relId}?inc=recordings&fmt=json`,
+          { headers }
+        );
+        if (!relResp.ok) continue;
+        const rel = await relResp.json();
+        const tracks = [];
+        if (Array.isArray(rel.media)) {
+          rel.media.forEach(m => {
+            (m.tracks || []).forEach(t => {
+              if (t && t.title) tracks.push(t.title);
+            });
+          });
+        }
+        if (tracks.length) {
+          return res.json(tracks);
+        }
+      } catch (err) {
+        console.error('Release fetch error:', err);
+      }
+    }
+
+    res.json([]);
+  } catch (error) {
+    console.error('MusicBrainz tracks error:', error);
+    res.status(500).json({ error: 'Failed to fetch tracks' });
+  }
+});
+
 // Search Spotify for an album and return the ID
 app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
   if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token ||
