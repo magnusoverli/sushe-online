@@ -1555,6 +1555,22 @@ function removeAlbum(index) {
 }
 
 // Make genre editable with datalist
+// Fetch track list for an album if missing and save
+
+async function fetchAndStoreTrackList(album, index) {
+  if (album.tracks && album.tracks.length) return album.tracks;
+  if (!album.album_id) return [];
+  const tracks = await window.getTrackList(album.album_id);
+  if (tracks.length > 0) {
+    album.tracks = tracks;
+    lists[currentList][index] = album;
+    try {
+      await saveList(currentList, lists[currentList]);
+    } catch (e) {}
+  }
+  return tracks;
+}
+
 function makeGenreEditable(genreDiv, albumIndex, genreField) {
   // Check if we're already editing
   if (genreDiv.querySelector('input')) {
@@ -2232,6 +2248,11 @@ window.showMobileEditForm = function(index) {
             placeholder="Add your notes..."
           >${album.comments || album.comment || ''}</textarea>
         </div>
+        <!-- Track List -->
+        <div class="w-full">
+          <label class="block text-gray-400 text-sm mb-2">Tracks</label>
+          <ul id="trackList" class="list-disc list-inside space-y-1 text-gray-300"></ul>
+        </div>
         
         <!-- Spacer for bottom padding -->
         <div class="h-4"></div>
@@ -2240,6 +2261,26 @@ window.showMobileEditForm = function(index) {
   `;
   
   document.body.appendChild(editModal);
+  const trackListEl = document.getElementById("trackList");
+  const renderTrackList = (tracks) => {
+    trackListEl.innerHTML = "";
+    if (!tracks || tracks.length === 0) {
+      const li = document.createElement("li");
+      li.textContent = "No track list available";
+      li.className = "text-gray-500";
+      trackListEl.appendChild(li);
+      return;
+    }
+    tracks.forEach(t => {
+      const li = document.createElement("li");
+      li.textContent = t;
+      trackListEl.appendChild(li);
+    });
+  };
+  renderTrackList(album.tracks);
+  if (!album.tracks || album.tracks.length === 0) {
+    fetchAndStoreTrackList(album, index).then(renderTrackList);
+  }
 
   // Handle date input placeholder
   const dateInput = document.getElementById('editReleaseDate');
