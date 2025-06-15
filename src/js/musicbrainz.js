@@ -1443,7 +1443,7 @@ async function selectArtist(artist) {
     
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.log('Album loading cancelled');
+      console.info('Album loading cancelled');
       return;
     }
     console.error('Error fetching albums:', error);

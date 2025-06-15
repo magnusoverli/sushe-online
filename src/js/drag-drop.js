@@ -17,9 +17,6 @@ const DragDropManager = (function() {
     const container = document.getElementById('albumContainer');
     if (!container) return;
 
-    console.debug('DragDropManager: initialize', {
-      containerFound: !!container,
-    });
     
     container.addEventListener('dragover', handleContainerDragOver);
     container.addEventListener('dragleave', handleContainerDragLeave);
@@ -31,10 +28,6 @@ const DragDropManager = (function() {
       clearInterval(autoScrollInterval);
     }
 
-    console.debug('DragDropManager: startAutoScroll', {
-      direction,
-      speed,
-    });
     
     currentScrollSpeed = speed;
     scrollAcceleration = 1;
@@ -49,10 +42,6 @@ const DragDropManager = (function() {
         const adjustedSpeed = currentScrollSpeed * scrollAcceleration;
         const currentScroll = scrollableContainer.scrollTop;
         const newScroll = currentScroll + (direction * adjustedSpeed);
-        console.debug('DragDropManager: autoScroll tick', {
-          adjustedSpeed,
-          newScroll,
-        });
         
         if (direction > 0) {
           const maxScroll = scrollableContainer.scrollHeight - scrollableContainer.clientHeight;
@@ -80,7 +69,6 @@ const DragDropManager = (function() {
       autoScrollInterval = null;
       currentScrollSpeed = 0;
       scrollAcceleration = 1;
-      console.debug('DragDropManager: stopAutoScroll');
     }
   }
 
@@ -92,11 +80,6 @@ const DragDropManager = (function() {
       return;
     }
 
-    console.debug('DragDropManager: drag start', {
-      index: this.dataset.index,
-      clientX: e.clientX,
-      clientY: e.clientY,
-    });
     
     draggedElement = this;
     draggedIndex = parseInt(this.dataset.index);
@@ -108,9 +91,6 @@ const DragDropManager = (function() {
     placeholder.className = 'album-row drag-placeholder album-grid gap-4 px-4 py-3 border-b border-gray-800';
     placeholder.style.height = this.offsetHeight + 'px';
 
-    console.debug('DragDropManager: placeholder created', {
-      height: this.offsetHeight,
-    });
     
     this.classList.add('dragging');
     
@@ -120,7 +100,6 @@ const DragDropManager = (function() {
     requestAnimationFrame(() => {
       this.style.display = 'none';
       this.parentNode.insertBefore(placeholder, this.nextSibling);
-      console.debug('DragDropManager: placeholder inserted');
     });
   }
 
@@ -128,7 +107,6 @@ const DragDropManager = (function() {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
 
-    console.debug('DragDropManager: container drag over');
     
     const rowsContainer = this.querySelector('.album-rows-container') || this;
     
@@ -191,26 +169,16 @@ const DragDropManager = (function() {
     
     // Update placeholder position
     const afterElement = getDragAfterElement(rowsContainer, e.clientY);
-    console.debug('DragDropManager: afterElement', {
-      afterElementIndex: afterElement ? afterElement.dataset.index : null,
-      clientY: e.clientY,
-    });
     
     if (!placeholder || !placeholder.parentNode) return;
     
     if (afterElement == null) {
       rowsContainer.appendChild(placeholder);
       lastValidDropIndex = rowsContainer.children.length - 1;
-      console.debug('DragDropManager: appended placeholder', {
-        lastValidDropIndex,
-      });
     } else {
       rowsContainer.insertBefore(placeholder, afterElement);
       const allElements = Array.from(rowsContainer.children);
       lastValidDropIndex = allElements.indexOf(placeholder);
-      console.debug('DragDropManager: inserted placeholder', {
-        lastValidDropIndex,
-      });
     }
     
     this.classList.add('drag-active');
@@ -222,7 +190,6 @@ const DragDropManager = (function() {
         e.clientY < rect.top || e.clientY > rect.bottom) {
       this.classList.remove('drag-active');
       stopAutoScroll();
-      console.debug('DragDropManager: container drag leave');
     }
   }
 
@@ -244,9 +211,7 @@ const DragDropManager = (function() {
   function handleDragEnd(e) {
     stopAutoScroll();
 
-    console.debug('DragDropManager: drag end', {
-      draggedIndex,
-    });
+
     
     if (draggedElement) {
       draggedElement.style.display = '';
@@ -256,7 +221,6 @@ const DragDropManager = (function() {
     // Only remove placeholder if it still exists (wasn't removed by drop handler)
     if (placeholder && placeholder.parentNode) {
       placeholder.parentNode.removeChild(placeholder);
-      console.debug('DragDropManager: placeholder removed on drag end');
     }
     
     document.getElementById('albumContainer').classList.remove('drag-active');
@@ -266,17 +230,14 @@ const DragDropManager = (function() {
     placeholder = null;
     lastValidDropIndex = null;
     scrollableContainer = null;
-    console.debug('DragDropManager: state cleared after drag end');
+    
   }
 
   async function handleContainerDrop(e, saveCallback) {
     e.preventDefault();
     e.stopPropagation();
 
-    console.debug('DragDropManager: container drop', {
-      draggedIndex,
-      lastValidDropIndex,
-    });
+    
     
     stopAutoScroll();
     this.classList.remove('drag-active');
@@ -287,7 +248,6 @@ const DragDropManager = (function() {
     
     // Calculate the final drop index
     let dropIndex = lastValidDropIndex;
-    console.debug('DragDropManager: initial dropIndex', { dropIndex });
     
     // Get the actual number of album rows (excluding placeholder)
     const albumRows = rowsContainer.querySelectorAll('.album-row:not(.drag-placeholder)');
@@ -297,11 +257,9 @@ const DragDropManager = (function() {
     if (draggedIndex < dropIndex) {
       dropIndex--;
     }
-    console.debug('DragDropManager: adjusted dropIndex after drag check', { dropIndex });
     
     // Ensure drop index is within valid bounds
     dropIndex = Math.max(0, Math.min(dropIndex, maxIndex));
-    console.debug('DragDropManager: bounded dropIndex', { dropIndex });
     
     // Only proceed if the position actually changed
     if (dropIndex !== draggedIndex) {
@@ -310,7 +268,6 @@ const DragDropManager = (function() {
         if (placeholder && placeholder.parentNode) {
           placeholder.parentNode.removeChild(placeholder);
           placeholder = null;
-          console.debug('DragDropManager: placeholder removed before inserting');
         }
         
         // Calculate where to insert the dragged element
@@ -334,7 +291,6 @@ const DragDropManager = (function() {
           // If no reference element, append to the end
           rowsContainer.appendChild(draggedElement);
         }
-        console.debug('DragDropManager: element moved', { from: draggedIndex, to: dropIndex });
         
         // Show the dragged element
         draggedElement.style.display = '';
@@ -345,7 +301,6 @@ const DragDropManager = (function() {
         
         // Call the save callback if provided
         if (saveCallback) {
-          console.debug('DragDropManager: saving', { from: draggedIndex, to: dropIndex });
           await saveCallback(draggedIndex, dropIndex);
         }
         
@@ -359,11 +314,9 @@ const DragDropManager = (function() {
       }
     } else {
       // Position didn't change, just clean up
-      console.debug('DragDropManager: position unchanged');
       if (placeholder && placeholder.parentNode) {
         placeholder.parentNode.removeChild(placeholder);
         placeholder = null;
-        console.debug('DragDropManager: placeholder removed (unchanged position)');
       }
       
       // Show the dragged element in its original position
@@ -376,7 +329,6 @@ const DragDropManager = (function() {
     draggedIndex = null;
     lastValidDropIndex = null;
     scrollableContainer = null;
-    console.debug('DragDropManager: cleanup after drop');
   }
 
   // Update positions without rebuilding
@@ -394,9 +346,6 @@ const DragDropManager = (function() {
       row.dataset.index = index;
     });
 
-    console.debug('DragDropManager: positions updated', {
-      totalRows: rows.length,
-    });
   }
 
   // Make row draggable
@@ -405,9 +354,6 @@ const DragDropManager = (function() {
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
 
-    console.debug('DragDropManager: row made draggable', {
-      index: row.dataset.index,
-    });
   }
 
   // Public API
@@ -417,7 +363,6 @@ const DragDropManager = (function() {
     setupDropHandler: function(saveCallback) {
       const container = document.getElementById('albumContainer');
       if (container) {
-        console.debug('DragDropManager: setup drop handler');
 
         // Remove any existing drop handlers
         if (container._dropHandler) {
