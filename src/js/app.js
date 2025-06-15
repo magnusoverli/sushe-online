@@ -270,7 +270,7 @@ async function downloadListAsJSON(listName) {
           return;
         }
       } catch (shareError) {
-        console.log('Share API failed, falling back to download:', shareError);
+        console.warn('Share API failed, falling back to download:', shareError);
         // Fall through to regular download
       }
     }
@@ -677,7 +677,6 @@ async function saveList(name, data) {
       return cleaned;
     });
 
-    console.debug('saveList', name, cleanedData);
     
     await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
       method: 'POST',
@@ -1470,7 +1469,6 @@ function initializeMobileSorting(container) {
 // Select and display a list
 async function selectList(listName) {
   try {
-    console.log('Selecting list:', listName);
     currentList = listName;
     subscribeToList(listName);
 
@@ -1748,12 +1746,12 @@ function makeCommentEditable(commentDiv, albumIndex) {
 // Display albums function with editable genres and comments
 // Display albums function with editable genres and comments
 function displayAlbums(albums) {
-  console.log('displayAlbums called, mobile:', window.innerWidth < 1024, 'albums:', albums?.length);
+    
   
   const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
   const container = document.getElementById('albumContainer');
     
-  console.log('Container found:', !!container, 'Container ID:', container?.id);
+  
   
   if (!container) {
     console.error('Album container not found!');
@@ -1761,7 +1759,6 @@ function displayAlbums(albums) {
   }
   
   container.innerHTML = '';
-  console.log('Container cleared, about to add albums...');
   
   if (!albums || albums.length === 0) {
     container.innerHTML = `
@@ -1929,14 +1926,12 @@ function displayAlbums(albums) {
       window.DragDropManager.initialize();
 
       window.DragDropManager.setupDropHandler(async (draggedIndex, dropIndex, needsRebuild) => {
-        console.debug('Drop handler invoked', { draggedIndex, dropIndex, needsRebuild });
         if (needsRebuild) {
           displayAlbums(lists[currentList]);
           return;
         }
 
         if (draggedIndex !== null && dropIndex !== null) {
-          console.debug('Reordering list', { list: currentList, from: draggedIndex, to: dropIndex });
           const list = lists[currentList];
           const [movedItem] = list.splice(draggedIndex, 1);
           list.splice(dropIndex, 0, movedItem);
@@ -1947,7 +1942,6 @@ function displayAlbums(albums) {
     }
   } else {
     // Mobile view - card-based layout with SortableJS
-    console.log('Building mobile view for', albums.length, 'albums');
     const mobileContainer = document.createElement('div');
     mobileContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
     
@@ -2045,13 +2039,11 @@ function displayAlbums(albums) {
     });
     
     container.appendChild(mobileContainer);
-    console.log('Mobile container appended with', albums.length, 'albums');
     
     // Initialize SortableJS for mobile
     initializeMobileSorting(mobileContainer);
   }
   
-  console.log('displayAlbums completed');
 }
 
 
@@ -2435,10 +2427,8 @@ document.addEventListener('DOMContentLoaded', () => {
       
       // Prioritize local storage if it exists and is valid
       if (localLastList && lists[localLastList]) {
-        console.log('Auto-loading last selected list from localStorage:', localLastList);
         selectList(localLastList);
       } else if (serverLastList && lists[serverLastList]) {
-        console.log('Auto-loading last selected list from server:', serverLastList);
         selectList(serverLastList);
         // Also update localStorage with server value
         localStorage.setItem('lastSelectedList', serverLastList);
