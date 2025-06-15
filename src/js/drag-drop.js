@@ -11,6 +11,8 @@ const DragDropManager = (function() {
   let currentScrollSpeed = 0;
   let scrollAcceleration = 1;
   let scrollableContainer = null;
+  // Cached rows for efficient lookups during drag
+  let cachedRows = [];
 
   // Initialize drag and drop for container
   function initialize() {
@@ -86,6 +88,10 @@ const DragDropManager = (function() {
     
     // Find the scrollable container (the parent with overflow-y-auto)
     scrollableContainer = this.closest('.overflow-y-auto') || document.getElementById('albumContainer').parentElement;
+
+    // Cache current album rows for faster lookups during drag
+    const rowsContainer = this.parentNode;
+    cachedRows = Array.from(rowsContainer.querySelectorAll('.album-row'));
     
     placeholder = document.createElement('div');
     placeholder.className = 'album-row drag-placeholder album-grid gap-4 px-4 py-3 border-b border-gray-800';
@@ -194,7 +200,14 @@ const DragDropManager = (function() {
   }
 
   function getDragAfterElement(container, y) {
-    const draggableElements = [...container.querySelectorAll('.album-row:not(.dragging):not(.drag-placeholder)')];
+    // Use cached rows when available to avoid expensive queries
+    const rows = cachedRows.length
+      ? cachedRows
+      : Array.from(container.querySelectorAll('.album-row'));
+
+    const draggableElements = rows.filter(
+      (el) => !el.classList.contains('dragging') && !el.classList.contains('drag-placeholder')
+    );
     
     return draggableElements.reduce((closest, child) => {
       const box = child.getBoundingClientRect();
@@ -230,6 +243,7 @@ const DragDropManager = (function() {
     placeholder = null;
     lastValidDropIndex = null;
     scrollableContainer = null;
+    cachedRows = [];
     
   }
 
@@ -329,6 +343,7 @@ const DragDropManager = (function() {
     draggedIndex = null;
     lastValidDropIndex = null;
     scrollableContainer = null;
+    cachedRows = [];
   }
 
   // Update positions without rebuilding
