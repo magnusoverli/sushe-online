@@ -2093,8 +2093,12 @@ window.showMobileAlbumMenu = function(indexOrElement) {
 };
 
 // Mobile edit form (basic implementation)
-window.showMobileEditForm = function(index) {
+window.showMobileEditForm = async function(index) {
   const album = lists[currentList][index];
+  if (album && !album.tracks && album.album_id && typeof fetchReleaseGroupTracks === 'function') {
+    album.tracks = await fetchReleaseGroupTracks(album.album_id);
+    await saveList(currentList, lists[currentList]);
+  }
   
   // Create the edit modal
   const editModal = document.createElement('div');
@@ -2225,13 +2229,22 @@ window.showMobileEditForm = function(index) {
         <!-- Comments -->
         <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Comments</label>
-          <textarea 
-            id="editComments" 
+        <textarea
+            id="editComments"
             rows="3"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
             placeholder="Add your notes..."
           >${album.comments || album.comment || ''}</textarea>
         </div>
+
+        ${album.tracks && album.tracks.length ? `
+        <div class="w-full">
+          <label class="block text-gray-400 text-sm mb-2">Tracks</label>
+          <ol class="list-decimal list-inside text-gray-300 space-y-1 text-sm">
+            ${album.tracks.map(t => `<li>${t}</li>`).join('')}
+          </ol>
+        </div>
+        ` : ''}
         
         <!-- Spacer for bottom padding -->
         <div class="h-4"></div>
