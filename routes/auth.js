@@ -82,6 +82,7 @@ app.post('/register', csrfProtection, async (req, res) => {
             tidalAuth: null,
             tidalCountry: null,
             accentColor: '#dc2626',
+            dateFormat: 'YYYY-MM-DD',
             createdAt: new Date(),
             updatedAt: new Date()
           }, (err, newUser) => {
@@ -435,6 +436,40 @@ app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
   }
 });
 
+// Update date format endpoint
+app.post('/settings/update-date-format', ensureAuth, async (req, res) => {
+  try {
+    const { dateFormat } = req.body;
+    const validFormats = ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY'];
+    if (!validFormats.includes(dateFormat)) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
+    users.update(
+      { _id: req.user._id },
+      { $set: { dateFormat, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating date format:', err);
+          return res.status(500).json({ error: 'Error updating date format' });
+        }
+
+        req.user.dateFormat = dateFormat;
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          res.json({ success: true });
+        });
+
+        console.log(`User ${req.user.email} updated date format to ${dateFormat}`);
+      }
+    );
+  } catch (error) {
+    console.error('Update date format error:', error);
+    res.status(500).json({ error: 'Error updating date format' });
+  }
+});
+
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
   
@@ -469,6 +504,20 @@ users.update(
       console.error('Error migrating accent colors:', err);
     } else if (numUpdated > 0) {
       console.log(`Migrated ${numUpdated} users with default accent color`);
+    }
+  }
+);
+
+// One-time migration to add dateFormat to existing users
+users.update(
+  { dateFormat: { $exists: false } },
+  { $set: { dateFormat: 'YYYY-MM-DD' } },
+  { multi: true },
+  (err, numUpdated) => {
+    if (err) {
+      console.error('Error migrating date formats:', err);
+    } else if (numUpdated > 0) {
+      console.log(`Migrated ${numUpdated} users with default date format`);
     }
   }
 );

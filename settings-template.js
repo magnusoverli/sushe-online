@@ -267,6 +267,25 @@ const settingsTemplate = (req, options) => {
         </div>
         </div>
 
+        <!-- Date Format Settings -->
+        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <h3 class="text-lg font-semibold text-white mb-4">
+            <i class="fas fa-calendar-alt mr-2 text-gray-400"></i>
+            Date Format
+        </h3>
+        <p class="text-sm text-gray-400 mb-4">
+            Choose how release dates are displayed
+        </p>
+        <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            <select id="dateFormatSelect" class="px-4 py-2 bg-gray-800 border border-gray-700 rounded text-white">
+            <option value="YYYY-MM-DD" ${user.dateFormat === 'YYYY-MM-DD' ? 'selected' : ''}>YYYY-MM-DD</option>
+            <option value="DD/MM/YYYY" ${user.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
+            <option value="MM/DD/YYYY" ${user.dateFormat === 'MM/DD/YYYY' ? 'selected' : ''}>MM/DD/YYYY</option>
+            </select>
+            <button onclick="updateDateFormat(document.getElementById('dateFormatSelect').value)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200">Save</button>
+        </div>
+        </div>
+
         <!-- Music Service Integration -->
         <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
           <h3 class="text-lg font-semibold text-white mb-4">
@@ -771,6 +790,34 @@ const settingsTemplate = (req, options) => {
     
     function resetAccentColor() {
       updateAccentColor('#dc2626');
+    }
+
+    async function updateDateFormat(format) {
+      try {
+        const allowed = ['YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY'];
+        if (!allowed.includes(format)) {
+          showToast('Invalid date format', 'error');
+          return;
+        }
+
+        const response = await fetch('/settings/update-date-format', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dateFormat: format }),
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          showToast('Date format updated!');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.error || 'Error updating date format', 'error');
+        }
+      } catch (error) {
+        console.error('Error updating date format:', error);
+        showToast('Error updating date format', 'error');
+      }
     }
     
     // Client-side color adjustment function
