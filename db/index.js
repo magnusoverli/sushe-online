@@ -11,6 +11,7 @@ async function ensureTables(pool) {
     username TEXT UNIQUE,
     hash TEXT,
     accent_color TEXT,
+    time_format TEXT,
     last_selected_list TEXT,
     role TEXT,
     admin_granted_at TIMESTAMPTZ,
@@ -25,6 +26,7 @@ async function ensureTables(pool) {
   )`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_granted_at TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format TEXT`);
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -73,6 +75,7 @@ if (process.env.DATABASE_URL) {
     username: 'username',
     hash: 'hash',
     accentColor: 'accent_color',
+    timeFormat: 'time_format',
     lastSelectedList: 'last_selected_list',
     role: 'role',
     adminGrantedAt: 'admin_granted_at',
@@ -116,6 +119,41 @@ if (process.env.DATABASE_URL) {
   usersAsync = users;
   listsAsync = lists;
   listItemsAsync = listItems;
+  async function migrateUsers() {
+    try {
+      await users.update(
+        { accentColor: { $exists: false } },
+        { $set: { accentColor: '#dc2626' } },
+        { multi: true }
+      );
+
+      await users.update(
+        { timeFormat: { $exists: false } },
+        { $set: { timeFormat: '24h' } },
+        { multi: true }
+      );
+
+      await users.update(
+        { spotifyAuth: { $exists: false } },
+        { $set: { spotifyAuth: null } },
+        { multi: true }
+      );
+
+      await users.update(
+        { tidalAuth: { $exists: false } },
+        { $set: { tidalAuth: null } },
+        { multi: true }
+      );
+
+      await users.update(
+        { tidalCountry: { $exists: false } },
+        { $set: { tidalCountry: null } },
+        { multi: true }
+      );
+    } catch (err) {
+      console.error('User migration error:', err);
+    }
+  }
   async function migrateLists() {
     const listsRes = await pool.query('SELECT _id, data FROM lists');
     for (const row of listsRes.rows) {
@@ -150,6 +188,7 @@ if (process.env.DATABASE_URL) {
   ready = waitForPostgres(pool)
     .then(() => ensureTables(pool))
     .then(() => migrateLists())
+    .then(() => migrateUsers())
     .then(() => console.log('Database ready'));
 } else {
   throw new Error('DATABASE_URL must be set');
