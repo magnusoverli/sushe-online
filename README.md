@@ -11,7 +11,7 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 - **User accounts** with registration, login and session handling using Passport.js and express-session.
 - **Password reset** via email using Nodemailer.
 - **Spotify-like interface** for browsing and editing your lists. Drag and drop albums to reorder and import data from MusicBrainz, iTunes and Deezer.
-- **Persistent storage** using NeDB databases stored locally in the `data` directory.
+- **Persistent storage** using NeDB databases or PostgreSQL. Set `DATABASE_URL` to use PostgreSQL. Existing data is migrated automatically on startup.
 - **Admin mode** protected by a rotating access code printed to the server console. Admins can view site statistics, manage users and create backups.
 - **Custom theme** support allowing each user to pick an accent colour.
 - **REST API** endpoints for list management and a proxy for Deezer API requests.
@@ -30,7 +30,9 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 
 ## Environment variables
 - `SESSION_SECRET` – session encryption secret.
-- `DATA_DIR` – directory where NeDB stores databases (`./data` by default).
+- `DATA_DIR` – directory where NeDB stores databases (`./data` by default). Ignored when using PostgreSQL.
+- `DATABASE_URL` – PostgreSQL connection string. When set, the application uses PostgreSQL instead of NeDB.
+- `LOG_SQL` – set to `true` to print all SQL queries for debugging.
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
 - `ASSET_VERSION` – optional string appended to static asset URLs to bust browser caches. If omitted, the app uses the current timestamp.
@@ -74,5 +76,7 @@ A `Dockerfile` and `docker-compose.yml` are included. You can build and start th
 ```bash
 docker compose up --build
 ```
+
+If `DATABASE_URL` is set, the application connects to PostgreSQL. When the server starts it will automatically copy any NeDB data into the database if the tables are empty. The server waits for PostgreSQL to become reachable before starting so it may take a few seconds on first boot.
 
 The admin access code is displayed in the server logs and rotates every five minutes.
