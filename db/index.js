@@ -33,6 +33,24 @@ async function ensureTables(pool) {
     updated_at TIMESTAMPTZ,
     CONSTRAINT unique_user_name UNIQUE(user_id, name)
   )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS list_items (
+    id SERIAL PRIMARY KEY,
+    _id TEXT UNIQUE NOT NULL,
+    list_id TEXT NOT NULL REFERENCES lists(_id) ON DELETE CASCADE,
+    position INT,
+    artist TEXT,
+    album TEXT,
+    album_id TEXT,
+    release_date TEXT,
+    country TEXT,
+    genre_1 TEXT,
+    genre_2 TEXT,
+    comments TEXT,
+    cover_image TEXT,
+    cover_image_format TEXT,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+  )`);
 }
 
 const dataDir = process.env.DATA_DIR || './data';
@@ -41,7 +59,7 @@ if (!fs.existsSync(dataDir)) {
 }
 console.log('Initializing database layer');
 
-let users, lists, usersAsync, listsAsync, pool;
+let users, lists, listItems, usersAsync, listsAsync, listItemsAsync, pool;
 let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {
@@ -72,15 +90,66 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at'
   };
+  const listItemsMap = {
+    _id: '_id',
+    listId: 'list_id',
+    position: 'position',
+    artist: 'artist',
+    album: 'album',
+    albumId: 'album_id',
+    releaseDate: 'release_date',
+    country: 'country',
+    genre1: 'genre_1',
+    genre2: 'genre_2',
+    comments: 'comments',
+    coverImage: 'cover_image',
+    coverImageFormat: 'cover_image_format',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
+  };
   users = new PgDatastore(pool, 'users', usersMap);
   lists = new PgDatastore(pool, 'lists', listsMap);
+  listItems = new PgDatastore(pool, 'list_items', listItemsMap);
   usersAsync = users;
   listsAsync = lists;
+  listItemsAsync = listItems;
+  async function migrateLists() {
+    const listsRes = await pool.query('SELECT _id, data FROM lists');
+    for (const row of listsRes.rows) {
+      const countRes = await pool.query('SELECT COUNT(*) FROM list_items WHERE list_id=$1', [row._id]);
+      if (parseInt(countRes.rows[0].count, 10) === 0 && Array.isArray(row.data)) {
+        for (let i = 0; i < row.data.length; i++) {
+          const album = row.data[i];
+          await pool.query(
+            `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, cover_image, cover_image_format, created_at, updated_at)
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())`,
+            [
+              row._id,
+              i + 1,
+              album.artist || '',
+              album.album || '',
+              album.album_id || '',
+              album.release_date || '',
+              album.country || '',
+              album.genre_1 || album.genre || '',
+              album.genre_2 || '',
+              album.comments || album.comment || '',
+              album.cover_image || '',
+              album.cover_image_format || ''
+            ]
+          );
+        }
+        await pool.query('UPDATE lists SET data = NULL WHERE _id=$1', [row._id]);
+      }
+    }
+  }
+
   ready = waitForPostgres(pool)
     .then(() => ensureTables(pool))
+    .then(() => migrateLists())
     .then(() => console.log('Database ready'));
 } else {
   throw new Error('DATABASE_URL must be set');
 }
 
-module.exports = { users, lists, usersAsync, listsAsync, dataDir, ready, pool };
+module.exports = { users, lists, listItems, usersAsync, listsAsync, listItemsAsync, dataDir, ready, pool };
