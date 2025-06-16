@@ -427,13 +427,19 @@ const settingsTemplate = (req, options) => {
                   >
                     <i class="fas fa-download mr-2"></i>Export Users
                   </button>
-                  <button 
+                  <button
+                    onclick="if(confirm('Download database export as JSON?')) window.location.href='/admin/export'"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
+                  >
+                    <i class="fas fa-file-export mr-2"></i>Export Database
+                  </button>
+                  <button
                     onclick="if(confirm('Download complete database backup?')) window.location.href='/admin/backup'"
                     class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
                   >
                     <i class="fas fa-database mr-2"></i>Backup Database
                   </button>
-                  <button 
+                  <button
                     onclick="showRestoreModal()"
                     class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 text-sm"
                   >
@@ -555,12 +561,12 @@ const settingsTemplate = (req, options) => {
       <form id="restoreForm" enctype="multipart/form-data" class="p-6">
         <div class="mb-4">
           <label class="block text-sm font-medium text-gray-400 mb-2">
-            Select backup file (.json)
+            Select backup file (.dump)
           </label>
           <input 
             type="file" 
             name="backup"
-            accept=".json"
+            accept=".dump"
             required
             class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
           >

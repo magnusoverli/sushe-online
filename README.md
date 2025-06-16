@@ -80,3 +80,7 @@ docker compose up --build
 The application uses PostgreSQL exclusively. The server waits for PostgreSQL to become reachable before starting so it may take a few seconds on first boot.
 
 The admin access code is displayed in the server logs and rotates every five minutes.
+Backup and restore operations rely on the `pg_dump` and `pg_restore` utilities.
+The Docker image installs `postgresql-client` to provide these commands. When
+running the app without Docker, ensure `pg_dump` and `pg_restore` are available
+in your `PATH` (typically via the `postgresql-client` package).
