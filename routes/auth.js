@@ -158,9 +158,14 @@ app.post('/login', csrfProtection, (req, res, next) => {
         req.flash('error', 'Login failed');
         return res.redirect('/login');
       }
-      
+
       console.log('User logged in successfully:', user.email);
-      
+
+      // Record last activity
+      const timestamp = new Date();
+      req.user.lastActivity = timestamp;
+      users.update({ _id: req.user._id }, { $set: { lastActivity: timestamp } }, () => {});
+
       // Force session save and handle errors
       req.session.save((err) => {
         if (err) {

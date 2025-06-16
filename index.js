@@ -82,6 +82,14 @@ function sanitizeUser(user) {
   };
 }
 
+function recordActivity(req) {
+  if (req.user) {
+    const timestamp = new Date();
+    req.user.lastActivity = timestamp;
+    users.update({ _id: req.user._id }, { $set: { lastActivity: timestamp } }, () => {});
+  }
+}
+
 // Admin code variables
 const adminCodeAttempts = new Map(); // Track failed attempts
 let adminCode = null;
@@ -317,6 +325,12 @@ app.use((req, res, next) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Record user activity for every authenticated request
+app.use((req, res, next) => {
+  recordActivity(req);
+  next();
+});
+
 // ============ MIDDLEWARE FUNCTIONS ============
 
 // Middleware to protect routes
@@ -329,7 +343,9 @@ function ensureAuth(req, res, next) {
 
 // API middleware to ensure authentication
 function ensureAuthAPI(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  if (req.isAuthenticated()) {
+    return next();
+  }
   res.status(401).json({ error: 'Unauthorized' });
 }
 
