@@ -69,12 +69,13 @@ function broadcastListUpdate(userId, name, data) {
 
 function sanitizeUser(user) {
   if (!user) return null;
-  const { _id, email, username, accentColor, lastSelectedList, role } = user;
+  const { _id, email, username, accentColor, dateFormat, lastSelectedList, role } = user;
   return {
     _id,
     email,
     username,
     accentColor,
+    dateFormat,
     lastSelectedList,
     role,
     spotifyAuth: !!user.spotifyAuth,
@@ -373,7 +374,7 @@ const deps = {
   users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer,
   composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword,
   broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt,
-  dataDir, pool
+  dataDir, pool, ready
 };
 
 authRoutes(app, deps);

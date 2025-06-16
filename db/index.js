@@ -11,6 +11,7 @@ async function ensureTables(pool) {
     username TEXT UNIQUE,
     hash TEXT,
     accent_color TEXT,
+    date_format TEXT,
     last_selected_list TEXT,
     role TEXT,
     spotify_auth JSONB,
@@ -21,6 +22,7 @@ async function ensureTables(pool) {
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT');
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -51,6 +53,7 @@ if (process.env.DATABASE_URL) {
     username: 'username',
     hash: 'hash',
     accentColor: 'accent_color',
+    dateFormat: 'date_format',
     lastSelectedList: 'last_selected_list',
     role: 'role',
     spotifyAuth: 'spotify_auth',
