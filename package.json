@@ -10,11 +10,9 @@
     "build:js": "vite build",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
-    "test": "node --test",
-    "migrate:postgres": "node scripts/migrate-to-postgres.js"
+    "test": "node --test"
   },
   "dependencies": {
-    "@seald-io/nedb": "^4.1.1",
     "bcryptjs": "^3.0.2",
     "compression": "^1.7.4",
     "csurf": "^1.11.0",

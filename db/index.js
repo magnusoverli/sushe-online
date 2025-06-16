@@ -1,9 +1,37 @@
 const path = require('path');
 const fs = require('fs');
-const Datastore = require('@seald-io/nedb');
-const promisifyDatastore = require('../db-utils');
 const { PgDatastore, Pool, waitForPostgres } = require('./postgres');
-const { migrateIfNeeded } = require('../scripts/migrate-to-postgres');
+
+async function ensureTables(pool) {
+  await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+  await pool.query(`CREATE TABLE IF NOT EXISTS users (
+    id SERIAL PRIMARY KEY,
+    _id TEXT UNIQUE NOT NULL,
+    email TEXT UNIQUE,
+    username TEXT UNIQUE,
+    hash TEXT,
+    accent_color TEXT,
+    last_selected_list TEXT,
+    role TEXT,
+    spotify_auth JSONB,
+    tidal_auth JSONB,
+    tidal_country TEXT,
+    reset_token TEXT,
+    reset_expires BIGINT,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+  )`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS lists (
+    id SERIAL PRIMARY KEY,
+    _id TEXT UNIQUE NOT NULL,
+    user_id TEXT NOT NULL REFERENCES users(_id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    data JSONB,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ,
+    CONSTRAINT unique_user_name UNIQUE(user_id, name)
+  )`);
+}
 
 const dataDir = process.env.DATA_DIR || './data';
 if (!fs.existsSync(dataDir)) {
@@ -11,12 +39,12 @@ if (!fs.existsSync(dataDir)) {
 }
 console.log('Initializing database layer');
 
-let users, lists, usersAsync, listsAsync;
+let users, lists, usersAsync, listsAsync, pool;
 let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {
   console.log('Using PostgreSQL backend');
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const usersMap = {
     _id: '_id',
     email: 'email',
@@ -46,16 +74,10 @@ if (process.env.DATABASE_URL) {
   usersAsync = users;
   listsAsync = lists;
   ready = waitForPostgres(pool)
-    .then(() => migrateIfNeeded({ pool, dataDir }))
-    .then(() => console.log('Database ready')); 
+    .then(() => ensureTables(pool))
+    .then(() => console.log('Database ready'));
 } else {
-  console.log('Using NeDB data directory:', dataDir);
-  users = new Datastore({ filename: path.join(dataDir, 'users.db'), autoload: true });
-  lists = new Datastore({ filename: path.join(dataDir, 'lists.db'), autoload: true });
-  usersAsync = promisifyDatastore(users);
-  listsAsync = promisifyDatastore(lists);
-  lists.ensureIndex({ fieldName: 'userId' });
-  lists.ensureIndex({ fieldName: 'name' });
+  throw new Error('DATABASE_URL must be set');
 }
 
-module.exports = { users, lists, usersAsync, listsAsync, dataDir, ready };
+module.exports = { users, lists, usersAsync, listsAsync, dataDir, ready, pool };
