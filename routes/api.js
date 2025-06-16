@@ -111,6 +111,9 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
 
     const timestamp = new Date();
     if (existingList) {
+      // Broadcast immediately so other devices update without waiting
+      broadcastListUpdate(req.user._id, name, data);
+
       await lists.update(
         { _id: existingList._id },
         { $set: { updatedAt: timestamp } }
@@ -138,6 +141,9 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
       res.json({ success: true, message: 'List updated' });
       broadcastListUpdate(req.user._id, name, data);
     } else {
+      // Broadcast immediately so other devices update without waiting
+      broadcastListUpdate(req.user._id, name, data);
+
       const newList = await listsAsync.insert({
         userId: req.user._id,
         name,
