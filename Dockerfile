@@ -22,7 +22,7 @@ WORKDIR /app
 # Install only production dependencies
 COPY --chown=node:node package*.json ./
 RUN npm ci --omit=dev --prefer-offline --no-audit \
-    && apk add --no-cache curl
+    && apk add --no-cache curl postgresql16-client
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
