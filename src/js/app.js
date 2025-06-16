@@ -1211,6 +1211,13 @@ function updateListNav() {
   
   createListItems(nav);
   if (mobileNav) createListItems(mobileNav, true);
+
+  // Cache list names locally for faster startup
+  try {
+    localStorage.setItem('cachedListNames', JSON.stringify(Object.keys(lists)));
+  } catch (e) {
+    console.warn('Failed to cache list names', e);
+  }
 }
 
 // Initialize SortableJS for mobile album sorting
@@ -1494,17 +1501,6 @@ async function selectList(listName) {
       localStorage.setItem('lastSelectedList', listName);
     }
     
-    // Save the last selected list to the server (keep existing code)
-    try {
-      await apiCall('/api/user/last-list', {
-        method: 'POST',
-        body: JSON.stringify({ listName })
-      });
-    } catch (error) {
-      // Don't block list selection if saving preference fails
-      console.warn('Failed to save list preference:', error);
-    }
-    
     // Update the header with current list name
     updateMobileHeader();
     
@@ -1521,6 +1517,20 @@ async function selectList(listName) {
     const fab = document.getElementById('addAlbumFAB');
     if (fab) {
       fab.style.display = listName ? 'flex' : 'none';
+    }
+
+    // Persist the selection without blocking UI if changed
+    if (listName && listName !== window.lastSelectedList) {
+      apiCall('/api/user/last-list', {
+        method: 'POST',
+        body: JSON.stringify({ listName })
+      })
+        .then(() => {
+          window.lastSelectedList = listName;
+        })
+        .catch((error) => {
+          console.warn('Failed to save list preference:', error);
+        });
     }
     
   } catch (error) {
@@ -2406,7 +2416,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize sidebar collapse first
   initializeSidebarCollapse();
-  
+
+  // Quickly populate sidebar using cached list names
+  const cachedLists = localStorage.getItem('cachedListNames');
+  if (cachedLists) {
+    try {
+      const names = JSON.parse(cachedLists);
+      names.forEach((name) => {
+        if (!lists[name]) lists[name] = [];
+      });
+      updateListNav();
+    } catch (err) {
+      console.warn('Failed to parse cached list names:', err);
+    }
+  }
+
   // Load all required data and initialize features
   Promise.all([loadGenres(), loadCountries(), loadLists()])
     .then(() => {
