@@ -369,8 +369,24 @@ app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), asy
     await listsAsync.remove({}, { multi: true });
 
     // Restore users and lists
-    await usersAsync.insert(backup.users);
-    await listsAsync.insert(backup.lists);
+    const allowedUserFields = Object.keys(usersAsync.fieldMap);
+    const allowedListFields = Object.keys(listsAsync.fieldMap);
+
+    for (const user of backup.users) {
+      const sanitized = {};
+      for (const field of allowedUserFields) {
+        if (user[field] !== undefined) sanitized[field] = user[field];
+      }
+      await usersAsync.insert(sanitized);
+    }
+
+    for (const list of backup.lists) {
+      const sanitized = {};
+      for (const field of allowedListFields) {
+        if (list[field] !== undefined) sanitized[field] = list[field];
+      }
+      await listsAsync.insert(sanitized);
+    }
 
     // Clear all sessions after restore
     req.sessionStore.clear((err) => {
