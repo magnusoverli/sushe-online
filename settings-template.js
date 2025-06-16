@@ -1,5 +1,5 @@
 // Import the header component, and asset helper from templates
-const { headerComponent, asset } = require('./templates');
+const { headerComponent, asset, formatDateTime, formatDate } = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
@@ -168,7 +168,7 @@ const settingsTemplate = (req, options) => {
               
               <div>
                 <label class="block text-sm font-medium text-gray-400 mb-1">Member Since</label>
-                <span class="text-white">${new Date(user.createdAt).toLocaleDateString()}</span>
+                <span class="text-white">${formatDate(user.createdAt, user.dateFormat)}</span>
               </div>
             </div>
           </div>
@@ -265,6 +265,34 @@ const settingsTemplate = (req, options) => {
             Reset to Default
             </button>
         </div>
+        </div>
+
+        <!-- Time & Date Format Settings -->
+        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+          <h3 class="text-lg font-semibold text-white mb-4">
+            <i class="fas fa-clock mr-2 text-gray-400"></i>
+            Time & Date Format
+          </h3>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+            <label class="text-sm text-gray-400 mr-2">Time:</label>
+            <select id="timeFormatSelect" class="bg-gray-800 border border-gray-700 rounded text-white px-3 py-2">
+              <option value="24h" ${user.timeFormat !== '12h' ? 'selected' : ''}>24-hour</option>
+              <option value="12h" ${user.timeFormat === '12h' ? 'selected' : ''}>12-hour</option>
+            </select>
+            <button onclick="updateTimeFormat(document.getElementById('timeFormatSelect').value)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200">
+              Save
+            </button>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+            <label class="text-sm text-gray-400 mr-2">Date:</label>
+            <select id="dateFormatSelect" class="bg-gray-800 border border-gray-700 rounded text-white px-3 py-2">
+              <option value="MM/DD/YYYY" ${user.dateFormat !== 'DD/MM/YYYY' ? 'selected' : ''}>MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY" ${user.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
+            </select>
+            <button onclick="updateDateFormat(document.getElementById('dateFormatSelect').value)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200">
+              Save
+            </button>
+          </div>
         </div>
 
         <!-- Music Service Integration -->
@@ -503,7 +531,7 @@ const settingsTemplate = (req, options) => {
                             }
                           </td>
                           <td class="py-3">
-                            <span class="text-sm text-gray-300">${u.lastActivity ? new Date(u.lastActivity).toLocaleString() : '-'}</span>
+                            <span class="text-sm text-gray-300">${u.lastActivity ? formatDateTime(u.lastActivity, user.timeFormat !== '24h', user.dateFormat) : '-'}</span>
                           </td>
                           <td class="py-3">
                             <div class="flex gap-2">
@@ -781,6 +809,52 @@ const settingsTemplate = (req, options) => {
     
     function resetAccentColor() {
       updateAccentColor('#dc2626');
+    }
+
+    async function updateTimeFormat(format) {
+      try {
+        const response = await fetch('/settings/update-time-format', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeFormat: format }),
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('Time format updated!');
+          setTimeout(() => location.reload(), 500);
+        } else {
+          showToast(data.error || 'Error updating time format', 'error');
+        }
+      } catch (error) {
+        console.error('Error updating time format:', error);
+        showToast('Error updating time format', 'error');
+      }
+    }
+
+    async function updateDateFormat(format) {
+      try {
+        const response = await fetch('/settings/update-date-format', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dateFormat: format }),
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('Date format updated!');
+          setTimeout(() => location.reload(), 500);
+        } else {
+          showToast(data.error || 'Error updating date format', 'error');
+        }
+      } catch (error) {
+        console.error('Error updating date format:', error);
+        showToast('Error updating date format', 'error');
+      }
     }
     
     // Client-side color adjustment function

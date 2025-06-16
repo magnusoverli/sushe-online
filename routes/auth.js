@@ -82,6 +82,8 @@ app.post('/register', csrfProtection, async (req, res) => {
             tidalAuth: null,
             tidalCountry: null,
             accentColor: '#dc2626',
+            timeFormat: '24h',
+            dateFormat: 'MM/DD/YYYY',
             createdAt: new Date(),
             updatedAt: new Date()
           }, (err, newUser) => {
@@ -442,6 +444,72 @@ app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
   }
 });
 
+// Update time format endpoint
+app.post('/settings/update-time-format', ensureAuth, async (req, res) => {
+  try {
+    const { timeFormat } = req.body;
+    if (!['12h', '24h'].includes(timeFormat)) {
+      return res.status(400).json({ error: 'Invalid time format' });
+    }
+
+    users.update(
+      { _id: req.user._id },
+      { $set: { timeFormat, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating time format:', err);
+          return res.status(500).json({ error: 'Error updating time format' });
+        }
+
+        req.user.timeFormat = timeFormat;
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          res.json({ success: true });
+        });
+
+        console.log(`User ${req.user.email} updated time format to ${timeFormat}`);
+      }
+    );
+  } catch (error) {
+    console.error('Update time format error:', error);
+    res.status(500).json({ error: 'Error updating time format' });
+  }
+});
+
+// Update date format endpoint
+app.post('/settings/update-date-format', ensureAuth, async (req, res) => {
+  try {
+    const { dateFormat } = req.body;
+    if (!['MM/DD/YYYY', 'DD/MM/YYYY'].includes(dateFormat)) {
+      return res.status(400).json({ error: 'Invalid date format' });
+    }
+
+    users.update(
+      { _id: req.user._id },
+      { $set: { dateFormat, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating date format:', err);
+          return res.status(500).json({ error: 'Error updating date format' });
+        }
+
+        req.user.dateFormat = dateFormat;
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          res.json({ success: true });
+        });
+
+        console.log(`User ${req.user.email} updated date format to ${dateFormat}`);
+      }
+    );
+  } catch (error) {
+    console.error('Update date format error:', error);
+    res.status(500).json({ error: 'Error updating date format' });
+  }
+});
+
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
   
@@ -466,42 +534,6 @@ function getTimeAgo(date) {
   return 'over a year ago';
 }
 
-// One-time migration to add accentColor to existing users
-users.update(
-  { accentColor: { $exists: false } },
-  { $set: { accentColor: '#dc2626' } },
-  { multi: true },
-  (err, numUpdated) => {
-    if (err) {
-      console.error('Error migrating accent colors:', err);
-    } else if (numUpdated > 0) {
-      console.log(`Migrated ${numUpdated} users with default accent color`);
-    }
-  }
-);
-
-// Ensure auth fields exist on existing users
-users.update(
-  { spotifyAuth: { $exists: false } },
-  { $set: { spotifyAuth: null } },
-  { multi: true },
-  () => {}
-);
-
-users.update(
-  { tidalAuth: { $exists: false } },
-  { $set: { tidalAuth: null } },
-  { multi: true },
-  () => {}
-);
-
-// Ensure tidalCountry exists on existing users
-users.update(
-  { tidalCountry: { $exists: false } },
-  { $set: { tidalCountry: null } },
-  { multi: true },
-  () => {}
-);
 
 
 // Change password endpoint
