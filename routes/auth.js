@@ -1,6 +1,6 @@
 module.exports = (app, deps) => {
   const path = require('path');
-  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt, dataDir, pool, ready } = deps;
+  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt, dataDir, pool, passport, ready } = deps;
 
 // ============ ROUTES ============
 
@@ -44,7 +44,8 @@ app.post('/register', csrfProtection, async (req, res) => {
     }
     
     // Check if email already exists
-    users.findOne({ email }, async (err, existingEmailUser) => {
+      email = email.toLowerCase();
+      users.findOne({ email }, async (err, existingEmailUser) => {
       if (err) {
         console.error('Database error during registration:', err);
         req.flash('error', 'Registration error. Please try again.');
@@ -83,6 +84,7 @@ app.post('/register', csrfProtection, async (req, res) => {
             tidalCountry: null,
             accentColor: '#dc2626',
             dateFormat: 'YYYY-MM-DD',
+            lastActiveAt: new Date(),
             createdAt: new Date(),
             updatedAt: new Date()
           }, (err, newUser) => {
@@ -153,6 +155,8 @@ app.post('/login', csrfProtection, (req, res, next) => {
       return res.redirect('/login');
     }
     
+    user.lastActiveAt = new Date();
+
     req.logIn(user, (err) => {
       if (err) {
         console.error('Login error:', err);
@@ -161,7 +165,10 @@ app.post('/login', csrfProtection, (req, res, next) => {
       }
       
       console.log('User logged in successfully:', user.email);
-      
+
+      // Update last active timestamp
+      users.update({ _id: user._id }, { $set: { lastActiveAt: user.lastActiveAt } }, () => {});
+
       // Force session save and handle errors
       req.session.save((err) => {
         if (err) {
@@ -546,6 +553,7 @@ ready.then(() => {
     { multi: true },
     () => {}
   );
+
 });
 
 

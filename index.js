@@ -169,6 +169,7 @@ setInterval(generateAdminCode, 5 * 60 * 1000);
 
 // Passport configuration
 passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
+  email = email.toLowerCase();
   console.log('Login attempt for email:', email);
   
   users.findOne({ email }, (err, user) => {
@@ -323,6 +324,11 @@ app.use(passport.session());
 // Middleware to protect routes
 function ensureAuth(req, res, next) {
   if (req.user || (req.isAuthenticated && req.isAuthenticated())) {
+    if (req.user) {
+      const now = new Date();
+      users.update({ _id: req.user._id }, { $set: { lastActiveAt: now } }, () => {});
+      req.user.lastActiveAt = now;
+    }
     return next();
   }
   res.redirect('/login');
@@ -374,7 +380,7 @@ const deps = {
   users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer,
   composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword,
   broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt,
-  dataDir, pool, ready
+  dataDir, pool, passport, ready
 };
 
 authRoutes(app, deps);
