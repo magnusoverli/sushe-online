@@ -116,88 +116,78 @@ function showServicePicker(hasSpotify, hasTidal) {
   });
 }
 
-// Standardize date formats for release dates
-function formatReleaseDate(dateStr) {
-  if (!dateStr) return '';
-  
-  // Handle various date formats
-  let date;
-  
-  // Try to parse the date string
+// Parse a date string into components {year, month, day}
+function parseDateParts(dateStr) {
+  if (!dateStr) return null;
   try {
-    // Check if it's just a year (e.g., "2023")
     if (/^\d{4}$/.test(dateStr)) {
-      return dateStr; // Just return the year as-is
+      return { year: dateStr };
     }
-    
-    // Check if it's year-month (e.g., "2023-12")
     if (/^\d{4}-\d{2}$/.test(dateStr)) {
       const [year, month] = dateStr.split('-');
-      return `${month}-${year}`;
+      return { year, month };
     }
-    
-    // Check various full date formats
-    // ISO format: "2023-12-25"
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
       const [year, month, day] = dateStr.split('-');
-      return `${day}-${month}-${year}`;
+      return { year, month, day };
     }
-    
-    // US format: "12/25/2023" or "12-25-2023"
     if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(dateStr)) {
       const parts = dateStr.split(/[/-]/);
-      const month = parts[0].padStart(2, '0');
-      const day = parts[1].padStart(2, '0');
-      const year = parts[2];
-      return `${day}-${month}-${year}`;
-    }
-    
-    // European format: "25/12/2023" or "25-12-2023"
-    if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(dateStr)) {
-      const parts = dateStr.split(/[/-]/);
-      // Try to detect if it's DD/MM or MM/DD by checking if first part > 12
-      const firstPart = parseInt(parts[0]);
-      const secondPart = parseInt(parts[1]);
-      
-      if (firstPart > 12) {
-        // Likely DD/MM/YYYY
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}-${month}-${year}`;
-      } else if (secondPart > 12) {
-        // Likely MM/DD/YYYY
-        const month = parts[0].padStart(2, '0');
-        const day = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}-${month}-${year}`;
+      const first = parseInt(parts[0]);
+      const second = parseInt(parts[1]);
+      let day, month;
+      if (first > 12) {
+        day = parts[0];
+        month = parts[1];
+      } else if (second > 12) {
+        month = parts[0];
+        day = parts[1];
       } else {
-        // Ambiguous, assume DD/MM/YYYY for European format
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}-${month}-${year}`;
+        day = parts[0];
+        month = parts[1];
       }
+      return { year: parts[2], month: month.padStart(2, '0'), day: day.padStart(2, '0') };
     }
-    
-    // Try to parse as a general date
-    date = new Date(dateStr);
-    
-    // Check if the date is valid
+    const date = new Date(dateStr);
     if (!isNaN(date.getTime())) {
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}-${month}-${year}`;
+      return {
+        year: date.getFullYear().toString(),
+        month: (date.getMonth() + 1).toString().padStart(2, '0'),
+        day: date.getDate().toString().padStart(2, '0')
+      };
     }
-    
-    // If all parsing fails, return the original string
-    return dateStr;
-    
   } catch (e) {
-    // If any error occurs, return the original string
-    return dateStr;
+    return null;
   }
+  return null;
+}
+
+function applyDateFormat(parts, format) {
+  if (!parts) return '';
+  if (!parts.month) return parts.year;
+
+  const delim = format.includes('/') ? '/' : '-';
+
+  if (!parts.day) {
+    if (format.startsWith('YYYY')) {
+      return `${parts.year}${delim}${parts.month}`;
+    }
+    return `${parts.month}${delim}${parts.year}`;
+  }
+
+  return format
+    .replace('YYYY', parts.year)
+    .replace('MM', parts.month)
+    .replace('DD', parts.day);
+}
+
+// Format release dates using the user's preferred format
+function formatReleaseDate(dateStr) {
+  if (!dateStr) return '';
+  const format = window.currentUser?.dateFormat || 'YYYY-MM-DD';
+  const parts = parseDateParts(dateStr);
+  if (!parts) return dateStr;
+  return applyDateFormat(parts, format);
 }
 
 // Load available countries
@@ -2151,7 +2141,7 @@ window.showMobileEditForm = function(index) {
           <input 
             type="date" 
             id="editReleaseDate" 
-            value="${album.release_date ? (album.release_date.length === 4 ? album.release_date + '-01-01' : album.release_date) : new Date().toISOString().split('T')[0]}"
+            value="${album.release_date ? (album.release_date.length === 4 ? album.release_date + "-01-01" : (album.release_date.length === 7 ? album.release_date + "-01" : album.release_date)) : new Date().toISOString().split('T')[0]}"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
             style="display: block; width: 100%; min-height: 48px; -webkit-appearance: none;"
           >
