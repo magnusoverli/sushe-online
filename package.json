@@ -10,7 +10,8 @@
     "build:js": "vite build",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
-    "test": "node --test"
+    "test": "node --test",
+    "migrate:postgres": "node scripts/migrate-to-postgres.js"
   },
   "dependencies": {
     "@seald-io/nedb": "^4.1.1",
@@ -26,7 +27,8 @@
     "nodemailer": "^7.0.3",
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
-    "session-file-store": "^1.5.0"
+    "session-file-store": "^1.5.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.21",
