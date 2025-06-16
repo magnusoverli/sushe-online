@@ -83,6 +83,7 @@ app.post('/register', csrfProtection, async (req, res) => {
             tidalCountry: null,
             accentColor: '#dc2626',
             dateFormat: 'YYYY-MM-DD',
+            lastActiveAt: new Date(),
             createdAt: new Date(),
             updatedAt: new Date()
           }, (err, newUser) => {
@@ -153,6 +154,8 @@ app.post('/login', csrfProtection, (req, res, next) => {
       return res.redirect('/login');
     }
     
+    user.lastActiveAt = new Date();
+
     req.logIn(user, (err) => {
       if (err) {
         console.error('Login error:', err);
@@ -161,7 +164,10 @@ app.post('/login', csrfProtection, (req, res, next) => {
       }
       
       console.log('User logged in successfully:', user.email);
-      
+
+      // Update last active timestamp
+      users.update({ _id: user._id }, { $set: { lastActiveAt: user.lastActiveAt } }, () => {});
+
       // Force session save and handle errors
       req.session.save((err) => {
         if (err) {
@@ -546,6 +552,18 @@ ready.then(() => {
     { multi: true },
     () => {}
   );
+
+  // Ensure lastActiveAt exists on existing users using their last known update time
+  users.find({ lastActiveAt: { $exists: false } }, (err, docs) => {
+    if (err) {
+      console.error('Error migrating lastActiveAt:', err);
+      return;
+    }
+    docs.forEach(u => {
+      const lastActive = u.updatedAt || u.createdAt || new Date();
+      users.update({ _id: u._id }, { $set: { lastActiveAt: lastActive } }, () => {});
+    });
+  });
 });
 
 

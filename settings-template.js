@@ -493,6 +493,7 @@ const settingsTemplate = (req, options) => {
                         <th class="pb-2 text-sm font-medium text-gray-400">User</th>
                         <th class="pb-2 text-sm font-medium text-gray-400">Lists</th>
                         <th class="pb-2 text-sm font-medium text-gray-400">Role</th>
+                        <th class="pb-2 text-sm font-medium text-gray-400">Last Active</th>
                         <th class="pb-2 text-sm font-medium text-gray-400">Actions</th>
                       </tr>
                     </thead>
@@ -509,10 +510,15 @@ const settingsTemplate = (req, options) => {
                             <span class="text-sm text-gray-300">${u.listCount}</span>
                           </td>
                           <td class="py-3">
-                            ${u.role === 'admin' ? 
-                              '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded">Admin</span>' : 
+                            ${u.role === 'admin' ?
+                              '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded">Admin</span>' :
                               '<span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">User</span>'
                             }
+                          </td>
+                          <td class="py-3">
+                            <span class="text-xs text-gray-400">
+                              ${u.lastActiveAt ? new Date(u.lastActiveAt).toLocaleString() : 'N/A'}
+                            </span>
                           </td>
                           <td class="py-3">
                             <div class="flex gap-2">
