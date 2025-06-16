@@ -31,7 +31,7 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 ## Environment variables
 - `SESSION_SECRET` – session encryption secret.
 - `DATA_DIR` – directory for session files (`./data` by default).
-- `DATABASE_URL` – PostgreSQL connection string.
+- `DATABASE_URL` – PostgreSQL connection string. The included Docker configuration uses a Unix socket at /var/run/postgresql by default.
 - `LOG_SQL` – set to `true` to print all SQL queries for debugging.
 - `SENDGRID_API_KEY` – optional API key for sending password reset emails. If omitted, reset links are logged to the console.
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
@@ -77,7 +77,7 @@ A `Dockerfile` and `docker-compose.yml` are included. You can build and start th
 docker compose up --build
 ```
 
-The application uses PostgreSQL exclusively. The server waits for PostgreSQL to become reachable before starting so it may take a few seconds on first boot.
+The application uses PostgreSQL exclusively. The compose file shares the database socket directory so the app connects via a Unix socket for improved performance. The server waits for PostgreSQL to become reachable before starting so it may take a few seconds on first boot.
 
 The admin access code is displayed in the server logs and rotates every five minutes.
 Backup and restore operations rely on the `pg_dump` and `pg_restore` utilities.

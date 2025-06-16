@@ -17,9 +17,10 @@ services:
       - SPOTIFY_REDIRECT_URI=${SPOTIFY_REDIRECT_URI}
       - TIDAL_CLIENT_ID=${TIDAL_CLIENT_ID}
       - TIDAL_REDIRECT_URI=${TIDAL_REDIRECT_URI}
-      - DATABASE_URL=postgres://postgres:example@db:5432/sushe
+      - DATABASE_URL=postgres://postgres:example@/sushe?host=/var/run/postgresql
     volumes:
       - sushe-data:/app/data
+      - postgres-socket:/var/run/postgresql
     depends_on:
       - db
     restart: unless-stopped
@@ -31,8 +32,10 @@ services:
       POSTGRES_DB: sushe
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - postgres-socket:/var/run/postgresql
 
 volumes:
   sushe-data:
   postgres-data:
+  postgres-socket:
 
