@@ -20,9 +20,11 @@ async function ensureTables(pool) {
     reset_token TEXT,
     reset_expires BIGINT,
     created_at TIMESTAMPTZ,
-    updated_at TIMESTAMPTZ
+    updated_at TIMESTAMPTZ,
+    last_activity TIMESTAMPTZ
   )`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_granted_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`);
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -80,7 +82,8 @@ if (process.env.DATABASE_URL) {
     resetToken: 'reset_token',
     resetExpires: 'reset_expires',
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
+    lastActivity: 'last_activity'
   };
   const listsMap = {
     _id: '_id',
