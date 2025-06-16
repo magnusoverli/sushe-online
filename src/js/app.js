@@ -1494,17 +1494,6 @@ async function selectList(listName) {
       localStorage.setItem('lastSelectedList', listName);
     }
     
-    // Save the last selected list to the server (keep existing code)
-    try {
-      await apiCall('/api/user/last-list', {
-        method: 'POST',
-        body: JSON.stringify({ listName })
-      });
-    } catch (error) {
-      // Don't block list selection if saving preference fails
-      console.warn('Failed to save list preference:', error);
-    }
-    
     // Update the header with current list name
     updateMobileHeader();
     
@@ -1521,6 +1510,16 @@ async function selectList(listName) {
     const fab = document.getElementById('addAlbumFAB');
     if (fab) {
       fab.style.display = listName ? 'flex' : 'none';
+    }
+
+    // Persist the selection without blocking UI
+    if (listName) {
+      apiCall('/api/user/last-list', {
+        method: 'POST',
+        body: JSON.stringify({ listName })
+      }).catch((error) => {
+        console.warn('Failed to save list preference:', error);
+      });
     }
     
   } catch (error) {
