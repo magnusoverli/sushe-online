@@ -82,6 +82,7 @@ app.post('/register', csrfProtection, async (req, res) => {
             tidalAuth: null,
             tidalCountry: null,
             accentColor: '#dc2626',
+            timeFormat: '24h',
             createdAt: new Date(),
             updatedAt: new Date()
           }, (err, newUser) => {
@@ -442,6 +443,39 @@ app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
   }
 });
 
+// Update time format endpoint
+app.post('/settings/update-time-format', ensureAuth, async (req, res) => {
+  try {
+    const { timeFormat } = req.body;
+    if (!['12h', '24h'].includes(timeFormat)) {
+      return res.status(400).json({ error: 'Invalid time format' });
+    }
+
+    users.update(
+      { _id: req.user._id },
+      { $set: { timeFormat, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating time format:', err);
+          return res.status(500).json({ error: 'Error updating time format' });
+        }
+
+        req.user.timeFormat = timeFormat;
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          res.json({ success: true });
+        });
+
+        console.log(`User ${req.user.email} updated time format to ${timeFormat}`);
+      }
+    );
+  } catch (error) {
+    console.error('Update time format error:', error);
+    res.status(500).json({ error: 'Error updating time format' });
+  }
+});
+
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
   
@@ -476,6 +510,20 @@ users.update(
       console.error('Error migrating accent colors:', err);
     } else if (numUpdated > 0) {
       console.log(`Migrated ${numUpdated} users with default accent color`);
+    }
+  }
+);
+
+// One-time migration to add timeFormat to existing users
+users.update(
+  { timeFormat: { $exists: false } },
+  { $set: { timeFormat: '24h' } },
+  { multi: true },
+  (err, numUpdated) => {
+    if (err) {
+      console.error('Error migrating time format:', err);
+    } else if (numUpdated > 0) {
+      console.log(`Migrated ${numUpdated} users with default time format`);
     }
   }
 );

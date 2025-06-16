@@ -1,5 +1,5 @@
 // Import the header component, and asset helper from templates
-const { headerComponent, asset } = require('./templates');
+const { headerComponent, asset, formatDateTime } = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
@@ -267,6 +267,23 @@ const settingsTemplate = (req, options) => {
         </div>
         </div>
 
+        <!-- Time Format Settings -->
+        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+          <h3 class="text-lg font-semibold text-white mb-4">
+            <i class="fas fa-clock mr-2 text-gray-400"></i>
+            Time Format
+          </h3>
+          <div class="flex items-center gap-3">
+            <select id="timeFormatSelect" class="bg-gray-800 border border-gray-700 rounded text-white px-3 py-2">
+              <option value="24h" ${user.timeFormat !== '12h' ? 'selected' : ''}>24-hour</option>
+              <option value="12h" ${user.timeFormat === '12h' ? 'selected' : ''}>12-hour</option>
+            </select>
+            <button onclick="updateTimeFormat(document.getElementById('timeFormatSelect').value)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200">
+              Save
+            </button>
+          </div>
+        </div>
+
         <!-- Music Service Integration -->
         <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
           <h3 class="text-lg font-semibold text-white mb-4">
@@ -503,7 +520,7 @@ const settingsTemplate = (req, options) => {
                             }
                           </td>
                           <td class="py-3">
-                            <span class="text-sm text-gray-300">${u.lastActivity ? new Date(u.lastActivity).toLocaleString() : '-'}</span>
+                            <span class="text-sm text-gray-300">${u.lastActivity ? formatDateTime(u.lastActivity, user.timeFormat !== '24h') : '-'}</span>
                           </td>
                           <td class="py-3">
                             <div class="flex gap-2">
@@ -781,6 +798,29 @@ const settingsTemplate = (req, options) => {
     
     function resetAccentColor() {
       updateAccentColor('#dc2626');
+    }
+
+    async function updateTimeFormat(format) {
+      try {
+        const response = await fetch('/settings/update-time-format', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ timeFormat: format }),
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('Time format updated!');
+          setTimeout(() => location.reload(), 500);
+        } else {
+          showToast(data.error || 'Error updating time format', 'error');
+        }
+      } catch (error) {
+        console.error('Error updating time format:', error);
+        showToast('Error updating time format', 'error');
+      }
     }
     
     // Client-side color adjustment function

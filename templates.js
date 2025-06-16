@@ -6,6 +6,19 @@ const ejs = require('ejs');
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = (p) => `${p}?v=${assetVersion}`;
 
+const formatDateTime = (date, hour12) => {
+  if (!date) return '';
+  const options = {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12
+  };
+  return new Date(date).toLocaleString('en-US', options);
+};
+
 const viewsDir = path.join(__dirname, 'views');
 // Precompile EJS templates for caching
 const layoutTemplateFn = ejs.compile(
@@ -1322,6 +1335,7 @@ module.exports = {
   invalidTokenTemplate,
   spotifyTemplate,
   headerComponent,
+  formatDateTime,
   asset,
   assetVersion
 };
