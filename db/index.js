@@ -13,6 +13,7 @@ async function ensureTables(pool) {
     accent_color TEXT,
     last_selected_list TEXT,
     role TEXT,
+    admin_granted_at TIMESTAMPTZ,
     spotify_auth JSONB,
     tidal_auth JSONB,
     tidal_country TEXT,
@@ -21,6 +22,7 @@ async function ensureTables(pool) {
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_granted_at TIMESTAMPTZ`);
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -53,6 +55,7 @@ if (process.env.DATABASE_URL) {
     accentColor: 'accent_color',
     lastSelectedList: 'last_selected_list',
     role: 'role',
+    adminGrantedAt: 'admin_granted_at',
     spotifyAuth: 'spotify_auth',
     tidalAuth: 'tidal_auth',
     tidalCountry: 'tidal_country',
