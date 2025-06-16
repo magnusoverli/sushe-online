@@ -161,7 +161,10 @@ app.post('/login', csrfProtection, (req, res, next) => {
       }
       
       console.log('User logged in successfully:', user.email);
-      
+
+      // Update last active timestamp
+      users.update({ _id: user._id }, { $set: { lastActiveAt: new Date() } }, () => {});
+
       // Force session save and handle errors
       req.session.save((err) => {
         if (err) {
@@ -543,6 +546,14 @@ ready.then(() => {
   users.update(
     { tidalCountry: { $exists: false } },
     { $set: { tidalCountry: null } },
+    { multi: true },
+    () => {}
+  );
+
+  // Ensure lastActiveAt exists on existing users
+  users.update(
+    { lastActiveAt: { $exists: false } },
+    { $set: { lastActiveAt: new Date() } },
     { multi: true },
     () => {}
   );

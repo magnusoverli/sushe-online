@@ -19,10 +19,12 @@ async function ensureTables(pool) {
     tidal_country TEXT,
     reset_token TEXT,
     reset_expires BIGINT,
+    last_active_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
   await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT');
+  await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ');
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -61,6 +63,7 @@ if (process.env.DATABASE_URL) {
     tidalCountry: 'tidal_country',
     resetToken: 'reset_token',
     resetExpires: 'reset_expires',
+    lastActiveAt: 'last_active_at',
     createdAt: 'created_at',
     updatedAt: 'updated_at'
   };

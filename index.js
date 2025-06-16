@@ -323,6 +323,10 @@ app.use(passport.session());
 // Middleware to protect routes
 function ensureAuth(req, res, next) {
   if (req.user || (req.isAuthenticated && req.isAuthenticated())) {
+    if (req.user) {
+      users.update({ _id: req.user._id }, { $set: { lastActiveAt: new Date() } }, () => {});
+      req.user.lastActiveAt = new Date();
+    }
     return next();
   }
   res.redirect('/login');
