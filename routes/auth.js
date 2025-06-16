@@ -1,6 +1,6 @@
 module.exports = (app, deps) => {
   const path = require('path');
-  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt, dataDir } = deps;
+  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt, dataDir, pool } = deps;
 
 // ============ ROUTES ============
 
@@ -267,25 +267,13 @@ app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
                 .sort((a, b) => b.listCount - a.listCount)
                 .slice(0, 5);
 
-              // Calculate database size (approximate)
+              // Calculate database size
               let dbSize = 'N/A';
               try {
-                const fs = require('fs');
-                const dbPath = path.join(dataDir, 'users.db');
-                const listsDbPath = path.join(dataDir, 'lists.db');
-                
-                if (fs.existsSync(dbPath) && fs.existsSync(listsDbPath)) {
-                  const usersSize = fs.statSync(dbPath).size;
-                  const listsSize = fs.statSync(listsDbPath).size;
-                  const totalSize = usersSize + listsSize;
-                  
-                  // Convert to human readable
-                  if (totalSize < 1024 * 1024) {
-                    dbSize = `${Math.round(totalSize / 1024)} KB`;
-                  } else {
-                    dbSize = `${(totalSize / (1024 * 1024)).toFixed(1)} MB`;
-                  }
-                }
+                const { rows } = await pool.query(
+                  "SELECT pg_size_pretty(pg_database_size(current_database())) AS size"
+                );
+                dbSize = rows[0].size;
               } catch (e) {
                 console.error('Error calculating DB size:', e);
               }

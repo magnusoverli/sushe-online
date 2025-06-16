@@ -4,7 +4,7 @@ const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-// Datastore setup is handled in ./db which supports NeDB or PostgreSQL
+// Datastore setup is handled in ./db which uses PostgreSQL
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -45,8 +45,8 @@ const {
 // Import the new settings template
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
-// Databases are initialized in ./db and can use NeDB or PostgreSQL
-const { users, lists, usersAsync, listsAsync, dataDir, ready } = require('./db');
+// Databases are initialized in ./db using PostgreSQL
+const { users, lists, usersAsync, listsAsync, dataDir, ready, pool } = require('./db');
 
 
 // Map of SSE subscribers keyed by `${userId}:${listName}`
@@ -373,7 +373,7 @@ const deps = {
   users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer,
   composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword,
   broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt,
-  dataDir
+  dataDir, pool
 };
 
 authRoutes(app, deps);

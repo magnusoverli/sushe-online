@@ -190,7 +190,7 @@ class PgDatastore {
     return this._callbackify(promise, cb);
   }
 
-  // For compatibility with NeDB
+  // Placeholder for API compatibility
   ensureIndex() {}
 }
 
