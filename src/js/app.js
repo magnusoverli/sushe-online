@@ -119,85 +119,92 @@ function showServicePicker(hasSpotify, hasTidal) {
 // Standardize date formats for release dates
 function formatReleaseDate(dateStr) {
   if (!dateStr) return '';
-  
-  // Handle various date formats
-  let date;
-  
-  // Try to parse the date string
-  try {
-    // Check if it's just a year (e.g., "2023")
-    if (/^\d{4}$/.test(dateStr)) {
-      return dateStr; // Just return the year as-is
-    }
-    
-    // Check if it's year-month (e.g., "2023-12")
-    if (/^\d{4}-\d{2}$/.test(dateStr)) {
-      const [year, month] = dateStr.split('-');
-      return `${month}-${year}`;
-    }
-    
-    // Check various full date formats
-    // ISO format: "2023-12-25"
-    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      const [year, month, day] = dateStr.split('-');
-      return `${day}-${month}-${year}`;
-    }
-    
-    // US format: "12/25/2023" or "12-25-2023"
-    if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(dateStr)) {
-      const parts = dateStr.split(/[/-]/);
-      const month = parts[0].padStart(2, '0');
-      const day = parts[1].padStart(2, '0');
-      const year = parts[2];
-      return `${day}-${month}-${year}`;
-    }
-    
-    // European format: "25/12/2023" or "25-12-2023"
-    if (/^\d{1,2}[/-]\d{1,2}[/-]\d{4}$/.test(dateStr)) {
-      const parts = dateStr.split(/[/-]/);
-      // Try to detect if it's DD/MM or MM/DD by checking if first part > 12
-      const firstPart = parseInt(parts[0]);
-      const secondPart = parseInt(parts[1]);
-      
-      if (firstPart > 12) {
-        // Likely DD/MM/YYYY
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}-${month}-${year}`;
-      } else if (secondPart > 12) {
-        // Likely MM/DD/YYYY
-        const month = parts[0].padStart(2, '0');
-        const day = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}-${month}-${year}`;
-      } else {
-        // Ambiguous, assume DD/MM/YYYY for European format
-        const day = parts[0].padStart(2, '0');
-        const month = parts[1].padStart(2, '0');
-        const year = parts[2];
-        return `${day}-${month}-${year}`;
-      }
-    }
-    
-    // Try to parse as a general date
-    date = new Date(dateStr);
-    
-    // Check if the date is valid
-    if (!isNaN(date.getTime())) {
-      const day = date.getDate().toString().padStart(2, '0');
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}-${month}-${year}`;
-    }
-    
-    // If all parsing fails, return the original string
-    return dateStr;
-    
-  } catch (e) {
-    // If any error occurs, return the original string
+
+  const userFormat = window.currentUser?.dateFormat || 'MM/DD/YYYY';
+
+  // Year only
+  if (/^\d{4}$/.test(dateStr)) {
     return dateStr;
   }
+
+  // Year-month
+  if (/^\d{4}-\d{2}$/.test(dateStr)) {
+    const [year, month] = dateStr.split('-');
+    return `${month}/${year}`;
+  }
+
+  const iso = normalizeDateForInput(dateStr);
+  if (!iso) return dateStr;
+
+  const [year, month, day] = iso.split('-');
+
+  if (userFormat === 'DD/MM/YYYY') {
+    return `${day}/${month}/${year}`;
+  }
+  return `${month}/${day}/${year}`;
+}
+
+// Convert various date formats to ISO YYYY-MM-DD for date input fields
+function normalizeDateForInput(dateStr) {
+  if (!dateStr) return '';
+
+  const userFormat = window.currentUser?.dateFormat;
+
+  // Year only
+  if (/^\d{4}$/.test(dateStr)) {
+    return `${dateStr}-01-01`;
+  }
+
+  // Year-month
+  if (/^\d{4}-\d{2}$/.test(dateStr)) {
+    return `${dateStr}-01`;
+  }
+
+  // ISO already
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // Formats like DD/MM/YYYY or MM/DD/YYYY or with dashes
+  const parts = dateStr.split(/[/-]/);
+  if (parts.length === 3 && /^\d{1,2}$/.test(parts[0]) && /^\d{1,2}$/.test(parts[1]) && /^\d{4}$/.test(parts[2])) {
+    const first = parseInt(parts[0], 10);
+    const second = parseInt(parts[1], 10);
+    const year = parts[2];
+    let day, month;
+    if (first > 12) {
+      day = first;
+      month = second;
+    } else if (second > 12) {
+      month = first;
+      day = second;
+    } else if (userFormat === 'DD/MM/YYYY') {
+      day = first;
+      month = second;
+    } else {
+      month = first;
+      day = second;
+    }
+    return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+  }
+
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    return d.toISOString().split('T')[0];
+  }
+
+  return '';
+}
+
+// Convert YYYY-MM-DD to the user's preferred format
+function formatDateForStorage(isoDate) {
+  if (!isoDate) return '';
+  const userFormat = window.currentUser?.dateFormat || 'MM/DD/YYYY';
+  const [year, month, day] = isoDate.split('-');
+  if (userFormat === 'DD/MM/YYYY') {
+    return `${day}/${month}/${year}`;
+  }
+  return `${month}/${day}/${year}`;
 }
 
 // Load available countries
@@ -2095,6 +2102,10 @@ window.showMobileAlbumMenu = function(indexOrElement) {
 // Mobile edit form (basic implementation)
 window.showMobileEditForm = function(index) {
   const album = lists[currentList][index];
+  const originalReleaseDate = album.release_date || '';
+  const inputReleaseDate = originalReleaseDate
+    ? normalizeDateForInput(originalReleaseDate) || new Date().toISOString().split('T')[0]
+    : new Date().toISOString().split('T')[0];
   
   // Create the edit modal
   const editModal = document.createElement('div');
@@ -2148,10 +2159,10 @@ window.showMobileEditForm = function(index) {
         <!-- Release Date -->
         <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Release Date</label>
-          <input 
-            type="date" 
-            id="editReleaseDate" 
-            value="${album.release_date ? (album.release_date.length === 4 ? album.release_date + '-01-01' : album.release_date) : new Date().toISOString().split('T')[0]}"
+          <input
+            type="date"
+            id="editReleaseDate"
+            value="${inputReleaseDate}"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
             style="display: block; width: 100%; min-height: 48px; -webkit-appearance: none;"
           >
@@ -2241,37 +2252,21 @@ window.showMobileEditForm = function(index) {
   
   document.body.appendChild(editModal);
 
-  // Handle date input placeholder
-  const dateInput = document.getElementById('editReleaseDate');
-  const placeholder = document.getElementById('datePlaceholder');
-
-  if (dateInput && placeholder) {
-    // Hide placeholder when date input is focused or has value
-    dateInput.addEventListener('focus', () => {
-      placeholder.style.display = 'none';
-    });
-    
-    dateInput.addEventListener('blur', () => {
-      if (!dateInput.value) {
-        placeholder.style.display = 'flex';
-      }
-    });
-    
-    dateInput.addEventListener('change', () => {
-      if (dateInput.value) {
-        placeholder.style.display = 'none';
-      }
-    });
-  }
-
   // Handle save (rest of the code remains the same)
   document.getElementById('mobileEditSaveBtn').onclick = async function() {
     // Gather all the values
+    const newDateValue = document.getElementById('editReleaseDate').value;
+    const normalizedOriginal = normalizeDateForInput(originalReleaseDate);
+    const finalReleaseDate =
+      originalReleaseDate && newDateValue === normalizedOriginal
+        ? originalReleaseDate
+        : formatDateForStorage(newDateValue);
+
     const updatedAlbum = {
       ...album,
       artist: document.getElementById('editArtist').value.trim(),
       album: document.getElementById('editAlbum').value.trim(),
-      release_date: document.getElementById('editReleaseDate').value,
+      release_date: finalReleaseDate,
       country: document.getElementById('editCountry').value,
       genre_1: document.getElementById('editGenre1').value,
       genre: document.getElementById('editGenre1').value, // Keep both for compatibility
