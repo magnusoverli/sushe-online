@@ -1,0 +1,125 @@
+const { Pool } = require('pg');
+
+class PgDatastore {
+  constructor(pool, table, fieldMap) {
+    this.pool = pool;
+    this.table = table;
+    this.fieldMap = fieldMap;
+    this.inverseMap = Object.fromEntries(
+      Object.entries(fieldMap).map(([k, v]) => [v, k])
+    );
+  }
+
+  _mapField(field) {
+    return this.fieldMap[field] || field;
+  }
+
+  _buildWhere(query, startIndex = 1) {
+    const conditions = [];
+    const values = [];
+    let idx = startIndex;
+    for (const [field, val] of Object.entries(query)) {
+      const col = this._mapField(field);
+      if (val && typeof val === 'object' && !Array.isArray(val)) {
+        if ('$gt' in val) {
+          conditions.push(`${col} > $${idx}`);
+          values.push(val['$gt']);
+          idx++;
+        } else if ('$exists' in val) {
+          if (val['$exists']) {
+            conditions.push(`${col} IS NOT NULL`);
+          } else {
+            conditions.push(`${col} IS NULL`);
+          }
+        } else {
+          conditions.push(`${col} = $${idx}`);
+          values.push(val);
+          idx++;
+        }
+      } else {
+        conditions.push(`${col} = $${idx}`);
+        values.push(val);
+        idx++;
+      }
+    }
+    return { text: conditions.length ? 'WHERE ' + conditions.join(' AND ') : '', values };
+  }
+
+  _mapRow(row) {
+    const mapped = {};
+    for (const [col, val] of Object.entries(row)) {
+      mapped[this.inverseMap[col] || col] = val;
+    }
+    return mapped;
+  }
+
+  async findOne(query) {
+    const { text, values } = this._buildWhere(query);
+    const res = await this.pool.query(`SELECT * FROM ${this.table} ${text} LIMIT 1`, values);
+    return res.rows[0] ? this._mapRow(res.rows[0]) : null;
+  }
+
+  async find(query) {
+    const { text, values } = this._buildWhere(query);
+    const res = await this.pool.query(`SELECT * FROM ${this.table} ${text}`, values);
+    return res.rows.map(r => this._mapRow(r));
+  }
+
+  async count(query) {
+    const { text, values } = this._buildWhere(query);
+    const res = await this.pool.query(`SELECT COUNT(*) AS cnt FROM ${this.table} ${text}`, values);
+    return parseInt(res.rows[0].cnt, 10);
+  }
+
+  async insert(doc) {
+    const cols = [];
+    const placeholders = [];
+    const values = [];
+    let idx = 1;
+    for (const [field, val] of Object.entries(doc)) {
+      const col = this._mapField(field);
+      cols.push(col);
+      placeholders.push(`$${idx}`);
+      values.push(val);
+      idx++;
+    }
+    const res = await this.pool.query(
+      `INSERT INTO ${this.table} (${cols.join(',')}) VALUES (${placeholders.join(',')}) RETURNING *`,
+      values
+    );
+    return this._mapRow(res.rows[0]);
+  }
+
+  async update(query, update, options = {}) {
+    const { $set = {}, $unset = {} } = update;
+    const setClauses = [];
+    const values = [];
+    let idx = 1;
+    for (const [field, val] of Object.entries($set)) {
+      setClauses.push(`${this._mapField(field)} = $${idx}`);
+      values.push(val);
+      idx++;
+    }
+    for (const field of Object.keys($unset)) {
+      setClauses.push(`${this._mapField(field)} = NULL`);
+    }
+    if (setClauses.length === 0) return 0;
+    const where = this._buildWhere(query, idx);
+    const res = await this.pool.query(
+      `UPDATE ${this.table} SET ${setClauses.join(', ')} ${where.text}`,
+      values.concat(where.values)
+    );
+    return res.rowCount;
+  }
+
+  async remove(query) {
+    const { text, values } = this._buildWhere(query);
+    const res = await this.pool.query(`DELETE FROM ${this.table} ${text}`, values);
+    return res.rowCount;
+  }
+
+  // For compatibility with NeDB
+  ensureIndex() {}
+}
+
+module.exports = { PgDatastore, Pool };
