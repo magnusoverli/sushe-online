@@ -1,6 +1,6 @@
 module.exports = (app, deps) => {
   const path = require('path');
-  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, dataDir, pool, passport } = deps;
+  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, dataDir, pool, passport } = deps;
 
 // ============ ROUTES ============
 
@@ -192,9 +192,13 @@ app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
     const sanitized = sanitizeUser(req.user);
     // Get user's personal stats
     const userLists = await listsAsync.find({ userId: req.user._id });
+    let albumCount = 0;
+    for (const l of userLists) {
+      albumCount += await listItemsAsync.count({ listId: l._id });
+    }
     const userStats = {
       listCount: userLists.length,
-      totalAlbums: userLists.reduce((sum, l) => sum + (Array.isArray(l.data) ? l.data.length : 0), 0)
+      totalAlbums: albumCount
     };
     
     // If admin, get admin data
@@ -229,7 +233,9 @@ app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
         ? Math.round(((usersThisWeek - usersLastWeek) / usersLastWeek) * 100)
         : (usersThisWeek > 0 ? 100 : 0);
 
-      allLists.forEach(list => {
+      for (const list of allLists) {
+        const items = await listItemsAsync.find({ listId: list._id });
+
         if (list.updatedAt && new Date(list.updatedAt) >= sevenDaysAgo) {
           const userIndex = allUsers.findIndex(u => u._id === list.userId);
           if (userIndex !== -1 && !allUsers[userIndex].counted) {
@@ -238,22 +244,18 @@ app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
           }
         }
 
-        if (Array.isArray(list.data)) {
-          totalAlbums += list.data.length;
-          list.data.forEach(album => {
-            if (album.genre_1 || album.genre) {
-              const genre = album.genre_1 || album.genre;
-              if (genre && genre !== '' && genre !== 'Genre 1') {
-                genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
-              }
-            }
+        totalAlbums += items.length;
+        for (const album of items) {
+          const genre = album.genre1;
+          if (genre && genre !== '' && genre !== 'Genre 1') {
+            genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
+          }
 
-            if (album.genre_2 && album.genre_2 !== '' && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-') {
-              genreCounts.set(album.genre_2, (genreCounts.get(album.genre_2) || 0) + 1);
-            }
-          });
+          if (album.genre2 && album.genre2 !== '' && album.genre2 !== 'Genre 2' && album.genre2 !== '-') {
+            genreCounts.set(album.genre2, (genreCounts.get(album.genre2) || 0) + 1);
+          }
         }
-      });
+      }
 
               // Get top genres
               const topGenres = Array.from(genreCounts.entries())

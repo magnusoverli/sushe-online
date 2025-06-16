@@ -1,22 +1,34 @@
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, ensureAuth, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
+  const { ensureAuthAPI, ensureAuth, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
 
 // ============ API ENDPOINTS FOR LISTS ============
 
 // Get all lists for current user
 app.get('/api/lists', ensureAuthAPI, (req, res) => {
-  lists.find({ userId: req.user._id }, (err, userLists) => {
+  lists.find({ userId: req.user._id }, async (err, userLists) => {
     if (err) {
       console.error('Error fetching lists:', err);
       return res.status(500).json({ error: 'Error fetching lists' });
     }
-    
-    // Transform to simple object format
+
     const listsObj = {};
-    userLists.forEach(list => {
-      listsObj[list.name] = list.data;
-    });
-    
+    for (const list of userLists) {
+      const items = await listItemsAsync.find({ listId: list._id });
+      items.sort((a, b) => a.position - b.position);
+      listsObj[list.name] = items.map(item => ({
+        artist: item.artist,
+        album: item.album,
+        album_id: item.albumId,
+        release_date: item.releaseDate,
+        country: item.country,
+        genre_1: item.genre1,
+        genre_2: item.genre2,
+        comments: item.comments,
+        cover_image: item.coverImage,
+        cover_image_format: item.coverImageFormat
+      }));
+    }
+
     res.json(listsObj);
   });
 });
@@ -55,7 +67,7 @@ app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
 // Get a single list
 app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
   const { name } = req.params;
-  lists.findOne({ userId: req.user._id, name }, (err, list) => {
+  lists.findOne({ userId: req.user._id, name }, async (err, list) => {
     if (err) {
       console.error('Error fetching list:', err);
       return res.status(500).json({ error: 'Error fetching list' });
@@ -63,7 +75,21 @@ app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
     if (!list) {
       return res.status(404).json({ error: 'List not found' });
     }
-    res.json(list.data);
+    const items = await listItemsAsync.find({ listId: list._id });
+    items.sort((a, b) => a.position - b.position);
+    const data = items.map(item => ({
+      artist: item.artist,
+      album: item.album,
+      album_id: item.albumId,
+      release_date: item.releaseDate,
+      country: item.country,
+      genre_1: item.genre1,
+      genre_2: item.genre2,
+      comments: item.comments,
+      cover_image: item.coverImage,
+      cover_image_format: item.coverImageFormat
+    }));
+    res.json(data);
   });
 });
 
@@ -77,43 +103,68 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
   }
   
   // Check if list exists
-  lists.findOne({ userId: req.user._id, name }, (err, existingList) => {
+  lists.findOne({ userId: req.user._id, name }, async (err, existingList) => {
     if (err) {
       console.error('Error checking list:', err);
       return res.status(500).json({ error: 'Database error' });
     }
-    
+
+    const timestamp = new Date();
     if (existingList) {
-      // Update existing list
-      lists.update(
+      await lists.update(
         { _id: existingList._id },
-        { $set: { data, updatedAt: new Date() } },
-        {},
-        (err) => {
-          if (err) {
-            console.error('Error updating list:', err);
-            return res.status(500).json({ error: 'Error updating list' });
-          }
-          res.json({ success: true, message: 'List updated' });
-          broadcastListUpdate(req.user._id, name, data);
-        }
+        { $set: { updatedAt: timestamp } }
       );
+      await listItemsAsync.remove({ listId: existingList._id }, { multi: true });
+      for (let i = 0; i < data.length; i++) {
+        const album = data[i];
+        await listItemsAsync.insert({
+          listId: existingList._id,
+          position: i + 1,
+          artist: album.artist || '',
+          album: album.album || '',
+          albumId: album.album_id || '',
+          releaseDate: album.release_date || '',
+          country: album.country || '',
+          genre1: album.genre_1 || album.genre || '',
+          genre2: album.genre_2 || '',
+          comments: album.comments || album.comment || '',
+          coverImage: album.cover_image || '',
+          coverImageFormat: album.cover_image_format || '',
+          createdAt: timestamp,
+          updatedAt: timestamp
+        });
+      }
+      res.json({ success: true, message: 'List updated' });
+      broadcastListUpdate(req.user._id, name, data);
     } else {
-      // Create new list
-      lists.insert({
+      const newList = await listsAsync.insert({
         userId: req.user._id,
         name,
-        data,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }, (err, newList) => {
-        if (err) {
-          console.error('Error creating list:', err);
-          return res.status(500).json({ error: 'Error creating list' });
-        }
-        res.json({ success: true, message: 'List created' });
-        broadcastListUpdate(req.user._id, name, data);
+        createdAt: timestamp,
+        updatedAt: timestamp
       });
+      for (let i = 0; i < data.length; i++) {
+        const album = data[i];
+        await listItemsAsync.insert({
+          listId: newList._id,
+          position: i + 1,
+          artist: album.artist || '',
+          album: album.album || '',
+          albumId: album.album_id || '',
+          releaseDate: album.release_date || '',
+          country: album.country || '',
+          genre1: album.genre_1 || album.genre || '',
+          genre2: album.genre_2 || '',
+          comments: album.comments || album.comment || '',
+          coverImage: album.cover_image || '',
+          coverImageFormat: album.cover_image_format || '',
+          createdAt: timestamp,
+          updatedAt: timestamp
+        });
+      }
+      res.json({ success: true, message: 'List created' });
+      broadcastListUpdate(req.user._id, name, data);
     }
   });
 });
