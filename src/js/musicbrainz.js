@@ -1005,6 +1005,15 @@ function showManualEntryForm() {
   // Reset form
   modalElements.form.reset();
   resetCoverPreview();
+
+  // Initialize date picker for release date
+  const releaseInput = document.getElementById('manualReleaseDate');
+  if (releaseInput && window.flatpickr) {
+    window.flatpickr(releaseInput, {
+      dateFormat: 'Y-m-d',
+      defaultDate: new Date()
+    });
+  }
   
   // Populate country dropdown (in case it wasn't populated yet)
   populateCountryDropdown();
@@ -1105,7 +1114,7 @@ async function handleManualSubmit(e) {
     artist: artist,
     album: albumTitle,
     album_id: 'manual-' + Date.now(), // Generate a unique ID for manual entries
-    release_date: formData.get('release_date') || '',
+    release_date: window.formatDateForStorage(formData.get('release_date') || ''),
     country: formData.get('country') || '',
     genre_1: '',
     genre_2: '',
@@ -1716,7 +1725,7 @@ async function addAlbumToList(releaseGroup) {
       artist: currentArtist.name,
       album: releaseGroup.title,
       album_id: releaseGroup.id,
-      release_date: releaseGroup['first-release-date'] || '',
+      release_date: window.formatDateForStorage(releaseGroup['first-release-date'] || ''),
       country: resolvedCountry,
       genre_1: '',
       genre_2: '',
