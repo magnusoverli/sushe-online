@@ -369,8 +369,12 @@ app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), asy
     await listsAsync.remove({}, { multi: true });
 
     // Restore users and lists
-    await usersAsync.insert(backup.users);
-    await listsAsync.insert(backup.lists);
+    for (const user of backup.users) {
+      await usersAsync.insert(user);
+    }
+    for (const list of backup.lists) {
+      await listsAsync.insert(list);
+    }
 
     // Clear all sessions after restore
     req.sessionStore.clear((err) => {
