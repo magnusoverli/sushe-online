@@ -1,5 +1,6 @@
 module.exports = (app, deps) => {
-  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, adminCode, adminCodeExpiry, crypto } = deps;
+  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, adminCode, adminCodeExpiry, crypto } = deps;
+  const { spawn } = require('child_process');
 
 // ============ ADMIN API ENDPOINTS ============
 
@@ -311,97 +312,97 @@ app.get('/admin/user-lists/:userId', ensureAuth, ensureAdmin, (req, res) => {
       return res.status(500).json({ error: 'Error fetching user lists' });
     }
     
-    const listsData = userLists.map(list => ({
-      name: list.name,
-      albumCount: Array.isArray(list.data) ? list.data.length : 0,
-      createdAt: list.createdAt,
-      updatedAt: list.updatedAt
-    }));
+    const listsData = [];
+    for (const list of userLists) {
+      const count = await listItemsAsync.count({ listId: list._id });
+      listsData.push({
+        name: list.name,
+        albumCount: count,
+        createdAt: list.createdAt,
+        updatedAt: list.updatedAt
+      });
+    }
     
     res.json({ lists: listsData });
   });
 });
 
-// Admin: Database backup
-app.get('/admin/backup', ensureAuth, ensureAdmin, async (req, res) => {
+// Admin: Export database to JSON
+app.get('/admin/export', ensureAuth, ensureAdmin, async (req, res) => {
   try {
+    const listsData = await listsAsync.find({});
+    for (const l of listsData) {
+      const items = await listItemsAsync.find({ listId: l._id });
+      items.sort((a, b) => a.position - b.position);
+      l.data = items.map(it => ({
+        artist: it.artist,
+        album: it.album,
+        album_id: it.albumId,
+        release_date: it.releaseDate,
+        country: it.country,
+        genre_1: it.genre1,
+        genre_2: it.genre2,
+        comments: it.comments,
+        cover_image: it.coverImage,
+        cover_image_format: it.coverImageFormat
+      }));
+    }
     const backup = {
       exportDate: new Date().toISOString(),
       users: await usersAsync.find({}),
-      lists: await listsAsync.find({})
+      lists: listsData
     };
 
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', 'attachment; filename="sushe-backup.json"');
+    res.setHeader('Content-Disposition', 'attachment; filename="sushe-export.json"');
     res.send(JSON.stringify(backup, null, 2));
   } catch (error) {
-    console.error('Backup error:', error);
-    res.status(500).send('Error creating backup');
+    console.error('Export error:', error);
+    res.status(500).send('Error creating export');
   }
 });
 
-// Admin: Restore database
-app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
-    }
+// Admin: Backup entire database using pg_dump
+app.get('/admin/backup', ensureAuth, ensureAdmin, (req, res) => {
+  const dump = spawn('pg_dump', ['-Fc', process.env.DATABASE_URL]);
+  res.setHeader('Content-Disposition', 'attachment; filename="sushe-db.dump"');
+  res.setHeader('Content-Type', 'application/octet-stream');
+  dump.stdout.pipe(res);
+  dump.stderr.on('data', d => console.error('pg_dump:', d.toString()));
+  dump.on('error', err => {
+    console.error('Backup error:', err);
+    res.status(500).send('Error creating backup');
+  });
+});
 
-    // Parse the JSON backup
-    let backup;
-    try {
-      backup = JSON.parse(req.file.buffer.toString());
-    } catch (parseError) {
-      console.error('Invalid backup file:', parseError);
-      return res.status(400).json({ error: 'Invalid backup file format' });
-    }
-
-    // Validate backup structure
-    if (!backup.users || !backup.lists || !Array.isArray(backup.users) || !Array.isArray(backup.lists)) {
-      return res.status(400).json({ error: 'Invalid backup structure' });
-    }
-
-    console.log(`Restoring backup from ${backup.exportDate}`);
-    console.log(`Contains ${backup.users.length} users and ${backup.lists.length} lists`);
-
-    // Clear existing data
-    await usersAsync.remove({}, { multi: true });
-    await listsAsync.remove({}, { multi: true });
-
-    // Restore users and lists
-    const allowedUserFields = Object.keys(usersAsync.fieldMap);
-    const allowedListFields = Object.keys(listsAsync.fieldMap);
-
-    for (const user of backup.users) {
-      const sanitized = {};
-      for (const field of allowedUserFields) {
-        if (user[field] !== undefined) sanitized[field] = user[field];
-      }
-      await usersAsync.insert(sanitized);
-    }
-
-    for (const list of backup.lists) {
-      const sanitized = {};
-      for (const field of allowedListFields) {
-        if (list[field] !== undefined) sanitized[field] = list[field];
-      }
-      await listsAsync.insert(sanitized);
-    }
-
-    // Clear all sessions after restore
-    req.sessionStore.clear((err) => {
-      if (err) {
-        console.error('Error clearing sessions after restore:', err);
-      }
-    });
-
-    console.log(`Database restored successfully by ${req.user.email}`);
-    res.json({ success: true, message: 'Database restored successfully' });
-
-  } catch (error) {
-    console.error('Restore error:', error);
-    res.status(500).json({ error: 'Error restoring database' });
+// Admin: Restore database from pg_dump file
+app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
   }
+
+  const restore = spawn('pg_restore', ['-c', '-d', process.env.DATABASE_URL]);
+  restore.stdin.write(req.file.buffer);
+  restore.stdin.end();
+
+  restore.stderr.on('data', data => console.error('pg_restore:', data.toString()));
+
+  restore.on('error', err => {
+    console.error('Restore error:', err);
+    res.status(500).json({ error: 'Error restoring database' });
+  });
+
+  restore.on('exit', code => {
+    if (code === 0) {
+      req.sessionStore.clear(err => {
+        if (err) console.error('Error clearing sessions after restore:', err);
+        res.json({ success: true, message: 'Database restored successfully' });
+      });
+    } else {
+      console.error('pg_restore exited with code', code);
+      res.status(500).json({ error: 'Error restoring database' });
+    }
+  });
 });
 
 // Admin: Clear all sessions
