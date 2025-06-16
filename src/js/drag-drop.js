@@ -14,12 +14,17 @@ const DragDropManager = (function() {
   // Cached rows for efficient lookups during drag
   let cachedRows = [];
 
+  // Prevent duplicate initialization
+  let initialized = false;
+
   // Initialize drag and drop for container
   function initialize() {
     const container = document.getElementById('albumContainer');
     if (!container) return;
 
-    
+    if (initialized) return;
+    initialized = true;
+
     container.addEventListener('dragover', handleContainerDragOver);
     container.addEventListener('dragleave', handleContainerDragLeave);
   }
