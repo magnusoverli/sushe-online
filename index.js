@@ -75,6 +75,8 @@ function sanitizeUser(user) {
     email,
     username,
     accentColor,
+    timeFormat: user.timeFormat || '24h',
+    dateFormat: user.dateFormat || 'MM/DD/YYYY',
     lastSelectedList,
     role,
     spotifyAuth: !!user.spotifyAuth,
