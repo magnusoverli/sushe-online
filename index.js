@@ -4,7 +4,7 @@ const session = require('express-session');
 const FileStore = require('session-file-store')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-const Datastore = require('@seald-io/nedb');
+// Datastore setup is handled in ./db which supports NeDB or PostgreSQL
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -38,31 +38,9 @@ const {
 // Import the new settings template
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
+// Databases are initialized in ./db and can use NeDB or PostgreSQL
+const { users, lists, usersAsync, listsAsync, dataDir, ready } = require('./db');
 
-// Create data directory if it doesn't exist
-const dataDir = process.env.DATA_DIR || './data';
-if (!require('fs').existsSync(dataDir)) {
-  require('fs').mkdirSync(dataDir, { recursive: true });
-}
-
-// Initialize NeDB databases
-const users = new Datastore({ 
-  filename: path.join(dataDir, 'users.db'), 
-  autoload: true 
-});
-const lists = new Datastore({
-  filename: path.join(dataDir, 'lists.db'),
-  autoload: true
-});
-
-// Promisified DB helpers for async/await
-const promisifyDatastore = require('./db-utils');
-const usersAsync = promisifyDatastore(users);
-const listsAsync = promisifyDatastore(lists);
-
-// Create indexes for better performance
-lists.ensureIndex({ fieldName: 'userId' });
-lists.ensureIndex({ fieldName: 'name' });
 
 // Map of SSE subscribers keyed by `${userId}:${listName}`
 const listSubscribers = new Map();
@@ -405,9 +383,16 @@ app.use((err, req, res, next) => {
   res.status(500).send('Something went wrong!');
 });
 
-// Start server
+// Start server once database is ready
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-  console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
-});
+ready
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
+      console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+    });
+  })
+  .catch((err) => {
+    console.error('Failed to initialize database', err);
+    process.exit(1);
+  });
