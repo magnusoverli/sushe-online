@@ -1,6 +1,6 @@
 module.exports = (app, deps) => {
   const path = require('path');
-  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt, dataDir, pool } = deps;
+  const { htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid, csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, usersAsync, listsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, dataDir, pool, passport } = deps;
 
 // ============ ROUTES ============
 
@@ -592,11 +592,10 @@ app.post('/settings/request-admin', ensureAuth, csrfProtection, rateLimitAdminRe
         }
         
         console.log(`✅ Admin access granted to: ${req.user.email}`);
-        
-        // >>>>>>> ADD THE TRACKING CODE HERE <<<<<
+
         // Track code usage
-        lastCodeUsedBy = req.user.email;
-        lastCodeUsedAt = Date.now();
+        deps.lastCodeUsedBy = req.user.email;
+        deps.lastCodeUsedAt = Date.now();
         
         // REGENERATE CODE IMMEDIATELY after successful use
         console.log('🔄 Regenerating admin code after successful use...');
