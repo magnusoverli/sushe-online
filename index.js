@@ -46,7 +46,19 @@ const {
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
 // Databases are initialized in ./db using PostgreSQL
-const { users, lists, listItems, usersAsync, listsAsync, listItemsAsync, dataDir, ready, pool } = require('./db');
+const {
+  users,
+  lists,
+  listItems,
+  albums,
+  usersAsync,
+  listsAsync,
+  listItemsAsync,
+  albumsAsync,
+  dataDir,
+  ready,
+  pool
+} = require('./db');
 
 
 // Map of SSE subscribers keyed by `${userId}:${listName}`
@@ -387,8 +399,23 @@ const apiRoutes = require("./routes/api");
 
 const deps = {
   htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid,
-  csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest,
-  users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, bcrypt, crypto, nodemailer,
+  csrfProtection,
+  ensureAuth,
+  ensureAuthAPI,
+  ensureAdmin,
+  rateLimitAdminRequest,
+  users,
+  lists,
+  listItems,
+  albums,
+  usersAsync,
+  listsAsync,
+  listItemsAsync,
+  albumsAsync,
+  upload,
+  bcrypt,
+  crypto,
+  nodemailer,
   composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword,
   broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt,
   dataDir, pool, passport

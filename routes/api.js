@@ -7,7 +7,29 @@ function mbFetch(url, options) {
 }
 
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, ensureAuth, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
+  const {
+    ensureAuthAPI,
+    ensureAuth,
+    users,
+    lists,
+    listItems,
+    albums,
+    usersAsync,
+    listsAsync,
+    listItemsAsync,
+    albumsAsync,
+    upload,
+    bcrypt,
+    crypto,
+    nodemailer,
+    composeForgotPasswordEmail,
+    isValidEmail,
+    isValidUsername,
+    isValidPassword,
+    csrfProtection,
+    broadcastListUpdate,
+    listSubscribers
+  } = deps;
 
 // ============ API ENDPOINTS FOR LISTS ============
 
@@ -23,19 +45,24 @@ app.get('/api/lists', ensureAuthAPI, (req, res) => {
     for (const list of userLists) {
       const items = await listItemsAsync.find({ listId: list._id });
       items.sort((a, b) => a.position - b.position);
-      listsObj[list.name] = items.map(item => ({
-        artist: item.artist,
-        album: item.album,
-        album_id: item.albumId,
-        release_date: item.releaseDate,
-        country: item.country,
-        genre_1: item.genre1,
-        genre_2: item.genre2,
-        comments: item.comments,
-        tracks: item.tracks,
-        cover_image: item.coverImage,
-        cover_image_format: item.coverImageFormat
-      }));
+      const listData = [];
+      for (const item of items) {
+        const album = await albumsAsync.findOne({ _id: item.albumId });
+        listData.push({
+          artist: album?.artist || item.artist,
+          album: album?.album || item.album,
+          album_id: item.albumId,
+          release_date: album?.releaseDate || item.releaseDate,
+          country: album?.country || item.country,
+          genre_1: album?.genre1 || item.genre1,
+          genre_2: album?.genre2 || item.genre2,
+          comments: item.comments,
+          tracks: album?.tracks || item.tracks,
+          cover_image: album?.coverImage || item.coverImage,
+          cover_image_format: album?.coverImageFormat || item.coverImageFormat
+        });
+      }
+      listsObj[list.name] = listData;
     }
 
     res.json(listsObj);
@@ -86,19 +113,23 @@ app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
     }
     const items = await listItemsAsync.find({ listId: list._id });
     items.sort((a, b) => a.position - b.position);
-    const data = items.map(item => ({
-      artist: item.artist,
-      album: item.album,
-      album_id: item.albumId,
-      release_date: item.releaseDate,
-      country: item.country,
-      genre_1: item.genre1,
-      genre_2: item.genre2,
-      comments: item.comments,
-      tracks: item.tracks,
-      cover_image: item.coverImage,
-      cover_image_format: item.coverImageFormat
-    }));
+    const data = [];
+    for (const item of items) {
+      const album = await albumsAsync.findOne({ _id: item.albumId });
+      data.push({
+        artist: album?.artist || item.artist,
+        album: album?.album || item.album,
+        album_id: item.albumId,
+        release_date: album?.releaseDate || item.releaseDate,
+        country: album?.country || item.country,
+        genre_1: album?.genre1 || item.genre1,
+        genre_2: album?.genre2 || item.genre2,
+        comments: item.comments,
+        tracks: album?.tracks || item.tracks,
+        cover_image: album?.coverImage || item.coverImage,
+        cover_image_format: album?.coverImageFormat || item.coverImageFormat
+      });
+    }
     res.json(data);
   });
 });
@@ -128,20 +159,40 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
       await listItemsAsync.remove({ listId: existingList._id }, { multi: true });
       for (let i = 0; i < data.length; i++) {
         const album = data[i];
-        await listItemsAsync.insert({
-          listId: existingList._id,
-          position: i + 1,
+        const albumId = album.album_id || '';
+        const albumData = {
           artist: album.artist || '',
           album: album.album || '',
-          albumId: album.album_id || '',
           releaseDate: album.release_date || '',
           country: album.country || '',
           genre1: album.genre_1 || album.genre || '',
           genre2: album.genre_2 || '',
-          comments: album.comments || album.comment || '',
           tracks: Array.isArray(album.tracks) ? album.tracks : null,
           coverImage: album.cover_image || '',
           coverImageFormat: album.cover_image_format || '',
+          updatedAt: timestamp
+        };
+        const existingAlbum = await albumsAsync.findOne({ _id: albumId });
+        if (existingAlbum) {
+          await albumsAsync.update({ _id: albumId }, { $set: albumData });
+        } else {
+          await albumsAsync.insert({ _id: albumId, ...albumData, createdAt: timestamp });
+        }
+
+        await listItemsAsync.insert({
+          listId: existingList._id,
+          position: i + 1,
+          artist: albumData.artist,
+          album: albumData.album,
+          albumId,
+          releaseDate: albumData.releaseDate,
+          country: albumData.country,
+          genre1: albumData.genre1,
+          genre2: albumData.genre2,
+          comments: album.comments || album.comment || '',
+          tracks: albumData.tracks,
+          coverImage: albumData.coverImage,
+          coverImageFormat: albumData.coverImageFormat,
           createdAt: timestamp,
           updatedAt: timestamp
         });
@@ -157,20 +208,40 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
       });
       for (let i = 0; i < data.length; i++) {
         const album = data[i];
-        await listItemsAsync.insert({
-          listId: newList._id,
-          position: i + 1,
+        const albumId = album.album_id || '';
+        const albumData = {
           artist: album.artist || '',
           album: album.album || '',
-          albumId: album.album_id || '',
           releaseDate: album.release_date || '',
           country: album.country || '',
           genre1: album.genre_1 || album.genre || '',
           genre2: album.genre_2 || '',
-          comments: album.comments || album.comment || '',
           tracks: Array.isArray(album.tracks) ? album.tracks : null,
           coverImage: album.cover_image || '',
           coverImageFormat: album.cover_image_format || '',
+          updatedAt: timestamp
+        };
+        const existingAlbum = await albumsAsync.findOne({ _id: albumId });
+        if (existingAlbum) {
+          await albumsAsync.update({ _id: albumId }, { $set: albumData });
+        } else {
+          await albumsAsync.insert({ _id: albumId, ...albumData, createdAt: timestamp });
+        }
+
+        await listItemsAsync.insert({
+          listId: newList._id,
+          position: i + 1,
+          artist: albumData.artist,
+          album: albumData.album,
+          albumId,
+          releaseDate: albumData.releaseDate,
+          country: albumData.country,
+          genre1: albumData.genre1,
+          genre2: albumData.genre2,
+          comments: album.comments || album.comment || '',
+          tracks: albumData.tracks,
+          coverImage: albumData.coverImage,
+          coverImageFormat: albumData.coverImageFormat,
           createdAt: timestamp,
           updatedAt: timestamp
         });
