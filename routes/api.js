@@ -10,38 +10,50 @@ module.exports = (app, deps) => {
   const { ensureAuthAPI, ensureAuth, users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers, pool } = deps;
 
   async function upsertAlbumRecord(album, timestamp) {
-    const existing = await albumsAsync.findOne({ _id: album.album_id });
-    if (existing) {
-      const updates = {};
-      if (album.artist && !existing.artist) updates.artist = album.artist;
-      if (album.album && !existing.album) updates.album = album.album;
-      if (album.release_date && !existing.releaseDate) updates.releaseDate = album.release_date;
-      if (album.country && !existing.country) updates.country = album.country;
-      if ((album.genre_1 || album.genre) && !existing.genre1) updates.genre1 = album.genre_1 || album.genre;
-      if (album.genre_2 && !existing.genre2) updates.genre2 = album.genre_2;
-      if (Array.isArray(album.tracks) && album.tracks.length && (!existing.tracks || !existing.tracks.length)) updates.tracks = album.tracks;
-      if (album.cover_image && !existing.coverImage) updates.coverImage = album.cover_image;
-      if (album.cover_image_format && !existing.coverImageFormat) updates.coverImageFormat = album.cover_image_format;
-      if (Object.keys(updates).length) {
-        updates.updatedAt = timestamp;
-        await albumsAsync.update({ _id: album.album_id }, { $set: updates });
-      }
-    } else {
-      await albumsAsync.insert({
-        _id: album.album_id,
-        artist: album.artist || '',
-        album: album.album || '',
-        releaseDate: album.release_date || '',
-        country: album.country || '',
-        genre1: album.genre_1 || album.genre || '',
-        genre2: album.genre_2 || '',
-        tracks: Array.isArray(album.tracks) ? album.tracks : null,
-        coverImage: album.cover_image || '',
-        coverImageFormat: album.cover_image_format || '',
-        createdAt: timestamp,
-        updatedAt: timestamp
-      });
-    }
+    const values = [
+      album.album_id,
+      album.artist || '',
+      album.album || '',
+      album.release_date || '',
+      album.country || '',
+      album.genre_1 || album.genre || '',
+      album.genre_2 || '',
+      Array.isArray(album.tracks) ? JSON.stringify(album.tracks) : null,
+      album.cover_image || '',
+      album.cover_image_format || '',
+      timestamp,
+      timestamp
+    ];
+
+    await pool.query(
+      `INSERT INTO albums (
+        album_id,
+        artist,
+        album,
+        release_date,
+        country,
+        genre_1,
+        genre_2,
+        tracks,
+        cover_image,
+        cover_image_format,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
+      ) ON CONFLICT (album_id) DO UPDATE SET
+        artist = COALESCE(albums.artist, EXCLUDED.artist),
+        album = COALESCE(albums.album, EXCLUDED.album),
+        release_date = COALESCE(albums.release_date, EXCLUDED.release_date),
+        country = COALESCE(albums.country, EXCLUDED.country),
+        genre_1 = COALESCE(albums.genre_1, EXCLUDED.genre_1),
+        genre_2 = COALESCE(albums.genre_2, EXCLUDED.genre_2),
+        tracks = COALESCE(albums.tracks, EXCLUDED.tracks),
+        cover_image = COALESCE(albums.cover_image, EXCLUDED.cover_image),
+        cover_image_format = COALESCE(albums.cover_image_format, EXCLUDED.cover_image_format),
+        updated_at = EXCLUDED.updated_at`,
+      values
+    );
   }
 
 // ============ API ENDPOINTS FOR LISTS ============
