@@ -174,8 +174,9 @@ body {
 .album-row {
   transition: all 0.2s ease;
   position: relative;
-  background-color: transparent;
+  background: linear-gradient(90deg, rgba(31, 41, 55, 0.4) 0%, rgba(17, 24, 39, 0.4) 100%);
   user-select: none;
+  border-left: 4px solid transparent;
 }
 
 /* Reduced vertical padding for desktop */
@@ -195,9 +196,10 @@ body {
 /* Enhanced hover effect with subtle background */
 @media (min-width: 1024px) {
   .album-row:hover:not(.dragging) {
-    background-color: rgba(31, 41, 55, 0.4);
-    transform: translateX(2px);
-    box-shadow: inset 0 0 0 1px rgba(55, 65, 81, 0.2);
+    background: linear-gradient(90deg, var(--accent-subtle) 0%, transparent 80%);
+    border-left-color: var(--accent-color);
+    transform: translateX(4px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   }
   
   /* Subtle border enhancement for desktop */
@@ -223,7 +225,7 @@ body {
   left: 0;
   right: 0;
   height: 0;
-  border-top: 2px dashed #dc2626;
+  border-top: 2px dashed var(--accent-color);
   top: var(--drop-indicator, -2px);
   pointer-events: none;
   z-index: 1;
