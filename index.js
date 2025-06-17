@@ -13,9 +13,16 @@ const compression = require('compression');
 const helmet = require('helmet');
 const csrf = require('csurf');
 const multer = require('multer');
+const os = require('os');
 const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+  storage: multer.diskStorage({
+    destination: os.tmpdir(),
+    filename: (req, file, cb) => {
+      const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + '-' + unique + '.dump');
+    }
+  }),
+  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB limit
 });
 // Log any unhandled errors so the server doesn't fail silently
 process.on('unhandledRejection', (err) => {
