@@ -7,7 +7,42 @@ function mbFetch(url, options) {
 }
 
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, ensureAuth, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
+  const { ensureAuthAPI, ensureAuth, users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
+
+  async function upsertAlbumRecord(album, timestamp) {
+    const existing = await albumsAsync.findOne({ _id: album.album_id });
+    if (existing) {
+      const updates = {};
+      if (album.artist && !existing.artist) updates.artist = album.artist;
+      if (album.album && !existing.album) updates.album = album.album;
+      if (album.release_date && !existing.releaseDate) updates.releaseDate = album.release_date;
+      if (album.country && !existing.country) updates.country = album.country;
+      if ((album.genre_1 || album.genre) && !existing.genre1) updates.genre1 = album.genre_1 || album.genre;
+      if (album.genre_2 && !existing.genre2) updates.genre2 = album.genre_2;
+      if (Array.isArray(album.tracks) && album.tracks.length && (!existing.tracks || !existing.tracks.length)) updates.tracks = album.tracks;
+      if (album.cover_image && !existing.coverImage) updates.coverImage = album.cover_image;
+      if (album.cover_image_format && !existing.coverImageFormat) updates.coverImageFormat = album.cover_image_format;
+      if (Object.keys(updates).length) {
+        updates.updatedAt = timestamp;
+        await albumsAsync.update({ _id: album.album_id }, { $set: updates });
+      }
+    } else {
+      await albumsAsync.insert({
+        _id: album.album_id,
+        artist: album.artist || '',
+        album: album.album || '',
+        releaseDate: album.release_date || '',
+        country: album.country || '',
+        genre1: album.genre_1 || album.genre || '',
+        genre2: album.genre_2 || '',
+        tracks: Array.isArray(album.tracks) ? album.tracks : null,
+        coverImage: album.cover_image || '',
+        coverImageFormat: album.cover_image_format || '',
+        createdAt: timestamp,
+        updatedAt: timestamp
+      });
+    }
+  }
 
 // ============ API ENDPOINTS FOR LISTS ============
 
@@ -23,19 +58,27 @@ app.get('/api/lists', ensureAuthAPI, (req, res) => {
     for (const list of userLists) {
       const items = await listItemsAsync.find({ listId: list._id });
       items.sort((a, b) => a.position - b.position);
-      listsObj[list.name] = items.map(item => ({
-        artist: item.artist,
-        album: item.album,
-        album_id: item.albumId,
-        release_date: item.releaseDate,
-        country: item.country,
-        genre_1: item.genre1,
-        genre_2: item.genre2,
-        comments: item.comments,
-        tracks: item.tracks,
-        cover_image: item.coverImage,
-        cover_image_format: item.coverImageFormat
-      }));
+      const mapped = [];
+      for (const item of items) {
+        let albumData = null;
+        if (item.albumId) {
+          albumData = await albumsAsync.findOne({ _id: item.albumId });
+        }
+        mapped.push({
+          artist: albumData?.artist || item.artist,
+          album: albumData?.album || item.album,
+          album_id: item.albumId,
+          release_date: albumData?.releaseDate || item.releaseDate,
+          country: albumData?.country || item.country,
+          genre_1: albumData?.genre1 || item.genre1,
+          genre_2: albumData?.genre2 || item.genre2,
+          comments: item.comments,
+          tracks: albumData?.tracks || item.tracks,
+          cover_image: albumData?.coverImage || item.coverImage,
+          cover_image_format: albumData?.coverImageFormat || item.coverImageFormat
+        });
+      }
+      listsObj[list.name] = mapped;
     }
 
     res.json(listsObj);
@@ -86,19 +129,26 @@ app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
     }
     const items = await listItemsAsync.find({ listId: list._id });
     items.sort((a, b) => a.position - b.position);
-    const data = items.map(item => ({
-      artist: item.artist,
-      album: item.album,
-      album_id: item.albumId,
-      release_date: item.releaseDate,
-      country: item.country,
-      genre_1: item.genre1,
-      genre_2: item.genre2,
-      comments: item.comments,
-      tracks: item.tracks,
-      cover_image: item.coverImage,
-      cover_image_format: item.coverImageFormat
-    }));
+    const data = [];
+    for (const item of items) {
+      let albumData = null;
+      if (item.albumId) {
+        albumData = await albumsAsync.findOne({ _id: item.albumId });
+      }
+      data.push({
+        artist: albumData?.artist || item.artist,
+        album: albumData?.album || item.album,
+        album_id: item.albumId,
+        release_date: albumData?.releaseDate || item.releaseDate,
+        country: albumData?.country || item.country,
+        genre_1: albumData?.genre1 || item.genre1,
+        genre_2: albumData?.genre2 || item.genre2,
+        comments: item.comments,
+        tracks: albumData?.tracks || item.tracks,
+        cover_image: albumData?.coverImage || item.coverImage,
+        cover_image_format: albumData?.coverImageFormat || item.coverImageFormat
+      });
+    }
     res.json(data);
   });
 });
@@ -128,6 +178,9 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
       await listItemsAsync.remove({ listId: existingList._id }, { multi: true });
       for (let i = 0; i < data.length; i++) {
         const album = data[i];
+        if (album.album_id) {
+          await upsertAlbumRecord(album, timestamp);
+        }
         await listItemsAsync.insert({
           listId: existingList._id,
           position: i + 1,
@@ -157,6 +210,9 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
       });
       for (let i = 0; i < data.length; i++) {
         const album = data[i];
+        if (album.album_id) {
+          await upsertAlbumRecord(album, timestamp);
+        }
         await listItemsAsync.insert({
           listId: newList._id,
           position: i + 1,
