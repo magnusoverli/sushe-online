@@ -1,3 +1,11 @@
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+let mbQueue = Promise.resolve();
+function mbFetch(url, options) {
+  const result = mbQueue.then(() => fetch(url, options));
+  mbQueue = result.then(() => wait(3000), () => wait(3000));
+  return result;
+}
+
 module.exports = (app, deps) => {
   const { ensureAuthAPI, ensureAuth, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
 
@@ -613,7 +621,7 @@ app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
         const url =
           `https://musicbrainz.org/ws/2/release-group/?query=${encodeURIComponent(query)}` +
           `&type=album|ep&fmt=json&limit=10`;
-        const resp = await fetch(url, { headers });
+        const resp = await mbFetch(url, { headers });
         if (!resp.ok) {
           throw new Error(`MusicBrainz search responded ${resp.status}`);
         }
@@ -631,7 +639,7 @@ app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
         const relUrl =
           `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(`${albumClean} ${artistClean}`)}` +
           `&fmt=json&limit=10`;
-        const relResp = await fetch(relUrl, { headers });
+        const relResp = await mbFetch(relUrl, { headers });
         if (relResp.ok) {
           const relData = await relResp.json();
           const releases = relData.releases || [];
@@ -656,7 +664,7 @@ app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
       const mbUrl =
         `https://musicbrainz.org/ws/2/release/${directReleaseId}` +
         `?inc=recordings&fmt=json`;
-      const resp = await fetch(mbUrl, { headers });
+      const resp = await mbFetch(mbUrl, { headers });
       if (!resp.ok) {
         throw new Error(`MusicBrainz responded ${resp.status}`);
       }
@@ -666,7 +674,7 @@ app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
       const mbUrl =
         `https://musicbrainz.org/ws/2/release?release-group=${releaseGroupId}` +
         `&inc=recordings&fmt=json&limit=100`;
-      const resp = await fetch(mbUrl, { headers });
+      const resp = await mbFetch(mbUrl, { headers });
       if (!resp.ok) {
         throw new Error(`MusicBrainz responded ${resp.status}`);
       }
