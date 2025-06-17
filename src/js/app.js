@@ -1,6 +1,9 @@
 // Global variables
 let currentList = null;
 let lists = {};
+// Expose for other modules
+window.currentList = currentList;
+window.lists = lists;
 let listEventSource = null;
 let availableGenres = [];
 let availableCountries = [];
@@ -667,6 +670,7 @@ function attachLinkPreview(container, comment) {
 async function loadLists() {
   try {
     lists = await apiCall('/api/lists');
+    window.lists = lists;
     updateListNav();
   } catch (error) {
     showToast('Error loading lists', 'error');
@@ -695,6 +699,8 @@ async function saveList(name, data) {
     throw error;
   }
 }
+// Expose saveList for other modules
+window.saveList = saveList;
 
 function subscribeToList(name) {
   if (listEventSource) {
@@ -768,6 +774,7 @@ function initializeContextMenu() {
         // If we're currently viewing this list, clear the view
         if (currentList === currentContextList) {
           currentList = null;
+          window.currentList = currentList;
           
           // Hide the list name in header
           const headerSeparator = document.getElementById('headerSeparator');
@@ -1090,6 +1097,7 @@ function initializeRenameList() {
       // If we're currently viewing this list, update the view
       if (currentList === oldName) {
         currentList = newName;
+        window.currentList = currentList;
         selectList(newName);
       }
       
@@ -1484,6 +1492,7 @@ function initializeMobileSorting(container) {
 async function selectList(listName) {
   try {
     currentList = listName;
+    window.currentList = currentList;
     subscribeToList(listName);
 
     // Always fetch the latest data when a list is selected

@@ -949,7 +949,7 @@ function clearSearchResults() {
 
 // Unified open modal function
 window.openAddAlbumModal = function() {
-  if (!currentList) {
+  if (!window.currentList) {
     showToast('Please select a list first', 'error');
     return;
   }
@@ -1149,13 +1149,13 @@ async function handleManualSubmit(e) {
 async function finishManualAdd(album) {
   try {
     // Add to current list
-    lists[currentList].push(album);
+    window.lists[window.currentList].push(album);
     
     // Save to server
-    await saveList(currentList, lists[currentList]);
+    await window.saveList(window.currentList, window.lists[window.currentList]);
     
     // Refresh the list view
-    selectList(currentList);
+    window.selectList(window.currentList);
     
     // Close modal
     closeAddAlbumModal();
@@ -1166,7 +1166,7 @@ async function finishManualAdd(album) {
     showToast('Error adding album to list', 'error');
     
     // Remove from list on error
-    lists[currentList].pop();
+    window.lists[window.currentList].pop();
   }
 }
 
@@ -1795,11 +1795,11 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   try {
-    lists[currentList].push(album);
-    
-    await saveList(currentList, lists[currentList]);
-    
-    selectList(currentList);
+    window.lists[window.currentList].push(album);
+
+    await window.saveList(window.currentList, window.lists[window.currentList]);
+
+    window.selectList(window.currentList);
     
     closeAddAlbumModal();
     
@@ -1808,7 +1808,7 @@ async function addAlbumToCurrentList(album) {
     console.error('Error adding album:', error);
     showToast('Error adding album to list', 'error');
     
-    lists[currentList].pop();
+    window.lists[window.currentList].pop();
   }
 }
 
