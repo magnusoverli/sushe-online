@@ -1855,7 +1855,7 @@ function displayAlbums(albums) {
     
     // Header - using album-grid class
     const header = document.createElement('div');
-    header.className = 'album-grid gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+    header.className = 'album-row album-header album-grid gap-4 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
     header.style.alignItems = 'center';
     header.innerHTML = `
       <div class="text-center">#</div>
@@ -1894,7 +1894,7 @@ function displayAlbums(albums) {
         genre2 = '';
       }
       const genre2Display = genre2 || 'Genre 2';
-      const genre2Class = genre2 ? 'text-gray-400' : 'text-gray-500 italic';
+      const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-500 italic';
       
       let comment = album.comments || album.comment || '';
       if (comment === 'Comment') {
