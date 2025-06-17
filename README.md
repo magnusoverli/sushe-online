@@ -12,6 +12,7 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 - **Password reset** via email using Nodemailer.
 - **Spotify-like interface** for browsing and editing your lists. Drag and drop albums to reorder and import data from MusicBrainz, iTunes and Deezer.
 - **Fetch track lists** from MusicBrainz when editing an album.
+- **Shared album metadata** stored in a dedicated table so details added by one user are reused by others.
 - **Persistent storage** using PostgreSQL for all data.
 - **Admin mode** protected by a rotating access code printed to the server console. Admins can view site statistics, manage users and create backups.
 - **Custom theme** support allowing each user to pick an accent colour.
