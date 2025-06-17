@@ -2265,8 +2265,11 @@ window.showMobileEditForm = function(index) {
 
         <!-- Tracks List -->
         <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Tracks</label>
-          <ul class="list-disc list-inside space-y-1 text-sm text-gray-300">
+          <div class="flex items-center justify-between">
+            <label class="block text-gray-400 text-sm mb-2">Tracks</label>
+            <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
+          </div>
+          <ul id="editTrackList" class="list-disc list-inside space-y-1 text-sm text-gray-300">
             ${Array.isArray(album.tracks) && album.tracks.length > 0
               ? album.tracks.map(track => `<li>${track}</li>`).join('')
               : '<li class="text-gray-500 italic">No tracks available</li>'}
@@ -2280,6 +2283,38 @@ window.showMobileEditForm = function(index) {
   `;
   
   document.body.appendChild(editModal);
+
+  // Fetch track list when button is clicked
+  const fetchBtn = document.getElementById('fetchTracksBtn');
+  const trackListEl = document.getElementById('editTrackList');
+  if (fetchBtn) {
+    fetchBtn.onclick = async () => {
+      if (!album.album_id) return;
+      fetchBtn.textContent = '...';
+      fetchBtn.disabled = true;
+      try {
+        const params = new URLSearchParams({
+          id: album.album_id || '',
+          artist: album.artist,
+          album: album.album
+        });
+        const resp = await fetch(`/api/musicbrainz/tracks?${params.toString()}`, {
+          credentials: 'include'
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.error || 'Failed');
+        album.tracks = data.tracks;
+        trackListEl.innerHTML = data.tracks.map(t => `<li>${t}</li>`).join('');
+        showToast('Tracks loaded');
+      } catch (err) {
+        console.error('Track fetch error:', err);
+        showToast('Error fetching tracks', 'error');
+      } finally {
+        fetchBtn.textContent = 'Get';
+        fetchBtn.disabled = false;
+      }
+    };
+  }
 
   // Handle save (rest of the code remains the same)
   document.getElementById('mobileEditSaveBtn').onclick = async function() {
@@ -2300,6 +2335,8 @@ window.showMobileEditForm = function(index) {
       genre_1: document.getElementById('editGenre1').value,
       genre: document.getElementById('editGenre1').value, // Keep both for compatibility
       genre_2: document.getElementById('editGenre2').value,
+      // Persist tracks that may have been fetched while editing
+      tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
       comments: document.getElementById('editComments').value.trim(),
       comment: document.getElementById('editComments').value.trim() // Keep both for compatibility
     };
