@@ -7,7 +7,7 @@ function mbFetch(url, options) {
 }
 
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, ensureAuth, users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers } = deps;
+  const { ensureAuthAPI, ensureAuth, users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, upload, bcrypt, crypto, nodemailer, composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword, csrfProtection, broadcastListUpdate, listSubscribers, pool } = deps;
 
   async function upsertAlbumRecord(album, timestamp) {
     const existing = await albumsAsync.findOne({ _id: album.album_id });
@@ -170,69 +170,66 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
     }
 
     const timestamp = new Date();
-    if (existingList) {
-      await lists.update(
-        { _id: existingList._id },
-        { $set: { updatedAt: timestamp } }
-      );
-      await listItemsAsync.remove({ listId: existingList._id }, { multi: true });
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      let listId = existingList ? existingList._id : null;
+      if (existingList) {
+        await client.query('UPDATE lists SET updated_at=$1 WHERE _id=$2', [timestamp, listId]);
+        await client.query('DELETE FROM list_items WHERE list_id=$1', [listId]);
+      } else {
+        const resList = await client.query(
+          'INSERT INTO lists (_id, user_id, name, created_at, updated_at) VALUES (gen_random_uuid()::text, $1, $2, $3, $4) RETURNING _id',
+          [req.user._id, name, timestamp, timestamp]
+        );
+        listId = resList.rows[0]._id;
+      }
+
+      const placeholders = [];
+      const values = [];
+      let idx = 1;
       for (let i = 0; i < data.length; i++) {
         const album = data[i];
         if (album.album_id) {
           await upsertAlbumRecord(album, timestamp);
         }
-        await listItemsAsync.insert({
-          listId: existingList._id,
-          position: i + 1,
-          artist: album.artist || '',
-          album: album.album || '',
-          albumId: album.album_id || '',
-          releaseDate: album.release_date || '',
-          country: album.country || '',
-          genre1: album.genre_1 || album.genre || '',
-          genre2: album.genre_2 || '',
-          comments: album.comments || album.comment || '',
-          tracks: Array.isArray(album.tracks) ? album.tracks : null,
-          coverImage: album.cover_image || '',
-          coverImageFormat: album.cover_image_format || '',
-          createdAt: timestamp,
-          updatedAt: timestamp
-        });
+        placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+        values.push(
+          crypto.randomBytes(12).toString('hex'),
+          listId,
+          i + 1,
+          album.artist || '',
+          album.album || '',
+          album.album_id || '',
+          album.release_date || '',
+          album.country || '',
+          album.genre_1 || album.genre || '',
+          album.genre_2 || '',
+          album.comments || album.comment || '',
+          Array.isArray(album.tracks) ? JSON.stringify(album.tracks) : null,
+          album.cover_image || '',
+          album.cover_image_format || '',
+          timestamp,
+          timestamp
+        );
       }
-      res.json({ success: true, message: 'List updated' });
-      broadcastListUpdate(req.user._id, name, data);
-    } else {
-      const newList = await listsAsync.insert({
-        userId: req.user._id,
-        name,
-        createdAt: timestamp,
-        updatedAt: timestamp
-      });
-      for (let i = 0; i < data.length; i++) {
-        const album = data[i];
-        if (album.album_id) {
-          await upsertAlbumRecord(album, timestamp);
-        }
-        await listItemsAsync.insert({
-          listId: newList._id,
-          position: i + 1,
-          artist: album.artist || '',
-          album: album.album || '',
-          albumId: album.album_id || '',
-          releaseDate: album.release_date || '',
-          country: album.country || '',
-          genre1: album.genre_1 || album.genre || '',
-          genre2: album.genre_2 || '',
-          comments: album.comments || album.comment || '',
-          tracks: Array.isArray(album.tracks) ? album.tracks : null,
-          coverImage: album.cover_image || '',
-          coverImageFormat: album.cover_image_format || '',
-          createdAt: timestamp,
-          updatedAt: timestamp
-        });
+
+      if (placeholders.length) {
+        await client.query(
+          `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, cover_image, cover_image_format, created_at, updated_at) VALUES ${placeholders.join(',')}`,
+          values
+        );
       }
-      res.json({ success: true, message: 'List created' });
+
+      await client.query('COMMIT');
+      res.json({ success: true, message: existingList ? 'List updated' : 'List created' });
       broadcastListUpdate(req.user._id, name, data);
+    } catch (dbErr) {
+      await client.query('ROLLBACK');
+      console.error('Error updating list:', dbErr);
+      res.status(500).json({ error: 'Database error' });
+    } finally {
+      client.release();
     }
   });
 });
