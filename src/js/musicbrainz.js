@@ -1151,10 +1151,12 @@ async function finishManualAdd(album) {
     // Add to current list
     window.lists[window.currentList].push(album);
 
-    try {
-      await window.fetchTracksForAlbum(album);
-    } catch (err) {
-      console.error('Auto track fetch failed:', err);
+    if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
+      try {
+        await window.fetchTracksForAlbum(album);
+      } catch (err) {
+        console.error('Auto track fetch failed:', err);
+      }
     }
 
     // Save to server
@@ -1803,10 +1805,12 @@ async function addAlbumToCurrentList(album) {
   try {
     window.lists[window.currentList].push(album);
 
-    try {
-      await window.fetchTracksForAlbum(album);
-    } catch (err) {
-      console.error('Auto track fetch failed:', err);
+    if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
+      try {
+        await window.fetchTracksForAlbum(album);
+      } catch (err) {
+        console.error('Auto track fetch failed:', err);
+      }
     }
 
     await window.saveList(window.currentList, window.lists[window.currentList]);

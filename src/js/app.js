@@ -725,18 +725,23 @@ function wait(ms) {
 async function autoFetchTracksForList(name) {
   const list = lists[name];
   if (!list) return;
+
+  const toFetch = list.filter(
+    (album) => !Array.isArray(album.tracks) || album.tracks.length === 0
+  );
+  if (toFetch.length === 0) return;
+
   let updated = false;
-  for (const album of list) {
-    if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
-      try {
-        await fetchTracksForAlbum(album);
-        updated = true;
-      } catch (err) {
-        console.error('Auto track fetch failed:', err);
-      }
-      await wait(3000);
+  for (const album of toFetch) {
+    try {
+      await fetchTracksForAlbum(album);
+      updated = true;
+    } catch (err) {
+      console.error('Auto track fetch failed:', err);
     }
+    await wait(3000);
   }
+
   if (updated) {
     try {
       await saveList(name, list);
