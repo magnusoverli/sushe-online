@@ -62,6 +62,7 @@ async function ensureTables(pool) {
   )`);
   await pool.query(`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_list_items_list_id ON list_items(list_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_list_items_album_id ON list_items(album_id)`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS albums (
     id SERIAL PRIMARY KEY,
