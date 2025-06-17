@@ -29,6 +29,8 @@ async function ensureTables(pool) {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_reset_token_expires ON users(reset_token, reset_expires)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -59,6 +61,7 @@ async function ensureTables(pool) {
     updated_at TIMESTAMPTZ
   )`);
   await pool.query(`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_list_items_list_id ON list_items(list_id)`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS albums (
     id SERIAL PRIMARY KEY,
