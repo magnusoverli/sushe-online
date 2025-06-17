@@ -134,6 +134,31 @@ app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
   });
 });
 
+// Get album metadata by ID
+app.get('/api/albums/:id', ensureAuthAPI, async (req, res) => {
+  try {
+    const album = await albumsAsync.findOne({ _id: req.params.id });
+    if (!album) {
+      return res.status(404).json({ error: 'Album not found' });
+    }
+    res.json({
+      artist: album.artist || '',
+      album: album.album || '',
+      album_id: album._id,
+      release_date: album.releaseDate || '',
+      country: album.country || '',
+      genre_1: album.genre1 || '',
+      genre_2: album.genre2 || '',
+      tracks: album.tracks || null,
+      cover_image: album.coverImage || '',
+      cover_image_format: album.coverImageFormat || ''
+    });
+  } catch (err) {
+    console.error('Error fetching album:', err);
+    res.status(500).json({ error: 'Database error' });
+  }
+});
+
 // Create or update a list
 app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
   const { name } = req.params;
@@ -170,26 +195,37 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
         if (Array.isArray(album.tracks)) albumUpdates.tracks = album.tracks;
         if (album.cover_image) albumUpdates.coverImage = album.cover_image;
         if (album.cover_image_format) albumUpdates.coverImageFormat = album.cover_image_format;
+        let finalAlbum = null;
         const existingAlbum = albumId ? await albumsAsync.findOne({ _id: albumId }) : null;
         if (albumId) {
           if (existingAlbum) {
-            if (Object.keys(albumUpdates).length) {
-              await albumsAsync.update({ _id: albumId }, { $set: { ...albumUpdates, updatedAt: timestamp } });
+            const update = {};
+            for (const [key, val] of Object.entries(albumUpdates)) {
+              if (val && (!existingAlbum[key] || existingAlbum[key] !== val)) {
+                update[key] = val;
+              }
+            }
+            if (Object.keys(update).length) {
+              await albumsAsync.update({ _id: albumId }, { $set: { ...update, updatedAt: timestamp } });
+              finalAlbum = { ...existingAlbum, ...update, updatedAt: timestamp };
+            } else {
+              finalAlbum = existingAlbum;
             }
           } else {
-            await albumsAsync.insert({ _id: albumId, ...albumUpdates, createdAt: timestamp, updatedAt: timestamp });
+            finalAlbum = { _id: albumId, ...albumUpdates, createdAt: timestamp, updatedAt: timestamp };
+            await albumsAsync.insert(finalAlbum);
           }
         }
         const itemData = {
-          artist: albumUpdates.artist || '',
-          album: albumUpdates.album || '',
-          releaseDate: albumUpdates.releaseDate || '',
-          country: albumUpdates.country || '',
-          genre1: albumUpdates.genre1 || '',
-          genre2: albumUpdates.genre2 || '',
-          tracks: albumUpdates.tracks || null,
-          coverImage: albumUpdates.coverImage || '',
-          coverImageFormat: albumUpdates.coverImageFormat || ''
+          artist: (finalAlbum && finalAlbum.artist) || album.artist || '',
+          album: (finalAlbum && finalAlbum.album) || album.album || '',
+          releaseDate: (finalAlbum && finalAlbum.releaseDate) || album.release_date || '',
+          country: (finalAlbum && finalAlbum.country) || album.country || '',
+          genre1: (finalAlbum && finalAlbum.genre1) || album.genre_1 || album.genre || '',
+          genre2: (finalAlbum && finalAlbum.genre2) || album.genre_2 || '',
+          tracks: (finalAlbum && finalAlbum.tracks) || album.tracks || null,
+          coverImage: (finalAlbum && finalAlbum.coverImage) || album.cover_image || '',
+          coverImageFormat: (finalAlbum && finalAlbum.coverImageFormat) || album.cover_image_format || ''
         };
         await listItemsAsync.insert({
           listId: existingList._id,
@@ -223,26 +259,37 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
         if (Array.isArray(album.tracks)) albumUpdates.tracks = album.tracks;
         if (album.cover_image) albumUpdates.coverImage = album.cover_image;
         if (album.cover_image_format) albumUpdates.coverImageFormat = album.cover_image_format;
+        let finalAlbum = null;
         const existingAlbum = albumId ? await albumsAsync.findOne({ _id: albumId }) : null;
         if (albumId) {
           if (existingAlbum) {
-            if (Object.keys(albumUpdates).length) {
-              await albumsAsync.update({ _id: albumId }, { $set: { ...albumUpdates, updatedAt: timestamp } });
+            const update = {};
+            for (const [key, val] of Object.entries(albumUpdates)) {
+              if (val && (!existingAlbum[key] || existingAlbum[key] !== val)) {
+                update[key] = val;
+              }
+            }
+            if (Object.keys(update).length) {
+              await albumsAsync.update({ _id: albumId }, { $set: { ...update, updatedAt: timestamp } });
+              finalAlbum = { ...existingAlbum, ...update, updatedAt: timestamp };
+            } else {
+              finalAlbum = existingAlbum;
             }
           } else {
-            await albumsAsync.insert({ _id: albumId, ...albumUpdates, createdAt: timestamp, updatedAt: timestamp });
+            finalAlbum = { _id: albumId, ...albumUpdates, createdAt: timestamp, updatedAt: timestamp };
+            await albumsAsync.insert(finalAlbum);
           }
         }
         const itemData = {
-          artist: albumUpdates.artist || '',
-          album: albumUpdates.album || '',
-          releaseDate: albumUpdates.releaseDate || '',
-          country: albumUpdates.country || '',
-          genre1: albumUpdates.genre1 || '',
-          genre2: albumUpdates.genre2 || '',
-          tracks: albumUpdates.tracks || null,
-          coverImage: albumUpdates.coverImage || '',
-          coverImageFormat: albumUpdates.coverImageFormat || ''
+          artist: (finalAlbum && finalAlbum.artist) || album.artist || '',
+          album: (finalAlbum && finalAlbum.album) || album.album || '',
+          releaseDate: (finalAlbum && finalAlbum.releaseDate) || album.release_date || '',
+          country: (finalAlbum && finalAlbum.country) || album.country || '',
+          genre1: (finalAlbum && finalAlbum.genre1) || album.genre_1 || album.genre || '',
+          genre2: (finalAlbum && finalAlbum.genre2) || album.genre_2 || '',
+          tracks: (finalAlbum && finalAlbum.tracks) || album.tracks || null,
+          coverImage: (finalAlbum && finalAlbum.coverImage) || album.cover_image || '',
+          coverImageFormat: (finalAlbum && finalAlbum.coverImageFormat) || album.cover_image_format || ''
         };
         await listItemsAsync.insert({
           listId: newList._id,

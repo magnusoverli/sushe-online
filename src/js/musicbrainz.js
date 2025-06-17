@@ -1710,7 +1710,18 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 async function addAlbumToList(releaseGroup) {
   // Show initial loading message
   showToast('Adding album...', 'info');
-  
+
+  try {
+    const existing = await window.fetchAlbumFromDB(releaseGroup.id);
+    if (existing) {
+      existing.comments = '';
+      addAlbumToCurrentList(existing);
+      return;
+    }
+  } catch (err) {
+    console.error('Failed to check existing album:', err);
+  }
+
   let resolvedCountry = '';
   if (currentArtist.country) {
     if (currentArtist.country.length === 2) {

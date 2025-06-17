@@ -718,6 +718,17 @@ async function fetchTracksForAlbum(album) {
 }
 window.fetchTracksForAlbum = fetchTracksForAlbum;
 
+async function fetchAlbumFromDB(id) {
+  const resp = await fetch(`/api/albums/${encodeURIComponent(id)}`, {
+    credentials: 'include'
+  });
+  if (resp.status === 404) return null;
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || 'Failed');
+  return data;
+}
+window.fetchAlbumFromDB = fetchAlbumFromDB;
+
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
