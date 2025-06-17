@@ -2255,14 +2255,24 @@ window.showMobileEditForm = function(index) {
         <!-- Comments -->
         <div class="w-full">
           <label class="block text-gray-400 text-sm mb-2">Comments</label>
-          <textarea 
-            id="editComments" 
+          <textarea
+            id="editComments"
             rows="3"
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
             placeholder="Add your notes..."
           >${album.comments || album.comment || ''}</textarea>
         </div>
-        
+
+        <!-- Tracks List -->
+        ${Array.isArray(album.tracks) && album.tracks.length > 0 ? `
+          <div class="w-full">
+            <label class="block text-gray-400 text-sm mb-2">Tracks</label>
+            <ul class="list-disc list-inside space-y-1 text-sm text-gray-300">
+              ${album.tracks.map(track => `<li>${track}</li>`).join('')}
+            </ul>
+          </div>
+        ` : ''}
+
         <!-- Spacer for bottom padding -->
         <div class="h-4"></div>
       </form>
