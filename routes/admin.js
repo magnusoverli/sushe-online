@@ -1,5 +1,23 @@
 module.exports = (app, deps) => {
-  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, adminCode, adminCodeExpiry, crypto } = deps;
+  const {
+    csrfProtection,
+    ensureAuth,
+    ensureAuthAPI,
+    ensureAdmin,
+    rateLimitAdminRequest,
+    users,
+    lists,
+    listItems,
+    albums,
+    usersAsync,
+    listsAsync,
+    listItemsAsync,
+    albumsAsync,
+    upload,
+    adminCode,
+    adminCodeExpiry,
+    crypto
+  } = deps;
   const { spawn } = require('child_process');
   const fs = require('fs');
   const path = require('path');
@@ -340,18 +358,23 @@ app.get('/admin/export', ensureAuth, ensureAdmin, async (req, res) => {
     for (const l of listsData) {
       const items = await listItemsAsync.find({ listId: l._id });
       items.sort((a, b) => a.position - b.position);
-      l.data = items.map(it => ({
-        artist: it.artist,
-        album: it.album,
-        album_id: it.albumId,
-        release_date: it.releaseDate,
-        country: it.country,
-        genre_1: it.genre1,
-        genre_2: it.genre2,
-        comments: it.comments,
-        cover_image: it.coverImage,
-        cover_image_format: it.coverImageFormat
-      }));
+      const data = [];
+      for (const it of items) {
+        const album = await albumsAsync.findOne({ _id: it.albumId });
+        data.push({
+          artist: album?.artist || it.artist,
+          album: album?.album || it.album,
+          album_id: it.albumId,
+          release_date: album?.releaseDate || it.releaseDate,
+          country: album?.country || it.country,
+          genre_1: album?.genre1 || it.genre1,
+          genre_2: album?.genre2 || it.genre2,
+          comments: it.comments,
+          cover_image: album?.coverImage || it.coverImage,
+          cover_image_format: album?.coverImageFormat || it.coverImageFormat
+        });
+      }
+      l.data = data;
     }
     const backup = {
       exportDate: new Date().toISOString(),
