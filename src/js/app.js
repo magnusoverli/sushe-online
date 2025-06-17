@@ -702,6 +702,43 @@ async function saveList(name, data) {
 // Expose saveList for other modules
 window.saveList = saveList;
 
+async function fetchTracksForAlbum(album) {
+  const params = new URLSearchParams({
+    id: album.album_id || '',
+    artist: album.artist,
+    album: album.album
+  });
+  const resp = await fetch(`/api/musicbrainz/tracks?${params.toString()}`, {
+    credentials: 'include'
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || 'Failed');
+  album.tracks = data.tracks;
+}
+
+async function autoFetchTracksForList(name) {
+  const list = lists[name];
+  if (!list) return;
+  let updated = false;
+  for (const album of list) {
+    if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
+      try {
+        await fetchTracksForAlbum(album);
+        updated = true;
+      } catch (err) {
+        console.error('Auto track fetch failed:', err);
+      }
+    }
+  }
+  if (updated) {
+    try {
+      await saveList(name, list);
+    } catch (err) {
+      console.error('Failed saving tracks for list', err);
+    }
+  }
+}
+
 function subscribeToList(name) {
   if (listEventSource) {
     listEventSource.close();
@@ -1521,6 +1558,9 @@ async function selectList(listName) {
     
     // Display the albums
     displayAlbums(lists[listName]);
+
+    // Automatically fetch tracks for albums in this list
+    autoFetchTracksForList(listName);
     
     // Show/hide FAB based on whether a list is selected (mobile only)
     const fab = document.getElementById('addAlbumFAB');
