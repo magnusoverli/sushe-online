@@ -1,5 +1,5 @@
 module.exports = (app, deps) => {
-  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, listItems, usersAsync, listsAsync, listItemsAsync, upload, adminCode, adminCodeExpiry, crypto } = deps;
+  const { csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest, users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, upload, adminCode, adminCodeExpiry, crypto } = deps;
   const { spawn } = require('child_process');
   const fs = require('fs');
   const path = require('path');
@@ -340,18 +340,26 @@ app.get('/admin/export', ensureAuth, ensureAdmin, async (req, res) => {
     for (const l of listsData) {
       const items = await listItemsAsync.find({ listId: l._id });
       items.sort((a, b) => a.position - b.position);
-      l.data = items.map(it => ({
-        artist: it.artist,
-        album: it.album,
-        album_id: it.albumId,
-        release_date: it.releaseDate,
-        country: it.country,
-        genre_1: it.genre1,
-        genre_2: it.genre2,
-        comments: it.comments,
-        cover_image: it.coverImage,
-        cover_image_format: it.coverImageFormat
-      }));
+      const mapped = [];
+      for (const it of items) {
+        let albumData = null;
+        if (it.albumId) {
+          albumData = await albumsAsync.findOne({ _id: it.albumId });
+        }
+        mapped.push({
+          artist: albumData?.artist || it.artist,
+          album: albumData?.album || it.album,
+          album_id: it.albumId,
+          release_date: albumData?.releaseDate || it.releaseDate,
+          country: albumData?.country || it.country,
+          genre_1: albumData?.genre1 || it.genre1,
+          genre_2: albumData?.genre2 || it.genre2,
+          comments: it.comments,
+          cover_image: albumData?.coverImage || it.coverImage,
+          cover_image_format: albumData?.coverImageFormat || it.coverImageFormat
+        });
+      }
+      l.data = mapped;
     }
     const backup = {
       exportDate: new Date().toISOString(),

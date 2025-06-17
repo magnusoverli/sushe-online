@@ -59,6 +59,48 @@ async function ensureTables(pool) {
     updated_at TIMESTAMPTZ
   )`);
   await pool.query(`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`);
+
+  await pool.query(`CREATE TABLE IF NOT EXISTS albums (
+    id SERIAL PRIMARY KEY,
+    album_id TEXT UNIQUE NOT NULL,
+    artist TEXT,
+    album TEXT,
+    release_date TEXT,
+    country TEXT,
+    genre_1 TEXT,
+    genre_2 TEXT,
+    tracks JSONB,
+    cover_image TEXT,
+    cover_image_format TEXT,
+    created_at TIMESTAMPTZ,
+    updated_at TIMESTAMPTZ
+  )`);
+  // Handle legacy column from early migrations
+  const legacyCheck = await pool.query(
+    `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='_id'`
+  );
+  if (legacyCheck.rowCount) {
+    const albumIdExists = await pool.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='album_id'`
+    );
+    if (!albumIdExists.rowCount) {
+      await pool.query('ALTER TABLE albums RENAME COLUMN _id TO album_id');
+    } else {
+      await pool.query('ALTER TABLE albums DROP COLUMN _id');
+    }
+  }
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS album_id TEXT UNIQUE`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS artist TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS album TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS release_date TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS country TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS genre_1 TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS genre_2 TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS tracks JSONB`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image_format TEXT`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`);
 }
 
 const dataDir = process.env.DATA_DIR || './data';
@@ -67,7 +109,7 @@ if (!fs.existsSync(dataDir)) {
 }
 console.log('Initializing database layer');
 
-let users, lists, listItems, usersAsync, listsAsync, listItemsAsync, pool;
+let users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, pool;
 let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {
@@ -119,12 +161,28 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at'
   };
+  const albumsMap = {
+    _id: 'album_id',
+    artist: 'artist',
+    album: 'album',
+    releaseDate: 'release_date',
+    country: 'country',
+    genre1: 'genre_1',
+    genre2: 'genre_2',
+    tracks: 'tracks',
+    coverImage: 'cover_image',
+    coverImageFormat: 'cover_image_format',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
+  };
   users = new PgDatastore(pool, 'users', usersMap);
   lists = new PgDatastore(pool, 'lists', listsMap);
   listItems = new PgDatastore(pool, 'list_items', listItemsMap);
+  albums = new PgDatastore(pool, 'albums', albumsMap);
   usersAsync = users;
   listsAsync = lists;
   listItemsAsync = listItems;
+  albumsAsync = albums;
   async function migrateUsers() {
     try {
       await users.update(
@@ -198,13 +256,38 @@ if (process.env.DATABASE_URL) {
     }
   }
 
+  async function migrateAlbums() {
+    const itemsRes = await pool.query('SELECT DISTINCT album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format FROM list_items');
+    for (const row of itemsRes.rows) {
+      if (!row.album_id) continue;
+      const existing = await albums.findOne({ _id: row.album_id });
+      if (!existing) {
+        await albums.insert({
+          _id: row.album_id,
+          artist: row.artist || '',
+          album: row.album || '',
+          releaseDate: row.release_date || '',
+          country: row.country || '',
+          genre1: row.genre_1 || '',
+          genre2: row.genre_2 || '',
+          tracks: row.tracks || null,
+          coverImage: row.cover_image || '',
+          coverImageFormat: row.cover_image_format || '',
+          createdAt: new Date(),
+          updatedAt: new Date()
+        });
+      }
+    }
+  }
+
   ready = waitForPostgres(pool)
     .then(() => ensureTables(pool))
     .then(() => migrateLists())
+    .then(() => migrateAlbums())
     .then(() => migrateUsers())
     .then(() => console.log('Database ready'));
 } else {
   throw new Error('DATABASE_URL must be set');
 }
 
-module.exports = { users, lists, listItems, usersAsync, listsAsync, listItemsAsync, dataDir, ready, pool };
+module.exports = { users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, dataDir, ready, pool };
