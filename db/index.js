@@ -52,11 +52,13 @@ async function ensureTables(pool) {
     genre_1 TEXT,
     genre_2 TEXT,
     comments TEXT,
+    tracks JSONB,
     cover_image TEXT,
     cover_image_format TEXT,
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
+  await pool.query(`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`);
 }
 
 const dataDir = process.env.DATA_DIR || './data';
@@ -111,6 +113,7 @@ if (process.env.DATABASE_URL) {
     genre1: 'genre_1',
     genre2: 'genre_2',
     comments: 'comments',
+    tracks: 'tracks',
     coverImage: 'cover_image',
     coverImageFormat: 'cover_image_format',
     createdAt: 'created_at',
@@ -171,8 +174,8 @@ if (process.env.DATABASE_URL) {
         for (let i = 0; i < row.data.length; i++) {
           const album = row.data[i];
           await pool.query(
-            `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, cover_image, cover_image_format, created_at, updated_at)
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW())`,
+            `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, cover_image, cover_image_format, created_at, updated_at)
+             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW(), NOW())`,
             [
               row._id,
               i + 1,
@@ -184,6 +187,7 @@ if (process.env.DATABASE_URL) {
               album.genre_1 || album.genre || '',
               album.genre_2 || '',
               album.comments || album.comment || '',
+              Array.isArray(album.tracks) ? album.tracks : null,
               album.cover_image || '',
               album.cover_image_format || ''
             ]

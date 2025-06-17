@@ -24,6 +24,7 @@ app.get('/api/lists', ensureAuthAPI, (req, res) => {
         genre_1: item.genre1,
         genre_2: item.genre2,
         comments: item.comments,
+        tracks: item.tracks,
         cover_image: item.coverImage,
         cover_image_format: item.coverImageFormat
       }));
@@ -86,6 +87,7 @@ app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
       genre_1: item.genre1,
       genre_2: item.genre2,
       comments: item.comments,
+      tracks: item.tracks,
       cover_image: item.coverImage,
       cover_image_format: item.coverImageFormat
     }));
@@ -129,6 +131,7 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
           genre1: album.genre_1 || album.genre || '',
           genre2: album.genre_2 || '',
           comments: album.comments || album.comment || '',
+          tracks: Array.isArray(album.tracks) ? album.tracks : null,
           coverImage: album.cover_image || '',
           coverImageFormat: album.cover_image_format || '',
           createdAt: timestamp,
@@ -157,6 +160,7 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
           genre1: album.genre_1 || album.genre || '',
           genre2: album.genre_2 || '',
           comments: album.comments || album.comment || '',
+          tracks: Array.isArray(album.tracks) ? album.tracks : null,
           coverImage: album.cover_image || '',
           coverImageFormat: album.cover_image_format || '',
           createdAt: timestamp,
