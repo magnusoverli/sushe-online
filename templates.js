@@ -39,7 +39,7 @@ const loginSnippetFn = ejs.compile(
 
 // Shared header component
 const headerComponent = (user, activeSection = 'home', currentListName = '') => `
-  <header class="bg-gray-900 border-b border-gray-800 z-50">
+  <header class="sticky top-0 bg-gray-900 border-b border-gray-800 z-50">
     <!-- Desktop Header -->
     <div class="hidden lg:flex items-center justify-between py-4 px-6">
       <div class="flex items-center gap-8">
