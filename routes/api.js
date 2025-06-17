@@ -527,4 +527,73 @@ app.get('/api/unfurl', ensureAuthAPI, async (req, res) => {
   }
 });
 
+// Fetch track list for a release group from MusicBrainz
+app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
+  const { id } = req.query;
+  if (!id) {
+    return res.status(400).json({ error: 'id query is required' });
+  }
+
+  try {
+    const mbUrl =
+      `https://musicbrainz.org/ws/2/release?release-group=${id}` +
+      `&inc=recordings&fmt=json&limit=100`;
+    const resp = await fetch(mbUrl, {
+      headers: { 'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)' }
+    });
+    if (!resp.ok) {
+      throw new Error(`MusicBrainz responded ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    if (!data.releases || !data.releases.length) {
+      return res.status(404).json({ error: 'No releases found' });
+    }
+
+    const EU = new Set([
+      'AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT',
+      'LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GB','XE'
+    ]);
+
+    const score = (rel) => {
+      if (rel.status !== 'Official' || rel.status === 'Pseudo-Release') return -1;
+      let s = 0;
+      if (EU.has(rel.country)) s += 20;
+      if (rel.country === 'XW') s += 10;
+      if ((rel.media || []).some(m => (m.format || '').includes('Digital'))) s += 15;
+      const date = new Date(rel.date || '1900-01-01');
+      if (!isNaN(date)) s += date.getTime() / 1e10; // minor weight
+      return s;
+    };
+
+    const best = data.releases
+      .map(r => ({ ...r, _score: score(r) }))
+      .filter(r => r._score >= 0)
+      .sort((a, b) => b._score - a._score)[0];
+
+    if (!best || !best.media) {
+      return res.status(404).json({ error: 'No suitable release found' });
+    }
+
+    const tracks = [];
+    for (const medium of best.media) {
+      if (Array.isArray(medium.tracks)) {
+        medium.tracks.forEach(t => {
+          const title = t.title || (t.recording && t.recording.title) || '';
+          tracks.push(title);
+        });
+      }
+    }
+
+    if (!tracks.length) {
+      return res.status(404).json({ error: 'No tracks available' });
+    }
+
+    res.json({ tracks, releaseId: best.id });
+  } catch (err) {
+    console.error('MusicBrainz tracks error:', err);
+    res.status(500).json({ error: 'Failed to fetch tracks' });
+  }
+});
+
 };
