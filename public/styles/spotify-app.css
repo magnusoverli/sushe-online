@@ -186,10 +186,10 @@ body {
     padding-bottom: 0.375rem !important;
   }
   
-  /* Adjust header padding to match */
-  .album-grid.px-4.py-3 {
-    padding-top: 0.5rem !important;    /* Reduced from 0.625rem */
-    padding-bottom: 0.5rem !important;
+  /* Adjust header padding to match rows */
+  .album-header {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
   }
 }
 
