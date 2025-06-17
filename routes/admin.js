@@ -397,8 +397,7 @@ app.post('/admin/restore', ensureAuth, ensureAdmin, upload.single('backup'), (re
     return res.status(400).json({ error: 'No file uploaded' });
   }
 
-  const tmpFile = path.join(os.tmpdir(), `sushe_restore_${Date.now()}.dump`);
-  fs.writeFileSync(tmpFile, req.file.buffer);
+  const tmpFile = req.file.path;
 
   const restore = spawn(pgRestoreCmd, ['-c', '-d', process.env.DATABASE_URL, tmpFile]);
 
