@@ -89,6 +89,9 @@ body {
   margin: 0;
   padding: 0;
   overflow: hidden;
+  height: 100vh;
+  height: 100dvh;
+  height: calc(var(--vh, 1vh) * 100);
 }
 
 .metal-title {
@@ -126,6 +129,7 @@ body {
 /* Enhanced album row styles */
 #albumContainer {
   min-height: 100vh;
+  min-height: 100dvh;
   min-height: calc(var(--vh, 1vh) * 100);
   position: relative;
 }
