@@ -2049,7 +2049,7 @@ function displayAlbums(albums) {
           </div>
 
           <!-- Album cover -->
-          <div class="flex-shrink-0 p-1 pl-0">
+          <div class="flex-shrink-0 p-2 pl-0">
             ${album.cover_image ? `
               <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}"
                   alt="${albumName}"
