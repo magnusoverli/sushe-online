@@ -893,12 +893,14 @@ const spotifyTemplate = (user) => `
       height: 100vh;
       height: 100dvh;
       height: calc(var(--vh, 1vh) * 100);
+      height: -webkit-fill-available;
     }
 
     body {
       height: 100vh;
       height: 100dvh;
       height: calc(var(--vh, 1vh) * 100);
+      height: -webkit-fill-available;
     }
     
     .main-content {

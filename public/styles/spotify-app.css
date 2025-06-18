@@ -92,6 +92,7 @@ body {
   height: 100vh;
   height: 100dvh;
   height: calc(var(--vh, 1vh) * 100);
+  height: -webkit-fill-available;
 }
 
 .metal-title {
@@ -131,6 +132,7 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   min-height: calc(var(--vh, 1vh) * 100);
+  min-height: -webkit-fill-available;
   position: relative;
 }
 
