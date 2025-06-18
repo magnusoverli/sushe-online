@@ -84,6 +84,7 @@ app.get('/api/lists', ensureAuthAPI, (req, res) => {
           country: albumData?.country || item.country,
           genre_1: albumData?.genre1 || item.genre1,
           genre_2: albumData?.genre2 || item.genre2,
+          track_pick: item.trackPick,
           comments: item.comments,
           tracks: albumData?.tracks || item.tracks,
           cover_image: albumData?.coverImage || item.coverImage,
@@ -155,6 +156,7 @@ app.get('/api/lists/:name', ensureAuthAPI, (req, res) => {
         country: albumData?.country || item.country,
         genre_1: albumData?.genre1 || item.genre1,
         genre_2: albumData?.genre2 || item.genre2,
+        track_pick: item.trackPick,
         comments: item.comments,
         tracks: albumData?.tracks || item.tracks,
         cover_image: albumData?.coverImage || item.coverImage,
@@ -197,15 +199,15 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
         listId = resList.rows[0]._id;
       }
 
-      const placeholders = [];
-      const values = [];
-      let idx = 1;
-      for (let i = 0; i < data.length; i++) {
-        const album = data[i];
-        if (album.album_id) {
-          await upsertAlbumRecord(album, timestamp);
-        }
-        placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
+        const placeholders = [];
+        const values = [];
+        let idx = 1;
+        for (let i = 0; i < data.length; i++) {
+          const album = data[i];
+          if (album.album_id) {
+            await upsertAlbumRecord(album, timestamp);
+          }
+        placeholders.push(`($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`);
         values.push(
           crypto.randomBytes(12).toString('hex'),
           listId,
@@ -219,6 +221,7 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
           album.genre_2 || '',
           album.comments || album.comment || '',
           Array.isArray(album.tracks) ? JSON.stringify(album.tracks) : null,
+          album.track_pick || null,
           album.cover_image || '',
           album.cover_image_format || '',
           timestamp,
@@ -228,7 +231,7 @@ app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
 
       if (placeholders.length) {
         await client.query(
-          `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, cover_image, cover_image_format, created_at, updated_at) VALUES ${placeholders.join(',')}`,
+          `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, track_pick, cover_image, cover_image_format, created_at, updated_at) VALUES ${placeholders.join(',')}`,
           values
         );
       }
