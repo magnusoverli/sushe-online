@@ -891,6 +891,7 @@ const spotifyTemplate = (user) => `
       display: grid;
       grid-template-rows: auto 1fr;
       height: 100vh;
+      height: 100dvh;
       height: calc(var(--vh, 1vh) * 100);
     }
     
@@ -1157,6 +1158,9 @@ const spotifyTemplate = (user) => `
     updateViewportHeight();
     window.addEventListener('resize', updateViewportHeight);
     window.addEventListener('orientationchange', updateViewportHeight);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', updateViewportHeight);
+    }
     
     // Mobile menu toggle
     function toggleMobileMenu() {
