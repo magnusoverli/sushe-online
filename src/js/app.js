@@ -966,8 +966,15 @@ function playAlbum(index) {
 
   const hasSpotify = window.currentUser?.spotifyAuth;
   const hasTidal = window.currentUser?.tidalAuth;
+  const preferred = window.currentUser?.musicService;
 
   const chooseService = () => {
+    if (preferred === 'spotify' && hasSpotify) {
+      return Promise.resolve('spotify');
+    }
+    if (preferred === 'tidal' && hasTidal) {
+      return Promise.resolve('tidal');
+    }
     if (hasSpotify && hasTidal) {
       return showServicePicker(true, true);
     } else if (hasSpotify) {
