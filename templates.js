@@ -971,7 +971,8 @@ const spotifyTemplate = (user) => `
     }
     
     .sortable-chosen {
-      background-color: rgba(55, 65, 81, 0.5);
+      background-color: rgba(55, 65, 81, 0.6);
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.3) inset;
     }
     
     /* Touch optimization */
