@@ -2329,6 +2329,26 @@ window.showMobileEditForm = function(index) {
           </ul>
         </div>
 
+        <!-- Track Selection -->
+        <div class="w-full" id="trackPickContainer">
+          <label class="block text-gray-400 text-sm mb-2">Selected Track</label>
+          ${Array.isArray(album.tracks) && album.tracks.length > 0 ? `
+            <ul class="space-y-2">
+              ${album.tracks.map((t, idx) => `
+                <li>
+                  <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="track-pick-checkbox" value="${t}" ${t === (album.track_pick || '') ? 'checked' : ''}>
+                    <span>${t}</span>
+                  </label>
+                </li>`).join('')}
+            </ul>
+          ` : `
+            <input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
+                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                   placeholder="Enter track number">
+          `}
+        </div>
+
         <!-- Spacer for bottom padding -->
         <div class="h-4"></div>
       </form>
@@ -2337,9 +2357,25 @@ window.showMobileEditForm = function(index) {
   
   document.body.appendChild(editModal);
 
+  function setupTrackPickCheckboxes() {
+    if (!trackPickContainer) return;
+    const boxes = trackPickContainer.querySelectorAll('input.track-pick-checkbox');
+    boxes.forEach(box => {
+      box.onchange = () => {
+        if (box.checked) {
+          boxes.forEach(other => {
+            if (other !== box) other.checked = false;
+          });
+        }
+      };
+    });
+  }
+
   // Fetch track list when button is clicked
   const fetchBtn = document.getElementById('fetchTracksBtn');
   const trackListEl = document.getElementById('editTrackList');
+  const trackPickContainer = document.getElementById('trackPickContainer');
+  setupTrackPickCheckboxes();
   if (fetchBtn) {
     fetchBtn.onclick = async () => {
       if (!album.album_id) return;
@@ -2348,6 +2384,21 @@ window.showMobileEditForm = function(index) {
       try {
         const tracks = await fetchTracksForAlbum(album);
         trackListEl.innerHTML = tracks.map(t => `<li>${t}</li>`).join('');
+        album.tracks = tracks;
+        if (trackPickContainer) {
+          trackPickContainer.innerHTML = `
+            <label class="block text-gray-400 text-sm mb-2">Selected Track</label>
+            <ul class="space-y-2">
+              ${tracks.map(t => `
+                <li>
+                  <label class="flex items-center space-x-2">
+                    <input type="checkbox" class="track-pick-checkbox" value="${t}">
+                    <span>${t}</span>
+                  </label>
+                </li>`).join('')}
+            </ul>`;
+          setupTrackPickCheckboxes();
+        }
         showToast('Tracks loaded');
       } catch (err) {
         console.error('Track fetch error:', err);
@@ -2380,6 +2431,14 @@ window.showMobileEditForm = function(index) {
       genre_2: document.getElementById('editGenre2').value,
       // Persist tracks that may have been fetched while editing
       tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
+      track_pick: (() => {
+        if (Array.isArray(album.tracks) && album.tracks.length > 0) {
+          const checked = document.querySelector('#trackPickContainer input[type="checkbox"]:checked');
+          return checked ? checked.value.trim() : '';
+        }
+        const numInput = document.getElementById('editTrackPickNumber');
+        return numInput ? numInput.value.trim() : '';
+      })(),
       comments: document.getElementById('editComments').value.trim(),
       comment: document.getElementById('editComments').value.trim() // Keep both for compatibility
     };
