@@ -411,7 +411,7 @@ const mainContentComponent = () => `
   <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Album List (removed the header section) -->
     <div class="flex-1 overflow-y-auto">
-      <div id="dropZone" class="drop-zone min-h-full p-6">
+      <div id="dropZone" class="drop-zone min-h-full">
         <div id="albumContainer">
           <!-- Albums will be displayed here -->
           <div class="text-center text-gray-500 mt-20">
@@ -1067,7 +1067,7 @@ const spotifyTemplate = (user) => `
       <!-- Album Display Area -->
       <main class="flex-1 overflow-hidden">
         <div class="h-full overflow-y-auto">
-          <div id="albumContainer" class="min-h-full p-4 lg:p-6">
+          <div id="albumContainer" class="min-h-full">
             <!-- Albums will be displayed here -->
             <div class="text-center text-gray-500 mt-20">
               <p class="text-xl mb-2">No list selected</p>
