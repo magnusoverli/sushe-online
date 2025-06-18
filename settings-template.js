@@ -17,6 +17,8 @@ const settingsTemplate = (req, options) => {
   <link rel="apple-touch-icon" href="/og-image.png">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link href="/styles/settings-material.css" rel="stylesheet">
   <link href="${asset('/styles/output.css')}" rel="stylesheet">
   <style>
     /* CSS Custom Properties for theming */
@@ -53,9 +55,9 @@ const settingsTemplate = (req, options) => {
 </head>
 <body class="bg-black text-gray-200">
   <div class="min-h-screen flex flex-col">
-    ${headerComponent(user, 'settings')}
+    ${headerComponent(user, 'settings', user.lastSelectedList || '')}
     
-    <div class="flex-1 p-4 lg:p-8 max-w-7xl mx-auto w-full">
+    <div class="settings-container container">
       <h1 class="text-3xl font-bold text-white mb-8">Settings</h1>
       
       <!-- Flash Messages -->
@@ -77,13 +79,13 @@ const settingsTemplate = (req, options) => {
         </div>
       ` : ''}
       
-      <div class="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
-        <!-- Personal Settings Section -->
+      <div class="settings-grid">
+        <!-- Account Settings -->
         <div class="space-y-6">
-          <h2 class="text-xl font-semibold text-gray-300 mb-4">Personal Settings</h2>
+          <h2 class="text-xl font-semibold text-gray-300 mb-4">Account Settings</h2>
           
           <!-- Account Info -->
-          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+          <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
             <h3 class="text-lg font-semibold text-white mb-4">
               <i class="fas fa-user mr-2 text-gray-400"></i>
               Account Information
@@ -174,7 +176,7 @@ const settingsTemplate = (req, options) => {
           </div>
           
           <!-- Change Password -->
-          <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+          <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
             <h3 class="text-lg font-semibold text-white mb-4">
               <i class="fas fa-lock mr-2 text-gray-400"></i>
               Change Password
@@ -231,9 +233,14 @@ const settingsTemplate = (req, options) => {
               </button>
             </form>
           </div>
+        </div>
+
+        <!-- Appearance Settings -->
+        <div class="space-y-6">
+          <h2 class="text-xl font-semibold text-gray-300 mb-4">Appearance</h2>
           
         <!-- Accent Color Settings -->
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
         <h3 class="text-lg font-semibold text-white mb-4">
             <i class="fas fa-palette mr-2 text-gray-400"></i>
             Theme Color
@@ -268,7 +275,7 @@ const settingsTemplate = (req, options) => {
         </div>
 
         <!-- Time & Date Format Settings -->
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
           <h3 class="text-lg font-semibold text-white mb-4">
             <i class="fas fa-clock mr-2 text-gray-400"></i>
             Time & Date Format
@@ -294,9 +301,13 @@ const settingsTemplate = (req, options) => {
             </button>
           </div>
         </div>
+        </div>
+        <!-- Integrations -->
+        <div class="space-y-6">
+          <h2 class="text-xl font-semibold text-gray-300 mb-4">Integrations</h2>
 
         <!-- Music Service Integration -->
-        <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+        <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
           <h3 class="text-lg font-semibold text-white mb-4">
             <i class="fas fa-music mr-2 text-gray-400"></i>
             Music Services
@@ -332,13 +343,14 @@ const settingsTemplate = (req, options) => {
             </div>
           </div>
         </div>
+        </div>
 
         <!-- Statistics & Admin Section -->
         <div class="space-y-6">
           <!-- Your Statistics -->
           <div>
             <h2 class="text-xl font-semibold text-gray-300 mb-4">Your Statistics</h2>
-            <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+            <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
               <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                 <div>
                   <p class="text-gray-400 text-sm">Total Lists</p>
@@ -356,7 +368,7 @@ const settingsTemplate = (req, options) => {
             <!-- Request Admin Access -->
             <div>
               <h2 class="text-xl font-semibold text-gray-300 mb-4">Admin Access</h2>
-              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+              <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
                 <p class="text-sm text-gray-400 mb-4">
                   Enter the admin code to gain administrator privileges.
                 </p>
@@ -390,7 +402,7 @@ const settingsTemplate = (req, options) => {
               </h2>
               
               <!-- System Stats -->
-              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+              <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                 <h3 class="text-lg font-semibold text-white mb-4">System Statistics</h3>
                 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   <div>
@@ -432,7 +444,7 @@ const settingsTemplate = (req, options) => {
               
               <!-- Top Genres -->
               ${stats.topGenres && stats.topGenres.length > 0 ? `
-                <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                   <h3 class="text-lg font-semibold text-white mb-4">Top Genres</h3>
                   <div class="space-y-2">
                     ${stats.topGenres.map((genre, index) => `
@@ -446,7 +458,7 @@ const settingsTemplate = (req, options) => {
               ` : ''}
               
               <!-- Admin Actions -->
-              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+              <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                 <h3 class="text-lg font-semibold text-white mb-4">Admin Actions</h3>
                 <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                   <button 
@@ -484,7 +496,7 @@ const settingsTemplate = (req, options) => {
               
               <!-- Recent Activity -->
               ${adminData?.recentActivity ? `
-                <div class="bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
+                <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                   <h3 class="text-lg font-semibold text-white mb-4">Recent Activity</h3>
                   <div class="space-y-3">
                     ${adminData.recentActivity.map(activity => `
@@ -499,7 +511,7 @@ const settingsTemplate = (req, options) => {
               ` : ''}
               
               <!-- User Management -->
-              <div class="bg-gray-900 rounded-lg p-6 border border-gray-800">
+              <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
                 <h3 class="text-lg font-semibold text-white mb-4">User Management</h3>
                 <div class="overflow-x-auto">
                   <table class="w-full">
@@ -1029,6 +1041,7 @@ const settingsTemplate = (req, options) => {
       });
     ` : ''}
   </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 </body>
 </html>
   `;
