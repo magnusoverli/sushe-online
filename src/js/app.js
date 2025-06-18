@@ -2044,19 +2044,19 @@ function displayAlbums(albums) {
       card.innerHTML = `
         <div class="flex items-center h-full">
           <!-- Position number on the far left -->
-          <div class="flex-shrink-0 w-12 flex items-center justify-center text-gray-500 font-medium text-sm">
+          <div class="flex-shrink-0 w-8 pl-1 flex items-center justify-start text-gray-500 font-medium text-sm">
             ${index + 1}
           </div>
-          
+
           <!-- Album cover -->
-          <div class="flex-shrink-0 p-3 pl-0">
+          <div class="flex-shrink-0 p-2 pl-0">
             ${album.cover_image ? `
-              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
-                  alt="${albumName}" 
-                  class="w-16 h-16 rounded-lg object-cover shadow-md"
+              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}"
+                  alt="${albumName}"
+                  class="w-20 h-20 rounded-lg object-cover shadow-md"
                   loading="lazy">
             ` : `
-              <div class="w-16 h-16 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
+              <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
                 <i class="fas fa-compact-disc text-xl text-gray-600"></i>
               </div>
             `}
@@ -2064,7 +2064,7 @@ function displayAlbums(albums) {
           
           <!-- Main content -->
           <div class="flex-1 min-w-0 py-3 pr-3">
-            <div class="flex items-start justify-between gap-2">
+            <div class="flex items-start gap-2">
               <div class="flex-1 min-w-0">
                 <h3 class="font-semibold text-white text-base leading-tight truncate">${albumName}</h3>
                 <p class="text-sm text-gray-400 truncate mt-0.5">${artist}</p>
@@ -2087,25 +2087,26 @@ function displayAlbums(albums) {
                 ` : ''}
               </div>
               
-              <!-- Actions on the right -->
-              <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
-                      class="flex-shrink-0 p-2 -m-2 text-gray-400 active:text-gray-200">
-                <i class="fas fa-ellipsis-v"></i>
-              </button>
             </div>
           </div>
-          
-          <!-- Subtle drag handle on far right edge -->
-          <div class="drag-handle flex-shrink-0 w-8 h-full flex items-center justify-center cursor-move select-none text-gray-600 border-l border-gray-800/50" 
-              style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-            <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
-              <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
-              <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-              <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
-              <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
-              <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
-              <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
-            </svg>
+
+          <!-- Actions and drag handle on the right -->
+          <div class="flex flex-col items-center flex-shrink-0 w-8 border-l border-gray-800/50">
+            <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
+                    class="p-2 text-gray-400 active:text-gray-200">
+              <i class="fas fa-ellipsis-v"></i>
+            </button>
+            <div class="drag-handle flex-1 w-full flex items-center justify-center cursor-move select-none text-gray-600"
+                style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+              <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
+                <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
+                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+                <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+                <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
+              </svg>
+            </div>
           </div>
         </div>
       `;
