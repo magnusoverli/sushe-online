@@ -1389,15 +1389,15 @@ function initializeMobileSorting(container) {
   // Create sortable with enhanced settings
   const sortable = Sortable.create(sortableContainer, {
     animation: 150,
-    handle: '.drag-handle',
+    // Allow dragging the entire card but require a short press on touch devices
+    delay: 250,
+    delayOnTouchOnly: true,
     preventOnFilter: true,
     forceFallback: true,
     fallbackClass: 'sortable-drag',
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
-    delay: 0,
-    delayOnTouchOnly: false,
     touchStartThreshold: 0,
     
     // Disable built-in auto-scroll
@@ -2090,23 +2090,12 @@ function displayAlbums(albums) {
             </div>
           </div>
 
-          <!-- Actions and drag handle on the right -->
-          <div class="flex flex-col items-center flex-shrink-0 w-8 border-l border-gray-800/50">
+          <!-- Action button (dragging via long press on card) -->
+          <div class="flex items-center justify-center h-full flex-shrink-0 w-8 border-l border-gray-800/50">
             <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
                     class="p-2 text-gray-400 active:text-gray-200">
               <i class="fas fa-ellipsis-v"></i>
             </button>
-            <div class="drag-handle flex-1 w-full flex items-center justify-center cursor-move select-none text-gray-600"
-                style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-              <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
-                <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
-                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-                <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
-              </svg>
-            </div>
           </div>
         </div>
       `;
