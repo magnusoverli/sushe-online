@@ -1511,17 +1511,15 @@ function initializeMobileSorting(container) {
     onUpdate: async function(evt) {
       const oldIndex = parseInt(evt.item.dataset.originalIndex);
       const newIndex = evt.newIndex;
-      
+
       if (oldIndex === newIndex) return;
-      
+
       try {
         const list = lists[currentList];
         const [movedItem] = list.splice(oldIndex, 1);
         list.splice(newIndex, 0, movedItem);
-        
-        await saveList(currentList, list);
-        
-        // Update position numbers
+
+        // Update position numbers immediately
         const cards = sortableContainer.querySelectorAll('.album-card');
         cards.forEach((card, index) => {
           card.dataset.index = index;
@@ -1530,8 +1528,15 @@ function initializeMobileSorting(container) {
             positionElement.textContent = index + 1;
           }
         });
+
+        // Persist changes without delaying UI update
+        saveList(currentList, list).catch(error => {
+          console.error('Error saving reorder:', error);
+          showToast('Error saving changes', 'error');
+          selectList(currentList);
+        });
       } catch (error) {
-        console.error('Error saving reorder:', error);
+        console.error('Error updating list order:', error);
         showToast('Error saving changes', 'error');
         selectList(currentList);
       }
