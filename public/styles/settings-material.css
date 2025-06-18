@@ -1,0 +1,43 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap');
+
+body {
+  font-family: 'Roboto', sans-serif;
+}
+
+.settings-container {
+  margin-top: 24px;
+}
+
+.material-card {
+  background-color: #1e1e1e;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+}
+
+.material-btn {
+  background-color: var(--accent-color);
+  color: #fff;
+}
+.material-btn:hover {
+  background-color: var(--accent-hover);
+}
+
+@media (min-width: 992px) {
+  .settings-grid {
+    display: grid;
+    gap: 24px;
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 991px) {
+  .material-card { margin-bottom: 16px; }
+  .settings-grid {
+    display: block;
+  }
+}
+
+button {
+  border-radius: 4px;
+  font-weight: 500;
+}
+
