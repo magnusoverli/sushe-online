@@ -893,18 +893,36 @@ const spotifyTemplate = (user) => `
       height: 100vh;
       height: 100dvh;
       height: calc(var(--vh, 1vh) * 100);
+      height: -webkit-fill-available;
     }
 
     body {
       height: 100vh;
       height: 100dvh;
       height: calc(var(--vh, 1vh) * 100);
+      height: -webkit-fill-available;
     }
     
     .main-content {
       display: grid;
       grid-template-columns: 0 1fr; /* Mobile: no sidebar */
       overflow: hidden;
+      height: 100%;
+      height: -webkit-fill-available;
+    }
+
+    main.flex-1 {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      height: -webkit-fill-available;
+    }
+
+    main.flex-1 > div.h-full {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     
     @media (min-width: 1024px) {
@@ -952,11 +970,15 @@ const spotifyTemplate = (user) => `
     /* Album container responsive padding */
     #albumContainer {
       padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+      height: 100%;
+      height: -webkit-fill-available;
     }
 
     @media (max-width: 1023px) {
       #albumContainer {
         padding-bottom: calc(5rem + env(safe-area-inset-bottom)); /* Space for FAB on mobile */
+        height: 100%;
+        height: -webkit-fill-available;
       }
     }
     
