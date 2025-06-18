@@ -327,8 +327,8 @@ const settingsTemplate = (req, options) => {
                 <a href="/auth/spotify" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
               `}
             </div>
-            <div class="flex items-center justify-between">
-              <span class="text-white">Tidal</span>
+              <div class="flex items-center justify-between">
+                <span class="text-white">Tidal</span>
               ${user.tidalAuth ? (
                 tidalValid ? `
                 <span class="text-green-500 text-sm mr-2">Connected</span>
@@ -340,10 +340,21 @@ const settingsTemplate = (req, options) => {
               ) : `
                 <a href="/auth/tidal" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
               `}
+              </div>
+            </div>
+            <div class="mt-4">
+              <label class="block text-sm font-medium text-gray-400 mb-2">Preferred Service</label>
+              <div class="flex items-center gap-2">
+                <select id="musicServiceSelect" class="bg-gray-800 border border-gray-700 rounded text-white px-3 py-2">
+                  <option value="" ${!user.musicService ? 'selected' : ''}>Ask each time</option>
+                  <option value="spotify" ${user.musicService === 'spotify' ? 'selected' : ''} ${!user.spotifyAuth ? 'disabled' : ''}>Spotify</option>
+                  <option value="tidal" ${user.musicService === 'tidal' ? 'selected' : ''} ${!user.tidalAuth ? 'disabled' : ''}>Tidal</option>
+                </select>
+                <button onclick="updateMusicService(document.getElementById('musicServiceSelect').value)" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition duration-200">Save</button>
+              </div>
             </div>
           </div>
-        </div>
-        </div>
+          </div>
 
         <!-- Statistics & Admin Section -->
         <div class="space-y-6">
@@ -866,6 +877,29 @@ const settingsTemplate = (req, options) => {
       } catch (error) {
         console.error('Error updating date format:', error);
         showToast('Error updating date format', 'error');
+      }
+    }
+
+    async function updateMusicService(service) {
+      try {
+        const response = await fetch('/settings/update-music-service', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ musicService: service }),
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('Music service updated!');
+          setTimeout(() => location.reload(), 500);
+        } else {
+          showToast(data.error || 'Error updating music service', 'error');
+        }
+      } catch (error) {
+        console.error('Error updating music service:', error);
+        showToast('Error updating music service', 'error');
       }
     }
     

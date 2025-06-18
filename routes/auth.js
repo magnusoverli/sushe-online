@@ -510,6 +510,39 @@ app.post('/settings/update-date-format', ensureAuth, async (req, res) => {
   }
 });
 
+// Update preferred music service endpoint
+app.post('/settings/update-music-service', ensureAuth, async (req, res) => {
+  try {
+    const { musicService } = req.body;
+    if (musicService && !['spotify', 'tidal'].includes(musicService)) {
+      return res.status(400).json({ error: 'Invalid music service' });
+    }
+
+    users.update(
+      { _id: req.user._id },
+      { $set: { musicService: musicService || null, updatedAt: new Date() } },
+      {},
+      (err) => {
+        if (err) {
+          console.error('Error updating music service:', err);
+          return res.status(500).json({ error: 'Error updating music service' });
+        }
+
+        req.user.musicService = musicService || null;
+        req.session.save((err) => {
+          if (err) console.error('Session save error:', err);
+          res.json({ success: true });
+        });
+
+        console.log(`User ${req.user.email} updated music service to ${musicService}`);
+      }
+    );
+  } catch (error) {
+    console.error('Update music service error:', error);
+    res.status(500).json({ error: 'Error updating music service' });
+  }
+});
+
 function getTimeAgo(date) {
   const seconds = Math.floor((new Date() - date) / 1000);
   

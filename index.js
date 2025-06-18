@@ -87,7 +87,8 @@ function sanitizeUser(user) {
     lastSelectedList,
     role,
     spotifyAuth: !!user.spotifyAuth,
-    tidalAuth: !!user.tidalAuth
+    tidalAuth: !!user.tidalAuth,
+    musicService: user.musicService || null
   };
 }
 

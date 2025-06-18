@@ -19,6 +19,7 @@ async function ensureTables(pool) {
     spotify_auth JSONB,
     tidal_auth JSONB,
     tidal_country TEXT,
+    music_service TEXT,
     reset_token TEXT,
     reset_expires BIGINT,
     created_at TIMESTAMPTZ,
@@ -29,6 +30,7 @@ async function ensureTables(pool) {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS music_service TEXT`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_reset_token_expires ON users(reset_token, reset_expires)`);
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
@@ -135,6 +137,7 @@ if (process.env.DATABASE_URL) {
     spotifyAuth: 'spotify_auth',
     tidalAuth: 'tidal_auth',
     tidalCountry: 'tidal_country',
+    musicService: 'music_service',
     resetToken: 'reset_token',
     resetExpires: 'reset_expires',
     createdAt: 'created_at',
@@ -225,6 +228,12 @@ if (process.env.DATABASE_URL) {
       await users.update(
         { tidalCountry: { $exists: false } },
         { $set: { tidalCountry: null } },
+        { multi: true }
+      );
+
+      await users.update(
+        { musicService: { $exists: false } },
+        { $set: { musicService: null } },
         { multi: true }
       );
     } catch (err) {
