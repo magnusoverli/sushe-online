@@ -2044,19 +2044,19 @@ function displayAlbums(albums) {
       card.innerHTML = `
         <div class="flex items-center h-full">
           <!-- Position number on the far left -->
-          <div class="flex-shrink-0 w-12 flex items-center justify-center text-gray-500 font-medium text-sm">
+          <div class="flex-shrink-0 w-10 flex items-center justify-center text-gray-500 font-medium text-sm">
             ${index + 1}
           </div>
-          
+
           <!-- Album cover -->
-          <div class="flex-shrink-0 p-3 pl-0">
+          <div class="flex-shrink-0 p-2 pl-0">
             ${album.cover_image ? `
-              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
-                  alt="${albumName}" 
-                  class="w-16 h-16 rounded-lg object-cover shadow-md"
+              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}"
+                  alt="${albumName}"
+                  class="w-20 h-20 rounded-lg object-cover shadow-md"
                   loading="lazy">
             ` : `
-              <div class="w-16 h-16 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
+              <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
                 <i class="fas fa-compact-disc text-xl text-gray-600"></i>
               </div>
             `}
