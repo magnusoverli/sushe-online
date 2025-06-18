@@ -315,6 +315,18 @@ async function downloadListAsJSON(listName) {
   }
 }
 
+// Update Spotify/Tidal playlist for the given list
+async function updatePlaylist(listName) {
+  try {
+    await apiCall(`/api/playlists/${encodeURIComponent(listName)}`, { method: 'POST' });
+    showToast(`Playlist "${listName}" updated`);
+  } catch (error) {
+    console.error('Error updating playlist:', error);
+    showToast('Error updating playlist', 'error');
+  }
+}
+window.updatePlaylist = updatePlaylist;
+
 // Initialize import conflict handling
 function initializeImportConflictHandling() {
   const conflictModal = document.getElementById('importConflictModal');
@@ -780,9 +792,10 @@ function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
   const downloadOption = document.getElementById('downloadListOption');
   const renameOption = document.getElementById('renameListOption');
+  const updatePlaylistOption = document.getElementById('updatePlaylistOption');
   const deleteOption = document.getElementById('deleteListOption');
-  
-  if (!contextMenu || !deleteOption || !renameOption || !downloadOption) return;
+
+  if (!contextMenu || !deleteOption || !renameOption || !downloadOption || !updatePlaylistOption) return;
   
   // Handle download option click
   downloadOption.onclick = () => {
@@ -798,12 +811,27 @@ function initializeContextMenu() {
   // Handle rename option click
   renameOption.onclick = () => {
     contextMenu.classList.add('hidden');
-    
+
     if (!currentContextList) return;
-    
+
     openRenameModal(currentContextList);
   };
-  
+
+  // Handle update playlist option click
+  updatePlaylistOption.onclick = async () => {
+    contextMenu.classList.add('hidden');
+
+    if (!currentContextList) return;
+
+    try {
+      await updatePlaylist(currentContextList);
+    } catch (err) {
+      console.error('Update playlist failed', err);
+    }
+
+    currentContextList = null;
+  };
+
   // Handle delete option click
   deleteOption.onclick = async () => {
     contextMenu.classList.add('hidden');

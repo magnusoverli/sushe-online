@@ -434,6 +434,9 @@ const contextMenusComponent = () => `
     <button id="renameListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Rename List
     </button>
+    <button id="updatePlaylistOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-sync mr-2 w-4 text-center"></i>Update Playlist
+    </button>
     <button id="deleteListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
     </button>
