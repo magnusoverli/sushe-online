@@ -2601,3 +2601,5 @@ window.addEventListener('beforeunload', () => {
 
 // Make showToast globally available
 window.showToast = showToast;
+// Expose playAlbum for inline handlers
+window.playAlbum = playAlbum;
