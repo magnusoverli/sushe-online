@@ -10,7 +10,13 @@
     "build:js": "vite build",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
-    "test": "node --test"
+    "test": "node --test",
+    "plan:init": "node planning-system.js init",
+    "plan:update": "node planning-system.js update",
+    "plan:watch": "node planning-system.js watch",
+    "plan:create": "node planning-utils.js create-plan",
+    "plan:report": "node planning-utils.js report",
+    "plan:complete": "node planning-utils.js auto-complete"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
