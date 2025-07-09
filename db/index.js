@@ -1,4 +1,5 @@
 const path = require('path');
+const MigrationManager = require('./migrations');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { PgDatastore, Pool, waitForPostgres } = require('./postgres');
@@ -27,13 +28,27 @@ async function ensureTables(pool) {
     updated_at TIMESTAMPTZ,
     last_activity TIMESTAMPTZ
   )`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_granted_at TIMESTAMPTZ`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS music_service TEXT`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_users_reset_token_expires ON users(reset_token, reset_expires)`);
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_granted_at TIMESTAMPTZ`
+  );
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_activity TIMESTAMPTZ`
+  );
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS time_format TEXT`
+  );
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS date_format TEXT`
+  );
+  await pool.query(
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS music_service TEXT`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_users_reset_token_expires ON users(reset_token, reset_expires)`
+  );
   await pool.query(`CREATE TABLE IF NOT EXISTS lists (
     id SERIAL PRIMARY KEY,
     _id TEXT UNIQUE NOT NULL,
@@ -64,10 +79,18 @@ async function ensureTables(pool) {
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
-  await pool.query(`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`);
-  await pool.query(`ALTER TABLE list_items ADD COLUMN IF NOT EXISTS track_pick TEXT`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_list_items_list_id ON list_items(list_id)`);
-  await pool.query(`CREATE INDEX IF NOT EXISTS idx_list_items_album_id ON list_items(album_id)`);
+  await pool.query(
+    `ALTER TABLE list_items ADD COLUMN IF NOT EXISTS tracks JSONB`
+  );
+  await pool.query(
+    `ALTER TABLE list_items ADD COLUMN IF NOT EXISTS track_pick TEXT`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_list_items_list_id ON list_items(list_id)`
+  );
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_list_items_album_id ON list_items(album_id)`
+  );
 
   await pool.query(`CREATE TABLE IF NOT EXISTS albums (
     id SERIAL PRIMARY KEY,
@@ -98,18 +121,30 @@ async function ensureTables(pool) {
       await pool.query('ALTER TABLE albums DROP COLUMN _id');
     }
   }
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS album_id TEXT UNIQUE`);
+  await pool.query(
+    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS album_id TEXT UNIQUE`
+  );
   await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS artist TEXT`);
   await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS album TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS release_date TEXT`);
+  await pool.query(
+    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS release_date TEXT`
+  );
   await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS country TEXT`);
   await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS genre_1 TEXT`);
   await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS genre_2 TEXT`);
   await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS tracks JSONB`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image_format TEXT`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`);
-  await pool.query(`ALTER TABLE albums ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`);
+  await pool.query(
+    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image TEXT`
+  );
+  await pool.query(
+    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS cover_image_format TEXT`
+  );
+  await pool.query(
+    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ`
+  );
+  await pool.query(
+    `ALTER TABLE albums ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ`
+  );
 }
 
 const dataDir = process.env.DATA_DIR || './data';
@@ -118,7 +153,15 @@ if (!fs.existsSync(dataDir)) {
 }
 console.log('Initializing database layer');
 
-let users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, pool;
+let users,
+  lists,
+  listItems,
+  albums,
+  usersAsync,
+  listsAsync,
+  listItemsAsync,
+  albumsAsync,
+  pool;
 let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {
@@ -143,7 +186,7 @@ if (process.env.DATABASE_URL) {
     resetExpires: 'reset_expires',
     createdAt: 'created_at',
     updatedAt: 'updated_at',
-    lastActivity: 'last_activity'
+    lastActivity: 'last_activity',
   };
   const listsMap = {
     _id: '_id',
@@ -151,7 +194,7 @@ if (process.env.DATABASE_URL) {
     name: 'name',
     data: 'data',
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
   };
   const listItemsMap = {
     _id: '_id',
@@ -170,7 +213,7 @@ if (process.env.DATABASE_URL) {
     coverImage: 'cover_image',
     coverImageFormat: 'cover_image_format',
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
   };
   const albumsMap = {
     _id: 'album_id',
@@ -184,7 +227,7 @@ if (process.env.DATABASE_URL) {
     coverImage: 'cover_image',
     coverImageFormat: 'cover_image_format',
     createdAt: 'created_at',
-    updatedAt: 'updated_at'
+    updatedAt: 'updated_at',
   };
   users = new PgDatastore(pool, 'users', usersMap);
   lists = new PgDatastore(pool, 'lists', listsMap);
@@ -244,8 +287,14 @@ if (process.env.DATABASE_URL) {
   async function migrateLists() {
     const listsRes = await pool.query('SELECT _id, data FROM lists');
     for (const row of listsRes.rows) {
-      const countRes = await pool.query('SELECT COUNT(*) FROM list_items WHERE list_id=$1', [row._id]);
-      if (parseInt(countRes.rows[0].count, 10) === 0 && Array.isArray(row.data)) {
+      const countRes = await pool.query(
+        'SELECT COUNT(*) FROM list_items WHERE list_id=$1',
+        [row._id]
+      );
+      if (
+        parseInt(countRes.rows[0].count, 10) === 0 &&
+        Array.isArray(row.data)
+      ) {
         for (let i = 0; i < row.data.length; i++) {
           const album = row.data[i];
           await pool.query(
@@ -265,17 +314,21 @@ if (process.env.DATABASE_URL) {
               Array.isArray(album.tracks) ? album.tracks : null,
               album.track_pick || null,
               album.cover_image || '',
-              album.cover_image_format || ''
+              album.cover_image_format || '',
             ]
           );
         }
-        await pool.query('UPDATE lists SET data = NULL WHERE _id=$1', [row._id]);
+        await pool.query('UPDATE lists SET data = NULL WHERE _id=$1', [
+          row._id,
+        ]);
       }
     }
   }
 
   async function migrateAlbums() {
-    const itemsRes = await pool.query('SELECT DISTINCT album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format FROM list_items');
+    const itemsRes = await pool.query(
+      'SELECT DISTINCT album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format FROM list_items'
+    );
     for (const row of itemsRes.rows) {
       if (!row.album_id) continue;
       const existing = await albums.findOne({ _id: row.album_id });
@@ -292,7 +345,7 @@ if (process.env.DATABASE_URL) {
           coverImage: row.cover_image || '',
           coverImageFormat: row.cover_image_format || '',
           createdAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         });
       }
     }
@@ -303,7 +356,7 @@ if (process.env.DATABASE_URL) {
       console.log('Checking for admin user...');
       const existingAdmin = await users.findOne({ username: 'admin' });
       console.log('Existing admin user found:', !!existingAdmin);
-      
+
       if (!existingAdmin) {
         console.log('Creating admin user...');
         const hash = await bcrypt.hash('admin', 12);
@@ -319,16 +372,21 @@ if (process.env.DATABASE_URL) {
           musicService: null,
           createdAt: new Date(),
           updatedAt: new Date(),
-          lastActivity: new Date()
+          lastActivity: new Date(),
         });
         console.log('Created admin user successfully:', newUser._id);
         console.log('Admin login: email=admin@localhost.com, password=admin');
-        
+
         // Verify we can find the user by email
-        const verifyUser = await users.findOne({ email: 'admin@localhost.com' });
+        const verifyUser = await users.findOne({
+          email: 'admin@localhost.com',
+        });
         console.log('Verification - can find admin by email:', !!verifyUser);
       } else {
-        console.log('Admin user already exists with email:', existingAdmin.email);
+        console.log(
+          'Admin user already exists with email:',
+          existingAdmin.email
+        );
       }
     } catch (err) {
       console.error('Error creating admin user:', err);
@@ -336,8 +394,14 @@ if (process.env.DATABASE_URL) {
   }
 
   ready = waitForPostgres(pool)
+    .then(async () => {
+      console.log('Running database migrations...');
+      const migrationManager = new MigrationManager(pool);
+      await migrationManager.runMigrations();
+      return migrationManager;
+    })
     .then(() => {
-      console.log('Creating tables...');
+      console.log('Creating tables (legacy)...');
       return ensureTables(pool);
     })
     .then(() => {
@@ -357,7 +421,7 @@ if (process.env.DATABASE_URL) {
       return ensureAdminUser();
     })
     .then(() => console.log('Database ready'))
-    .catch(err => {
+    .catch((err) => {
       console.error('Database initialization error:', err);
       throw err;
     });
@@ -365,4 +429,16 @@ if (process.env.DATABASE_URL) {
   throw new Error('DATABASE_URL must be set');
 }
 
-module.exports = { users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, dataDir, ready, pool };
+module.exports = {
+  users,
+  lists,
+  listItems,
+  albums,
+  usersAsync,
+  listsAsync,
+  listItemsAsync,
+  albumsAsync,
+  dataDir,
+  ready,
+  pool,
+};

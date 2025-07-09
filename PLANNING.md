@@ -98,18 +98,21 @@ Tasks are simple, quick changes that don't require complex planning:
 ## Examples
 
 ### Good Plan Examples
+
 - "Implement user authentication system"
 - "Add real-time notifications"
 - "Refactor database layer"
 - "Set up CI/CD pipeline"
 
 ### Good Task Examples
+
 - "Fix typo in login page title"
 - "Update copyright year in footer"
 - "Change button color to blue"
 - "Add missing alt text to logo"
 
 ### What NOT to do
+
 - Don't break plans into sub-tasks
 - Don't create plans for simple changes
 - Don't manually edit TODO.md (use the system)

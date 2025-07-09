@@ -1,11 +1,17 @@
 // Import the header component, and asset helper from templates
-const { headerComponent, asset, formatDateTime, formatDate } = require('./templates');
+const {
+  headerComponent,
+  asset,
+  formatDateTime,
+  formatDate,
+} = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
 // Settings page template
 const settingsTemplate = (req, options) => {
-  const { user, userStats, stats, adminData, flash, spotifyValid, tidalValid } = options;
-  
+  const { user, userStats, stats, adminData, flash, spotifyValid, tidalValid } =
+    options;
+
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -61,23 +67,31 @@ const settingsTemplate = (req, options) => {
       <h1 class="text-3xl font-bold text-white mb-8">Settings</h1>
       
       <!-- Flash Messages -->
-      ${flash.error && flash.error.length ? `
+      ${
+        flash.error && flash.error.length
+          ? `
         <div class="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg">
           <p class="text-red-400 flex items-center">
             <i class="fas fa-exclamation-circle mr-2"></i>
             ${flash.error[0]}
           </p>
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
-      ${flash.success && flash.success.length ? `
+      ${
+        flash.success && flash.success.length
+          ? `
         <div class="mb-6 p-4 bg-green-900/20 border border-green-800 rounded-lg">
           <p class="text-green-400 flex items-center">
             <i class="fas fa-check-circle mr-2"></i>
             ${flash.success[0]}
           </p>
         </div>
-      ` : ''}
+      `
+          : ''
+      }
       
       <div class="settings-grid">
         <!-- Account Settings -->
@@ -315,31 +329,39 @@ const settingsTemplate = (req, options) => {
           <div class="space-y-4">
             <div class="flex items-center justify-between">
               <span class="text-white">Spotify</span>
-              ${user.spotifyAuth ? (
-                spotifyValid ? `
+              ${
+                user.spotifyAuth
+                  ? spotifyValid
+                    ? `
                 <span class="text-green-500 text-sm mr-2">Connected</span>
                 <a href="/auth/spotify/disconnect" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">Disconnect</a>
-                ` : `
+                `
+                    : `
                 <span class="text-yellow-500 text-sm mr-2">Reconnect required</span>
                 <a href="/auth/spotify" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm">Reconnect</a>
                 `
-              ) : `
+                  : `
                 <a href="/auth/spotify" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
-              `}
+              `
+              }
             </div>
             <div class="flex items-center justify-between">
               <span class="text-white">Tidal</span>
-              ${user.tidalAuth ? (
-                tidalValid ? `
+              ${
+                user.tidalAuth
+                  ? tidalValid
+                    ? `
                 <span class="text-green-500 text-sm mr-2">Connected</span>
                 <a href="/auth/tidal/disconnect" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm">Disconnect</a>
-                ` : `
+                `
+                    : `
                 <span class="text-yellow-500 text-sm mr-2">Reconnect required</span>
                 <a href="/auth/tidal" class="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm">Reconnect</a>
                 `
-              ) : `
+                  : `
                 <a href="/auth/tidal" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm">Connect</a>
-              `}
+              `
+              }
             </div>
           </div>
           <div class="mt-4">
@@ -374,7 +396,9 @@ const settingsTemplate = (req, options) => {
             </div>
           </div>
           
-          ${user.role !== 'admin' ? `
+          ${
+            user.role !== 'admin'
+              ? `
             <!-- Request Admin Access -->
             <div>
               <h2 class="text-xl font-semibold text-gray-300 mb-4">Admin Access</h2>
@@ -403,7 +427,8 @@ const settingsTemplate = (req, options) => {
                 </form>
               </div>
             </div>
-          ` : `
+          `
+              : `
             <!-- Admin Panel -->
             <div>
               <h2 class="text-xl font-semibold text-gray-300 mb-4">
@@ -453,19 +478,27 @@ const settingsTemplate = (req, options) => {
               </div>
               
               <!-- Top Genres -->
-              ${stats.topGenres && stats.topGenres.length > 0 ? `
+              ${
+                stats.topGenres && stats.topGenres.length > 0
+                  ? `
                 <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                   <h3 class="text-lg font-semibold text-white mb-4">Top Genres</h3>
                   <div class="space-y-2">
-                    ${stats.topGenres.map((genre, index) => `
+                    ${stats.topGenres
+                      .map(
+                        (genre, index) => `
                       <div class="flex items-center justify-between">
                         <span class="text-gray-300">${index + 1}. ${genre.name}</span>
                         <span class="text-gray-500">${genre.count} albums</span>
                       </div>
-                    `).join('')}
+                    `
+                      )
+                      .join('')}
                   </div>
                 </div>
-              ` : ''}
+              `
+                  : ''
+              }
               
               <!-- Admin Actions -->
               <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
@@ -505,20 +538,28 @@ const settingsTemplate = (req, options) => {
               </div>
               
               <!-- Recent Activity -->
-              ${adminData?.recentActivity ? `
+              ${
+                adminData?.recentActivity
+                  ? `
                 <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800 mb-6">
                   <h3 class="text-lg font-semibold text-white mb-4">Recent Activity</h3>
                   <div class="space-y-3">
-                    ${adminData.recentActivity.map(activity => `
+                    ${adminData.recentActivity
+                      .map(
+                        (activity) => `
                       <div class="flex items-center gap-3 text-sm">
                         <i class="fas ${activity.icon} text-${activity.color}-500"></i>
                         <span class="text-gray-300 flex-1">${activity.message}</span>
                         <span class="text-gray-500 text-xs">${activity.time}</span>
                       </div>
-                    `).join('')}
+                    `
+                      )
+                      .join('')}
                   </div>
                 </div>
-              ` : ''}
+              `
+                  : ''
+              }
               
               <!-- User Management -->
               <div class="material-card bg-gray-900 rounded-lg p-6 border border-gray-800">
@@ -535,7 +576,9 @@ const settingsTemplate = (req, options) => {
                       </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-800">
-                      ${adminData.users.map(u => `
+                      ${adminData.users
+                        .map(
+                          (u) => `
                         <tr>
                           <td class="py-3">
                             <div>
@@ -547,9 +590,10 @@ const settingsTemplate = (req, options) => {
                             <span class="text-sm text-gray-300">${u.listCount}</span>
                           </td>
                           <td class="py-3">
-                            ${u.role === 'admin' ?
-                              '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded">Admin</span>' :
-                              '<span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">User</span>'
+                            ${
+                              u.role === 'admin'
+                                ? '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded">Admin</span>'
+                                : '<span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">User</span>'
                             }
                           </td>
                           <td class="py-3">
@@ -557,8 +601,12 @@ const settingsTemplate = (req, options) => {
                           </td>
                           <td class="py-3">
                             <div class="flex gap-2">
-                              ${u._id !== user._id ? `
-                                ${u.role !== 'admin' ? `
+                              ${
+                                u._id !== user._id
+                                  ? `
+                                ${
+                                  u.role !== 'admin'
+                                    ? `
                                   <button 
                                     onclick="makeAdmin('${u._id}')"
                                     class="text-xs text-blue-400 hover:text-blue-300"
@@ -566,7 +614,8 @@ const settingsTemplate = (req, options) => {
                                   >
                                     <i class="fas fa-user-shield"></i>
                                   </button>
-                                ` : `
+                                `
+                                    : `
                                   <button 
                                     onclick="revokeAdmin('${u._id}')"
                                     class="text-xs text-yellow-400 hover:text-yellow-300"
@@ -574,7 +623,8 @@ const settingsTemplate = (req, options) => {
                                   >
                                     <i class="fas fa-user-times"></i>
                                   </button>
-                                `}
+                                `
+                                }
                                 <button 
                                   onclick="viewUserLists('${u._id}')"
                                   class="text-xs text-gray-400 hover:text-gray-300"
@@ -589,17 +639,22 @@ const settingsTemplate = (req, options) => {
                                 >
                                   <i class="fas fa-trash"></i>
                                 </button>
-                              ` : '<span class="text-xs text-gray-600">Current User</span>'}
+                              `
+                                  : '<span class="text-xs text-gray-600">Current User</span>'
+                              }
                             </div>
                           </td>
                         </tr>
-                      `).join('')}
+                      `
+                        )
+                        .join('')}
                     </tbody>
                   </table>
                 </div>
               </div>
             </div>
-          `}
+          `
+          }
         </div>
       </div>
     </div>
@@ -915,7 +970,9 @@ const settingsTemplate = (req, options) => {
         .toString(16).slice(1);
     }
     
-    ${user.role === 'admin' ? `
+    ${
+      user.role === 'admin'
+        ? `
       // Admin functions
       async function makeAdmin(userId) {
         if (!confirm('Grant admin privileges to this user?')) return;
@@ -1072,7 +1129,9 @@ const settingsTemplate = (req, options) => {
         
         document.getElementById('restoreModal').classList.add('hidden');
       });
-    ` : ''}
+    `
+        : ''
+    }
   </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
 </body>

@@ -10,7 +10,7 @@ body {
 
 .material-card {
   background-color: #1e1e1e;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
 }
 
 .material-btn {
@@ -30,7 +30,9 @@ body {
 }
 
 @media (max-width: 991px) {
-  .material-card { margin-bottom: 16px; }
+  .material-card {
+    margin-bottom: 16px;
+  }
   .settings-grid {
     display: block;
   }
@@ -40,4 +42,3 @@ button {
   border-radius: 4px;
   font-weight: 500;
 }
-

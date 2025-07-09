@@ -1,7 +1,11 @@
 const assert = require('node:assert');
 const test = require('node:test');
 
-const { isValidEmail, isValidUsername, isValidPassword } = require('../validators');
+const {
+  isValidEmail,
+  isValidUsername,
+  isValidPassword,
+} = require('../validators');
 const { adjustColor, colorWithOpacity } = require('../color-utils');
 const { isTokenValid } = require('../auth-utils');
 

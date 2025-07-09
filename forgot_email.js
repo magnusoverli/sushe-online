@@ -148,7 +148,7 @@ If you did not request this, ignore this email and your password will remain unc
     from: process.env.EMAIL_FROM || 'magnus@overli.dev',
     subject: 'SuShe Online - Password Reset',
     text: textContent,
-    html: htmlContent
+    html: htmlContent,
   };
 };
 

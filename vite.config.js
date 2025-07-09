@@ -8,9 +8,9 @@ export default defineConfig({
       input: path.resolve(__dirname, 'src/js/main.js'),
       output: {
         entryFileNames: 'bundle.js',
-      }
+      },
     },
     outDir: path.resolve(__dirname, 'public/js'),
     emptyOutDir: false,
-  }
+  },
 });

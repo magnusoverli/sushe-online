@@ -16,7 +16,7 @@ class PlanningSystem {
     this.activeDir = path.join(this.plansDir, 'active');
     this.completedDir = path.join(this.plansDir, 'completed');
     this.templatesDir = path.join(this.plansDir, 'templates');
-    
+
     this.plans = new Map();
     this.tasks = new Map(); // Simple standalone tasks
     this.metrics = {
@@ -26,7 +26,7 @@ class PlanningSystem {
       totalTasks: 0,
       completedTasks: 0,
       plansProgress: 0,
-      tasksProgress: 0
+      tasksProgress: 0,
     };
   }
 
@@ -38,7 +38,12 @@ class PlanningSystem {
   }
 
   async ensureDirectories() {
-    const dirs = [this.plansDir, this.activeDir, this.completedDir, this.templatesDir];
+    const dirs = [
+      this.plansDir,
+      this.activeDir,
+      this.completedDir,
+      this.templatesDir,
+    ];
     for (const dir of dirs) {
       try {
         await fs.access(dir);
@@ -52,20 +57,24 @@ class PlanningSystem {
     try {
       const activeFiles = await fs.readdir(this.activeDir);
       const completedFiles = await fs.readdir(this.completedDir);
-      
+
       for (const file of activeFiles) {
         if (file.endsWith('.md')) {
-          const plan = await this.parsePlanFile(path.join(this.activeDir, file));
+          const plan = await this.parsePlanFile(
+            path.join(this.activeDir, file)
+          );
           if (plan) {
             plan.status = 'active';
             this.plans.set(plan.id, plan);
           }
         }
       }
-      
+
       for (const file of completedFiles) {
         if (file.endsWith('.md')) {
-          const plan = await this.parsePlanFile(path.join(this.completedDir, file));
+          const plan = await this.parsePlanFile(
+            path.join(this.completedDir, file)
+          );
           if (plan) {
             plan.status = 'completed';
             this.plans.set(plan.id, plan);
@@ -81,7 +90,7 @@ class PlanningSystem {
     try {
       const content = await fs.readFile(filePath, 'utf8');
       const plan = { filePath };
-      
+
       // Extract plan metadata
       const idMatch = content.match(/\*\*ID\*\*:\s*(.+)/);
       const titleMatch = content.match(/\*\*Title\*\*:\s*(.+)/);
@@ -90,7 +99,7 @@ class PlanningSystem {
       const createdMatch = content.match(/\*\*Created\*\*:\s*(.+)/);
       const progressMatch = content.match(/\*\*Overall Progress\*\*:\s*(.+)/);
       const phaseMatch = content.match(/\*\*Current Phase\*\*:\s*(.+)/);
-      
+
       if (idMatch) plan.id = idMatch[1].trim();
       if (titleMatch) plan.title = titleMatch[1].trim();
       if (statusMatch) plan.status = statusMatch[1].trim();
@@ -98,19 +107,27 @@ class PlanningSystem {
       if (createdMatch) plan.created = createdMatch[1].trim();
       if (progressMatch) plan.progress = progressMatch[1].trim();
       if (phaseMatch) plan.currentPhase = phaseMatch[1].trim();
-      
+
       // Extract success criteria completion
-      const successCriteria = content.match(/## Success Criteria\n([\s\S]*?)(?=\n##|$)/);
+      const successCriteria = content.match(
+        /## Success Criteria\n([\s\S]*?)(?=\n##|$)/
+      );
       if (successCriteria) {
         const criteriaText = successCriteria[1];
         const totalCriteria = (criteriaText.match(/- \[[ x]\]/g) || []).length;
         const completedCriteria = (criteriaText.match(/- \[x\]/g) || []).length;
-        plan.criteriaProgress = totalCriteria > 0 ? Math.round((completedCriteria / totalCriteria) * 100) : 0;
+        plan.criteriaProgress =
+          totalCriteria > 0
+            ? Math.round((completedCriteria / totalCriteria) * 100)
+            : 0;
       }
-      
+
       return plan;
     } catch (error) {
-      console.warn(`Warning: Could not parse plan file ${filePath}:`, error.message);
+      console.warn(
+        `Warning: Could not parse plan file ${filePath}:`,
+        error.message
+      );
       return null;
     }
   }
@@ -118,58 +135,84 @@ class PlanningSystem {
   async loadTasksFromTodo() {
     try {
       const todoContent = await fs.readFile(this.todoPath, 'utf8');
-      
+
       // Extract tasks from Quick Tasks section
-      const tasksSection = todoContent.match(/## 📋 Quick Tasks\n([\s\S]*?)(?=\n##|$)/);
+      const tasksSection = todoContent.match(
+        /## 📋 Quick Tasks\n([\s\S]*?)(?=\n##|$)/
+      );
       if (tasksSection) {
-        const taskMatches = tasksSection[1].matchAll(/- \[([ x])\] \*\*TASK-(\d+)\*\*:\s*(.+)/g);
+        const taskMatches = tasksSection[1].matchAll(
+          /- \[([ x])\] \*\*TASK-(\d+)\*\*:\s*(.+)/g
+        );
         for (const match of taskMatches) {
           const [, completed, taskId, description] = match;
           this.tasks.set(`TASK-${taskId}`, {
             id: `TASK-${taskId}`,
             description: description.trim(),
             completed: completed === 'x',
-            type: 'quick'
+            type: 'quick',
           });
         }
       }
     } catch (error) {
-      console.warn('Warning: Could not load tasks from TODO.md:', error.message);
+      console.warn(
+        'Warning: Could not load tasks from TODO.md:',
+        error.message
+      );
     }
   }
 
   calculateMetrics() {
     this.metrics.totalPlans = this.plans.size;
-    this.metrics.activePlans = Array.from(this.plans.values()).filter(p => p.status === 'active' || p.status === 'In Progress').length;
-    this.metrics.completedPlans = Array.from(this.plans.values()).filter(p => p.status === 'completed' || p.status === 'Completed').length;
+    this.metrics.activePlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'active' || p.status === 'In Progress'
+    ).length;
+    this.metrics.completedPlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'completed' || p.status === 'Completed'
+    ).length;
     this.metrics.totalTasks = this.tasks.size;
-    this.metrics.completedTasks = Array.from(this.tasks.values()).filter(t => t.completed).length;
-    
+    this.metrics.completedTasks = Array.from(this.tasks.values()).filter(
+      (t) => t.completed
+    ).length;
+
     // Calculate plans progress (average of all plan progress)
-    const activePlans = Array.from(this.plans.values()).filter(p => p.status === 'active' || p.status === 'In Progress');
+    const activePlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'active' || p.status === 'In Progress'
+    );
     if (activePlans.length > 0) {
       const totalProgress = activePlans.reduce((sum, plan) => {
         const progress = plan.criteriaProgress || parseInt(plan.progress) || 0;
         return sum + progress;
       }, 0);
-      this.metrics.plansProgress = Math.round(totalProgress / activePlans.length);
+      this.metrics.plansProgress = Math.round(
+        totalProgress / activePlans.length
+      );
     } else {
       this.metrics.plansProgress = 0;
     }
-    
+
     // Calculate tasks progress
-    this.metrics.tasksProgress = this.metrics.totalTasks > 0 
-      ? Math.round((this.metrics.completedTasks / this.metrics.totalTasks) * 100) 
-      : 0;
+    this.metrics.tasksProgress =
+      this.metrics.totalTasks > 0
+        ? Math.round(
+            (this.metrics.completedTasks / this.metrics.totalTasks) * 100
+          )
+        : 0;
   }
 
   async updateTodoFile() {
-    const activePlans = Array.from(this.plans.values()).filter(p => p.status === 'active' || p.status === 'In Progress');
-    const completedPlans = Array.from(this.plans.values()).filter(p => p.status === 'completed' || p.status === 'Completed');
-    const activeTasks = Array.from(this.tasks.values()).filter(t => !t.completed);
-    
+    const activePlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'active' || p.status === 'In Progress'
+    );
+    const completedPlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'completed' || p.status === 'Completed'
+    );
+    const activeTasks = Array.from(this.tasks.values()).filter(
+      (t) => !t.completed
+    );
+
     const now = new Date().toISOString().split('T')[0];
-    
+
     let content = `# SuShe Online - Planning & Tracking System
 
 *Last updated: ${now}*
@@ -220,7 +263,7 @@ class PlanningSystem {
 ### High Priority
 `;
 
-    const highPriorityTasks = activeTasks.filter(t => t.priority === 'High');
+    const highPriorityTasks = activeTasks.filter((t) => t.priority === 'High');
     if (highPriorityTasks.length === 0) {
       content += '*No high priority tasks*\n\n';
     } else {
@@ -237,7 +280,9 @@ class PlanningSystem {
     content += `### Medium Priority
 `;
 
-    const mediumPriorityTasks = activeTasks.filter(t => t.priority === 'Medium');
+    const mediumPriorityTasks = activeTasks.filter(
+      (t) => t.priority === 'Medium'
+    );
     if (mediumPriorityTasks.length === 0) {
       content += '*No medium priority tasks*\n\n';
     } else {
@@ -254,7 +299,7 @@ class PlanningSystem {
     content += `### Low Priority
 `;
 
-    const lowPriorityTasks = activeTasks.filter(t => t.priority === 'Low');
+    const lowPriorityTasks = activeTasks.filter((t) => t.priority === 'Low');
     if (lowPriorityTasks.length === 0) {
       content += '*No low priority tasks*\n\n';
     } else {
@@ -275,7 +320,7 @@ class PlanningSystem {
 ## 📊 Current Focus
 
 ### This Week
-${activePlans.length > 0 ? activePlans.map(p => `- ${p.title}`).join('\n') : '- No active plans'}
+${activePlans.length > 0 ? activePlans.map((p) => `- ${p.title}`).join('\n') : '- No active plans'}
 
 ### Next Week
 - Monitor system performance
@@ -306,23 +351,24 @@ ${activePlans.length > 0 ? activePlans.map(p => `- ${p.title}`).join('\n') : '- 
   }
 
   async createPlan(planData) {
-    const planId = planData.id || `PLAN-${String(this.plans.size + 1).padStart(3, '0')}`;
+    const planId =
+      planData.id || `PLAN-${String(this.plans.size + 1).padStart(3, '0')}`;
     const fileName = `${planId.toLowerCase().replace(/[^a-z0-9]/g, '-')}.md`;
     const filePath = path.join(this.activeDir, fileName);
-    
+
     const planContent = this.generatePlanTemplate(planData, planId);
     await fs.writeFile(filePath, planContent, 'utf8');
-    
+
     await this.loadPlans();
     await this.calculateMetrics();
     await this.updateTodoFile();
-    
+
     return planId;
   }
 
   generatePlanTemplate(planData, planId) {
     const now = new Date().toISOString().split('T')[0];
-    
+
     return `# ${planId}: ${planData.title}
 
 ## Plan Overview
@@ -340,13 +386,13 @@ ${activePlans.length > 0 ? activePlans.map(p => `- ${p.title}`).join('\n') : '- 
 ${planData.description || 'Plan description to be added.'}
 
 ## Objectives
-${planData.objectives ? planData.objectives.map(obj => `- ${obj}`).join('\n') : '- Objectives to be defined'}
+${planData.objectives ? planData.objectives.map((obj) => `- ${obj}`).join('\n') : '- Objectives to be defined'}
 
 ## Success Criteria
-${planData.successCriteria ? planData.successCriteria.map(criteria => `- [ ] ${criteria}`).join('\n') : '- [ ] Success criteria to be defined'}
+${planData.successCriteria ? planData.successCriteria.map((criteria) => `- [ ] ${criteria}`).join('\n') : '- [ ] Success criteria to be defined'}
 
 ## Tasks Breakdown
-${planData.tasks ? planData.tasks.map(task => `- [ ] **${task.id}**: ${task.description}`).join('\n') : '- [ ] Tasks to be defined'}
+${planData.tasks ? planData.tasks.map((task) => `- [ ] **${task.id}**: ${task.description}`).join('\n') : '- [ ] Tasks to be defined'}
 
 ## Progress Tracking
 - **Overall Progress**: 0%
@@ -355,7 +401,7 @@ ${planData.tasks ? planData.tasks.map(task => `- [ ] **${task.id}**: ${task.desc
 ${planData.dependencies ? planData.dependencies.join(', ') : 'None'}
 
 ## Risks & Mitigation
-${planData.risks ? planData.risks.map(risk => `- **Risk**: ${risk.description}\n  - **Mitigation**: ${risk.mitigation}`).join('\n') : '- No identified risks'}
+${planData.risks ? planData.risks.map((risk) => `- **Risk**: ${risk.description}\n  - **Mitigation**: ${risk.mitigation}`).join('\n') : '- No identified risks'}
 
 ## Resources
 - Project root: \`${this.projectRoot}\`
@@ -375,24 +421,30 @@ ${planData.notes || 'No additional notes.'}
     if (!plan || plan.status === 'completed') {
       return false;
     }
-    
+
     const oldPath = plan.filePath;
     const fileName = path.basename(oldPath);
     const newPath = path.join(this.completedDir, fileName);
-    
+
     // Update plan content to mark as completed
     let content = await fs.readFile(oldPath, 'utf8');
     const now = new Date().toISOString().split('T')[0];
-    content = content.replace(/\*\*Status\*\*:\s*(.+)/, `**Status**: Completed`);
-    content = content.replace(/## Change Log/, `## Change Log\n- **${now}**: Plan completed and moved to completed directory`);
-    
+    content = content.replace(
+      /\*\*Status\*\*:\s*(.+)/,
+      `**Status**: Completed`
+    );
+    content = content.replace(
+      /## Change Log/,
+      `## Change Log\n- **${now}**: Plan completed and moved to completed directory`
+    );
+
     await fs.writeFile(newPath, content, 'utf8');
     await fs.unlink(oldPath);
-    
+
     await this.loadPlans();
     await this.calculateMetrics();
     await this.updateTodoFile();
-    
+
     return true;
   }
 
@@ -406,13 +458,13 @@ ${planData.notes || 'No additional notes.'}
     const chokidar = require('chokidar');
     const watcher = chokidar.watch([this.activeDir, this.completedDir], {
       ignored: /(^|[\/\\])\../,
-      persistent: true
+      persistent: true,
     });
-    
+
     watcher.on('change', () => this.autoUpdate());
     watcher.on('add', () => this.autoUpdate());
     watcher.on('unlink', () => this.autoUpdate());
-    
+
     console.log('Planning system is now watching for changes...');
   }
 }
@@ -420,38 +472,42 @@ ${planData.notes || 'No additional notes.'}
 // CLI interface
 if (require.main === module) {
   const system = new PlanningSystem();
-  
+
   const command = process.argv[2];
-  
+
   switch (command) {
     case 'init':
       system.initialize().then(() => {
         console.log('Planning system initialized');
       });
       break;
-      
+
     case 'update':
       system.autoUpdate();
       break;
-      
+
     case 'watch':
       system.watchForChanges();
       break;
-      
+
     case 'create-plan':
       const planData = JSON.parse(process.argv[3] || '{}');
-      system.createPlan(planData).then(planId => {
+      system.createPlan(planData).then((planId) => {
         console.log(`Created plan: ${planId}`);
       });
       break;
-      
+
     case 'complete-plan':
       const planId = process.argv[3];
-      system.completePlan(planId).then(success => {
-        console.log(success ? `Plan ${planId} completed` : `Failed to complete plan ${planId}`);
+      system.completePlan(planId).then((success) => {
+        console.log(
+          success
+            ? `Plan ${planId} completed`
+            : `Failed to complete plan ${planId}`
+        );
       });
       break;
-      
+
     default:
       console.log(`
 Usage: node planning-system.js <command>

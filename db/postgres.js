@@ -10,7 +10,7 @@ async function waitForPostgres(pool, retries = 10, interval = 3000) {
       return;
     } catch (err) {
       console.log(`Waiting for PostgreSQL... (${i + 1}/${retries})`);
-      await new Promise(res => setTimeout(res, interval));
+      await new Promise((res) => setTimeout(res, interval));
     }
   }
   throw new Error('PostgreSQL not reachable');
@@ -40,7 +40,7 @@ class PgDatastore {
 
   _callbackify(promise, cb) {
     if (typeof cb === 'function') {
-      promise.then(r => cb(null, r)).catch(err => cb(err));
+      promise.then((r) => cb(null, r)).catch((err) => cb(err));
       return;
     }
     return promise;
@@ -85,7 +85,10 @@ class PgDatastore {
         idx++;
       }
     }
-    return { text: conditions.length ? 'WHERE ' + conditions.join(' AND ') : '', values };
+    return {
+      text: conditions.length ? 'WHERE ' + conditions.join(' AND ') : '',
+      values,
+    };
   }
 
   _mapRow(row) {
@@ -99,7 +102,10 @@ class PgDatastore {
   findOne(query, cb) {
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const res = await this._query(`SELECT * FROM ${this.table} ${text} LIMIT 1`, values);
+      const res = await this._query(
+        `SELECT * FROM ${this.table} ${text} LIMIT 1`,
+        values
+      );
       return res.rows[0] ? this._mapRow(res.rows[0]) : null;
     })();
     return this._callbackify(promise, cb);
@@ -108,8 +114,11 @@ class PgDatastore {
   find(query, cb) {
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const res = await this._query(`SELECT * FROM ${this.table} ${text}`, values);
-      return res.rows.map(r => this._mapRow(r));
+      const res = await this._query(
+        `SELECT * FROM ${this.table} ${text}`,
+        values
+      );
+      return res.rows.map((r) => this._mapRow(r));
     })();
     return this._callbackify(promise, cb);
   }
@@ -117,7 +126,10 @@ class PgDatastore {
   count(query, cb) {
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const res = await this._query(`SELECT COUNT(*) AS cnt FROM ${this.table} ${text}`, values);
+      const res = await this._query(
+        `SELECT COUNT(*) AS cnt FROM ${this.table} ${text}`,
+        values
+      );
       return parseInt(res.rows[0].cnt, 10);
     })();
     return this._callbackify(promise, cb);
@@ -184,7 +196,10 @@ class PgDatastore {
     }
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const res = await this._query(`DELETE FROM ${this.table} ${text}`, values);
+      const res = await this._query(
+        `DELETE FROM ${this.table} ${text}`,
+        values
+      );
       return res.rowCount;
     })();
     return this._callbackify(promise, cb);

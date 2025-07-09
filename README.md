@@ -6,8 +6,8 @@ The project targets **Node.js 22** for both development and production. The incl
 
 The `Dockerfile` uses a multi-stage build. The `builder` stage installs all dependencies and compiles assets, then a second `runtime` stage copies the built files into a clean Node 22 image containing only production dependencies.
 
-
 ## Features
+
 - **User accounts** with registration, login and session handling using Passport.js and express-session.
 - **Password reset** via email using Nodemailer.
 - **Spotify-like interface** for browsing and editing your lists. Drag and drop albums to reorder and import data from MusicBrainz, iTunes and Deezer.
@@ -20,6 +20,7 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 - **Gzip compression** for API and page responses to improve performance.
 
 ## Development
+
 1. Install dependencies:
    ```bash
    npm install
@@ -31,6 +32,7 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 3. Alternatively, run `npm start` to build assets once and launch the server without watchers.
 
 ## Environment variables
+
 - `SESSION_SECRET` – session encryption secret.
 - `DATA_DIR` – directory for session files (`./data` by default).
 - `DATABASE_URL` – PostgreSQL connection string. The included Docker configuration uses a Unix socket at /var/run/postgresql by default.
@@ -74,7 +76,9 @@ Dynamic pages and API responses set `Cache-Control: no-store` (along with
 reused.
 
 ## Running with Docker
+
 A `Dockerfile` and `docker-compose.yml` are included. You can build and start the app with:
+
 ```bash
 docker compose up --build
 ```

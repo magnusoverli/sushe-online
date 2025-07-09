@@ -21,7 +21,7 @@ const formatDateTime = (date, hour12, format = 'MM/DD/YYYY') => {
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
-    hour12
+    hour12,
   };
   return new Date(date).toLocaleString(locale, options);
 };
@@ -38,7 +38,11 @@ const loginSnippetFn = ejs.compile(
 );
 
 // Shared header component
-const headerComponent = (user, activeSection = 'home', currentListName = '') => `
+const headerComponent = (
+  user,
+  activeSection = 'home',
+  currentListName = ''
+) => `
   <header class="sticky top-0 bg-gray-900 border-b border-gray-800 z-50">
     <!-- Desktop Header -->
     <div class="hidden lg:flex items-center justify-between py-4 px-6">
@@ -65,28 +69,40 @@ const headerComponent = (user, activeSection = 'home', currentListName = '') => 
     <!-- Mobile Header -->
     <div class="lg:hidden flex items-center justify-between p-3 gap-2">
       <div class="flex items-center gap-2 min-w-0">
-        ${activeSection === 'home' ? `
+        ${
+          activeSection === 'home'
+            ? `
           <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 active:text-white">
             <i class="fas fa-bars text-lg"></i>
           </button>
-        ` : `
+        `
+            : `
           <a href="/" class="p-2 -m-2 text-gray-400 active:text-white">
             <i class="fas fa-arrow-left text-lg"></i>
           </a>
-        `}
+        `
+        }
         <a href="/" class="text-xl font-bold text-red-600 flex-shrink-0 ml-2">SuShe</a>
-        ${currentListName && activeSection === 'home' ? `
+        ${
+          currentListName && activeSection === 'home'
+            ? `
           <span class="text-gray-600 flex-shrink-0">/</span>
           <span class="text-sm text-yellow-500 font-medium truncate">${currentListName}</span>
-        ` : ''}
+        `
+            : ''
+        }
       </div>
       
       <div class="flex items-center gap-1 flex-shrink-0">
-        ${activeSection !== 'settings' ? `
+        ${
+          activeSection !== 'settings'
+            ? `
           <a href="/settings" class="p-2 text-gray-400 active:text-white" title="Settings">
             <i class="fas fa-cog text-lg"></i>
           </a>
-        ` : ''}
+        `
+            : ''
+        }
         <a href="/logout" class="p-2 text-gray-400 active:text-white" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
@@ -103,11 +119,13 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) =>
     user,
     asset,
     adjustColor,
-    colorWithOpacity
+    colorWithOpacity,
   });
 
 // Registration form template - Updated with flash parameter
-const registerTemplate = (req, flash) => htmlTemplate(`
+const registerTemplate = (req, flash) =>
+  htmlTemplate(
+    `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">Join SuShe Online</h1>
@@ -196,11 +214,13 @@ const registerTemplate = (req, flash) => htmlTemplate(`
       </p>
     </div>
   </div>
-`, 'Join SuShe Online', null);
+`,
+    'Join SuShe Online',
+    null
+  );
 
 // Login form template rendered with EJS
-const loginTemplate = (req, flash) =>
-  loginSnippetFn({ req, flash });
+const loginTemplate = (req, flash) => loginSnippetFn({ req, flash });
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
@@ -284,7 +304,6 @@ const invalidTokenTemplate = () => `
     <a href="/forgot" class="block text-center text-red-500 hover:text-red-400 font-semibold">Request new recovery rune</a>
   </div>
 `;
-
 
 // Component: Sidebar - Updated with clickable account link
 const sidebarComponent = (req) => `
@@ -1348,5 +1367,5 @@ module.exports = {
   formatDate,
   formatDateTime,
   asset,
-  assetVersion
+  assetVersion,
 };

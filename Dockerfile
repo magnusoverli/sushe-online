@@ -29,8 +29,8 @@ COPY --chown=node:node --from=builder /app ./
 
 # Runtime configuration
 ENV NODE_ENV=production
-RUN mkdir -p /app/data && \
-    chown node:node /app/data
+RUN mkdir -p /app/data /app/logs && \
+    chown node:node /app/data /app/logs
 
 # Node.js optimizations
 ENV NODE_OPTIONS="--max-old-space-size=512"

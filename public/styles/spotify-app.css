@@ -7,25 +7,25 @@
   --cover-art-size: 64px;
 }
 
-
 /* Prevent overscroll on mobile */
 @media (max-width: 1023px) {
   body {
     overscroll-behavior: none;
   }
-  
+
   /* Larger touch targets */
   button {
     min-height: 44px;
   }
-  
+
   /* Prevent text selection on interactive elements */
-  .album-row, button {
+  .album-row,
+  button {
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
   }
-  
+
   /* Bottom padding for fixed nav */
   .main-content {
     padding-bottom: 4rem;
@@ -73,7 +73,7 @@
 .album-cover {
   width: 100%;
   height: 100%;
-  object-fit: contain;  /* Maintains aspect ratio */
+  object-fit: contain; /* Maintains aspect ratio */
 }
 
 /* Placeholder cover styling */
@@ -101,8 +101,18 @@ body {
 }
 
 @keyframes glow {
-  from { text-shadow: 0 0 10px #dc2626, 0 0 20px #dc2626, 0 0 30px #dc2626; }
-  to { text-shadow: 0 0 20px #dc2626, 0 0 30px #dc2626, 0 0 40px #dc2626; }
+  from {
+    text-shadow:
+      0 0 10px #dc2626,
+      0 0 20px #dc2626,
+      0 0 30px #dc2626;
+  }
+  to {
+    text-shadow:
+      0 0 20px #dc2626,
+      0 0 30px #dc2626,
+      0 0 40px #dc2626;
+  }
 }
 
 /* Custom scrollbar */
@@ -133,7 +143,7 @@ body {
 /* Subtle background enhancement for desktop only */
 @media (min-width: 1024px) {
   #albumContainer {
-    background-image: 
+    background-image:
       linear-gradient(180deg, rgba(17, 24, 39, 0.3) 0%, transparent 40%),
       repeating-linear-gradient(
         90deg,
@@ -151,7 +161,7 @@ body {
       );
     background-color: #000;
   }
-  
+
   /* Add a subtle noise texture overlay */
   #albumContainer::before {
     content: '';
@@ -161,8 +171,12 @@ body {
     right: 0;
     bottom: 0;
     opacity: 0.015;
-    background-image: 
-      repeating-conic-gradient(#fff 0%, transparent 0.0003%, transparent 0.00075%, #fff 0.001%);
+    background-image: repeating-conic-gradient(
+      #fff 0%,
+      transparent 0.0003%,
+      transparent 0.00075%,
+      #fff 0.001%
+    );
     pointer-events: none;
   }
 }
@@ -174,7 +188,11 @@ body {
 .album-row {
   transition: all 0.2s ease;
   position: relative;
-  background: linear-gradient(90deg, rgba(31, 41, 55, 0.4) 0%, rgba(17, 24, 39, 0.4) 100%);
+  background: linear-gradient(
+    90deg,
+    rgba(31, 41, 55, 0.4) 0%,
+    rgba(17, 24, 39, 0.4) 100%
+  );
   user-select: none;
   border-left: 4px solid transparent;
 }
@@ -182,10 +200,10 @@ body {
 /* Reduced vertical padding for desktop */
 @media (min-width: 1024px) {
   .album-row {
-    padding-top: 0.375rem !important;  /* Reduced from 0.5rem */
+    padding-top: 0.375rem !important; /* Reduced from 0.5rem */
     padding-bottom: 0.375rem !important;
   }
-  
+
   /* Adjust header padding to match rows */
   .album-header {
     padding-top: 0.375rem !important;
@@ -196,23 +214,31 @@ body {
 /* Enhanced hover effect with subtle background */
 @media (min-width: 1024px) {
   .album-row:hover:not(.dragging) {
-    background: linear-gradient(90deg, var(--accent-subtle) 0%, transparent 80%);
+    background: linear-gradient(
+      90deg,
+      var(--accent-subtle) 0%,
+      transparent 80%
+    );
     border-left-color: var(--accent-color);
     transform: translateX(4px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   }
-  
+
   /* Subtle border enhancement for desktop */
   .album-row {
-    border-bottom-color: rgba(55, 65, 81, 0.15);  /* Slightly more visible border */
+    border-bottom-color: rgba(
+      55,
+      65,
+      81,
+      0.15
+    ); /* Slightly more visible border */
   }
-  
+
   /* Remove border from last row */
   .album-rows-container .album-row:last-child {
     border-bottom: none;
   }
 }
-
 
 .album-row.dragging {
   opacity: 0.2;
@@ -220,7 +246,7 @@ body {
 }
 
 .album-row.drop-target::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 0;
   right: 0;
@@ -234,7 +260,9 @@ body {
 /* Ensure minimum heights for rows */
 @media (min-width: 1024px) {
   .album-row {
-    min-height: calc(var(--cover-art-size) + 0.25rem);  /* Reduced padding from 0.5rem */
+    min-height: calc(
+      var(--cover-art-size) + 0.25rem
+    ); /* Reduced padding from 0.5rem */
   }
 }
 
@@ -242,7 +270,6 @@ body {
 .album-rows-container {
   min-height: 100%;
 }
-
 
 /* Make sure text doesn't overflow */
 .truncate {
@@ -300,7 +327,6 @@ body {
   padding: 0.125rem 0;
 }
 
-
 /* Datalist input styling */
 input[list] {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
@@ -338,7 +364,7 @@ input[list]::-webkit-list-button {
 }
 
 /* Ensure interactive elements remain accessible */
-.album-row input[type="text"],
+.album-row input[type='text'],
 .album-row input[list],
 .album-row textarea,
 .album-row select {
@@ -429,18 +455,22 @@ input[list]::-webkit-list-button {
 
 #albumContainer.drag-active::before {
   top: 0;
-  background: linear-gradient(to bottom, 
-    rgba(220, 38, 38, 0.2) 0%, 
-    rgba(220, 38, 38, 0.1) 50%, 
-    transparent 100%);
+  background: linear-gradient(
+    to bottom,
+    rgba(220, 38, 38, 0.2) 0%,
+    rgba(220, 38, 38, 0.1) 50%,
+    transparent 100%
+  );
 }
 
 #albumContainer.drag-active::after {
   bottom: 0;
-  background: linear-gradient(to top, 
-    rgba(220, 38, 38, 0.2) 0%, 
-    rgba(220, 38, 38, 0.1) 50%, 
-    transparent 100%);
+  background: linear-gradient(
+    to top,
+    rgba(220, 38, 38, 0.2) 0%,
+    rgba(220, 38, 38, 0.1) 50%,
+    transparent 100%
+  );
 }
 
 /* Show zones when dragging */
@@ -487,7 +517,9 @@ body.desktop-dragging #albumContainer.drag-active::after {
 .sidebar.collapsed nav {
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.2s, visibility 0.2s;
+  transition:
+    opacity 0.2s,
+    visibility 0.2s;
 }
 
 /* Hide the title when collapsed */
@@ -495,7 +527,10 @@ body.desktop-dragging #albumContainer.drag-active::after {
   opacity: 0;
   visibility: hidden;
   width: 0;
-  transition: opacity 0.2s, visibility 0.2s, width 0.2s;
+  transition:
+    opacity 0.2s,
+    visibility 0.2s,
+    width 0.2s;
 }
 
 /* Center the toggle button when collapsed */
@@ -520,7 +555,7 @@ body.desktop-dragging #albumContainer.drag-active::after {
     grid-template-columns: 16rem 1fr; /* Default */
     transition: grid-template-columns 0.3s ease;
   }
-  
+
   .main-content.sidebar-collapsed {
     grid-template-columns: 3rem 1fr; /* Collapsed - matches sidebar width */
   }

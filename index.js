@@ -11,18 +11,24 @@ const nodemailer = require('nodemailer');
 const path = require('path');
 const compression = require('compression');
 const helmet = require('helmet');
-const csrf = require('csurf');
+const csrf = require('csrf');
 const multer = require('multer');
 const os = require('os');
+const logger = require('./utils/logger');
+const {
+  errorHandler,
+  notFoundHandler,
+  asyncHandler,
+} = require('./middleware/error-handler');
 const upload = multer({
   storage: multer.diskStorage({
     destination: os.tmpdir(),
     filename: (req, file, cb) => {
       const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
       cb(null, file.fieldname + '-' + unique + '.dump');
-    }
+    },
   }),
-  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB limit
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB limit
 });
 // Log any unhandled errors so the server doesn't fail silently
 process.on('unhandledRejection', (err) => {
@@ -32,29 +38,44 @@ process.on('uncaughtException', (err) => {
   console.error('Uncaught exception:', err);
 });
 const { composeForgotPasswordEmail } = require('./forgot_email');
-const { isValidEmail, isValidUsername, isValidPassword } = require('./validators');
+const {
+  isValidEmail,
+  isValidUsername,
+  isValidPassword,
+} = require('./validators');
 
 //
 let lastCodeUsedBy = null;
 let lastCodeUsedAt = null;
 
 // Import templates
-const { 
-  htmlTemplate, 
-  registerTemplate, 
-  loginTemplate, 
-  forgotPasswordTemplate, 
-  resetPasswordTemplate, 
-  invalidTokenTemplate, 
-  spotifyTemplate
+const {
+  htmlTemplate,
+  registerTemplate,
+  loginTemplate,
+  forgotPasswordTemplate,
+  resetPasswordTemplate,
+  invalidTokenTemplate,
+  spotifyTemplate,
 } = require('./templates');
 
 // Import the new settings template
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
 // Databases are initialized in ./db using PostgreSQL
-const { users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, dataDir, ready, pool } = require('./db');
-
+const {
+  users,
+  lists,
+  listItems,
+  albums,
+  usersAsync,
+  listsAsync,
+  listItemsAsync,
+  albumsAsync,
+  dataDir,
+  ready,
+  pool,
+} = require('./db');
 
 // Map of SSE subscribers keyed by `${userId}:${listName}`
 const listSubscribers = new Map();
@@ -73,7 +94,6 @@ function broadcastListUpdate(userId, name, data) {
   }
 }
 
-
 function sanitizeUser(user) {
   if (!user) return null;
   const { _id, email, username, accentColor, lastSelectedList, role } = user;
@@ -88,7 +108,7 @@ function sanitizeUser(user) {
     role,
     spotifyAuth: !!user.spotifyAuth,
     tidalAuth: !!user.tidalAuth,
-    musicService: user.musicService || null
+    musicService: user.musicService || null,
   };
 }
 
@@ -96,7 +116,11 @@ function recordActivity(req) {
   if (req.user) {
     const timestamp = new Date();
     req.user.lastActivity = timestamp;
-    users.update({ _id: req.user._id }, { $set: { lastActivity: timestamp } }, () => {});
+    users.update(
+      { _id: req.user._id },
+      { $set: { lastActivity: timestamp } },
+      () => {}
+    );
   }
 }
 
@@ -109,9 +133,12 @@ let adminCodeExpiry = null;
 function generateAdminCode() {
   try {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    adminCode = Array.from({length: 8}, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    adminCode = Array.from(
+      { length: 8 },
+      () => chars[Math.floor(Math.random() * chars.length)]
+    ).join('');
     adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
-    
+
     // ANSI color codes
     const colors = {
       reset: '\x1b[0m',
@@ -122,22 +149,22 @@ function generateAdminCode() {
       blue: '\x1b[34m',
       cyan: '\x1b[36m',
       white: '\x1b[37m',
-      gray: '\x1b[90m'
+      gray: '\x1b[90m',
     };
-    
+
     // Format time
-    const timeOptions = { 
-      hour: '2-digit', 
-      minute: '2-digit', 
+    const timeOptions = {
+      hour: '2-digit',
+      minute: '2-digit',
       second: '2-digit',
-      hour12: true 
+      hour12: true,
     };
     const timeString = adminCodeExpiry.toLocaleTimeString('en-US', timeOptions);
-    
+
     // Box configuration
     const BOX_WIDTH = 45;
     const INNER_WIDTH = BOX_WIDTH - 2;
-    
+
     // Helper functions
     const centerText = (text) => {
       const visibleLength = text.replace(/\x1b\[[0-9;]*m/g, '').length;
@@ -146,35 +173,95 @@ function generateAdminCode() {
       const rightPad = totalPadding - leftPad;
       return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
     };
-    
+
     const leftAlignText = (label, value, labelColor = '', valueColor = '') => {
       const fullText = `  ${label}: ${value}`;
       const padding = INNER_WIDTH - fullText.length;
       return `  ${label}: ${valueColor}${value}${colors.reset}${' '.repeat(padding)}`;
     };
-    
+
     // Build the box
-    console.log('\n' + colors.cyan + '╔' + '═'.repeat(INNER_WIDTH) + '╗' + colors.reset);
-    console.log(colors.cyan + '║' + colors.reset + centerText(colors.bright + colors.yellow + '🔐 ADMIN ACCESS CODE 🔐' + colors.reset) + colors.cyan + '║' + colors.reset);
-    console.log(colors.cyan + '╠' + '═'.repeat(INNER_WIDTH) + '╣' + colors.reset);
-    console.log(colors.cyan + '║' + colors.reset + leftAlignText('Code', adminCode, '', colors.bright + colors.green) + colors.cyan + '║' + colors.reset);
-    console.log(colors.cyan + '║' + colors.reset + leftAlignText('Valid until', timeString, '', colors.yellow) + colors.cyan + '║' + colors.reset);
-    
+    console.log(
+      '\n' + colors.cyan + '╔' + '═'.repeat(INNER_WIDTH) + '╗' + colors.reset
+    );
+    console.log(
+      colors.cyan +
+        '║' +
+        colors.reset +
+        centerText(
+          colors.bright +
+            colors.yellow +
+            '🔐 ADMIN ACCESS CODE 🔐' +
+            colors.reset
+        ) +
+        colors.cyan +
+        '║' +
+        colors.reset
+    );
+    console.log(
+      colors.cyan + '╠' + '═'.repeat(INNER_WIDTH) + '╣' + colors.reset
+    );
+    console.log(
+      colors.cyan +
+        '║' +
+        colors.reset +
+        leftAlignText('Code', adminCode, '', colors.bright + colors.green) +
+        colors.cyan +
+        '║' +
+        colors.reset
+    );
+    console.log(
+      colors.cyan +
+        '║' +
+        colors.reset +
+        leftAlignText('Valid until', timeString, '', colors.yellow) +
+        colors.cyan +
+        '║' +
+        colors.reset
+    );
+
     // Show last usage info if available
     if (lastCodeUsedBy && lastCodeUsedAt) {
-      console.log(colors.cyan + '╟' + '─'.repeat(INNER_WIDTH) + '╢' + colors.reset);
+      console.log(
+        colors.cyan + '╟' + '─'.repeat(INNER_WIDTH) + '╢' + colors.reset
+      );
       const usedTimeAgo = Math.floor((Date.now() - lastCodeUsedAt) / 1000);
-      const timeAgoStr = usedTimeAgo < 60 ? `${usedTimeAgo}s ago` : `${Math.floor(usedTimeAgo / 60)}m ago`;
-      console.log(colors.cyan + '║' + colors.reset + leftAlignText('Previous code used by', lastCodeUsedBy, '', colors.gray) + colors.cyan + '║' + colors.reset);
-      console.log(colors.cyan + '║' + colors.reset + leftAlignText('Used', timeAgoStr, '', colors.gray) + colors.cyan + '║' + colors.reset);
+      const timeAgoStr =
+        usedTimeAgo < 60
+          ? `${usedTimeAgo}s ago`
+          : `${Math.floor(usedTimeAgo / 60)}m ago`;
+      console.log(
+        colors.cyan +
+          '║' +
+          colors.reset +
+          leftAlignText(
+            'Previous code used by',
+            lastCodeUsedBy,
+            '',
+            colors.gray
+          ) +
+          colors.cyan +
+          '║' +
+          colors.reset
+      );
+      console.log(
+        colors.cyan +
+          '║' +
+          colors.reset +
+          leftAlignText('Used', timeAgoStr, '', colors.gray) +
+          colors.cyan +
+          '║' +
+          colors.reset
+      );
     }
-    
-    console.log(colors.cyan + '╚' + '═'.repeat(INNER_WIDTH) + '╝' + colors.reset + '\n');
-    
+
+    console.log(
+      colors.cyan + '╚' + '═'.repeat(INNER_WIDTH) + '╝' + colors.reset + '\n'
+    );
+
     // Reset tracking for new code
     lastCodeUsedBy = null;
     lastCodeUsedAt = null;
-    
   } catch (error) {
     console.error('Error generating admin code:', error);
   }
@@ -185,45 +272,49 @@ generateAdminCode();
 setInterval(generateAdminCode, 5 * 60 * 1000);
 
 // Passport configuration
-passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
-  console.log('Login attempt for email:', email);
-  
-  users.findOne({ email }, (err, user) => {
-    if (err) {
-      console.error('Database error during login:', err);
-      return done(err);
-    }
-    
-    if (!user) {
-      console.log('Login failed: Unknown email -', email);
-      // Don't reveal that the email doesn't exist
-      return done(null, false, { message: 'Invalid email or password' });
-    }
-    
-    console.log('User found:', { email: user.email, hasHash: !!user.hash });
-    
-    bcrypt.compare(password, user.hash, (err, isMatch) => {
-      if (err) {
-        console.error('Bcrypt compare error:', err);
+passport.use(
+  new LocalStrategy(
+    { usernameField: 'email' },
+    async (email, password, done) => {
+      console.log('Login attempt for email:', email);
+
+      try {
+        const user = await usersAsync.findOne({ email });
+
+        if (!user) {
+          console.log('Login failed: Unknown email -', email);
+          // Don't reveal that the email doesn't exist
+          return done(null, false, { message: 'Invalid email or password' });
+        }
+
+        console.log('User found:', { email: user.email, hasHash: !!user.hash });
+
+        const isMatch = await bcrypt.compare(password, user.hash);
+
+        if (isMatch) {
+          console.log('Login successful for:', email);
+          return done(null, user);
+        } else {
+          console.log('Login failed: Invalid password for -', email);
+          return done(null, false, { message: 'Invalid email or password' });
+        }
+      } catch (err) {
+        console.error('Database error during login:', err);
         return done(err);
       }
-      
-      console.log('Password comparison result:', isMatch);
-      
-      if (!isMatch) {
-        console.log('Login failed: Bad password for', email);
-        // Same message as unknown email for security
-        return done(null, false, { message: 'Invalid email or password' });
-      }
-      
-      console.log('Login successful for:', email);
-      return done(null, user);
-    });
-  });
-}));
+    }
+  )
+);
 
 passport.serializeUser((user, done) => done(null, user._id));
-passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
+passport.deserializeUser(async (id, done) => {
+  try {
+    const user = await usersAsync.findOne({ _id: id });
+    done(null, user);
+  } catch (err) {
+    done(err);
+  }
+});
 
 // Create Express app
 const app = express();
@@ -243,7 +334,7 @@ app.use((req, res, next) => {
   res.set({
     'Cache-Control': 'no-store, no-cache, must-revalidate, private',
     Pragma: 'no-cache',
-    Expires: '0'
+    Expires: '0',
   });
   next();
 });
@@ -256,48 +347,52 @@ app.use((req, res, next) => {
   console.log(`→ ${req.method} ${req.originalUrl}`);
   res.on('finish', () => {
     const duration = Date.now() - start;
-    console.log(`← ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`);
+    console.log(
+      `← ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`
+    );
   });
   next();
 });
 
 // Session middleware
-app.use(session({
-  store: new FileStore({
-    path: path.join(dataDir, 'sessions'),
-    ttl: 86400, // 1 day in seconds
-    retries: 0,
-    reapInterval: 600, // Clean up expired sessions every 10 minutes
-    reapAsync: true,
-    reapSyncFallback: true,
-    // Add these options for Windows compatibility
-    logFn: function(){}, // Disable verbose logging
-    fallbackSessionFn: function() {
-      // Provide a minimal session object to avoid errors
-      return {
-        cookie: {
-          originalMaxAge: null,
-          expires: null,
-          secure: false,
-          httpOnly: true,
-          path: '/'
-        }
-      };
-    }
-  }),
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: false,
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 // 24 hours
-  },
-  // Add this to handle session save errors gracefully
-  genid: function(req) {
-    return require('crypto').randomBytes(16).toString('hex');
-  }
-}));
+app.use(
+  session({
+    store: new FileStore({
+      path: path.join(dataDir, 'sessions'),
+      ttl: 86400, // 1 day in seconds
+      retries: 0,
+      reapInterval: 600, // Clean up expired sessions every 10 minutes
+      reapAsync: true,
+      reapSyncFallback: true,
+      // Add these options for Windows compatibility
+      logFn: function () {}, // Disable verbose logging
+      fallbackSessionFn: function () {
+        // Provide a minimal session object to avoid errors
+        return {
+          cookie: {
+            originalMaxAge: null,
+            expires: null,
+            secure: false,
+            httpOnly: true,
+            path: '/',
+          },
+        };
+      },
+    }),
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: false,
+      httpOnly: true,
+      maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    },
+    // Add this to handle session save errors gracefully
+    genid: function (req) {
+      return require('crypto').randomBytes(16).toString('hex');
+    },
+  })
+);
 
 // Custom flash middleware
 app.use((req, res, next) => {
@@ -305,37 +400,64 @@ app.use((req, res, next) => {
   if (!req.session.flash) {
     req.session.flash = {};
   }
-  
+
   // Make flash messages available to templates via res.locals
   res.locals.flash = req.session.flash;
-  
+
   // Clear flash messages after making them available
   req.session.flash = {};
-  
+
   // Add flash method to request object
   req.flash = (type, message) => {
     // If called with just type, return messages of that type (getter)
     if (message === undefined) {
       return res.locals.flash[type] || [];
     }
-    
+
     // Otherwise, add message (setter)
     if (!req.session.flash[type]) {
       req.session.flash[type] = [];
     }
     req.session.flash[type].push(message);
   };
-  
+
   next();
 });
 
+// Request logging middleware
+app.use(logger.requestLogger());
 
 // Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
 
 // CSRF Protection (must be after session middleware)
-const csrfProtection = csrf();
+const csrfTokens = new csrf();
+const csrfProtection = (req, res, next) => {
+  if (!req.session.csrfSecret) {
+    req.session.csrfSecret = csrfTokens.secretSync();
+  }
+
+  req.csrfToken = () => csrfTokens.create(req.session.csrfSecret);
+
+  if (
+    req.method === 'GET' ||
+    req.method === 'HEAD' ||
+    req.method === 'OPTIONS'
+  ) {
+    return next();
+  }
+
+  const token = req.body._csrf || req.headers['x-csrf-token'];
+  if (!token || !csrfTokens.verify(req.session.csrfSecret, token)) {
+    const err = new Error('Invalid CSRF token');
+    err.code = 'EBADCSRFTOKEN';
+    err.status = 403;
+    return next(err);
+  }
+
+  next();
+};
 
 // Record user activity for every authenticated request
 app.use((req, res, next) => {
@@ -372,61 +494,107 @@ function ensureAdmin(req, res, next) {
 // Rate limiting middleware for admin requests
 function rateLimitAdminRequest(req, res, next) {
   const userKey = req.user._id;
-  const attempts = adminCodeAttempts.get(userKey) || { count: 0, firstAttempt: Date.now() };
-  
+  const attempts = adminCodeAttempts.get(userKey) || {
+    count: 0,
+    firstAttempt: Date.now(),
+  };
+
   // Reset if more than 30 minutes since first attempt
   if (Date.now() - attempts.firstAttempt > 30 * 60 * 1000) {
     attempts.count = 0;
     attempts.firstAttempt = Date.now();
   }
-  
+
   // Block if too many attempts
   if (attempts.count >= 5) {
-    console.warn(`⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`);
+    console.warn(
+      `⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`
+    );
     req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
     return res.redirect('/settings');
   }
-  
+
   req.adminAttempts = attempts;
   next();
 }
 
-const authRoutes = require("./routes/auth");
-const adminRoutes = require("./routes/admin");
-const apiRoutes = require("./routes/api");
+const authRoutes = require('./routes/auth');
+const adminRoutes = require('./routes/admin');
+const apiRoutes = require('./routes/api');
 
 const deps = {
-  htmlTemplate, registerTemplate, loginTemplate, forgotPasswordTemplate, resetPasswordTemplate, invalidTokenTemplate, spotifyTemplate, settingsTemplate, isTokenValid,
-  csrfProtection, ensureAuth, ensureAuthAPI, ensureAdmin, rateLimitAdminRequest,
-  users, lists, listItems, albums, usersAsync, listsAsync, listItemsAsync, albumsAsync, upload, bcrypt, crypto, nodemailer,
-  composeForgotPasswordEmail, isValidEmail, isValidUsername, isValidPassword,
-  broadcastListUpdate, listSubscribers, sanitizeUser, adminCodeAttempts, adminCode, adminCodeExpiry, generateAdminCode, lastCodeUsedBy, lastCodeUsedAt,
-  dataDir, pool, passport
+  htmlTemplate,
+  registerTemplate,
+  loginTemplate,
+  forgotPasswordTemplate,
+  resetPasswordTemplate,
+  invalidTokenTemplate,
+  spotifyTemplate,
+  settingsTemplate,
+  isTokenValid,
+  csrfProtection,
+  ensureAuth,
+  ensureAuthAPI,
+  ensureAdmin,
+  rateLimitAdminRequest,
+  users,
+  lists,
+  listItems,
+  albums,
+  usersAsync,
+  listsAsync,
+  listItemsAsync,
+  albumsAsync,
+  upload,
+  bcrypt,
+  crypto,
+  nodemailer,
+  composeForgotPasswordEmail,
+  isValidEmail,
+  isValidUsername,
+  isValidPassword,
+  broadcastListUpdate,
+  listSubscribers,
+  sanitizeUser,
+  adminCodeAttempts,
+  adminCode,
+  adminCodeExpiry,
+  generateAdminCode,
+  lastCodeUsedBy,
+  lastCodeUsedAt,
+  dataDir,
+  pool,
+  passport,
 };
 
 authRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);
 
+// 404 handler for unmatched routes
+app.use(notFoundHandler);
 
-// Error handling middleware
+// Centralized error handling middleware
 app.use((err, req, res, next) => {
-  console.error('Application error:', err);
-  
   // Check if headers were already sent
   if (res.headersSent) {
-    console.error('Headers already sent, cannot send error response');
+    logger.error('Headers already sent, cannot send error response', {
+      error: err.message,
+    });
     return;
   }
-  
+
   // For session-related errors, try to continue
   if (err.code === 'EPERM' && err.path && err.path.includes('sessions')) {
-    console.warn('Session file error, attempting to continue...');
+    logger.warn('Session file error, attempting to continue...', {
+      path: err.path,
+    });
     // Don't send error response for session file issues
     return;
   }
-  
-  res.status(500).send('Something went wrong!');
+
+  // Use centralized error handler
+  errorHandler(err, req, res, next);
 });
 
 // Start server once database is ready
@@ -435,7 +603,9 @@ ready
   .then(() => {
     app.listen(PORT, () => {
       console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-      console.log(`🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`);
+      console.log(
+        `🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`
+      );
     });
   })
   .catch((err) => {
