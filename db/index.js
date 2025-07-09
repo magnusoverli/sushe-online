@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcryptjs');
 const { PgDatastore, Pool, waitForPostgres } = require('./postgres');
 
 async function ensureTables(pool) {
@@ -297,12 +298,69 @@ if (process.env.DATABASE_URL) {
     }
   }
 
+  async function ensureAdminUser() {
+    try {
+      console.log('Checking for admin user...');
+      const existingAdmin = await users.findOne({ username: 'admin' });
+      console.log('Existing admin user found:', !!existingAdmin);
+      
+      if (!existingAdmin) {
+        console.log('Creating admin user...');
+        const hash = await bcrypt.hash('admin', 12);
+        const newUser = await users.insert({
+          username: 'admin',
+          email: 'admin@localhost.com',
+          hash: hash,
+          accentColor: '#dc2626',
+          timeFormat: '24h',
+          dateFormat: 'MM/DD/YYYY',
+          role: 'admin',
+          adminGrantedAt: new Date(),
+          musicService: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          lastActivity: new Date()
+        });
+        console.log('Created admin user successfully:', newUser._id);
+        console.log('Admin login: email=admin@localhost.com, password=admin');
+        
+        // Verify we can find the user by email
+        const verifyUser = await users.findOne({ email: 'admin@localhost.com' });
+        console.log('Verification - can find admin by email:', !!verifyUser);
+      } else {
+        console.log('Admin user already exists with email:', existingAdmin.email);
+      }
+    } catch (err) {
+      console.error('Error creating admin user:', err);
+    }
+  }
+
   ready = waitForPostgres(pool)
-    .then(() => ensureTables(pool))
-    .then(() => migrateLists())
-    .then(() => migrateAlbums())
-    .then(() => migrateUsers())
-    .then(() => console.log('Database ready'));
+    .then(() => {
+      console.log('Creating tables...');
+      return ensureTables(pool);
+    })
+    .then(() => {
+      console.log('Migrating lists...');
+      return migrateLists();
+    })
+    .then(() => {
+      console.log('Migrating albums...');
+      return migrateAlbums();
+    })
+    .then(() => {
+      console.log('Migrating users...');
+      return migrateUsers();
+    })
+    .then(() => {
+      console.log('Ensuring admin user...');
+      return ensureAdminUser();
+    })
+    .then(() => console.log('Database ready'))
+    .catch(err => {
+      console.error('Database initialization error:', err);
+      throw err;
+    });
 } else {
   throw new Error('DATABASE_URL must be set');
 }

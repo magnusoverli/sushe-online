@@ -227,7 +227,6 @@ passport.deserializeUser((id, done) => users.findOne({ _id: id }, done));
 
 // Create Express app
 const app = express();
-const csrfProtection = csrf();
 
 // Configure EJS view engine with caching
 app.set('views', path.join(__dirname, 'views'));
@@ -334,6 +333,9 @@ app.use((req, res, next) => {
 // Initialize Passport
 app.use(passport.initialize());
 app.use(passport.session());
+
+// CSRF Protection (must be after session middleware)
+const csrfProtection = csrf();
 
 // Record user activity for every authenticated request
 app.use((req, res, next) => {
