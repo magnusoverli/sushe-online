@@ -1420,272 +1420,7 @@ function updateListNav() {
   }
 }
 
-// Initialize SortableJS for mobile album sorting
-function initializeMobileSorting(container) {
-  if (!window.Sortable) {
-    console.error('SortableJS not loaded');
-    return;
-  }
-
-  // Clean up any existing sortable instance
-  if (container._sortable) {
-    container._sortable.destroy();
-  }
-
-  // Find the container with the album cards
-  const sortableContainer =
-    container.querySelector('.mobile-album-list') || container;
-
-  // Find the actual scrollable container
-  let scrollableParent = sortableContainer.closest('.overflow-y-auto');
-
-  if (!scrollableParent) {
-    const mobileContainer = document.querySelector('#mobileAlbumContainer');
-    if (mobileContainer) {
-      scrollableParent = mobileContainer.parentElement;
-    }
-  }
-
-  // Get the bottom nav height
-  const getBottomNavHeight = () => {
-    const bottomNav = document.querySelector('nav.fixed.bottom-0');
-    if (bottomNav && !bottomNav.classList.contains('hidden')) {
-      return bottomNav.offsetHeight;
-    }
-    return 0;
-  };
-
-  // Force render function to ensure content is visible during scroll
-  const forceRenderOnScroll = () => {
-    if (scrollableParent) {
-      const scrollTop = scrollableParent.scrollTop;
-      const scrollHeight = scrollableParent.scrollHeight;
-
-      // Force the browser to recalculate and render
-      void scrollableParent.offsetHeight;
-
-      // If we're near the bottom, ensure bottom content is rendered
-      if (scrollTop + scrollableParent.clientHeight >= scrollHeight - 200) {
-        sortableContainer.style.minHeight =
-          sortableContainer.scrollHeight + 'px';
-        requestAnimationFrame(() => {
-          sortableContainer.style.minHeight = '';
-        });
-      }
-    }
-  };
-
-  // Enhanced auto-scroll implementation
-  let autoScrollInterval = null;
-  let currentScrollSpeed = 0;
-  let lastTouchY = null;
-  let scrollAcceleration = 1;
-
-  const startAutoScroll = (direction, speed) => {
-    if (autoScrollInterval) {
-      clearInterval(autoScrollInterval);
-    }
-
-    currentScrollSpeed = speed;
-    scrollAcceleration = 1;
-
-    autoScrollInterval = setInterval(() => {
-      if (scrollableParent) {
-        // Gradually increase speed for smoother acceleration
-        if (scrollAcceleration < 2.5) {
-          scrollAcceleration += 0.05;
-        }
-
-        const adjustedSpeed = currentScrollSpeed * scrollAcceleration;
-        const currentScroll = scrollableParent.scrollTop;
-        const newScroll = currentScroll + direction * adjustedSpeed;
-
-        if (direction > 0) {
-          const maxScroll =
-            scrollableParent.scrollHeight - scrollableParent.clientHeight;
-          scrollableParent.scrollTop = Math.min(newScroll, maxScroll);
-
-          // Stop if we've reached the bottom
-          if (scrollableParent.scrollTop >= maxScroll) {
-            stopAutoScroll();
-          }
-        } else {
-          scrollableParent.scrollTop = Math.max(newScroll, 0);
-
-          // Stop if we've reached the top
-          if (scrollableParent.scrollTop <= 0) {
-            stopAutoScroll();
-          }
-        }
-
-        forceRenderOnScroll();
-      }
-    }, 16); // 60fps
-  };
-
-  const stopAutoScroll = () => {
-    if (autoScrollInterval) {
-      clearInterval(autoScrollInterval);
-      autoScrollInterval = null;
-      currentScrollSpeed = 0;
-      scrollAcceleration = 1;
-    }
-  };
-
-  // Create sortable with enhanced settings
-  const sortable = Sortable.create(sortableContainer, {
-    animation: 150,
-    handle: '.drag-handle',
-    preventOnFilter: true,
-    forceFallback: true,
-    fallbackClass: 'sortable-drag',
-    ghostClass: 'sortable-ghost',
-    chosenClass: 'sortable-chosen',
-    dragClass: 'sortable-drag',
-    delay: 0,
-    delayOnTouchOnly: false,
-    touchStartThreshold: 0,
-
-    // Disable built-in auto-scroll
-    scroll: false,
-
-    onStart: function (evt) {
-      evt.item.dataset.originalIndex = evt.oldIndex;
-      document.body.style.overflow = 'hidden';
-      document.body.classList.add('sorting-active'); // Add this
-      lastTouchY = null;
-
-      if (scrollableParent) {
-        scrollableParent.classList.add('sortable-scrolling');
-        scrollableParent.classList.add('sortable-drag-active'); // Add this
-
-        // Pre-render all content
-        const cards = sortableContainer.querySelectorAll('.album-card');
-        cards.forEach((card) => {
-          void card.offsetHeight;
-        });
-      }
-    },
-
-    onMove: function (evt) {
-      if (!scrollableParent) return;
-
-      // Get current touch/mouse position
-      const touch = evt.originalEvent.touches
-        ? evt.originalEvent.touches[0]
-        : evt.originalEvent;
-      const clientY = touch.clientY;
-
-      // Store for velocity calculation
-      lastTouchY = clientY;
-
-      // Get viewport dimensions
-      const viewportHeight = window.innerHeight;
-      const containerRect = scrollableParent.getBoundingClientRect();
-
-      // Larger scroll zones for easier triggering (25% of viewport height each)
-      const scrollZoneSize = Math.max(100, viewportHeight * 0.25);
-
-      // Calculate effective boundaries
-      const topBoundary = Math.max(containerRect.top, 0);
-      const bottomBoundary = Math.min(containerRect.bottom, viewportHeight);
-
-      // Define scroll trigger zones
-      const topScrollTrigger = topBoundary + scrollZoneSize;
-      const bottomScrollTrigger = bottomBoundary - scrollZoneSize;
-
-      // Calculate scroll speed based on position within the zone
-      let shouldScroll = false;
-      let scrollDirection = 0;
-      let scrollSpeed = 0;
-
-      if (clientY < topScrollTrigger && clientY >= topBoundary) {
-        // In top scroll zone
-        shouldScroll = true;
-        scrollDirection = -1;
-
-        // Calculate speed based on how deep into the zone we are
-        const zoneDepth = (topScrollTrigger - clientY) / scrollZoneSize;
-        scrollSpeed = Math.max(3, Math.min(25, zoneDepth * 25));
-
-        // Extra boost if very close to edge
-        if (clientY < topBoundary + 30) {
-          scrollSpeed = Math.min(35, scrollSpeed * 1.5);
-        }
-      } else if (clientY > bottomScrollTrigger && clientY <= bottomBoundary) {
-        // In bottom scroll zone
-        shouldScroll = true;
-        scrollDirection = 1;
-
-        // Calculate speed based on how deep into the zone we are
-        const zoneDepth = (clientY - bottomScrollTrigger) / scrollZoneSize;
-        scrollSpeed = Math.max(3, Math.min(25, zoneDepth * 25));
-
-        // Extra boost if very close to edge
-        if (clientY > bottomBoundary - 30) {
-          scrollSpeed = Math.min(35, scrollSpeed * 1.5);
-        }
-      }
-
-      if (shouldScroll) {
-        startAutoScroll(scrollDirection, scrollSpeed);
-      } else {
-        stopAutoScroll();
-      }
-
-      // Force render to ensure content is visible
-      forceRenderOnScroll();
-
-      // REMOVED: return false; - This was preventing the drag operation!
-    },
-
-    onEnd: function (evt) {
-      stopAutoScroll();
-      document.body.style.overflow = '';
-      document.body.classList.remove('sorting-active'); // Add this
-      lastTouchY = null;
-
-      if (scrollableParent) {
-        scrollableParent.classList.remove('sortable-scrolling');
-        scrollableParent.classList.remove('sortable-drag-active'); // Add this
-      }
-    },
-
-    onUpdate: async function (evt) {
-      const oldIndex = parseInt(evt.item.dataset.originalIndex);
-      const newIndex = evt.newIndex;
-
-      if (oldIndex === newIndex) return;
-
-      try {
-        const list = lists[currentList];
-        const [movedItem] = list.splice(oldIndex, 1);
-        list.splice(newIndex, 0, movedItem);
-
-        await saveList(currentList, list);
-
-        // Update position numbers
-        const cards = sortableContainer.querySelectorAll('.album-card');
-        cards.forEach((card, index) => {
-          card.dataset.index = index;
-          const positionElement = card.querySelector(
-            '.w-12.flex.items-center.justify-center'
-          );
-          if (positionElement) {
-            positionElement.textContent = index + 1;
-          }
-        });
-      } catch (error) {
-        console.error('Error saving reorder:', error);
-        showToast('Error saving changes', 'error');
-        selectList(currentList);
-      }
-    },
-  });
-
-  // Store sortable instance
-  container._sortable = sortable;
-}
+// Removed complex initializeMobileSorting function - now using unified approach
 
 // Select and display a list
 async function selectList(listName) {
@@ -2350,20 +2085,37 @@ function initializeUnifiedSorting(container, isMobile) {
     return;
   }
 
-  // Initialize SortableJS
-  const sortable = new Sortable(sortableContainer, {
+  // Configure SortableJS options
+  const sortableOptions = {
     animation: 150,
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
-    handle: isMobile ? '.drag-handle' : undefined, // Mobile uses specific handle, desktop uses entire row
+    handle: isMobile ? '.drag-handle' : undefined,
+
+    // Enable built-in scrolling - works well for both desktop and mobile
+    scroll: true,
+    scrollSensitivity: isMobile ? 50 : 30,
+    scrollSpeed: isMobile ? 15 : 10,
+
+    // Simplified event handlers
     onStart: function (evt) {
-      // Add visual feedback
-      evt.item.style.opacity = '0.5';
+      // Minimal visual feedback - let CSS classes handle the rest
+      if (!isMobile) {
+        document.body.classList.add('desktop-dragging');
+      } else {
+        // Prevent body scroll on mobile during drag
+        document.body.style.overflow = 'hidden';
+      }
     },
+
     onEnd: async function (evt) {
-      // Remove visual feedback
-      evt.item.style.opacity = '';
+      // Clean up
+      if (!isMobile) {
+        document.body.classList.remove('desktop-dragging');
+      } else {
+        document.body.style.overflow = '';
+      }
 
       const oldIndex = evt.oldIndex;
       const newIndex = evt.newIndex;
@@ -2379,9 +2131,7 @@ function initializeUnifiedSorting(container, isMobile) {
           // Update position numbers
           displayAlbums(lists[currentList]);
         } catch (error) {
-          logger.error('Error saving list after reorder', {
-            error: error.message,
-          });
+          console.error('Error saving list after reorder:', error);
           showToast('Error saving list order', 'error');
           // Revert the change
           const [revertItem] = list.splice(newIndex, 1);
@@ -2390,7 +2140,9 @@ function initializeUnifiedSorting(container, isMobile) {
         }
       }
     },
-  });
+  };
+  // Initialize SortableJS
+  const sortable = new Sortable(sortableContainer, sortableOptions);
 
   // Store reference for cleanup
   container._sortable = sortable;
