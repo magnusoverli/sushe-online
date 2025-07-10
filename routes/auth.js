@@ -1,5 +1,6 @@
 module.exports = (app, deps) => {
   const path = require('path');
+  const logger = require('../utils/logger');
   const {
     htmlTemplate,
     registerTemplate,
@@ -109,7 +110,7 @@ module.exports = (app, deps) => {
         }
 
         // Hash password and create user
-        const hash = await bcrypt.hash(password, 10);
+        const hash = await bcrypt.hash(password, 12);
         if (!hash) {
           req.flash('error', 'Registration error. Please try again.');
           return res.redirect('/register');
@@ -130,16 +131,18 @@ module.exports = (app, deps) => {
           updatedAt: new Date(),
         });
 
-        console.log('New user registered:', email, 'username:', username);
+        logger.info('New user registered', { email, username });
         req.flash('success', 'Registration successful! Please login.');
         res.redirect('/login');
       } catch (err) {
-        console.error('Database error during registration:', err);
+        logger.error('Database error during registration', {
+          error: err.message,
+        });
         req.flash('error', 'Registration error. Please try again.');
         return res.redirect('/register');
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('Registration error', { error: error.message });
       req.flash('error', 'Registration error. Please try again.');
       res.redirect('/register');
     }
@@ -177,7 +180,7 @@ module.exports = (app, deps) => {
   });
 
   app.post('/login', csrfProtection, async (req, res, next) => {
-    console.log('Login POST request received for:', req.body.email);
+    logger.debug('Login POST request received', { email: req.body.email });
 
     try {
       const { user, info } = await new Promise((resolve, reject) => {
@@ -200,7 +203,7 @@ module.exports = (app, deps) => {
         });
       });
 
-      console.log('User logged in successfully:', user.email);
+      logger.info('User logged in successfully', { email: user.email });
 
       // Record last activity
       const timestamp = new Date();
@@ -223,7 +226,7 @@ module.exports = (app, deps) => {
 
       return res.redirect('/');
     } catch (err) {
-      console.error('Authentication error:', err);
+      logger.error('Authentication error', { error: err.message });
       req.flash('error', 'An error occurred during login');
       return res.redirect('/login');
     }

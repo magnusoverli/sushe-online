@@ -32,10 +32,13 @@ const upload = multer({
 });
 // Log any unhandled errors so the server doesn't fail silently
 process.on('unhandledRejection', (err) => {
-  console.error('Unhandled promise rejection:', err);
+  logger.error('Unhandled promise rejection', {
+    error: err.message,
+    stack: err.stack,
+  });
 });
 process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+  logger.error('Uncaught exception', { error: err.message, stack: err.stack });
 });
 const { composeForgotPasswordEmail } = require('./forgot_email');
 const {
@@ -263,7 +266,7 @@ function generateAdminCode() {
     lastCodeUsedBy = null;
     lastCodeUsedAt = null;
   } catch (error) {
-    console.error('Error generating admin code:', error);
+    logger.error('Error generating admin code', { error: error.message });
   }
 }
 
@@ -276,30 +279,30 @@ passport.use(
   new LocalStrategy(
     { usernameField: 'email' },
     async (email, password, done) => {
-      console.log('Login attempt for email:', email);
+      logger.info('Login attempt', { email });
 
       try {
         const user = await usersAsync.findOne({ email });
 
         if (!user) {
-          console.log('Login failed: Unknown email -', email);
+          logger.warn('Login failed: Unknown email', { email });
           // Don't reveal that the email doesn't exist
           return done(null, false, { message: 'Invalid email or password' });
         }
 
-        console.log('User found:', { email: user.email, hasHash: !!user.hash });
+        logger.debug('User found', { email: user.email, hasHash: !!user.hash });
 
         const isMatch = await bcrypt.compare(password, user.hash);
 
         if (isMatch) {
-          console.log('Login successful for:', email);
+          logger.info('Login successful', { email });
           return done(null, user);
         } else {
-          console.log('Login failed: Invalid password for -', email);
+          logger.warn('Login failed: Invalid password', { email });
           return done(null, false, { message: 'Invalid email or password' });
         }
       } catch (err) {
-        console.error('Database error during login:', err);
+        logger.error('Database error during login', { error: err.message });
         return done(err);
       }
     }
@@ -341,18 +344,7 @@ app.use((req, res, next) => {
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-// Simple request logger for debugging connectivity issues
-app.use((req, res, next) => {
-  const start = Date.now();
-  console.log(`→ ${req.method} ${req.originalUrl}`);
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(
-      `← ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms`
-    );
-  });
-  next();
-});
+// Request logging is handled by logger.requestLogger() middleware
 
 // Session middleware
 app.use(
@@ -507,9 +499,10 @@ function rateLimitAdminRequest(req, res, next) {
 
   // Block if too many attempts
   if (attempts.count >= 5) {
-    console.warn(
-      `⚠️  User ${req.user.email} blocked from admin requests (too many attempts)`
-    );
+    logger.warn('User blocked from admin requests', {
+      email: req.user.email,
+      reason: 'too many attempts',
+    });
     req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
     return res.redirect('/settings');
   }
@@ -602,13 +595,14 @@ const PORT = process.env.PORT || 3000;
 ready
   .then(() => {
     app.listen(PORT, () => {
-      console.log(`🔥 Server burning at http://localhost:${PORT} 🔥`);
-      console.log(
-        `🔥 Environment: ${process.env.NODE_ENV || 'development'} 🔥`
-      );
+      logger.info('Server started', {
+        port: PORT,
+        environment: process.env.NODE_ENV || 'development',
+        url: `http://localhost:${PORT}`,
+      });
     });
   })
   .catch((err) => {
-    console.error('Failed to initialize database', err);
+    logger.error('Failed to initialize database', { error: err.message });
     process.exit(1);
   });
