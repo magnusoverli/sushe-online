@@ -252,9 +252,9 @@ module.exports = (app, deps) => {
             listId,
           ]);
         } else {
-          const resList = await client.query(
-            'INSERT INTO lists (_id, user_id, name, created_at, updated_at) VALUES (gen_random_uuid()::text, $1, $2, $3, $4) RETURNING _id',
-            [req.user._id, name, timestamp, timestamp]
+          result.failed++;
+          result.errors.push(
+            `Track not found: "${item.artist} - ${item.album}" - Track ${trackPick}`
           );
           listId = resList.rows[0]._id;
         }
@@ -1100,9 +1100,11 @@ module.exports = (app, deps) => {
       res.json(result);
     } catch (err) {
       logger.error('Playlist operation error:', err);
+      logger.error('Error stack:', err.stack);
       res.status(500).json({
         error: 'Failed to update playlist',
         details: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
       });
     }
   });
@@ -1119,7 +1121,8 @@ module.exports = (app, deps) => {
     };
 
     for (const item of items) {
-      if (item.trackPick && item.trackPick.trim()) {
+      const trackPick = item.trackPick || item.track_pick;
+      if (trackPick && trackPick.trim()) {
         validation.albumsWithTracks++;
         validation.estimatedTracks++;
       } else {
@@ -1186,6 +1189,7 @@ module.exports = (app, deps) => {
       }
     } catch (err) {
       logger.error(`${service} playlist error:`, err);
+      logger.error(`${service} error stack:`, err.stack);
       throw err;
     }
   }
@@ -1260,7 +1264,8 @@ module.exports = (app, deps) => {
     for (const item of items) {
       result.processed++;
 
-      if (!item.trackPick || !item.trackPick.trim()) {
+      const trackPick = item.trackPick || item.track_pick;
+      if (!trackPick || !trackPick.trim()) {
         result.errors.push(
           `Skipped "${item.artist} - ${item.album}": no track selected`
         );
@@ -1275,7 +1280,7 @@ module.exports = (app, deps) => {
           result.tracks.push({
             artist: item.artist,
             album: item.album,
-            track: item.trackPick,
+            track: trackPick,
             found: true,
           });
         } else {
@@ -1286,7 +1291,7 @@ module.exports = (app, deps) => {
           result.tracks.push({
             artist: item.artist,
             album: item.album,
-            track: item.trackPick,
+            track: trackPick,
             found: false,
           });
         }
@@ -1332,6 +1337,7 @@ module.exports = (app, deps) => {
 
   // Find Spotify track URI
   async function findSpotifyTrack(item, auth) {
+    const trackPick = item.trackPick || item.track_pick;
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
     };
@@ -1355,7 +1361,7 @@ module.exports = (app, deps) => {
               const tracksData = await tracksResp.json();
 
               // Try to match by track number
-              const trackNum = parseInt(item.trackPick);
+              const trackNum = parseInt(trackPick);
               if (
                 !isNaN(trackNum) &&
                 trackNum > 0 &&
@@ -1367,8 +1373,8 @@ module.exports = (app, deps) => {
               // Try to match by track name
               const matchingTrack = tracksData.tracks.items.find(
                 (t) =>
-                  t.name.toLowerCase().includes(item.trackPick.toLowerCase()) ||
-                  item.trackPick.toLowerCase().includes(t.name.toLowerCase())
+                  t.name.toLowerCase().includes(trackPick.toLowerCase()) ||
+                  trackPick.toLowerCase().includes(t.name.toLowerCase())
               );
               if (matchingTrack) {
                 return matchingTrack.uri;
@@ -1383,7 +1389,7 @@ module.exports = (app, deps) => {
 
     // Fallback to general track search
     try {
-      const query = `track:${item.trackPick} album:${item.album} artist:${item.artist}`;
+      const query = `track:${trackPick} album:${item.album} artist:${item.artist}`;
       const searchResp = await fetch(
         `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
         { headers }
@@ -1481,7 +1487,8 @@ module.exports = (app, deps) => {
     for (const item of items) {
       result.processed++;
 
-      if (!item.trackPick || !item.trackPick.trim()) {
+      const trackPick = item.trackPick || item.track_pick;
+      if (!trackPick || !trackPick.trim()) {
         result.errors.push(
           `Skipped "${item.artist} - ${item.album}": no track selected`
         );
@@ -1496,7 +1503,7 @@ module.exports = (app, deps) => {
           result.tracks.push({
             artist: item.artist,
             album: item.album,
-            track: item.trackPick,
+            track: trackPick,
             found: true,
           });
         } else {
@@ -1507,7 +1514,7 @@ module.exports = (app, deps) => {
           result.tracks.push({
             artist: item.artist,
             album: item.album,
-            track: item.trackPick,
+            track: trackPick,
             found: false,
           });
         }
@@ -1567,6 +1574,7 @@ module.exports = (app, deps) => {
 
   // Find Tidal track ID
   async function findTidalTrack(item, auth, countryCode = 'US') {
+    const trackPick = item.trackPick || item.track_pick;
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
       Accept: 'application/vnd.api+json',
@@ -1595,7 +1603,7 @@ module.exports = (app, deps) => {
             const tracksData = await tracksResp.json();
 
             // Try to match by track number
-            const trackNum = parseInt(item.trackPick);
+            const trackNum = parseInt(trackPick);
             if (
               !isNaN(trackNum) &&
               trackNum > 0 &&
@@ -1611,8 +1619,8 @@ module.exports = (app, deps) => {
                 (t) =>
                   t.attributes.title
                     .toLowerCase()
-                    .includes(item.trackPick.toLowerCase()) ||
-                  item.trackPick
+                    .includes(trackPick.toLowerCase()) ||
+                  trackPick
                     .toLowerCase()
                     .includes(t.attributes.title.toLowerCase())
               );
@@ -1629,7 +1637,7 @@ module.exports = (app, deps) => {
 
     // Fallback to general track search
     try {
-      const trackQuery = `${item.artist} ${item.album} ${item.trackPick}`;
+      const trackQuery = `${item.artist} ${item.album} ${trackPick}`;
       const searchResp = await fetch(
         `https://openapi.tidal.com/v2/searchresults/tracks?query=${encodeURIComponent(trackQuery)}&countryCode=${countryCode}&limit=1`,
         { headers }
