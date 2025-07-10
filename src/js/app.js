@@ -1,11 +1,13 @@
 /* eslint-disable no-console */
 // Global variables
-let currentList = null;
 let lists = {};
-// Expose for other modules
-window.currentList = currentList;
-window.lists = lists;
+let currentList = '';
+let currentContextAlbum = null;
+let currentContextList = null;
+let genres = [];
+let countries = [];
 let listEventSource = null;
+let sseUpdateTimeout = null;
 let availableGenres = [];
 let availableCountries = [];
 let pendingImportData = null;
@@ -13,8 +15,6 @@ let pendingImportFilename = null;
 let confirmationCallback = null;
 
 // Context menu variables
-let currentContextList = null;
-let currentContextAlbum = null;
 
 // Position-based points mapping
 const POSITION_POINTS = {
@@ -867,10 +867,22 @@ function subscribeToList(name) {
   listEventSource.addEventListener('update', (e) => {
     try {
       const data = JSON.parse(e.data);
-      lists[name] = data;
-      if (currentList === name) {
-        displayAlbums(data);
-      }
+
+      // Debounce SSE updates to batch rapid changes
+      clearTimeout(sseUpdateTimeout);
+      sseUpdateTimeout = setTimeout(() => {
+        // Prevent re-rendering if data hasn't actually changed (avoid self-updates)
+        const currentData = lists[name];
+        const hasChanged =
+          !currentData || JSON.stringify(currentData) !== JSON.stringify(data);
+
+        if (hasChanged) {
+          lists[name] = data;
+          if (currentList === name) {
+            displayAlbums(data);
+          }
+        }
+      }, 100);
     } catch (err) {
       console.error('Failed to parse SSE update', err);
     }
@@ -2119,33 +2131,31 @@ function updatePositionNumbers(container, isMobile) {
     rows = rowsContainer ? rowsContainer.children : container.children;
   }
 
-  // Use requestAnimationFrame for smooth updates
-  requestAnimationFrame(() => {
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
+  // Direct execution for immediate position updates
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
 
-      // Use cached position element or find and cache it
-      let positionEl = positionElementCache.get(row);
+    // Use cached position element or find and cache it
+    let positionEl = positionElementCache.get(row);
+    if (!positionEl) {
+      // Try O(1) lookup first using data attribute
+      positionEl = row.querySelector('[data-position-element="true"]');
+
+      // Fallback to optimized single class selector
       if (!positionEl) {
-        // Try O(1) lookup first using data attribute
-        positionEl = row.querySelector('[data-position-element="true"]');
-
-        // Fallback to optimized single class selector
-        if (!positionEl) {
-          positionEl = row.querySelector('.position-display');
-        }
-
-        if (positionEl) {
-          positionElementCache.set(row, positionEl);
-        }
+        positionEl = row.querySelector('.position-display');
       }
 
       if (positionEl) {
-        positionEl.textContent = i + 1;
+        positionElementCache.set(row, positionEl);
       }
-      row.dataset.index = i;
     }
-  });
+
+    if (positionEl) {
+      positionEl.textContent = i + 1;
+    }
+    row.dataset.index = i;
+  }
 }
 
 // Debounced save function to batch rapid changes
