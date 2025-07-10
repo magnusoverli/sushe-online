@@ -1202,6 +1202,11 @@ module.exports = (app, deps) => {
     user,
     result
   ) {
+    logger.debug('Starting Spotify playlist creation', {
+      playlistName,
+      itemCount: items.length,
+    });
+
     const baseUrl = 'https://api.spotify.com/v1';
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
@@ -1209,16 +1214,26 @@ module.exports = (app, deps) => {
     };
 
     // Get user's Spotify profile
+    logger.debug('Fetching Spotify profile');
     const profileResp = await fetch(`${baseUrl}/me`, { headers });
     if (!profileResp.ok) {
-      throw new Error(`Failed to get Spotify profile: ${profileResp.status}`);
+      const errorText = await profileResp.text();
+      logger.error('Spotify profile fetch failed', {
+        status: profileResp.status,
+        error: errorText,
+      });
+      throw new Error(
+        `Failed to get Spotify profile: ${profileResp.status} - ${errorText}`
+      );
     }
     const profile = await profileResp.json();
+    logger.debug('Spotify profile fetched', { userId: profile.id });
 
     // Check if playlist exists
     let playlistId = null;
     let existingPlaylist = null;
 
+    logger.debug('Checking for existing playlists');
     const playlistsResp = await fetch(`${baseUrl}/me/playlists?limit=50`, {
       headers,
     });
@@ -1227,11 +1242,21 @@ module.exports = (app, deps) => {
       existingPlaylist = playlists.items.find((p) => p.name === playlistName);
       if (existingPlaylist) {
         playlistId = existingPlaylist.id;
+        logger.debug('Found existing playlist', { playlistId });
+      } else {
+        logger.debug('No existing playlist found');
       }
+    } else {
+      const errorText = await playlistsResp.text();
+      logger.error('Failed to fetch playlists', {
+        status: playlistsResp.status,
+        error: errorText,
+      });
     }
 
     // Create playlist if it doesn't exist
     if (!playlistId) {
+      logger.debug('Creating new playlist');
       const createResp = await fetch(
         `${baseUrl}/users/${profile.id}/playlists`,
         {
@@ -1246,8 +1271,13 @@ module.exports = (app, deps) => {
       );
 
       if (!createResp.ok) {
+        const errorText = await createResp.text();
+        logger.error('Failed to create playlist', {
+          status: createResp.status,
+          error: errorText,
+        });
         throw new Error(
-          `Failed to create Spotify playlist: ${createResp.status}`
+          `Failed to create Spotify playlist: ${createResp.status} - ${errorText}`
         );
       }
 
