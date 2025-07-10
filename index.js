@@ -380,6 +380,7 @@ app.use(
       secure: false,
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
+      sameSite: 'lax', // Explicitly set SameSite for mobile compatibility
     },
     genid: function (_req) {
       return require('crypto').randomBytes(16).toString('hex');
@@ -429,6 +430,14 @@ const csrfTokens = new csrf();
 const csrfProtection = (req, res, next) => {
   if (!req.session.csrfSecret) {
     req.session.csrfSecret = csrfTokens.secretSync();
+    // Force session save when CSRF secret is created
+    req.session.save((err) => {
+      if (err) {
+        logger.error('Failed to save session with CSRF secret', {
+          error: err.message,
+        });
+      }
+    });
   }
 
   req.csrfToken = () => csrfTokens.create(req.session.csrfSecret);
@@ -462,6 +471,9 @@ const csrfProtection = (req, res, next) => {
       tokenPreview: token?.substring(0, 8) + '...',
       secretPreview: req.session?.csrfSecret?.substring(0, 8) + '...',
       userAgent: req.get('User-Agent'),
+      sessionId: req.sessionID,
+      tokenFull: token, // Log full token for debugging
+      secretFull: req.session?.csrfSecret, // Log full secret for debugging
     });
     const err = new Error('Invalid CSRF token');
     err.code = 'EBADCSRFTOKEN';

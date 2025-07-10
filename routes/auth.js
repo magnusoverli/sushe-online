@@ -163,13 +163,33 @@ module.exports = (app, deps) => {
 
   // Login routes
   app.get('/login', csrfProtection, (req, res) => {
+    // Redirect if already authenticated
+    if (req.isAuthenticated()) {
+      return res.redirect('/');
+    }
+
+    // Debug CSRF token generation
+    logger.debug('Login GET - CSRF token generation', {
+      hasSession: !!req.session,
+      hasSecret: !!req.session?.csrfSecret,
+      sessionId: req.sessionID,
+      userAgent: req.get('User-Agent'),
+    });
+
     res.send(
       htmlTemplate(loginTemplate(req, res.locals.flash), 'SuShe Online')
     );
   });
 
   app.post('/login', csrfProtection, async (req, res, next) => {
-    logger.debug('Login POST request received', { email: req.body.email });
+    logger.debug('Login POST request received', {
+      email: req.body.email,
+      hasSession: !!req.session,
+      hasSecret: !!req.session?.csrfSecret,
+      sessionId: req.sessionID,
+      csrfToken: req.body._csrf?.substring(0, 8) + '...',
+      userAgent: req.get('User-Agent'),
+    });
 
     try {
       const { user, info } = await new Promise((resolve, reject) => {
