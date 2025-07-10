@@ -4,8 +4,8 @@ let lists = {};
 let currentList = '';
 let currentContextAlbum = null;
 let currentContextList = null;
-const genres = [];
-const countries = [];
+const _genres = [];
+const _countries = [];
 let listEventSource = null;
 let sseUpdateTimeout = null;
 let availableGenres = [];
@@ -280,7 +280,7 @@ async function loadCountries() {
     availableCountries = text
       .split('\n')
       .map((c) => c.trim())
-      .filter((c, index, arr) => {
+      .filter((c, index, _arr) => {
         // Keep the first empty line if it exists, but remove other empty lines
         return c.length > 0 || (index === 0 && c === '');
       });

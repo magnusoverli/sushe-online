@@ -63,7 +63,7 @@ let modalElements = {};
 let currentLoadingController = null;
 
 // Simple source priority order
-const COVER_ART_SOURCES = ['coverart', 'itunes', 'deezer'];
+const _COVER_ART_SOURCES = ['coverart', 'itunes', 'deezer'];
 
 // Optimization 1: Preload cache for hovering
 const preloadCache = new Map();
@@ -1971,7 +1971,7 @@ function hasNonLatinCharacters(str) {
   if (!str) return false;
   // Check if more than 50% of alphabetic characters are non-Latin
   const alphaChars = str.match(/\p{L}/gu) || [];
-  const nonLatinChars = str.match(/[^\u0000-\u024F\u1E00-\u1EFF]/gu) || [];
+  const nonLatinChars = str.match(/[^\u0020-\u024F\u1E00-\u1EFF]/gu) || [];
   return (
     alphaChars.length > 0 && nonLatinChars.length / alphaChars.length > 0.5
   );

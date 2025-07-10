@@ -17,6 +17,7 @@ module.exports = (app, deps) => {
   const { spawn } = require('child_process');
   const fs = require('fs');
   const path = require('path');
+  const { URLSearchParams } = require('url');
 
   const pgMajor = process.env.PG_MAJOR || '16';
   const binDir = process.env.PG_BIN || `/usr/lib/postgresql/${pgMajor}/bin`;

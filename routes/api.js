@@ -11,6 +11,13 @@ function mbFetch(url, options) {
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
+  const { URLSearchParams } = require('url');
+  const {
+    htmlTemplate,
+    forgotPasswordTemplate,
+    invalidTokenTemplate,
+    resetPasswordTemplate,
+  } = require('../templates');
   const {
     ensureAuthAPI,
     users,
@@ -389,21 +396,20 @@ module.exports = (app, deps) => {
               resetUrl
             );
 
-            transporter.sendMail(emailOptions, (error, info) => {
+            transporter.sendMail(emailOptions, (error, _info) => {
               if (error) {
                 logger.error(
                   'Failed to send password reset email:',
                   error.message
                 );
               } else {
-                logger.info(
-                  'Password reset email sent successfully to:',
-                  user.email
-                );
+                logger.info('Password reset email sent successfully', {
+                  email: user.email,
+                });
               }
             });
           } else {
-            console.warn(
+            logger.warn(
               'SENDGRID_API_KEY not configured - password reset email not sent'
             );
             logger.info('Reset token for testing:', token);
@@ -542,7 +548,7 @@ module.exports = (app, deps) => {
       (req.user.spotifyAuth.expires_at &&
         req.user.spotifyAuth.expires_at <= Date.now())
     ) {
-      console.warn('Spotify API request without valid token');
+      logger.warn('Spotify API request without valid token');
       return res.status(400).json({ error: 'Not authenticated with Spotify' });
     }
 
@@ -584,12 +590,12 @@ module.exports = (app, deps) => {
       (req.user.tidalAuth.expires_at &&
         req.user.tidalAuth.expires_at <= Date.now())
     ) {
-      console.warn('Tidal API request without valid token');
+      logger.warn('Tidal API request without valid token');
       return res.status(400).json({ error: 'Not authenticated with Tidal' });
     }
 
-    console.debug('Tidal token expires at:', req.user.tidalAuth.expires_at);
-    console.debug(
+    logger.debug('Tidal token expires at:', req.user.tidalAuth.expires_at);
+    logger.debug(
       'Using Tidal access token:',
       (req.user.tidalAuth.access_token || '').slice(0, 6) +
         '...' +
@@ -628,7 +634,7 @@ module.exports = (app, deps) => {
             );
             req.user.tidalCountry = countryCode;
           } else {
-            console.warn('Tidal profile request failed:', profileResp.status);
+            logger.warn('Tidal profile request failed:', profileResp.status);
             countryCode = 'US';
           }
         } catch (profileErr) {
@@ -645,8 +651,8 @@ module.exports = (app, deps) => {
       const url =
         `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?` +
         params.toString();
-      console.debug('Tidal search URL:', url);
-      console.debug(
+      logger.debug('Tidal search URL:', url);
+      logger.debug(
         'Tidal client ID header:',
         (process.env.TIDAL_CLIENT_ID || '').slice(0, 6) + '...'
       );
@@ -657,14 +663,14 @@ module.exports = (app, deps) => {
           'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
         },
       });
-      console.debug('Tidal response status:', resp.status);
+      logger.debug('Tidal response status:', resp.status);
       if (!resp.ok) {
         const body = await resp.text().catch(() => '<body read failed>');
-        console.warn('Tidal API request failed:', resp.status, body);
+        logger.warn('Tidal API request failed:', resp.status, body);
         throw new Error(`Tidal API error ${resp.status}`);
       }
       const data = await resp.json();
-      console.debug('Tidal API response body:', JSON.stringify(data, null, 2));
+      logger.debug('Tidal API response body:', JSON.stringify(data, null, 2));
       const albumId = data?.data?.[0]?.id;
       if (!albumId) {
         return res.status(404).json({ error: 'Album not found' });
@@ -693,11 +699,11 @@ module.exports = (app, deps) => {
       const getMeta = (name) => {
         const metaTag =
           new RegExp(
-            `<meta[^>]+property=[\"']og:${name}[\"'][^>]+content=[\"']([^\"']+)[\"']`,
+            `<meta[^>]+property=["']og:${name}["'][^>]+content=["']([^"']+)["']`,
             'i'
           ).exec(html) ||
           new RegExp(
-            `<meta[^>]+name=[\"']${name}[\"'][^>]+content=[\"']([^\"']+)[\"']`,
+            `<meta[^>]+name=["']${name}["'][^>]+content=["']([^"']+)["']`,
             'i'
           ).exec(html);
         return metaTag ? metaTag[1] : '';

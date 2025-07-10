@@ -264,7 +264,7 @@ const forgotPasswordTemplate = (req, flash) => `
 `;
 
 // Reset password template
-const resetPasswordTemplate = (token) => `
+const resetPasswordTemplate = (token, csrfToken = '') => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">FORGE NEW DARKNESS</h1>
@@ -272,7 +272,7 @@ const resetPasswordTemplate = (token) => `
     </div>
     
     <form method="post" action="/reset/${token}" class="space-y-6">
-      <input type="hidden" name="_csrf" value="${req.csrfToken()}" />
+      <input type="hidden" name="_csrf" value="${csrfToken}" />
       <div>
         <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="password">
           New Password
@@ -306,7 +306,7 @@ const invalidTokenTemplate = () => `
 `;
 
 // Component: Sidebar - Updated with clickable account link
-const sidebarComponent = (req) => `
+const _sidebarComponent = (_req) => `
   <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
     <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
       <div class="flex-1">
@@ -426,7 +426,7 @@ const importConflictModalComponent = () => `
 `;
 
 // Component: Main Content Area
-const mainContentComponent = () => `
+const _mainContentComponent = () => `
   <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Album List (removed the header section) -->
     <div class="flex-1 overflow-y-auto">

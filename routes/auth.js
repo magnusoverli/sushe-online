@@ -17,7 +17,7 @@ module.exports = (app, deps) => {
     usersAsync,
     listsAsync,
     listItemsAsync,
-    albumsAsync,
+    _albumsAsync,
     bcrypt,
     isValidEmail,
     isValidUsername,
@@ -106,7 +106,7 @@ module.exports = (app, deps) => {
         }
 
         // Insert new user
-        const newUser = await usersAsync.insert({
+        const _newUser = await usersAsync.insert({
           email,
           username,
           hash,
@@ -758,7 +758,7 @@ module.exports = (app, deps) => {
             },
           },
           {},
-          (err, numUpdated) => {
+          (err, _numUpdated) => {
             if (err) {
               logger.error('Error granting admin:', err);
               req.flash('error', 'Error granting admin access');
