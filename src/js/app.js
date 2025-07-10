@@ -3,6 +3,7 @@
 let lists = {};
 let currentList = '';
 let currentContextAlbum = null;
+let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null;
 const _genres = [];
 const _countries = [];
@@ -72,6 +73,9 @@ document.addEventListener('click', () => {
   const albumContextMenu = document.getElementById('albumContextMenu');
   if (albumContextMenu) {
     albumContextMenu.classList.add('hidden');
+    // Clear context album references when menu is hidden
+    currentContextAlbum = null;
+    currentContextAlbumId = null;
   }
 });
 
@@ -1029,14 +1033,51 @@ function initializeAlbumContextMenu() {
 
     if (currentContextAlbum === null) return;
 
-    showMobileEditForm(currentContextAlbum);
+    // Verify the album is still at the expected index, fallback to identity search
+    const expectedAlbum =
+      lists[currentList] && lists[currentList][currentContextAlbum];
+    if (expectedAlbum && currentContextAlbumId) {
+      const expectedId =
+        `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
+      if (expectedId === currentContextAlbumId) {
+        // Index is still valid
+        showMobileEditForm(currentContextAlbum);
+        return;
+      }
+    }
+
+    // Index is stale, search by identity
+    if (currentContextAlbumId) {
+      showMobileEditFormSafe(currentContextAlbumId);
+    } else {
+      showToast('Album not found - it may have been moved or removed', 'error');
+    }
   };
 
   // Handle play option click
   playOption.onclick = () => {
     contextMenu.classList.add('hidden');
     if (currentContextAlbum === null) return;
-    playAlbum(currentContextAlbum);
+
+    // Verify the album is still at the expected index, fallback to identity search
+    const expectedAlbum =
+      lists[currentList] && lists[currentList][currentContextAlbum];
+    if (expectedAlbum && currentContextAlbumId) {
+      const expectedId =
+        `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
+      if (expectedId === currentContextAlbumId) {
+        // Index is still valid
+        playAlbum(currentContextAlbum);
+        return;
+      }
+    }
+
+    // Index is stale, search by identity
+    if (currentContextAlbumId) {
+      playAlbumSafe(currentContextAlbumId);
+    } else {
+      showToast('Album not found - it may have been moved or removed', 'error');
+    }
   };
 
   // Handle remove option click
@@ -1045,8 +1086,31 @@ function initializeAlbumContextMenu() {
 
     if (currentContextAlbum === null) return;
 
-    // Get album details for the confirmation message
-    const album = lists[currentList][currentContextAlbum];
+    // Verify the album is still at the expected index, fallback to identity search
+    let album = lists[currentList] && lists[currentList][currentContextAlbum];
+    let indexToRemove = currentContextAlbum;
+
+    if (album && currentContextAlbumId) {
+      const expectedId =
+        `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+      if (expectedId !== currentContextAlbumId) {
+        // Index is stale, search by identity
+        const result = findAlbumByIdentity(currentContextAlbumId);
+        if (result) {
+          album = result.album;
+          indexToRemove = result.index;
+        } else {
+          showToast(
+            'Album not found - it may have been moved or removed',
+            'error'
+          );
+          return;
+        }
+      }
+    } else if (!album) {
+      showToast('Album not found - it may have been moved or removed', 'error');
+      return;
+    }
 
     showConfirmation(
       'Remove Album',
@@ -1055,8 +1119,8 @@ function initializeAlbumContextMenu() {
       'Remove',
       async () => {
         try {
-          // Remove from the list
-          lists[currentList].splice(currentContextAlbum, 1);
+          // Remove from the list using the correct index
+          lists[currentList].splice(indexToRemove, 1);
 
           // Save to server
           await saveList(currentList, lists[currentList]);
@@ -1075,6 +1139,7 @@ function initializeAlbumContextMenu() {
         }
 
         currentContextAlbum = null;
+        currentContextAlbumId = null;
       }
     );
   };
@@ -1872,7 +1937,13 @@ function attachDesktopEventHandlers(row, index) {
     e.preventDefault();
     e.stopPropagation();
 
+    // Store both index and album identity for safety
+    const album = lists[currentList][index];
+    const albumId =
+      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+
     currentContextAlbum = index;
+    currentContextAlbumId = albumId; // Store identity as backup
 
     const contextMenu = document.getElementById('albumContextMenu');
     if (!contextMenu) return;
@@ -2485,6 +2556,10 @@ window.showMobileAlbumMenu = function (indexOrElement) {
 
   const album = lists[currentList][index];
 
+  // Create a unique identifier for this album to prevent stale index issues
+  const albumId =
+    `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+
   const actionSheet = document.createElement('div');
   actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
   actionSheet.innerHTML = `
@@ -2495,17 +2570,17 @@ window.showMobileAlbumMenu = function (indexOrElement) {
         <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
         <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
         
-        <button onclick="showMobileEditForm(${index}); this.closest('.fixed').remove();"
+        <button onclick="showMobileEditFormSafe('${albumId}'); this.closest('.fixed').remove();"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
           <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
         </button>
 
-        <button onclick="this.closest('.fixed').remove(); playAlbum(${index});"
+        <button onclick="this.closest('.fixed').remove(); playAlbumSafe('${albumId}');"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
           <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
         </button>
 
-        <button onclick="this.closest('.fixed').remove(); setTimeout(() => { currentContextAlbum = ${index}; document.getElementById('removeAlbumOption').click(); }, 100);"
+        <button onclick="this.closest('.fixed').remove(); removeAlbumSafe('${albumId}');"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
           <i class="fas fa-trash mr-3"></i>Remove from List
         </button>
@@ -2518,6 +2593,54 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     </div>
   `;
   document.body.appendChild(actionSheet);
+};
+
+// Helper function to find album by identity instead of index
+function findAlbumByIdentity(albumId) {
+  if (!currentList || !lists[currentList]) return null;
+
+  for (let i = 0; i < lists[currentList].length; i++) {
+    const album = lists[currentList][i];
+    const currentId =
+      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+    if (currentId === albumId) {
+      return { album, index: i };
+    }
+  }
+  return null;
+}
+
+// Safe wrapper for mobile edit form that uses album identity
+window.showMobileEditFormSafe = function (albumId) {
+  const result = findAlbumByIdentity(albumId);
+  if (!result) {
+    showToast('Album not found - it may have been moved or removed', 'error');
+    return;
+  }
+  showMobileEditForm(result.index);
+};
+
+// Safe wrapper for play album that uses album identity
+window.playAlbumSafe = function (albumId) {
+  const result = findAlbumByIdentity(albumId);
+  if (!result) {
+    showToast('Album not found - it may have been moved or removed', 'error');
+    return;
+  }
+  playAlbum(result.index);
+};
+
+// Safe wrapper for remove album that uses album identity
+window.removeAlbumSafe = function (albumId) {
+  const result = findAlbumByIdentity(albumId);
+  if (!result) {
+    showToast('Album not found - it may have been moved or removed', 'error');
+    return;
+  }
+
+  // Use the existing remove logic but with the current index
+  currentContextAlbum = result.index;
+  document.getElementById('removeAlbumOption').click();
 };
 
 // Mobile edit form (basic implementation)
