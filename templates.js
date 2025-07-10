@@ -220,7 +220,8 @@ const registerTemplate = (req, flash) =>
   );
 
 // Login form template rendered with EJS
-const loginTemplate = (req, flash) => loginSnippetFn({ req, flash });
+const loginTemplate = (req, flash) =>
+  loginSnippetFn({ req, flash, csrfToken: req.csrfToken() });
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
