@@ -12,6 +12,7 @@ module.exports = (app, deps) => {
     csrfProtection,
     ensureAuth,
     ensureAuthAPI,
+    rateLimitAdminRequest,
     users,
     usersAsync,
     listsAsync,
