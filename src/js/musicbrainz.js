@@ -62,12 +62,8 @@ let modal = null;
 let modalElements = {};
 let currentLoadingController = null;
 
-// Optimization 4: Smart Source Priority
-const sourceStats = {
-  itunes: { attempts: 0, successes: 0 },
-  deezer: { attempts: 0, successes: 0 },
-  coverart: { attempts: 0, successes: 0 },
-};
+// Simple source priority order
+const COVER_ART_SOURCES = ['coverart', 'itunes', 'deezer'];
 
 // Optimization 1: Preload cache for hovering
 const preloadCache = new Map();
@@ -234,8 +230,6 @@ async function searchITunesArtwork(artistName, albumName) {
     return itunesCache.get(cacheKey);
   }
 
-  sourceStats.itunes.attempts++;
-
   return itunesQueue.add(async () => {
     try {
       const searchTerm = `${artistName} ${albumName}`
@@ -293,7 +287,6 @@ async function searchITunesArtwork(artistName, albumName) {
             '600x600'
           );
           itunesCache.set(cacheKey, highResArtwork);
-          sourceStats.itunes.successes++;
           return highResArtwork;
         }
       }
@@ -315,8 +308,6 @@ async function searchDeezerArtwork(artistName, albumName) {
   if (deezerCache.has(cacheKey)) {
     return deezerCache.get(cacheKey);
   }
-
-  sourceStats.deezer.attempts++;
 
   return deezerQueue.add(async () => {
     try {
@@ -374,7 +365,6 @@ async function searchDeezerArtwork(artistName, albumName) {
 
         if (bestMatch && bestMatch.cover_xl) {
           deezerCache.set(cacheKey, bestMatch.cover_xl);
-          sourceStats.deezer.successes++;
           return bestMatch.cover_xl;
         }
       }
@@ -391,8 +381,6 @@ async function searchDeezerArtwork(artistName, albumName) {
 
 // Get cover art from Cover Art Archive
 async function getCoverArtFromArchive(releaseGroupId) {
-  sourceStats.coverart.attempts++;
-
   return coverArtQueue.add(async () => {
     try {
       const response = await fetch(
@@ -417,7 +405,6 @@ async function getCoverArtFromArchive(releaseGroupId) {
           frontImage.thumbnails['250'] ||
           frontImage.thumbnails.small ||
           frontImage.image;
-        sourceStats.coverart.successes++;
         return imageUrl;
       }
 
@@ -429,16 +416,15 @@ async function getCoverArtFromArchive(releaseGroupId) {
   });
 }
 
-// Optimization 4: Smart Source Priority
+// Try cover art sources in priority order
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
-  // Calculate success rates
-  const getSuccessRate = (source) => {
-    const stats = sourceStats[source];
-    return stats.attempts > 0 ? stats.successes / stats.attempts : 0.5;
-  };
-
-  // Sort sources by success rate
+  // Define sources in priority order: Cover Art Archive first (most reliable), then iTunes, then Deezer
   const sources = [
+    {
+      name: 'coverart',
+      fn: () => getCoverArtFromArchive(releaseGroupId),
+      enabled: true,
+    },
     {
       name: 'itunes',
       fn: () => searchITunesArtwork(artistName, albumTitle),
@@ -449,16 +435,9 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
       fn: () => searchDeezerArtwork(artistName, albumTitle),
       enabled: artistName && albumTitle,
     },
-    {
-      name: 'coverart',
-      fn: () => getCoverArtFromArchive(releaseGroupId),
-      enabled: true,
-    },
-  ]
-    .filter((s) => s.enabled)
-    .sort((a, b) => getSuccessRate(b.name) - getSuccessRate(a.name));
+  ].filter((s) => s.enabled);
 
-  // Try sources in order of success rate
+  // Try sources in priority order
   for (const source of sources) {
     try {
       const result = await source.fn();

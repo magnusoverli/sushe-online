@@ -12,10 +12,20 @@ export default [
     },
     rules: {
       'prettier/prettier': 'error',
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+        },
+      ],
       'no-console': 'warn',
       'prefer-const': 'error',
       'no-var': 'error',
+      'no-unreachable': 'error',
+      'no-unused-expressions': 'error',
     },
     languageOptions: {
       ecmaVersion: 2022,

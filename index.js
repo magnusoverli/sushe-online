@@ -371,22 +371,7 @@ app.use(
       ttl: 86400, // 1 day in seconds
       retries: 0,
       reapInterval: 600, // Clean up expired sessions every 10 minutes
-      reapAsync: true,
-      reapSyncFallback: true,
-      // Add these options for Windows compatibility
       logFn: function () {}, // Disable verbose logging
-      fallbackSessionFn: function () {
-        // Provide a minimal session object to avoid errors
-        return {
-          cookie: {
-            originalMaxAge: null,
-            expires: null,
-            secure: false,
-            httpOnly: true,
-            path: '/',
-          },
-        };
-      },
     }),
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
@@ -396,7 +381,6 @@ app.use(
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
     },
-    // Add this to handle session save errors gracefully
     genid: function (_req) {
       return require('crypto').randomBytes(16).toString('hex');
     },
