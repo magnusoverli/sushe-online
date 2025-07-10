@@ -539,6 +539,30 @@ const settingsTemplate = (req, options) => {
       --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.1)};
     }
     
+    /* Custom scrollbar - reused from main page */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: #111827;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+    
+    /* Firefox scrollbar */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #374151 #111827;
+    }
+    
     .text-red-600, .text-red-500, .text-red-400 { 
       color: var(--accent-color) !important; 
     }
@@ -556,6 +580,18 @@ const settingsTemplate = (req, options) => {
     }
     .focus\\:border-red-600:focus { 
       border-color: var(--accent-color) !important; 
+    }
+    
+    /* Mobile scrolling behavior - consistent with main page */
+    @media (max-width: 1023px) {
+      body {
+        overscroll-behavior: none;
+      }
+    }
+    
+    /* iOS smooth scrolling optimization */
+    .overflow-y-auto {
+      -webkit-overflow-scrolling: touch;
     }
     
     /* Mobile-first responsive design */
@@ -607,10 +643,11 @@ const settingsTemplate = (req, options) => {
   </style>
 </head>
 <body class="bg-black text-gray-200 min-h-screen">
-  <div class="min-h-screen flex flex-col">
+  <div class="min-h-screen flex flex-col overflow-hidden">
     ${headerComponent(user, 'settings')}
     
-    <main class="flex-1 container mx-auto px-4 py-6 lg:py-8 max-w-7xl">
+    <main class="flex-1 overflow-y-auto overflow-x-hidden">
+      <div class="container mx-auto px-4 py-6 lg:py-8 max-w-7xl">
       <div class="mb-6 lg:mb-8">
         <h1 class="text-2xl lg:text-3xl font-bold text-white">Settings</h1>
         <p class="text-gray-400 mt-2">Manage your account preferences and system settings</p>
@@ -636,6 +673,7 @@ const settingsTemplate = (req, options) => {
         
         <!-- Admin Panel (Full Width) -->
         ${user.role === 'admin' ? adminPanelSection(stats, { ...adminData, currentUserId: user._id }) : ''}
+      </div>
       </div>
     </main>
   </div>

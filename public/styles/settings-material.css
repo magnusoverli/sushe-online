@@ -11,6 +11,30 @@ body {
     sans-serif;
 }
 
+/* Custom scrollbar - consistent with main page */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #374151 #111827;
+}
+
 /* Enhanced form styling */
 input[type='color'] {
   -webkit-appearance: none;
@@ -88,13 +112,37 @@ select:focus-visible {
 }
 
 /* Mobile optimizations */
+@media (max-width: 1023px) {
+  body {
+    overscroll-behavior: none;
+  }
+}
+
 @media (max-width: 640px) {
   /* Ensure touch targets are at least 44px */
-  button,
-  input,
-  select {
+  button, input, select {
     min-height: 44px;
   }
+  
+  /* Stack form elements on mobile */
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  
+  .mobile-stack > * {
+    width: 100% !important;
+    margin-bottom: 0.75rem;
+  }
+  
+  .mobile-stack > *:last-child {
+    margin-bottom: 0;
+  }
+}
+
+/* iOS smooth scrolling optimization */
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
 
   /* Stack form elements on mobile */
   .mobile-stack {
