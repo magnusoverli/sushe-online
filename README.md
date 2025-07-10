@@ -16,6 +16,8 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 - **Persistent storage** using PostgreSQL for all data.
 - **Admin mode** protected by a rotating access code printed to the server console. Admins can view site statistics, manage users and create backups.
 - **Custom theme** support allowing each user to pick an accent colour.
+- **Music service integration** with Spotify and Tidal OAuth for playlist creation.
+- **Playlist synchronization** - create and update playlists in your preferred music service from album lists.
 - **REST API** endpoints for list management and a proxy for Deezer API requests.
 - **Gzip compression** for API and page responses to improve performance.
 
@@ -64,6 +66,32 @@ parses the request correctly.
 
 When running with Docker Compose, place these variables in a `.env` file or
 export them so they are available to the container.
+
+## Playlist Feature
+
+The application includes playlist synchronization with Spotify and Tidal:
+
+### Setup
+
+1. Configure OAuth credentials for your preferred music service(s)
+2. Users connect their accounts via Settings page
+3. Set a preferred music service (optional - users can choose per-playlist)
+
+### Usage
+
+1. Create album lists and select tracks from each album
+2. Right-click on any list to open the context menu
+3. Select "Update Playlist" to create/update a playlist in your music service
+4. The playlist will have the same name as your list and contain the selected tracks in order
+
+### Features
+
+- **Pre-flight validation** - warns about albums without selected tracks
+- **Smart track matching** - tries multiple search strategies to find tracks
+- **Progress tracking** - shows real-time progress during playlist creation
+- **Conflict resolution** - handles existing playlists and missing tracks gracefully
+- **Service selection** - choose Spotify or Tidal if no default is set
+- **Detailed reporting** - shows which tracks were found/missing after completion
 
 ## Caching
 

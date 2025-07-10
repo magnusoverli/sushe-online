@@ -391,16 +391,376 @@ async function downloadListAsJSON(listName) {
 // Update Spotify/Tidal playlist for the given list
 async function updatePlaylist(listName) {
   try {
-    await apiCall(`/api/playlists/${encodeURIComponent(listName)}`, {
-      method: 'POST',
-    });
-    showToast(`Playlist "${listName}" updated`);
+    // First, validate the playlist data
+    const validation = await apiCall(
+      `/api/playlists/${encodeURIComponent(listName)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action: 'validate' }),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    // Show pre-flight validation modal
+    const shouldProceed = await showPlaylistValidationModal(
+      listName,
+      validation
+    );
+    if (!shouldProceed) return;
+
+    // Show progress modal
+    const progressModal = showPlaylistProgressModal(listName);
+
+    // Create/update the playlist
+    const result = await apiCall(
+      `/api/playlists/${encodeURIComponent(listName)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action: 'update' }),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    // Hide progress modal
+    hidePlaylistProgressModal(progressModal);
+
+    // Show results
+    showPlaylistResultModal(listName, result);
   } catch (error) {
     console.error('Error updating playlist:', error);
+
+    // Handle specific error cases
+    if (error.response) {
+      const errorData = await error.response.json().catch(() => ({}));
+
+      if (errorData.code === 'NO_SERVICE') {
+        showServiceSelectionModal(listName);
+        return;
+      } else if (errorData.code === 'NOT_AUTHENTICATED') {
+        showToast(
+          `Please connect your ${errorData.service} account in settings`,
+          'error'
+        );
+        return;
+      }
+    }
+
     showToast('Error updating playlist', 'error');
   }
 }
 window.updatePlaylist = updatePlaylist;
+
+// Show playlist validation modal before creating playlist
+async function showPlaylistValidationModal(listName, validation) {
+  return new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className =
+      'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+        <h3 class="text-lg font-semibold text-white mb-4">Create Playlist "${listName}"</h3>
+        
+        <div class="space-y-3 mb-6">
+          <div class="flex items-center text-green-400">
+            <i class="fas fa-check mr-2"></i>
+            <span>${validation.totalAlbums} albums in list</span>
+          </div>
+          
+          ${
+            validation.albumsWithTracks > 0
+              ? `
+            <div class="flex items-center text-green-400">
+              <i class="fas fa-music mr-2"></i>
+              <span>${validation.albumsWithTracks} albums with selected tracks</span>
+            </div>
+          `
+              : ''
+          }
+          
+          ${
+            validation.albumsWithoutTracks > 0
+              ? `
+            <div class="flex items-center text-yellow-400">
+              <i class="fas fa-exclamation-triangle mr-2"></i>
+              <span>${validation.albumsWithoutTracks} albums will be skipped (no selected tracks)</span>
+            </div>
+          `
+              : ''
+          }
+          
+          <div class="flex items-center text-blue-400">
+            <i class="fas fa-list mr-2"></i>
+            <span>Estimated ${validation.estimatedTracks} tracks</span>
+          </div>
+        </div>
+
+        ${
+          validation.warnings.length > 0
+            ? `
+          <div class="bg-yellow-900 border border-yellow-600 rounded p-3 mb-4">
+            <h4 class="text-yellow-400 font-medium mb-2">Warnings:</h4>
+            <ul class="text-yellow-300 text-sm space-y-1">
+              ${validation.warnings.map((w) => `<li>• ${w}</li>`).join('')}
+            </ul>
+          </div>
+        `
+            : ''
+        }
+
+        <div class="flex space-x-3">
+          <button id="cancelPlaylist" class="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+            Cancel
+          </button>
+          <button id="proceedPlaylist" class="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors" ${!validation.canProceed ? 'disabled' : ''}>
+            ${validation.canProceed ? 'Create Playlist' : 'Cannot Proceed'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const cancelBtn = modal.querySelector('#cancelPlaylist');
+    const proceedBtn = modal.querySelector('#proceedPlaylist');
+
+    cancelBtn.onclick = () => {
+      document.body.removeChild(modal);
+      resolve(false);
+    };
+
+    proceedBtn.onclick = () => {
+      document.body.removeChild(modal);
+      resolve(true);
+    };
+
+    // Close on backdrop click
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+        resolve(false);
+      }
+    };
+  });
+}
+
+// Show progress modal during playlist creation
+function showPlaylistProgressModal(listName) {
+  const modal = document.createElement('div');
+  modal.className =
+    'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+  modal.innerHTML = `
+    <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+      <h3 class="text-lg font-semibold text-white mb-4">Creating Playlist "${listName}"</h3>
+      
+      <div class="space-y-4">
+        <div class="flex items-center text-blue-400">
+          <i class="fas fa-spinner fa-spin mr-2"></i>
+          <span>Processing albums...</span>
+        </div>
+        
+        <div class="bg-gray-700 rounded-full h-2">
+          <div class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%" id="progressBar"></div>
+        </div>
+        
+        <div id="progressText" class="text-gray-400 text-sm">
+          Preparing...
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  return modal;
+}
+
+// Hide progress modal
+function hidePlaylistProgressModal(modal) {
+  if (modal && modal.parentNode) {
+    document.body.removeChild(modal);
+  }
+}
+
+// Show playlist creation results
+function showPlaylistResultModal(listName, result) {
+  const modal = document.createElement('div');
+  modal.className =
+    'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+
+  const successRate =
+    result.processed > 0
+      ? Math.round((result.successful / result.processed) * 100)
+      : 0;
+  const isSuccess = result.successful > 0;
+
+  modal.innerHTML = `
+    <div class="bg-gray-800 rounded-lg p-6 max-w-lg w-full mx-4 max-h-96 overflow-y-auto">
+      <h3 class="text-lg font-semibold text-white mb-4">
+        Playlist "${listName}" ${isSuccess ? 'Created' : 'Failed'}
+      </h3>
+      
+      <div class="space-y-3 mb-6">
+        <div class="flex items-center ${isSuccess ? 'text-green-400' : 'text-red-400'}">
+          <i class="fas ${isSuccess ? 'fa-check' : 'fa-times'} mr-2"></i>
+          <span>${result.successful}/${result.processed} tracks added successfully (${successRate}%)</span>
+        </div>
+        
+        ${
+          result.playlistUrl
+            ? `
+          <div class="flex items-center text-blue-400">
+            <i class="fab fa-${result.service} mr-2"></i>
+            <a href="${result.playlistUrl}" target="_blank" class="hover:underline">Open in ${result.service}</a>
+          </div>
+        `
+            : ''
+        }
+        
+        ${
+          result.failed > 0
+            ? `
+          <div class="flex items-center text-yellow-400">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <span>${result.failed} tracks could not be found</span>
+          </div>
+        `
+            : ''
+        }
+      </div>
+
+      ${
+        result.errors.length > 0
+          ? `
+        <div class="bg-red-900 border border-red-600 rounded p-3 mb-4 max-h-32 overflow-y-auto">
+          <h4 class="text-red-400 font-medium mb-2">Issues:</h4>
+          <ul class="text-red-300 text-sm space-y-1">
+            ${result.errors
+              .slice(0, 10)
+              .map((error) => `<li>• ${error}</li>`)
+              .join('')}
+            ${result.errors.length > 10 ? `<li>• ... and ${result.errors.length - 10} more</li>` : ''}
+          </ul>
+        </div>
+      `
+          : ''
+      }
+
+      <div class="flex justify-end">
+        <button id="closeResult" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const closeBtn = modal.querySelector('#closeResult');
+  closeBtn.onclick = () => {
+    document.body.removeChild(modal);
+  };
+
+  // Close on backdrop click
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  };
+
+  // Show success toast
+  if (isSuccess) {
+    showToast(
+      `Playlist "${listName}" created with ${result.successful} tracks`,
+      'success'
+    );
+  }
+}
+
+// Show service selection modal when no preferred service is set
+function showServiceSelectionModal(listName) {
+  const modal = document.createElement('div');
+  modal.className =
+    'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+  modal.innerHTML = `
+    <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
+      <h3 class="text-lg font-semibold text-white mb-4">Choose Music Service</h3>
+      
+      <p class="text-gray-300 mb-6">
+        You haven't set a preferred music service. Choose where to create the playlist "${listName}":
+      </p>
+
+      <div class="space-y-3 mb-6">
+        <button id="chooseSpotify" class="w-full flex items-center justify-center px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors">
+          <i class="fab fa-spotify mr-2"></i>
+          Create on Spotify
+        </button>
+        
+        <button id="chooseTidal" class="w-full flex items-center justify-center px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors">
+          <i class="fas fa-music mr-2"></i>
+          Create on Tidal
+        </button>
+      </div>
+
+      <div class="flex justify-between items-center">
+        <button id="cancelService" class="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
+          Cancel
+        </button>
+        
+        <a href="/settings" class="text-blue-400 hover:underline text-sm">
+          Set default in settings
+        </a>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const spotifyBtn = modal.querySelector('#chooseSpotify');
+  const tidalBtn = modal.querySelector('#chooseTidal');
+  const cancelBtn = modal.querySelector('#cancelService');
+
+  spotifyBtn.onclick = async () => {
+    document.body.removeChild(modal);
+    await createPlaylistWithService(listName, 'spotify');
+  };
+
+  tidalBtn.onclick = async () => {
+    document.body.removeChild(modal);
+    await createPlaylistWithService(listName, 'tidal');
+  };
+
+  cancelBtn.onclick = () => {
+    document.body.removeChild(modal);
+  };
+
+  // Close on backdrop click
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      document.body.removeChild(modal);
+    }
+  };
+}
+
+// Create playlist with specific service
+async function createPlaylistWithService(listName, service) {
+  try {
+    const progressModal = showPlaylistProgressModal(listName);
+
+    const result = await apiCall(
+      `/api/playlists/${encodeURIComponent(listName)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ action: 'update', service }),
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+    hidePlaylistProgressModal(progressModal);
+    showPlaylistResultModal(listName, result);
+  } catch (error) {
+    console.error('Error creating playlist with service:', error);
+    showToast(`Error creating playlist on ${service}`, 'error');
+  }
+}
 
 // Initialize import conflict handling
 function initializeImportConflictHandling() {

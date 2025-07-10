@@ -1033,4 +1033,618 @@ module.exports = (app, deps) => {
       }
     }
   );
+
+  // Playlist management endpoint
+  app.post('/api/playlists/:listName', ensureAuthAPI, async (req, res) => {
+    const { listName } = req.params;
+    const { action = 'update', service } = req.body;
+
+    try {
+      // Validate user has a preferred music service or service is specified
+      const targetService = service || req.user.musicService;
+      if (!targetService || !['spotify', 'tidal'].includes(targetService)) {
+        return res.status(400).json({
+          error:
+            'No music service specified. Please set a preferred service in settings.',
+          code: 'NO_SERVICE',
+        });
+      }
+
+      // Check authentication for the target service
+      const authField =
+        targetService === 'spotify' ? 'spotifyAuth' : 'tidalAuth';
+      const auth = req.user[authField];
+
+      if (
+        !auth ||
+        !auth.access_token ||
+        (auth.expires_at && auth.expires_at <= Date.now())
+      ) {
+        return res.status(400).json({
+          error: `Not authenticated with ${targetService}. Please connect your ${targetService} account.`,
+          code: 'NOT_AUTHENTICATED',
+          service: targetService,
+        });
+      }
+
+      // Get the list and its items
+      const list = await listsAsync.findOne({
+        userId: req.user._id,
+        name: listName,
+      });
+
+      if (!list) {
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      const items = await listItemsAsync.find({ listId: list._id });
+      items.sort((a, b) => a.position - b.position);
+
+      // Pre-flight validation
+      const validation = await validatePlaylistData(items, targetService, auth);
+
+      if (action === 'validate') {
+        return res.json(validation);
+      }
+
+      // Create or update playlist
+      const result = await createOrUpdatePlaylist(
+        listName,
+        items,
+        targetService,
+        auth,
+        req.user,
+        validation
+      );
+
+      res.json(result);
+    } catch (err) {
+      logger.error('Playlist operation error:', err);
+      res.status(500).json({
+        error: 'Failed to update playlist',
+        details: err.message,
+      });
+    }
+  });
+
+  // Pre-flight validation for playlist creation
+  async function validatePlaylistData(items, _service, _auth) {
+    const validation = {
+      totalAlbums: items.length,
+      albumsWithTracks: 0,
+      albumsWithoutTracks: 0,
+      estimatedTracks: 0,
+      warnings: [],
+      canProceed: true,
+    };
+
+    for (const item of items) {
+      if (item.trackPick && item.trackPick.trim()) {
+        validation.albumsWithTracks++;
+        validation.estimatedTracks++;
+      } else {
+        validation.albumsWithoutTracks++;
+        validation.warnings.push(
+          `"${item.artist} - ${item.album}" has no selected track`
+        );
+      }
+    }
+
+    if (validation.albumsWithoutTracks > 0) {
+      validation.warnings.unshift(
+        `${validation.albumsWithoutTracks} albums will be skipped (no selected tracks)`
+      );
+    }
+
+    if (validation.estimatedTracks === 0) {
+      validation.canProceed = false;
+      validation.warnings.push(
+        'No tracks selected. Please select tracks from your albums first.'
+      );
+    }
+
+    return validation;
+  }
+
+  // Create or update playlist in the specified service
+  async function createOrUpdatePlaylist(
+    playlistName,
+    items,
+    service,
+    auth,
+    user,
+    _validation
+  ) {
+    const result = {
+      service,
+      playlistName,
+      processed: 0,
+      successful: 0,
+      failed: 0,
+      tracks: [],
+      errors: [],
+      playlistUrl: null,
+    };
+
+    try {
+      if (service === 'spotify') {
+        return await handleSpotifyPlaylist(
+          playlistName,
+          items,
+          auth,
+          user,
+          result
+        );
+      } else if (service === 'tidal') {
+        return await handleTidalPlaylist(
+          playlistName,
+          items,
+          auth,
+          user,
+          result
+        );
+      }
+    } catch (err) {
+      logger.error(`${service} playlist error:`, err);
+      throw err;
+    }
+  }
+
+  // Spotify playlist handling
+  async function handleSpotifyPlaylist(
+    playlistName,
+    items,
+    auth,
+    user,
+    result
+  ) {
+    const baseUrl = 'https://api.spotify.com/v1';
+    const headers = {
+      Authorization: `Bearer ${auth.access_token}`,
+      'Content-Type': 'application/json',
+    };
+
+    // Get user's Spotify profile
+    const profileResp = await fetch(`${baseUrl}/me`, { headers });
+    if (!profileResp.ok) {
+      throw new Error(`Failed to get Spotify profile: ${profileResp.status}`);
+    }
+    const profile = await profileResp.json();
+
+    // Check if playlist exists
+    let playlistId = null;
+    let existingPlaylist = null;
+
+    const playlistsResp = await fetch(`${baseUrl}/me/playlists?limit=50`, {
+      headers,
+    });
+    if (playlistsResp.ok) {
+      const playlists = await playlistsResp.json();
+      existingPlaylist = playlists.items.find((p) => p.name === playlistName);
+      if (existingPlaylist) {
+        playlistId = existingPlaylist.id;
+      }
+    }
+
+    // Create playlist if it doesn't exist
+    if (!playlistId) {
+      const createResp = await fetch(
+        `${baseUrl}/users/${profile.id}/playlists`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            name: playlistName,
+            description: `Created from SuShe Online list "${playlistName}"`,
+            public: false,
+          }),
+        }
+      );
+
+      if (!createResp.ok) {
+        throw new Error(
+          `Failed to create Spotify playlist: ${createResp.status}`
+        );
+      }
+
+      const newPlaylist = await createResp.json();
+      playlistId = newPlaylist.id;
+      result.playlistUrl = newPlaylist.external_urls.spotify;
+    } else {
+      result.playlistUrl = existingPlaylist.external_urls.spotify;
+    }
+
+    // Collect track URIs
+    const trackUris = [];
+
+    for (const item of items) {
+      result.processed++;
+
+      if (!item.trackPick || !item.trackPick.trim()) {
+        result.errors.push(
+          `Skipped "${item.artist} - ${item.album}": no track selected`
+        );
+        continue;
+      }
+
+      try {
+        const trackUri = await findSpotifyTrack(item, auth);
+        if (trackUri) {
+          trackUris.push(trackUri);
+          result.successful++;
+          result.tracks.push({
+            artist: item.artist,
+            album: item.album,
+            track: item.trackPick,
+            found: true,
+          });
+        } else {
+          result.failed++;
+          result.errors.push(
+            `Track not found: "${item.artist} - ${item.album}" - Track ${item.trackPick}`
+          );
+          result.tracks.push({
+            artist: item.artist,
+            album: item.album,
+            track: item.trackPick,
+            found: false,
+          });
+        }
+      } catch (err) {
+        result.failed++;
+        result.errors.push(
+          `Error searching for "${item.artist} - ${item.album}": ${err.message}`
+        );
+      }
+    }
+
+    // Update playlist with tracks
+    if (trackUris.length > 0) {
+      // Clear existing tracks
+      await fetch(`${baseUrl}/playlists/${playlistId}/tracks`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ uris: [] }),
+      });
+
+      // Add new tracks in batches of 100 (Spotify limit)
+      for (let i = 0; i < trackUris.length; i += 100) {
+        const batch = trackUris.slice(i, i + 100);
+        const addResp = await fetch(
+          `${baseUrl}/playlists/${playlistId}/tracks`,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ uris: batch }),
+          }
+        );
+
+        if (!addResp.ok) {
+          logger.warn(
+            `Failed to add tracks batch ${i}-${i + batch.length}: ${addResp.status}`
+          );
+        }
+      }
+    }
+
+    return result;
+  }
+
+  // Find Spotify track URI
+  async function findSpotifyTrack(item, auth) {
+    const headers = {
+      Authorization: `Bearer ${auth.access_token}`,
+    };
+
+    // First try to get album tracks if we have album_id
+    if (item.albumId) {
+      try {
+        const albumResp = await fetch(
+          `https://api.spotify.com/v1/search?q=album:${encodeURIComponent(item.album)} artist:${encodeURIComponent(item.artist)}&type=album&limit=1`,
+          { headers }
+        );
+        if (albumResp.ok) {
+          const albumData = await albumResp.json();
+          if (albumData.albums.items.length > 0) {
+            const spotifyAlbumId = albumData.albums.items[0].id;
+            const tracksResp = await fetch(
+              `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks`,
+              { headers }
+            );
+            if (tracksResp.ok) {
+              const tracksData = await tracksResp.json();
+
+              // Try to match by track number
+              const trackNum = parseInt(item.trackPick);
+              if (
+                !isNaN(trackNum) &&
+                trackNum > 0 &&
+                trackNum <= tracksData.tracks.items.length
+              ) {
+                return tracksData.tracks.items[trackNum - 1].uri;
+              }
+
+              // Try to match by track name
+              const matchingTrack = tracksData.tracks.items.find(
+                (t) =>
+                  t.name.toLowerCase().includes(item.trackPick.toLowerCase()) ||
+                  item.trackPick.toLowerCase().includes(t.name.toLowerCase())
+              );
+              if (matchingTrack) {
+                return matchingTrack.uri;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        logger.debug('Album-based track search failed:', err);
+      }
+    }
+
+    // Fallback to general track search
+    try {
+      const query = `track:${item.trackPick} album:${item.album} artist:${item.artist}`;
+      const searchResp = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`,
+        { headers }
+      );
+      if (searchResp.ok) {
+        const searchData = await searchResp.json();
+        if (searchData.tracks.items.length > 0) {
+          return searchData.tracks.items[0].uri;
+        }
+      }
+    } catch (err) {
+      logger.debug('Track search failed:', err);
+    }
+
+    return null;
+  }
+
+  // Tidal playlist handling
+  async function handleTidalPlaylist(playlistName, items, auth, user, result) {
+    const baseUrl = 'https://openapi.tidal.com/v2';
+    const headers = {
+      Authorization: `Bearer ${auth.access_token}`,
+      'Content-Type': 'application/vnd.api+json',
+      Accept: 'application/vnd.api+json',
+    };
+
+    // Get user's Tidal profile
+    const profileResp = await fetch(`${baseUrl}/me`, { headers });
+    if (!profileResp.ok) {
+      throw new Error(`Failed to get Tidal profile: ${profileResp.status}`);
+    }
+    const profile = await profileResp.json();
+    const _userId = profile.data.id;
+
+    // Check if playlist exists
+    let playlistId = null;
+    let existingPlaylist = null;
+
+    try {
+      const playlistsResp = await fetch(`${baseUrl}/me/playlists?limit=50`, {
+        headers,
+      });
+      if (playlistsResp.ok) {
+        const playlists = await playlistsResp.json();
+        existingPlaylist = playlists.data.find(
+          (p) => p.attributes.title === playlistName
+        );
+        if (existingPlaylist) {
+          playlistId = existingPlaylist.id;
+        }
+      }
+    } catch (err) {
+      logger.debug('Error fetching Tidal playlists:', err);
+    }
+
+    // Create playlist if it doesn't exist
+    if (!playlistId) {
+      const createResp = await fetch(`${baseUrl}/playlists`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          data: {
+            type: 'playlists',
+            attributes: {
+              title: playlistName,
+              description: `Created from SuShe Online list "${playlistName}"`,
+              public: false,
+            },
+          },
+        }),
+      });
+
+      if (!createResp.ok) {
+        const errorText = await createResp.text();
+        logger.error(
+          'Tidal playlist creation failed:',
+          createResp.status,
+          errorText
+        );
+        throw new Error(
+          `Failed to create Tidal playlist: ${createResp.status}`
+        );
+      }
+
+      const newPlaylist = await createResp.json();
+      playlistId = newPlaylist.data.id;
+      result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
+    } else {
+      result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
+    }
+
+    // Collect track IDs
+    const trackIds = [];
+
+    for (const item of items) {
+      result.processed++;
+
+      if (!item.trackPick || !item.trackPick.trim()) {
+        result.errors.push(
+          `Skipped "${item.artist} - ${item.album}": no track selected`
+        );
+        continue;
+      }
+
+      try {
+        const trackId = await findTidalTrack(item, auth, user.tidalCountry);
+        if (trackId) {
+          trackIds.push(trackId);
+          result.successful++;
+          result.tracks.push({
+            artist: item.artist,
+            album: item.album,
+            track: item.trackPick,
+            found: true,
+          });
+        } else {
+          result.failed++;
+          result.errors.push(
+            `Track not found: "${item.artist} - ${item.album}" - Track ${item.trackPick}`
+          );
+          result.tracks.push({
+            artist: item.artist,
+            album: item.album,
+            track: item.trackPick,
+            found: false,
+          });
+        }
+      } catch (err) {
+        result.failed++;
+        result.errors.push(
+          `Error searching for "${item.artist} - ${item.album}": ${err.message}`
+        );
+      }
+    }
+
+    // Update playlist with tracks
+    if (trackIds.length > 0) {
+      // Clear existing tracks first
+      try {
+        await fetch(`${baseUrl}/playlists/${playlistId}/items`, {
+          method: 'DELETE',
+          headers,
+        });
+      } catch (err) {
+        logger.debug('Error clearing Tidal playlist:', err);
+      }
+
+      // Add new tracks in batches
+      for (let i = 0; i < trackIds.length; i += 50) {
+        const batch = trackIds.slice(i, i + 50);
+        const trackData = batch.map((id) => ({
+          type: 'tracks',
+          id: id,
+        }));
+
+        try {
+          const addResp = await fetch(
+            `${baseUrl}/playlists/${playlistId}/items`,
+            {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                data: trackData,
+              }),
+            }
+          );
+
+          if (!addResp.ok) {
+            logger.warn(
+              `Failed to add Tidal tracks batch ${i}-${i + batch.length}: ${addResp.status}`
+            );
+          }
+        } catch (err) {
+          logger.warn(`Error adding Tidal tracks batch:`, err);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  // Find Tidal track ID
+  async function findTidalTrack(item, auth, countryCode = 'US') {
+    const headers = {
+      Authorization: `Bearer ${auth.access_token}`,
+      Accept: 'application/vnd.api+json',
+    };
+
+    // First try to search for the album and get tracks
+    try {
+      const albumQuery = `${item.artist} ${item.album}`;
+      const albumSearchResp = await fetch(
+        `https://openapi.tidal.com/v2/searchresults/albums?query=${encodeURIComponent(albumQuery)}&countryCode=${countryCode}&limit=1`,
+        { headers }
+      );
+
+      if (albumSearchResp.ok) {
+        const albumData = await albumSearchResp.json();
+        if (albumData.data && albumData.data.length > 0) {
+          const tidalAlbumId = albumData.data[0].id;
+
+          // Get album tracks
+          const tracksResp = await fetch(
+            `https://openapi.tidal.com/v2/albums/${tidalAlbumId}/items?countryCode=${countryCode}`,
+            { headers }
+          );
+
+          if (tracksResp.ok) {
+            const tracksData = await tracksResp.json();
+
+            // Try to match by track number
+            const trackNum = parseInt(item.trackPick);
+            if (
+              !isNaN(trackNum) &&
+              trackNum > 0 &&
+              tracksData.data &&
+              trackNum <= tracksData.data.length
+            ) {
+              return tracksData.data[trackNum - 1].id;
+            }
+
+            // Try to match by track name
+            if (tracksData.data) {
+              const matchingTrack = tracksData.data.find(
+                (t) =>
+                  t.attributes.title
+                    .toLowerCase()
+                    .includes(item.trackPick.toLowerCase()) ||
+                  item.trackPick
+                    .toLowerCase()
+                    .includes(t.attributes.title.toLowerCase())
+              );
+              if (matchingTrack) {
+                return matchingTrack.id;
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      logger.debug('Tidal album-based track search failed:', err);
+    }
+
+    // Fallback to general track search
+    try {
+      const trackQuery = `${item.artist} ${item.album} ${item.trackPick}`;
+      const searchResp = await fetch(
+        `https://openapi.tidal.com/v2/searchresults/tracks?query=${encodeURIComponent(trackQuery)}&countryCode=${countryCode}&limit=1`,
+        { headers }
+      );
+
+      if (searchResp.ok) {
+        const searchData = await searchResp.json();
+        if (searchData.data && searchData.data.length > 0) {
+          return searchData.data[0].id;
+        }
+      }
+    } catch (err) {
+      logger.debug('Tidal track search failed:', err);
+    }
+
+    return null;
+  }
 };
