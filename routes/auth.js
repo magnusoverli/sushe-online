@@ -157,7 +157,7 @@ module.exports = (app, deps) => {
       {},
       (err) => {
         if (err) {
-          console.error('Error updating last selected list:', err);
+          logger.error('Error updating last selected list:', err);
           return res
             .status(500)
             .json({ error: 'Error updating last selected list' });
@@ -191,7 +191,7 @@ module.exports = (app, deps) => {
       });
 
       if (!user) {
-        console.log('Authentication failed:', info);
+        logger.info('Authentication failed:', info);
         req.flash('error', info.message || 'Invalid credentials');
         return res.redirect('/login');
       }
@@ -217,7 +217,7 @@ module.exports = (app, deps) => {
       await new Promise((resolve) => {
         req.session.save((err) => {
           if (err) {
-            console.error('Session save error:', err);
+            logger.error('Session save error:', err);
             // Continue anyway - session might still work
           }
           resolve();
@@ -353,7 +353,7 @@ module.exports = (app, deps) => {
           );
           dbSize = rows[0].size;
         } catch (e) {
-          console.error('Error calculating DB size:', e);
+          logger.error('Error calculating DB size:', e);
         }
 
         // Count active sessions
@@ -367,7 +367,7 @@ module.exports = (app, deps) => {
             ).length;
           }
         } catch (e) {
-          console.error('Error counting sessions:', e);
+          logger.error('Error counting sessions:', e);
         }
 
         stats = {
@@ -483,7 +483,7 @@ module.exports = (app, deps) => {
         })
       );
     } catch (error) {
-      console.error('Settings page error:', error);
+      logger.error('Settings page error:', error);
       req.flash('error', 'Error loading settings');
       res.redirect('/');
     }
@@ -509,7 +509,7 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            console.error('Error updating accent color:', err);
+            logger.error('Error updating accent color:', err);
             return res
               .status(500)
               .json({ error: 'Error updating theme color' });
@@ -518,17 +518,17 @@ module.exports = (app, deps) => {
           // Update session
           req.user.accentColor = accentColor;
           req.session.save((err) => {
-            if (err) console.error('Session save error:', err);
+            if (err) logger.error('Session save error:', err);
             res.json({ success: true });
           });
 
-          console.log(
+          logger.info(
             `User ${req.user.email} updated accent color to ${accentColor}`
           );
         }
       );
     } catch (error) {
-      console.error('Update accent color error:', error);
+      logger.error('Update accent color error:', error);
       res.status(500).json({ error: 'Error updating theme color' });
     }
   });
@@ -547,7 +547,7 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            console.error('Error updating time format:', err);
+            logger.error('Error updating time format:', err);
             return res
               .status(500)
               .json({ error: 'Error updating time format' });
@@ -555,17 +555,17 @@ module.exports = (app, deps) => {
 
           req.user.timeFormat = timeFormat;
           req.session.save((err) => {
-            if (err) console.error('Session save error:', err);
+            if (err) logger.error('Session save error:', err);
             res.json({ success: true });
           });
 
-          console.log(
+          logger.info(
             `User ${req.user.email} updated time format to ${timeFormat}`
           );
         }
       );
     } catch (error) {
-      console.error('Update time format error:', error);
+      logger.error('Update time format error:', error);
       res.status(500).json({ error: 'Error updating time format' });
     }
   });
@@ -584,7 +584,7 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            console.error('Error updating date format:', err);
+            logger.error('Error updating date format:', err);
             return res
               .status(500)
               .json({ error: 'Error updating date format' });
@@ -592,17 +592,17 @@ module.exports = (app, deps) => {
 
           req.user.dateFormat = dateFormat;
           req.session.save((err) => {
-            if (err) console.error('Session save error:', err);
+            if (err) logger.error('Session save error:', err);
             res.json({ success: true });
           });
 
-          console.log(
+          logger.info(
             `User ${req.user.email} updated date format to ${dateFormat}`
           );
         }
       );
     } catch (error) {
-      console.error('Update date format error:', error);
+      logger.error('Update date format error:', error);
       res.status(500).json({ error: 'Error updating date format' });
     }
   });
@@ -621,7 +621,7 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            console.error('Error updating music service:', err);
+            logger.error('Error updating music service:', err);
             return res
               .status(500)
               .json({ error: 'Error updating music service' });
@@ -629,17 +629,17 @@ module.exports = (app, deps) => {
 
           req.user.musicService = musicService || null;
           req.session.save((err) => {
-            if (err) console.error('Session save error:', err);
+            if (err) logger.error('Session save error:', err);
             res.json({ success: true });
           });
 
-          console.log(
+          logger.info(
             `User ${req.user.email} updated music service to ${musicService}`
           );
         }
       );
     } catch (error) {
-      console.error('Update music service error:', error);
+      logger.error('Update music service error:', error);
       res.status(500).json({ error: 'Error updating music service' });
     }
   });
@@ -710,7 +710,7 @@ module.exports = (app, deps) => {
           {},
           (err) => {
             if (err) {
-              console.error('Error updating password:', err);
+              logger.error('Error updating password:', err);
               req.flash('error', 'Error updating password');
               return res.redirect('/settings');
             }
@@ -720,7 +720,7 @@ module.exports = (app, deps) => {
           }
         );
       } catch (error) {
-        console.error('Password change error:', error);
+        logger.error('Password change error:', error);
         req.flash('error', 'Error changing password');
         res.redirect('/settings');
       }
@@ -734,7 +734,7 @@ module.exports = (app, deps) => {
     csrfProtection,
     rateLimitAdminRequest,
     async (req, res) => {
-      console.log('Admin request received from:', req.user.email);
+      logger.info('Admin request received from:', req.user.email);
 
       try {
         const { code } = req.body;
@@ -745,7 +745,7 @@ module.exports = (app, deps) => {
           code.toUpperCase() !== adminCode ||
           new Date() > adminCodeExpiry
         ) {
-          console.log('Invalid code attempt');
+          logger.info('Invalid code attempt');
 
           // Increment failed attempts
           const attempts = req.adminAttempts;
@@ -771,32 +771,32 @@ module.exports = (app, deps) => {
           {},
           (err, numUpdated) => {
             if (err) {
-              console.error('Error granting admin:', err);
+              logger.error('Error granting admin:', err);
               req.flash('error', 'Error granting admin access');
               return res.redirect('/settings');
             }
 
-            console.log(`✅ Admin access granted to: ${req.user.email}`);
+            logger.info(`✅ Admin access granted to: ${req.user.email}`);
 
             // Track code usage
             deps.lastCodeUsedBy = req.user.email;
             deps.lastCodeUsedAt = Date.now();
 
             // REGENERATE CODE IMMEDIATELY after successful use
-            console.log('🔄 Regenerating admin code after successful use...');
+            logger.info('🔄 Regenerating admin code after successful use...');
             generateAdminCode();
 
             // Update the session
             req.user.role = 'admin';
             req.session.save((err) => {
-              if (err) console.error('Session save error:', err);
+              if (err) logger.error('Session save error:', err);
               req.flash('success', 'Admin access granted!');
               res.redirect('/settings');
             });
           }
         );
       } catch (error) {
-        console.error('Admin request error:', error);
+        logger.error('Admin request error:', error);
         req.flash('error', 'Error processing admin request');
         res.redirect('/settings');
       }
@@ -822,7 +822,7 @@ module.exports = (app, deps) => {
         { email, _id: { $ne: req.user._id } },
         (err, existingUser) => {
           if (err) {
-            console.error('Database error:', err);
+            logger.error('Database error:', err);
             return res.status(500).json({ error: 'Database error' });
           }
 
@@ -837,14 +837,14 @@ module.exports = (app, deps) => {
             {},
             (err) => {
               if (err) {
-                console.error('Error updating email:', err);
+                logger.error('Error updating email:', err);
                 return res.status(500).json({ error: 'Error updating email' });
               }
 
               // Update session
               req.user.email = email.trim();
               req.session.save((err) => {
-                if (err) console.error('Session save error:', err);
+                if (err) logger.error('Session save error:', err);
                 req.flash('success', 'Email updated successfully');
                 res.json({ success: true });
               });
@@ -853,7 +853,7 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      console.error('Update email error:', error);
+      logger.error('Update email error:', error);
       res.status(500).json({ error: 'Error updating email' });
     }
   });
@@ -880,7 +880,7 @@ module.exports = (app, deps) => {
         { username, _id: { $ne: req.user._id } },
         (err, existingUser) => {
           if (err) {
-            console.error('Database error:', err);
+            logger.error('Database error:', err);
             return res.status(500).json({ error: 'Database error' });
           }
 
@@ -895,7 +895,7 @@ module.exports = (app, deps) => {
             {},
             (err) => {
               if (err) {
-                console.error('Error updating username:', err);
+                logger.error('Error updating username:', err);
                 return res
                   .status(500)
                   .json({ error: 'Error updating username' });
@@ -904,7 +904,7 @@ module.exports = (app, deps) => {
               // Update session
               req.user.username = username.trim();
               req.session.save((err) => {
-                if (err) console.error('Session save error:', err);
+                if (err) logger.error('Session save error:', err);
                 req.flash('success', 'Username updated successfully');
                 res.json({ success: true });
               });
@@ -913,7 +913,7 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      console.error('Update username error:', error);
+      logger.error('Update username error:', error);
       res.status(500).json({ error: 'Error updating username' });
     }
   });

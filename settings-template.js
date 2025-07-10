@@ -774,6 +774,7 @@ const settingsTemplate = (req, options) => {
           cancelEmailEdit();
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error:', error);
         showToast('Error updating email', 'error');
         cancelEmailEdit();
@@ -832,6 +833,7 @@ const settingsTemplate = (req, options) => {
           cancelUsernameEdit();
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error:', error);
         showToast('Error updating username', 'error');
         cancelUsernameEdit();
@@ -878,6 +880,7 @@ const settingsTemplate = (req, options) => {
           location.reload();
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error updating accent color:', error);
         showToast('Error updating color', 'error');
         location.reload();
@@ -906,6 +909,7 @@ const settingsTemplate = (req, options) => {
           showToast(data.error || 'Error updating time format', 'error');
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error updating time format:', error);
         showToast('Error updating time format', 'error');
       }
@@ -929,6 +933,7 @@ const settingsTemplate = (req, options) => {
           showToast(data.error || 'Error updating date format', 'error');
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error updating date format:', error);
         showToast('Error updating date format', 'error');
       }
@@ -952,6 +957,7 @@ const settingsTemplate = (req, options) => {
           showToast(data.error || 'Error updating music service', 'error');
         }
       } catch (error) {
+        // eslint-disable-next-line no-console
         console.error('Error updating music service:', error);
         showToast('Error updating music service', 'error');
       }
@@ -994,7 +1000,8 @@ const settingsTemplate = (req, options) => {
             showToast(data.error || 'Error granting admin', 'error');
           }
         } catch (error) {
-          console.error('Error:', error);
+          // eslint-disable-next-line no-console
+        console.error('Error:', error);
           showToast('Error granting admin', 'error');
         }
       }
@@ -1019,7 +1026,8 @@ const settingsTemplate = (req, options) => {
             showToast(data.error || 'Error revoking admin', 'error');
           }
         } catch (error) {
-          console.error('Error:', error);
+          // eslint-disable-next-line no-console
+        console.error('Error:', error);
           showToast('Error revoking admin', 'error');
         }
       }
@@ -1044,7 +1052,8 @@ const settingsTemplate = (req, options) => {
             showToast(data.error || 'Error deleting user', 'error');
           }
         } catch (error) {
-          console.error('Error:', error);
+          // eslint-disable-next-line no-console
+        console.error('Error:', error);
           showToast('Error deleting user', 'error');
         }
       }
@@ -1067,7 +1076,8 @@ const settingsTemplate = (req, options) => {
             showToast('Error fetching user lists', 'error');
           }
         } catch (error) {
-          console.error('Error:', error);
+          // eslint-disable-next-line no-console
+        console.error('Error:', error);
           showToast('Error fetching user lists', 'error');
         }
       }
@@ -1088,7 +1098,8 @@ const settingsTemplate = (req, options) => {
             showToast('Error clearing sessions', 'error');
           }
         } catch (error) {
-          console.error('Error:', error);
+          // eslint-disable-next-line no-console
+        console.error('Error:', error);
           showToast('Error clearing sessions', 'error');
         }
       }
@@ -1123,7 +1134,8 @@ const settingsTemplate = (req, options) => {
             showToast(data.error || 'Error restoring database', 'error');
           }
         } catch (error) {
-          console.error('Error:', error);
+          // eslint-disable-next-line no-console
+        console.error('Error:', error);
           showToast('Error restoring database', 'error');
         }
         

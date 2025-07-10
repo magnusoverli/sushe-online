@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // MusicBrainz API integration
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
 const COVERART_API = 'https://coverartarchive.org';
@@ -1891,7 +1892,7 @@ async function addAlbumToList(releaseGroup) {
   if (!coverArtUrl) {
     // Find the album element in the list
     const albumElements = document.querySelectorAll('[data-album-index]');
-    for (let el of albumElements) {
+    for (const el of albumElements) {
       if (
         parseInt(el.dataset.albumIndex) === releaseGroups.indexOf(releaseGroup)
       ) {

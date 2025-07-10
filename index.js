@@ -15,11 +15,7 @@ const csrf = require('csrf');
 const multer = require('multer');
 const os = require('os');
 const logger = require('./utils/logger');
-const {
-  errorHandler,
-  notFoundHandler,
-  asyncHandler,
-} = require('./middleware/error-handler');
+const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const upload = multer({
   storage: multer.diskStorage({
     destination: os.tmpdir(),
@@ -170,24 +166,29 @@ function generateAdminCode() {
 
     // Helper functions
     const centerText = (text) => {
-      const visibleLength = text.replace(/\x1b\[[0-9;]*m/g, '').length;
+      const ansiEscape = '\u001B';
+      const visibleLength = text.replace(
+        new RegExp(`${ansiEscape}\\[[0-9;]*m`, 'gu'),
+        ''
+      ).length;
       const totalPadding = INNER_WIDTH - visibleLength;
       const leftPad = Math.floor(totalPadding / 2);
       const rightPad = totalPadding - leftPad;
       return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
     };
 
-    const leftAlignText = (label, value, labelColor = '', valueColor = '') => {
+    const leftAlignText = (label, value, _labelColor = '', valueColor = '') => {
       const fullText = `  ${label}: ${value}`;
       const padding = INNER_WIDTH - fullText.length;
       return `  ${label}: ${valueColor}${value}${colors.reset}${' '.repeat(padding)}`;
     };
 
     // Build the box
-    console.log(
+    const boxLines = [];
+    boxLines.push(
       '\n' + colors.cyan + '╔' + '═'.repeat(INNER_WIDTH) + '╗' + colors.reset
     );
-    console.log(
+    boxLines.push(
       colors.cyan +
         '║' +
         colors.reset +
@@ -201,10 +202,10 @@ function generateAdminCode() {
         '║' +
         colors.reset
     );
-    console.log(
+    boxLines.push(
       colors.cyan + '╠' + '═'.repeat(INNER_WIDTH) + '╣' + colors.reset
     );
-    console.log(
+    boxLines.push(
       colors.cyan +
         '║' +
         colors.reset +
@@ -213,7 +214,7 @@ function generateAdminCode() {
         '║' +
         colors.reset
     );
-    console.log(
+    boxLines.push(
       colors.cyan +
         '║' +
         colors.reset +
@@ -225,7 +226,7 @@ function generateAdminCode() {
 
     // Show last usage info if available
     if (lastCodeUsedBy && lastCodeUsedAt) {
-      console.log(
+      boxLines.push(
         colors.cyan + '╟' + '─'.repeat(INNER_WIDTH) + '╢' + colors.reset
       );
       const usedTimeAgo = Math.floor((Date.now() - lastCodeUsedAt) / 1000);
@@ -233,7 +234,7 @@ function generateAdminCode() {
         usedTimeAgo < 60
           ? `${usedTimeAgo}s ago`
           : `${Math.floor(usedTimeAgo / 60)}m ago`;
-      console.log(
+      boxLines.push(
         colors.cyan +
           '║' +
           colors.reset +
@@ -247,7 +248,7 @@ function generateAdminCode() {
           '║' +
           colors.reset
       );
-      console.log(
+      boxLines.push(
         colors.cyan +
           '║' +
           colors.reset +
@@ -258,9 +259,13 @@ function generateAdminCode() {
       );
     }
 
-    console.log(
+    boxLines.push(
       colors.cyan + '╚' + '═'.repeat(INNER_WIDTH) + '╝' + colors.reset + '\n'
     );
+
+    // Output the admin code box to console (this is intentional UI output)
+    // eslint-disable-next-line no-console
+    console.log(boxLines.join('\n'));
 
     // Reset tracking for new code
     lastCodeUsedBy = null;
@@ -380,7 +385,7 @@ app.use(
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
     },
     // Add this to handle session save errors gracefully
-    genid: function (req) {
+    genid: function (_req) {
       return require('crypto').randomBytes(16).toString('hex');
     },
   })
@@ -403,7 +408,7 @@ app.use((req, res, next) => {
   req.flash = (type, message) => {
     // If called with just type, return messages of that type (getter)
     if (message === undefined) {
-      return res.locals.flash[type] || [];
+      return req.session.flash[type] || [];
     }
 
     // Otherwise, add message (setter)

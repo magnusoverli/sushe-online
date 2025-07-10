@@ -7,6 +7,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const logger = require('./utils/logger');
 
 class PlanningSystem {
   constructor(projectRoot = process.cwd()) {
@@ -82,7 +83,7 @@ class PlanningSystem {
         }
       }
     } catch (error) {
-      console.warn('Warning: Could not load plans:', error.message);
+      logger.warn('Could not load plans:', { error: error.message });
     }
   }
 
@@ -124,10 +125,10 @@ class PlanningSystem {
 
       return plan;
     } catch (error) {
-      console.warn(
-        `Warning: Could not parse plan file ${filePath}:`,
-        error.message
-      );
+      logger.warn('Could not parse plan file:', {
+        filePath,
+        error: error.message,
+      });
       return null;
     }
   }
@@ -155,10 +156,9 @@ class PlanningSystem {
         }
       }
     } catch (error) {
-      console.warn(
-        'Warning: Could not load tasks from TODO.md:',
-        error.message
-      );
+      logger.warn('Could not load tasks from TODO.md:', {
+        error: error.message,
+      });
     }
   }
 
@@ -451,13 +451,13 @@ ${planData.notes || 'No additional notes.'}
   async autoUpdate() {
     await this.initialize();
     await this.updateTodoFile();
-    console.log('Planning system updated successfully');
+    logger.info('Planning system updated successfully');
   }
 
   async watchForChanges() {
     const chokidar = require('chokidar');
     const watcher = chokidar.watch([this.activeDir, this.completedDir], {
-      ignored: /(^|[\/\\])\../,
+      ignored: /(^|[/\\])\../,
       persistent: true,
     });
 
@@ -465,7 +465,7 @@ ${planData.notes || 'No additional notes.'}
     watcher.on('add', () => this.autoUpdate());
     watcher.on('unlink', () => this.autoUpdate());
 
-    console.log('Planning system is now watching for changes...');
+    logger.info('Planning system is now watching for changes...');
   }
 }
 
@@ -478,7 +478,7 @@ if (require.main === module) {
   switch (command) {
     case 'init':
       system.initialize().then(() => {
-        console.log('Planning system initialized');
+        logger.info('Planning system initialized');
       });
       break;
 
@@ -490,25 +490,28 @@ if (require.main === module) {
       system.watchForChanges();
       break;
 
-    case 'create-plan':
+    case 'create-plan': {
       const planData = JSON.parse(process.argv[3] || '{}');
       system.createPlan(planData).then((planId) => {
-        console.log(`Created plan: ${planId}`);
+        logger.info(`Created plan: ${planId}`);
       });
       break;
+    }
 
-    case 'complete-plan':
+    case 'complete-plan': {
       const planId = process.argv[3];
       system.completePlan(planId).then((success) => {
-        console.log(
+        logger.info(
           success
             ? `Plan ${planId} completed`
             : `Failed to complete plan ${planId}`
         );
       });
       break;
+    }
 
     default:
+      // eslint-disable-next-line no-console
       console.log(`
 Usage: node planning-system.js <command>
 

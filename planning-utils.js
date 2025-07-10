@@ -8,6 +8,7 @@
 const fs = require('fs').promises;
 const path = require('path');
 const PlanningSystem = require('./planning-system');
+const logger = require('./utils/logger');
 
 class PlanningUtils {
   constructor(projectRoot = process.cwd()) {
@@ -216,9 +217,9 @@ class PlanningUtils {
         JSON.stringify(packageJson, null, 2),
         'utf8'
       );
-      console.log('Added planning system scripts to package.json');
+      logger.info('Added planning system scripts to package.json');
     } catch (error) {
-      console.warn('Could not update package.json:', error.message);
+      logger.warn('Could not update package.json:', error.message);
     }
   }
 }
@@ -229,50 +230,52 @@ if (require.main === module) {
   const command = process.argv[2];
 
   switch (command) {
-    case 'create-plan':
+    case 'create-plan': {
       const planData = JSON.parse(process.argv[3] || '{}');
       utils.createPlanFromTemplate(planData).then((planId) => {
-        console.log(`Created plan: ${planId}`);
+        logger.info(`Created plan: ${planId}`);
       });
       break;
+    }
 
-    case 'generate-project-plan':
+    case 'generate-project-plan': {
       const projectData = JSON.parse(process.argv[3] || '{}');
       utils.generateProjectPlan(projectData).then((planId) => {
-        console.log(`Generated project plan: ${planId}`);
+        logger.info(`Generated project plan: ${planId}`);
       });
       break;
+    }
 
     case 'report':
       utils.generateProgressReport().then((report) => {
-        console.log(report);
+        logger.info(report);
       });
       break;
 
     case 'analyze':
       utils.analyzeProjectProgress().then((analysis) => {
-        console.log(JSON.stringify(analysis, null, 2));
+        logger.info(JSON.stringify(analysis, null, 2));
       });
       break;
 
     case 'auto-complete':
       utils.autoCompleteFinishedPlans().then((completed) => {
         if (completed.length > 0) {
-          console.log(`Auto-completed plans: ${completed.join(', ')}`);
+          logger.info(`Auto-completed plans: ${completed.join(', ')}`);
         } else {
-          console.log('No plans ready for auto-completion');
+          logger.info('No plans ready for auto-completion');
         }
       });
       break;
 
     case 'setup':
       utils.setupAutomation().then(() => {
-        console.log('Planning system automation setup complete');
+        logger.info('Planning system automation setup complete');
       });
       break;
 
     default:
-      console.log(`
+      logger.info(`
 Usage: node planning-utils.js <command>
 
 Commands:

@@ -18,6 +18,8 @@ module.exports = (app, deps) => {
     adminCodeExpiry,
     crypto,
   } = deps;
+
+  const logger = require('../utils/logger');
   const { spawn } = require('child_process');
   const fs = require('fs');
   const path = require('path');
@@ -44,14 +46,14 @@ module.exports = (app, deps) => {
     // Delete user's lists first
     lists.remove({ userId }, { multi: true }, (err) => {
       if (err) {
-        console.error('Error deleting user lists:', err);
+        logger.error('Error deleting user lists:', err);
         return res.status(500).json({ error: 'Error deleting user data' });
       }
 
       // Then delete the user
       users.remove({ _id: userId }, {}, (err, numRemoved) => {
         if (err) {
-          console.error('Error deleting user:', err);
+          logger.error('Error deleting user:', err);
           return res.status(500).json({ error: 'Error deleting user' });
         }
 
@@ -59,7 +61,7 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'User not found' });
         }
 
-        console.log(`Admin ${req.user.email} deleted user with ID: ${userId}`);
+        logger.info(`Admin ${req.user.email} deleted user with ID: ${userId}`);
         res.json({ success: true });
       });
     });
@@ -68,7 +70,7 @@ module.exports = (app, deps) => {
   // ===== Music Service Authentication =====
   app.get('/auth/spotify', ensureAuth, (req, res) => {
     const state = crypto.randomBytes(8).toString('hex');
-    console.log('Starting Spotify OAuth flow, state:', state);
+    logger.info('Starting Spotify OAuth flow, state:', state);
     req.session.spotifyState = state;
     const params = new URLSearchParams({
       client_id: process.env.SPOTIFY_CLIENT_ID || '',
@@ -86,7 +88,7 @@ module.exports = (app, deps) => {
       return res.redirect('/settings');
     }
     delete req.session.spotifyState;
-    console.log(
+    logger.info(
       'Spotify callback received. code:',
       req.query.code,
       'state:',
@@ -106,7 +108,7 @@ module.exports = (app, deps) => {
         body: params.toString(),
       });
       if (!resp.ok) {
-        console.error(
+        logger.error(
           'Spotify token request failed:',
           resp.status,
           await resp.text()
@@ -114,7 +116,7 @@ module.exports = (app, deps) => {
         throw new Error('Token request failed');
       }
       const token = await resp.json();
-      console.log('Spotify token response:', {
+      logger.info('Spotify token response:', {
         access_token: token.access_token?.slice(0, 6) + '...',
         expires_in: token.expires_in,
         refresh: !!token.refresh_token,
@@ -127,26 +129,26 @@ module.exports = (app, deps) => {
         { $set: { spotifyAuth: token, updatedAt: new Date() } },
         {},
         (err) => {
-          if (err) console.error('Spotify auth update error:', err);
+          if (err) logger.error('Spotify auth update error:', err);
         }
       );
       req.user.spotifyAuth = token;
       req.flash('success', 'Spotify connected');
     } catch (e) {
-      console.error('Spotify auth error:', e);
+      logger.error('Spotify auth error:', e);
       req.flash('error', 'Failed to authenticate with Spotify');
     }
     res.redirect('/settings');
   });
 
   app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
-    console.log('Disconnecting Spotify for user:', req.user.email);
+    logger.info('Disconnecting Spotify for user:', req.user.email);
     users.update(
       { _id: req.user._id },
       { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } },
       {},
       (err) => {
-        if (err) console.error('Spotify disconnect error:', err);
+        if (err) logger.error('Spotify disconnect error:', err);
       }
     );
     delete req.user.spotifyAuth;
@@ -211,7 +213,7 @@ module.exports = (app, deps) => {
         body: params.toString(),
       });
       if (!resp.ok) {
-        console.error(
+        logger.error(
           'Tidal token request failed:',
           resp.status,
           await resp.text()
@@ -239,10 +241,10 @@ module.exports = (app, deps) => {
           const profile = await profileResp.json();
           countryCode = profile.countryCode || null;
         } else {
-          console.warn('Tidal profile request failed:', profileResp.status);
+          logger.warn('Tidal profile request failed:', profileResp.status);
         }
       } catch (profileErr) {
-        console.error('Tidal profile fetch error:', profileErr);
+        logger.error('Tidal profile fetch error:', profileErr);
       }
 
       users.update(
@@ -256,14 +258,14 @@ module.exports = (app, deps) => {
         },
         {},
         (err) => {
-          if (err) console.error('Tidal auth update error:', err);
+          if (err) logger.error('Tidal auth update error:', err);
         }
       );
       req.user.tidalAuth = token;
       req.user.tidalCountry = countryCode;
       req.flash('success', 'Tidal connected');
     } catch (e) {
-      console.error('Tidal auth error:', e);
+      logger.error('Tidal auth error:', e);
       req.flash('error', 'Failed to authenticate with Tidal');
     }
     res.redirect('/settings');
@@ -275,7 +277,7 @@ module.exports = (app, deps) => {
       { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
       {},
       (err) => {
-        if (err) console.error('Tidal disconnect error:', err);
+        if (err) logger.error('Tidal disconnect error:', err);
       }
     );
     delete req.user.tidalAuth;
@@ -293,7 +295,7 @@ module.exports = (app, deps) => {
       {},
       (err, numUpdated) => {
         if (err) {
-          console.error('Error granting admin:', err);
+          logger.error('Error granting admin:', err);
           return res
             .status(500)
             .json({ error: 'Error granting admin privileges' });
@@ -303,7 +305,7 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'User not found' });
         }
 
-        console.log(
+        logger.info(
           `Admin ${req.user.email} granted admin to user ID: ${userId}`
         );
         res.json({ success: true });
@@ -328,7 +330,7 @@ module.exports = (app, deps) => {
       {},
       (err, numUpdated) => {
         if (err) {
-          console.error('Error revoking admin:', err);
+          logger.error('Error revoking admin:', err);
           return res
             .status(500)
             .json({ error: 'Error revoking admin privileges' });
@@ -338,7 +340,7 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'User not found' });
         }
 
-        console.log(
+        logger.info(
           `Admin ${req.user.email} revoked admin from user ID: ${userId}`
         );
         res.json({ success: true });
@@ -350,7 +352,7 @@ module.exports = (app, deps) => {
   app.get('/admin/export-users', ensureAuth, ensureAdmin, (req, res) => {
     users.find({}, (err, allUsers) => {
       if (err) {
-        console.error('Error exporting users:', err);
+        logger.error('Error exporting users:', err);
         return res.status(500).send('Error exporting users');
       }
 
@@ -392,7 +394,7 @@ module.exports = (app, deps) => {
 
         res.json({ lists: listsData });
       } catch (err) {
-        console.error('Error fetching user lists:', err);
+        logger.error('Error fetching user lists:', err);
         res.status(500).json({ error: 'Error fetching user lists' });
       }
     }
@@ -440,7 +442,7 @@ module.exports = (app, deps) => {
       );
       res.send(JSON.stringify(backup, null, 2));
     } catch (error) {
-      console.error('Export error:', error);
+      logger.error('Export error:', error);
       res.status(500).send('Error creating export');
     }
   });
@@ -454,9 +456,9 @@ module.exports = (app, deps) => {
     );
     res.setHeader('Content-Type', 'application/octet-stream');
     dump.stdout.pipe(res);
-    dump.stderr.on('data', (d) => console.error('pg_dump:', d.toString()));
+    dump.stderr.on('data', (d) => logger.error('pg_dump:', d.toString()));
     dump.on('error', (err) => {
-      console.error('Backup error:', err);
+      logger.error('Backup error:', err);
       res.status(500).send('Error creating backup');
     });
   });
@@ -484,11 +486,11 @@ module.exports = (app, deps) => {
       ]);
 
       restore.stderr.on('data', (data) =>
-        console.error('pg_restore:', data.toString())
+        logger.error('pg_restore:', data.toString())
       );
 
       restore.on('error', (err) => {
-        console.error('Restore error:', err);
+        logger.error('Restore error:', err);
         res.status(500).json({ error: 'Error restoring database' });
       });
 
@@ -497,14 +499,14 @@ module.exports = (app, deps) => {
         if (code === 0) {
           req.sessionStore.clear((err) => {
             if (err)
-              console.error('Error clearing sessions after restore:', err);
+              logger.error('Error clearing sessions after restore:', err);
             res.json({
               success: true,
               message: 'Database restored successfully',
             });
           });
         } else {
-          console.error('pg_restore exited with code', code);
+          logger.error('pg_restore exited with code', code);
           res.status(500).json({ error: 'Error restoring database' });
         }
       });
@@ -517,11 +519,11 @@ module.exports = (app, deps) => {
 
     sessionStore.clear((err) => {
       if (err) {
-        console.error('Error clearing sessions:', err);
+        logger.error('Error clearing sessions:', err);
         return res.status(500).json({ error: 'Error clearing sessions' });
       }
 
-      console.log(`Admin ${req.user.email} cleared all sessions`);
+      logger.info(`Admin ${req.user.email} cleared all sessions`);
       res.json({ success: true });
     });
   });

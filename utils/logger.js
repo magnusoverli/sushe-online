@@ -50,6 +50,7 @@ class Logger {
     try {
       fs.appendFileSync(filepath, logLine);
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('Failed to write to log file:', err);
     }
   }
@@ -71,12 +72,15 @@ class Logger {
     const prefix = `${color}[${timestamp}] ${levelName}:${reset}`;
 
     if (typeof message === 'object') {
+      // eslint-disable-next-line no-console
       console.log(prefix, JSON.stringify(message, null, 2));
     } else {
+      // eslint-disable-next-line no-console
       console.log(prefix, message);
     }
 
     if (Object.keys(meta).length > 0) {
+      // eslint-disable-next-line no-console
       console.log('  Meta:', JSON.stringify(meta, null, 2));
     }
   }

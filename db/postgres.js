@@ -1,15 +1,16 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
+const logger = require('../utils/logger');
 
 async function waitForPostgres(pool, retries = 10, interval = 3000) {
-  console.log('Checking PostgreSQL connection...');
+  logger.info('Checking PostgreSQL connection...');
   for (let i = 0; i < retries; i++) {
     try {
       await pool.query('SELECT 1');
-      console.log('PostgreSQL is reachable');
+      logger.info('PostgreSQL is reachable');
       return;
-    } catch (err) {
-      console.log(`Waiting for PostgreSQL... (${i + 1}/${retries})`);
+    } catch {
+      logger.info(`Waiting for PostgreSQL... (${i + 1}/${retries})`);
       await new Promise((res) => setTimeout(res, interval));
     }
   }
@@ -48,7 +49,7 @@ class PgDatastore {
 
   _query(text, params) {
     if (this.logQueries) {
-      console.log('SQL', text, params);
+      logger.debug('SQL', { query: text, params });
     }
     return this.pool.query(text, params);
   }

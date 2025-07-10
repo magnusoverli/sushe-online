@@ -10,6 +10,7 @@ function mbFetch(url, options) {
 }
 
 module.exports = (app, deps) => {
+  const logger = require('../utils/logger');
   const {
     ensureAuthAPI,
     ensureAuth,
@@ -120,7 +121,7 @@ module.exports = (app, deps) => {
 
       res.json(listsObj);
     } catch (err) {
-      console.error('Error fetching lists:', err);
+      logger.error('Error fetching lists:', err);
       return res.status(500).json({ error: 'Error fetching lists' });
     }
   });
@@ -191,7 +192,7 @@ module.exports = (app, deps) => {
       }
       res.json(data);
     } catch (err) {
-      console.error('Error fetching list:', err);
+      logger.error('Error fetching list:', err);
       return res.status(500).json({ error: 'Error fetching list' });
     }
   });
@@ -208,7 +209,7 @@ module.exports = (app, deps) => {
     // Check if list exists
     lists.findOne({ userId: req.user._id, name }, async (err, existingList) => {
       if (err) {
-        console.error('Error checking list:', err);
+        logger.error('Error checking list:', err);
         return res.status(500).json({ error: 'Database error' });
       }
 
@@ -280,7 +281,7 @@ module.exports = (app, deps) => {
         broadcastListUpdate(req.user._id, name, data);
       } catch (dbErr) {
         await client.query('ROLLBACK');
-        console.error('Error updating list:', dbErr);
+        logger.error('Error updating list:', dbErr);
         res.status(500).json({ error: 'Database error' });
       } finally {
         client.release();
@@ -294,7 +295,7 @@ module.exports = (app, deps) => {
 
     lists.remove({ userId: req.user._id, name }, {}, (err, numRemoved) => {
       if (err) {
-        console.error('Error deleting list:', err);
+        logger.error('Error deleting list:', err);
         return res.status(500).json({ error: 'Error deleting list' });
       }
 
@@ -310,7 +311,7 @@ module.exports = (app, deps) => {
           {},
           (updateErr) => {
             if (updateErr) {
-              console.error('Error clearing last selected list:', updateErr);
+              logger.error('Error clearing last selected list:', updateErr);
             }
             req.user.lastSelectedList = null;
             req.session.save();
@@ -345,7 +346,7 @@ module.exports = (app, deps) => {
 
     users.findOne({ email }, (err, user) => {
       if (err) {
-        console.error('Database error during forgot password:', err);
+        logger.error('Database error during forgot password:', err);
         req.flash('error', 'An error occurred. Please try again.');
         return res.redirect('/forgot');
       }
@@ -367,18 +368,18 @@ module.exports = (app, deps) => {
         {},
         (err, numReplaced) => {
           if (err) {
-            console.error('Failed to set reset token:', err);
+            logger.error('Failed to set reset token:', err);
             // Don't show error to user for security reasons
             return res.redirect('/forgot');
           }
 
           if (numReplaced === 0) {
-            console.error('No user updated when setting reset token');
+            logger.error('No user updated when setting reset token');
             // Don't show error to user for security reasons
             return res.redirect('/forgot');
           }
 
-          console.log('Reset token set for user:', user.email);
+          logger.info('Reset token set for user:', user.email);
 
           if (process.env.SENDGRID_API_KEY) {
             const transporter = nodemailer.createTransport({
@@ -398,12 +399,12 @@ module.exports = (app, deps) => {
 
             transporter.sendMail(emailOptions, (error, info) => {
               if (error) {
-                console.error(
+                logger.error(
                   'Failed to send password reset email:',
                   error.message
                 );
               } else {
-                console.log(
+                logger.info(
                   'Password reset email sent successfully to:',
                   user.email
                 );
@@ -413,7 +414,7 @@ module.exports = (app, deps) => {
             console.warn(
               'SENDGRID_API_KEY not configured - password reset email not sent'
             );
-            console.log('Reset token for testing:', token);
+            logger.info('Reset token for testing:', token);
           }
 
           res.redirect('/forgot');
@@ -451,7 +452,7 @@ module.exports = (app, deps) => {
       { resetToken: req.params.token, resetExpires: { $gt: Date.now() } },
       async (err, user) => {
         if (err) {
-          console.error('Error finding user with reset token:', err);
+          logger.error('Error finding user with reset token:', err);
           return res.send(
             htmlTemplate(
               invalidTokenTemplate(),
@@ -481,7 +482,7 @@ module.exports = (app, deps) => {
             {},
             (err, numReplaced) => {
               if (err) {
-                console.error('Password reset update error:', err);
+                logger.error('Password reset update error:', err);
                 req.flash(
                   'error',
                   'Error updating password. Please try again.'
@@ -490,7 +491,7 @@ module.exports = (app, deps) => {
               }
 
               if (numReplaced === 0) {
-                console.error('No user updated during password reset');
+                logger.error('No user updated during password reset');
                 req.flash(
                   'error',
                   'Error updating password. Please try again.'
@@ -498,7 +499,7 @@ module.exports = (app, deps) => {
                 return res.redirect('/reset/' + req.params.token);
               }
 
-              console.log(
+              logger.info(
                 'Password successfully updated for user:',
                 user.email
               );
@@ -510,7 +511,7 @@ module.exports = (app, deps) => {
             }
           );
         } catch (error) {
-          console.error('Password hashing error:', error);
+          logger.error('Password hashing error:', error);
           req.flash('error', 'Error processing password. Please try again.');
           res.redirect('/reset/' + req.params.token);
         }
@@ -536,7 +537,7 @@ module.exports = (app, deps) => {
       const data = await response.json();
       res.json(data);
     } catch (error) {
-      console.error('Deezer proxy error:', error);
+      logger.error('Deezer proxy error:', error);
       res.status(500).json({ error: 'Failed to fetch from Deezer' });
     }
   });
@@ -557,7 +558,7 @@ module.exports = (app, deps) => {
     if (!artist || !album) {
       return res.status(400).json({ error: 'artist and album are required' });
     }
-    console.log('Spotify album search:', artist, '-', album);
+    logger.info('Spotify album search:', artist, '-', album);
 
     try {
       const query = `album:${album} artist:${artist}`;
@@ -575,10 +576,10 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'Album not found' });
       }
       const albumId = data.albums.items[0].id;
-      console.log('Spotify search result id:', albumId);
+      logger.info('Spotify search result id:', albumId);
       res.json({ id: albumId });
     } catch (err) {
-      console.error('Spotify search error:', err);
+      logger.error('Spotify search error:', err);
       res.status(500).json({ error: 'Failed to search Spotify' });
     }
   });
@@ -608,7 +609,7 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'artist and album are required' });
     }
 
-    console.log('Tidal album search:', artist, '-', album);
+    logger.info('Tidal album search:', artist, '-', album);
 
     try {
       let countryCode = req.user.tidalCountry;
@@ -639,7 +640,7 @@ module.exports = (app, deps) => {
             countryCode = 'US';
           }
         } catch (profileErr) {
-          console.error('Tidal profile fetch error:', profileErr);
+          logger.error('Tidal profile fetch error:', profileErr);
           countryCode = 'US';
         }
       }
@@ -676,10 +677,10 @@ module.exports = (app, deps) => {
       if (!albumId) {
         return res.status(404).json({ error: 'Album not found' });
       }
-      console.log('Tidal search result id:', albumId);
+      logger.info('Tidal search result id:', albumId);
       res.json({ id: albumId });
     } catch (err) {
-      console.error('Tidal search error:', err);
+      logger.error('Tidal search error:', err);
       res.status(500).json({ error: 'Failed to search Tidal' });
     }
   });
@@ -718,7 +719,7 @@ module.exports = (app, deps) => {
         image: getMeta('image'),
       });
     } catch (err) {
-      console.error('Unfurl error:', err);
+      logger.error('Unfurl error:', err);
       res.status(500).json({ error: 'Failed to unfurl' });
     }
   });
@@ -773,7 +774,7 @@ module.exports = (app, deps) => {
             ? { tracks, releaseId: `itunes:${best.collectionId}` }
             : null;
         } catch (err) {
-          console.error('iTunes fallback error:', err);
+          logger.error('iTunes fallback error:', err);
           return null;
         }
       };
@@ -800,7 +801,7 @@ module.exports = (app, deps) => {
             ? { tracks, releaseId: `deezer:${albumId}` }
             : null;
         } catch (err) {
-          console.error('Deezer fallback error:', err);
+          logger.error('Deezer fallback error:', err);
           return null;
         }
       };
@@ -974,7 +975,7 @@ module.exports = (app, deps) => {
 
       res.json({ tracks, releaseId: best.id });
     } catch (err) {
-      console.error('MusicBrainz tracks error:', err);
+      logger.error('MusicBrainz tracks error:', err);
       res.status(500).json({ error: 'Failed to fetch tracks' });
     }
   });

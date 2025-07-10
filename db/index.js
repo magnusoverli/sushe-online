@@ -1,8 +1,8 @@
-const path = require('path');
 const MigrationManager = require('./migrations');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
 const { PgDatastore, Pool, waitForPostgres } = require('./postgres');
+const logger = require('../utils/logger');
 
 async function ensureTables(pool) {
   await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
@@ -151,7 +151,7 @@ const dataDir = process.env.DATA_DIR || './data';
 if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
-console.log('Initializing database layer');
+logger.info('Initializing database layer');
 
 let users,
   lists,
@@ -165,7 +165,7 @@ let users,
 let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {
-  console.log('Using PostgreSQL backend');
+  logger.info('Using PostgreSQL backend');
   pool = new Pool({ connectionString: process.env.DATABASE_URL });
   const usersMap = {
     _id: '_id',
@@ -281,7 +281,7 @@ if (process.env.DATABASE_URL) {
         { multi: true }
       );
     } catch (err) {
-      console.error('User migration error:', err);
+      logger.error('User migration error:', err);
     }
   }
   async function migrateLists() {
@@ -353,12 +353,12 @@ if (process.env.DATABASE_URL) {
 
   async function ensureAdminUser() {
     try {
-      console.log('Checking for admin user...');
+      logger.info('Checking for admin user...');
       const existingAdmin = await users.findOne({ username: 'admin' });
-      console.log('Existing admin user found:', !!existingAdmin);
+      logger.info('Existing admin user found:', { exists: !!existingAdmin });
 
       if (!existingAdmin) {
-        console.log('Creating admin user...');
+        logger.info('Creating admin user...');
         const hash = await bcrypt.hash('admin', 12);
         const newUser = await users.insert({
           username: 'admin',
@@ -374,55 +374,58 @@ if (process.env.DATABASE_URL) {
           updatedAt: new Date(),
           lastActivity: new Date(),
         });
-        console.log('Created admin user successfully:', newUser._id);
-        console.log('Admin login: email=admin@localhost.com, password=admin');
+        logger.info('Created admin user successfully:', {
+          userId: newUser._id,
+        });
+        logger.info('Admin login: email=admin@localhost.com, password=admin');
 
         // Verify we can find the user by email
         const verifyUser = await users.findOne({
           email: 'admin@localhost.com',
         });
-        console.log('Verification - can find admin by email:', !!verifyUser);
+        logger.info('Verification - can find admin by email:', {
+          found: !!verifyUser,
+        });
       } else {
-        console.log(
-          'Admin user already exists with email:',
-          existingAdmin.email
-        );
+        logger.info('Admin user already exists with email:', {
+          email: existingAdmin.email,
+        });
       }
     } catch (err) {
-      console.error('Error creating admin user:', err);
+      logger.error('Error creating admin user:', err);
     }
   }
 
   ready = waitForPostgres(pool)
     .then(async () => {
-      console.log('Running database migrations...');
+      logger.info('Running database migrations...');
       const migrationManager = new MigrationManager(pool);
       await migrationManager.runMigrations();
       return migrationManager;
     })
     .then(() => {
-      console.log('Creating tables (legacy)...');
+      logger.info('Creating tables (legacy)...');
       return ensureTables(pool);
     })
     .then(() => {
-      console.log('Migrating lists...');
+      logger.info('Migrating lists...');
       return migrateLists();
     })
     .then(() => {
-      console.log('Migrating albums...');
+      logger.info('Migrating albums...');
       return migrateAlbums();
     })
     .then(() => {
-      console.log('Migrating users...');
+      logger.info('Migrating users...');
       return migrateUsers();
     })
     .then(() => {
-      console.log('Ensuring admin user...');
+      logger.info('Ensuring admin user...');
       return ensureAdminUser();
     })
-    .then(() => console.log('Database ready'))
+    .then(() => logger.info('Database ready'))
     .catch((err) => {
-      console.error('Database initialization error:', err);
+      logger.error('Database initialization error:', err);
       throw err;
     });
 } else {

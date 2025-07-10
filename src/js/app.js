@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // Global variables
 let currentList = null;
 let lists = {};
@@ -293,8 +294,12 @@ async function loadCountries() {
       availableCountries.unshift(emptyItem);
     }
   } catch (error) {
-    console.error('Error loading countries:', error);
-    showToast('Error loading countries', 'error');
+    console.error('Error saving list after reorder:', error);
+    showToast('Error saving list order', 'error');
+    // Revert the change
+    const [revertItem] = list.splice(newIndex, 1);
+    list.splice(oldIndex, 0, revertItem);
+    displayAlbums(lists[currentList]);
   }
 }
 
@@ -1978,8 +1983,277 @@ function makeCommentEditable(commentDiv, albumIndex) {
   });
 }
 
-// Display albums function with editable genres and comments
-// Display albums function with editable genres and comments
+// Shared album data processing
+function processAlbumData(album, index) {
+  const position = index + 1;
+  const albumName = album.album || 'Unknown Album';
+  const artist = album.artist || 'Unknown Artist';
+  const releaseDate = formatReleaseDate(album.release_date || '');
+  const country = album.country || '';
+  const countryDisplay = country || 'Country';
+  const countryClass = country ? 'text-gray-300' : 'text-gray-500 italic';
+
+  const genre1 = album.genre_1 || album.genre || '';
+  const genre1Display = genre1 || 'Genre 1';
+  const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-500 italic';
+
+  let genre2 = album.genre_2 || '';
+  if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
+  const genre2Display = genre2 || 'Genre 2';
+  const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-500 italic';
+
+  let comment = album.comments || album.comment || '';
+  if (comment === 'Comment') comment = '';
+
+  const coverImage = album.cover_image || '';
+  const imageFormat = album.cover_image_format || 'PNG';
+
+  return {
+    position,
+    albumName,
+    artist,
+    releaseDate,
+    country,
+    countryDisplay,
+    countryClass,
+    genre1,
+    genre1Display,
+    genre1Class,
+    genre2,
+    genre2Display,
+    genre2Class,
+    comment,
+    coverImage,
+    imageFormat,
+  };
+}
+
+// Create album item component (works for both desktop and mobile)
+function createAlbumItem(album, index, isMobile = false) {
+  const data = processAlbumData(album, index);
+
+  if (isMobile) {
+    return createMobileAlbumCard(data, index);
+  } else {
+    return createDesktopAlbumRow(data, index);
+  }
+}
+
+// Create desktop album row (preserves exact current design)
+function createDesktopAlbumRow(data, index) {
+  const row = document.createElement('div');
+  row.className =
+    'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
+  row.dataset.index = index;
+
+  row.innerHTML = `
+    <div class="flex items-center justify-center text-gray-400 font-medium">${data.position}</div>
+    <div class="flex items-center">
+      <div class="album-cover-container">
+        ${
+          data.coverImage
+            ? `
+          <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
+              alt="${data.albumName}" 
+              class="album-cover rounded shadow-lg"
+              loading="lazy"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+          >
+        `
+            : `
+          <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+          </div>
+        `
+        }
+      </div>
+    </div>
+    <div class="flex flex-col justify-center">
+      <div class="font-semibold text-white truncate">${data.albumName}</div>
+      <div class="text-xs text-gray-400 mt-0.5">${data.releaseDate}</div>
+    </div>
+    <div class="flex items-center">
+      <span class="text-sm text-gray-300 truncate">${data.artist}</span>
+    </div>
+    <div class="flex items-center country-cell">
+      <span class="text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
+    </div>
+    <div class="flex items-center genre-1-cell">
+      <span class="text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
+    </div>
+    <div class="flex items-center genre-2-cell">
+      <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
+    </div>
+    <div class="flex items-center comment-cell">
+      <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${data.comment}</span>
+    </div>
+  `;
+
+  // Add shared event handlers
+  attachDesktopEventHandlers(row, index);
+  return row;
+}
+
+// Shared event handlers for desktop rows
+function attachDesktopEventHandlers(row, index) {
+  // Add click handler to country cell
+  const countryCell = row.querySelector('.country-cell');
+  countryCell.onclick = () => makeCountryEditable(countryCell, index);
+
+  // Add click handlers to genre cells
+  const genre1Cell = row.querySelector('.genre-1-cell');
+  genre1Cell.onclick = () => makeGenreEditable(genre1Cell, index, 'genre_1');
+
+  const genre2Cell = row.querySelector('.genre-2-cell');
+  genre2Cell.onclick = () => makeGenreEditable(genre2Cell, index, 'genre_2');
+
+  // Add click handler to comment cell
+  const commentCell = row.querySelector('.comment-cell');
+  commentCell.onclick = () => makeCommentEditable(commentCell, index);
+
+  // Attach link preview
+  const album = lists[currentList][index];
+  const comment = album.comments || album.comment || '';
+  attachLinkPreview(commentCell, comment);
+
+  // Right-click handler for album rows
+  row.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    currentContextAlbum = index;
+
+    const contextMenu = document.getElementById('albumContextMenu');
+    if (!contextMenu) return;
+
+    contextMenu.style.left = `${e.clientX}px`;
+    contextMenu.style.top = `${e.clientY}px`;
+    contextMenu.classList.remove('hidden');
+
+    setTimeout(() => {
+      const rect = contextMenu.getBoundingClientRect();
+      if (rect.right > window.innerWidth) {
+        contextMenu.style.left = `${e.clientX - rect.width}px`;
+      }
+      if (rect.bottom > window.innerHeight) {
+        contextMenu.style.top = `${e.clientY - rect.height}px`;
+      }
+    }, 0);
+  });
+}
+
+// Create mobile album card (preserves exact current design)
+function createMobileAlbumCard(data, index) {
+  const cardWrapper = document.createElement('div');
+  cardWrapper.className = 'album-card-wrapper';
+
+  const card = document.createElement('div');
+  card.className =
+    'album-card bg-gray-900 border-b border-gray-800 touch-manipulation transition-all cursor-move relative overflow-hidden';
+  card.dataset.index = index;
+
+  card.innerHTML = `
+    <div class="flex items-center h-full">
+      <!-- Position number on the far left -->
+      <div class="flex-shrink-0 px-1 flex items-center justify-start text-gray-500 font-medium text-sm">
+        ${data.position}
+      </div>
+
+      <!-- Album cover -->
+      <div class="flex-shrink-0 p-1 pl-0">
+        ${
+          data.coverImage
+            ? `
+          <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
+              alt="${data.albumName}"
+              class="w-20 h-20 rounded-lg object-cover shadow-md"
+              loading="lazy">
+        `
+            : `
+          <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
+            <i class="fas fa-compact-disc text-xl text-gray-600"></i>
+          </div>
+        `
+        }
+      </div>
+      
+      <!-- Main content -->
+      <div class="flex-1 min-w-0 py-3 pr-3">
+        <div class="flex items-start gap-2">
+          <div class="flex-1 min-w-0">
+            <h3 class="font-semibold text-white text-base leading-tight truncate">${data.albumName}</h3>
+            <p class="text-sm text-gray-400 truncate mt-0.5">${data.artist}</p>
+            
+            <!-- Date and Country row -->
+            <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
+              <span class="whitespace-nowrap">${data.releaseDate}</span>
+              ${data.country ? `<span>• ${data.country}</span>` : ''}
+            </div>
+            
+            <!-- Genres row (if any) -->
+            ${
+              data.genre1 || data.genre2
+                ? `
+              <div class="text-xs text-gray-500 truncate">
+                ${data.genre1}${data.genre2 ? ` / ${data.genre2}` : ''}
+              </div>
+            `
+                : ''
+            }
+            
+            ${
+              data.comment
+                ? `
+              <p class="text-xs text-gray-400 italic mt-1 line-clamp-1">${data.comment}</p>
+            `
+                : ''
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions and drag handle on the right -->
+      <div class="flex flex-col items-center flex-shrink-0 w-8 border-l border-gray-800/50">
+        <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
+                class="p-2 text-gray-400 active:text-gray-200">
+          <i class="fas fa-ellipsis-v"></i>
+        </button>
+        <div class="drag-handle flex-1 w-full flex items-center justify-center cursor-move select-none text-gray-600"
+            style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
+          <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
+            <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
+            <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
+            <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
+            <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
+            <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  `;
+
+  cardWrapper.appendChild(card);
+
+  // Add shared event handlers
+  attachMobileEventHandlers(card, index);
+  return cardWrapper;
+}
+
+// Shared event handlers for mobile cards
+function attachMobileEventHandlers(card, index) {
+  // Attach link preview to content area
+  const album = lists[currentList][index];
+  const comment = album.comments || album.comment || '';
+  const contentDiv = card.querySelector('.flex-1.min-w-0');
+  if (contentDiv) attachLinkPreview(contentDiv, comment);
+}
+
+// Display albums function - now consolidated
 function displayAlbums(albums) {
   const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
   const container = document.getElementById('albumContainer');
@@ -2001,12 +2275,15 @@ function displayAlbums(albums) {
     return;
   }
 
-  if (!isMobile) {
-    // Desktop view - table layout
-    const table = document.createElement('div');
-    table.className = 'w-full relative';
+  // Create container based on view type
+  let albumContainer;
 
-    // Header - using album-grid class
+  if (!isMobile) {
+    // Desktop: Table layout with header
+    albumContainer = document.createElement('div');
+    albumContainer.className = 'w-full relative';
+
+    // Header
     const header = document.createElement('div');
     header.className =
       'album-row album-header album-grid gap-4 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
@@ -2021,283 +2298,102 @@ function displayAlbums(albums) {
       <div>Genre 2</div>
       <div>Comment</div>
     `;
-    table.appendChild(header);
+    albumContainer.appendChild(header);
 
     const rowsContainer = document.createElement('div');
     rowsContainer.className = 'album-rows-container relative';
 
+    // Create album rows
     albums.forEach((album, index) => {
-      const row = document.createElement('div');
-      row.className =
-        'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
-      row.dataset.index = index;
-
-      const position = index + 1;
-      const albumName = album.album || 'Unknown Album';
-      const artist = album.artist || 'Unknown Artist';
-
-      const country = album.country || '';
-      const countryDisplay = country || 'Country';
-      const countryClass = country ? 'text-gray-300' : 'text-gray-500 italic';
-
-      const genre1 = album.genre_1 || album.genre || '';
-      const genre1Display = genre1 || 'Genre 1';
-      const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-500 italic';
-
-      let genre2 = album.genre_2 || '';
-      if (genre2 === 'Genre 2' || genre2 === '-') {
-        genre2 = '';
-      }
-      const genre2Display = genre2 || 'Genre 2';
-      const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-500 italic';
-
-      let comment = album.comments || album.comment || '';
-      if (comment === 'Comment') {
-        comment = '';
-      }
-
-      const releaseDate = formatReleaseDate(album.release_date || '');
-      const coverImage = album.cover_image || '';
-      const imageFormat = album.cover_image_format || 'PNG';
-
-      row.innerHTML = `
-        <div class="flex items-center justify-center text-gray-400 font-medium">${position}</div>
-        <div class="flex items-center">
-          <div class="album-cover-container">
-            ${
-              coverImage
-                ? `
-              <img src="data:image/${imageFormat};base64,${coverImage}" 
-                  alt="${albumName}" 
-                  class="album-cover rounded shadow-lg"
-                  loading="lazy"
-                  onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
-              >
-            `
-                : `
-              <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                  <polyline points="21 15 16 10 5 21"></polyline>
-                </svg>
-              </div>
-            `
-            }
-          </div>
-        </div>
-        <div class="flex flex-col justify-center min-w-0">
-          <div class="font-medium text-white truncate">${albumName}</div>
-          <div class="text-xs text-gray-400">${releaseDate}</div>
-        </div>
-        <div class="flex items-center text-gray-300 truncate">${artist}</div>
-        <div class="flex items-center country-cell">
-          <span class="text-sm ${countryClass} truncate cursor-pointer hover:text-gray-100">${countryDisplay}</span>
-        </div>
-        <div class="flex items-center genre-cell genre-1-cell">
-          <span class="text-sm ${genre1Class} truncate cursor-pointer hover:text-gray-100">${genre1Display}</span>
-        </div>
-        <div class="flex items-center genre-cell genre-2-cell">
-          <span class="text-sm ${genre2Class} truncate cursor-pointer hover:text-gray-100">${genre2Display}</span>
-        </div>
-        <div class="flex items-center comment-cell">
-          <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${comment}</span>
-        </div>
-      `;
-
-      // Add click handler to country cell
-      const countryCell = row.querySelector('.country-cell');
-      countryCell.onclick = () => makeCountryEditable(countryCell, index);
-
-      // Add click handlers to genre cells
-      const genre1Cell = row.querySelector('.genre-1-cell');
-      genre1Cell.onclick = () =>
-        makeGenreEditable(genre1Cell, index, 'genre_1');
-
-      const genre2Cell = row.querySelector('.genre-2-cell');
-      genre2Cell.onclick = () =>
-        makeGenreEditable(genre2Cell, index, 'genre_2');
-
-      // Add click handler to comment cell
-      const commentCell = row.querySelector('.comment-cell');
-      commentCell.onclick = () => makeCommentEditable(commentCell, index);
-
-      attachLinkPreview(commentCell, comment);
-
-      // Make row draggable using DragDropManager
-      if (window.DragDropManager) {
-        window.DragDropManager.makeRowDraggable(row);
-      }
-
-      // Right-click handler for album rows
-      row.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        currentContextAlbum = index;
-
-        const contextMenu = document.getElementById('albumContextMenu');
-        if (!contextMenu) return;
-
-        contextMenu.style.left = `${e.clientX}px`;
-        contextMenu.style.top = `${e.clientY}px`;
-        contextMenu.classList.remove('hidden');
-
-        setTimeout(() => {
-          const rect = contextMenu.getBoundingClientRect();
-          if (rect.right > window.innerWidth) {
-            contextMenu.style.left = `${e.clientX - rect.width}px`;
-          }
-          if (rect.bottom > window.innerHeight) {
-            contextMenu.style.top = `${e.clientY - rect.height}px`;
-          }
-        }, 0);
-      });
-
+      const row = createAlbumItem(album, index, false);
       rowsContainer.appendChild(row);
     });
 
-    table.appendChild(rowsContainer);
-    container.appendChild(table);
-
-    // Initialize drag and drop
-    if (window.DragDropManager) {
-      window.DragDropManager.initialize();
-
-      window.DragDropManager.setupDropHandler(
-        async (draggedIndex, dropIndex, needsRebuild) => {
-          if (needsRebuild) {
-            displayAlbums(lists[currentList]);
-            return;
-          }
-
-          if (draggedIndex !== null && dropIndex !== null) {
-            const list = lists[currentList];
-            const [movedItem] = list.splice(draggedIndex, 1);
-            list.splice(dropIndex, 0, movedItem);
-
-            await saveList(currentList, list);
-          }
-        }
-      );
-    }
+    albumContainer.appendChild(rowsContainer);
   } else {
-    // Mobile view - card-based layout with SortableJS
-    const mobileContainer = document.createElement('div');
-    mobileContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
+    // Mobile: Card layout
+    albumContainer = document.createElement('div');
+    albumContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
 
+    // Create album cards
     albums.forEach((album, index) => {
-      const cardWrapper = document.createElement('div');
-      cardWrapper.className = 'album-card-wrapper';
-
-      const card = document.createElement('div');
-      card.className =
-        'album-card bg-gray-900 border-b border-gray-800 touch-manipulation transition-all cursor-move relative overflow-hidden';
-      card.dataset.index = index;
-
-      const albumName = album.album || 'Unknown Album';
-      const artist = album.artist || 'Unknown Artist';
-      const releaseDate = formatReleaseDate(album.release_date || '');
-      const country = album.country || '';
-      const genre1 = album.genre_1 || album.genre || '';
-      let genre2 = album.genre_2 || '';
-      if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
-      let comment = album.comments || album.comment || '';
-      if (comment === 'Comment') comment = '';
-
-      card.innerHTML = `
-        <div class="flex items-center h-full">
-          <!-- Position number on the far left -->
-          <div class="flex-shrink-0 px-1 flex items-center justify-start text-gray-500 font-medium text-sm">
-            ${index + 1}
-          </div>
-
-          <!-- Album cover -->
-          <div class="flex-shrink-0 p-1 pl-0">
-            ${
-              album.cover_image
-                ? `
-              <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}"
-                  alt="${albumName}"
-                  class="w-20 h-20 rounded-lg object-cover shadow-md"
-                  loading="lazy">
-            `
-                : `
-              <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
-                <i class="fas fa-compact-disc text-xl text-gray-600"></i>
-              </div>
-            `
-            }
-          </div>
-          
-          <!-- Main content -->
-          <div class="flex-1 min-w-0 py-3 pr-3">
-            <div class="flex items-start gap-2">
-              <div class="flex-1 min-w-0">
-                <h3 class="font-semibold text-white text-base leading-tight truncate">${albumName}</h3>
-                <p class="text-sm text-gray-400 truncate mt-0.5">${artist}</p>
-                
-                <!-- Date and Country row -->
-                <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
-                  <span class="whitespace-nowrap">${releaseDate}</span>
-                  ${country ? `<span>• ${country}</span>` : ''}
-                </div>
-                
-                <!-- Genres row (if any) -->
-                ${
-                  genre1 || genre2
-                    ? `
-                  <div class="text-xs text-gray-500 truncate">
-                    ${genre1}${genre2 ? ` / ${genre2}` : ''}
-                  </div>
-                `
-                    : ''
-                }
-                
-                ${
-                  comment
-                    ? `
-                  <p class="text-xs text-gray-400 italic mt-1 line-clamp-1">${comment}</p>
-                `
-                    : ''
-                }
-              </div>
-              
-            </div>
-          </div>
-
-          <!-- Actions and drag handle on the right -->
-          <div class="flex flex-col items-center flex-shrink-0 w-8 border-l border-gray-800/50">
-            <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
-                    class="p-2 text-gray-400 active:text-gray-200">
-              <i class="fas fa-ellipsis-v"></i>
-            </button>
-            <div class="drag-handle flex-1 w-full flex items-center justify-center cursor-move select-none text-gray-600"
-                style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-              <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
-                <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
-                <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-                <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
-                <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
-              </svg>
-            </div>
-          </div>
-        </div>
-      `;
-
-      cardWrapper.appendChild(card);
-      const contentDiv = card.querySelector('.flex-1.min-w-0');
-      if (contentDiv) attachLinkPreview(contentDiv, comment);
-      mobileContainer.appendChild(cardWrapper);
+      const card = createAlbumItem(album, index, true);
+      albumContainer.appendChild(card);
     });
-
-    container.appendChild(mobileContainer);
-
-    // Initialize SortableJS for mobile
-    initializeMobileSorting(mobileContainer);
   }
+
+  container.appendChild(albumContainer);
+
+  // Initialize SortableJS for both desktop and mobile
+  initializeUnifiedSorting(albumContainer, isMobile);
+}
+
+// Unified sorting function using SortableJS for both desktop and mobile
+function initializeUnifiedSorting(container, isMobile) {
+  if (!window.Sortable) {
+    console.error('SortableJS not loaded');
+    return;
+  }
+
+  // Clean up any existing sortable instance
+  if (container._sortable) {
+    container._sortable.destroy();
+  }
+
+  // Find the sortable container
+  const sortableContainer = isMobile
+    ? container
+    : container.querySelector('.album-rows-container') || container;
+
+  if (!sortableContainer) {
+    console.error('Sortable container not found');
+    return;
+  }
+
+  // Initialize SortableJS
+  const sortable = new Sortable(sortableContainer, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    dragClass: 'sortable-drag',
+    handle: isMobile ? '.drag-handle' : undefined, // Mobile uses specific handle, desktop uses entire row
+    onStart: function (evt) {
+      // Add visual feedback
+      evt.item.style.opacity = '0.5';
+    },
+    onEnd: async function (evt) {
+      // Remove visual feedback
+      evt.item.style.opacity = '';
+
+      const oldIndex = evt.oldIndex;
+      const newIndex = evt.newIndex;
+
+      if (oldIndex !== newIndex) {
+        // Update the data
+        const list = lists[currentList];
+        const [movedItem] = list.splice(oldIndex, 1);
+        list.splice(newIndex, 0, movedItem);
+
+        try {
+          await saveList(currentList, list);
+          // Update position numbers
+          displayAlbums(lists[currentList]);
+        } catch (error) {
+          logger.error('Error saving list after reorder', {
+            error: error.message,
+          });
+          showToast('Error saving list order', 'error');
+          // Revert the change
+          const [revertItem] = list.splice(newIndex, 1);
+          list.splice(oldIndex, 0, revertItem);
+          displayAlbums(lists[currentList]);
+        }
+      }
+    },
+  });
+
+  // Store reference for cleanup
+  container._sortable = sortable;
 }
 
 // Add this function to handle mobile album actions

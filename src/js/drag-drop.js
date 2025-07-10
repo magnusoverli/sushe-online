@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // Drag and Drop Module for Album Reordering
 const DragDropManager = (function () {
   // Drag and drop state

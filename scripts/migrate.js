@@ -10,7 +10,7 @@ async function main() {
   const command = process.argv[2];
 
   if (!process.env.DATABASE_URL) {
-    console.error('DATABASE_URL environment variable is required');
+    logger.error('DATABASE_URL environment variable is required');
     process.exit(1);
   }
 
@@ -31,10 +31,13 @@ async function main() {
 
       case 'status':
         const status = await migrationManager.getMigrationStatus();
+        // eslint-disable-next-line no-console
         console.log('\nMigration Status:');
+        // eslint-disable-next-line no-console
         console.log('================');
         status.forEach((migration) => {
           const status = migration.executed ? '✓ Executed' : '✗ Pending';
+          // eslint-disable-next-line no-console
           console.log(`${status} - ${migration.version}`);
         });
         break;
@@ -42,18 +45,23 @@ async function main() {
       case 'create':
         const name = process.argv[3];
         if (!name) {
-          console.error('Migration name is required');
-          console.error('Usage: npm run migrate:create <migration_name>');
+          logger.error('Migration name is required');
+          logger.error('Usage: npm run migrate:create <migration_name>');
           process.exit(1);
         }
         await createMigration(name);
         break;
 
       default:
+        // eslint-disable-next-line no-console
         console.log('Usage:');
+        // eslint-disable-next-line no-console
         console.log('  npm run migrate up      - Run pending migrations');
+        // eslint-disable-next-line no-console
         console.log('  npm run migrate down    - Rollback last migration');
+        // eslint-disable-next-line no-console
         console.log('  npm run migrate status  - Show migration status');
+        // eslint-disable-next-line no-console
         console.log('  npm run migrate create <name> - Create new migration');
         break;
     }
@@ -103,7 +111,9 @@ module.exports = {
   const filePath = path.join(migrationsDir, filename);
   fs.writeFileSync(filePath, template);
 
+  // eslint-disable-next-line no-console
   console.log(`Created migration: ${filename}`);
+  // eslint-disable-next-line no-console
   console.log(`Path: ${filePath}`);
 }
 
