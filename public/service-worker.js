@@ -35,6 +35,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  // Skip service worker for navigation requests to avoid redirect issues
+  if (event.request.mode === 'navigate') {
+    return;
+  }
+
   event.respondWith(
     caches
       .match(event.request)
@@ -43,10 +48,12 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         return fetch(event.request).then((response) => {
+          // Don't cache redirects or non-successful responses
           if (
             !response ||
             response.status !== 200 ||
-            response.type !== 'basic'
+            response.type !== 'basic' ||
+            response.redirected
           ) {
             return response;
           }
@@ -58,8 +65,9 @@ self.addEventListener('fetch', (event) => {
         });
       })
       .catch(() => {
+        // Only serve cached fallback for static assets, not navigation
         if (event.request.destination === 'document') {
-          return caches.match('/');
+          return fetch(event.request);
         }
       })
   );
