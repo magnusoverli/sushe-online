@@ -6,6 +6,9 @@ export default [
   js.configs.recommended,
   prettierConfig,
   {
+    ignores: ['public/js/bundle.js', 'dist/**', 'node_modules/**'],
+  },
+  {
     files: ['**/*.js'],
     plugins: {
       prettier,
