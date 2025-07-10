@@ -597,6 +597,32 @@ authRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);
 
+// Icon routes for iOS/Safari compatibility
+app.get('/favicon.ico', (req, res) => {
+  res.redirect('/icons/ios/32.png');
+});
+
+app.get('/apple-touch-icon.png', (req, res) => {
+  res.redirect('/icons/ios/180.png'); // Standard iOS touch icon size
+});
+
+app.get('/apple-touch-icon-precomposed.png', (req, res) => {
+  res.redirect('/icons/ios/180.png');
+});
+
+// Additional common iOS icon sizes
+app.get('/apple-touch-icon-120x120.png', (req, res) => {
+  res.redirect('/icons/ios/120.png');
+});
+
+app.get('/apple-touch-icon-152x152.png', (req, res) => {
+  res.redirect('/icons/ios/152.png');
+});
+
+app.get('/apple-touch-icon-180x180.png', (req, res) => {
+  res.redirect('/icons/ios/180.png');
+});
+
 // 404 handler for unmatched routes
 app.use(notFoundHandler);
 
