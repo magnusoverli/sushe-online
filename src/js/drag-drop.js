@@ -354,20 +354,20 @@ const DragDropManager = (function () {
     cachedRows = [];
   }
 
-  // Update positions without rebuilding
+  // Update positions without rebuilding - optimized version
   function updateAlbumPositions(container) {
-    const rows = Array.from(container.querySelectorAll('.album-row'));
+    const rows = container.querySelectorAll('.album-row');
 
-    rows.forEach((row, index) => {
-      // Update the position number
+    // Use for loop for better performance than forEach
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      // Cache the position element lookup
       const positionEl = row.querySelector('.flex.items-center.justify-center');
       if (positionEl) {
-        positionEl.textContent = index + 1;
+        positionEl.textContent = i + 1;
       }
-
-      // Update the data-index attribute
-      row.dataset.index = index;
-    });
+      row.dataset.index = i;
+    }
   }
 
   // Make row draggable

@@ -2059,10 +2059,69 @@ function displayAlbums(albums) {
 
   container.appendChild(albumContainer);
 
+  // Clear position cache when rebuilding
+  clearPositionCache();
+
   // Initialize SortableJS for both desktop and mobile
   initializeUnifiedSorting(albumContainer, isMobile);
 }
 
+// Position element cache for performance
+let positionElementCache = new WeakMap();
+
+// Optimized position number update with caching
+function updatePositionNumbers(container, isMobile) {
+  let rows;
+
+  if (isMobile) {
+    rows = container.children;
+  } else {
+    const rowsContainer = container.querySelector('.album-rows-container');
+    rows = rowsContainer ? rowsContainer.children : container.children;
+  }
+
+  // Use requestAnimationFrame for smooth updates
+  requestAnimationFrame(() => {
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+
+      // Use cached position element or find and cache it
+      let positionEl = positionElementCache.get(row);
+      if (!positionEl) {
+        positionEl = isMobile
+          ? row.querySelector('.position-number, .text-2xl.font-bold')
+          : row.querySelector('.flex.items-center.justify-center');
+        if (positionEl) {
+          positionElementCache.set(row, positionEl);
+        }
+      }
+
+      if (positionEl) {
+        positionEl.textContent = i + 1;
+      }
+      row.dataset.index = i;
+    }
+  });
+}
+
+// Debounced save function to batch rapid changes
+let saveTimeout = null;
+function debouncedSaveList(listName, listData, delay = 300) {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(async () => {
+    try {
+      await saveList(listName, listData);
+    } catch (error) {
+      console.error('Error saving list:', error);
+      showToast('Error saving list order', 'error');
+    }
+  }, delay);
+}
+
+// Clear cache when list changes
+function clearPositionCache() {
+  positionElementCache = new WeakMap();
+}
 // Unified sorting function using SortableJS for both desktop and mobile
 function initializeUnifiedSorting(container, isMobile) {
   if (!window.Sortable) {
@@ -2126,18 +2185,11 @@ function initializeUnifiedSorting(container, isMobile) {
         const [movedItem] = list.splice(oldIndex, 1);
         list.splice(newIndex, 0, movedItem);
 
-        try {
-          await saveList(currentList, list);
-          // Update position numbers
-          displayAlbums(lists[currentList]);
-        } catch (error) {
-          console.error('Error saving list after reorder:', error);
-          showToast('Error saving list order', 'error');
-          // Revert the change
-          const [revertItem] = list.splice(newIndex, 1);
-          list.splice(oldIndex, 0, revertItem);
-          displayAlbums(lists[currentList]);
-        }
+        // Immediate optimistic UI update
+        updatePositionNumbers(sortableContainer, isMobile);
+
+        // Debounced server save to batch rapid changes
+        debouncedSaveList(currentList, list);
       }
     },
   };
