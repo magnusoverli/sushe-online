@@ -1,3 +1,164 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* SortableJS Touch-and-Hold Drag Styles */
+@layer components {
+  /* SortableJS ghost element (placeholder during drag) */
+  .sortable-ghost {
+    @apply opacity-30 bg-gray-800/50 border-2 border-dashed;
+    border-color: var(--accent-color) !important;
+    transform: scale(0.98);
+  }
+
+  /* SortableJS chosen element (element being dragged) */
+  .sortable-chosen {
+    @apply cursor-grabbing;
+    transform: scale(1.02);
+    z-index: 1000;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* SortableJS drag element (fallback drag element) */
+  .sortable-drag {
+    @apply opacity-80;
+    transform: rotate(2deg);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  }
+
+  /* SortableJS fallback element for touch devices */
+  .sortable-fallback {
+    @apply opacity-90 cursor-grabbing;
+    transform: scale(1.05) rotate(1deg);
+    z-index: 100000;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+    border: 2px solid var(--accent-color);
+  }
+
+  /* Mobile-specific dragging state */
+  .dragging-mobile {
+    @apply opacity-70;
+    transform: scale(1.03);
+    transition: all 0.2s ease;
+  }
+
+  /* Container scrolling state */
+  .sortable-scrolling {
+    position: relative;
+  }
+
+  .sortable-scrolling::before,
+  .sortable-scrolling::after {
+    content: '';
+    position: fixed;
+    left: 0;
+    right: 0;
+    height: 40px;
+    pointer-events: none;
+    z-index: 1000;
+    background: linear-gradient(
+      to bottom,
+      var(--accent-shadow) 0%,
+      var(--accent-subtle) 50%,
+      transparent 100%
+    );
+  }
+
+  .sortable-scrolling::before {
+    top: 0;
+  }
+
+  .sortable-scrolling::after {
+    bottom: 0;
+    transform: rotate(180deg);
+  }
+
+  /* Touch feedback for mobile */
+  @media (max-width: 768px) {
+    .album-card,
+    .album-row {
+      @apply touch-manipulation;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      cursor: grab;
+    }
+
+    /* Visual feedback for touch-and-hold on entire card */
+    .sortable-chosen.album-card,
+    .sortable-chosen.album-row {
+      background-color: var(--accent-subtle) !important;
+      border-color: var(--accent-color) !important;
+      animation: pulse-drag 1s ease-in-out infinite;
+      cursor: grabbing;
+    }
+
+    /* Subtle hover effect to indicate interactivity */
+    .album-card:active,
+    .album-row:active {
+      background-color: rgba(55, 65, 81, 0.5) !important;
+      transform: scale(0.98);
+      transition: all 0.1s ease;
+    }
+
+    /* Ensure buttons remain interactive */
+    .album-card button,
+    .album-row button {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+  }
+
+  /* Pulse animation for active drag state */
+  @keyframes pulse-drag {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 var(--accent-shadow);
+    }
+    50% {
+      box-shadow: 0 0 0 8px transparent;
+    }
+  }
+
+  /* Subtle animation to indicate touch-and-hold capability */
+  @media (max-width: 768px) {
+    .album-card {
+      transition: all 0.2s ease;
+    }
+
+    /* Long press indication - subtle scale effect during delay */
+    .sortable-delay .album-card,
+    .sortable-delay .album-row {
+      transform: scale(0.99);
+      background-color: rgba(55, 65, 81, 0.3) !important;
+      transition: all 0.3s ease;
+    }
+  }
+  50% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+
+/* Prevent dragging on interactive elements */
+.no-drag {
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+/* Smooth transitions for position changes */
+.album-row,
+.album-card {
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+/* Disable transitions during sorting for better performance */
+.sortable-chosen,
+.sortable-ghost,
+.sortable-drag {
+  transition: none !important;
+}

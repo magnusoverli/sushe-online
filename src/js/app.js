@@ -1790,7 +1790,7 @@ function createAlbumItem(album, index, isMobile = false) {
 function createDesktopAlbumRow(data, index) {
   const row = document.createElement('div');
   row.className =
-    'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 cursor-move hover:bg-gray-800/30 transition-colors';
+    'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 hover:bg-gray-800/30 transition-colors';
   row.dataset.index = index;
 
   row.innerHTML = `
@@ -1900,7 +1900,7 @@ function createMobileAlbumCard(data, index) {
 
   const card = document.createElement('div');
   card.className =
-    'album-card bg-gray-900 border-b border-gray-800 touch-manipulation transition-all cursor-move relative overflow-hidden';
+    'album-card album-row bg-gray-900 border-b border-gray-800 touch-manipulation transition-all relative overflow-hidden';
   card.dataset.index = index;
 
   card.innerHTML = `
@@ -1963,23 +1963,12 @@ function createMobileAlbumCard(data, index) {
         </div>
       </div>
 
-      <!-- Actions and drag handle on the right -->
-      <div class="flex flex-col items-center flex-shrink-0 w-8 border-l border-gray-800/50">
+      <!-- Actions on the right -->
+      <div class="flex items-center justify-center flex-shrink-0 w-8 border-l border-gray-800/50">
         <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
-                class="p-2 text-gray-400 active:text-gray-200">
+                class="p-2 text-gray-400 active:text-gray-200 no-drag">
           <i class="fas fa-ellipsis-v"></i>
         </button>
-        <div class="drag-handle flex-1 w-full flex items-center justify-center cursor-move select-none text-gray-600"
-            style="touch-action: none; -webkit-user-select: none; -webkit-touch-callout: none;">
-          <svg width="16" height="24" viewBox="0 0 16 24" fill="none" class="pointer-events-none opacity-50">
-            <circle cx="5" cy="6" r="1.5" fill="currentColor"/>
-            <circle cx="5" cy="12" r="1.5" fill="currentColor"/>
-            <circle cx="5" cy="18" r="1.5" fill="currentColor"/>
-            <circle cx="11" cy="6" r="1.5" fill="currentColor"/>
-            <circle cx="11" cy="12" r="1.5" fill="currentColor"/>
-            <circle cx="11" cy="18" r="1.5" fill="currentColor"/>
-          </svg>
-        </div>
       </div>
     </div>
   `;
@@ -2197,50 +2186,97 @@ function initializeUnifiedSorting(container, isMobile) {
 
   // Configure SortableJS options
   const sortableOptions = {
-    animation: 150,
+    animation: 200,
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
-    handle: isMobile ? '.drag-handle' : undefined,
+
+    // Touch-and-hold configuration for mobile
+    ...(isMobile && {
+      delay: 500, // 500ms touch-and-hold delay
+      delayOnTouchOnly: true,
+      touchStartThreshold: 10,
+      forceFallback: true,
+      fallbackTolerance: 5,
+    }),
+
+    // Filter to prevent dragging on interactive elements
+    filter: 'button, input, textarea, select, .no-drag',
+    preventOnFilter: true,
 
     // Enable built-in scrolling - works well for both desktop and mobile
     scroll: true,
     scrollSensitivity: isMobile ? 50 : 30,
     scrollSpeed: isMobile ? 15 : 10,
 
-    // Simplified event handlers
+    // Enhanced event handlers
     onStart: function (evt) {
-      // Minimal visual feedback - let CSS classes handle the rest
+      // Visual feedback
       if (!isMobile) {
         document.body.classList.add('desktop-dragging');
       } else {
-        // Prevent body scroll on mobile during drag
+        // Mobile-specific feedback
         document.body.style.overflow = 'hidden';
+        evt.item.classList.add('dragging-mobile');
+
+        // Haptic feedback if available
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+      }
+
+      // Add scrolling class to container
+      const container = evt.item.closest('#albumContainer');
+      if (container) {
+        container.classList.add('sortable-scrolling');
       }
     },
 
     onEnd: async function (evt) {
-      // Clean up
+      // Clean up visual feedback
       if (!isMobile) {
         document.body.classList.remove('desktop-dragging');
       } else {
         document.body.style.overflow = '';
+        evt.item.classList.remove('dragging-mobile');
+      }
+
+      // Remove scrolling class
+      const container = evt.item.closest('#albumContainer');
+      if (container) {
+        container.classList.remove('sortable-scrolling');
       }
 
       const oldIndex = evt.oldIndex;
       const newIndex = evt.newIndex;
 
       if (oldIndex !== newIndex) {
-        // Update the data
-        const list = lists[currentList];
-        const [movedItem] = list.splice(oldIndex, 1);
-        list.splice(newIndex, 0, movedItem);
+        try {
+          // Update the data
+          const list = lists[currentList];
+          const [movedItem] = list.splice(oldIndex, 1);
+          list.splice(newIndex, 0, movedItem);
 
-        // Immediate optimistic UI update
-        updatePositionNumbers(sortableContainer, isMobile);
+          // Immediate optimistic UI update
+          updatePositionNumbers(sortableContainer, isMobile);
 
-        // Debounced server save to batch rapid changes
-        debouncedSaveList(currentList, list);
+          // Debounced server save to batch rapid changes
+          debouncedSaveList(currentList, list);
+        } catch (error) {
+          console.error('Error saving reorder:', error);
+          if (window.showToast) {
+            window.showToast('Error saving changes', 'error');
+          }
+          // Revert the change on error
+          const items = Array.from(evt.to.children);
+          const itemToMove = items[newIndex];
+          if (oldIndex < items.length) {
+            evt.to.insertBefore(itemToMove, items[oldIndex]);
+          } else {
+            evt.to.appendChild(itemToMove);
+          }
+          updatePositionNumbers(sortableContainer, isMobile);
+        }
       }
     },
   };

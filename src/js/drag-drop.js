@@ -1,24 +1,19 @@
 /* eslint-disable no-console */
-// Drag and Drop Module for Album Reordering
-const DragDropManager = (function () {
-  // Drag and drop state
-  let draggedElement = null;
-  let draggedIndex = null;
-  let dropTargetElement = null;
-  let lastValidDropIndex = null;
+// SortableJS-based Drag and Drop Module for Album Reordering
+import Sortable from 'sortablejs';
 
-  // Auto-scroll state
-  let autoScrollInterval = null;
-  let currentScrollSpeed = 0;
-  let scrollAcceleration = 1;
-  let scrollableContainer = null;
-  // Cached rows for efficient lookups during drag
-  let cachedRows = [];
+const DragDropManager = (function () {
+  // SortableJS instances
+  let sortableInstance = null;
+  let saveCallback = null;
+
+  // Mobile detection
+  const isMobile = () => window.innerWidth <= 768 || 'ontouchstart' in window;
 
   // Prevent duplicate initialization
   let initialized = false;
 
-  // Initialize drag and drop for container
+  // Initialize SortableJS for container
   function initialize() {
     const container = document.getElementById('albumContainer');
     if (!container) return;
@@ -26,337 +21,153 @@ const DragDropManager = (function () {
     if (initialized) return;
     initialized = true;
 
-    container.addEventListener('dragover', handleContainerDragOver);
-    container.addEventListener('dragleave', handleContainerDragLeave);
-  }
+    // Find the rows container
+    const rowsContainer =
+      container.querySelector('.album-rows-container') ||
+      container.querySelector('.mobile-album-list') ||
+      container;
 
-  // Enhanced auto-scroll implementation
-  function startAutoScroll(direction, speed) {
-    if (autoScrollInterval) {
-      clearInterval(autoScrollInterval);
+    if (!rowsContainer) return;
+
+    // Destroy existing instance if it exists
+    if (sortableInstance) {
+      sortableInstance.destroy();
     }
 
-    currentScrollSpeed = speed;
-    scrollAcceleration = 1;
+    // Configure SortableJS options
+    const sortableOptions = {
+      animation: 200,
+      ghostClass: 'sortable-ghost',
+      chosenClass: 'sortable-chosen',
+      dragClass: 'sortable-drag',
+      forceFallback: false,
+      fallbackClass: 'sortable-fallback',
+      fallbackOnBody: true,
+      swapThreshold: 0.65,
+      invertSwap: false,
+      invertedSwapThreshold: 0.1,
+      direction: 'vertical',
+      touchStartThreshold: 3,
 
-    autoScrollInterval = setInterval(() => {
-      if (scrollableContainer) {
-        // Gradually increase speed for smoother acceleration
-        if (scrollAcceleration < 2.5) {
-          scrollAcceleration += 0.05;
-        }
+      // Mobile-specific options
+      ...(isMobile() && {
+        delay: 500, // 500ms touch-and-hold delay
+        delayOnTouchOnly: true,
+        touchStartThreshold: 10,
+        forceFallback: true,
+        fallbackTolerance: 5,
+      }),
 
-        const adjustedSpeed = currentScrollSpeed * scrollAcceleration;
-        const currentScroll = scrollableContainer.scrollTop;
-        const newScroll = currentScroll + direction * adjustedSpeed;
+      // Filter to prevent dragging on interactive elements
+      filter: 'textarea, select, input, button, .no-drag',
+      preventOnFilter: true,
 
-        if (direction > 0) {
-          const maxScroll =
-            scrollableContainer.scrollHeight - scrollableContainer.clientHeight;
-          scrollableContainer.scrollTop = Math.min(newScroll, maxScroll);
+      onStart: handleSortStart,
+      onEnd: handleSortEnd,
+      onMove: handleSortMove,
+    };
 
-          // Stop if we've reached the bottom
-          if (scrollableContainer.scrollTop >= maxScroll) {
-            stopAutoScroll();
-          }
-        } else {
-          scrollableContainer.scrollTop = Math.max(newScroll, 0);
+    // Create SortableJS instance
+    sortableInstance = Sortable.create(rowsContainer, sortableOptions);
+  }
 
-          // Stop if we've reached the top
-          if (scrollableContainer.scrollTop <= 0) {
-            stopAutoScroll();
-          }
-        }
+  // SortableJS event handlers
+  function handleSortStart(evt) {
+    const item = evt.item;
+
+    // Add visual feedback for mobile
+    if (isMobile()) {
+      item.classList.add('dragging-mobile');
+      // Add haptic feedback if available
+      if (navigator.vibrate) {
+        navigator.vibrate(50);
       }
-    }, 16); // 60fps
-  }
+    }
 
-  function stopAutoScroll() {
-    if (autoScrollInterval) {
-      clearInterval(autoScrollInterval);
-      autoScrollInterval = null;
-      currentScrollSpeed = 0;
-      scrollAcceleration = 1;
+    // Store original index
+    item.dataset.originalIndex = evt.oldIndex;
+
+    // Add scrolling class to container for auto-scroll styling
+    const container = item.closest('#albumContainer');
+    if (container) {
+      container.classList.add('sortable-scrolling');
     }
   }
 
-  // Drag handlers
-  function handleDragStart(e) {
-    // Don't start drag if we're editing a comment or selecting genre/country
-    if (
-      e.target.tagName === 'TEXTAREA' ||
-      e.target.tagName === 'SELECT' ||
-      e.target.tagName === 'INPUT'
-    ) {
-      e.preventDefault();
+  function handleSortEnd(evt) {
+    const item = evt.item;
+    const oldIndex = parseInt(item.dataset.originalIndex);
+    const newIndex = evt.newIndex;
+
+    // Remove visual feedback
+    item.classList.remove('dragging-mobile');
+
+    // Remove scrolling class
+    const container = item.closest('#albumContainer');
+    if (container) {
+      container.classList.remove('sortable-scrolling');
+    }
+
+    // Clean up
+    delete item.dataset.originalIndex;
+
+    // Only save if position actually changed
+    if (oldIndex !== newIndex && saveCallback) {
+      // Update position numbers immediately for better UX
+      updateAlbumPositions(evt.to);
+
+      // Call save callback
+      saveCallback(oldIndex, newIndex).catch((error) => {
+        console.error('Error saving reorder:', error);
+        showToast('Error saving changes', 'error');
+        // Revert the change on error
+        if (sortableInstance) {
+          const items = Array.from(evt.to.children);
+          const itemToMove = items[newIndex];
+          if (oldIndex < items.length) {
+            evt.to.insertBefore(itemToMove, items[oldIndex]);
+          } else {
+            evt.to.appendChild(itemToMove);
+          }
+          updateAlbumPositions(evt.to);
+        }
+      });
+    }
+  }
+
+  function handleSortMove(evt) {
+    // Prevent dropping on non-draggable elements
+    const related = evt.related;
+    if (related && related.classList.contains('no-drop')) {
+      return false;
+    }
+    return true;
+  }
+
+  // Utility function to show toast messages
+  function showToast(message, type = 'info') {
+    // Try to use existing toast system if available
+    if (window.showToast) {
+      window.showToast(message, type);
       return;
     }
 
-    draggedElement = this;
-    draggedIndex = parseInt(this.dataset.index);
+    // Fallback toast implementation
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-4 py-2 rounded-lg text-white z-50 ${
+      type === 'error' ? 'bg-red-600' : 'bg-gray-800'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
 
-    // Find the scrollable container (the parent with overflow-y-auto)
-    scrollableContainer =
-      this.closest('.overflow-y-auto') ||
-      document.getElementById('albumContainer').parentElement;
-
-    // Cache current album rows for faster lookups during drag
-    const rowsContainer = this.parentNode;
-    cachedRows = Array.from(rowsContainer.querySelectorAll('.album-row'));
-
-    this.classList.add('dragging');
-
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/html', this.innerHTML);
-    requestAnimationFrame(() => {
-      // Keep element in flow while dragging
-    });
-  }
-
-  function handleContainerDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-
-    const rowsContainer = this.querySelector('.album-rows-container') || this;
-
-    // Enhanced auto-scroll logic
-    if (scrollableContainer) {
-      const clientY = e.clientY;
-      const viewportHeight = window.innerHeight;
-      const containerRect = scrollableContainer.getBoundingClientRect();
-
-      // Larger scroll zones for easier triggering (20% of viewport height each)
-      const scrollZoneSize = Math.max(80, viewportHeight * 0.2);
-
-      // Calculate effective boundaries
-      const topBoundary = Math.max(containerRect.top, 0);
-      const bottomBoundary = Math.min(containerRect.bottom, viewportHeight);
-
-      // Define scroll trigger zones
-      const topScrollTrigger = topBoundary + scrollZoneSize;
-      const bottomScrollTrigger = bottomBoundary - scrollZoneSize;
-
-      // Calculate scroll speed based on position within the zone
-      let shouldScroll = false;
-      let scrollDirection = 0;
-      let scrollSpeed = 0;
-
-      if (clientY < topScrollTrigger && clientY >= topBoundary) {
-        // In top scroll zone
-        shouldScroll = true;
-        scrollDirection = -1;
-
-        // Calculate speed based on how deep into the zone we are
-        const zoneDepth = (topScrollTrigger - clientY) / scrollZoneSize;
-        scrollSpeed = Math.max(3, Math.min(20, zoneDepth * 20));
-
-        // Extra boost if very close to edge
-        if (clientY < topBoundary + 30) {
-          scrollSpeed = Math.min(30, scrollSpeed * 1.5);
-        }
-      } else if (clientY > bottomScrollTrigger && clientY <= bottomBoundary) {
-        // In bottom scroll zone
-        shouldScroll = true;
-        scrollDirection = 1;
-
-        // Calculate speed based on how deep into the zone we are
-        const zoneDepth = (clientY - bottomScrollTrigger) / scrollZoneSize;
-        scrollSpeed = Math.max(3, Math.min(20, zoneDepth * 20));
-
-        // Extra boost if very close to edge
-        if (clientY > bottomBoundary - 30) {
-          scrollSpeed = Math.min(30, scrollSpeed * 1.5);
-        }
-      }
-
-      if (shouldScroll) {
-        startAutoScroll(scrollDirection, scrollSpeed);
-      } else {
-        stopAutoScroll();
-      }
-    }
-
-    // Determine drop position without modifying the DOM
-    const afterElement = getDragAfterElement(rowsContainer, e.clientY);
-
-    if (afterElement == null) {
-      const lastRow = rowsContainer.lastElementChild;
-      lastValidDropIndex = rowsContainer.children.length;
-      showDropIndicator(lastRow, 'bottom');
-    } else {
-      const allElements = Array.from(rowsContainer.children);
-      lastValidDropIndex = allElements.indexOf(afterElement);
-      showDropIndicator(afterElement, 'top');
-    }
-
-    this.classList.add('drag-active');
-  }
-
-  function handleContainerDragLeave(e) {
-    const rect = this.getBoundingClientRect();
-    if (
-      e.clientX < rect.left ||
-      e.clientX > rect.right ||
-      e.clientY < rect.top ||
-      e.clientY > rect.bottom
-    ) {
-      this.classList.remove('drag-active');
-      stopAutoScroll();
-      clearDropIndicator();
-    }
-  }
-
-  function getDragAfterElement(container, y) {
-    // Use cached rows when available to avoid expensive queries
-    const rows = cachedRows.length
-      ? cachedRows
-      : Array.from(container.querySelectorAll('.album-row'));
-
-    const draggableElements = rows.filter(
-      (el) => !el.classList.contains('dragging')
-    );
-
-    return draggableElements.reduce(
-      (closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
-        } else {
-          return closest;
-        }
-      },
-      { offset: Number.NEGATIVE_INFINITY }
-    ).element;
-  }
-
-  function showDropIndicator(targetElement, position) {
-    if (!targetElement) return;
-    if (dropTargetElement && dropTargetElement !== targetElement) {
-      clearDropIndicator();
-    }
-    dropTargetElement = targetElement;
-    const offset = position === 'bottom' ? 'calc(100% - 2px)' : '-2px';
-    targetElement.style.setProperty('--drop-indicator', offset);
-    targetElement.classList.add('drop-target');
-  }
-
-  function clearDropIndicator() {
-    if (dropTargetElement) {
-      dropTargetElement.classList.remove('drop-target');
-      dropTargetElement.style.removeProperty('--drop-indicator');
-      dropTargetElement = null;
-    }
-  }
-
-  function handleDragEnd(e) {
-    stopAutoScroll();
-
-    if (draggedElement) {
-      draggedElement.classList.remove('dragging');
-    }
-
-    clearDropIndicator();
-
-    document.getElementById('albumContainer').classList.remove('drag-active');
-
-    draggedElement = null;
-    draggedIndex = null;
-    lastValidDropIndex = null;
-    scrollableContainer = null;
-    cachedRows = [];
-  }
-
-  async function handleContainerDrop(e, saveCallback) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    stopAutoScroll();
-    this.classList.remove('drag-active');
-    clearDropIndicator();
-
-    if (!draggedElement || lastValidDropIndex === null) return;
-
-    const rowsContainer = this.querySelector('.album-rows-container') || this;
-
-    // Calculate the final drop index
-    let dropIndex = lastValidDropIndex;
-
-    // Get the actual number of album rows
-    const albumRows = rowsContainer.querySelectorAll('.album-row');
-    const maxIndex = albumRows.length - 1;
-
-    // Adjust drop index if dragging from before the drop position
-    if (draggedIndex < dropIndex) {
-      dropIndex--;
-    }
-
-    // Ensure drop index is within valid bounds
-    dropIndex = Math.max(0, Math.min(dropIndex, maxIndex));
-
-    // Only proceed if the position actually changed
-    if (dropIndex !== draggedIndex) {
-      try {
-        // Calculate where to insert the dragged element
-        const allRows = Array.from(
-          rowsContainer.querySelectorAll('.album-row:not(.dragging)')
-        );
-
-        // Determine the reference element for insertion
-        let referenceElement = null;
-        if (dropIndex < allRows.length) {
-          // Adjust reference based on original position
-          if (draggedIndex < dropIndex) {
-            referenceElement = allRows[dropIndex];
-          } else {
-            referenceElement = allRows[dropIndex];
-          }
-        }
-
-        // Insert the dragged element at the new position
-        if (referenceElement) {
-          rowsContainer.insertBefore(draggedElement, referenceElement);
-        } else {
-          // If no reference element, append to the end
-          rowsContainer.appendChild(draggedElement);
-        }
-
-        // Show the dragged element
-        draggedElement.classList.remove('dragging');
-
-        // Update all position numbers and data-index attributes
-        updateAlbumPositions(rowsContainer);
-
-        // Call the save callback if provided
-        if (saveCallback) {
-          await saveCallback(draggedIndex, dropIndex);
-        }
-      } catch (error) {
-        console.error('Error saving reorder:', error);
-        showToast('Error saving changes', 'error');
-        // On error, trigger a rebuild through the callback
-        if (saveCallback) {
-          saveCallback(null, null, true); // Third parameter indicates error/rebuild needed
-        }
-      }
-    } else {
-      // Position didn't change, just clean up
-      // Show the dragged element in its original position
-      draggedElement.classList.remove('dragging');
-    }
-
-    // Clean up drag state
-    draggedElement = null;
-    draggedIndex = null;
-    lastValidDropIndex = null;
-    scrollableContainer = null;
-    cachedRows = [];
+    setTimeout(() => {
+      toast.remove();
+    }, 3000);
   }
 
   // Update positions without rebuilding - optimized version
   function updateAlbumPositions(container) {
-    const rows = container.querySelectorAll('.album-row');
+    const rows = container.querySelectorAll('.album-row, .album-card');
 
     // Use for loop for better performance than forEach
     for (let i = 0; i < rows.length; i++) {
@@ -375,35 +186,40 @@ const DragDropManager = (function () {
     }
   }
 
-  // Make row draggable
+  // Make row draggable (now handled by SortableJS)
   function makeRowDraggable(row) {
-    row.draggable = true;
-    row.addEventListener('dragstart', handleDragStart);
-    row.addEventListener('dragend', handleDragEnd);
+    // SortableJS handles draggability automatically
+    // Just ensure the row has the proper classes and isn't filtered out
+    if (row.classList.contains('no-drag')) {
+      row.classList.remove('no-drag');
+    }
+  }
+
+  // Destroy SortableJS instance
+  function destroy() {
+    if (sortableInstance) {
+      sortableInstance.destroy();
+      sortableInstance = null;
+    }
+    initialized = false;
   }
 
   // Public API
   return {
     initialize,
     makeRowDraggable,
-    setupDropHandler: function (saveCallback) {
-      const container = document.getElementById('albumContainer');
-      if (container) {
-        // Remove any existing drop handlers
-        if (container._dropHandler) {
-          container.removeEventListener('drop', container._dropHandler);
-        }
-        container.removeEventListener('drop', handleContainerDrop);
-
-        // Create new handler with the callback
-        container._dropHandler = function (e) {
-          handleContainerDrop.call(this, e, saveCallback);
-        };
-
-        // Add the new handler
-        container.addEventListener('drop', container._dropHandler);
+    destroy,
+    setupDropHandler: function (callback) {
+      saveCallback = callback;
+      // Re-initialize if needed to apply the new callback
+      if (initialized) {
+        destroy();
+        initialize();
       }
     },
+    // Additional utility methods
+    updatePositions: updateAlbumPositions,
+    isMobile: isMobile,
   };
 })();
 
