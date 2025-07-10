@@ -964,6 +964,13 @@ const spotifyTemplate = (user) => `
       box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.4);
     }
     
+    /* Ensure FAB positioning is consistent across all mobile devices */
+    @media (max-width: 1023px) {
+      #addAlbumFAB {
+        bottom: calc(1.5rem + env(safe-area-inset-bottom, 1rem));
+      }
+    }
+    
     /* Album container responsive padding */
     #albumContainer {
       padding-bottom: calc(1rem + env(safe-area-inset-bottom));
@@ -971,13 +978,27 @@ const spotifyTemplate = (user) => `
 
     @media (max-width: 1023px) {
       #albumContainer {
-        padding-bottom: calc(5rem + env(safe-area-inset-bottom)); /* Space for FAB on mobile */
+        padding-bottom: calc(6rem + env(safe-area-inset-bottom)); /* Space for FAB + safe area on mobile */
       }
     }
     
     /* Safe areas for iOS */
     .safe-area-bottom {
       padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    /* Additional iPhone-specific fixes */
+    @media (max-width: 1023px) {
+      /* Ensure proper viewport handling on iPhone */
+      .main-content {
+        min-height: calc(100vh - env(safe-area-inset-top, 0px));
+        min-height: calc(100dvh - env(safe-area-inset-top, 0px));
+      }
+      
+      /* Fix for iPhone home indicator area */
+      main {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
     }
     
     /* Sortable enhancements */
@@ -1003,7 +1024,7 @@ const spotifyTemplate = (user) => `
       }
       
       body {
-        overscroll-behavior: contain;
+        overscroll-behavior: none;
         -webkit-user-select: none;
         user-select: none;
       }
@@ -1146,7 +1167,7 @@ const spotifyTemplate = (user) => `
   <button
     id="addAlbumFAB"
     class="fixed bottom-6 right-6 w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
-    style="display: none; bottom: calc(1.5rem + env(safe-area-inset-bottom));"
+    style="display: none;"
     onclick="if(window.openAddAlbumModal) window.openAddAlbumModal()"
   >
     <i class="fas fa-plus text-xl"></i>
