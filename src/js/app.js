@@ -2161,6 +2161,152 @@ function debouncedSaveList(listName, listData, delay = 300) {
   }, delay);
 }
 
+// Mobile autoscroll implementation
+let mobileAutoscrollInterval = null;
+let mobileScrollContainer = null;
+
+function startMobileAutoscroll(sortableContainer) {
+  // Find the main scroll container if not already found
+  if (!mobileScrollContainer) {
+    mobileScrollContainer = document.querySelector(
+      'main .h-full.overflow-y-auto'
+    );
+  }
+  if (!mobileScrollContainer) {
+    console.warn('Mobile scroll container not found');
+    return;
+  }
+
+  // Clear any existing interval
+  stopMobileAutoscroll();
+
+  // Start monitoring for autoscroll
+  mobileAutoscrollInterval = setInterval(() => {
+    // Try multiple selectors to find the dragged element
+    let draggedElement =
+      document.querySelector('.sortable-drag') ||
+      document.querySelector('.sortable-chosen') ||
+      document.querySelector('.dragging-mobile');
+
+    if (!draggedElement) return;
+
+    const containerRect = mobileScrollContainer.getBoundingClientRect();
+    const draggedRect = draggedElement.getBoundingClientRect();
+
+    const scrollZoneSize = 100; // Increased trigger zone for easier mobile use
+    const scrollSpeed = 6; // Slightly slower for better control
+
+    // Check if dragged element is near top or bottom of scroll container
+    const distanceFromTop = draggedRect.top - containerRect.top;
+    const distanceFromBottom = containerRect.bottom - draggedRect.bottom;
+
+    // More generous boundaries for mobile
+    if (distanceFromTop < scrollZoneSize && distanceFromTop > -50) {
+      // Scroll up
+      const intensity = Math.max(0.1, 1 - distanceFromTop / scrollZoneSize);
+      const scrollAmount = scrollSpeed * intensity;
+      mobileScrollContainer.scrollTop = Math.max(
+        0,
+        mobileScrollContainer.scrollTop - scrollAmount
+      );
+    } else if (
+      distanceFromBottom < scrollZoneSize &&
+      distanceFromBottom > -50
+    ) {
+      // Scroll down
+      const intensity = Math.max(0.1, 1 - distanceFromBottom / scrollZoneSize);
+      const scrollAmount = scrollSpeed * intensity;
+      const maxScroll =
+        mobileScrollContainer.scrollHeight - mobileScrollContainer.clientHeight;
+      mobileScrollContainer.scrollTop = Math.min(
+        maxScroll,
+        mobileScrollContainer.scrollTop + scrollAmount
+      );
+    }
+  }, 16); // ~60fps
+}
+
+function stopMobileAutoscroll() {
+  if (mobileAutoscrollInterval) {
+    clearInterval(mobileAutoscrollInterval);
+    mobileAutoscrollInterval = null;
+  }
+  mobileScrollContainer = null;
+}
+
+// Touch-based autoscroll for mobile
+let touchAutoscrollInterval = null;
+let lastTouchY = null;
+
+function startTouchAutoscroll(draggedElement) {
+  if (!mobileScrollContainer) {
+    mobileScrollContainer = document.querySelector(
+      'main .h-full.overflow-y-auto'
+    );
+  }
+  if (!mobileScrollContainer) return;
+
+  // Track touch movements
+  const handleTouchMove = (e) => {
+    if (e.touches && e.touches.length > 0) {
+      lastTouchY = e.touches[0].clientY;
+    }
+  };
+
+  document.addEventListener('touchmove', handleTouchMove, { passive: true });
+
+  // Clear any existing interval
+  stopTouchAutoscroll();
+
+  touchAutoscrollInterval = setInterval(() => {
+    if (lastTouchY === null) return;
+
+    const containerRect = mobileScrollContainer.getBoundingClientRect();
+    const scrollZoneSize = 120; // Larger zone for touch
+    const scrollSpeed = 8;
+
+    // Check touch position relative to scroll container
+    const distanceFromTop = lastTouchY - containerRect.top;
+    const distanceFromBottom = containerRect.bottom - lastTouchY;
+
+    if (distanceFromTop < scrollZoneSize && distanceFromTop > 0) {
+      // Scroll up
+      const intensity = Math.max(0.1, 1 - distanceFromTop / scrollZoneSize);
+      const scrollAmount = scrollSpeed * intensity;
+      mobileScrollContainer.scrollTop = Math.max(
+        0,
+        mobileScrollContainer.scrollTop - scrollAmount
+      );
+    } else if (distanceFromBottom < scrollZoneSize && distanceFromBottom > 0) {
+      // Scroll down
+      const intensity = Math.max(0.1, 1 - distanceFromBottom / scrollZoneSize);
+      const scrollAmount = scrollSpeed * intensity;
+      const maxScroll =
+        mobileScrollContainer.scrollHeight - mobileScrollContainer.clientHeight;
+      mobileScrollContainer.scrollTop = Math.min(
+        maxScroll,
+        mobileScrollContainer.scrollTop + scrollAmount
+      );
+    }
+  }, 16);
+
+  // Store the cleanup function
+  touchAutoscrollInterval._cleanup = () => {
+    document.removeEventListener('touchmove', handleTouchMove);
+  };
+}
+
+function stopTouchAutoscroll() {
+  if (touchAutoscrollInterval) {
+    clearInterval(touchAutoscrollInterval);
+    if (touchAutoscrollInterval._cleanup) {
+      touchAutoscrollInterval._cleanup();
+    }
+    touchAutoscrollInterval = null;
+  }
+  lastTouchY = null;
+}
+
 // Clear cache when list changes - use rebuildPositionCache instead
 // Unified sorting function using SortableJS for both desktop and mobile
 function initializeUnifiedSorting(container, isMobile) {
@@ -2184,6 +2330,13 @@ function initializeUnifiedSorting(container, isMobile) {
     return;
   }
 
+  // Initialize mobile scroll container reference for mobile
+  if (isMobile && !mobileScrollContainer) {
+    mobileScrollContainer = document.querySelector(
+      'main .h-full.overflow-y-auto'
+    );
+  }
+
   // Configure SortableJS options
   const sortableOptions = {
     animation: 200,
@@ -2198,14 +2351,30 @@ function initializeUnifiedSorting(container, isMobile) {
       touchStartThreshold: 10,
       forceFallback: true,
       fallbackTolerance: 5,
+      // Prevent scrolling during drag
+      preventOnFilter: false,
+      onChoose: function (evt) {
+        // Disable scrolling on the container when drag starts
+        if (mobileScrollContainer) {
+          mobileScrollContainer.style.overflowY = 'hidden';
+          mobileScrollContainer.style.touchAction = 'none';
+        }
+      },
+      onUnchoose: function (evt) {
+        // Re-enable scrolling when drag is cancelled
+        if (mobileScrollContainer) {
+          mobileScrollContainer.style.overflowY = 'auto';
+          mobileScrollContainer.style.touchAction = 'auto';
+        }
+      },
     }),
 
     // Filter to prevent dragging on interactive elements
     filter: 'button, input, textarea, select, .no-drag',
     preventOnFilter: true,
 
-    // Enable built-in scrolling - works well for both desktop and mobile
-    scroll: true,
+    // Configure scrolling - disable built-in autoscroll on mobile, use custom implementation
+    scroll: !isMobile, // Disable built-in autoscroll on mobile
     scrollSensitivity: isMobile ? 50 : 30,
     scrollSpeed: isMobile ? 15 : 10,
 
@@ -2215,9 +2384,20 @@ function initializeUnifiedSorting(container, isMobile) {
       if (!isMobile) {
         document.body.classList.add('desktop-dragging');
       } else {
-        // Mobile-specific feedback
-        document.body.style.overflow = 'hidden';
+        // Mobile-specific feedback - don't manipulate body overflow
         evt.item.classList.add('dragging-mobile');
+
+        // Disable scrolling during drag to prevent conflicts
+        if (mobileScrollContainer) {
+          mobileScrollContainer.style.overflowY = 'hidden';
+          mobileScrollContainer.style.touchAction = 'none';
+        }
+
+        // Start custom autoscroll for mobile
+        startMobileAutoscroll(sortableContainer);
+
+        // Also start touch-based autoscroll
+        startTouchAutoscroll(evt.item);
 
         // Haptic feedback if available
         if (navigator.vibrate) {
@@ -2225,14 +2405,22 @@ function initializeUnifiedSorting(container, isMobile) {
         }
       }
     },
-
     onEnd: async function (evt) {
       // Clean up visual feedback
       if (!isMobile) {
         document.body.classList.remove('desktop-dragging');
       } else {
-        document.body.style.overflow = '';
         evt.item.classList.remove('dragging-mobile');
+
+        // Re-enable scrolling after drag ends
+        if (mobileScrollContainer) {
+          mobileScrollContainer.style.overflowY = 'auto';
+          mobileScrollContainer.style.touchAction = 'auto';
+        }
+
+        // Stop custom autoscroll for mobile
+        stopMobileAutoscroll();
+        stopTouchAutoscroll();
       }
 
       const oldIndex = evt.oldIndex;
@@ -2283,6 +2471,18 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     if (!card) return;
     index = parseInt(card.dataset.index);
   }
+
+  // Validate index
+  if (
+    isNaN(index) ||
+    index < 0 ||
+    !lists[currentList] ||
+    index >= lists[currentList].length
+  ) {
+    console.error('Invalid album index:', index);
+    return;
+  }
+
   const album = lists[currentList][index];
 
   const actionSheet = document.createElement('div');
@@ -2322,6 +2522,17 @@ window.showMobileAlbumMenu = function (indexOrElement) {
 
 // Mobile edit form (basic implementation)
 window.showMobileEditForm = function (index) {
+  // Validate inputs
+  if (!currentList || !lists[currentList]) {
+    showToast('No list selected', 'error');
+    return;
+  }
+
+  if (isNaN(index) || index < 0 || index >= lists[currentList].length) {
+    showToast('Invalid album selected', 'error');
+    return;
+  }
+
   const album = lists[currentList][index];
   const originalReleaseDate = album.release_date || '';
   const inputReleaseDate = originalReleaseDate
@@ -2631,11 +2842,11 @@ window.showMobileEditForm = function (index) {
       // Save to server
       await saveList(currentList, lists[currentList]);
 
-      // Update the display
-      selectList(currentList);
-
-      // Close the modal
+      // Close the modal first
       editModal.remove();
+
+      // Force refresh the display to show changes
+      displayAlbums(lists[currentList]);
 
       showToast('Album updated successfully');
     } catch (error) {
@@ -2644,6 +2855,12 @@ window.showMobileEditForm = function (index) {
 
       // Revert changes on error
       lists[currentList][index] = album;
+
+      // Close modal even on error
+      editModal.remove();
+
+      // Refresh display to show reverted state
+      displayAlbums(lists[currentList]);
     }
   };
 
