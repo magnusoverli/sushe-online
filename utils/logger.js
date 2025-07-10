@@ -18,9 +18,22 @@ class Logger {
     this.enableConsole = options.enableConsole !== false;
     this.enableFile = options.enableFile !== false;
 
+    // Async file writing queue
+    this.writeQueue = [];
+    this.isWriting = false;
+    this.batchSize = 50; // Write logs in batches for better performance
+    this.flushInterval = 1000; // Flush every 1 second
+
     // Ensure log directory exists
     if (this.enableFile && !fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
+    }
+
+    // Start periodic flush for async logging
+    if (this.enableFile) {
+      this.flushTimer = setInterval(() => {
+        this.flushWriteQueue();
+      }, this.flushInterval);
     }
   }
 
@@ -44,14 +57,72 @@ class Logger {
     const date = new Date().toISOString().split('T')[0];
     const filename = `${date}.log`;
     const filepath = path.join(this.logDir, filename);
-
     const logLine = formattedMessage + '\n';
 
+    // Add to async write queue instead of synchronous write
+    this.writeQueue.push({ filepath, logLine });
+
+    // Flush immediately if queue is getting large
+    if (this.writeQueue.length >= this.batchSize) {
+      this.flushWriteQueue();
+    }
+  }
+
+  async flushWriteQueue() {
+    if (this.isWriting || this.writeQueue.length === 0) return;
+
+    this.isWriting = true;
+    const batch = this.writeQueue.splice(0, this.batchSize);
+
+    // Group by filepath for efficient writing
+    const fileGroups = new Map();
+    for (const { filepath, logLine } of batch) {
+      if (!fileGroups.has(filepath)) {
+        fileGroups.set(filepath, []);
+      }
+      fileGroups.get(filepath).push(logLine);
+    }
+
+    // Write all files asynchronously
+    const writePromises = Array.from(fileGroups.entries()).map(
+      async ([filepath, lines]) => {
+        try {
+          const content = lines.join('');
+          await fs.promises.appendFile(filepath, content);
+        } catch (err) {
+          // Fallback to console if file write fails
+          // eslint-disable-next-line no-console
+          console.error('Failed to write to log file:', err);
+          // eslint-disable-next-line no-console
+          console.error('Lost log entries:', lines.length);
+        }
+      }
+    );
+
     try {
-      fs.appendFileSync(filepath, logLine);
+      await Promise.all(writePromises);
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error('Failed to write to log file:', err);
+      console.error('Batch log write failed:', err);
+    } finally {
+      this.isWriting = false;
+
+      // Process any new items that arrived during write
+      if (this.writeQueue.length > 0) {
+        setImmediate(() => this.flushWriteQueue());
+      }
+    }
+  }
+
+  // Graceful shutdown - flush remaining logs
+  async shutdown() {
+    if (this.flushTimer) {
+      clearInterval(this.flushTimer);
+    }
+
+    // Flush any remaining logs
+    while (this.writeQueue.length > 0) {
+      await this.flushWriteQueue();
     }
   }
 

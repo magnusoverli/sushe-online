@@ -36,6 +36,37 @@ process.on('unhandledRejection', (err) => {
 process.on('uncaughtException', (err) => {
   logger.error('Uncaught exception', { error: err.message, stack: err.stack });
 });
+
+// Graceful shutdown handling for async logger and cache
+process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down gracefully');
+  await logger.shutdown();
+
+  // Shutdown response cache if it exists
+  try {
+    const { responseCache } = require('./middleware/response-cache');
+    responseCache.shutdown();
+  } catch (e) {
+    // Cache module might not be loaded yet
+  }
+
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down gracefully');
+  await logger.shutdown();
+
+  // Shutdown response cache if it exists
+  try {
+    const { responseCache } = require('./middleware/response-cache');
+    responseCache.shutdown();
+  } catch (e) {
+    // Cache module might not be loaded yet
+  }
+
+  process.exit(0);
+});
 const { composeForgotPasswordEmail } = require('./forgot_email');
 const {
   isValidEmail,
@@ -344,11 +375,49 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.set('view cache', process.env.NODE_ENV === 'production');
 
-// Disable Helmet's default Content Security Policy as it blocks external CDN scripts used in the UI
-app.use(helmet({ contentSecurityPolicy: false }));
+// Conditional middleware application for performance
+app.use((req, res, next) => {
+  // Skip heavy security middleware for static assets
+  if (
+    req.path.startsWith('/styles/') ||
+    req.path.startsWith('/js/') ||
+    req.path.startsWith('/icons/') ||
+    req.path.endsWith('.css') ||
+    req.path.endsWith('.js') ||
+    req.path.endsWith('.png') ||
+    req.path.endsWith('.ico')
+  ) {
+    return next();
+  }
+
+  // Apply helmet for all other requests
+  helmet({ contentSecurityPolicy: false })(req, res, next);
+});
 
 // Basic Express middleware
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
+
+// Conditional compression - skip for small API responses
+app.use((req, res, next) => {
+  // Skip compression for small API responses to reduce CPU overhead
+  if (req.path.startsWith('/api/') && req.method === 'GET') {
+    const originalJson = res.json;
+    res.json = function (data) {
+      const jsonString = JSON.stringify(data);
+      // Only compress responses larger than 1KB
+      if (jsonString.length > 1024) {
+        compression()(req, res, () => {
+          originalJson.call(this, data);
+        });
+      } else {
+        originalJson.call(this, data);
+      }
+    };
+  }
+  next();
+});
+
+// Apply compression for all other requests
 app.use(compression());
 app.use((req, res, next) => {
   res.set({

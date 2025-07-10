@@ -11,6 +11,10 @@ function mbFetch(url, options) {
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
+  const {
+    cacheConfigs,
+    responseCache,
+  } = require('../middleware/response-cache');
   const { URLSearchParams } = require('url');
   const {
     htmlTemplate,
@@ -85,51 +89,56 @@ module.exports = (app, deps) => {
   // ============ API ENDPOINTS FOR LISTS ============
 
   // Get all lists for current user
-  app.get('/api/lists', ensureAuthAPI, async (req, res) => {
-    try {
-      const userLists = await listsAsync.find({ userId: req.user._id });
+  app.get(
+    '/api/lists',
+    ensureAuthAPI,
+    cacheConfigs.userSpecific,
+    async (req, res) => {
+      try {
+        const userLists = await listsAsync.find({ userId: req.user._id });
 
-      const listsObj = {};
-      for (const list of userLists) {
-        const items = await listItemsAsync.find({ listId: list._id });
-        items.sort((a, b) => a.position - b.position);
+        const listsObj = {};
+        for (const list of userLists) {
+          const items = await listItemsAsync.find({ listId: list._id });
+          items.sort((a, b) => a.position - b.position);
 
-        // Batch load album data to avoid N+1 queries
-        const albumIds = items.map((item) => item.albumId).filter(Boolean);
-        const albumsData =
-          albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
-        const albumsMap = new Map(
-          albumsData.map((album) => [album._id, album])
-        );
+          // Batch load album data to avoid N+1 queries
+          const albumIds = items.map((item) => item.albumId).filter(Boolean);
+          const albumsData =
+            albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+          const albumsMap = new Map(
+            albumsData.map((album) => [album._id, album])
+          );
 
-        const mapped = [];
-        for (const item of items) {
-          const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
-          mapped.push({
-            artist: albumData?.artist || item.artist,
-            album: albumData?.album || item.album,
-            album_id: item.albumId,
-            release_date: albumData?.releaseDate || item.releaseDate,
-            country: albumData?.country || item.country,
-            genre_1: albumData?.genre1 || item.genre1,
-            genre_2: albumData?.genre2 || item.genre2,
-            track_pick: item.trackPick,
-            comments: item.comments,
-            tracks: albumData?.tracks || item.tracks,
-            cover_image: albumData?.coverImage || item.coverImage,
-            cover_image_format:
-              albumData?.coverImageFormat || item.coverImageFormat,
-          });
+          const mapped = [];
+          for (const item of items) {
+            const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
+            mapped.push({
+              artist: albumData?.artist || item.artist,
+              album: albumData?.album || item.album,
+              album_id: item.albumId,
+              release_date: albumData?.releaseDate || item.releaseDate,
+              country: albumData?.country || item.country,
+              genre_1: albumData?.genre1 || item.genre1,
+              genre_2: albumData?.genre2 || item.genre2,
+              track_pick: item.trackPick,
+              comments: item.comments,
+              tracks: albumData?.tracks || item.tracks,
+              cover_image: albumData?.coverImage || item.coverImage,
+              cover_image_format:
+                albumData?.coverImageFormat || item.coverImageFormat,
+            });
+          }
+          listsObj[list.name] = mapped;
         }
-        listsObj[list.name] = mapped;
-      }
 
-      res.json(listsObj);
-    } catch (err) {
-      logger.error('Error fetching lists:', err);
-      return res.status(500).json({ error: 'Error fetching lists' });
+        res.json(listsObj);
+      } catch (err) {
+        logger.error('Error fetching lists:', err);
+        return res.status(500).json({ error: 'Error fetching lists' });
+      }
     }
-  });
+  );
 
   // Server-sent events subscription for a specific list
   app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
@@ -163,48 +172,55 @@ module.exports = (app, deps) => {
   });
 
   // Get a single list
-  app.get('/api/lists/:name', ensureAuthAPI, async (req, res) => {
-    try {
-      const { name } = req.params;
-      const list = await listsAsync.findOne({ userId: req.user._id, name });
+  app.get(
+    '/api/lists/:name',
+    ensureAuthAPI,
+    cacheConfigs.userSpecific,
+    async (req, res) => {
+      try {
+        const { name } = req.params;
+        const list = await listsAsync.findOne({ userId: req.user._id, name });
 
-      if (!list) {
-        return res.status(404).json({ error: 'List not found' });
+        if (!list) {
+          return res.status(404).json({ error: 'List not found' });
+        }
+        const items = await listItemsAsync.find({ listId: list._id });
+        items.sort((a, b) => a.position - b.position);
+
+        // Batch load album data to avoid N+1 queries
+        const albumIds = items.map((item) => item.albumId).filter(Boolean);
+        const albumsData =
+          albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+        const albumsMap = new Map(
+          albumsData.map((album) => [album._id, album])
+        );
+
+        const data = [];
+        for (const item of items) {
+          const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
+          data.push({
+            artist: albumData?.artist || item.artist,
+            album: albumData?.album || item.album,
+            album_id: item.albumId,
+            release_date: albumData?.releaseDate || item.releaseDate,
+            country: albumData?.country || item.country,
+            genre_1: albumData?.genre1 || item.genre1,
+            genre_2: albumData?.genre2 || item.genre2,
+            track_pick: item.trackPick,
+            comments: item.comments,
+            tracks: albumData?.tracks || item.tracks,
+            cover_image: albumData?.coverImage || item.coverImage,
+            cover_image_format:
+              albumData?.coverImageFormat || item.coverImageFormat,
+          });
+        }
+        res.json(data);
+      } catch (err) {
+        logger.error('Error fetching list:', err);
+        return res.status(500).json({ error: 'Error fetching list' });
       }
-      const items = await listItemsAsync.find({ listId: list._id });
-      items.sort((a, b) => a.position - b.position);
-
-      // Batch load album data to avoid N+1 queries
-      const albumIds = items.map((item) => item.albumId).filter(Boolean);
-      const albumsData =
-        albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
-      const albumsMap = new Map(albumsData.map((album) => [album._id, album]));
-
-      const data = [];
-      for (const item of items) {
-        const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
-        data.push({
-          artist: albumData?.artist || item.artist,
-          album: albumData?.album || item.album,
-          album_id: item.albumId,
-          release_date: albumData?.releaseDate || item.releaseDate,
-          country: albumData?.country || item.country,
-          genre_1: albumData?.genre1 || item.genre1,
-          genre_2: albumData?.genre2 || item.genre2,
-          track_pick: item.trackPick,
-          comments: item.comments,
-          tracks: albumData?.tracks || item.tracks,
-          cover_image: albumData?.coverImage || item.coverImage,
-          cover_image_format:
-            albumData?.coverImageFormat || item.coverImageFormat,
-        });
-      }
-      res.json(data);
-    } catch (err) {
-      logger.error('Error fetching list:', err);
-      return res.status(500).json({ error: 'Error fetching list' });
     }
-  });
+  );
 
   // Create or update a list
   app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
@@ -287,6 +303,11 @@ module.exports = (app, deps) => {
           success: true,
           message: existingList ? 'List updated' : 'List created',
         });
+
+        // Invalidate cache for this user's lists
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+        responseCache.invalidate(`GET:/api/lists/${name}:${req.user._id}`);
+
         broadcastListUpdate(req.user._id, name, data);
       } catch (dbErr) {
         await client.query('ROLLBACK');
@@ -329,6 +350,10 @@ module.exports = (app, deps) => {
       }
 
       res.json({ success: true, message: 'List deleted' });
+
+      // Invalidate cache for this user's lists
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+      responseCache.invalidate(`GET:/api/lists/${name}:${req.user._id}`);
     });
   });
 
@@ -528,27 +553,36 @@ module.exports = (app, deps) => {
   });
 
   // Proxy for Deezer API to avoid CORS issues
-  app.get('/api/proxy/deezer', ensureAuthAPI, async (req, res) => {
-    try {
-      const { q } = req.query;
-      if (!q) {
-        return res.status(400).json({ error: 'Query parameter q is required' });
+  app.get(
+    '/api/proxy/deezer',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { q } = req.query;
+        if (!q) {
+          return res
+            .status(400)
+            .json({ error: 'Query parameter q is required' });
+        }
+
+        const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(
+            `Deezer API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('Deezer proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch from Deezer' });
       }
-
-      const url = `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`;
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Deezer API responded with status ${response.status}`);
-      }
-
-      const data = await response.json();
-      res.json(data);
-    } catch (error) {
-      logger.error('Deezer proxy error:', error);
-      res.status(500).json({ error: 'Failed to fetch from Deezer' });
     }
-  });
+  );
 
   // Search Spotify for an album and return the ID
   app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
@@ -694,297 +728,309 @@ module.exports = (app, deps) => {
   });
 
   // Fetch metadata for link previews
-  app.get('/api/unfurl', ensureAuthAPI, async (req, res) => {
-    try {
-      const { url } = req.query;
-      if (!url) {
-        return res.status(400).json({ error: 'url query is required' });
-      }
-
-      const response = await fetch(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (SuSheBot)' },
-      });
-      const html = await response.text();
-
-      const getMeta = (name) => {
-        const metaTag =
-          new RegExp(
-            `<meta[^>]+property=["']og:${name}["'][^>]+content=["']([^"']+)["']`,
-            'i'
-          ).exec(html) ||
-          new RegExp(
-            `<meta[^>]+name=["']${name}["'][^>]+content=["']([^"']+)["']`,
-            'i'
-          ).exec(html);
-        return metaTag ? metaTag[1] : '';
-      };
-
-      const titleTag = /<title[^>]*>([^<]*)<\/title>/i.exec(html);
-
-      res.json({
-        title: getMeta('title') || (titleTag ? titleTag[1] : ''),
-        description: getMeta('description'),
-        image: getMeta('image'),
-      });
-    } catch (err) {
-      logger.error('Unfurl error:', err);
-      res.status(500).json({ error: 'Failed to unfurl' });
-    }
-  });
-
-  // Fetch track list for a release group from MusicBrainz
-  app.get('/api/musicbrainz/tracks', ensureAuthAPI, async (req, res) => {
-    const { id, artist, album } = req.query;
-    if (!id && (!artist || !album)) {
-      return res
-        .status(400)
-        .json({ error: 'id or artist/album query required' });
-    }
-
-    const headers = { 'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)' };
-
-    try {
-      let releaseGroupId = id;
-      let directReleaseId = null;
-
-      const sanitize = (str = '') =>
-        str
-          .trim()
-          .replace(/[\u2018\u2019'"`]/g, '')
-          .replace(/[()[\]{}]/g, '')
-          .replace(/[.,!?]/g, '')
-          .replace(/\s{2,}/g, ' ');
-
-      const artistClean = sanitize(artist);
-      const albumClean = sanitize(album);
-
-      const fetchItunesTracks = async () => {
-        try {
-          const term = `${artistClean} ${albumClean}`
-            .replace(/[^\w\s]/g, ' ')
-            .trim();
-          const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
-          const resp = await fetch(searchUrl);
-          if (!resp.ok) return null;
-          const data = await resp.json();
-          if (!data.results || !data.results.length) return null;
-          const best = data.results[0];
-          if (!best.collectionId) return null;
-          const lookup = await fetch(
-            `https://itunes.apple.com/lookup?id=${best.collectionId}&entity=song`
-          );
-          if (!lookup.ok) return null;
-          const lookupData = await lookup.json();
-          const tracks = (lookupData.results || [])
-            .filter((r) => r.wrapperType === 'track')
-            .map((r) => r.trackName);
-          return tracks.length
-            ? { tracks, releaseId: `itunes:${best.collectionId}` }
-            : null;
-        } catch (err) {
-          logger.error('iTunes fallback error:', err);
-          return null;
-        }
-      };
-
-      const fetchDeezerTracks = async () => {
-        try {
-          const q = `${artistClean} ${albumClean}`
-            .replace(/[^\w\s]/g, ' ')
-            .trim();
-          const searchResp = await fetch(
-            `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`
-          );
-          if (!searchResp.ok) return null;
-          const data = await searchResp.json();
-          const albumId = data.data && data.data[0] && data.data[0].id;
-          if (!albumId) return null;
-          const albumResp = await fetch(
-            `https://api.deezer.com/album/${albumId}`
-          );
-          if (!albumResp.ok) return null;
-          const albumData = await albumResp.json();
-          const tracks = (albumData.tracks?.data || []).map((t) => t.title);
-          return tracks.length
-            ? { tracks, releaseId: `deezer:${albumId}` }
-            : null;
-        } catch (err) {
-          logger.error('Deezer fallback error:', err);
-          return null;
-        }
-      };
-
-      const runFallbacks = async () => {
-        const itunes = await fetchItunesTracks();
-        if (itunes) return itunes;
-        return await fetchDeezerTracks();
-      };
-
-      const looksLikeMBID = (val) =>
-        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
-          val || ''
-        );
-
-      if (!looksLikeMBID(releaseGroupId)) {
-        if (!artist || !album) {
-          return res
-            .status(400)
-            .json({ error: 'artist and album are required' });
+  app.get(
+    '/api/unfurl',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { url } = req.query;
+        if (!url) {
+          return res.status(400).json({ error: 'url query is required' });
         }
 
-        const searchReleaseGroups = async (query) => {
-          const url =
-            `https://musicbrainz.org/ws/2/release-group/?query=${encodeURIComponent(query)}` +
-            `&type=album|ep&fmt=json&limit=10`;
-          const resp = await mbFetch(url, { headers });
-          if (!resp.ok) {
-            throw new Error(`MusicBrainz search responded ${resp.status}`);
-          }
-          const data = await resp.json();
-          return data['release-groups'] || [];
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (SuSheBot)' },
+        });
+        const html = await response.text();
+
+        const getMeta = (name) => {
+          const metaTag =
+            new RegExp(
+              `<meta[^>]+property=["']og:${name}["'][^>]+content=["']([^"']+)["']`,
+              'i'
+            ).exec(html) ||
+            new RegExp(
+              `<meta[^>]+name=["']${name}["'][^>]+content=["']([^"']+)["']`,
+              'i'
+            ).exec(html);
+          return metaTag ? metaTag[1] : '';
         };
 
-        let groups = await searchReleaseGroups(
-          `release:${albumClean} AND artist:${artistClean}`
-        );
-        if (
-          !groups.length &&
-          (albumClean !== album || artistClean !== artist)
-        ) {
-          groups = await searchReleaseGroups(
-            `release:${album} AND artist:${artist}`
-          );
-        }
+        const titleTag = /<title[^>]*>([^<]*)<\/title>/i.exec(html);
 
-        if (!groups.length) {
-          // Fallback: try release search instead of release-group
-          const relUrl =
-            `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(`${albumClean} ${artistClean}`)}` +
-            `&fmt=json&limit=10`;
-          const relResp = await mbFetch(relUrl, { headers });
-          if (relResp.ok) {
-            const relData = await relResp.json();
-            const releases = relData.releases || [];
-            if (releases.length) {
-              releaseGroupId = releases[0]['release-group']?.id || null;
-              directReleaseId = releases[0].id;
-            }
-          }
-        } else {
-          releaseGroupId = groups[0].id;
-        }
-
-        if (!releaseGroupId && !directReleaseId) {
-          const fb = await runFallbacks();
-          if (fb) return res.json(fb);
-          return res.status(404).json({ error: 'Release group not found' });
-        }
+        res.json({
+          title: getMeta('title') || (titleTag ? titleTag[1] : ''),
+          description: getMeta('description'),
+          image: getMeta('image'),
+        });
+      } catch (err) {
+        logger.error('Unfurl error:', err);
+        res.status(500).json({ error: 'Failed to unfurl' });
       }
-
-      let releasesData;
-      if (directReleaseId) {
-        const mbUrl =
-          `https://musicbrainz.org/ws/2/release/${directReleaseId}` +
-          `?inc=recordings&fmt=json`;
-        const resp = await mbFetch(mbUrl, { headers });
-        if (!resp.ok) {
-          throw new Error(`MusicBrainz responded ${resp.status}`);
-        }
-        const data = await resp.json();
-        releasesData = [data];
-      } else {
-        const mbUrl =
-          `https://musicbrainz.org/ws/2/release?release-group=${releaseGroupId}` +
-          `&inc=recordings&fmt=json&limit=100`;
-        const resp = await mbFetch(mbUrl, { headers });
-        if (!resp.ok) {
-          throw new Error(`MusicBrainz responded ${resp.status}`);
-        }
-        const data = await resp.json();
-        if (!data.releases || !data.releases.length) {
-          const fb = await runFallbacks();
-          if (fb) return res.json(fb);
-          return res.status(404).json({ error: 'No releases found' });
-        }
-        releasesData = data.releases;
-      }
-
-      const EU = new Set([
-        'AT',
-        'BE',
-        'BG',
-        'HR',
-        'CY',
-        'CZ',
-        'DK',
-        'EE',
-        'FI',
-        'FR',
-        'DE',
-        'GR',
-        'HU',
-        'IE',
-        'IT',
-        'LV',
-        'LT',
-        'LU',
-        'MT',
-        'NL',
-        'PL',
-        'PT',
-        'RO',
-        'SK',
-        'SI',
-        'ES',
-        'SE',
-        'GB',
-        'XE',
-      ]);
-
-      const score = (rel) => {
-        if (rel.status !== 'Official' || rel.status === 'Pseudo-Release')
-          return -1;
-        let s = 0;
-        if (EU.has(rel.country)) s += 20;
-        if (rel.country === 'XW') s += 10;
-        if ((rel.media || []).some((m) => (m.format || '').includes('Digital')))
-          s += 15;
-        const date = new Date(rel.date || '1900-01-01');
-        if (!isNaN(date)) s += date.getTime() / 1e10; // minor weight
-        return s;
-      };
-
-      const best = releasesData
-        .map((r) => ({ ...r, _score: score(r) }))
-        .filter((r) => r._score >= 0)
-        .sort((a, b) => b._score - a._score)[0];
-
-      if (!best || !best.media) {
-        const fb = await runFallbacks();
-        if (fb) return res.json(fb);
-        return res.status(404).json({ error: 'No suitable release found' });
-      }
-
-      const tracks = [];
-      for (const medium of best.media) {
-        if (Array.isArray(medium.tracks)) {
-          medium.tracks.forEach((t) => {
-            const title = t.title || (t.recording && t.recording.title) || '';
-            tracks.push(title);
-          });
-        }
-      }
-
-      if (!tracks.length) {
-        const fb = await runFallbacks();
-        if (fb) return res.json(fb);
-        return res.status(404).json({ error: 'No tracks available' });
-      }
-
-      res.json({ tracks, releaseId: best.id });
-    } catch (err) {
-      logger.error('MusicBrainz tracks error:', err);
-      res.status(500).json({ error: 'Failed to fetch tracks' });
     }
-  });
+  );
+
+  // Fetch track list for a release group from MusicBrainz
+  app.get(
+    '/api/musicbrainz/tracks',
+    ensureAuthAPI,
+    cacheConfigs.static,
+    async (req, res) => {
+      const { id, artist, album } = req.query;
+      if (!id && (!artist || !album)) {
+        return res
+          .status(400)
+          .json({ error: 'id or artist/album query required' });
+      }
+
+      const headers = { 'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)' };
+
+      try {
+        let releaseGroupId = id;
+        let directReleaseId = null;
+
+        const sanitize = (str = '') =>
+          str
+            .trim()
+            .replace(/[\u2018\u2019'"`]/g, '')
+            .replace(/[()[\]{}]/g, '')
+            .replace(/[.,!?]/g, '')
+            .replace(/\s{2,}/g, ' ');
+
+        const artistClean = sanitize(artist);
+        const albumClean = sanitize(album);
+
+        const fetchItunesTracks = async () => {
+          try {
+            const term = `${artistClean} ${albumClean}`
+              .replace(/[^\w\s]/g, ' ')
+              .trim();
+            const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
+            const resp = await fetch(searchUrl);
+            if (!resp.ok) return null;
+            const data = await resp.json();
+            if (!data.results || !data.results.length) return null;
+            const best = data.results[0];
+            if (!best.collectionId) return null;
+            const lookup = await fetch(
+              `https://itunes.apple.com/lookup?id=${best.collectionId}&entity=song`
+            );
+            if (!lookup.ok) return null;
+            const lookupData = await lookup.json();
+            const tracks = (lookupData.results || [])
+              .filter((r) => r.wrapperType === 'track')
+              .map((r) => r.trackName);
+            return tracks.length
+              ? { tracks, releaseId: `itunes:${best.collectionId}` }
+              : null;
+          } catch (err) {
+            logger.error('iTunes fallback error:', err);
+            return null;
+          }
+        };
+
+        const fetchDeezerTracks = async () => {
+          try {
+            const q = `${artistClean} ${albumClean}`
+              .replace(/[^\w\s]/g, ' ')
+              .trim();
+            const searchResp = await fetch(
+              `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`
+            );
+            if (!searchResp.ok) return null;
+            const data = await searchResp.json();
+            const albumId = data.data && data.data[0] && data.data[0].id;
+            if (!albumId) return null;
+            const albumResp = await fetch(
+              `https://api.deezer.com/album/${albumId}`
+            );
+            if (!albumResp.ok) return null;
+            const albumData = await albumResp.json();
+            const tracks = (albumData.tracks?.data || []).map((t) => t.title);
+            return tracks.length
+              ? { tracks, releaseId: `deezer:${albumId}` }
+              : null;
+          } catch (err) {
+            logger.error('Deezer fallback error:', err);
+            return null;
+          }
+        };
+
+        const runFallbacks = async () => {
+          const itunes = await fetchItunesTracks();
+          if (itunes) return itunes;
+          return await fetchDeezerTracks();
+        };
+
+        const looksLikeMBID = (val) =>
+          /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+            val || ''
+          );
+
+        if (!looksLikeMBID(releaseGroupId)) {
+          if (!artist || !album) {
+            return res
+              .status(400)
+              .json({ error: 'artist and album are required' });
+          }
+
+          const searchReleaseGroups = async (query) => {
+            const url =
+              `https://musicbrainz.org/ws/2/release-group/?query=${encodeURIComponent(query)}` +
+              `&type=album|ep&fmt=json&limit=10`;
+            const resp = await mbFetch(url, { headers });
+            if (!resp.ok) {
+              throw new Error(`MusicBrainz search responded ${resp.status}`);
+            }
+            const data = await resp.json();
+            return data['release-groups'] || [];
+          };
+
+          let groups = await searchReleaseGroups(
+            `release:${albumClean} AND artist:${artistClean}`
+          );
+          if (
+            !groups.length &&
+            (albumClean !== album || artistClean !== artist)
+          ) {
+            groups = await searchReleaseGroups(
+              `release:${album} AND artist:${artist}`
+            );
+          }
+
+          if (!groups.length) {
+            // Fallback: try release search instead of release-group
+            const relUrl =
+              `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(`${albumClean} ${artistClean}`)}` +
+              `&fmt=json&limit=10`;
+            const relResp = await mbFetch(relUrl, { headers });
+            if (relResp.ok) {
+              const relData = await relResp.json();
+              const releases = relData.releases || [];
+              if (releases.length) {
+                releaseGroupId = releases[0]['release-group']?.id || null;
+                directReleaseId = releases[0].id;
+              }
+            }
+          } else {
+            releaseGroupId = groups[0].id;
+          }
+
+          if (!releaseGroupId && !directReleaseId) {
+            const fb = await runFallbacks();
+            if (fb) return res.json(fb);
+            return res.status(404).json({ error: 'Release group not found' });
+          }
+        }
+
+        let releasesData;
+        if (directReleaseId) {
+          const mbUrl =
+            `https://musicbrainz.org/ws/2/release/${directReleaseId}` +
+            `?inc=recordings&fmt=json`;
+          const resp = await mbFetch(mbUrl, { headers });
+          if (!resp.ok) {
+            throw new Error(`MusicBrainz responded ${resp.status}`);
+          }
+          const data = await resp.json();
+          releasesData = [data];
+        } else {
+          const mbUrl =
+            `https://musicbrainz.org/ws/2/release?release-group=${releaseGroupId}` +
+            `&inc=recordings&fmt=json&limit=100`;
+          const resp = await mbFetch(mbUrl, { headers });
+          if (!resp.ok) {
+            throw new Error(`MusicBrainz responded ${resp.status}`);
+          }
+          const data = await resp.json();
+          if (!data.releases || !data.releases.length) {
+            const fb = await runFallbacks();
+            if (fb) return res.json(fb);
+            return res.status(404).json({ error: 'No releases found' });
+          }
+          releasesData = data.releases;
+        }
+
+        const EU = new Set([
+          'AT',
+          'BE',
+          'BG',
+          'HR',
+          'CY',
+          'CZ',
+          'DK',
+          'EE',
+          'FI',
+          'FR',
+          'DE',
+          'GR',
+          'HU',
+          'IE',
+          'IT',
+          'LV',
+          'LT',
+          'LU',
+          'MT',
+          'NL',
+          'PL',
+          'PT',
+          'RO',
+          'SK',
+          'SI',
+          'ES',
+          'SE',
+          'GB',
+          'XE',
+        ]);
+
+        const score = (rel) => {
+          if (rel.status !== 'Official' || rel.status === 'Pseudo-Release')
+            return -1;
+          let s = 0;
+          if (EU.has(rel.country)) s += 20;
+          if (rel.country === 'XW') s += 10;
+          if (
+            (rel.media || []).some((m) => (m.format || '').includes('Digital'))
+          )
+            s += 15;
+          const date = new Date(rel.date || '1900-01-01');
+          if (!isNaN(date)) s += date.getTime() / 1e10; // minor weight
+          return s;
+        };
+
+        const best = releasesData
+          .map((r) => ({ ...r, _score: score(r) }))
+          .filter((r) => r._score >= 0)
+          .sort((a, b) => b._score - a._score)[0];
+
+        if (!best || !best.media) {
+          const fb = await runFallbacks();
+          if (fb) return res.json(fb);
+          return res.status(404).json({ error: 'No suitable release found' });
+        }
+
+        const tracks = [];
+        for (const medium of best.media) {
+          if (Array.isArray(medium.tracks)) {
+            medium.tracks.forEach((t) => {
+              const title = t.title || (t.recording && t.recording.title) || '';
+              tracks.push(title);
+            });
+          }
+        }
+
+        if (!tracks.length) {
+          const fb = await runFallbacks();
+          if (fb) return res.json(fb);
+          return res.status(404).json({ error: 'No tracks available' });
+        }
+
+        res.json({ tracks, releaseId: best.id });
+      } catch (err) {
+        logger.error('MusicBrainz tracks error:', err);
+        res.status(500).json({ error: 'Failed to fetch tracks' });
+      }
+    }
+  );
 };

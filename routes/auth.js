@@ -365,12 +365,19 @@ module.exports = (app, deps) => {
           logger.error('Error calculating DB size:', e);
         }
 
-        // Count active sessions
+        // Count active sessions asynchronously
         let activeSessions = 0;
         try {
           const sessionPath = path.join(dataDir, 'sessions');
-          if (require('fs').existsSync(sessionPath)) {
-            const sessionFiles = require('fs').readdirSync(sessionPath);
+          const fs = require('fs').promises;
+
+          if (
+            await fs
+              .access(sessionPath)
+              .then(() => true)
+              .catch(() => false)
+          ) {
+            const sessionFiles = await fs.readdir(sessionPath);
             activeSessions = sessionFiles.filter((f) =>
               f.endsWith('.json')
             ).length;
