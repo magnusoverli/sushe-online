@@ -2224,12 +2224,6 @@ function initializeUnifiedSorting(container, isMobile) {
           navigator.vibrate(50);
         }
       }
-
-      // Add scrolling class to container
-      const container = evt.item.closest('#albumContainer');
-      if (container) {
-        container.classList.add('sortable-scrolling');
-      }
     },
 
     onEnd: async function (evt) {
@@ -2239,12 +2233,6 @@ function initializeUnifiedSorting(container, isMobile) {
       } else {
         document.body.style.overflow = '';
         evt.item.classList.remove('dragging-mobile');
-      }
-
-      // Remove scrolling class
-      const container = evt.item.closest('#albumContainer');
-      if (container) {
-        container.classList.remove('sortable-scrolling');
       }
 
       const oldIndex = evt.oldIndex;

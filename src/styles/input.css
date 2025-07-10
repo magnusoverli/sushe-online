@@ -42,37 +42,6 @@
     transition: all 0.2s ease;
   }
 
-  /* Container scrolling state */
-  .sortable-scrolling {
-    position: relative;
-  }
-
-  .sortable-scrolling::before,
-  .sortable-scrolling::after {
-    content: '';
-    position: fixed;
-    left: 0;
-    right: 0;
-    height: 40px;
-    pointer-events: none;
-    z-index: 1000;
-    background: linear-gradient(
-      to bottom,
-      var(--accent-shadow) 0%,
-      var(--accent-subtle) 50%,
-      transparent 100%
-    );
-  }
-
-  .sortable-scrolling::before {
-    top: 0;
-  }
-
-  .sortable-scrolling::after {
-    bottom: 0;
-    transform: rotate(180deg);
-  }
-
   /* Touch feedback for mobile */
   @media (max-width: 768px) {
     .album-card,

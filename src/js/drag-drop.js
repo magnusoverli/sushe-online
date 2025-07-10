@@ -86,12 +86,6 @@ const DragDropManager = (function () {
 
     // Store original index
     item.dataset.originalIndex = evt.oldIndex;
-
-    // Add scrolling class to container for auto-scroll styling
-    const container = item.closest('#albumContainer');
-    if (container) {
-      container.classList.add('sortable-scrolling');
-    }
   }
 
   function handleSortEnd(evt) {
@@ -101,12 +95,6 @@ const DragDropManager = (function () {
 
     // Remove visual feedback
     item.classList.remove('dragging-mobile');
-
-    // Remove scrolling class
-    const container = item.closest('#albumContainer');
-    if (container) {
-      container.classList.remove('sortable-scrolling');
-    }
 
     // Clean up
     delete item.dataset.originalIndex;
