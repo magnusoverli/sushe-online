@@ -361,8 +361,13 @@ const DragDropManager = (function () {
     // Use for loop for better performance than forEach
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      // Cache the position element lookup
-      const positionEl = row.querySelector('.flex.items-center.justify-center');
+
+      // Use optimized selector - try O(1) lookup first, then fallback
+      let positionEl = row.querySelector('[data-position-element="true"]');
+      if (!positionEl) {
+        positionEl = row.querySelector('.position-display');
+      }
+
       if (positionEl) {
         positionEl.textContent = i + 1;
       }

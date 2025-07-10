@@ -15,6 +15,7 @@ module.exports = {
     'album-cover',
     'album-cover-placeholder',
     'album-row',
+    'position-display',
 
     // Drag and drop classes
     'dragging',

@@ -1782,7 +1782,7 @@ function createDesktopAlbumRow(data, index) {
   row.dataset.index = index;
 
   row.innerHTML = `
-    <div class="flex items-center justify-center text-gray-400 font-medium">${data.position}</div>
+    <div class="flex items-center justify-center text-gray-400 font-medium position-display" data-position-element="true">${data.position}</div>
     <div class="flex items-center">
       <div class="album-cover-container">
         ${
@@ -1894,7 +1894,7 @@ function createMobileAlbumCard(data, index) {
   card.innerHTML = `
     <div class="flex items-center h-full">
       <!-- Position number on the far left -->
-      <div class="flex-shrink-0 px-1 flex items-center justify-start text-gray-500 font-medium text-sm">
+      <div class="flex-shrink-0 px-1 flex items-center justify-start text-gray-500 font-medium text-sm position-display" data-position-element="true">
         ${data.position}
       </div>
 
@@ -2059,14 +2059,53 @@ function displayAlbums(albums) {
 
   container.appendChild(albumContainer);
 
-  // Clear position cache when rebuilding
-  clearPositionCache();
+  // Pre-populate position element cache for better performance
+  prePopulatePositionCache(albumContainer, isMobile);
 
-  // Initialize SortableJS for both desktop and mobile
-  initializeUnifiedSorting(albumContainer, isMobile);
+  // Initialize sorting
+  initializeUnifiedSorting(container, isMobile);
 }
 
-// Position element cache for performance
+// Clear position cache when rebuilding
+function clearPositionCache() {
+  positionElementCache = new WeakMap();
+}
+
+// Rebuild position cache after clearing
+function rebuildPositionCache(container, isMobile) {
+  clearPositionCache();
+  prePopulatePositionCache(container, isMobile);
+}
+
+// Pre-populate position element cache for better performance
+function prePopulatePositionCache(container, isMobile) {
+  let rows;
+
+  if (isMobile) {
+    rows = container.children;
+  } else {
+    const rowsContainer = container.querySelector('.album-rows-container');
+    rows = rowsContainer ? rowsContainer.children : container.children;
+  }
+
+  // Pre-populate cache during initial render
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+
+    // Try O(1) lookup first using data attribute
+    let positionEl = row.querySelector('[data-position-element="true"]');
+
+    // Fallback to optimized single class selector
+    if (!positionEl) {
+      positionEl = row.querySelector('.position-display');
+    }
+
+    if (positionEl) {
+      positionElementCache.set(row, positionEl);
+    }
+  }
+}
+
 let positionElementCache = new WeakMap();
 
 // Optimized position number update with caching
@@ -2088,9 +2127,14 @@ function updatePositionNumbers(container, isMobile) {
       // Use cached position element or find and cache it
       let positionEl = positionElementCache.get(row);
       if (!positionEl) {
-        positionEl = isMobile
-          ? row.querySelector('.position-number, .text-2xl.font-bold')
-          : row.querySelector('.flex.items-center.justify-center');
+        // Try O(1) lookup first using data attribute
+        positionEl = row.querySelector('[data-position-element="true"]');
+
+        // Fallback to optimized single class selector
+        if (!positionEl) {
+          positionEl = row.querySelector('.position-display');
+        }
+
         if (positionEl) {
           positionElementCache.set(row, positionEl);
         }
@@ -2118,10 +2162,7 @@ function debouncedSaveList(listName, listData, delay = 300) {
   }, delay);
 }
 
-// Clear cache when list changes
-function clearPositionCache() {
-  positionElementCache = new WeakMap();
-}
+// Clear cache when list changes - use rebuildPositionCache instead
 // Unified sorting function using SortableJS for both desktop and mobile
 function initializeUnifiedSorting(container, isMobile) {
   if (!window.Sortable) {
@@ -2136,7 +2177,7 @@ function initializeUnifiedSorting(container, isMobile) {
 
   // Find the sortable container
   const sortableContainer = isMobile
-    ? container
+    ? container.querySelector('.mobile-album-list') || container
     : container.querySelector('.album-rows-container') || container;
 
   if (!sortableContainer) {
