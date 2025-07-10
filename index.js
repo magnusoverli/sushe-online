@@ -96,7 +96,7 @@ function broadcastListUpdate(userId, name, data) {
           }
           activeConnections.add(res);
         }
-      } catch (err) {
+      } catch {
         // Connection is dead, will be cleaned up
       }
     }

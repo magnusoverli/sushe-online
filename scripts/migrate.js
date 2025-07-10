@@ -29,7 +29,7 @@ async function main() {
         await migrationManager.rollbackLastMigration();
         break;
 
-      case 'status':
+      case 'status': {
         const status = await migrationManager.getMigrationStatus();
         // eslint-disable-next-line no-console
         console.log('\nMigration Status:');
@@ -41,8 +41,9 @@ async function main() {
           console.log(`${status} - ${migration.version}`);
         });
         break;
+      }
 
-      case 'create':
+      case 'create': {
         const name = process.argv[3];
         if (!name) {
           logger.error('Migration name is required');
@@ -51,6 +52,7 @@ async function main() {
         }
         await createMigration(name);
         break;
+      }
 
       default:
         // eslint-disable-next-line no-console

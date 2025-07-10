@@ -1,20 +1,14 @@
 module.exports = (app, deps) => {
   const {
-    csrfProtection,
     ensureAuth,
-    ensureAuthAPI,
     ensureAdmin,
-    rateLimitAdminRequest,
     users,
     lists,
-    listItems,
-    albums,
     usersAsync,
     listsAsync,
     listItemsAsync,
     albumsAsync,
     upload,
-    adminCode,
     adminCodeExpiry,
     crypto,
   } = deps;
@@ -464,7 +458,6 @@ module.exports = (app, deps) => {
   });
 
   // Admin: Restore database from pg_dump file
-  const os = require('os');
 
   app.post(
     '/admin/restore',
