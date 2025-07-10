@@ -42,3 +42,15 @@
 - **Manual testing**: Verify UI/UX changes in browser, test edge cases and error scenarios
 - **Database integrity**: Ensure migrations don't break existing data, backup before schema changes
 - **Performance monitoring**: Check for memory leaks, slow queries, and response time degradation
+
+## Git Commit Guidelines
+
+- **Commit messages**: Write meaningful commits that clearly describe the change with personality and wit
+- **Structure**: Lead with a catchy summary, then use bullet points for detailed changes
+- **Tone**: Professional but playful - make code reviews more enjoyable to read
+- **Examples**:
+  - "Tame the linting beast: from 500+ errors to just 13 survivors"
+  - "Banish the authentication gremlins that were eating user sessions"
+  - "Add database migrations (because schema changes shouldn't be a surprise party)"
+  - "Fix memory leak that was hungrier than a teenager after school"
+  - "Refactor API endpoints to be less chatty than a parrot on caffeine"
