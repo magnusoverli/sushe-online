@@ -402,12 +402,18 @@ module.exports = (app, deps) => {
       for (const l of listsData) {
         const items = await listItemsAsync.find({ listId: l._id });
         items.sort((a, b) => a.position - b.position);
+
+        // Batch load album data to avoid N+1 queries
+        const albumIds = items.map((item) => item.albumId).filter(Boolean);
+        const albumsData =
+          albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+        const albumsMap = new Map(
+          albumsData.map((album) => [album._id, album])
+        );
+
         const mapped = [];
         for (const it of items) {
-          let albumData = null;
-          if (it.albumId) {
-            albumData = await albumsAsync.findOne({ _id: it.albumId });
-          }
+          const albumData = it.albumId ? albumsMap.get(it.albumId) : null;
           mapped.push({
             artist: albumData?.artist || it.artist,
             album: albumData?.album || it.album,

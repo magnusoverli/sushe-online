@@ -93,12 +93,18 @@ module.exports = (app, deps) => {
       for (const list of userLists) {
         const items = await listItemsAsync.find({ listId: list._id });
         items.sort((a, b) => a.position - b.position);
+
+        // Batch load album data to avoid N+1 queries
+        const albumIds = items.map((item) => item.albumId).filter(Boolean);
+        const albumsData =
+          albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+        const albumsMap = new Map(
+          albumsData.map((album) => [album._id, album])
+        );
+
         const mapped = [];
         for (const item of items) {
-          let albumData = null;
-          if (item.albumId) {
-            albumData = await albumsAsync.findOne({ _id: item.albumId });
-          }
+          const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
           mapped.push({
             artist: albumData?.artist || item.artist,
             album: albumData?.album || item.album,
@@ -167,12 +173,16 @@ module.exports = (app, deps) => {
       }
       const items = await listItemsAsync.find({ listId: list._id });
       items.sort((a, b) => a.position - b.position);
+
+      // Batch load album data to avoid N+1 queries
+      const albumIds = items.map((item) => item.albumId).filter(Boolean);
+      const albumsData =
+        albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+      const albumsMap = new Map(albumsData.map((album) => [album._id, album]));
+
       const data = [];
       for (const item of items) {
-        let albumData = null;
-        if (item.albumId) {
-          albumData = await albumsAsync.findOne({ _id: item.albumId });
-        }
+        const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
         data.push({
           artist: albumData?.artist || item.artist,
           album: albumData?.album || item.album,

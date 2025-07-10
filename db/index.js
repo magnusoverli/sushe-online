@@ -1,7 +1,12 @@
 const MigrationManager = require('./migrations');
 const fs = require('fs');
 const bcrypt = require('bcryptjs');
-const { PgDatastore, Pool, waitForPostgres } = require('./postgres');
+const {
+  PgDatastore,
+  Pool,
+  waitForPostgres,
+  warmConnections,
+} = require('./postgres');
 const logger = require('../utils/logger');
 
 async function ensureTables(pool) {
@@ -166,7 +171,19 @@ let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {
   logger.info('Using PostgreSQL backend');
-  pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    max: 20, // Increase max connections for better concurrency
+    min: 5, // Keep minimum connections warm
+    idleTimeoutMillis: 300000, // 5 minutes - keep connections alive longer
+    connectionTimeoutMillis: 2000, // 2 second timeout for new connections
+    acquireTimeoutMillis: 2000, // 2 second timeout for acquiring from pool
+    keepAlive: true, // Enable TCP keep-alive
+    keepAliveInitialDelayMillis: 10000, // 10 second initial delay for keep-alive
+    statement_timeout: 30000, // 30 second statement timeout
+    query_timeout: 30000, // 30 second query timeout
+    allowExitOnIdle: false, // Don't exit when idle
+  });
   const usersMap = {
     _id: '_id',
     email: 'email',
@@ -239,47 +256,44 @@ if (process.env.DATABASE_URL) {
   albumsAsync = albums;
   async function migrateUsers() {
     try {
-      await users.update(
-        { accentColor: { $exists: false } },
-        { $set: { accentColor: '#dc2626' } },
-        { multi: true }
-      );
-
-      await users.update(
-        { timeFormat: { $exists: false } },
-        { $set: { timeFormat: '24h' } },
-        { multi: true }
-      );
-
-      await users.update(
-        { dateFormat: { $exists: false } },
-        { $set: { dateFormat: 'MM/DD/YYYY' } },
-        { multi: true }
-      );
-
-      await users.update(
-        { spotifyAuth: { $exists: false } },
-        { $set: { spotifyAuth: null } },
-        { multi: true }
-      );
-
-      await users.update(
-        { tidalAuth: { $exists: false } },
-        { $set: { tidalAuth: null } },
-        { multi: true }
-      );
-
-      await users.update(
-        { tidalCountry: { $exists: false } },
-        { $set: { tidalCountry: null } },
-        { multi: true }
-      );
-
-      await users.update(
-        { musicService: { $exists: false } },
-        { $set: { musicService: null } },
-        { multi: true }
-      );
+      // Run user migrations in parallel for better performance
+      await Promise.all([
+        users.update(
+          { accentColor: { $exists: false } },
+          { $set: { accentColor: '#dc2626' } },
+          { multi: true }
+        ),
+        users.update(
+          { timeFormat: { $exists: false } },
+          { $set: { timeFormat: '24h' } },
+          { multi: true }
+        ),
+        users.update(
+          { dateFormat: { $exists: false } },
+          { $set: { dateFormat: 'MM/DD/YYYY' } },
+          { multi: true }
+        ),
+        users.update(
+          { spotifyAuth: { $exists: false } },
+          { $set: { spotifyAuth: null } },
+          { multi: true }
+        ),
+        users.update(
+          { tidalAuth: { $exists: false } },
+          { $set: { tidalAuth: null } },
+          { multi: true }
+        ),
+        users.update(
+          { tidalCountry: { $exists: false } },
+          { $set: { tidalCountry: null } },
+          { multi: true }
+        ),
+        users.update(
+          { musicService: { $exists: false } },
+          { $set: { musicService: null } },
+          { multi: true }
+        ),
+      ]);
     } catch (err) {
       logger.error('User migration error:', err);
     }
@@ -398,6 +412,8 @@ if (process.env.DATABASE_URL) {
 
   ready = waitForPostgres(pool)
     .then(async () => {
+      logger.info('Warming database connections...');
+      await warmConnections(pool);
       logger.info('Running database migrations...');
       const migrationManager = new MigrationManager(pool);
       await migrationManager.runMigrations();

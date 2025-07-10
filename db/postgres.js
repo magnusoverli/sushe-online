@@ -17,6 +17,23 @@ async function waitForPostgres(pool, retries = 10, interval = 3000) {
   throw new Error('PostgreSQL not reachable');
 }
 
+async function warmConnections(pool) {
+  logger.info('Warming database connections...');
+  const warmupPromises = [];
+
+  // Create minimum number of connections by running simple queries
+  for (let i = 0; i < (pool.options.min || 5); i++) {
+    warmupPromises.push(
+      pool.query('SELECT 1 as warmup').catch((err) => {
+        logger.warn(`Connection warmup ${i + 1} failed:`, err.message);
+      })
+    );
+  }
+
+  await Promise.all(warmupPromises);
+  logger.info(`Warmed ${warmupPromises.length} database connections`);
+}
+
 class PgDatastore {
   constructor(pool, table, fieldMap) {
     this.pool = pool;
@@ -26,6 +43,9 @@ class PgDatastore {
     this.inverseMap = Object.fromEntries(
       Object.entries(fieldMap).map(([k, v]) => [v, k])
     );
+    this.preparedStatements = new Map();
+    this.cache = new Map();
+    this.cacheTimeout = 60000; // 1 minute cache for static data
   }
 
   _prepareValue(val) {
@@ -52,6 +72,18 @@ class PgDatastore {
       logger.debug('SQL', { query: text, params });
     }
     return this.pool.query(text, params);
+  }
+
+  async _preparedQuery(name, text, params) {
+    if (this.logQueries) {
+      logger.debug('Prepared SQL', { name, query: text, params });
+    }
+
+    if (!this.preparedStatements.has(name)) {
+      this.preparedStatements.set(name, { text, name });
+    }
+
+    return this.pool.query({ name, text }, params);
   }
 
   _mapField(field) {
@@ -103,10 +135,9 @@ class PgDatastore {
   findOne(query, cb) {
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const res = await this._query(
-        `SELECT * FROM ${this.table} ${text} LIMIT 1`,
-        values
-      );
+      const queryText = `SELECT * FROM ${this.table} ${text} LIMIT 1`;
+      const queryName = `findOne_${this.table}_${Object.keys(query).join('_')}`;
+      const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows[0] ? this._mapRow(res.rows[0]) : null;
     })();
     return this._callbackify(promise, cb);
@@ -115,10 +146,9 @@ class PgDatastore {
   find(query, cb) {
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);
-      const res = await this._query(
-        `SELECT * FROM ${this.table} ${text}`,
-        values
-      );
+      const queryText = `SELECT * FROM ${this.table} ${text}`;
+      const queryName = `find_${this.table}_${Object.keys(query).join('_')}`;
+      const res = await this._preparedQuery(queryName, queryText, values);
       return res.rows.map((r) => this._mapRow(r));
     })();
     return this._callbackify(promise, cb);
@@ -206,8 +236,38 @@ class PgDatastore {
     return this._callbackify(promise, cb);
   }
 
+  // Batch find by IDs for efficient loading
+  async findByIds(ids, cb) {
+    const promise = (async () => {
+      if (!ids || ids.length === 0) return [];
+
+      // Check cache for static data (albums table)
+      if (this.table === 'albums') {
+        const cacheKey = `findByIds_${ids.sort().join(',')}`;
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+          return cached.data;
+        }
+      }
+
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
+      const queryText = `SELECT * FROM ${this.table} WHERE ${this._mapField('_id')} IN (${placeholders})`;
+      const queryName = `findByIds_${this.table}`;
+      const res = await this._preparedQuery(queryName, queryText, ids);
+      const result = res.rows.map((r) => this._mapRow(r));
+
+      // Cache result for albums (static data)
+      if (this.table === 'albums') {
+        const cacheKey = `findByIds_${ids.sort().join(',')}`;
+        this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+      }
+
+      return result;
+    })();
+    return this._callbackify(promise, cb);
+  }
   // Placeholder for API compatibility
   ensureIndex() {}
 }
 
-module.exports = { PgDatastore, Pool, waitForPostgres };
+module.exports = { PgDatastore, Pool, waitForPostgres, warmConnections };
