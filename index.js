@@ -442,7 +442,27 @@ const csrfProtection = (req, res, next) => {
   }
 
   const token = req.body._csrf || req.headers['x-csrf-token'];
+
+  // Debug CSRF token issues
+  logger.debug('CSRF Debug', {
+    hasSession: !!req.session,
+    hasSecret: !!req.session?.csrfSecret,
+    hasToken: !!token,
+    tokenLength: token?.length,
+    secretLength: req.session?.csrfSecret?.length,
+    userAgent: req.get('User-Agent'),
+    url: req.url,
+    method: req.method,
+  });
+
   if (!token || !csrfTokens.verify(req.session.csrfSecret, token)) {
+    logger.warn('CSRF token validation failed', {
+      hasToken: !!token,
+      hasSecret: !!req.session?.csrfSecret,
+      tokenPreview: token?.substring(0, 8) + '...',
+      secretPreview: req.session?.csrfSecret?.substring(0, 8) + '...',
+      userAgent: req.get('User-Agent'),
+    });
     const err = new Error('Invalid CSRF token');
     err.code = 'EBADCSRFTOKEN';
     err.status = 403;

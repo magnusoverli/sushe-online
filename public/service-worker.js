@@ -1,10 +1,5 @@
-const CACHE_NAME = 'sushe-online-v1';
-const STATIC_ASSETS = [
-  '/',
-  '/styles/output.css',
-  '/manifest.json',
-  '/og-image.png',
-];
+const CACHE_NAME = 'sushe-online-v2';
+const STATIC_ASSETS = ['/styles/output.css', '/manifest.json', '/og-image.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -33,10 +28,34 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
-
   // Skip service worker for navigation requests to avoid redirect issues
   if (event.request.mode === 'navigate') {
+    console.log('SW: Skipping navigation request:', event.request.url);
+    return;
+  }
+
+  // Skip service worker for POST/PUT/DELETE requests (forms, API calls)
+  if (event.request.method !== 'GET') {
+    console.log(
+      'SW: Skipping non-GET request:',
+      event.request.method,
+      event.request.url
+    );
+    return;
+  }
+
+  console.log('SW: Handling GET request:', event.request.url);
+
+  // Don't cache pages with forms or dynamic content
+  const url = new URL(event.request.url);
+  if (
+    url.pathname === '/login' ||
+    url.pathname === '/register' ||
+    url.pathname === '/' ||
+    url.pathname.startsWith('/reset/')
+  ) {
+    console.log('SW: Skipping cache for dynamic page:', url.pathname);
+    event.respondWith(fetch(event.request));
     return;
   }
 
