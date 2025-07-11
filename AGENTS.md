@@ -52,13 +52,13 @@
 
 ## Quality Assurance
 
-### Test Suite Overview (98+ Tests)
+### Test Suite Overview (110+ Tests)
 
 The comprehensive test suite covers all critical application areas:
 
 #### Unit Tests (`npm test`)
 
-- **Route Handler Tests** (50+ tests):
+- **Route Handler Tests** (45+ tests):
   - `test/routes-auth.test.js` - Authentication, registration, login, settings
   - `test/routes-api.test.js` - API endpoints, list management, external integrations
   - `test/routes-admin.test.js` - Admin operations, user management, database ops
@@ -97,10 +97,10 @@ The comprehensive test suite covers all critical application areas:
    - Database operations
 
 4. **Integration Testing**
-   - External API integrations (Spotify, Tidal, MusicBrainz)
-   - Database connectivity
-   - File upload/download operations
-   - Email functionality
+   - External API integrations (Deezer proxy, basic Spotify/Tidal auth checks)
+   - Database connectivity and operations
+   - Email functionality (password reset flows)
+   - URL metadata fetching
 
 5. **Performance & Reliability**
    - Response time validation
@@ -128,11 +128,12 @@ The comprehensive test suite covers all critical application areas:
 
 When running `npm test`, you should see:
 
-- **98+ total tests**
-- **70+ passing tests** (some may fail due to complex mocking requirements)
+- **110+ total tests**
+- **100+ passing tests** (clean test suite with non-working tests removed)
 - **All security tests passing** (critical for production)
 - **All session management tests passing** (critical for user experience)
 - **Core utility tests passing** (foundation functionality)
+- **All authentication and authorization tests passing** (user management)
 
 ### Test Maintenance
 

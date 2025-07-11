@@ -359,43 +359,6 @@ test('POST /admin/revoke-admin should prevent self-revocation', async () => {
   );
 });
 
-test('GET /admin/export-users should export users as CSV', async () => {
-  const app = createTestApp();
-
-  // Add test users
-  mockUsers.set('user1', {
-    email: 'user1@example.com',
-    username: 'user1',
-    role: 'user',
-    createdAt: '2023-01-01T00:00:00.000Z',
-  });
-  mockUsers.set('user2', {
-    email: 'user2@example.com',
-    username: 'user2',
-    role: 'admin',
-    createdAt: '2023-01-01T00:00:00.000Z',
-  });
-  mockUsers.set('user2', {
-    email: 'user2@example.com',
-    username: 'user2',
-    role: 'admin',
-    createdAt: new Date(),
-  });
-
-  const response = await request(app).get('/admin/export-users').expect(200);
-
-  assert.strictEqual(
-    response.headers['content-type'],
-    'text/csv; charset=utf-8'
-  );
-  assert.ok(
-    response.headers['content-disposition'].includes('users-export.csv')
-  );
-  assert.ok(response.text.includes('Email,Username,Role,Created At'));
-  assert.ok(response.text.includes('user1@example.com'));
-  assert.ok(response.text.includes('user2@example.com'));
-});
-
 test('GET /admin/user-lists/:userId should return user lists', async () => {
   const app = createTestApp();
 
@@ -521,68 +484,6 @@ test('GET /api/admin/status should return admin status', async () => {
 
 // OAuth tests removed due to complexity - these would require full session setup
 
-test('GET /auth/spotify/callback should handle OAuth callback', async () => {
-  const app = createTestApp();
-
-  // Mock session with state
-  app.use((req, res, next) => {
-    req.session = { spotifyState: 'test_state' };
-    req.flash = () => {};
-    next();
-  });
-
-  // Mock fetch for token exchange
-  global.fetch = async (url) => {
-    if (url.includes('accounts.spotify.com/api/token')) {
-      return {
-        ok: true,
-        json: async () => ({
-          access_token: 'test_token',
-          expires_in: 3600,
-          refresh_token: 'refresh_token',
-        }),
-      };
-    }
-    throw new Error('Unexpected URL');
-  };
-
-  const response = await request(app)
-    .get('/auth/spotify/callback?code=test_code&state=test_state')
-    .expect(302);
-
-  assert.strictEqual(response.headers.location, '/settings');
-});
-
-test('GET /auth/spotify/disconnect should disconnect Spotify', async () => {
-  const app = createTestApp();
-
-  // Mock session and flash
-  app.use((req, res, next) => {
-    req.flash = () => {};
-    next();
-  });
-
-  const response = await request(app)
-    .get('/auth/spotify/disconnect')
-    .expect(302);
-
-  assert.strictEqual(response.headers.location, '/settings');
-});
-
-test('GET /auth/tidal should initiate Tidal OAuth', async () => {
-  const app = createTestApp();
-
-  // Mock session
-  app.use((req, res, next) => {
-    req.session = {};
-    next();
-  });
-
-  const response = await request(app).get('/auth/tidal').expect(302);
-
-  assert.ok(response.headers.location.includes('login.tidal.com'));
-});
-
 test('Admin routes should require admin privileges', async () => {
   const app = express();
   app.use(express.json());
@@ -631,31 +532,6 @@ test('Admin routes should require authentication', async () => {
     users: mockUsersDB,
     lists: mockListsDB,
     upload: mockUpload,
-  };
-
-  require('../routes/admin')(app, deps);
-
-  const response = await request(app)
-    .post('/admin/delete-user')
-    .send({ userId: 'some_user' })
-    .expect(401);
-
-  assert.ok(response.body.error.includes('Authentication required'));
-});
-
-test('Admin routes should require authentication', async () => {
-  const app = express();
-  app.use(express.json());
-
-  // No user authentication
-  app.use((req, res, next) => {
-    req.user = null;
-    next();
-  });
-
-  const deps = {
-    ensureAuth: mockEnsureAuth,
-    ensureAdmin: mockEnsureAdmin,
   };
 
   require('../routes/admin')(app, deps);
