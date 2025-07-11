@@ -299,43 +299,61 @@ if (process.env.DATABASE_URL) {
     }
   }
   async function migrateLists() {
-    const listsRes = await pool.query('SELECT _id, data FROM lists');
-    for (const row of listsRes.rows) {
-      const countRes = await pool.query(
-        'SELECT COUNT(*) FROM list_items WHERE list_id=$1',
-        [row._id]
-      );
-      if (
-        parseInt(countRes.rows[0].count, 10) === 0 &&
-        Array.isArray(row.data)
-      ) {
-        for (let i = 0; i < row.data.length; i++) {
-          const album = row.data[i];
-          await pool.query(
-            `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, track_pick, cover_image, cover_image_format, created_at, updated_at)
-             VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())`,
-            [
-              row._id,
-              i + 1,
-              album.artist || '',
-              album.album || '',
-              album.album_id || '',
-              album.release_date || '',
-              album.country || '',
-              album.genre_1 || album.genre || '',
-              album.genre_2 || '',
-              album.comments || album.comment || '',
-              Array.isArray(album.tracks) ? album.tracks : null,
-              album.track_pick || null,
-              album.cover_image || '',
-              album.cover_image_format || '',
-            ]
-          );
-        }
-        await pool.query('UPDATE lists SET data = NULL WHERE _id=$1', [
-          row._id,
-        ]);
+    try {
+      // Check if data column exists (for legacy migration)
+      const columnCheck = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'lists' AND column_name = 'data'
+      `);
+
+      if (columnCheck.rows.length === 0) {
+        logger.info(
+          'No legacy data column found in lists table, skipping migration'
+        );
+        return;
       }
+
+      const listsRes = await pool.query('SELECT _id, data FROM lists');
+      for (const row of listsRes.rows) {
+        const countRes = await pool.query(
+          'SELECT COUNT(*) FROM list_items WHERE list_id=$1',
+          [row._id]
+        );
+        if (
+          parseInt(countRes.rows[0].count, 10) === 0 &&
+          Array.isArray(row.data)
+        ) {
+          for (let i = 0; i < row.data.length; i++) {
+            const album = row.data[i];
+            await pool.query(
+              `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, track_pick, cover_image, cover_image_format, created_at, updated_at)
+               VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())`,
+              [
+                row._id,
+                i + 1,
+                album.artist || '',
+                album.album || '',
+                album.album_id || '',
+                album.release_date || '',
+                album.country || '',
+                album.genre_1 || album.genre || '',
+                album.genre_2 || '',
+                album.comments || album.comment || '',
+                Array.isArray(album.tracks) ? album.tracks : null,
+                album.track_pick || null,
+                album.cover_image || '',
+                album.cover_image_format || '',
+              ]
+            );
+          }
+          await pool.query('UPDATE lists SET data = NULL WHERE _id=$1', [
+            row._id,
+          ]);
+        }
+      }
+    } catch (err) {
+      logger.error('List migration error:', err);
     }
   }
 
@@ -378,15 +396,14 @@ if (process.env.DATABASE_URL) {
           username: 'admin',
           email: 'admin@localhost.com',
           hash: hash,
-          accentColor: '#dc2626',
-          timeFormat: '24h',
-          dateFormat: 'MM/DD/YYYY',
-          role: 'admin',
-          adminGrantedAt: new Date(),
-          musicService: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          lastActivity: new Date(),
+          accent_color: '#dc2626',
+          time_format: '24h',
+          date_format: 'MM/DD/YYYY',
+          admin_granted_at: new Date(),
+          music_service: null,
+          created_at: new Date(),
+          updated_at: new Date(),
+          last_activity: new Date(),
         });
         logger.info('Created admin user successfully:', {
           userId: newUser._id,
