@@ -133,7 +133,7 @@ const mockCsrfProtection = (req, res, next) => {
 const mockTemplates = {
   htmlTemplate: (content, title) =>
     `<html><head><title>${title}</title></head><body>${content}</body></html>`,
-  forgotPasswordTemplate: (req, flash) => `<form>Forgot Password Form</form>`,
+  forgotPasswordTemplate: (flash) => `<form>Forgot Password Form</form>`,
   invalidTokenTemplate: () => `<div>Invalid Token</div>`,
   resetPasswordTemplate: (token) => `<form>Reset Password Form</form>`,
 };
@@ -195,6 +195,22 @@ function createTestApp() {
       spotifyAuth: null,
       tidalAuth: null,
     };
+    // Mock flash function
+    req.flash = (type, message) => {
+      if (!req.session) req.session = {};
+      if (!req.session.flash) req.session.flash = {};
+      if (message) {
+        if (!req.session.flash[type]) req.session.flash[type] = [];
+        req.session.flash[type].push(message);
+      } else {
+        const messages = req.session.flash[type] || [];
+        delete req.session.flash[type];
+        return messages;
+      }
+    };
+    // Mock res.locals.flash
+    res.locals = res.locals || {};
+    res.locals.flash = {};
     next();
   });
 
@@ -299,7 +315,38 @@ test('GET /api/lists should require authentication', async () => {
     },
     cacheConfigs: {
       userSpecific: (req, res, next) => next(),
+      public: (req, res, next) => next(),
+      static: (req, res, next) => next(),
     },
+    responseCache: mockResponseCache,
+    htmlTemplate: mockTemplates.htmlTemplate,
+    forgotPasswordTemplate: mockTemplates.forgotPasswordTemplate,
+    invalidTokenTemplate: mockTemplates.invalidTokenTemplate,
+    resetPasswordTemplate: mockTemplates.resetPasswordTemplate,
+    users: mockUsersDB,
+    lists: mockListsDB,
+    listItems: mockListItemsDB,
+    albums: mockAlbumsDB,
+    listsAsync: mockListsAsync,
+    listItemsAsync: mockListItemsAsync,
+    albumsAsync: mockAlbumsAsync,
+    bcrypt: require('bcryptjs'),
+    crypto,
+    nodemailer: {
+      createTransporter: () => ({
+        sendMail: (options, callback) => callback(null, { messageId: 'test' }),
+      }),
+    },
+    composeForgotPasswordEmail: (email, resetUrl) => ({
+      from: 'test@example.com',
+      to: email,
+      subject: 'Password Reset',
+      text: `Reset your password: ${resetUrl}`,
+    }),
+    csrfProtection: mockCsrfProtection,
+    broadcastListUpdate: mockBroadcastListUpdate,
+    listSubscribers: mockListSubscribers,
+    pool: mockPool,
   };
 
   require('../routes/api')(app, deps);

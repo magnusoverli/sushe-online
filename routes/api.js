@@ -363,7 +363,7 @@ module.exports = (app, deps) => {
   app.get('/forgot', csrfProtection, (req, res) => {
     res.send(
       htmlTemplate(
-        forgotPasswordTemplate(req, res.locals.flash),
+        forgotPasswordTemplate(req, res.locals.flash || {}),
         'Password Recovery - Black Metal Auth'
       )
     );

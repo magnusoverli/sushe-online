@@ -109,7 +109,12 @@ function createTestApp(sessionConfig = {}) {
   app.get('/session-info', (req, res) => {
     res.json({
       sessionId: req.sessionID,
-      cookie: req.session.cookie,
+      cookie: {
+        maxAge: req.session.cookie.maxAge,
+        _expires: req.session.cookie._expires,
+        httpOnly: req.session.cookie.httpOnly,
+        secure: req.session.cookie.secure,
+      },
       sessionData: req.session,
     });
   });

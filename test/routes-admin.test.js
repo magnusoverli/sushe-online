@@ -520,25 +520,6 @@ test('GET /api/admin/status should return admin status', async () => {
 });
 
 // OAuth tests removed due to complexity - these would require full session setup
-    
-    const deps = {
-      ensureAuth: mockEnsureAuth,
-      crypto
-    };
-    
-    require('../routes/admin')(app, deps);
-    
-    const response = await request(app)
-      .get('/auth/spotify')
-      .expect(302);
-      
-    assert.ok(response.headers.location.includes('accounts.spotify.com'));
-  });
-
-  const response = await request(app).get('/auth/spotify').expect(302);
-
-  assert.ok(response.headers.location.includes('accounts.spotify.com'));
-});
 
 test('GET /auth/spotify/callback should handle OAuth callback', async () => {
   const app = createTestApp();
@@ -605,76 +586,61 @@ test('GET /auth/tidal should initiate Tidal OAuth', async () => {
 test('Admin routes should require admin privileges', async () => {
   const app = express();
   app.use(express.json());
-  
+
   // Mock regular user (not admin)
   app.use((req, res, next) => {
     req.user = {
       _id: 'regular_user',
       email: 'user@example.com',
-      role: 'user'
+      role: 'user',
     };
     next();
   });
-  
+
   const deps = {
     ensureAuth: mockEnsureAuth,
     ensureAdmin: mockEnsureAdmin,
     users: mockUsersDB,
     lists: mockListsDB,
-    upload: mockUpload
+    upload: mockUpload,
   };
-  
+
   require('../routes/admin')(app, deps);
-  
+
   const response = await request(app)
     .post('/admin/delete-user')
     .send({ userId: 'some_user' })
     .expect(403);
-    
+
   assert.ok(response.body.error.includes('Admin access required'));
 });
 
 test('Admin routes should require authentication', async () => {
   const app = express();
   app.use(express.json());
-  
+
   // No user authentication
   app.use((req, res, next) => {
     req.user = null;
     next();
   });
-  
+
   const deps = {
     ensureAuth: mockEnsureAuth,
     ensureAdmin: mockEnsureAdmin,
     users: mockUsersDB,
     lists: mockListsDB,
-    upload: mockUpload
+    upload: mockUpload,
   };
-  
+
   require('../routes/admin')(app, deps);
-  
+
   const response = await request(app)
     .post('/admin/delete-user')
     .send({ userId: 'some_user' })
     .expect(401);
-    
+
   assert.ok(response.body.error.includes('Authentication required'));
-});
-
-  const deps = {
-    ensureAuth: mockEnsureAuth,
-    ensureAdmin: mockEnsureAdmin,
-  };
-
-  require('../routes/admin')(app, deps);
-
-  const response = await request(app)
-    .post('/admin/delete-user')
-    .send({ userId: 'some_user' })
-    .expect(403);
-
-  assert.ok(response.body.error.includes('Admin access required'));
 });
 
 test('Admin routes should require authentication', async () => {
