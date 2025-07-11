@@ -1,9 +1,12 @@
 import js from '@eslint/js';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';
+import security from 'eslint-plugin-security';
+import importPlugin from 'eslint-plugin-import';
 
 export default [
   js.configs.recommended,
+  security.configs.recommended,
   prettierConfig,
   {
     ignores: ['public/js/bundle.js', 'dist/**', 'node_modules/**'],
@@ -12,6 +15,8 @@ export default [
     files: ['**/*.js'],
     plugins: {
       prettier,
+      security,
+      import: importPlugin,
     },
     rules: {
       'prettier/prettier': 'error',
@@ -29,6 +34,26 @@ export default [
       'no-var': 'error',
       'no-unreachable': 'error',
       'no-unused-expressions': 'error',
+      // Complexity rules
+      complexity: ['warn', { max: 15 }],
+      'max-depth': ['warn', { max: 4 }],
+      'max-lines-per-function': [
+        'warn',
+        { max: 100, skipBlankLines: true, skipComments: true },
+      ],
+      'max-params': ['warn', { max: 5 }],
+      // Import rules (relaxed for Node.js environment)
+      'import/no-unresolved': 'off', // Node.js modules may not be resolved
+      'import/named': 'error',
+      'import/default': 'error',
+      'import/no-absolute-path': 'error',
+      'import/no-self-import': 'error',
+      'import/no-cycle': 'warn',
+      'import/no-duplicates': 'error',
+      // Security rules (additional to plugin defaults)
+      'security/detect-object-injection': 'warn',
+      'security/detect-non-literal-regexp': 'warn',
+      'security/detect-unsafe-regex': 'error',
     },
     languageOptions: {
       ecmaVersion: 2022,
@@ -87,6 +112,18 @@ export default [
         after: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
+      },
+    },
+  },
+  {
+    files: ['public/service-worker.js'],
+    languageOptions: {
+      globals: {
+        self: 'readonly',
+        caches: 'readonly',
+        clients: 'readonly',
+        skipWaiting: 'readonly',
+        registration: 'readonly',
       },
     },
   },
