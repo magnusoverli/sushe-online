@@ -3,7 +3,7 @@ services:
     build: .
     container_name: sushe-online
     ports:
-      - '3001:3000'
+      - '3000:3000'
     environment:
       - NODE_ENV=production
       - SESSION_SECRET=${SESSION_SECRET}
