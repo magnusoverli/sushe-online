@@ -2,6 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide flash messages when JavaScript is enabled for toast conversion */
+.js-enabled .flash-message {
+  display: none !important;
+}
+
 /* SortableJS Touch-and-Hold Drag Styles */
 @layer components {
   /* SortableJS ghost element (placeholder during drag) */

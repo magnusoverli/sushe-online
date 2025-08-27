@@ -2090,5 +2090,11 @@ function formatArtistDisplayName(artist) {
 
 // Initialize when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-  initializeAddAlbumFeature();
+  // Only initialize on pages that have the add album feature
+  const isAuthPage = window.location.pathname.match(
+    /\/(login|register|forgot)/
+  );
+  if (!isAuthPage) {
+    initializeAddAlbumFeature();
+  }
 });

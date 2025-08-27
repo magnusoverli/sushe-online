@@ -205,7 +205,7 @@ const registerTemplate = (req, flash) =>
       </button>
     </form>
     
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center flash-message" data-flash="error">${flash.error[0]}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -253,8 +253,8 @@ const forgotPasswordTemplate = (req, flash) => `
       </button>
     </form>
     
-    ${flash.info && flash.info.length ? `<p class="text-blue-400 text-sm mt-4 text-center">${flash.info[0]}</p>` : ''}
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center">${flash.error[0]}</p>` : ''}
+    ${flash.info && flash.info.length ? `<p class="text-blue-400 text-sm mt-4 text-center flash-message" data-flash="info">${flash.info[0]}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center flash-message" data-flash="error">${flash.error[0]}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">

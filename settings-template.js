@@ -487,7 +487,7 @@ const flashMessages = (flash) => `
   ${
     flash.error && flash.error.length
       ? `
-    <div class="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg">
+    <div class="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg flash-message" data-flash="error">
       <p class="text-red-400 flex items-center">
         <i class="fas fa-exclamation-circle mr-2"></i>
         ${flash.error[0]}
@@ -500,7 +500,7 @@ const flashMessages = (flash) => `
   ${
     flash.success && flash.success.length
       ? `
-    <div class="mb-6 p-4 bg-green-900/20 border border-green-800 rounded-lg">
+    <div class="mb-6 p-4 bg-green-900/20 border border-green-800 rounded-lg flash-message" data-flash="success">
       <p class="text-green-400 flex items-center">
         <i class="fas fa-check-circle mr-2"></i>
         ${flash.success[0]}

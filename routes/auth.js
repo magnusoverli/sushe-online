@@ -202,6 +202,17 @@ module.exports = (app, deps) => {
       if (!user) {
         logger.info('Authentication failed:', info);
         req.flash('error', info.message || 'Invalid credentials');
+
+        // Force session save before redirect to ensure flash messages persist
+        await new Promise((resolve) => {
+          req.session.save((err) => {
+            if (err) {
+              logger.error('Session save error:', err);
+            }
+            resolve();
+          });
+        });
+
         return res.redirect('/login');
       }
 

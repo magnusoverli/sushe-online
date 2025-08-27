@@ -465,13 +465,19 @@ app.use((req, res, next) => {
   }
 
   // Make flash messages available to templates via res.locals
-  res.locals.flash = req.session.flash;
+  // Clone the flash object to avoid reference issues
+  res.locals.flash = { ...req.session.flash };
 
   // Clear flash messages after making them available
-  req.session.flash = {};
+  // This ensures they're only shown once
+  delete req.session.flash;
 
   // Add flash method to request object
   req.flash = (type, message) => {
+    // Ensure session.flash exists
+    if (!req.session.flash) {
+      req.session.flash = {};
+    }
     // If called with just type, return messages of that type (getter)
     if (message === undefined) {
       return req.session.flash[type] || [];

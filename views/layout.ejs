@@ -16,6 +16,43 @@
   <link rel="manifest" href="/manifest.json">
   <link href="<%= asset('/styles/output.css') %>" rel="stylesheet">
   <style>
+    /* Toast notification styles */
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      max-width: 350px;
+      padding: 16px 24px;
+      background: #1DB954;
+      color: white;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      z-index: 1000;
+      opacity: 0;
+      transform: translateX(400px);
+      transition: all 0.3s ease;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    
+    .toast.show {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    
+    .toast.error {
+      background: #dc2626;
+    }
+    
+    .toast.success {
+      background: #1DB954;
+    }
+    
+    .toast.info {
+      background: #3b82f6;
+    }
+  </style>
+  <style>
     :root {
       --accent-color: <%= user?.accentColor || '#dc2626' %>;
       --accent-hover: <%= adjustColor(user?.accentColor || '#dc2626', -30) %>;
@@ -63,6 +100,12 @@
   <div class="relative z-10 max-w-md w-full px-4">
     <%- content %>
   </div>
+  <!-- Toast notification element -->
+  <div id="toast" class="toast"></div>
+  
+  <!-- Include the main JavaScript bundle -->
+  <script type="module" src="<%= asset('/js/bundle.js') %>"></script>
+  
   <script>
     // Temporarily disable service worker to debug CSRF issues
     /*

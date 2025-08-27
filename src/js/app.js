@@ -770,8 +770,30 @@ function initializeImportConflictHandling() {
   const originalImportNameSpan = document.getElementById('originalImportName');
   const importNewNameInput = document.getElementById('importNewName');
 
+  // Check if elements exist before setting handlers
+  const importOverwriteBtn = document.getElementById('importOverwriteBtn');
+  const importRenameBtn = document.getElementById('importRenameBtn');
+  const importMergeBtn = document.getElementById('importMergeBtn');
+  const importCancelBtn = document.getElementById('importCancelBtn');
+  const confirmImportRenameBtn = document.getElementById(
+    'confirmImportRenameBtn'
+  );
+  const cancelImportRenameBtn = document.getElementById(
+    'cancelImportRenameBtn'
+  );
+
+  if (
+    !importOverwriteBtn ||
+    !importRenameBtn ||
+    !importMergeBtn ||
+    !importCancelBtn
+  ) {
+    // Elements don't exist on this page, skip initialization
+    return;
+  }
+
   // Overwrite option
-  document.getElementById('importOverwriteBtn').onclick = async () => {
+  importOverwriteBtn.onclick = async () => {
     if (!pendingImportData || !pendingImportFilename) return;
 
     conflictModal.classList.add('hidden');
@@ -793,7 +815,7 @@ function initializeImportConflictHandling() {
   };
 
   // Rename option
-  document.getElementById('importRenameBtn').onclick = () => {
+  importRenameBtn.onclick = () => {
     conflictModal.classList.add('hidden');
     originalImportNameSpan.textContent = pendingImportFilename;
 
@@ -815,7 +837,7 @@ function initializeImportConflictHandling() {
   };
 
   // Merge option
-  document.getElementById('importMergeBtn').onclick = async () => {
+  importMergeBtn.onclick = async () => {
     if (!pendingImportData || !pendingImportFilename) return;
 
     conflictModal.classList.add('hidden');
@@ -862,7 +884,7 @@ function initializeImportConflictHandling() {
   };
 
   // Cancel import
-  document.getElementById('importCancelBtn').onclick = () => {
+  importCancelBtn.onclick = () => {
     conflictModal.classList.add('hidden');
     pendingImportData = null;
     pendingImportFilename = null;
@@ -870,51 +892,57 @@ function initializeImportConflictHandling() {
   };
 
   // Rename modal handlers
-  document.getElementById('confirmImportRenameBtn').onclick = async () => {
-    const newName = importNewNameInput.value.trim();
+  if (confirmImportRenameBtn) {
+    confirmImportRenameBtn.onclick = async () => {
+      const newName = importNewNameInput.value.trim();
 
-    if (!newName) {
-      showToast('Please enter a new name', 'error');
-      return;
-    }
+      if (!newName) {
+        showToast('Please enter a new name', 'error');
+        return;
+      }
 
-    if (lists[newName]) {
-      showToast('A list with this name already exists', 'error');
-      return;
-    }
+      if (lists[newName]) {
+        showToast('A list with this name already exists', 'error');
+        return;
+      }
 
-    renameModal.classList.add('hidden');
+      renameModal.classList.add('hidden');
 
-    try {
-      await saveList(newName, pendingImportData);
-      updateListNav();
-      selectList(newName);
-      showToast(
-        `Imported as "${newName}" with ${pendingImportData.length} albums`
-      );
-    } catch (err) {
-      console.error('Import with rename error:', err);
-      showToast('Error importing list', 'error');
-    }
+      try {
+        await saveList(newName, pendingImportData);
+        updateListNav();
+        selectList(newName);
+        showToast(
+          `Imported as "${newName}" with ${pendingImportData.length} albums`
+        );
+      } catch (err) {
+        console.error('Import with rename error:', err);
+        showToast('Error importing list', 'error');
+      }
 
-    pendingImportData = null;
-    pendingImportFilename = null;
-  };
+      pendingImportData = null;
+      pendingImportFilename = null;
+    };
+  }
 
-  document.getElementById('cancelImportRenameBtn').onclick = () => {
-    renameModal.classList.add('hidden');
-    // Go back to conflict modal
-    document.getElementById('conflictListName').textContent =
-      pendingImportFilename;
-    conflictModal.classList.remove('hidden');
-  };
+  if (cancelImportRenameBtn) {
+    cancelImportRenameBtn.onclick = () => {
+      renameModal.classList.add('hidden');
+      // Go back to conflict modal
+      document.getElementById('conflictListName').textContent =
+        pendingImportFilename;
+      conflictModal.classList.remove('hidden');
+    };
+  }
 
   // Enter key in rename input
-  importNewNameInput.onkeypress = (e) => {
-    if (e.key === 'Enter') {
-      document.getElementById('confirmImportRenameBtn').click();
-    }
-  };
+  if (importNewNameInput) {
+    importNewNameInput.onkeypress = (e) => {
+      if (e.key === 'Enter' && confirmImportRenameBtn) {
+        confirmImportRenameBtn.click();
+      }
+    };
+  }
 }
 
 // Make country editable with datalist
@@ -1070,6 +1098,9 @@ function showToast(message, type = 'success') {
     toast.classList.remove('show');
   }, 3000);
 }
+
+// Make showToast globally available immediately
+window.showToast = showToast;
 
 // API helper functions
 async function apiCall(url, options = {}) {
@@ -3353,72 +3384,60 @@ window.showMobileEditForm = function (index) {
   }, 100);
 };
 
-// File import
-document.getElementById('importBtn').onclick = () => {
-  document.getElementById('fileInput').click();
-};
-
-document.getElementById('fileInput').onchange = async (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const content = e.target.result;
-        const data = JSON.parse(content);
-
-        if (!Array.isArray(data)) {
-          throw new Error('JSON must be an array of albums');
-        }
-
-        if (data.length > 0) {
-          const requiredFields = ['artist', 'album'];
-          const missingFields = requiredFields.filter(
-            (field) => !data[0].hasOwnProperty(field)
-          );
-          if (missingFields.length > 0) {
-            throw new Error(
-              'Missing required fields: ' + missingFields.join(', ')
-            );
-          }
-        }
-
-        const listName = file.name.replace('.json', '');
-
-        // Check if list already exists
-        if (lists[listName]) {
-          // Store the data and show conflict modal
-          pendingImportData = data;
-          pendingImportFilename = listName;
-
-          document.getElementById('conflictListName').textContent = listName;
-          document
-            .getElementById('importConflictModal')
-            .classList.remove('hidden');
-        } else {
-          // No conflict, import directly
-          await saveList(listName, data);
-          updateListNav();
-          selectList(listName);
-          showToast(`Successfully imported ${data.length} albums`);
-        }
-      } catch (err) {
-        console.error('Import error:', err);
-        showToast('Error importing file: ' + err.message, 'error');
-      }
-    };
-
-    reader.onerror = (err) => {
-      console.error('File read error:', err);
-      showToast('Error reading file', 'error');
-    };
-
-    reader.readAsText(file, 'UTF-8');
-  }
-  e.target.value = '';
-};
+// File import handlers moved inside DOMContentLoaded
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Convert server-side flash messages to toast notifications
+  function convertFlashToToast() {
+    // Add 'js-enabled' class to body to enable CSS that hides flash messages
+    document.body.classList.add('js-enabled');
+
+    // Find all flash messages with data-flash attribute
+    const flashMessages = document.querySelectorAll('[data-flash]');
+
+    console.log('Flash messages found:', flashMessages.length);
+    flashMessages.forEach((element) => {
+      const type = element.dataset.flash; // 'error', 'success', 'info'
+      let message;
+
+      // For login.ejs which uses data-flash-content
+      if (element.dataset.flashContent) {
+        message = element.dataset.flashContent;
+      } else {
+        // For templates.js which has text content directly
+        message = element.textContent.trim();
+      }
+
+      console.log('Processing flash:', {
+        type,
+        message,
+        hasContent: !!message,
+      });
+
+      if (message) {
+        // Show toast notification
+        showToast(message, type);
+
+        // Remove the original flash element with a slight delay to ensure toast is shown
+        setTimeout(() => {
+          element.remove();
+        }, 100);
+      }
+    });
+  }
+
+  // Call the conversion function immediately - this works on all pages
+  convertFlashToToast();
+
+  // Check if we're on a main app page (not auth pages)
+  const isAuthPage = window.location.pathname.match(
+    /\/(login|register|forgot)/
+  );
+  if (isAuthPage) {
+    // Don't initialize main app features on auth pages
+    return;
+  }
+
   // Sidebar collapse functionality
   function initializeSidebarCollapse() {
     const sidebar = document.getElementById('sidebar');
@@ -3491,6 +3510,53 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('lastSelectedList', serverLastList);
       }
 
+      // Initialize file import handlers
+      const importBtn = document.getElementById('importBtn');
+      const fileInput = document.getElementById('fileInput');
+
+      if (importBtn && fileInput) {
+        importBtn.onclick = () => {
+          fileInput.click();
+        };
+
+        fileInput.onchange = async (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+              try {
+                const data = JSON.parse(e.target.result);
+                const fileName = file.name.replace(/\.json$/, '');
+
+                // Check for existing list
+                if (lists[fileName]) {
+                  // Show import conflict modal
+                  pendingImportData = data;
+                  pendingImportFilename = fileName;
+                  document.getElementById('conflictListName').textContent =
+                    fileName;
+                  document
+                    .getElementById('importConflictModal')
+                    .classList.remove('hidden');
+                } else {
+                  // Import directly
+                  await saveList(fileName, data);
+                  showToast(`Successfully imported ${data.length} albums`);
+                }
+              } catch (err) {
+                console.error('File import error:', err);
+                showToast('Error importing file: ' + err.message, 'error');
+              }
+            };
+            reader.onerror = () => {
+              showToast('Error reading file', 'error');
+            };
+            reader.readAsText(file);
+          }
+          e.target.value = ''; // Reset file input
+        };
+      }
+
       // Initialize confirmation modal handlers
       const confirmModal = document.getElementById('confirmationModal');
       const cancelBtn = document.getElementById('confirmationCancelBtn');
@@ -3541,7 +3607,5 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// Make showToast globally available
-window.showToast = showToast;
 // Expose playAlbum for inline handlers
 window.playAlbum = playAlbum;
