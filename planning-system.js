@@ -15,6 +15,7 @@ class PlanningSystem {
     this.todoPath = path.join(projectRoot, 'TODO.md');
     this.plansDir = path.join(projectRoot, 'plans');
     this.activeDir = path.join(this.plansDir, 'active');
+    this.backlogDir = path.join(this.plansDir, 'backlog');
     this.completedDir = path.join(this.plansDir, 'completed');
     this.templatesDir = path.join(this.plansDir, 'templates');
 
@@ -42,6 +43,7 @@ class PlanningSystem {
     const dirs = [
       this.plansDir,
       this.activeDir,
+      this.backlogDir,
       this.completedDir,
       this.templatesDir,
     ];
@@ -56,8 +58,11 @@ class PlanningSystem {
 
   async loadPlans() {
     try {
-      const activeFiles = await fs.readdir(this.activeDir);
-      const completedFiles = await fs.readdir(this.completedDir);
+      const activeFiles = await fs.readdir(this.activeDir).catch(() => []);
+      const backlogFiles = await fs.readdir(this.backlogDir).catch(() => []);
+      const completedFiles = await fs
+        .readdir(this.completedDir)
+        .catch(() => []);
 
       for (const file of activeFiles) {
         if (file.endsWith('.md')) {
@@ -66,6 +71,18 @@ class PlanningSystem {
           );
           if (plan) {
             plan.status = 'active';
+            this.plans.set(plan.id, plan);
+          }
+        }
+      }
+
+      for (const file of backlogFiles) {
+        if (file.endsWith('.md')) {
+          const plan = await this.parsePlanFile(
+            path.join(this.backlogDir, file)
+          );
+          if (plan) {
+            plan.status = 'backlog';
             this.plans.set(plan.id, plan);
           }
         }
@@ -167,6 +184,9 @@ class PlanningSystem {
     this.metrics.activePlans = Array.from(this.plans.values()).filter(
       (p) => p.status === 'active' || p.status === 'In Progress'
     ).length;
+    this.metrics.backlogPlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'backlog'
+    ).length;
     this.metrics.completedPlans = Array.from(this.plans.values()).filter(
       (p) => p.status === 'completed' || p.status === 'Completed'
     ).length;
@@ -204,6 +224,9 @@ class PlanningSystem {
     const activePlans = Array.from(this.plans.values()).filter(
       (p) => p.status === 'active' || p.status === 'In Progress'
     );
+    const backlogPlans = Array.from(this.plans.values()).filter(
+      (p) => p.status === 'backlog'
+    );
     const completedPlans = Array.from(this.plans.values()).filter(
       (p) => p.status === 'completed' || p.status === 'Completed'
     );
@@ -218,7 +241,29 @@ class PlanningSystem {
 *Last updated: ${now}*
 *System version: 2.0.0*
 
-## 🎯 Active Plans
+## 📋 Backlog Plans
+
+`;
+
+    if (backlogPlans.length === 0) {
+      content += '*No plans in backlog*\n\n';
+    } else {
+      for (const plan of backlogPlans) {
+        const progress = plan.criteriaProgress || parseInt(plan.progress) || 0;
+        content += `### [${plan.id}] ${plan.title}
+- **Status**: ${plan.status}
+- **Priority**: ${plan.priority}
+- **Created**: ${plan.created}
+- **Progress**: ${progress}%
+- **Owner**: System
+- **Description**: ${plan.title}
+- **Location**: \`plans/backlog/${plan.id.toLowerCase().replace(/[^a-z0-9]/g, '-')}.md\`
+
+`;
+      }
+    }
+
+    content += `## 🎯 Active Plans
 
 `;
 
@@ -328,7 +373,7 @@ ${activePlans.length > 0 ? activePlans.map((p) => `- ${p.title}`).join('\n') : '
 
 ## 📈 Metrics
 
-- **Total Plans**: ${this.metrics.totalPlans} (${this.metrics.activePlans} active, ${this.metrics.completedPlans} completed)
+- **Total Plans**: ${this.metrics.totalPlans} (${this.metrics.backlogPlans} backlog, ${this.metrics.activePlans} active, ${this.metrics.completedPlans} completed)
 - **Total Tasks**: ${this.metrics.totalTasks} (${this.metrics.completedTasks} completed, ${this.metrics.totalTasks - this.metrics.completedTasks} pending)
 - **Plans Progress**: ${this.metrics.plansProgress}%
 - **Tasks Completion Rate**: ${this.metrics.tasksProgress}%
@@ -351,10 +396,34 @@ ${activePlans.length > 0 ? activePlans.map((p) => `- ${p.title}`).join('\n') : '
   }
 
   async createPlan(planData) {
-    const planId =
-      planData.id || `PLAN-${String(this.plans.size + 1).padStart(3, '0')}`;
+    // Ensure plans are loaded before generating ID
+    if (this.plans.size === 0) {
+      await this.loadPlans();
+    }
+
+    let planId;
+    if (planData.id) {
+      planId = planData.id;
+    } else {
+      // Generate unique ID by finding the highest existing plan number
+      const existingIds = Array.from(this.plans.keys())
+        .filter((id) => id.startsWith('PLAN-'))
+        .map((id) => parseInt(id.replace('PLAN-', '')))
+        .filter((num) => !isNaN(num));
+
+      const nextNum = existingIds.length > 0 ? Math.max(...existingIds) + 1 : 1;
+      planId = `PLAN-${String(nextNum).padStart(3, '0')}`;
+    }
+
     const fileName = `${planId.toLowerCase().replace(/[^a-z0-9]/g, '-')}.md`;
-    const filePath = path.join(this.activeDir, fileName);
+
+    // Determine target directory based on status
+    let targetDir = this.activeDir;
+    if (planData.status === 'backlog') {
+      targetDir = this.backlogDir;
+    }
+
+    const filePath = path.join(targetDir, fileName);
 
     const planContent = this.generatePlanTemplate(planData, planId);
     await fs.writeFile(filePath, planContent, 'utf8');
@@ -368,16 +437,17 @@ ${activePlans.length > 0 ? activePlans.map((p) => `- ${p.title}`).join('\n') : '
 
   generatePlanTemplate(planData, planId) {
     const now = new Date().toISOString().split('T')[0];
+    const status = planData.status || 'Active';
 
     return `# ${planId}: ${planData.title}
 
 ## Plan Overview
 - **ID**: ${planId}
 - **Title**: ${planData.title}
-- **Status**: ${planData.status || 'Active'}
+- **Status**: ${status}
 - **Priority**: ${planData.priority || 'Medium'}
 - **Created**: ${now}
-- **Started**: ${now}
+- **Started**: ${status === 'Active' ? now : 'Not started'}
 - **Estimated Completion**: ${planData.estimatedCompletion || 'TBD'}
 - **Owner**: ${planData.owner || 'System'}
 - **Type**: ${planData.type || 'Development'}
@@ -430,12 +500,70 @@ ${planData.notes || 'No additional notes.'}
     let content = await fs.readFile(oldPath, 'utf8');
     const now = new Date().toISOString().split('T')[0];
     content = content.replace(
-      /\*\*Status\*\*:\s*(.+)/,
-      `**Status**: Completed`
+      /- \*\*Status\*\*:\s*(.+)/,
+      `- **Status**: Active`
     );
     content = content.replace(
       /## Change Log/,
       `## Change Log\n- **${now}**: Plan completed and moved to completed directory`
+    );
+
+    await fs.writeFile(newPath, content, 'utf8');
+    await fs.unlink(oldPath);
+
+    await this.loadPlans();
+    await this.calculateMetrics();
+    await this.updateTodoFile();
+
+    return true;
+  }
+
+  async moveToBacklog(planId) {
+    const plan = this.plans.get(planId);
+    if (!plan || plan.status === 'backlog') {
+      return false;
+    }
+
+    const oldPath = plan.filePath;
+    const fileName = path.basename(oldPath);
+    const newPath = path.join(this.backlogDir, fileName);
+
+    // Update plan content to mark as backlog
+    let content = await fs.readFile(oldPath, 'utf8');
+    const now = new Date().toISOString().split('T')[0];
+    content = content.replace(/\*\*Status\*\*:\s*(.+)/, `**Status**: Backlog`);
+    content = content.replace(
+      /## Change Log/,
+      `## Change Log\n- **${now}**: Plan moved to backlog`
+    );
+
+    await fs.writeFile(newPath, content, 'utf8');
+    await fs.unlink(oldPath);
+
+    await this.loadPlans();
+    await this.calculateMetrics();
+    await this.updateTodoFile();
+
+    return true;
+  }
+
+  async moveToActive(planId) {
+    const plan = this.plans.get(planId);
+    if (!plan || plan.status === 'active') {
+      return false;
+    }
+
+    const oldPath = plan.filePath;
+    const fileName = path.basename(oldPath);
+    const newPath = path.join(this.activeDir, fileName);
+
+    // Update plan content to mark as active
+    let content = await fs.readFile(oldPath, 'utf8');
+    const now = new Date().toISOString().split('T')[0];
+    content = content.replace(/\*\*Status\*\*:\s*(.+)/, `**Status**: Active`);
+    content = content.replace(
+      /## Change Log/,
+      `## Change Log\n- **${now}**: Plan moved to active`
     );
 
     await fs.writeFile(newPath, content, 'utf8');
@@ -510,17 +638,43 @@ if (require.main === module) {
       break;
     }
 
+    case 'backlog-plan': {
+      const planId = process.argv[3];
+      system.moveToBacklog(planId).then((success) => {
+        logger.info(
+          success
+            ? `Plan ${planId} moved to backlog`
+            : `Failed to move plan ${planId} to backlog`
+        );
+      });
+      break;
+    }
+
+    case 'activate-plan': {
+      const planId = process.argv[3];
+      system.moveToActive(planId).then((success) => {
+        logger.info(
+          success
+            ? `Plan ${planId} moved to active`
+            : `Failed to move plan ${planId} to active`
+        );
+      });
+      break;
+    }
+
     default:
       // eslint-disable-next-line no-console
       console.log(`
 Usage: node planning-system.js <command>
 
 Commands:
-  init          Initialize the planning system
-  update        Update TODO.md and recalculate metrics
-  watch         Watch for changes and auto-update
-  create-plan   Create a new plan (requires JSON data as second argument)
-  complete-plan Complete a plan (requires plan ID as second argument)
+   init          Initialize the planning system
+   update        Update TODO.md and recalculate metrics
+   watch         Watch for changes and auto-update
+   create-plan   Create a new plan (requires JSON data as second argument)
+   complete-plan Complete a plan (requires plan ID as second argument)
+   backlog-plan  Move a plan to backlog (requires plan ID as second argument)
+   activate-plan Move a plan to active (requires plan ID as second argument)
 `);
   }
 }
