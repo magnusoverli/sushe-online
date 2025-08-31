@@ -15,6 +15,11 @@ let pendingImportData = null;
 let pendingImportFilename = null;
 let confirmationCallback = null;
 
+// Track loading performance optimization variables
+let trackAbortController = null;
+let lastLoadedAlbumIndex = null;
+const trackMenuCache = new Map();
+
 // Context menu variables
 
 // Position-based points mapping
@@ -76,6 +81,12 @@ document.addEventListener('click', () => {
     // Clear context album references when menu is hidden
     currentContextAlbum = null;
     currentContextAlbumId = null;
+
+    // Clean up track loading state when closing menu
+    if (trackAbortController) {
+      trackAbortController.abort();
+      trackAbortController = null;
+    }
   }
 
   const trackSubmenu = document.getElementById('trackSubmenu');
@@ -1346,15 +1357,26 @@ async function saveList(name, data) {
 // Expose saveList for other modules
 window.saveList = saveList;
 
-async function fetchTracksForAlbum(album) {
+async function fetchTracksForAlbum(album, signal = null) {
   const params = new URLSearchParams({
     id: album.album_id || '',
     artist: album.artist,
     album: album.album,
   });
-  const resp = await fetch(`/api/musicbrainz/tracks?${params.toString()}`, {
+
+  const fetchOptions = {
     credentials: 'include',
-  });
+  };
+
+  // Add abort signal if provided
+  if (signal) {
+    fetchOptions.signal = signal;
+  }
+
+  const resp = await fetch(
+    `/api/musicbrainz/tracks?${params.toString()}`,
+    fetchOptions
+  );
   const data = await resp.json();
   if (!resp.ok) throw new Error(data.error || 'Failed');
   album.tracks = data.tracks;
@@ -1571,12 +1593,38 @@ function initializeAlbumContextMenu() {
     selectTrackOption.onmouseenter = async () => {
       if (currentContextAlbum === null) return;
 
+      // Cancel any in-flight requests if switching albums quickly
+      if (trackAbortController) {
+        trackAbortController.abort();
+        trackAbortController = null;
+      }
+
       const album =
         lists[currentList] && lists[currentList][currentContextAlbum];
       if (!album) return;
 
-      // Clear previous tracks
-      trackSubmenu.innerHTML = '';
+      // Check if we already have this menu cached and tracks haven't changed
+      const cacheKey = `${currentList}_${currentContextAlbum}_${album.track_pick || ''}`;
+      if (
+        lastLoadedAlbumIndex === currentContextAlbum &&
+        trackMenuCache.has(cacheKey) &&
+        album.tracks &&
+        album.tracks.length > 0
+      ) {
+        // Reuse cached menu
+        trackSubmenu.innerHTML = trackMenuCache.get(cacheKey);
+        trackSubmenu.classList.remove('hidden');
+
+        // Reattach event listeners to cached elements
+        reattachTrackListeners(trackSubmenu, album);
+        return;
+      }
+
+      // Clear previous tracks only if switching to a different album
+      if (lastLoadedAlbumIndex !== currentContextAlbum) {
+        trackSubmenu.innerHTML = '';
+      }
+      lastLoadedAlbumIndex = currentContextAlbum;
 
       // Check if album has tracks
       if (!album.tracks || album.tracks.length === 0) {
@@ -1586,10 +1634,22 @@ function initializeAlbumContextMenu() {
         trackSubmenu.classList.remove('hidden');
 
         try {
-          await fetchTracksForAlbum(album);
-          // Save the updated album with tracks
-          await saveList(currentList, lists[currentList]);
+          // Create abort controller for this request
+          trackAbortController = new AbortController();
+
+          // Fetch tracks with abort signal
+          await fetchTracksForAlbum(album, trackAbortController.signal);
+
+          // Only save if request wasn't aborted
+          if (!trackAbortController.signal.aborted) {
+            await saveList(currentList, lists[currentList]);
+            trackAbortController = null;
+          }
         } catch (error) {
+          if (error.name === 'AbortError') {
+            // Request was aborted, ignore
+            return;
+          }
           console.error('Error fetching tracks:', error);
           trackSubmenu.innerHTML =
             '<div class="px-4 py-2 text-sm text-red-400">Failed to load tracks</div>';
@@ -1599,68 +1659,23 @@ function initializeAlbumContextMenu() {
 
       // Display tracks
       if (album.tracks && album.tracks.length > 0) {
-        trackSubmenu.innerHTML = '';
+        // Build the menu HTML
+        const menuHTML = buildTrackMenu(album);
 
-        // Sort tracks to ensure they start from track 1
-        const sortedTracks = [...album.tracks].sort((a, b) => {
-          // Extract track numbers if they exist at the beginning of track names
-          const aNum = parseInt(
-            a.match(/^(\d+)[\.\s\-]/) ? a.match(/^(\d+)/)[1] : 0
-          );
-          const bNum = parseInt(
-            b.match(/^(\d+)[\.\s\-]/) ? b.match(/^(\d+)/)[1] : 0
-          );
-          if (aNum && bNum) return aNum - bNum;
-          return 0; // Keep original order if no track numbers found
-        });
+        // Cache the menu HTML
+        trackMenuCache.set(cacheKey, menuHTML);
 
-        // Add "None" option
-        const noneOption = document.createElement('button');
-        noneOption.className =
-          'block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-nowrap';
-        noneOption.innerHTML = `
-          <span class="${!album.track_pick ? 'text-red-500' : 'text-gray-400'}">
-            ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
-          </span>
-        `;
-        noneOption.onclick = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          album.track_pick = '';
-          await saveList(currentList, lists[currentList]);
-          contextMenu.classList.add('hidden');
-          trackSubmenu.classList.add('hidden');
-          showToast('Track selection cleared');
-        };
-        trackSubmenu.appendChild(noneOption);
+        // Limit cache size to prevent memory issues
+        if (trackMenuCache.size > 20) {
+          const firstKey = trackMenuCache.keys().next().value;
+          trackMenuCache.delete(firstKey);
+        }
 
-        // Add track options
-        sortedTracks.forEach((track, idx) => {
-          const trackOption = document.createElement('button');
-          const isSelected =
-            album.track_pick === track ||
-            album.track_pick === (idx + 1).toString();
-          trackOption.className =
-            'block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-normal';
-          trackOption.innerHTML = `
-            <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
-              ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
-              ${idx + 1}. ${track}
-            </span>
-          `;
-          trackOption.onclick = async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            album.track_pick = track;
-            await saveList(currentList, lists[currentList]);
-            contextMenu.classList.add('hidden');
-            trackSubmenu.classList.add('hidden');
-            showToast(`Selected track: ${track}`);
-          };
-          trackSubmenu.appendChild(trackOption);
-        });
-
+        trackSubmenu.innerHTML = menuHTML;
         trackSubmenu.classList.remove('hidden');
+
+        // Attach event listeners
+        reattachTrackListeners(trackSubmenu, album);
 
         // Adjust submenu position if it goes off-screen
         setTimeout(() => {
@@ -1694,6 +1709,79 @@ function initializeAlbumContextMenu() {
         trackSubmenu.classList.remove('hidden');
       }
     };
+
+    // Helper function to build track menu HTML as a string
+    function buildTrackMenu(album) {
+      // Sort tracks to ensure they start from track 1
+      const sortedTracks = [...album.tracks].sort((a, b) => {
+        const aNum = parseInt(
+          a.match(/^(\d+)[\.\s\-]/) ? a.match(/^(\d+)/)[1] : 0
+        );
+        const bNum = parseInt(
+          b.match(/^(\d+)[\.\s\-]/) ? b.match(/^(\d+)/)[1] : 0
+        );
+        if (aNum && bNum) return aNum - bNum;
+        return 0;
+      });
+
+      let html = '';
+
+      // Add "None" option
+      html += `
+        <button class="track-menu-option block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-nowrap"
+                data-track-value="">
+          <span class="${!album.track_pick ? 'text-red-500' : 'text-gray-400'}">
+            ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
+          </span>
+        </button>
+      `;
+
+      // Add track options
+      sortedTracks.forEach((track, idx) => {
+        const isSelected =
+          album.track_pick === track ||
+          album.track_pick === (idx + 1).toString();
+        html += `
+          <button class="track-menu-option block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-normal"
+                  data-track-value="${track.replace(/"/g, '&quot;')}">
+            <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
+              ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
+              ${idx + 1}. ${track}
+            </span>
+          </button>
+        `;
+      });
+
+      return html;
+    }
+
+    // Helper function to reattach event listeners to track menu buttons
+    function reattachTrackListeners(submenu, album) {
+      const buttons = submenu.querySelectorAll('.track-menu-option');
+      buttons.forEach((button) => {
+        button.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          const trackValue = button.dataset.trackValue;
+          album.track_pick = trackValue;
+
+          await saveList(currentList, lists[currentList]);
+          contextMenu.classList.add('hidden');
+          trackSubmenu.classList.add('hidden');
+
+          // Clear cache since selection changed
+          trackMenuCache.clear();
+          lastLoadedAlbumIndex = null;
+
+          if (trackValue) {
+            showToast(`Selected track: ${trackValue}`);
+          } else {
+            showToast('Track selection cleared');
+          }
+        };
+      });
+    }
 
     selectTrackOption.onmouseleave = (e) => {
       // Hide submenu if not hovering over it
