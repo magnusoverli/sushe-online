@@ -294,7 +294,6 @@ async function searchITunesArtwork(artistName, albumName) {
       itunesCache.set(cacheKey, null);
       return null;
     } catch (error) {
-      console.error('iTunes search error:', error);
       itunesCache.set(cacheKey, null);
       return null;
     }
@@ -372,7 +371,6 @@ async function searchDeezerArtwork(artistName, albumName) {
       deezerCache.set(cacheKey, null);
       return null;
     } catch (error) {
-      console.error('Deezer search error:', error);
       deezerCache.set(cacheKey, null);
       return null;
     }
@@ -410,7 +408,6 @@ async function getCoverArtFromArchive(releaseGroupId) {
 
       return null;
     } catch (error) {
-      console.error('Error fetching cover art from archive:', error);
       return null;
     }
   });
@@ -444,9 +441,7 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
       if (result) {
         return result;
       }
-    } catch (error) {
-      console.error(`${source.name} error:`, error);
-    }
+    } catch (error) {}
   }
 
   return null;
@@ -488,9 +483,7 @@ async function preloadArtistAlbums(artist) {
 
     return releaseGroups;
   } catch (error) {
-    if (error.name !== 'AbortError') {
-      console.error('Preload error:', error);
-    }
+    // Silently handle AbortError
     return null;
   }
 }
@@ -552,11 +545,8 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       loadedAlbums.add(index);
       loadingAlbums.delete(index);
     } catch (error) {
-      console.error(
-        `Error loading cover for ${releaseGroups[index].title}:`,
-        error
-      );
-      loadedAlbums.add(index); // Mark as loaded to avoid retry
+      // Error loading cover - mark as loaded to avoid retry
+      loadedAlbums.add(index);
       loadingAlbums.delete(index);
     }
   };
@@ -703,7 +693,6 @@ async function performSearch() {
       await displayDirectAlbumResults(albums);
     }
   } catch (error) {
-    console.error(`Error searching ${searchMode}s:`, error);
     showToast(`Error searching ${searchMode}s`, 'error');
     modalElements.searchLoading.classList.add('hidden');
     modalElements.searchEmpty.classList.remove('hidden');
@@ -810,7 +799,7 @@ async function displayDirectAlbumResults(releaseGroups) {
             rg.coverArt = coverArt;
           }
         } catch (error) {
-          console.error('Error loading cover before add:', error);
+          // Error loading cover - will try again later
         }
       }
 
@@ -1224,13 +1213,12 @@ async function handleManualSubmit(e) {
       };
 
       reader.onerror = function () {
-        console.error('Error reading cover art');
+        // Error reading cover art
         showToast('Error processing cover art', 'error');
       };
 
       reader.readAsDataURL(coverArtFile);
     } catch (error) {
-      console.error('Error processing cover art:', error);
       showToast('Error processing cover art', 'error');
     }
   } else {
@@ -1248,7 +1236,7 @@ async function finishManualAdd(album) {
       try {
         await window.fetchTracksForAlbum(album);
       } catch (err) {
-        console.error('Auto track fetch failed:', err);
+        // Auto track fetch failed - not critical
       }
     }
 
@@ -1263,7 +1251,6 @@ async function finishManualAdd(album) {
 
     showToast(`Added "${album.album}" by ${album.artist} to the list`);
   } catch (error) {
-    console.error('Error adding manual album:', error);
     showToast('Error adding album to list', 'error');
 
     // Remove from list on error
@@ -1414,7 +1401,6 @@ async function searchArtistImage(artistName) {
 
     return null;
   } catch (error) {
-    console.error('Error fetching artist image:', error);
     return null;
   }
 }
@@ -1560,10 +1546,9 @@ async function selectArtist(artist) {
     displayAlbumResultsWithLazyLoading(releaseGroups);
   } catch (error) {
     if (error.name === 'AbortError') {
-      console.info('Album loading cancelled');
+      // Album loading cancelled - expected behavior
       return;
     }
-    console.error('Error fetching albums:', error);
     showToast('Error fetching albums', 'error');
     showArtistResults();
   }
@@ -1638,7 +1623,6 @@ async function resolveCountryCode(countryCode) {
     );
     return '';
   } catch (error) {
-    console.error('Error resolving country code:', error);
     return '';
   }
 }
@@ -1662,7 +1646,7 @@ async function getCombinedArtistCountries(artistCredits) {
         }
       }
     } catch (err) {
-      console.error('Error fetching artist country:', err);
+      // Error fetching artist country - non-critical
     }
   }
 
@@ -1805,7 +1789,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
             rg.coverArt = coverArt;
           }
         } catch (error) {
-          console.error('Error loading cover before add:', error);
+          // Error loading cover - will try again later
         }
       }
 
@@ -1900,7 +1884,7 @@ async function addAlbumToList(releaseGroup) {
         releaseGroup.coverArt = coverArtUrl;
       }
     } catch (error) {
-      console.error('Error fetching cover art:', error);
+      // Error fetching cover art - will proceed without
     }
   }
 
@@ -1925,13 +1909,13 @@ async function addAlbumToList(releaseGroup) {
       };
 
       reader.onerror = function () {
-        console.error('Error reading cover art');
+        // Error reading cover art
         addAlbumToCurrentList(album);
       };
 
       reader.readAsDataURL(blob);
     } catch (error) {
-      console.error('Error fetching cover art:', error);
+      // Error fetching cover art - will proceed without
       addAlbumToCurrentList(album);
     }
   } else {
@@ -1948,7 +1932,7 @@ async function addAlbumToCurrentList(album) {
       try {
         await window.fetchTracksForAlbum(album);
       } catch (err) {
-        console.error('Auto track fetch failed:', err);
+        // Auto track fetch failed - not critical
       }
     }
 
@@ -1960,7 +1944,6 @@ async function addAlbumToCurrentList(album) {
 
     showToast(`Added "${album.album}" by ${album.artist} to the list`);
   } catch (error) {
-    console.error('Error adding album:', error);
     showToast('Error adding album to list', 'error');
 
     window.lists[window.currentList].pop();

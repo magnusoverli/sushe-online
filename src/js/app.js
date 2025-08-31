@@ -337,7 +337,6 @@ async function loadCountries() {
       availableCountries.unshift(emptyItem);
     }
   } catch (error) {
-    console.error('Error saving list after reorder:', error);
     showToast('Error saving list order', 'error');
     // Revert the change
     const [revertItem] = list.splice(newIndex, 1);
@@ -422,7 +421,6 @@ async function downloadListAsJSON(listName) {
 
     showToast(`Downloaded "${listName}"`);
   } catch (error) {
-    console.error('Error downloading/sharing list:', error);
     showToast('Error downloading list', 'error');
   }
 }
@@ -435,15 +433,12 @@ window.testConfirmation = async function () {
     'This is a sub-message',
     'Confirm'
   );
-  console.log('Test confirmation result:', result);
   return result;
 };
 
 // Update Spotify/Tidal playlist for the given list
 async function updatePlaylist(listName) {
   try {
-    console.log('updatePlaylist called with listName:', listName);
-
     // First check if playlist exists
     showToast('Checking for existing playlist...', 'info');
 
@@ -458,18 +453,12 @@ async function updatePlaylist(listName) {
         }
       );
     } catch (checkError) {
-      console.error('Error checking playlist existence:', checkError);
       // If check fails, proceed with update anyway
       checkResult = { exists: false };
     }
 
-    console.log('Playlist check result:', checkResult);
-    console.log('Playlist exists?', checkResult.exists);
-    console.log('CheckResult object:', JSON.stringify(checkResult));
-
     // If playlist exists, ask for confirmation
     if (checkResult && checkResult.exists === true) {
-      console.log('Showing confirmation dialog...');
       const confirmed = await showConfirmation(
         'Replace Existing Playlist?',
         `A playlist named "${listName}" already exists in your music service. Do you want to replace it with the current list?`,
@@ -478,14 +467,9 @@ async function updatePlaylist(listName) {
       );
 
       if (!confirmed) {
-        console.log('User cancelled playlist replacement');
         showToast('Playlist update cancelled', 'info');
         return;
       }
-    } else {
-      console.log(
-        'Playlist does not exist or check failed, creating new playlist'
-      );
     }
 
     // Show progress indicator
@@ -568,7 +552,6 @@ async function updatePlaylist(listName) {
         }
       } catch (parseError) {
         // If we can't parse the error, show generic message
-        console.error('Error parsing response:', parseError);
       }
     }
 
@@ -1553,7 +1536,6 @@ function initializeContextMenu() {
 
         showToast(`List "${currentContextList}" deleted`);
       } catch (error) {
-        console.error('Error deleting list:', error);
         showToast('Error deleting list', 'error');
       }
     }
@@ -1949,7 +1931,6 @@ function initializeCreateList() {
 
       showToast(`Created list "${listName}"`);
     } catch (error) {
-      console.error('Error creating list:', error);
       showToast('Error creating list', 'error');
     }
   };
@@ -2050,7 +2031,6 @@ function initializeRenameList() {
 
       showToast(`List renamed from "${oldName}" to "${newName}"`);
     } catch (error) {
-      console.error('Error renaming list:', error);
       showToast('Error renaming list', 'error');
     }
   };
@@ -2228,7 +2208,6 @@ async function selectList(listName) {
         });
     }
   } catch (error) {
-    console.error('Error selecting list:', error);
     showToast('Error loading list', 'error');
   }
 }
@@ -3819,7 +3798,6 @@ document.addEventListener('DOMContentLoaded', () => {
                   showToast(`Successfully imported ${data.length} albums`);
                 }
               } catch (err) {
-                console.error('File import error:', err);
                 showToast('Error importing file: ' + err.message, 'error');
               }
             };
@@ -3868,7 +3846,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     })
     .catch((err) => {
-      console.error('Failed to initialize:', err);
       showToast('Failed to initialize', 'error');
     });
 });
