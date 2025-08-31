@@ -266,6 +266,32 @@ class PgDatastore {
     })();
     return this._callbackify(promise, cb);
   }
+
+  // Find albums by album_id (MusicBrainz IDs)
+  async findByAlbumIds(albumIds, cb) {
+    const promise = (async () => {
+      if (!albumIds || albumIds.length === 0) return [];
+
+      // Check cache
+      const cacheKey = `findByAlbumIds_${albumIds.sort().join(',')}`;
+      const cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+        return cached.data;
+      }
+
+      const placeholders = albumIds.map((_, i) => `$${i + 1}`).join(',');
+      const queryText = `SELECT * FROM ${this.table} WHERE ${this._mapField('albumId')} IN (${placeholders})`;
+      const queryName = `findByAlbumIds_${this.table}`;
+      const res = await this._preparedQuery(queryName, queryText, albumIds);
+      const result = res.rows.map((r) => this._mapRow(r));
+
+      // Cache result
+      this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
+
+      return result;
+    })();
+    return this._callbackify(promise, cb);
+  }
   // Placeholder for API compatibility
   ensureIndex() {}
 }

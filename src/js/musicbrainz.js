@@ -1891,30 +1891,26 @@ async function addAlbumToList(releaseGroup) {
   // Process cover art if found
   if (coverArtUrl) {
     try {
-      const response = await fetch(coverArtUrl);
-      const blob = await response.blob();
+      // Use the image proxy endpoint to fetch external images
+      const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(coverArtUrl)}`;
+      const response = await fetch(proxyUrl, {
+        credentials: 'same-origin',
+      });
 
-      if (!blob.type.startsWith('image/')) {
-        throw new Error('Invalid image type');
+      if (!response.ok) {
+        throw new Error('Failed to fetch image through proxy');
       }
 
-      const reader = new FileReader();
+      const data = await response.json();
 
-      reader.onloadend = function () {
-        const base64data = reader.result;
-        album.cover_image = base64data.split(',')[1];
-        album.cover_image_format = blob.type.split('/')[1].toUpperCase();
+      if (data.data && data.contentType) {
+        album.cover_image = data.data;
+        album.cover_image_format = data.contentType.split('/')[1].toUpperCase();
+      }
 
-        addAlbumToCurrentList(album);
-      };
-
-      reader.onerror = function () {
-        // Error reading cover art
-        addAlbumToCurrentList(album);
-      };
-
-      reader.readAsDataURL(blob);
+      addAlbumToCurrentList(album);
     } catch (error) {
+      console.warn('Error fetching cover art:', error);
       // Error fetching cover art - will proceed without
       addAlbumToCurrentList(album);
     }
