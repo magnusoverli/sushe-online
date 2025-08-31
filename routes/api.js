@@ -596,6 +596,38 @@ module.exports = (app, deps) => {
     }
   );
 
+  // iTunes proxy endpoint for album artwork
+  app.get(
+    '/api/proxy/itunes',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { term } = req.query;
+        if (!term) {
+          return res
+            .status(400)
+            .json({ error: 'Query parameter term is required' });
+        }
+
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(
+            `iTunes API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('iTunes proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch from iTunes' });
+      }
+    }
+  );
+
   // Image proxy endpoint for fetching external cover art
   app.get(
     '/api/proxy/image',
@@ -616,6 +648,7 @@ module.exports = (app, deps) => {
           'is4-ssl.mzstatic.com',
           'is5-ssl.mzstatic.com',
           'e-cdns-images.dzcdn.net',
+          'cdn-images.dzcdn.net', // Added correct Deezer CDN host
           'coverartarchive.org',
           'archive.org',
         ];

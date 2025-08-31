@@ -222,7 +222,7 @@ async function getArtistReleaseGroups(artistId) {
   return releaseGroups;
 }
 
-// Search iTunes for album artwork
+// Search iTunes for album artwork (via proxy to avoid CORS)
 async function searchITunesArtwork(artistName, albumName) {
   const cacheKey = `${artistName}::${albumName}`.toLowerCase();
 
@@ -235,11 +235,14 @@ async function searchITunesArtwork(artistName, albumName) {
       const searchTerm = `${artistName} ${albumName}`
         .replace(/[^\w\s]/g, ' ')
         .trim();
-      const url = `${ITUNES_API}/search?term=${encodeURIComponent(searchTerm)}&entity=album&limit=5`;
+      // Use proxy endpoint to avoid CORS issues
+      const url = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}`;
 
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        credentials: 'same-origin', // Include cookies for authentication
+      });
       if (!response.ok) {
-        throw new Error('iTunes API request failed');
+        throw new Error('iTunes proxy request failed');
       }
 
       const data = await response.json();
@@ -416,25 +419,28 @@ async function getCoverArtFromArchive(releaseGroupId) {
 // Try cover art sources in parallel for faster loading
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   // Define sources - all will be checked in parallel
+  // Prioritize Deezer (fastest), then Cover Art Archive
+  // iTunes disabled temporarily due to proxy issues
   const sources = [
-    {
-      name: 'coverart',
-      fn: () => getCoverArtFromArchive(releaseGroupId),
-      enabled: true,
-      priority: 1, // Highest priority - most reliable source
-    },
-    {
-      name: 'itunes',
-      fn: () => searchITunesArtwork(artistName, albumTitle),
-      enabled: artistName && albumTitle,
-      priority: 2,
-    },
     {
       name: 'deezer',
       fn: () => searchDeezerArtwork(artistName, albumTitle),
       enabled: artistName && albumTitle,
-      priority: 3,
+      priority: 1, // Fastest and most reliable with proxy
     },
+    {
+      name: 'coverart',
+      fn: () => getCoverArtFromArchive(releaseGroupId),
+      enabled: true,
+      priority: 2, // Can be slow but reliable
+    },
+    // iTunes temporarily disabled - proxy having issues
+    // {
+    //   name: 'itunes',
+    //   fn: () => searchITunesArtwork(artistName, albumTitle),
+    //   enabled: artistName && albumTitle,
+    //   priority: 3,
+    // },
   ].filter((s) => s.enabled);
 
   // Execute all sources in parallel for 3x faster loading
@@ -577,18 +583,13 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       }
     }
 
-    // Load remaining albums in larger batches for faster loading
-    const BATCH_SIZE = 10; // Increased from 3 to match our new concurrent limits
+    // Load ALL remaining albums in parallel (let the queue manage concurrency)
+    // This is much faster than sequential batches
+    if (unloadedIndexes.length > 0) {
+      const allPromises = unloadedIndexes.map((index) => loadAlbumCover(index));
 
-    for (let i = 0; i < unloadedIndexes.length; i += BATCH_SIZE) {
-      if (currentLoadingController?.signal.aborted) break;
-
-      const batch = unloadedIndexes.slice(i, i + BATCH_SIZE);
-      const batchPromises = batch.map((index) => loadAlbumCover(index));
-
-      await Promise.allSettled(batchPromises);
-
-      // Removed artificial delay - parallel loading handles this better
+      // Wait for all to complete (the RequestQueue will handle rate limiting)
+      await Promise.allSettled(allPromises);
     }
 
     isBackgroundLoading = false;
@@ -598,20 +599,45 @@ function setupIntersectionObserver(releaseGroups, artistName) {
   let visibleImagesLoaded = 0;
   let totalVisibleImages = 0;
 
+  // Collect intersecting albums for parallel loading
+  const pendingLoads = new Set();
+  let loadTimer = null;
+
   imageObserver = new IntersectionObserver(
     (entries, observer) => {
+      // Collect all newly visible albums
+      const newlyVisible = [];
+
       entries.forEach((entry) => {
         if (entry.isIntersecting) {
           const albumEl = entry.target;
           const index = parseInt(albumEl.dataset.albumIndex);
 
-          totalVisibleImages++;
+          if (!loadedAlbums.has(index) && !loadingAlbums.has(index)) {
+            newlyVisible.push(index);
+            pendingLoads.add(index);
+            totalVisibleImages++;
+          }
 
-          // Load this album's cover
-          loadAlbumCover(index).then(() => {
-            visibleImagesLoaded++;
+          // Stop observing this element
+          observer.unobserve(albumEl);
+        }
+      });
 
-            // Check if all initially visible images are loaded
+      // Clear existing timer
+      if (loadTimer) clearTimeout(loadTimer);
+
+      // Batch load all pending items with a small debounce
+      loadTimer = setTimeout(() => {
+        if (pendingLoads.size > 0) {
+          // Load all pending albums in parallel
+          const toLoad = Array.from(pendingLoads);
+          pendingLoads.clear();
+
+          Promise.all(toLoad.map((index) => loadAlbumCover(index))).then(() => {
+            visibleImagesLoaded += toLoad.length;
+
+            // Check if we should start background loading
             if (
               visibleImagesLoaded >= totalVisibleImages &&
               visibleImagesLoaded > 0
@@ -620,11 +646,8 @@ function setupIntersectionObserver(releaseGroups, artistName) {
               startBackgroundLoading();
             }
           });
-
-          // Stop observing this element
-          observer.unobserve(albumEl);
         }
-      });
+      }, 50); // Small debounce to batch multiple intersection events
     },
     {
       rootMargin: '100px', // Start loading 100px before entering viewport
@@ -632,28 +655,34 @@ function setupIntersectionObserver(releaseGroups, artistName) {
     }
   );
 
-  // Also start background loading after a short timeout if no scrolling happens
+  // Also start loading immediately for visible albums and background loading
   setTimeout(() => {
-    if (visibleImagesLoaded === 0) {
-      // No visible images detected yet, force check for visible albums
-      const visibleAlbums = Array.from(
-        modalElements.albumList.querySelectorAll('[data-album-index]')
-      ).filter((el) => {
-        const rect = el.getBoundingClientRect();
-        return rect.top < window.innerHeight && rect.bottom > 0;
-      });
+    // Force check for visible albums that might not have triggered intersection
+    const visibleAlbums = Array.from(
+      modalElements.albumList.querySelectorAll('[data-album-index]')
+    ).filter((el) => {
+      const rect = el.getBoundingClientRect();
+      return rect.top < window.innerHeight + 100 && rect.bottom > -100; // Include near-visible
+    });
 
-      // Load visible albums first
-      Promise.all(
-        visibleAlbums.map((el) =>
-          loadAlbumCover(parseInt(el.dataset.albumIndex))
-        )
-      ).then(() => {
-        // Then start background loading
-        startBackgroundLoading();
-      });
+    // Get indexes of visible albums not yet loading
+    const albumIndexes = visibleAlbums
+      .map((el) => parseInt(el.dataset.albumIndex))
+      .filter((index) => !loadedAlbums.has(index) && !loadingAlbums.has(index));
+
+    if (albumIndexes.length > 0) {
+      // Load all visible albums in parallel
+      Promise.all(albumIndexes.map((index) => loadAlbumCover(index))).then(
+        () => {
+          // After visible albums are loaded, start background loading
+          startBackgroundLoading();
+        }
+      );
+    } else if (visibleImagesLoaded > 0) {
+      // If some images already loaded via intersection, start background
+      startBackgroundLoading();
     }
-  }, 200); // Reduced from 2000ms to 200ms for faster initial load
+  }, 100); // Even faster initial check
 
   return imageObserver;
 }
