@@ -1120,7 +1120,13 @@ function makeCountryEditable(countryDiv, albumIndex) {
       handleClickOutside = null;
     }
 
-    countryDiv.innerHTML = `<span class="text-sm text-gray-300 truncate cursor-pointer hover:text-gray-100">${valueToDisplay}</span>`;
+    // Show placeholder if empty
+    const displayValue = valueToDisplay || 'Country';
+    const displayClass = valueToDisplay
+      ? 'text-gray-300'
+      : 'text-gray-500 italic';
+
+    countryDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
 
     // Restore the original click handler
     countryDiv.onclick = originalOnClick;
@@ -2434,21 +2440,30 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
       handleClickOutside = null;
     }
 
-    const colorClass =
-      genreField === 'genre_1' ? 'text-gray-300' : 'text-gray-400';
-    let displayGenre = valueToDisplay;
+    // Determine what to display based on value and field
+    let displayValue = valueToDisplay;
+    let displayClass;
 
-    // Handle empty or placeholder values for genre_2
-    if (
-      genreField === 'genre_2' &&
-      (displayGenre === 'Genre 2' ||
-        displayGenre === '-' ||
-        displayGenre === '')
-    ) {
-      displayGenre = '';
+    if (genreField === 'genre_1') {
+      // For Genre 1: show placeholder if empty
+      displayValue = valueToDisplay || 'Genre 1';
+      displayClass = valueToDisplay ? 'text-gray-300' : 'text-gray-500 italic';
+    } else {
+      // For Genre 2: show placeholder if empty, but treat 'Genre 2' and '-' as empty
+      if (
+        !valueToDisplay ||
+        valueToDisplay === 'Genre 2' ||
+        valueToDisplay === '-'
+      ) {
+        displayValue = 'Genre 2';
+        displayClass = 'text-gray-500 italic';
+      } else {
+        displayValue = valueToDisplay;
+        displayClass = 'text-gray-400';
+      }
     }
 
-    genreDiv.innerHTML = `<span class="text-sm ${colorClass} truncate cursor-pointer hover:text-gray-100">${displayGenre}</span>`;
+    genreDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
 
     // Restore the original click handler
     genreDiv.onclick = originalOnClick;
@@ -2582,6 +2597,111 @@ function makeCommentEditable(commentDiv, albumIndex) {
   });
 }
 
+// Show track selection menu for quick track picking
+function showTrackSelectionMenu(album, albumIndex, x, y) {
+  // Remove any existing menu
+  const existingMenu = document.getElementById('quickTrackMenu');
+  if (existingMenu) existingMenu.remove();
+
+  const menu = document.createElement('div');
+  menu.id = 'quickTrackMenu';
+  menu.className =
+    'absolute z-50 bg-gray-800 rounded-lg shadow-xl border border-gray-700 max-h-96 overflow-y-auto';
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  menu.style.minWidth = '250px';
+
+  if (!album.tracks || album.tracks.length === 0) {
+    menu.innerHTML =
+      '<div class="px-4 py-2 text-sm text-gray-500">No tracks available</div>';
+  } else {
+    // Sort tracks by track number
+    const sortedTracks = [...album.tracks].sort((a, b) => {
+      const numA = parseInt(
+        a.match(/^(\d+)[\.\s\-]/) ? a.match(/^(\d+)/)[1] : 0
+      );
+      const numB = parseInt(
+        b.match(/^(\d+)[\.\s\-]/) ? b.match(/^(\d+)/)[1] : 0
+      );
+      return numA && numB ? numA - numB : 0;
+    });
+
+    let menuHTML = `
+      <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm" data-track-value="">
+        <span class="${!album.track_pick ? 'text-red-500' : 'text-gray-400'}">
+          ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
+        </span>
+      </div>
+      <div class="border-t border-gray-700"></div>
+    `;
+
+    sortedTracks.forEach((track, idx) => {
+      const isSelected =
+        album.track_pick === track || album.track_pick === (idx + 1).toString();
+      const match = track.match(/^(\d+)[\.\s\-]?\s*(.*)$/);
+      const trackNum = match ? match[1] : idx + 1;
+      const trackName = match ? match[2] : track;
+
+      menuHTML += `
+        <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm ${isSelected ? 'bg-gray-700/50' : ''}" 
+             data-track-value="${track}">
+          <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
+            ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
+            <span class="font-medium">${trackNum}.</span> ${trackName}
+          </span>
+        </div>
+      `;
+    });
+
+    menu.innerHTML = menuHTML;
+
+    // Add click handlers
+    menu.querySelectorAll('.track-menu-option').forEach((option) => {
+      option.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const trackValue = option.dataset.trackValue;
+
+        album.track_pick = trackValue;
+        await saveList(currentList, lists[currentList]);
+
+        menu.remove();
+        selectList(currentList); // Refresh the display
+        showToast(
+          trackValue
+            ? `Selected track: ${trackValue.substring(0, 50)}...`
+            : 'Track selection cleared'
+        );
+      };
+    });
+  }
+
+  document.body.appendChild(menu);
+
+  // Position adjustment to keep menu on screen
+  setTimeout(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = `${window.innerWidth - rect.width - 10}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = `${y - rect.height}px`;
+    }
+  }, 0);
+
+  // Close menu when clicking outside
+  const closeMenu = (e) => {
+    if (!menu.contains(e.target)) {
+      menu.remove();
+      document.removeEventListener('click', closeMenu);
+    }
+  };
+
+  setTimeout(() => {
+    document.addEventListener('click', closeMenu);
+  }, 0);
+}
+
 // Shared album data processing
 function processAlbumData(album, index) {
   const position = index + 1;
@@ -2607,6 +2727,42 @@ function processAlbumData(album, index) {
   const coverImage = album.cover_image || '';
   const imageFormat = album.cover_image_format || 'PNG';
 
+  // Process track pick
+  let trackPick = album.track_pick || '';
+  let trackPickDisplay = '';
+  let trackPickClass = 'text-gray-500 italic';
+
+  if (trackPick && album.tracks && Array.isArray(album.tracks)) {
+    // Find the track that matches
+    const trackMatch = album.tracks.find((t) => t === trackPick);
+    if (trackMatch) {
+      // Extract track number and name
+      const match = trackMatch.match(/^(\d+)[\.\s\-]?\s*(.*)$/);
+      if (match) {
+        const trackNum = match[1];
+        const trackName = match[2] || '';
+        trackPickDisplay = trackName
+          ? `${trackNum}. ${trackName}`
+          : `Track ${trackNum}`;
+        trackPickClass = 'text-gray-300';
+      } else {
+        trackPickDisplay = trackMatch;
+        trackPickClass = 'text-gray-300';
+      }
+    } else if (trackPick.match(/^\d+$/)) {
+      // Just a track number
+      trackPickDisplay = `Track ${trackPick}`;
+      trackPickClass = 'text-gray-300';
+    } else {
+      trackPickDisplay = trackPick;
+      trackPickClass = 'text-gray-300';
+    }
+  }
+
+  if (!trackPickDisplay) {
+    trackPickDisplay = 'Select Track';
+  }
+
   return {
     position,
     albumName,
@@ -2624,6 +2780,9 @@ function processAlbumData(album, index) {
     comment,
     coverImage,
     imageFormat,
+    trackPick,
+    trackPickDisplay,
+    trackPickClass,
   };
 }
 
@@ -2690,6 +2849,9 @@ function createDesktopAlbumRow(data, index) {
     <div class="flex items-center comment-cell">
       <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${data.comment}</span>
     </div>
+    <div class="flex items-center track-cell">
+      <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>
+    </div>
   `;
 
   // Add shared event handlers
@@ -2699,6 +2861,28 @@ function createDesktopAlbumRow(data, index) {
 
 // Shared event handlers for desktop rows
 function attachDesktopEventHandlers(row, index) {
+  // Add click handler to track cell for quick selection
+  const trackCell = row.querySelector('.track-cell');
+  if (trackCell) {
+    trackCell.onclick = async () => {
+      const album = lists[currentList][index];
+      if (!album.tracks || album.tracks.length === 0) {
+        showToast('Fetching tracks...', 'info');
+        try {
+          await fetchTracksForAlbum(album);
+          await saveList(currentList, lists[currentList]);
+        } catch (err) {
+          showToast('Error fetching tracks', 'error');
+          return;
+        }
+      }
+
+      // Show track selection menu at the cell position
+      const rect = trackCell.getBoundingClientRect();
+      showTrackSelectionMenu(album, index, rect.left, rect.bottom);
+    };
+  }
+
   // Add click handler to country cell
   const countryCell = row.querySelector('.country-cell');
   countryCell.onclick = () => makeCountryEditable(countryCell, index);
@@ -2810,6 +2994,17 @@ function createMobileAlbumCard(data, index) {
                 : ''
             }
             
+            <!-- Track selection (if any) -->
+            ${
+              data.trackPick && data.trackPickDisplay !== 'Select Track'
+                ? `
+              <div class="text-xs text-blue-400 truncate mt-1">
+                <i class="fas fa-music mr-1"></i>${data.trackPickDisplay}
+              </div>
+            `
+                : ''
+            }
+            
             ${
               data.comment
                 ? `
@@ -2891,6 +3086,7 @@ function displayAlbums(albums) {
       <div>Genre 1</div>
       <div>Genre 2</div>
       <div>Comment</div>
+      <div>Track</div>
     `;
     albumContainer.appendChild(header);
 

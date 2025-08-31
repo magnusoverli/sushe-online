@@ -2,8 +2,8 @@
 
 /* Album grid column configuration with responsive behavior */
 :root {
-  /* Default grid for desktop screens */
-  --album-grid-columns: 0.1fr 0.18fr 0.85fr 0.85fr 0.5fr 0.5fr 0.5fr 1.3fr;
+  /* Default grid for desktop screens - Track column at the end */
+  --album-grid-columns: 0.1fr 0.18fr 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
   --cover-art-size: 64px;
 }
 
