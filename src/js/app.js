@@ -1474,6 +1474,26 @@ function initializeContextMenu() {
   )
     return;
 
+  // Update the playlist option text based on user's music service
+  const updatePlaylistText = document.getElementById('updatePlaylistText');
+  if (updatePlaylistText) {
+    const musicService = window.currentUser?.musicService;
+    const hasSpotify = window.currentUser?.spotifyAuth;
+    const hasTidal = window.currentUser?.tidalAuth;
+
+    if (musicService === 'spotify' && hasSpotify) {
+      updatePlaylistText.textContent = 'Send to Spotify';
+    } else if (musicService === 'tidal' && hasTidal) {
+      updatePlaylistText.textContent = 'Send to Tidal';
+    } else if (hasSpotify && !hasTidal) {
+      updatePlaylistText.textContent = 'Send to Spotify';
+    } else if (hasTidal && !hasSpotify) {
+      updatePlaylistText.textContent = 'Send to Tidal';
+    } else {
+      updatePlaylistText.textContent = 'Send to Music Service';
+    }
+  }
+
   // Handle download option click
   downloadOption.onclick = () => {
     contextMenu.classList.add('hidden');
@@ -2226,6 +2246,27 @@ function updateListNav() {
 
           const contextMenu = document.getElementById('contextMenu');
           if (!contextMenu) return;
+
+          // Update the playlist option text based on user's music service
+          const updatePlaylistText =
+            document.getElementById('updatePlaylistText');
+          if (updatePlaylistText) {
+            const musicService = window.currentUser?.musicService;
+            const hasSpotify = window.currentUser?.spotifyAuth;
+            const hasTidal = window.currentUser?.tidalAuth;
+
+            if (musicService === 'spotify' && hasSpotify) {
+              updatePlaylistText.textContent = 'Send to Spotify';
+            } else if (musicService === 'tidal' && hasTidal) {
+              updatePlaylistText.textContent = 'Send to Tidal';
+            } else if (hasSpotify && !hasTidal) {
+              updatePlaylistText.textContent = 'Send to Spotify';
+            } else if (hasTidal && !hasSpotify) {
+              updatePlaylistText.textContent = 'Send to Tidal';
+            } else {
+              updatePlaylistText.textContent = 'Send to Music Service';
+            }
+          }
 
           // Position the menu at cursor
           contextMenu.style.left = `${e.clientX}px`;
