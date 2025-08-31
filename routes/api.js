@@ -108,9 +108,11 @@ module.exports = (app, deps) => {
           // Batch load album data to avoid N+1 queries
           const albumIds = items.map((item) => item.albumId).filter(Boolean);
           const albumsData =
-            albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+            albumIds.length > 0
+              ? await albumsAsync.findByAlbumIds(albumIds)
+              : [];
           const albumsMap = new Map(
-            albumsData.map((album) => [album._id, album])
+            albumsData.map((album) => [album.albumId, album])
           );
 
           const mapped = [];
@@ -193,9 +195,9 @@ module.exports = (app, deps) => {
         // Batch load album data to avoid N+1 queries
         const albumIds = items.map((item) => item.albumId).filter(Boolean);
         const albumsData =
-          albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
+          albumIds.length > 0 ? await albumsAsync.findByAlbumIds(albumIds) : [];
         const albumsMap = new Map(
-          albumsData.map((album) => [album._id, album])
+          albumsData.map((album) => [album.albumId, album])
         );
 
         const data = [];
@@ -590,6 +592,71 @@ module.exports = (app, deps) => {
       } catch (error) {
         logger.error('Deezer proxy error:', error);
         res.status(500).json({ error: 'Failed to fetch from Deezer' });
+      }
+    }
+  );
+
+  // Image proxy endpoint for fetching external cover art
+  app.get(
+    '/api/proxy/image',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { url } = req.query;
+        if (!url) {
+          return res.status(400).json({ error: 'URL parameter is required' });
+        }
+
+        // Validate URL to prevent SSRF attacks
+        const allowedHosts = [
+          'is1-ssl.mzstatic.com',
+          'is2-ssl.mzstatic.com',
+          'is3-ssl.mzstatic.com',
+          'is4-ssl.mzstatic.com',
+          'is5-ssl.mzstatic.com',
+          'e-cdns-images.dzcdn.net',
+          'coverartarchive.org',
+          'archive.org',
+        ];
+
+        const urlObj = new URL(url);
+        const isAllowed = allowedHosts.some(
+          (host) =>
+            urlObj.hostname === host || urlObj.hostname.endsWith('.' + host)
+        );
+
+        if (!isAllowed) {
+          return res.status(403).json({ error: 'URL host not allowed' });
+        }
+
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Image fetch responded with status ${response.status}`
+          );
+        }
+
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.startsWith('image/')) {
+          throw new Error('Response is not an image');
+        }
+
+        const buffer = await response.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+
+        res.json({
+          data: base64,
+          contentType: contentType,
+        });
+      } catch (error) {
+        logger.error('Image proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch image' });
       }
     }
   );

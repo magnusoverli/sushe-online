@@ -233,7 +233,8 @@ if (process.env.DATABASE_URL) {
     updatedAt: 'updated_at',
   };
   const albumsMap = {
-    _id: 'album_id',
+    _id: 'id',
+    albumId: 'album_id',
     artist: 'artist',
     album: 'album',
     releaseDate: 'release_date',
@@ -363,10 +364,10 @@ if (process.env.DATABASE_URL) {
     );
     for (const row of itemsRes.rows) {
       if (!row.album_id) continue;
-      const existing = await albums.findOne({ _id: row.album_id });
+      const existing = await albums.findOne({ albumId: row.album_id });
       if (!existing) {
         await albums.insert({
-          _id: row.album_id,
+          albumId: row.album_id,
           artist: row.artist || '',
           album: row.album || '',
           releaseDate: row.release_date || '',
