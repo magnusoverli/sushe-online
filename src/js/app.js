@@ -1601,6 +1601,19 @@ function initializeAlbumContextMenu() {
       if (album.tracks && album.tracks.length > 0) {
         trackSubmenu.innerHTML = '';
 
+        // Sort tracks to ensure they start from track 1
+        const sortedTracks = [...album.tracks].sort((a, b) => {
+          // Extract track numbers if they exist at the beginning of track names
+          const aNum = parseInt(
+            a.match(/^(\d+)[\.\s\-]/) ? a.match(/^(\d+)/)[1] : 0
+          );
+          const bNum = parseInt(
+            b.match(/^(\d+)[\.\s\-]/) ? b.match(/^(\d+)/)[1] : 0
+          );
+          if (aNum && bNum) return aNum - bNum;
+          return 0; // Keep original order if no track numbers found
+        });
+
         // Add "None" option
         const noneOption = document.createElement('button');
         noneOption.className =
@@ -1610,7 +1623,9 @@ function initializeAlbumContextMenu() {
             ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
           </span>
         `;
-        noneOption.onclick = async () => {
+        noneOption.onclick = async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           album.track_pick = '';
           await saveList(currentList, lists[currentList]);
           contextMenu.classList.add('hidden');
@@ -1620,7 +1635,7 @@ function initializeAlbumContextMenu() {
         trackSubmenu.appendChild(noneOption);
 
         // Add track options
-        album.tracks.forEach((track, idx) => {
+        sortedTracks.forEach((track, idx) => {
           const trackOption = document.createElement('button');
           const isSelected =
             album.track_pick === track ||
@@ -1633,7 +1648,9 @@ function initializeAlbumContextMenu() {
               ${idx + 1}. ${track}
             </span>
           `;
-          trackOption.onclick = async () => {
+          trackOption.onclick = async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             album.track_pick = track;
             await saveList(currentList, lists[currentList]);
             contextMenu.classList.add('hidden');
@@ -1644,6 +1661,33 @@ function initializeAlbumContextMenu() {
         });
 
         trackSubmenu.classList.remove('hidden');
+
+        // Adjust submenu position if it goes off-screen
+        setTimeout(() => {
+          const submenuRect = trackSubmenu.getBoundingClientRect();
+          const contextRect = contextMenu.getBoundingClientRect();
+
+          // Check if submenu goes off the right edge of the screen
+          if (submenuRect.right > window.innerWidth) {
+            // Position submenu to the left of the parent menu
+            trackSubmenu.style.left = 'auto';
+            trackSubmenu.style.right = '100%';
+            trackSubmenu.style.marginLeft = '0';
+            trackSubmenu.style.marginRight = '0.25rem';
+          } else {
+            // Reset to default position (right of parent)
+            trackSubmenu.style.left = '100%';
+            trackSubmenu.style.right = 'auto';
+            trackSubmenu.style.marginLeft = '0.25rem';
+            trackSubmenu.style.marginRight = '0';
+          }
+
+          // Check if submenu goes off the bottom of the screen
+          if (submenuRect.bottom > window.innerHeight) {
+            const maxHeight = window.innerHeight - contextRect.top - 20;
+            trackSubmenu.style.maxHeight = `${maxHeight}px`;
+          }
+        }, 10);
       } else {
         trackSubmenu.innerHTML =
           '<div class="px-4 py-2 text-sm text-gray-500">No tracks available</div>';
@@ -1660,7 +1704,7 @@ function initializeAlbumContextMenu() {
         ) {
           trackSubmenu.classList.add('hidden');
         }
-      }, 100);
+      }, 200); // Increased timeout for better UX
     };
 
     trackSubmenu.onmouseleave = (e) => {
@@ -1672,7 +1716,13 @@ function initializeAlbumContextMenu() {
         ) {
           trackSubmenu.classList.add('hidden');
         }
-      }, 100);
+      }, 200); // Increased timeout for better UX
+    };
+
+    // Ensure submenu stays interactive
+    trackSubmenu.onmouseenter = (e) => {
+      e.stopPropagation();
+      trackSubmenu.classList.remove('hidden');
     };
   }
 
