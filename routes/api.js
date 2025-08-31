@@ -1,3 +1,6 @@
+// Ensure fetch is available
+const fetch = globalThis.fetch || require('node-fetch');
+
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 let mbQueue = Promise.resolve();
 function mbFetch(url, options) {
@@ -252,9 +255,16 @@ module.exports = (app, deps) => {
             listId,
           ]);
         } else {
-          result.failed++;
-          result.errors.push(
-            `Track not found: "${item.artist} - ${item.album}" - Track ${trackPick}`
+          // Create new list
+          const resList = await client.query(
+            'INSERT INTO lists (_id, user_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) RETURNING _id',
+            [
+              crypto.randomBytes(12).toString('hex'),
+              req.user._id,
+              name,
+              timestamp,
+              timestamp,
+            ]
           );
           listId = resList.rows[0]._id;
         }
@@ -1039,6 +1049,13 @@ module.exports = (app, deps) => {
     const { listName } = req.params;
     const { action = 'update', service } = req.body;
 
+    logger.info('Playlist endpoint called:', {
+      listName,
+      action,
+      service,
+      body: req.body,
+    });
+
     try {
       // Validate user has a preferred music service or service is specified
       const targetService = service || req.user.musicService;
@@ -1065,6 +1082,17 @@ module.exports = (app, deps) => {
           code: 'NOT_AUTHENTICATED',
           service: targetService,
         });
+      }
+
+      // Check if playlist exists (for confirmation dialog)
+      if (action === 'check') {
+        logger.info('Playlist check action received:', {
+          listName,
+          targetService,
+        });
+        const exists = await checkPlaylistExists(listName, targetService, auth);
+        logger.info('Playlist check result:', { listName, exists });
+        return res.json({ exists, playlistName: listName });
       }
 
       // Get the list and its items
@@ -1108,6 +1136,144 @@ module.exports = (app, deps) => {
       });
     }
   });
+
+  // Check if playlist exists in the music service
+  async function checkPlaylistExists(playlistName, targetService, auth) {
+    logger.info('checkPlaylistExists called:', { playlistName, targetService });
+
+    if (targetService === 'spotify') {
+      const baseUrl = 'https://api.spotify.com/v1';
+      const headers = {
+        Authorization: `Bearer ${auth.access_token}`,
+      };
+
+      let offset = 0;
+      let hasMore = true;
+      let totalChecked = 0;
+      let allPlaylistNames = [];
+
+      while (hasMore) {
+        try {
+          const url = `${baseUrl}/me/playlists?limit=50&offset=${offset}`;
+          logger.info('Fetching Spotify playlists:', { url, offset });
+
+          const resp = await fetch(url, { headers });
+
+          if (resp.ok) {
+            const playlists = await resp.json();
+            totalChecked += playlists.items.length;
+
+            // Collect all playlist names for debugging
+            allPlaylistNames = allPlaylistNames.concat(
+              playlists.items.map((p) => p.name)
+            );
+
+            // Log details about this batch
+            logger.info('Spotify playlists batch:', {
+              count: playlists.items.length,
+              total: playlists.total,
+              offset,
+              hasNext: playlists.next !== null,
+              nextUrl: playlists.next,
+              searchingFor: playlistName,
+              batchNames: playlists.items.map((p) => ({
+                name: p.name,
+                owner: p.owner.display_name || p.owner.id,
+                collaborative: p.collaborative,
+                public: p.public,
+              })),
+            });
+
+            const exists = playlists.items.some((p) => {
+              // Log every comparison for debugging
+              logger.debug('Comparing playlist names:', {
+                searchName: playlistName,
+                searchNameLength: playlistName.length,
+                searchNameType: typeof playlistName,
+                spotifyName: p.name,
+                spotifyNameLength: p.name.length,
+                spotifyNameType: typeof p.name,
+                exactMatch: p.name === playlistName,
+                caseInsensitiveMatch:
+                  p.name.toLowerCase() === playlistName.toLowerCase(),
+                trimmedMatch: p.name.trim() === playlistName.trim(),
+              });
+
+              const match = p.name === playlistName;
+              if (match) {
+                logger.info('Found matching Spotify playlist:', {
+                  searchName: playlistName,
+                  foundName: p.name,
+                  playlistId: p.id,
+                });
+              }
+              return match;
+            });
+
+            if (exists) return true;
+
+            hasMore = playlists.next !== null;
+            offset += 50;
+          } else {
+            logger.error('Failed to fetch Spotify playlists:', {
+              status: resp.status,
+              statusText: resp.statusText,
+            });
+            return false;
+          }
+        } catch (err) {
+          logger.error('Error fetching Spotify playlists:', err);
+          return false;
+        }
+      }
+
+      logger.info('Playlist search complete', {
+        totalChecked,
+        searchName: playlistName,
+        searchNameLength: playlistName.length,
+        found: false,
+        allPlaylistNames: allPlaylistNames.slice(0, 100), // Log first 100 names
+        totalPlaylists: allPlaylistNames.length,
+      });
+      return false;
+    } else if (targetService === 'tidal') {
+      const baseUrl = 'https://openapi.tidal.com/v2';
+      const headers = {
+        Authorization: `Bearer ${auth.access_token}`,
+        Accept: 'application/vnd.api+json',
+      };
+
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        try {
+          const resp = await fetch(
+            `${baseUrl}/me/playlists?limit=50&offset=${offset}`,
+            { headers }
+          );
+
+          if (resp.ok) {
+            const playlists = await resp.json();
+            const exists = playlists.data.some(
+              (p) => p.attributes.title === playlistName
+            );
+            if (exists) return true;
+
+            hasMore = playlists.data.length === 50;
+            offset += 50;
+          } else {
+            return false;
+          }
+        } catch (err) {
+          return false;
+        }
+      }
+      return false;
+    }
+
+    return false;
+  }
 
   // Pre-flight validation for playlist creation
   async function validatePlaylistData(items, _service, _auth) {

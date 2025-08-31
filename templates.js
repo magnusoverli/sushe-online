@@ -464,6 +464,16 @@ const contextMenusComponent = () => `
   
   <!-- Context Menu for Albums -->
   <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+    <div id="selectTrackOption" class="relative">
+      <button class="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap flex items-center justify-between">
+        <span><i class="fas fa-music mr-2 w-4 text-center"></i>Select Track</span>
+        <i class="fas fa-chevron-right text-xs ml-2"></i>
+      </button>
+      <!-- Track submenu will be populated dynamically -->
+      <div id="trackSubmenu" class="hidden absolute left-full top-0 ml-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 min-w-[200px] max-w-[350px] max-h-[400px] overflow-y-auto">
+        <!-- Tracks will be populated here -->
+      </div>
+    </div>
     <button id="editAlbumOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>

@@ -77,6 +77,11 @@ document.addEventListener('click', () => {
     currentContextAlbum = null;
     currentContextAlbumId = null;
   }
+
+  const trackSubmenu = document.getElementById('trackSubmenu');
+  if (trackSubmenu) {
+    trackSubmenu.classList.add('hidden');
+  }
 });
 
 // Prevent default context menu on right-click in list nav
@@ -104,18 +109,52 @@ function showConfirmation(
   const messageEl = document.getElementById('confirmationMessage');
   const subMessageEl = document.getElementById('confirmationSubMessage');
   const confirmBtn = document.getElementById('confirmationConfirmBtn');
+  const cancelBtn = document.getElementById('confirmationCancelBtn');
 
   titleEl.textContent = title;
   messageEl.textContent = message;
   subMessageEl.textContent = subMessage || '';
   confirmBtn.textContent = confirmText;
 
-  confirmationCallback = onConfirm;
+  // If onConfirm is provided, use callback style
+  if (onConfirm) {
+    confirmationCallback = onConfirm;
+    modal.classList.remove('hidden');
+    setTimeout(() => confirmBtn.focus(), 100);
+    return;
+  }
 
-  modal.classList.remove('hidden');
+  // Otherwise return a promise for async/await style
+  return new Promise((resolve) => {
+    const handleConfirm = () => {
+      modal.classList.add('hidden');
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      modal.removeEventListener('click', handleBackdropClick);
+      resolve(true);
+    };
 
-  // Focus the confirm button for keyboard navigation
-  setTimeout(() => confirmBtn.focus(), 100);
+    const handleCancel = () => {
+      modal.classList.add('hidden');
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      modal.removeEventListener('click', handleBackdropClick);
+      resolve(false);
+    };
+
+    const handleBackdropClick = (e) => {
+      if (e.target === modal) {
+        handleCancel();
+      }
+    };
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    modal.addEventListener('click', handleBackdropClick);
+
+    modal.classList.remove('hidden');
+    setTimeout(() => confirmBtn.focus(), 100);
+  });
 }
 
 function hideConfirmation() {
@@ -388,28 +427,69 @@ async function downloadListAsJSON(listName) {
   }
 }
 
+// Test function to verify confirmation dialog works
+window.testConfirmation = async function () {
+  const result = await showConfirmation(
+    'Test Dialog',
+    'This is a test message',
+    'This is a sub-message',
+    'Confirm'
+  );
+  console.log('Test confirmation result:', result);
+  return result;
+};
+
 // Update Spotify/Tidal playlist for the given list
 async function updatePlaylist(listName) {
   try {
-    // First, validate the playlist data
-    const validation = await apiCall(
-      `/api/playlists/${encodeURIComponent(listName)}`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ action: 'validate' }),
-        headers: { 'Content-Type': 'application/json' },
+    console.log('updatePlaylist called with listName:', listName);
+
+    // First check if playlist exists
+    showToast('Checking for existing playlist...', 'info');
+
+    let checkResult;
+    try {
+      checkResult = await apiCall(
+        `/api/playlists/${encodeURIComponent(listName)}`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ action: 'check' }),
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    } catch (checkError) {
+      console.error('Error checking playlist existence:', checkError);
+      // If check fails, proceed with update anyway
+      checkResult = { exists: false };
+    }
+
+    console.log('Playlist check result:', checkResult);
+    console.log('Playlist exists?', checkResult.exists);
+    console.log('CheckResult object:', JSON.stringify(checkResult));
+
+    // If playlist exists, ask for confirmation
+    if (checkResult && checkResult.exists === true) {
+      console.log('Showing confirmation dialog...');
+      const confirmed = await showConfirmation(
+        'Replace Existing Playlist?',
+        `A playlist named "${listName}" already exists in your music service. Do you want to replace it with the current list?`,
+        'This will replace all tracks in the existing playlist.',
+        'Replace'
+      );
+
+      if (!confirmed) {
+        console.log('User cancelled playlist replacement');
+        showToast('Playlist update cancelled', 'info');
+        return;
       }
-    );
+    } else {
+      console.log(
+        'Playlist does not exist or check failed, creating new playlist'
+      );
+    }
 
-    // Show pre-flight validation modal
-    const shouldProceed = await showPlaylistValidationModal(
-      listName,
-      validation
-    );
-    if (!shouldProceed) return;
-
-    // Show progress modal
-    const progressModal = showPlaylistProgressModal(listName);
+    // Show progress indicator
+    showToast('Updating playlist...', 'info');
 
     // Create/update the playlist
     const result = await apiCall(
@@ -421,31 +501,81 @@ async function updatePlaylist(listName) {
       }
     );
 
-    // Hide progress modal
-    hidePlaylistProgressModal(progressModal);
-
-    // Show results
-    showPlaylistResultModal(listName, result);
+    // Show success message with results
+    if (result.playlistUrl) {
+      const action = result.replacedExisting ? 'replaced' : 'created';
+      showToast(
+        `Playlist ${action} successfully! ${result.successful || 0} tracks added, ${result.failed || 0} failed`,
+        'success'
+      );
+    } else {
+      showToast('Playlist updated successfully!', 'success');
+    }
   } catch (error) {
     console.error('Error updating playlist:', error);
 
     // Handle specific error cases
     if (error.response) {
-      const errorData = await error.response.json().catch(() => ({}));
+      try {
+        const errorData = await error.response.json();
 
-      if (errorData.code === 'NO_SERVICE') {
-        showServiceSelectionModal(listName);
-        return;
-      } else if (errorData.code === 'NOT_AUTHENTICATED') {
-        showToast(
-          `Please connect your ${errorData.service} account in settings`,
-          'error'
-        );
-        return;
+        if (errorData.code === 'NO_SERVICE') {
+          // Show a more helpful message with action button
+          const toastEl = showToast(
+            'No music service selected! Please choose Spotify or Tidal as your preferred service in Settings.',
+            'error',
+            8000 // Show for 8 seconds
+          );
+
+          // Add a button to go to settings
+          if (toastEl && typeof toastEl === 'object') {
+            const actionBtn = document.createElement('button');
+            actionBtn.className =
+              'ml-3 text-blue-400 hover:text-blue-300 underline text-sm';
+            actionBtn.textContent = 'Go to Settings';
+            actionBtn.onclick = () => (window.location.href = '/settings');
+            toastEl.querySelector('.toast-message')?.appendChild(actionBtn);
+          }
+          return;
+        } else if (errorData.code === 'NOT_AUTHENTICATED') {
+          showToast(
+            `Please reconnect your ${errorData.service || 'music'} account in settings`,
+            'error'
+          );
+          return;
+        }
+
+        // Show the actual error message if available
+        if (errorData.error) {
+          // For NO_SERVICE errors, add a link to settings
+          if (errorData.code === 'NO_SERVICE') {
+            const toastEl = showToast(errorData.error, 'error', 8000);
+            if (toastEl && toastEl.querySelector) {
+              const actionBtn = document.createElement('a');
+              actionBtn.href = '/settings';
+              actionBtn.className =
+                'ml-3 text-blue-400 hover:text-blue-300 underline text-sm';
+              actionBtn.textContent = 'Go to Settings →';
+              const messageEl =
+                toastEl.querySelector('.text-sm') ||
+                toastEl.querySelector('div');
+              if (messageEl) messageEl.appendChild(actionBtn);
+            }
+          } else {
+            showToast(errorData.error, 'error');
+          }
+          return;
+        }
+      } catch (parseError) {
+        // If we can't parse the error, show generic message
+        console.error('Error parsing response:', parseError);
       }
     }
 
-    showToast('Error updating playlist', 'error');
+    showToast(
+      'Error updating playlist. Please check your music service connection.',
+      'error'
+    );
   }
 }
 window.updatePlaylist = updatePlaylist;
@@ -1119,7 +1249,9 @@ async function apiCall(url, options = {}) {
         window.location.href = '/login';
         return;
       }
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const error = new Error(`HTTP error! status: ${response.status}`);
+      error.response = response;
+      throw error;
     }
 
     return await response.json();
@@ -1415,12 +1547,125 @@ function initializeAlbumContextMenu() {
   const removeOption = document.getElementById('removeAlbumOption');
   const editOption = document.getElementById('editAlbumOption');
   const playOption = document.getElementById('playAlbumOption');
+  const selectTrackOption = document.getElementById('selectTrackOption');
+  const trackSubmenu = document.getElementById('trackSubmenu');
 
   if (!contextMenu || !removeOption || !editOption || !playOption) return;
+
+  // Handle select track option
+  if (selectTrackOption && trackSubmenu) {
+    selectTrackOption.onmouseenter = async () => {
+      if (currentContextAlbum === null) return;
+
+      const album =
+        lists[currentList] && lists[currentList][currentContextAlbum];
+      if (!album) return;
+
+      // Clear previous tracks
+      trackSubmenu.innerHTML = '';
+
+      // Check if album has tracks
+      if (!album.tracks || album.tracks.length === 0) {
+        // Try to fetch tracks
+        trackSubmenu.innerHTML =
+          '<div class="px-4 py-2 text-sm text-gray-500">Loading tracks...</div>';
+        trackSubmenu.classList.remove('hidden');
+
+        try {
+          await fetchTracksForAlbum(album);
+          // Save the updated album with tracks
+          await saveList(currentList, lists[currentList]);
+        } catch (error) {
+          console.error('Error fetching tracks:', error);
+          trackSubmenu.innerHTML =
+            '<div class="px-4 py-2 text-sm text-red-400">Failed to load tracks</div>';
+          return;
+        }
+      }
+
+      // Display tracks
+      if (album.tracks && album.tracks.length > 0) {
+        trackSubmenu.innerHTML = '';
+
+        // Add "None" option
+        const noneOption = document.createElement('button');
+        noneOption.className =
+          'block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-nowrap';
+        noneOption.innerHTML = `
+          <span class="${!album.track_pick ? 'text-red-500' : 'text-gray-400'}">
+            ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
+          </span>
+        `;
+        noneOption.onclick = async () => {
+          album.track_pick = '';
+          await saveList(currentList, lists[currentList]);
+          contextMenu.classList.add('hidden');
+          trackSubmenu.classList.add('hidden');
+          showToast('Track selection cleared');
+        };
+        trackSubmenu.appendChild(noneOption);
+
+        // Add track options
+        album.tracks.forEach((track, idx) => {
+          const trackOption = document.createElement('button');
+          const isSelected =
+            album.track_pick === track ||
+            album.track_pick === (idx + 1).toString();
+          trackOption.className =
+            'block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-normal';
+          trackOption.innerHTML = `
+            <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
+              ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
+              ${idx + 1}. ${track}
+            </span>
+          `;
+          trackOption.onclick = async () => {
+            album.track_pick = track;
+            await saveList(currentList, lists[currentList]);
+            contextMenu.classList.add('hidden');
+            trackSubmenu.classList.add('hidden');
+            showToast(`Selected track: ${track}`);
+          };
+          trackSubmenu.appendChild(trackOption);
+        });
+
+        trackSubmenu.classList.remove('hidden');
+      } else {
+        trackSubmenu.innerHTML =
+          '<div class="px-4 py-2 text-sm text-gray-500">No tracks available</div>';
+        trackSubmenu.classList.remove('hidden');
+      }
+    };
+
+    selectTrackOption.onmouseleave = (e) => {
+      // Hide submenu if not hovering over it
+      setTimeout(() => {
+        if (
+          !selectTrackOption.matches(':hover') &&
+          !trackSubmenu.matches(':hover')
+        ) {
+          trackSubmenu.classList.add('hidden');
+        }
+      }, 100);
+    };
+
+    trackSubmenu.onmouseleave = (e) => {
+      // Hide submenu if not hovering over parent or submenu
+      setTimeout(() => {
+        if (
+          !selectTrackOption.matches(':hover') &&
+          !trackSubmenu.matches(':hover')
+        ) {
+          trackSubmenu.classList.add('hidden');
+        }
+      }, 100);
+    };
+  }
 
   // Handle edit option click
   editOption.onclick = () => {
     contextMenu.classList.add('hidden');
+    if (trackSubmenu) trackSubmenu.classList.add('hidden');
 
     if (currentContextAlbum === null) return;
 
@@ -1448,6 +1693,7 @@ function initializeAlbumContextMenu() {
   // Handle play option click
   playOption.onclick = () => {
     contextMenu.classList.add('hidden');
+    if (trackSubmenu) trackSubmenu.classList.add('hidden');
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
@@ -1474,6 +1720,7 @@ function initializeAlbumContextMenu() {
   // Handle remove option click
   removeOption.onclick = async () => {
     contextMenu.classList.add('hidden');
+    if (trackSubmenu) trackSubmenu.classList.add('hidden');
 
     if (currentContextAlbum === null) return;
 
@@ -3541,6 +3788,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                   // Import directly
                   await saveList(fileName, data);
+                  updateListNav();
+                  selectList(fileName);
                   showToast(`Successfully imported ${data.length} albums`);
                 }
               } catch (err) {
