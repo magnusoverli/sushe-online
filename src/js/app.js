@@ -1218,15 +1218,47 @@ async function loadGenres() {
   }
 }
 
-// Toast notification
-function showToast(message, type = 'success') {
+// Toast notification management
+let toastTimer = null;
+
+// Show toast notification with configurable duration
+function showToast(message, type = 'success', duration = null) {
   const toast = document.getElementById('toast');
+
+  // Clear any existing timer
+  if (toastTimer) {
+    clearTimeout(toastTimer);
+    toastTimer = null;
+  }
+
+  // Remove 'show' class immediately to reset animation
+  toast.classList.remove('show');
+
   toast.textContent = message;
   toast.className = 'toast ' + type;
+
+  // Show the toast
   setTimeout(() => toast.classList.add('show'), 10);
-  setTimeout(() => {
+
+  // Determine duration based on type and content
+  if (duration === null) {
+    // Default durations
+    if (type === 'success' && message.includes('successfully')) {
+      duration = 5000; // 5 seconds for success messages
+    } else if (type === 'error') {
+      duration = 5000; // 5 seconds for errors
+    } else if (message.includes('...')) {
+      duration = 10000; // 10 seconds for "loading" messages
+    } else {
+      duration = 3000; // 3 seconds for other messages
+    }
+  }
+
+  // Set timer to hide the toast
+  toastTimer = setTimeout(() => {
     toast.classList.remove('show');
-  }, 3000);
+    toastTimer = null;
+  }, duration);
 }
 
 // Make showToast globally available immediately
@@ -3662,13 +3694,7 @@ document.addEventListener('DOMContentLoaded', () => {
       });
 
       if (message) {
-        // Show toast notification
         showToast(message, type);
-
-        // Remove the original flash element with a slight delay to ensure toast is shown
-        setTimeout(() => {
-          element.remove();
-        }, 100);
       }
     });
   }
