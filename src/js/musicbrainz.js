@@ -16,10 +16,10 @@ let searchMode = 'artist';
 const itunesCache = new Map();
 const deezerCache = new Map();
 
-// Concurrent request limits
-const ITUNES_BATCH_SIZE = 5;
-const COVERART_BATCH_SIZE = 3;
-const DEEZER_BATCH_SIZE = 5;
+// Concurrent request limits - increased for faster parallel loading
+const ITUNES_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
+const COVERART_BATCH_SIZE = 10; // Increased from 3 for 3x faster loading
+const DEEZER_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
 
 // Queue for managing concurrent requests
 class RequestQueue {
@@ -413,38 +413,50 @@ async function getCoverArtFromArchive(releaseGroupId) {
   });
 }
 
-// Try cover art sources in priority order
+// Try cover art sources in parallel for faster loading
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
-  // Define sources in priority order: Cover Art Archive first (most reliable), then iTunes, then Deezer
+  // Define sources - all will be checked in parallel
   const sources = [
     {
       name: 'coverart',
       fn: () => getCoverArtFromArchive(releaseGroupId),
       enabled: true,
+      priority: 1, // Highest priority - most reliable source
     },
     {
       name: 'itunes',
       fn: () => searchITunesArtwork(artistName, albumTitle),
       enabled: artistName && albumTitle,
+      priority: 2,
     },
     {
       name: 'deezer',
       fn: () => searchDeezerArtwork(artistName, albumTitle),
       enabled: artistName && albumTitle,
+      priority: 3,
     },
   ].filter((s) => s.enabled);
 
-  // Try sources in priority order
-  for (const source of sources) {
-    try {
-      const result = await source.fn();
-      if (result) {
-        return result;
+  // Execute all sources in parallel for 3x faster loading
+  const results = await Promise.allSettled(
+    sources.map(async (source) => {
+      try {
+        const result = await source.fn();
+        return result ? { url: result, priority: source.priority } : null;
+      } catch (error) {
+        return null;
       }
-    } catch (error) {}
-  }
+    })
+  );
 
-  return null;
+  // Find successful results and sort by priority
+  const successfulResults = results
+    .filter((r) => r.status === 'fulfilled' && r.value && r.value.url)
+    .map((r) => r.value)
+    .sort((a, b) => a.priority - b.priority);
+
+  // Return the highest priority successful result
+  return successfulResults.length > 0 ? successfulResults[0].url : null;
 }
 
 // Convert date to year format
@@ -565,8 +577,8 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       }
     }
 
-    // Load remaining albums in batches
-    const BATCH_SIZE = 3;
+    // Load remaining albums in larger batches for faster loading
+    const BATCH_SIZE = 10; // Increased from 3 to match our new concurrent limits
 
     for (let i = 0; i < unloadedIndexes.length; i += BATCH_SIZE) {
       if (currentLoadingController?.signal.aborted) break;
@@ -576,10 +588,7 @@ function setupIntersectionObserver(releaseGroups, artistName) {
 
       await Promise.allSettled(batchPromises);
 
-      // Small delay between batches to avoid overwhelming the browser
-      if (i + BATCH_SIZE < unloadedIndexes.length) {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
+      // Removed artificial delay - parallel loading handles this better
     }
 
     isBackgroundLoading = false;
@@ -607,10 +616,8 @@ function setupIntersectionObserver(releaseGroups, artistName) {
               visibleImagesLoaded >= totalVisibleImages &&
               visibleImagesLoaded > 0
             ) {
-              // Start loading remaining images in background after a short delay
-              setTimeout(() => {
-                startBackgroundLoading();
-              }, 500);
+              // Start loading remaining images immediately for better performance
+              startBackgroundLoading();
             }
           });
 
@@ -625,7 +632,7 @@ function setupIntersectionObserver(releaseGroups, artistName) {
     }
   );
 
-  // Also start background loading after a timeout if no scrolling happens
+  // Also start background loading after a short timeout if no scrolling happens
   setTimeout(() => {
     if (visibleImagesLoaded === 0) {
       // No visible images detected yet, force check for visible albums
@@ -646,7 +653,7 @@ function setupIntersectionObserver(releaseGroups, artistName) {
         startBackgroundLoading();
       });
     }
-  }, 2000); // 2 seconds timeout
+  }, 200); // Reduced from 2000ms to 200ms for faster initial load
 
   return imageObserver;
 }
