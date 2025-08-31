@@ -455,7 +455,7 @@ const contextMenusComponent = () => `
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Rename List
     </button>
     <button id="updatePlaylistOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-sync mr-2 w-4 text-center"></i>Update Playlist
+      <i class="fas fa-paper-plane mr-2 w-4 text-center"></i><span id="updatePlaylistText">Send to Music Service</span>
     </button>
     <button id="deleteListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
@@ -464,15 +464,16 @@ const contextMenusComponent = () => `
   
   <!-- Context Menu for Albums -->
   <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-    <div id="selectTrackOption" class="relative">
-      <button class="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap flex items-center justify-between">
-        <span><i class="fas fa-music mr-2 w-4 text-center"></i>Select Track</span>
-        <i class="fas fa-chevron-right text-xs ml-2"></i>
-      </button>
-      <!-- Track submenu will be populated dynamically -->
-      <div id="trackSubmenu" class="hidden absolute left-full top-0 ml-1 bg-gray-800 border border-gray-700 rounded shadow-lg py-1 min-w-[200px] max-w-[350px] max-h-[400px] overflow-y-auto">
-        <!-- Tracks will be populated here -->
-      </div>
+    <button id="editAlbumOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
+    </button>
+    <button id="playAlbumOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-play mr-2 w-4 text-center"></i>Play Album
+    </button>
+    <button id="removeAlbumOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-times mr-2 w-4 text-center"></i>Remove Album
+    </button>
+  </div>
     </div>
     <button id="editAlbumOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details

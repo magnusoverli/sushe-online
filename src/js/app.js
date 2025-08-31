@@ -68,7 +68,7 @@ const POSITION_POINTS = {
 
 window.selectList = selectList;
 
-// Hide context menu when clicking elsewhere
+// Hide context menus when clicking elsewhere
 document.addEventListener('click', () => {
   const contextMenu = document.getElementById('contextMenu');
   if (contextMenu) {
@@ -82,16 +82,11 @@ document.addEventListener('click', () => {
     currentContextAlbum = null;
     currentContextAlbumId = null;
 
-    // Clean up track loading state when closing menu
+    // Cancel any pending track fetches
     if (trackAbortController) {
       trackAbortController.abort();
       trackAbortController = null;
     }
-  }
-
-  const trackSubmenu = document.getElementById('trackSubmenu');
-  if (trackSubmenu) {
-    trackSubmenu.classList.add('hidden');
   }
 });
 
@@ -1589,13 +1584,11 @@ function initializeAlbumContextMenu() {
   const removeOption = document.getElementById('removeAlbumOption');
   const editOption = document.getElementById('editAlbumOption');
   const playOption = document.getElementById('playAlbumOption');
-  const selectTrackOption = document.getElementById('selectTrackOption');
-  const trackSubmenu = document.getElementById('trackSubmenu');
 
   if (!contextMenu || !removeOption || !editOption || !playOption) return;
 
-  // Handle select track option
-  if (selectTrackOption && trackSubmenu) {
+  // Track selection has been removed from context menu - now available directly in the album list
+  if (false) {
     selectTrackOption.onmouseenter = async () => {
       if (currentContextAlbum === null) return;
 
@@ -1823,7 +1816,6 @@ function initializeAlbumContextMenu() {
   // Handle edit option click
   editOption.onclick = () => {
     contextMenu.classList.add('hidden');
-    if (trackSubmenu) trackSubmenu.classList.add('hidden');
 
     if (currentContextAlbum === null) return;
 
@@ -1851,7 +1843,6 @@ function initializeAlbumContextMenu() {
   // Handle play option click
   playOption.onclick = () => {
     contextMenu.classList.add('hidden');
-    if (trackSubmenu) trackSubmenu.classList.add('hidden');
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
@@ -1878,8 +1869,6 @@ function initializeAlbumContextMenu() {
   // Handle remove option click
   removeOption.onclick = async () => {
     contextMenu.classList.add('hidden');
-    if (trackSubmenu) trackSubmenu.classList.add('hidden');
-
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
