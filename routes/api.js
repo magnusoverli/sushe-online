@@ -119,19 +119,19 @@ module.exports = (app, deps) => {
           for (const item of items) {
             const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
             mapped.push({
-              artist: albumData?.artist || item.artist,
-              album: albumData?.album || item.album,
+              artist: item.artist || albumData?.artist,
+              album: item.album || albumData?.album,
               album_id: item.albumId,
-              release_date: albumData?.releaseDate || item.releaseDate,
-              country: albumData?.country || item.country,
-              genre_1: albumData?.genre1 || item.genre1,
-              genre_2: albumData?.genre2 || item.genre2,
+              release_date: item.releaseDate || albumData?.releaseDate,
+              country: item.country || albumData?.country,
+              genre_1: item.genre1 || albumData?.genre1,
+              genre_2: item.genre2 || albumData?.genre2,
               track_pick: item.trackPick,
               comments: item.comments,
-              tracks: albumData?.tracks || item.tracks,
-              cover_image: albumData?.coverImage || item.coverImage,
+              tracks: item.tracks || albumData?.tracks,
+              cover_image: item.coverImage || albumData?.coverImage,
               cover_image_format:
-                albumData?.coverImageFormat || item.coverImageFormat,
+                item.coverImageFormat || albumData?.coverImageFormat,
             });
           }
           listsObj[list.name] = mapped;
@@ -204,19 +204,19 @@ module.exports = (app, deps) => {
         for (const item of items) {
           const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
           data.push({
-            artist: albumData?.artist || item.artist,
-            album: albumData?.album || item.album,
+            artist: item.artist || albumData?.artist,
+            album: item.album || albumData?.album,
             album_id: item.albumId,
-            release_date: albumData?.releaseDate || item.releaseDate,
-            country: albumData?.country || item.country,
-            genre_1: albumData?.genre1 || item.genre1,
-            genre_2: albumData?.genre2 || item.genre2,
+            release_date: item.releaseDate || albumData?.releaseDate,
+            country: item.country || albumData?.country,
+            genre_1: item.genre1 || albumData?.genre1,
+            genre_2: item.genre2 || albumData?.genre2,
             track_pick: item.trackPick,
             comments: item.comments,
-            tracks: albumData?.tracks || item.tracks,
-            cover_image: albumData?.coverImage || item.coverImage,
+            tracks: item.tracks || albumData?.tracks,
+            cover_image: item.coverImage || albumData?.coverImage,
             cover_image_format:
-              albumData?.coverImageFormat || item.coverImageFormat,
+              item.coverImageFormat || albumData?.coverImageFormat,
           });
         }
         res.json(data);

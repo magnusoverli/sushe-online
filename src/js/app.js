@@ -2589,11 +2589,15 @@ function makeCommentEditable(commentDiv, albumIndex) {
 
       // Update display without re-rendering everything
       let displayComment = newComment;
-      if (displayComment === 'Comment') {
-        displayComment = '';
+      let displayClass = 'text-gray-300';
+
+      // If comment is empty, show placeholder
+      if (!displayComment) {
+        displayComment = 'Comment';
+        displayClass = 'text-gray-500';
       }
 
-      commentDiv.innerHTML = `<span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${displayComment}</span>`;
+      commentDiv.innerHTML = `<span class="text-sm ${displayClass} italic line-clamp-2 cursor-pointer hover:text-gray-100">${displayComment}</span>`;
 
       // Re-add click handler
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
@@ -2603,8 +2607,14 @@ function makeCommentEditable(commentDiv, albumIndex) {
       }
     } catch (error) {
       showToast('Error saving comment', 'error');
-      // Revert on error
-      commentDiv.innerHTML = `<span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${currentComment}</span>`;
+      // Revert on error - also handle placeholder for empty comments
+      let revertDisplay = currentComment;
+      let revertClass = 'text-gray-300';
+      if (!revertDisplay) {
+        revertDisplay = 'Comment';
+        revertClass = 'text-gray-500';
+      }
+      commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100">${revertDisplay}</span>`;
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
     }
   };
@@ -2618,10 +2628,15 @@ function makeCommentEditable(commentDiv, albumIndex) {
     if (e.key === 'Escape') {
       // Cancel editing
       let displayComment = currentComment;
-      if (displayComment === 'Comment') {
-        displayComment = '';
+      let displayClass = 'text-gray-300';
+
+      // If comment is empty, show placeholder
+      if (!displayComment) {
+        displayComment = 'Comment';
+        displayClass = 'text-gray-500';
       }
-      commentDiv.innerHTML = `<span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${displayComment}</span>`;
+
+      commentDiv.innerHTML = `<span class="text-sm ${displayClass} italic line-clamp-2 cursor-pointer hover:text-gray-100">${displayComment}</span>`;
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
     }
   });
