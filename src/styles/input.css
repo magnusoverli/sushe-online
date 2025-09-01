@@ -68,10 +68,9 @@
     }
 
     /* Subtle hover effect to indicate interactivity */
-    .album-card:active,
-    .album-row:active {
+    /* Removed active state for album-row to prevent any click effects */
+    .album-card:active {
       background-color: rgba(55, 65, 81, 0.5) !important;
-      /* Removed transform to prevent click nudge effect */
       transition: background-color 0.1s ease;
     }
 
@@ -101,11 +100,14 @@
     }
 
     /* Long press indication - subtle scale effect during delay */
-    .sortable-delay .album-card,
-    .sortable-delay .album-row {
+    .sortable-delay .album-card {
       transform: scale(0.99);
       background-color: rgba(55, 65, 81, 0.3) !important;
       transition: all 0.3s ease;
+    }
+    /* No effects for album-row during sortable delay */
+    .sortable-delay .album-row {
+      /* No visual changes */
     }
   }
   50% {
@@ -123,7 +125,10 @@
 }
 
 /* Smooth transitions for position changes */
-.album-row,
+/* Album-row has no transitions to prevent click effects */
+.album-row {
+  transition: none;
+}
 .album-card {
   transition: box-shadow 0.2s ease;
 }

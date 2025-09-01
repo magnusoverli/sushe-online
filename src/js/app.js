@@ -2831,7 +2831,7 @@ function createAlbumItem(album, index, isMobile = false) {
 function createDesktopAlbumRow(data, index) {
   const row = document.createElement('div');
   row.className =
-    'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 hover:bg-gray-800/30 transition-colors';
+    'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800 hover:bg-gray-800/30';
   row.dataset.index = index;
 
   row.innerHTML = `
