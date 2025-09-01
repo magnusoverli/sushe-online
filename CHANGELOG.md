@@ -10,6 +10,7 @@ All notable user-facing changes to this project will be documented in this file.
 - **Completely removed all click effects from album rows including background color transitions**
 - **Fixed comment field placeholder disappearing when user exits editor without entering text**
 - **Fixed persistence issue where genre, country, and other editable fields would revert after page refresh**
+- **Fixed Spotify OAuth 'Illegal scope' error by removing invalid offline_access scope**
 
 - **Added automatic changelog update system** - Streamlined changelog management with npm commands for consistent user-facing change documentation
 - **Improved Spotify authentication** - Spotify sessions now persist smoothly across application restarts
