@@ -39,7 +39,11 @@
     "smart:analyze": "node smart-planning.js analyze",
     "smart:status": "node smart-planning.js status",
     "smart:watch": "node smart-planning.js watch",
-    "smart:update": "node smart-planning.js update"
+    "smart:update": "node smart-planning.js update",
+    "changelog": "node scripts/update-changelog.js",
+    "changelog:quick": "node scripts/update-changelog.js",
+    "changelog:git": "node scripts/update-changelog.js --git",
+    "changelog:setup": "bash scripts/setup-git-hooks.sh"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
