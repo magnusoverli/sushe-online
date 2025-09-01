@@ -72,7 +72,7 @@ module.exports = (app, deps) => {
       response_type: 'code',
       redirect_uri: process.env.SPOTIFY_REDIRECT_URI || '',
       scope:
-        'user-read-email playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public',
+        'user-read-email playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public offline_access',
       state,
     });
     res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);

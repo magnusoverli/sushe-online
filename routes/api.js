@@ -696,6 +696,39 @@ module.exports = (app, deps) => {
 
   // Search Spotify for an album and return the ID
   app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
+    // Check if we need to refresh the token
+    if (req.user.spotifyAuth && req.user.spotifyAuth.refresh_token) {
+      const needsRefresh =
+        req.user.spotifyAuth.expires_at &&
+        req.user.spotifyAuth.expires_at <= Date.now() + 60000; // Refresh if expires in < 1 minute
+
+      if (needsRefresh) {
+        try {
+          const { refreshSpotifyToken } = require('../auth-utils');
+          const newToken = await refreshSpotifyToken(
+            req.user.spotifyAuth.refresh_token
+          );
+
+          // Update user's token in database
+          await usersAsync.update(
+            { _id: req.user._id },
+            { $set: { spotifyAuth: newToken } }
+          );
+
+          // Update token in current request
+          req.user.spotifyAuth = newToken;
+
+          logger.info(
+            'Spotify token refreshed successfully for user:',
+            req.user.email
+          );
+        } catch (err) {
+          logger.error('Failed to refresh Spotify token:', err);
+          // Continue with the existing token check below
+        }
+      }
+    }
+
     if (
       !req.user.spotifyAuth ||
       !req.user.spotifyAuth.access_token ||
@@ -1170,7 +1203,32 @@ module.exports = (app, deps) => {
       // Check authentication for the target service
       const authField =
         targetService === 'spotify' ? 'spotifyAuth' : 'tidalAuth';
-      const auth = req.user[authField];
+      let auth = req.user[authField];
+
+      // Try to refresh Spotify token if needed
+      if (targetService === 'spotify' && auth && auth.refresh_token) {
+        const needsRefresh =
+          auth.expires_at && auth.expires_at <= Date.now() + 60000;
+
+        if (needsRefresh) {
+          try {
+            const { refreshSpotifyToken } = require('../auth-utils');
+            const newToken = await refreshSpotifyToken(auth.refresh_token);
+
+            await usersAsync.update(
+              { _id: req.user._id },
+              { $set: { spotifyAuth: newToken } }
+            );
+
+            req.user.spotifyAuth = newToken;
+            auth = newToken;
+
+            logger.info('Spotify token refreshed for playlist operation');
+          } catch (err) {
+            logger.error('Failed to refresh Spotify token for playlist:', err);
+          }
+        }
+      }
 
       if (
         !auth ||
