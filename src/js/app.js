@@ -2877,7 +2877,7 @@ function createDesktopAlbumRow(data, index) {
       <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
     </div>
     <div class="flex items-center comment-cell">
-      <span class="text-sm text-gray-300 italic line-clamp-2 cursor-pointer hover:text-gray-100">${data.comment}</span>
+      <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-500'} italic line-clamp-2 cursor-pointer hover:text-gray-100">${data.comment || 'Comment'}</span>
     </div>
     <div class="flex items-center track-cell">
       <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>

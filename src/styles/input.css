@@ -71,8 +71,8 @@
     .album-card:active,
     .album-row:active {
       background-color: rgba(55, 65, 81, 0.5) !important;
-      transform: scale(0.98);
-      transition: all 0.1s ease;
+      /* Removed transform to prevent click nudge effect */
+      transition: background-color 0.1s ease;
     }
 
     /* Ensure buttons remain interactive */
@@ -125,9 +125,7 @@
 /* Smooth transitions for position changes */
 .album-row,
 .album-card {
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease;
 }
 
 /* Disable transitions during sorting for better performance */
