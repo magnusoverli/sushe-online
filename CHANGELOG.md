@@ -6,6 +6,7 @@ All notable user-facing changes to this project will be documented in this file.
 
 ### 2025-09-01
 - **Fixed non-editable comment column in album list table**
+- **Removed click nudge effect from album rows in the list table**
 
 - **Added automatic changelog update system** - Streamlined changelog management with npm commands for consistent user-facing change documentation
 - **Improved Spotify authentication** - Spotify sessions now persist smoothly across application restarts
