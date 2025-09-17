@@ -173,15 +173,15 @@ if (process.env.DATABASE_URL) {
   logger.info('Using PostgreSQL backend');
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 20, // Increase max connections for better concurrency
-    min: 5, // Keep minimum connections warm
-    idleTimeoutMillis: 300000, // 5 minutes - keep connections alive longer
-    connectionTimeoutMillis: 2000, // 2 second timeout for new connections
-    acquireTimeoutMillis: 2000, // 2 second timeout for acquiring from pool
+    max: 30, // Increase max connections for better performance with more resources
+    min: 10, // Keep more connections warm for faster response
+    idleTimeoutMillis: 600000, // 10 minutes - longer idle timeout for stability
+    connectionTimeoutMillis: 5000, // 5 seconds - more reasonable for production
+    acquireTimeoutMillis: 5000, // 5 seconds - prevent cascade failures
     keepAlive: true, // Enable TCP keep-alive
     keepAliveInitialDelayMillis: 10000, // 10 second initial delay for keep-alive
-    statement_timeout: 30000, // 30 second statement timeout
-    query_timeout: 30000, // 30 second query timeout
+    statement_timeout: 60000, // 60 seconds for complex queries
+    query_timeout: 60000, // 60 seconds query timeout
     allowExitOnIdle: false, // Don't exit when idle
   });
   const usersMap = {

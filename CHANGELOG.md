@@ -4,6 +4,10 @@ All notable user-facing changes to this project will be documented in this file.
 
 ## Recent Updates
 
+### 2025-09-17
+- **Enhanced database container stability with health checks, improved resource allocation, and comprehensive error handling**
+
+
 ### 2025-09-01
 - **Fixed non-editable comment column in album list table**
 - **Removed click nudge effect from album rows in the list table**

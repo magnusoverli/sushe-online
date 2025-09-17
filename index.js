@@ -668,6 +668,50 @@ const deps = {
   passport,
 };
 
+// Database health check endpoint
+const { healthCheck } = require('./db/retry-wrapper');
+
+app.get('/health/db', async (req, res) => {
+  try {
+    const health = await healthCheck(pool);
+    const statusCode = health.status === 'healthy' ? 200 : 503;
+    res.status(statusCode).json(health);
+  } catch (error) {
+    logger.error('Health check endpoint error:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      database: 'error',
+      error: 'Health check failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// General health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    const dbHealth = await healthCheck(pool);
+    const health = {
+      status: dbHealth.status === 'healthy' ? 'healthy' : 'unhealthy',
+      timestamp: new Date().toISOString(),
+      database: dbHealth,
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: process.version
+    };
+    
+    const statusCode = health.status === 'healthy' ? 200 : 503;
+    res.status(statusCode).json(health);
+  } catch (error) {
+    logger.error('General health check error:', error);
+    res.status(503).json({
+      status: 'unhealthy',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed'
+    });
+  }
+});
+
 authRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);

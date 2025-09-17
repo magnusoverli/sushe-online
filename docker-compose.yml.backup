@@ -22,17 +22,8 @@ services:
       - sushe-data:/app/data
       - postgres-socket:/var/run/postgresql
     depends_on:
-      db:
-        condition: service_healthy
+      - db
     restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '2.0'
-        reservations:
-          memory: 512M
-          cpus: '0.5'
 
   db:
     image: postgres:16
@@ -41,42 +32,9 @@ services:
     environment:
       POSTGRES_PASSWORD: example
       POSTGRES_DB: sushe
-      # Enhanced logging for monitoring
-      POSTGRES_INITDB_ARGS: "--auth-host=md5"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sushe"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '4.0'
-        reservations:
-          memory: 1G
-          cpus: '1.0'
-    command: >
-      postgres 
-      -c log_destination=stderr 
-      -c log_statement=mod 
-      -c log_duration=on 
-      -c log_min_duration_statement=1000
-      -c shared_buffers=1GB
-      -c effective_cache_size=3GB
-      -c maintenance_work_mem=256MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=64MB
-      -c default_statistics_target=100
-      -c random_page_cost=1.1
-      -c effective_io_concurrency=200
-      -c work_mem=16MB
-      -c max_connections=100
 
 volumes:
   sushe-data:
