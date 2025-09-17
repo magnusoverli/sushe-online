@@ -687,8 +687,13 @@ app.get('/health/db', async (req, res) => {
   }
 });
 
-// General health check endpoint
-app.get('/health', async (req, res) => {
+// Health monitoring UI page
+app.get('/health', (req, res) => {
+  res.render('health');
+});
+
+// General health check API endpoint  
+app.get('/api/health', async (req, res) => {
   try {
     const dbHealth = await healthCheck(pool);
     const health = {

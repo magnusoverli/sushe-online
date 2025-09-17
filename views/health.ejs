@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Health Monitor</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: monospace; margin: 20px; background: #f5f5f5; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .healthy { background: #d4edda; color: #155724; }
+        .unhealthy { background: #f8d7da; color: #721c24; }
+        .metric { margin: 5px 0; }
+        .timestamp { color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>System Health Monitor</h1>
+    <p style="color: #666; font-size: 14px;">Shows if your application is running properly. Updates every 5 seconds.</p>
+    
+    <div id="status"></div>
+    
+    <h3>Database <small style="color: #666;">(where your data is stored)</small></h3>
+    <div id="database"></div>
+    
+    <h3>System <small style="color: #666;">(server resources)</small></h3>
+    <div id="system"></div>
+    
+    <details style="margin-top: 20px;">
+        <summary style="cursor: pointer; color: #666;">What do these numbers mean?</summary>
+        <div style="margin: 10px 0; font-size: 14px; color: #555;">
+            <strong>Status:</strong> Green = everything working, Red = problem detected<br>
+            <strong>Response Time:</strong> How fast the database responds (lower is better)<br>
+            <strong>Uptime:</strong> How long the server has been running without restart<br>
+            <strong>Memory:</strong> How much RAM the application is using (out of 2GB limit)<br>
+        </div>
+    </details>
+    
+    <p class="timestamp">Last updated: <span id="lastUpdate">-</span></p>
+    
+    <script>
+        function updateHealth() {
+            fetch('/api/health')
+                .then(r => r.json())
+                .then(data => {
+                    // Overall status
+                    document.getElementById('status').innerHTML = 
+                        `<div class="status ${data.status}">${data.status.toUpperCase()}</div>`;
+                    
+                    // Database info with detailed error handling
+                    if (data.database.status === 'healthy') {
+                        document.getElementById('database').innerHTML = 
+                            `<div class="metric">Status: ✅ ${data.database.status}</div>
+                             <div class="metric">Response Time: ${data.database.responseTime}ms</div>`;
+                    } else {
+                        const errorInfo = data.database.error ? ` - ${data.database.error}` : '';
+                        document.getElementById('database').innerHTML = 
+                            `<div class="metric" style="color: #721c24;">Status: ❌ ${data.database.status}${errorInfo}</div>
+                             <div class="metric" style="color: #721c24;">🚨 Database connection failed</div>`;
+                    }
+                    
+                    // System info
+                    const memMB = Math.round(data.memory.rss / 1024 / 1024);
+                    document.getElementById('system').innerHTML = 
+                        `<div class="metric">Uptime: ${Math.round(data.uptime)}s</div>
+                         <div class="metric">Memory: ${memMB}MB</div>
+                         <div class="metric">Node: ${data.version}</div>`;
+                    
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                })
+                .catch(e => {
+                    // Clear failure display
+                    document.getElementById('status').innerHTML = 
+                        '<div class="status unhealthy">🚨 APPLICATION UNREACHABLE</div>';
+                    
+                    document.getElementById('database').innerHTML = 
+                        '<div class="metric" style="color: #721c24;">❌ Cannot check database - app not responding</div>';
+                    
+                    document.getElementById('system').innerHTML = 
+                        '<div class="metric" style="color: #721c24;">❌ Cannot check system resources - app not responding</div>';
+                    
+                    document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                    
+                    console.error('Health check failed:', e);
+                });
+        }
+        
+        // Update every 5 seconds
+        updateHealth();
+        setInterval(updateHealth, 5000);
+    </script>
+</body>
+</html>
