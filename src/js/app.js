@@ -342,12 +342,10 @@ async function loadCountries() {
       availableCountries.sort();
       availableCountries.unshift(emptyItem);
     }
+    // Expose to window for access from musicbrainz.js
+    window.availableCountries = availableCountries;
   } catch (error) {
-    showToast('Error saving list order', 'error');
-    // Revert the change
-    const [revertItem] = list.splice(newIndex, 1);
-    list.splice(oldIndex, 0, revertItem);
-    displayAlbums(lists[currentList]);
+    console.error('Error loading countries:', error);
   }
 }
 

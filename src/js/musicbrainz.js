@@ -1151,8 +1151,8 @@ function populateCountryDropdown() {
   }
 
   // Add countries from the global availableCountries array
-  if (typeof availableCountries !== 'undefined' && availableCountries) {
-    availableCountries.forEach((country) => {
+  if (window.availableCountries && Array.isArray(window.availableCountries)) {
+    window.availableCountries.forEach((country) => {
       const option = document.createElement('option');
       option.value = country;
       option.textContent = country;
@@ -1616,6 +1616,7 @@ async function selectArtist(artist) {
 
 async function resolveCountryCode(countryCode) {
   if (!countryCode || countryCode.length !== 2) {
+    console.debug(`Invalid country code: ${countryCode}`);
     return '';
   }
 
@@ -1626,12 +1627,15 @@ async function resolveCountryCode(countryCode) {
     );
 
     if (!response.ok) {
-      console.warn(`Country code ${countryCode} not found`);
+      console.warn(
+        `Country code ${countryCode} not found in RestCountries API`
+      );
       return '';
     }
 
     const data = await response.json();
     if (!data || !data[0]) {
+      console.warn(`Empty data from RestCountries API for ${countryCode}`);
       return '';
     }
 
@@ -1656,16 +1660,26 @@ async function resolveCountryCode(countryCode) {
       namesToTry.push('Korea, North');
     }
 
+    // Check if availableCountries is loaded
+    if (
+      !window.availableCountries ||
+      !Array.isArray(window.availableCountries)
+    ) {
+      console.warn('availableCountries not loaded yet, returning country code');
+      return countryData.name.common;
+    }
+
     // Find the first name that matches our countries list
     for (const name of namesToTry) {
-      if (name && availableCountries.includes(name)) {
+      if (name && window.availableCountries.includes(name)) {
+        console.debug(`Resolved ${countryCode} to ${name}`);
         return name;
       }
     }
 
     // If no exact match, try case-insensitive partial matching
     const commonName = countryData.name.common.toLowerCase();
-    const closeMatch = availableCountries.find((country) => {
+    const closeMatch = window.availableCountries.find((country) => {
       const countryLower = country.toLowerCase();
       return (
         countryLower === commonName ||
@@ -1675,14 +1689,16 @@ async function resolveCountryCode(countryCode) {
     });
 
     if (closeMatch) {
+      console.debug(`Resolved ${countryCode} to ${closeMatch} (partial match)`);
       return closeMatch;
     }
 
     console.warn(
-      `Country "${countryData.name.common}" (${countryCode}) not found in allowed countries list`
+      `Country "${countryData.name.common}" (${countryCode}) not found in allowed countries list. Names tried: ${namesToTry.join(', ')}`
     );
     return '';
   } catch (error) {
+    console.error(`Error resolving country code ${countryCode}:`, error);
     return '';
   }
 }
@@ -1888,13 +1904,22 @@ async function addAlbumToList(releaseGroup) {
   // Show initial loading message
   showToast('Adding album...', 'info');
 
+  console.debug('Adding album for artist:', currentArtist);
+  console.debug('Artist country field:', currentArtist.country);
+
   let resolvedCountry = '';
   if (currentArtist.country) {
     if (currentArtist.country.length === 2) {
       resolvedCountry = await resolveCountryCode(currentArtist.country);
+      console.debug(
+        `Resolved country code ${currentArtist.country} to: ${resolvedCountry}`
+      );
     } else {
       resolvedCountry = currentArtist.country;
+      console.debug('Using full country name:', resolvedCountry);
     }
+  } else {
+    console.warn('No country field found for artist:', currentArtist.name);
   }
 
   const album = {
@@ -1907,6 +1932,8 @@ async function addAlbumToList(releaseGroup) {
     genre_2: '',
     comments: '',
   };
+
+  console.debug('Album object being saved:', album);
 
   // Enhanced cover art retrieval
   let coverArtUrl = releaseGroup.coverArt;
