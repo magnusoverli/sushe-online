@@ -18,8 +18,11 @@ const deezerCache = new Map();
 
 // Concurrent request limits - increased for faster parallel loading
 const ITUNES_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
-const COVERART_BATCH_SIZE = 10; // Increased from 3 for 3x faster loading
+const COVERART_BATCH_SIZE = 5; // Reduced - archive.org is less stable
 const DEEZER_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
+
+// Timeout for Cover Art Archive requests (archive.org can be slow/unstable)
+const COVERART_TIMEOUT = 8000; // 8 seconds
 
 // Queue for managing concurrent requests
 class RequestQueue {
@@ -384,16 +387,26 @@ async function searchDeezerArtwork(artistName, albumName) {
 async function getCoverArtFromArchive(releaseGroupId) {
   return coverArtQueue.add(async () => {
     try {
+      // Add timeout to prevent hanging on slow connections
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), COVERART_TIMEOUT);
+
       const response = await fetch(
         `${COVERART_API}/release-group/${releaseGroupId}`,
         {
           headers: {
             Accept: 'application/json',
           },
+          signal: controller.signal,
         }
       );
 
+      clearTimeout(timeoutId);
+
       if (!response.ok) {
+        console.debug(
+          `Cover Art Archive: No cover found for ${releaseGroupId} (${response.status})`
+        );
         return null;
       }
 
@@ -406,11 +419,23 @@ async function getCoverArtFromArchive(releaseGroupId) {
           frontImage.thumbnails['250'] ||
           frontImage.thumbnails.small ||
           frontImage.image;
+        console.debug(`Cover Art Archive: Found cover for ${releaseGroupId}`);
         return imageUrl;
       }
 
       return null;
     } catch (error) {
+      // Cover Art Archive often has connection issues - this is expected
+      // Deezer will be used as fallback
+      if (error.name === 'AbortError') {
+        console.debug(
+          `Cover Art Archive timeout for ${releaseGroupId} (>${COVERART_TIMEOUT}ms)`
+        );
+      } else {
+        console.debug(
+          `Cover Art Archive connection failed for ${releaseGroupId}: ${error.message}`
+        );
+      }
       return null;
     }
   });
@@ -448,8 +473,11 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
     sources.map(async (source) => {
       try {
         const result = await source.fn();
-        return result ? { url: result, priority: source.priority } : null;
+        return result
+          ? { url: result, priority: source.priority, source: source.name }
+          : null;
       } catch (error) {
+        console.debug(`Cover art source '${source.name}' failed:`, error);
         return null;
       }
     })
@@ -462,7 +490,18 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
     .sort((a, b) => a.priority - b.priority);
 
   // Return the highest priority successful result
-  return successfulResults.length > 0 ? successfulResults[0].url : null;
+  if (successfulResults.length > 0) {
+    const winner = successfulResults[0];
+    console.debug(
+      `Using cover art from '${winner.source}' for ${albumTitle || releaseGroupId}`
+    );
+    return winner.url;
+  }
+
+  console.warn(
+    `No cover art found for ${albumTitle || releaseGroupId} from any source`
+  );
+  return null;
 }
 
 // Convert date to year format
