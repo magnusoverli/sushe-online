@@ -699,8 +699,8 @@ module.exports = (app, deps) => {
     // Check if we need to refresh the token
     if (req.user.spotifyAuth && req.user.spotifyAuth.refresh_token) {
       const needsRefresh =
-        req.user.spotifyAuth.expires_at &&
-        req.user.spotifyAuth.expires_at <= Date.now() + 60000; // Refresh if expires in < 1 minute
+        !req.user.spotifyAuth.expires_at ||
+        req.user.spotifyAuth.expires_at <= Date.now() + 300000; // Refresh if expired or expires in < 5 minutes
 
       if (needsRefresh) {
         try {
@@ -1208,7 +1208,7 @@ module.exports = (app, deps) => {
       // Try to refresh Spotify token if needed
       if (targetService === 'spotify' && auth && auth.refresh_token) {
         const needsRefresh =
-          auth.expires_at && auth.expires_at <= Date.now() + 60000;
+          !auth.expires_at || auth.expires_at <= Date.now() + 300000; // Refresh if expired or expires in < 5 minutes
 
         if (needsRefresh) {
           try {
