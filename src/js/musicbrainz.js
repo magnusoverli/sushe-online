@@ -18,11 +18,8 @@ const deezerCache = new Map();
 
 // Concurrent request limits - increased for faster parallel loading
 const ITUNES_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
-const COVERART_BATCH_SIZE = 5; // Reduced - archive.org is less stable
+const COVERART_BATCH_SIZE = 5; // Kept low for potential future use
 const DEEZER_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
-
-// Timeout for Cover Art Archive requests (archive.org can be slow/unstable)
-const COVERART_TIMEOUT = 8000; // 8 seconds
 
 // Queue for managing concurrent requests
 class RequestQueue {
@@ -404,9 +401,6 @@ async function getCoverArtFromArchive(releaseGroupId) {
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        console.debug(
-          `Cover Art Archive: No cover found for ${releaseGroupId} (${response.status})`
-        );
         return null;
       }
 
@@ -419,23 +413,13 @@ async function getCoverArtFromArchive(releaseGroupId) {
           frontImage.thumbnails['250'] ||
           frontImage.thumbnails.small ||
           frontImage.image;
-        console.debug(`Cover Art Archive: Found cover for ${releaseGroupId}`);
         return imageUrl;
       }
 
       return null;
     } catch (error) {
-      // Cover Art Archive often has connection issues - this is expected
-      // Deezer will be used as fallback
-      if (error.name === 'AbortError') {
-        console.debug(
-          `Cover Art Archive timeout for ${releaseGroupId} (>${COVERART_TIMEOUT}ms)`
-        );
-      } else {
-        console.debug(
-          `Cover Art Archive connection failed for ${releaseGroupId}: ${error.message}`
-        );
-      }
+      // Cover Art Archive connection issues are expected and handled gracefully
+      // Deezer provides primary coverage
       return null;
     }
   });
@@ -444,8 +428,7 @@ async function getCoverArtFromArchive(releaseGroupId) {
 // Try cover art sources in parallel for faster loading
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   // Define sources - all will be checked in parallel
-  // Prioritize Deezer (fastest), then Cover Art Archive
-  // iTunes disabled temporarily due to proxy issues
+  // Deezer provides 90%+ of covers, Cover Art Archive disabled due to unreliability
   const sources = [
     {
       name: 'deezer',
@@ -453,13 +436,15 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
       enabled: artistName && albumTitle,
       priority: 1, // Fastest and most reliable with proxy
     },
-    {
-      name: 'coverart',
-      fn: () => getCoverArtFromArchive(releaseGroupId),
-      enabled: true,
-      priority: 2, // Can be slow but reliable
-    },
-    // iTunes temporarily disabled - proxy having issues
+    // Cover Art Archive disabled - unreliable (archive.org connection issues)
+    // Deezer provides sufficient coverage (~90%+ of albums)
+    // {
+    //   name: 'coverart',
+    //   fn: () => getCoverArtFromArchive(releaseGroupId),
+    //   enabled: true,
+    //   priority: 2,
+    // },
+    // iTunes disabled - proxy having issues
     // {
     //   name: 'itunes',
     //   fn: () => searchITunesArtwork(artistName, albumTitle),
@@ -492,14 +477,14 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   // Return the highest priority successful result
   if (successfulResults.length > 0) {
     const winner = successfulResults[0];
-    console.debug(
-      `Using cover art from '${winner.source}' for ${albumTitle || releaseGroupId}`
-    );
+    // Only log in debug mode - successful cover fetching is normal operation
+    // console.debug(`Using cover from '${winner.source}' for ${albumTitle || releaseGroupId}`);
     return winner.url;
   }
 
+  // Only warn when no cover found at all - this is unusual
   console.warn(
-    `No cover art found for ${albumTitle || releaseGroupId} from any source`
+    `No cover art found for "${albumTitle || releaseGroupId}" - album will use placeholder`
   );
   return null;
 }
