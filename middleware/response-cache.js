@@ -184,6 +184,21 @@ const cacheConfigs = {
       );
     },
   }),
+
+  // Album cover images with very long TTL (URLs don't change)
+  images: createCacheMiddleware({
+    ttl: 3600000, // 1 hour - images rarely change
+    keyGenerator: (req) => `image:${req.query.url}`, // Key by image URL only
+    shouldCache: (req) => {
+      return req.path === '/api/proxy/image';
+    },
+    onHit: (req, key) => {
+      logger.debug(`Image cache hit: ${key}`);
+    },
+    onMiss: (req, key) => {
+      logger.debug(`Image cache miss: ${key}`);
+    },
+  }),
 };
 
 module.exports = {

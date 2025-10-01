@@ -1389,54 +1389,64 @@ function showAlbumResults() {
   modalElements.albumResults.classList.remove('hidden');
 }
 
-// Search Deezer for artist image
+// Search Deezer for artist image using direct artist search endpoint
 async function searchArtistImage(artistName) {
   try {
     const searchQuery = artistName.replace(/[^\w\s]/g, ' ').trim();
-    const url = `${DEEZER_PROXY}?q=${encodeURIComponent(searchQuery)}`;
+    const url = `/api/proxy/deezer/artist?q=${encodeURIComponent(searchQuery)}`;
 
     const response = await fetch(url, {
       credentials: 'same-origin',
     });
 
     if (!response.ok) {
+      console.warn(
+        `Artist image fetch failed for "${artistName}": ${response.status}`
+      );
       return null;
     }
 
     const data = await response.json();
 
     if (data.data && data.data.length > 0) {
-      // Try to find the best matching artist from album results
-      const artistImages = new Map();
+      const searchNameLower = artistName.toLowerCase();
 
-      data.data.forEach((album) => {
-        if (album.artist && album.artist.picture_medium) {
-          const artistNameLower = album.artist.name.toLowerCase();
-          const searchNameLower = artistName.toLowerCase();
+      // Find exact match first
+      let bestMatch = data.data.find(
+        (artist) => artist.name.toLowerCase() === searchNameLower
+      );
 
-          // Prioritize exact matches
-          if (artistNameLower === searchNameLower) {
-            artistImages.set(album.artist.name, album.artist.picture_medium);
-          } else if (
+      // Fall back to partial match
+      if (!bestMatch) {
+        bestMatch = data.data.find((artist) => {
+          const artistNameLower = artist.name.toLowerCase();
+          return (
             artistNameLower.includes(searchNameLower) ||
             searchNameLower.includes(artistNameLower)
-          ) {
-            // Also consider partial matches
-            if (!artistImages.has(album.artist.name)) {
-              artistImages.set(album.artist.name, album.artist.picture_medium);
-            }
-          }
-        }
-      });
+          );
+        });
+      }
 
-      // Return the first (best) match
-      if (artistImages.size > 0) {
-        return artistImages.values().next().value;
+      // Use first result if no good match
+      if (!bestMatch && data.data[0]) {
+        bestMatch = data.data[0];
+      }
+
+      if (bestMatch) {
+        // Use picture_xl for better quality, fallback to picture_medium
+        const imageUrl =
+          bestMatch.picture_xl ||
+          bestMatch.picture_big ||
+          bestMatch.picture_medium;
+        if (imageUrl) {
+          return imageUrl;
+        }
       }
     }
 
     return null;
   } catch (error) {
+    console.error('Error fetching artist image:', error);
     return null;
   }
 }
@@ -1448,13 +1458,38 @@ async function displayArtistResults(artists) {
   // Desktop now uses the same list-style layout as mobile
   modalElements.artistList.className = 'space-y-3';
 
-  for (const artist of artists) {
+  // Prefetch all artist images in parallel before rendering
+  // Use Promise.allSettled to prevent one failure from breaking all
+  const imagePromises = artists.map(async (artist) => {
+    try {
+      const displayName = formatArtistDisplayName(artist);
+      const searchName =
+        displayName.original && !displayName.warning
+          ? displayName.primary
+          : artist.name;
+      const imageUrl = await searchArtistImage(searchName);
+      return { artist, imageUrl, displayName };
+    } catch (error) {
+      console.error(`Error processing artist ${artist.name}:`, error);
+      // Return artist without image on error
+      return {
+        artist,
+        imageUrl: null,
+        displayName: formatArtistDisplayName(artist),
+      };
+    }
+  });
+
+  const results = await Promise.allSettled(imagePromises);
+  const artistsWithImages = results
+    .filter((r) => r.status === 'fulfilled')
+    .map((r) => r.value);
+
+  // Now render all artists with their images
+  for (const { artist, imageUrl, displayName } of artistsWithImages) {
     const artistEl = document.createElement('div');
     artistEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
-
-    // Format the artist name intelligently
-    const displayName = formatArtistDisplayName(artist);
 
     // Build disambiguation/secondary text
     let secondaryText = '';
@@ -1480,15 +1515,24 @@ async function displayArtistResults(artists) {
       countryDisplay = ` • ${fullCountryName || artist.country}`;
     }
 
-    // Create initial structure with placeholder
-    artistEl.innerHTML = `
-      <div class="artist-image-container flex-shrink-0">
-        <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+    // Create structure with image already loaded (or placeholder if no image)
+    const imageHtml = imageUrl
+      ? `<img 
+          src="${imageUrl}" 
+          alt="${displayName.primary}" 
+          class="w-16 h-16 rounded-full object-cover"
+          onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
+        >`
+      : `<div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-        </div>
+        </div>`;
+
+    artistEl.innerHTML = `
+      <div class="artist-image-container flex-shrink-0">
+        ${imageHtml}
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-medium text-white">
@@ -1509,27 +1553,6 @@ async function displayArtistResults(artists) {
       _displayName: displayName,
     };
 
-    // Fetch artist image asynchronously (using the Latin name if available for better results)
-    const searchName =
-      displayName.original && !displayName.warning
-        ? displayName.primary
-        : artist.name;
-    searchArtistImage(searchName).then((imageUrl) => {
-      if (imageUrl) {
-        const imageContainer = artistEl.querySelector(
-          '.artist-image-container'
-        );
-        imageContainer.innerHTML = `
-          <img 
-            src="${imageUrl}" 
-            alt="${displayName.primary}" 
-            class="w-16 h-16 rounded-full object-cover"
-            onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
-          >
-        `;
-      }
-    });
-
     // Optimization 1: Preload on hover
     let preloadTimeout;
     artistEl.addEventListener('mouseenter', () => {
@@ -1543,6 +1566,7 @@ async function displayArtistResults(artists) {
     });
 
     artistEl.onclick = () => selectArtist(enhancedArtist);
+
     modalElements.artistList.appendChild(artistEl);
   }
 

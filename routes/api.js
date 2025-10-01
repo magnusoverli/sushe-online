@@ -12,6 +12,39 @@ function mbFetch(url, options) {
   return result;
 }
 
+// Image proxy request queue to prevent overwhelming the server
+class RequestQueue {
+  constructor(maxConcurrent = 10) {
+    this.maxConcurrent = maxConcurrent;
+    this.running = 0;
+    this.queue = [];
+  }
+
+  async add(fn) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ fn, resolve, reject });
+      this.process();
+    });
+  }
+
+  async process() {
+    while (this.running < this.maxConcurrent && this.queue.length > 0) {
+      const { fn, resolve, reject } = this.queue.shift();
+      this.running++;
+
+      fn()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          this.running--;
+          this.process();
+        });
+    }
+  }
+}
+
+const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
+
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const {
@@ -596,6 +629,38 @@ module.exports = (app, deps) => {
     }
   );
 
+  // Deezer artist search proxy for direct artist image fetching
+  app.get(
+    '/api/proxy/deezer/artist',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { q } = req.query;
+        if (!q) {
+          return res
+            .status(400)
+            .json({ error: 'Query parameter q is required' });
+        }
+
+        const url = `https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=5`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(
+            `Deezer API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('Deezer artist proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch artist from Deezer' });
+      }
+    }
+  );
+
   // iTunes proxy endpoint for album artwork
   app.get(
     '/api/proxy/itunes',
@@ -632,7 +697,7 @@ module.exports = (app, deps) => {
   app.get(
     '/api/proxy/image',
     ensureAuthAPI,
-    cacheConfigs.public,
+    cacheConfigs.images,
     async (req, res) => {
       try {
         const { url } = req.query;
@@ -663,30 +728,35 @@ module.exports = (app, deps) => {
           return res.status(403).json({ error: 'URL host not allowed' });
         }
 
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
-          },
+        // Use request queue to limit concurrent image fetches
+        const result = await imageProxyQueue.add(async () => {
+          const response = await fetch(url, {
+            headers: {
+              'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Image fetch responded with status ${response.status}`
+            );
+          }
+
+          const contentType = response.headers.get('content-type');
+          if (!contentType || !contentType.startsWith('image/')) {
+            throw new Error('Response is not an image');
+          }
+
+          const buffer = await response.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString('base64');
+
+          return {
+            data: base64,
+            contentType: contentType,
+          };
         });
 
-        if (!response.ok) {
-          throw new Error(
-            `Image fetch responded with status ${response.status}`
-          );
-        }
-
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.startsWith('image/')) {
-          throw new Error('Response is not an image');
-        }
-
-        const buffer = await response.arrayBuffer();
-        const base64 = Buffer.from(buffer).toString('base64');
-
-        res.json({
-          data: base64,
-          contentType: contentType,
-        });
+        res.json(result);
       } catch (error) {
         logger.error('Image proxy error:', error);
         res.status(500).json({ error: 'Failed to fetch image' });

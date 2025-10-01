@@ -28,6 +28,7 @@ require.cache[require.resolve('../middleware/response-cache')] = {
       userSpecific: (req, res, next) => next(),
       public: (req, res, next) => next(),
       static: (req, res, next) => next(),
+      images: (req, res, next) => next(),
     },
     responseCache: mockResponseCache,
   },
@@ -552,13 +553,19 @@ test('GET /api/proxy/deezer should proxy Deezer API', async () => {
   // Validate structure instead of specific content
   assert.ok(response.body.data, 'Response should have data array');
   assert.ok(Array.isArray(response.body.data), 'data should be an array');
-  
+
   if (response.body.data.length > 0) {
     // If we have results, check they have expected structure
     const firstResult = response.body.data[0];
-    assert.ok(typeof firstResult === 'object', 'First result should be an object');
+    assert.ok(
+      typeof firstResult === 'object',
+      'First result should be an object'
+    );
     // Deezer API typically returns albums with title property
-    assert.ok('title' in firstResult || 'name' in firstResult, 'Result should have title or name');
+    assert.ok(
+      'title' in firstResult || 'name' in firstResult,
+      'Result should have title or name'
+    );
   }
 });
 
@@ -600,11 +607,17 @@ test('GET /api/unfurl should fetch metadata from URL', async () => {
   // Validate structure instead of specific content
   assert.ok(typeof response.body === 'object', 'Response should be an object');
   assert.ok('title' in response.body, 'Response should have title property');
-  assert.ok('description' in response.body, 'Response should have description property');
+  assert.ok(
+    'description' in response.body,
+    'Response should have description property'
+  );
   assert.ok('image' in response.body, 'Response should have image property');
-  
+
   // Validate that title has some content (example.com should have a title)
-  assert.ok(typeof response.body.title === 'string', 'Title should be a string');
+  assert.ok(
+    typeof response.body.title === 'string',
+    'Title should be a string'
+  );
   assert.ok(response.body.title.length > 0, 'Title should not be empty');
 });
 
@@ -619,8 +632,9 @@ test('GET /api/unfurl should require URL parameter', async () => {
 test('GET /api/musicbrainz/tracks should fetch track list or handle errors appropriately', async () => {
   const app = createTestApp();
 
-  const response = await request(app)
-    .get('/api/musicbrainz/tracks?artist=Test%20Artist&album=Test%20Album');
+  const response = await request(app).get(
+    '/api/musicbrainz/tracks?artist=Test%20Artist&album=Test%20Album'
+  );
 
   // The endpoint can return either 200 (success) or error status depending on:
   // - Network connectivity
@@ -628,18 +642,30 @@ test('GET /api/musicbrainz/tracks should fetch track list or handle errors appro
   // - Whether the artist/album is found
   if (response.status === 200) {
     // If successful, validate the response structure
-    assert.ok(typeof response.body === 'object', 'Response should be an object');
-    
+    assert.ok(
+      typeof response.body === 'object',
+      'Response should be an object'
+    );
+
     // Check if it returned tracks data
     if (response.body.tracks) {
-      assert.ok(Array.isArray(response.body.tracks), 'tracks should be an array');
+      assert.ok(
+        Array.isArray(response.body.tracks),
+        'tracks should be an array'
+      );
     }
   } else {
     // If error, should be 400 (bad request) or 500 (server error)
-    assert.ok([400, 404, 500].includes(response.status), 'Error status should be 400, 404, or 500');
-    
+    assert.ok(
+      [400, 404, 500].includes(response.status),
+      'Error status should be 400, 404, or 500'
+    );
+
     if (response.body && response.body.error) {
-      assert.ok(typeof response.body.error === 'string', 'Error message should be a string');
+      assert.ok(
+        typeof response.body.error === 'string',
+        'Error message should be a string'
+      );
     }
   }
 });
