@@ -1,8 +1,6 @@
 /* eslint-disable no-console */
 // MusicBrainz API integration
 const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
-const COVERART_API = 'https://coverartarchive.org';
-const ITUNES_API = 'https://itunes.apple.com';
 const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
 const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
 
@@ -13,13 +11,10 @@ const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
 let searchMode = 'artist';
 
 // Cache for searches to avoid duplicate requests
-const itunesCache = new Map();
 const deezerCache = new Map();
 
-// Concurrent request limits - increased for faster parallel loading
-const ITUNES_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
-const COVERART_BATCH_SIZE = 5; // Kept low for potential future use
-const DEEZER_BATCH_SIZE = 15; // Increased from 5 for 3x faster loading
+// Concurrent request limits for Deezer
+const DEEZER_BATCH_SIZE = 15;
 
 // Queue for managing concurrent requests
 class RequestQueue {
@@ -52,8 +47,6 @@ class RequestQueue {
   }
 }
 
-const itunesQueue = new RequestQueue(ITUNES_BATCH_SIZE);
-const coverArtQueue = new RequestQueue(COVERART_BATCH_SIZE);
 const deezerQueue = new RequestQueue(DEEZER_BATCH_SIZE);
 
 // Modal management
@@ -62,23 +55,14 @@ let modal = null;
 let modalElements = {};
 let currentLoadingController = null;
 
-// Simple source priority order
-const _COVER_ART_SOURCES = ['coverart', 'itunes', 'deezer'];
-
-// Optimization 1: Preload cache for hovering
+// Preload cache for hovering
 const preloadCache = new Map();
 let currentPreloadController = null;
 
-// Optimization 3: Browser Connection Optimization
+// Browser Connection Optimization
 function warmupConnections() {
   const cdns = [
-    'https://is1-ssl.mzstatic.com', // iTunes CDN
-    'https://is2-ssl.mzstatic.com', // iTunes CDN alternate
-    'https://is3-ssl.mzstatic.com', // iTunes CDN alternate
-    'https://is4-ssl.mzstatic.com', // iTunes CDN alternate
-    'https://is5-ssl.mzstatic.com', // iTunes CDN alternate
     'https://e-cdns-images.dzcdn.net', // Deezer CDN
-    'https://coverartarchive.org',
   ];
 
   cdns.forEach((origin) => {
@@ -222,87 +206,6 @@ async function getArtistReleaseGroups(artistId) {
   return releaseGroups;
 }
 
-// Search iTunes for album artwork (via proxy to avoid CORS)
-async function searchITunesArtwork(artistName, albumName) {
-  const cacheKey = `${artistName}::${albumName}`.toLowerCase();
-
-  if (itunesCache.has(cacheKey)) {
-    return itunesCache.get(cacheKey);
-  }
-
-  return itunesQueue.add(async () => {
-    try {
-      const searchTerm = `${artistName} ${albumName}`
-        .replace(/[^\w\s]/g, ' ')
-        .trim();
-      // Use proxy endpoint to avoid CORS issues
-      const url = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}`;
-
-      const response = await fetch(url, {
-        credentials: 'same-origin', // Include cookies for authentication
-      });
-      if (!response.ok) {
-        throw new Error('iTunes proxy request failed');
-      }
-
-      const data = await response.json();
-
-      if (data.results && data.results.length > 0) {
-        const normalizedAlbumName = albumName
-          .toLowerCase()
-          .replace(/[^\w\s]/g, '');
-        const normalizedArtistName = artistName
-          .toLowerCase()
-          .replace(/[^\w\s]/g, '');
-
-        let bestMatch = data.results.find((result) => {
-          const resultAlbum = (result.collectionName || '')
-            .toLowerCase()
-            .replace(/[^\w\s]/g, '');
-          const resultArtist = (result.artistName || '')
-            .toLowerCase()
-            .replace(/[^\w\s]/g, '');
-          return (
-            resultAlbum === normalizedAlbumName &&
-            resultArtist === normalizedArtistName
-          );
-        });
-
-        if (!bestMatch) {
-          bestMatch = data.results.find((result) => {
-            const resultAlbum = (result.collectionName || '')
-              .toLowerCase()
-              .replace(/[^\w\s]/g, '');
-            return (
-              resultAlbum.includes(normalizedAlbumName) ||
-              normalizedAlbumName.includes(resultAlbum)
-            );
-          });
-        }
-
-        if (!bestMatch) {
-          bestMatch = data.results[0];
-        }
-
-        if (bestMatch && bestMatch.artworkUrl100) {
-          const highResArtwork = bestMatch.artworkUrl100.replace(
-            '100x100',
-            '600x600'
-          );
-          itunesCache.set(cacheKey, highResArtwork);
-          return highResArtwork;
-        }
-      }
-
-      itunesCache.set(cacheKey, null);
-      return null;
-    } catch (error) {
-      itunesCache.set(cacheKey, null);
-      return null;
-    }
-  });
-}
-
 // Search Deezer for album artwork (via proxy)
 async function searchDeezerArtwork(artistName, albumName) {
   const cacheKey = `${artistName}::${albumName}`.toLowerCase();
@@ -380,113 +283,27 @@ async function searchDeezerArtwork(artistName, albumName) {
   });
 }
 
-// Get cover art from Cover Art Archive
-async function getCoverArtFromArchive(releaseGroupId) {
-  return coverArtQueue.add(async () => {
-    try {
-      // Add timeout to prevent hanging on slow connections
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), COVERART_TIMEOUT);
-
-      const response = await fetch(
-        `${COVERART_API}/release-group/${releaseGroupId}`,
-        {
-          headers: {
-            Accept: 'application/json',
-          },
-          signal: controller.signal,
-        }
-      );
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
-
-      if (data.images && data.images.length > 0) {
-        const frontImage =
-          data.images.find((img) => img.front) || data.images[0];
-        const imageUrl =
-          frontImage.thumbnails['250'] ||
-          frontImage.thumbnails.small ||
-          frontImage.image;
-        return imageUrl;
-      }
-
-      return null;
-    } catch (error) {
-      // Cover Art Archive connection issues are expected and handled gracefully
-      // Deezer provides primary coverage
-      return null;
-    }
-  });
-}
-
-// Try cover art sources in parallel for faster loading
+// Get cover art from Deezer
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
-  // Define sources - all will be checked in parallel
-  // Deezer provides 90%+ of covers, Cover Art Archive disabled due to unreliability
-  const sources = [
-    {
-      name: 'deezer',
-      fn: () => searchDeezerArtwork(artistName, albumTitle),
-      enabled: artistName && albumTitle,
-      priority: 1, // Fastest and most reliable with proxy
-    },
-    // Cover Art Archive disabled - unreliable (archive.org connection issues)
-    // Deezer provides sufficient coverage (~90%+ of albums)
-    // {
-    //   name: 'coverart',
-    //   fn: () => getCoverArtFromArchive(releaseGroupId),
-    //   enabled: true,
-    //   priority: 2,
-    // },
-    // iTunes disabled - proxy having issues
-    // {
-    //   name: 'itunes',
-    //   fn: () => searchITunesArtwork(artistName, albumTitle),
-    //   enabled: artistName && albumTitle,
-    //   priority: 3,
-    // },
-  ].filter((s) => s.enabled);
-
-  // Execute all sources in parallel for 3x faster loading
-  const results = await Promise.allSettled(
-    sources.map(async (source) => {
-      try {
-        const result = await source.fn();
-        return result
-          ? { url: result, priority: source.priority, source: source.name }
-          : null;
-      } catch (error) {
-        console.debug(`Cover art source '${source.name}' failed:`, error);
-        return null;
-      }
-    })
-  );
-
-  // Find successful results and sort by priority
-  const successfulResults = results
-    .filter((r) => r.status === 'fulfilled' && r.value && r.value.url)
-    .map((r) => r.value)
-    .sort((a, b) => a.priority - b.priority);
-
-  // Return the highest priority successful result
-  if (successfulResults.length > 0) {
-    const winner = successfulResults[0];
-    // Only log in debug mode - successful cover fetching is normal operation
-    // console.debug(`Using cover from '${winner.source}' for ${albumTitle || releaseGroupId}`);
-    return winner.url;
+  if (!artistName || !albumTitle) {
+    console.warn(
+      `Missing artist or album name for "${releaseGroupId}" - cannot fetch cover art`
+    );
+    return null;
   }
 
-  // Only warn when no cover found at all - this is unusual
-  console.warn(
-    `No cover art found for "${albumTitle || releaseGroupId}" - album will use placeholder`
-  );
-  return null;
+  try {
+    const coverUrl = await searchDeezerArtwork(artistName, albumTitle);
+    if (!coverUrl) {
+      console.warn(
+        `No cover art found for "${albumTitle}" by ${artistName} - album will use placeholder`
+      );
+    }
+    return coverUrl;
+  } catch (error) {
+    console.error(`Error fetching cover art for "${albumTitle}":`, error);
+    return null;
+  }
 }
 
 // Convert date to year format
