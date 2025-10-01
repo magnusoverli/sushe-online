@@ -6,8 +6,8 @@ let mbQueue = Promise.resolve();
 function mbFetch(url, options) {
   const result = mbQueue.then(() => fetch(url, options));
   mbQueue = result.then(
-    () => wait(3000),
-    () => wait(3000)
+    () => wait(1000), // MusicBrainz official rate limit: 1 request/second
+    () => wait(1000)
   );
   return result;
 }
@@ -1001,9 +1001,16 @@ module.exports = (app, deps) => {
         };
 
         const runFallbacks = async () => {
-          const itunes = await fetchItunesTracks();
-          if (itunes) return itunes;
-          return await fetchDeezerTracks();
+          // Race both services and return first successful result
+          try {
+            return await Promise.any([
+              fetchItunesTracks(),
+              fetchDeezerTracks(),
+            ]);
+          } catch (err) {
+            // All fallbacks failed
+            return null;
+          }
         };
 
         const looksLikeMBID = (val) =>
@@ -1612,48 +1619,83 @@ module.exports = (app, deps) => {
       result.playlistUrl = existingPlaylist.external_urls.spotify;
     }
 
-    // Collect track URIs
+    // Collect track URIs with parallel processing
     const trackUris = [];
+    const albumCache = new Map();
 
-    for (const item of items) {
-      result.processed++;
+    // Process tracks in parallel batches to respect rate limits
+    const batchSize = 10;
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
 
-      const trackPick = item.trackPick || item.track_pick;
-      if (!trackPick || !trackPick.trim()) {
-        result.errors.push(
-          `Skipped "${item.artist} - ${item.album}": no track selected`
-        );
-        continue;
-      }
+      const batchResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          result.processed++;
 
-      try {
-        const trackUri = await findSpotifyTrack(item, auth);
-        if (trackUri) {
-          trackUris.push(trackUri);
-          result.successful++;
-          result.tracks.push({
-            artist: item.artist,
-            album: item.album,
-            track: trackPick,
-            found: true,
-          });
+          const trackPick = item.trackPick || item.track_pick;
+          if (!trackPick || !trackPick.trim()) {
+            return {
+              success: false,
+              item,
+              error: `Skipped "${item.artist} - ${item.album}": no track selected`,
+            };
+          }
+
+          try {
+            const trackUri = await findSpotifyTrack(item, auth, albumCache);
+            if (trackUri) {
+              return {
+                success: true,
+                item,
+                trackUri,
+                trackPick,
+              };
+            } else {
+              return {
+                success: false,
+                item,
+                error: `Track not found: "${item.artist} - ${item.album}" - Track ${item.trackPick}`,
+              };
+            }
+          } catch (err) {
+            return {
+              success: false,
+              item,
+              error: `Error searching for "${item.artist} - ${item.album}": ${err.message}`,
+            };
+          }
+        })
+      );
+
+      // Process batch results
+      for (const promiseResult of batchResults) {
+        if (promiseResult.status === 'fulfilled') {
+          const trackResult = promiseResult.value;
+          if (trackResult.success) {
+            trackUris.push(trackResult.trackUri);
+            result.successful++;
+            result.tracks.push({
+              artist: trackResult.item.artist,
+              album: trackResult.item.album,
+              track: trackResult.trackPick,
+              found: true,
+            });
+          } else {
+            result.failed++;
+            result.errors.push(trackResult.error);
+            if (trackResult.trackPick) {
+              result.tracks.push({
+                artist: trackResult.item.artist,
+                album: trackResult.item.album,
+                track: trackResult.trackPick,
+                found: false,
+              });
+            }
+          }
         } else {
           result.failed++;
-          result.errors.push(
-            `Track not found: "${item.artist} - ${item.album}" - Track ${item.trackPick}`
-          );
-          result.tracks.push({
-            artist: item.artist,
-            album: item.album,
-            track: trackPick,
-            found: false,
-          });
+          result.errors.push(`Unexpected error: ${promiseResult.reason}`);
         }
-      } catch (err) {
-        result.failed++;
-        result.errors.push(
-          `Error searching for "${item.artist} - ${item.album}": ${err.message}`
-        );
       }
     }
 
@@ -1689,8 +1731,8 @@ module.exports = (app, deps) => {
     return result;
   }
 
-  // Find Spotify track URI
-  async function findSpotifyTrack(item, auth) {
+  // Find Spotify track URI with caching
+  async function findSpotifyTrack(item, auth, albumCache = new Map()) {
     const trackPick = item.trackPick || item.track_pick;
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
@@ -1699,41 +1741,53 @@ module.exports = (app, deps) => {
     // First try to get album tracks if we have album_id
     if (item.albumId) {
       try {
-        const albumResp = await fetch(
-          `https://api.spotify.com/v1/search?q=album:${encodeURIComponent(item.album)} artist:${encodeURIComponent(item.artist)}&type=album&limit=1`,
-          { headers }
-        );
-        if (albumResp.ok) {
-          const albumData = await albumResp.json();
-          if (albumData.albums.items.length > 0) {
-            const spotifyAlbumId = albumData.albums.items[0].id;
-            const tracksResp = await fetch(
-              `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks`,
-              { headers }
-            );
-            if (tracksResp.ok) {
-              const tracksData = await tracksResp.json();
+        const cacheKey = `${item.artist}::${item.album}`;
+        let albumData = albumCache.get(cacheKey);
 
-              // Try to match by track number
-              const trackNum = parseInt(trackPick);
-              if (
-                !isNaN(trackNum) &&
-                trackNum > 0 &&
-                trackNum <= tracksData.tracks.items.length
-              ) {
-                return tracksData.tracks.items[trackNum - 1].uri;
-              }
-
-              // Try to match by track name
-              const matchingTrack = tracksData.tracks.items.find(
-                (t) =>
-                  t.name.toLowerCase().includes(trackPick.toLowerCase()) ||
-                  trackPick.toLowerCase().includes(t.name.toLowerCase())
+        if (!albumData) {
+          const albumResp = await fetch(
+            `https://api.spotify.com/v1/search?q=album:${encodeURIComponent(item.album)} artist:${encodeURIComponent(item.artist)}&type=album&limit=1`,
+            { headers }
+          );
+          if (albumResp.ok) {
+            const data = await albumResp.json();
+            if (data.albums.items.length > 0) {
+              const spotifyAlbumId = data.albums.items[0].id;
+              const tracksResp = await fetch(
+                `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks`,
+                { headers }
               );
-              if (matchingTrack) {
-                return matchingTrack.uri;
+              if (tracksResp.ok) {
+                const tracksData = await tracksResp.json();
+                albumData = {
+                  id: spotifyAlbumId,
+                  tracks: tracksData.tracks.items,
+                };
+                albumCache.set(cacheKey, albumData);
               }
             }
+          }
+        }
+
+        if (albumData && albumData.tracks) {
+          // Try to match by track number
+          const trackNum = parseInt(trackPick);
+          if (
+            !isNaN(trackNum) &&
+            trackNum > 0 &&
+            trackNum <= albumData.tracks.length
+          ) {
+            return albumData.tracks[trackNum - 1].uri;
+          }
+
+          // Try to match by track name
+          const matchingTrack = albumData.tracks.find(
+            (t) =>
+              t.name.toLowerCase().includes(trackPick.toLowerCase()) ||
+              trackPick.toLowerCase().includes(t.name.toLowerCase())
+          );
+          if (matchingTrack) {
+            return matchingTrack.uri;
           }
         }
       } catch (err) {
@@ -1835,48 +1889,88 @@ module.exports = (app, deps) => {
       result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
     }
 
-    // Collect track IDs
+    // Collect track IDs with parallel processing
     const trackIds = [];
+    const albumCache = new Map();
 
-    for (const item of items) {
-      result.processed++;
+    // Process tracks in parallel batches to respect rate limits
+    const batchSize = 10;
+    for (let i = 0; i < items.length; i += batchSize) {
+      const batch = items.slice(i, i + batchSize);
 
-      const trackPick = item.trackPick || item.track_pick;
-      if (!trackPick || !trackPick.trim()) {
-        result.errors.push(
-          `Skipped "${item.artist} - ${item.album}": no track selected`
-        );
-        continue;
-      }
+      const batchResults = await Promise.allSettled(
+        batch.map(async (item) => {
+          result.processed++;
 
-      try {
-        const trackId = await findTidalTrack(item, auth, user.tidalCountry);
-        if (trackId) {
-          trackIds.push(trackId);
-          result.successful++;
-          result.tracks.push({
-            artist: item.artist,
-            album: item.album,
-            track: trackPick,
-            found: true,
-          });
+          const trackPick = item.trackPick || item.track_pick;
+          if (!trackPick || !trackPick.trim()) {
+            return {
+              success: false,
+              item,
+              error: `Skipped "${item.artist} - ${item.album}": no track selected`,
+            };
+          }
+
+          try {
+            const trackId = await findTidalTrack(
+              item,
+              auth,
+              user.tidalCountry,
+              albumCache
+            );
+            if (trackId) {
+              return {
+                success: true,
+                item,
+                trackId,
+                trackPick,
+              };
+            } else {
+              return {
+                success: false,
+                item,
+                error: `Track not found: "${item.artist} - ${item.album}" - Track ${item.trackPick}`,
+              };
+            }
+          } catch (err) {
+            return {
+              success: false,
+              item,
+              error: `Error searching for "${item.artist} - ${item.album}": ${err.message}`,
+            };
+          }
+        })
+      );
+
+      // Process batch results
+      for (const promiseResult of batchResults) {
+        if (promiseResult.status === 'fulfilled') {
+          const trackResult = promiseResult.value;
+          if (trackResult.success) {
+            trackIds.push(trackResult.trackId);
+            result.successful++;
+            result.tracks.push({
+              artist: trackResult.item.artist,
+              album: trackResult.item.album,
+              track: trackResult.trackPick,
+              found: true,
+            });
+          } else {
+            result.failed++;
+            result.errors.push(trackResult.error);
+            if (trackResult.trackPick) {
+              result.tracks.push({
+                artist: trackResult.item.artist,
+                album: trackResult.item.album,
+                track: trackResult.trackPick,
+                found: false,
+              });
+            }
+          }
         } else {
           result.failed++;
-          result.errors.push(
-            `Track not found: "${item.artist} - ${item.album}" - Track ${item.trackPick}`
-          );
-          result.tracks.push({
-            artist: item.artist,
-            album: item.album,
-            track: trackPick,
-            found: false,
-          });
+          result.errors.push(`Unexpected error: ${promiseResult.reason}`);
         }
-      } catch (err) {
-        result.failed++;
-        result.errors.push(
-          `Error searching for "${item.artist} - ${item.album}": ${err.message}`
-        );
       }
     }
 
@@ -1926,8 +2020,13 @@ module.exports = (app, deps) => {
     return result;
   }
 
-  // Find Tidal track ID
-  async function findTidalTrack(item, auth, countryCode = 'US') {
+  // Find Tidal track ID with caching
+  async function findTidalTrack(
+    item,
+    auth,
+    countryCode = 'US',
+    albumCache = new Map()
+  ) {
     const trackPick = item.trackPick || item.track_pick;
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
@@ -1936,53 +2035,60 @@ module.exports = (app, deps) => {
 
     // First try to search for the album and get tracks
     try {
-      const albumQuery = `${item.artist} ${item.album}`;
-      const albumSearchResp = await fetch(
-        `https://openapi.tidal.com/v2/searchresults/albums?query=${encodeURIComponent(albumQuery)}&countryCode=${countryCode}&limit=1`,
-        { headers }
-      );
+      const cacheKey = `${item.artist}::${item.album}`;
+      let albumData = albumCache.get(cacheKey);
 
-      if (albumSearchResp.ok) {
-        const albumData = await albumSearchResp.json();
-        if (albumData.data && albumData.data.length > 0) {
-          const tidalAlbumId = albumData.data[0].id;
+      if (!albumData) {
+        const albumQuery = `${item.artist} ${item.album}`;
+        const albumSearchResp = await fetch(
+          `https://openapi.tidal.com/v2/searchresults/albums?query=${encodeURIComponent(albumQuery)}&countryCode=${countryCode}&limit=1`,
+          { headers }
+        );
 
-          // Get album tracks
-          const tracksResp = await fetch(
-            `https://openapi.tidal.com/v2/albums/${tidalAlbumId}/items?countryCode=${countryCode}`,
-            { headers }
-          );
+        if (albumSearchResp.ok) {
+          const searchData = await albumSearchResp.json();
+          if (searchData.data && searchData.data.length > 0) {
+            const tidalAlbumId = searchData.data[0].id;
 
-          if (tracksResp.ok) {
-            const tracksData = await tracksResp.json();
+            // Get album tracks
+            const tracksResp = await fetch(
+              `https://openapi.tidal.com/v2/albums/${tidalAlbumId}/items?countryCode=${countryCode}`,
+              { headers }
+            );
 
-            // Try to match by track number
-            const trackNum = parseInt(trackPick);
-            if (
-              !isNaN(trackNum) &&
-              trackNum > 0 &&
-              tracksData.data &&
-              trackNum <= tracksData.data.length
-            ) {
-              return tracksData.data[trackNum - 1].id;
-            }
-
-            // Try to match by track name
-            if (tracksData.data) {
-              const matchingTrack = tracksData.data.find(
-                (t) =>
-                  t.attributes.title
-                    .toLowerCase()
-                    .includes(trackPick.toLowerCase()) ||
-                  trackPick
-                    .toLowerCase()
-                    .includes(t.attributes.title.toLowerCase())
-              );
-              if (matchingTrack) {
-                return matchingTrack.id;
-              }
+            if (tracksResp.ok) {
+              const tracksData = await tracksResp.json();
+              albumData = {
+                id: tidalAlbumId,
+                tracks: tracksData.data || [],
+              };
+              albumCache.set(cacheKey, albumData);
             }
           }
+        }
+      }
+
+      if (albumData && albumData.tracks) {
+        // Try to match by track number
+        const trackNum = parseInt(trackPick);
+        if (
+          !isNaN(trackNum) &&
+          trackNum > 0 &&
+          trackNum <= albumData.tracks.length
+        ) {
+          return albumData.tracks[trackNum - 1].id;
+        }
+
+        // Try to match by track name
+        const matchingTrack = albumData.tracks.find(
+          (t) =>
+            t.attributes.title
+              .toLowerCase()
+              .includes(trackPick.toLowerCase()) ||
+            trackPick.toLowerCase().includes(t.attributes.title.toLowerCase())
+        );
+        if (matchingTrack) {
+          return matchingTrack.id;
         }
       }
     } catch (err) {
@@ -1991,9 +2097,9 @@ module.exports = (app, deps) => {
 
     // Fallback to general track search
     try {
-      const trackQuery = `${item.artist} ${item.album} ${trackPick}`;
+      const query = `${trackPick} ${item.album} ${item.artist}`;
       const searchResp = await fetch(
-        `https://openapi.tidal.com/v2/searchresults/tracks?query=${encodeURIComponent(trackQuery)}&countryCode=${countryCode}&limit=1`,
+        `https://openapi.tidal.com/v2/searchresults/tracks?query=${encodeURIComponent(query)}&countryCode=${countryCode}&limit=1`,
         { headers }
       );
 

@@ -4,6 +4,10 @@ All notable user-facing changes to this project will be documented in this file.
 
 ## Recent Updates
 
+### 2025-10-01
+- **Massively speed up playlist sending with parallel API calls and smart caching**
+
+
 ### 2025-09-17
 - **Enhanced database container stability with health checks, improved resource allocation, and comprehensive error handling**
 
