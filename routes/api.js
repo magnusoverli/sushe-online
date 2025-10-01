@@ -743,6 +743,12 @@ module.exports = (app, deps) => {
       if (needsRefresh) {
         try {
           const { refreshSpotifyToken } = require('../auth-utils');
+          logger.info('Attempting to refresh Spotify token for album search', {
+            currentExpiry: req.user.spotifyAuth.expires_at,
+            now: Date.now(),
+            hasRefreshToken: !!req.user.spotifyAuth.refresh_token,
+          });
+
           const newToken = await refreshSpotifyToken(
             req.user.spotifyAuth.refresh_token
           );
@@ -756,13 +762,28 @@ module.exports = (app, deps) => {
           // Update token in current request
           req.user.spotifyAuth = newToken;
 
-          logger.info(
-            'Spotify token refreshed successfully for user:',
-            req.user.email
-          );
+          // Save session to persist the new token
+          await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+              if (err) reject(err);
+              else resolve();
+            });
+          });
+
+          logger.info('Spotify token refreshed successfully for album search', {
+            newExpiry: newToken.expires_at,
+          });
         } catch (err) {
-          logger.error('Failed to refresh Spotify token:', err);
-          // Continue with the existing token check below
+          logger.error('Failed to refresh Spotify token:', {
+            error: err.message,
+            stack: err.stack,
+            hasRefreshToken: !!req.user.spotifyAuth.refresh_token,
+          });
+          return res.status(401).json({
+            error:
+              'Failed to refresh Spotify token. Please reconnect your Spotify account.',
+            code: 'TOKEN_REFRESH_FAILED',
+          });
         }
       }
     }
@@ -774,7 +795,10 @@ module.exports = (app, deps) => {
         req.user.spotifyAuth.expires_at <= Date.now())
     ) {
       logger.warn('Spotify API request without valid token');
-      return res.status(400).json({ error: 'Not authenticated with Spotify' });
+      return res.status(401).json({
+        error: 'Not authenticated with Spotify',
+        code: 'NOT_AUTHENTICATED',
+      });
     }
 
     const { artist, album } = req.query;
@@ -1258,6 +1282,12 @@ module.exports = (app, deps) => {
         if (needsRefresh) {
           try {
             const { refreshSpotifyToken } = require('../auth-utils');
+            logger.info('Attempting to refresh Spotify token', {
+              currentExpiry: auth.expires_at,
+              now: Date.now(),
+              hasRefreshToken: !!auth.refresh_token,
+            });
+
             const newToken = await refreshSpotifyToken(auth.refresh_token);
 
             await usersAsync.update(
@@ -1268,9 +1298,33 @@ module.exports = (app, deps) => {
             req.user.spotifyAuth = newToken;
             auth = newToken;
 
-            logger.info('Spotify token refreshed for playlist operation');
+            // Save session to persist the new token
+            await new Promise((resolve, reject) => {
+              req.session.save((err) => {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+
+            logger.info(
+              'Spotify token refreshed successfully for playlist operation',
+              {
+                newExpiry: newToken.expires_at,
+              }
+            );
           } catch (err) {
-            logger.error('Failed to refresh Spotify token for playlist:', err);
+            logger.error('Failed to refresh Spotify token for playlist:', {
+              error: err.message,
+              stack: err.stack,
+              hasRefreshToken: !!auth.refresh_token,
+            });
+            return res.status(401).json({
+              error:
+                'Failed to refresh Spotify token. Please reconnect your Spotify account.',
+              code: 'TOKEN_REFRESH_FAILED',
+              service: targetService,
+              details: err.message,
+            });
           }
         }
       }
@@ -1280,7 +1334,7 @@ module.exports = (app, deps) => {
         !auth.access_token ||
         (auth.expires_at && auth.expires_at <= Date.now())
       ) {
-        return res.status(400).json({
+        return res.status(401).json({
           error: `Not authenticated with ${targetService}. Please connect your ${targetService} account.`,
           code: 'NOT_AUTHENTICATED',
           service: targetService,
