@@ -2,14 +2,61 @@
 const fetch = globalThis.fetch || require('node-fetch');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-let mbQueue = Promise.resolve();
-function mbFetch(url, options) {
-  const result = mbQueue.then(() => fetch(url, options));
-  mbQueue = result.then(
-    () => wait(1000), // MusicBrainz official rate limit: 1 request/second
-    () => wait(1000)
-  );
-  return result;
+
+// Smart MusicBrainz request queue with priority and batching
+class MusicBrainzQueue {
+  constructor() {
+    this.queue = [];
+    this.processing = false;
+    this.lastRequestTime = 0;
+    this.minInterval = 1000; // 1 req/second as per MusicBrainz policy
+  }
+
+  async add(url, options, priority = 'normal') {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ url, options, priority, resolve, reject });
+      // Sort by priority: high > normal > low
+      this.queue.sort((a, b) => {
+        const priorityMap = { high: 3, normal: 2, low: 1 };
+        return priorityMap[b.priority] - priorityMap[a.priority];
+      });
+      this.process();
+    });
+  }
+
+  async process() {
+    if (this.processing || this.queue.length === 0) return;
+    
+    this.processing = true;
+
+    while (this.queue.length > 0) {
+      const now = Date.now();
+      const timeSinceLastRequest = now - this.lastRequestTime;
+
+      // Wait if we need to respect rate limit
+      if (timeSinceLastRequest < this.minInterval) {
+        await wait(this.minInterval - timeSinceLastRequest);
+      }
+
+      const { url, options, resolve, reject } = this.queue.shift();
+      this.lastRequestTime = Date.now();
+
+      try {
+        const response = await fetch(url, options);
+        resolve(response);
+      } catch (error) {
+        reject(error);
+      }
+    }
+
+    this.processing = false;
+  }
+}
+
+const mbQueue = new MusicBrainzQueue();
+
+function mbFetch(url, options, priority = 'normal') {
+  return mbQueue.add(url, options, priority);
 }
 
 // Image proxy request queue to prevent overwhelming the server
@@ -657,6 +704,93 @@ module.exports = (app, deps) => {
       } catch (error) {
         logger.error('Deezer artist proxy error:', error);
         res.status(500).json({ error: 'Failed to fetch artist from Deezer' });
+      }
+    }
+  );
+
+  // Proxy for MusicBrainz API to avoid CORS issues and handle rate limiting
+  app.get(
+    '/api/proxy/musicbrainz',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { endpoint, priority } = req.query;
+        if (!endpoint) {
+          return res
+            .status(400)
+            .json({ error: 'Query parameter endpoint is required' });
+        }
+
+        // Determine request priority
+        // high: user-initiated searches, album lists
+        // normal: artist metadata for display
+        // low: background image fetching
+        const requestPriority = priority || 'normal';
+
+        // Use the MusicBrainz rate-limited fetch function with priority
+        const url = `https://musicbrainz.org/ws/2/${endpoint}`;
+        const response = await mbFetch(
+          url,
+          {
+            headers: {
+              'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+              Accept: 'application/json',
+            },
+          },
+          requestPriority
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `MusicBrainz API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('MusicBrainz proxy error:', error);
+        res
+          .status(500)
+          .json({ error: 'Failed to fetch from MusicBrainz API' });
+      }
+    }
+  );
+
+  // Proxy for Wikidata API to avoid CORS issues
+  app.get(
+    '/api/proxy/wikidata',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { entity, property } = req.query;
+        if (!entity || !property) {
+          return res.status(400).json({
+            error: 'Query parameters entity and property are required',
+          });
+        }
+
+        const url = `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${encodeURIComponent(entity)}&property=${encodeURIComponent(property)}&format=json`;
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Wikidata API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('Wikidata proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch from Wikidata API' });
       }
     }
   );

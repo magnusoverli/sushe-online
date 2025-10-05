@@ -1,12 +1,13 @@
 /* eslint-disable no-console */
 // MusicBrainz API integration
-const MUSICBRAINZ_API = 'https://musicbrainz.org/ws/2';
+const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
+const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
 const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
 const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
 
-// Rate limiting - MusicBrainz requires max 1 request per second
+// Rate limiting is now handled on the backend, but we'll keep a small delay for the UI
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1100; // 1.1 seconds to be safe
+const MIN_REQUEST_INTERVAL = 100; // Small delay for UI responsiveness
 
 let searchMode = 'artist';
 
@@ -80,11 +81,13 @@ function warmupConnections() {
   });
 }
 
-// Rate limited fetch ONLY for MusicBrainz
-async function rateLimitedFetch(url) {
+// Fetch via MusicBrainz proxy (rate limiting handled on backend)
+// priority: 'high' (user searches), 'normal' (displayed data), 'low' (background images)
+async function rateLimitedFetch(endpoint, priority = 'normal') {
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
 
+  // Small UI delay to prevent overwhelming the interface
   if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
     await new Promise((resolve) =>
       setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest)
@@ -93,11 +96,9 @@ async function rateLimitedFetch(url) {
 
   lastRequestTime = Date.now();
 
+  const url = `${MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(endpoint)}&priority=${priority}`;
   const response = await fetch(url, {
-    headers: {
-      'User-Agent': USER_AGENT,
-      Accept: 'application/json',
-    },
+    credentials: 'same-origin', // Include cookies for authentication
   });
 
   if (!response.ok) {
@@ -110,8 +111,9 @@ async function rateLimitedFetch(url) {
 // Search for artists
 async function searchArtists(query) {
   // Request aliases and tags for better popularity scoring
-  const url = `${MUSICBRAINZ_API}/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=20&inc=aliases+tags`;
-  const data = await rateLimitedFetch(url);
+  const endpoint = `artist/?query=${encodeURIComponent(query)}&fmt=json&limit=20&inc=aliases+tags`;
+  // HIGH priority: user-initiated search
+  const data = await rateLimitedFetch(endpoint, 'high');
   return data.artists || [];
 }
 
@@ -183,8 +185,9 @@ function prioritizeSearchResults(artists, searchQuery) {
 
 // Get release groups - ONLY pure Albums and EPs (no secondary types)
 async function getArtistReleaseGroups(artistId) {
-  const url = `${MUSICBRAINZ_API}/release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
-  const data = await rateLimitedFetch(url);
+  const endpoint = `release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
+  // HIGH priority: user clicked on artist, wants to see albums
+  const data = await rateLimitedFetch(endpoint, 'high');
 
   let releaseGroups = data['release-groups'] || [];
 
@@ -1302,8 +1305,9 @@ function calculateSimilarity(str1, str2) {
 
 async function getWikidataImageFromMusicBrainz(artistId, artistName) {
   try {
-    const url = `${MUSICBRAINZ_API}/artist/${artistId}?inc=url-rels&fmt=json`;
-    const data = await rateLimitedFetch(url);
+    const endpoint = `artist/${artistId}?inc=url-rels&fmt=json`;
+    // LOW priority: background image fetching, not critical
+    const data = await rateLimitedFetch(endpoint, 'low');
 
     if (!data.relations) {
       return null;
@@ -1321,8 +1325,11 @@ async function getWikidataImageFromMusicBrainz(artistId, artistName) {
     const wikidataId = wikidataRel.url.resource.split('/').pop();
     console.debug(`Found Wikidata ID for "${artistName}": ${wikidataId}`);
 
-    const wikidataUrl = `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${wikidataId}&property=P18&format=json`;
-    const wikidataResponse = await fetch(wikidataUrl);
+    // Use Wikidata proxy
+    const wikidataUrl = `${WIKIDATA_PROXY}?entity=${encodeURIComponent(wikidataId)}&property=P18`;
+    const wikidataResponse = await fetch(wikidataUrl, {
+      credentials: 'same-origin',
+    });
 
     if (!wikidataResponse.ok) {
       return null;
@@ -1442,9 +1449,22 @@ async function searchArtistImage(
 
     let imageUrl = null;
 
+    // Try Deezer FIRST (fast, no rate limiting)
+    console.debug(`Trying Deezer for "${artistName}"`);
+    imageUrl = await searchDeezerArtistImage(artistName, disambiguation);
+
+    if (imageUrl) {
+      console.debug(`✓ Using Deezer image for "${artistName}"`);
+      if (artistId) {
+        artistImageCache.set(artistId, imageUrl);
+      }
+      return imageUrl;
+    }
+
+    // Fallback to Wikidata only if Deezer fails (slower but higher quality)
     if (artistId) {
       console.debug(
-        `Trying MusicBrainz/Wikidata for "${artistName}" (${artistId})`
+        `Deezer failed, trying MusicBrainz/Wikidata for "${artistName}" (${artistId})`
       );
       imageUrl = await getWikidataImageFromMusicBrainz(artistId, artistName);
 
@@ -1453,16 +1473,6 @@ async function searchArtistImage(
         artistImageCache.set(artistId, imageUrl);
         return imageUrl;
       }
-    }
-
-    console.debug(`Falling back to Deezer for "${artistName}"`);
-    imageUrl = await searchDeezerArtistImage(artistName, disambiguation);
-
-    if (imageUrl) {
-      if (artistId) {
-        artistImageCache.set(artistId, imageUrl);
-      }
-      return imageUrl;
     }
 
     if (artistId) {
@@ -1478,46 +1488,16 @@ async function searchArtistImage(
   }
 }
 
-// Display artist results with hover preloading
+// Display artist results with lazy-loaded images
 async function displayArtistResults(artists) {
   modalElements.artistList.innerHTML = '';
 
   // Desktop now uses the same list-style layout as mobile
   modalElements.artistList.className = 'space-y-3';
 
-  // Prefetch all artist images in parallel before rendering
-  // Use Promise.allSettled to prevent one failure from breaking all
-  const imagePromises = artists.map(async (artist) => {
-    try {
-      const displayName = formatArtistDisplayName(artist);
-      const searchName =
-        displayName.original && !displayName.warning
-          ? displayName.primary
-          : artist.name;
-      const imageUrl = await searchArtistImage(
-        searchName,
-        artist.disambiguation,
-        artist.id
-      );
-      return { artist, imageUrl, displayName };
-    } catch (error) {
-      console.error(`Error processing artist ${artist.name}:`, error);
-      // Return artist without image on error
-      return {
-        artist,
-        imageUrl: null,
-        displayName: formatArtistDisplayName(artist),
-      };
-    }
-  });
-
-  const results = await Promise.allSettled(imagePromises);
-  const artistsWithImages = results
-    .filter((r) => r.status === 'fulfilled')
-    .map((r) => r.value);
-
-  // Now render all artists with their images
-  for (const { artist, imageUrl, displayName } of artistsWithImages) {
+  // Render artists immediately with placeholders, then lazy-load images
+  for (const artist of artists) {
+    const displayName = formatArtistDisplayName(artist);
     const artistEl = document.createElement('div');
     artistEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
@@ -1539,31 +1519,27 @@ async function displayArtistResults(artists) {
         : artist.disambiguation;
     }
 
-    // Resolve country code to full name
+    // Resolve country code to full name (async but don't block rendering)
     let countryDisplay = '';
-    if (artist.country) {
-      const fullCountryName = await resolveCountryCode(artist.country);
-      countryDisplay = ` • ${fullCountryName || artist.country}`;
-    }
+    resolveCountryCode(artist.country).then((fullCountryName) => {
+      if (fullCountryName) {
+        countryDisplay = ` • ${fullCountryName}`;
+        const countryEl = artistEl.querySelector('.artist-country');
+        if (countryEl) {
+          countryEl.textContent = `${artist.type || 'Artist'}${countryDisplay}`;
+        }
+      }
+    });
 
-    // Create structure with image already loaded (or placeholder if no image)
-    const imageHtml = imageUrl
-      ? `<img 
-          src="${imageUrl}" 
-          alt="${displayName.primary}" 
-          class="w-16 h-16 rounded-full object-cover"
-          onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
-        >`
-      : `<div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center">
+    // Start with placeholder image
+    artistEl.innerHTML = `
+      <div class="artist-image-container flex-shrink-0">
+        <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-        </div>`;
-
-    artistEl.innerHTML = `
-      <div class="artist-image-container flex-shrink-0">
-        ${imageHtml}
+        </div>
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-medium text-white">
@@ -1571,7 +1547,7 @@ async function displayArtistResults(artists) {
           ${displayName.warning ? '<i class="fas fa-exclamation-triangle text-yellow-500 text-xs ml-2" title="Non-Latin script - no Latin version found"></i>' : ''}
         </div>
         ${secondaryText ? `<div class="text-sm text-gray-400 mt-1">${secondaryText}</div>` : ''}
-        <div class="text-sm text-gray-400 mt-1">${artist.type || 'Artist'}${countryDisplay}</div>
+        <div class="text-sm text-gray-400 mt-1 artist-country">${artist.type || 'Artist'}${artist.country ? ` • ${artist.country}` : ''}</div>
       </div>
       <div class="flex-shrink-0">
         <i class="fas fa-chevron-right text-gray-500"></i>
@@ -1599,6 +1575,47 @@ async function displayArtistResults(artists) {
     artistEl.onclick = () => selectArtist(enhancedArtist);
 
     modalElements.artistList.appendChild(artistEl);
+
+    // Lazy-load artist image in the background
+    const searchName =
+      displayName.original && !displayName.warning
+        ? displayName.primary
+        : artist.name;
+    searchArtistImage(searchName, artist.disambiguation, artist.id)
+      .then((imageUrl) => {
+        if (imageUrl) {
+          const imageContainer = artistEl.querySelector(
+            '.artist-image-container'
+          );
+          if (imageContainer) {
+            imageContainer.innerHTML = `
+              <img 
+                src="${imageUrl}" 
+                alt="${displayName.primary}" 
+                class="w-16 h-16 rounded-full object-cover"
+                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><path d=\\'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\\'></path><circle cx=\\'12\\' cy=\\'7\\' r=\\'4\\'></circle></svg></div>'"
+              >
+            `;
+          }
+        } else {
+          // No image found, remove pulse animation
+          const imageContainer = artistEl.querySelector(
+            '.artist-image-container div'
+          );
+          if (imageContainer) {
+            imageContainer.classList.remove('animate-pulse');
+          }
+        }
+      })
+      .catch(() => {
+        // Error loading image, remove pulse animation
+        const imageContainer = artistEl.querySelector(
+          '.artist-image-container div'
+        );
+        if (imageContainer) {
+          imageContainer.classList.remove('animate-pulse');
+        }
+      });
   }
 
   showArtistResults();
@@ -1743,9 +1760,9 @@ async function getCombinedArtistCountries(artistCredits) {
     if (!id) continue;
 
     try {
-      const artistData = await rateLimitedFetch(
-        `${MUSICBRAINZ_API}/artist/${id}?fmt=json`
-      );
+      const endpoint = `artist/${id}?fmt=json`;
+      // NORMAL priority: needed for display but not critical
+      const artistData = await rateLimitedFetch(endpoint, 'normal');
       if (artistData && artistData.country) {
         const name = await resolveCountryCode(artistData.country);
         if (name && !countries.includes(name)) {
@@ -1761,8 +1778,9 @@ async function getCombinedArtistCountries(artistCredits) {
 }
 
 async function searchAlbums(query) {
-  const url = `${MUSICBRAINZ_API}/release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=20`;
-  const data = await rateLimitedFetch(url);
+  const endpoint = `release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=20`;
+  // HIGH priority: user-initiated album search
+  const data = await rateLimitedFetch(endpoint, 'high');
 
   let releaseGroups = data['release-groups'] || [];
 
