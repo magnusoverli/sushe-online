@@ -1,4 +1,8 @@
 /* eslint-disable no-console */
+// Lazy loading module cache
+let musicServicesModule = null;
+let importExportModule = null;
+
 // Global variables
 let lists = {};
 let currentList = '';
@@ -170,59 +174,11 @@ function hideConfirmation() {
 }
 
 // Show modal to choose a music service
-function showServicePicker(hasSpotify, hasTidal) {
-  const modal = document.getElementById('serviceSelectModal');
-  const spotifyBtn = document.getElementById('serviceSpotifyBtn');
-  const tidalBtn = document.getElementById('serviceTidalBtn');
-  const cancelBtn = document.getElementById('serviceCancelBtn');
-
-  if (!modal || !spotifyBtn || !tidalBtn || !cancelBtn) {
-    return Promise.resolve(null);
+async function showServicePicker(hasSpotify, hasTidal) {
+  if (!musicServicesModule) {
+    musicServicesModule = await import('./modules/music-services.js');
   }
-
-  spotifyBtn.classList.toggle('hidden', !hasSpotify);
-  tidalBtn.classList.toggle('hidden', !hasTidal);
-
-  modal.classList.remove('hidden');
-
-  return new Promise((resolve) => {
-    const cleanup = () => {
-      modal.classList.add('hidden');
-      spotifyBtn.onclick = null;
-      tidalBtn.onclick = null;
-      cancelBtn.onclick = null;
-      modal.onclick = null;
-      document.removeEventListener('keydown', escHandler);
-    };
-
-    const escHandler = (e) => {
-      if (e.key === 'Escape') {
-        cleanup();
-        resolve(null);
-      }
-    };
-
-    spotifyBtn.onclick = () => {
-      cleanup();
-      resolve('spotify');
-    };
-    tidalBtn.onclick = () => {
-      cleanup();
-      resolve('tidal');
-    };
-    cancelBtn.onclick = () => {
-      cleanup();
-      resolve(null);
-    };
-    modal.onclick = (e) => {
-      if (e.target === modal) {
-        cleanup();
-        resolve(null);
-      }
-    };
-
-    document.addEventListener('keydown', escHandler);
-  });
+  return musicServicesModule.showServicePicker(hasSpotify, hasTidal);
 }
 
 // Standardize date formats for release dates
@@ -350,83 +306,11 @@ async function loadCountries() {
 }
 
 async function downloadListAsJSON(listName) {
-  try {
-    // Get the list data
-    const listData = lists[listName];
-
-    if (!listData) {
-      showToast('List not found', 'error');
-      return;
-    }
-
-    // Create a copy with rank added based on position
-    const exportData = listData.map((album, index) => {
-      const exported = { ...album };
-      exported.rank = index + 1;
-      exported.points = getPointsForPosition(index + 1);
-      return exported;
-    });
-
-    // Convert to JSON with pretty formatting
-    const jsonStr = JSON.stringify(exportData, null, 2);
-
-    // Create blob and file
-    const blob = new Blob([jsonStr], { type: 'application/json' });
-    const fileName = `${listName}.json`;
-
-    // Check if we're on mobile and if Web Share API is available
-    const isMobile =
-      /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent
-      );
-
-    if (isMobile && navigator.share) {
-      try {
-        // Create a File object (required for sharing files)
-        const file = new File([blob], fileName, { type: 'application/json' });
-
-        // Check if the browser can share files
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            files: [file],
-            title: listName,
-            text: `Album list export: ${listName}`,
-          });
-          showToast('List shared successfully');
-          return;
-        }
-      } catch (shareError) {
-        console.warn('Share API failed, falling back to download:', shareError);
-        // Fall through to regular download
-      }
-    }
-
-    // Regular download for desktop or if share fails
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-
-    // For iOS Safari, we need to handle this slightly differently
-    if (window.navigator.userAgent.match(/iPhone|iPad|iPod/i)) {
-      // iOS devices
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-    }
-
-    document.body.appendChild(a);
-    a.click();
-
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
-
-    showToast(`Downloaded "${listName}"`);
-  } catch (error) {
-    showToast('Error downloading list', 'error');
+  if (!importExportModule) {
+    showToast('Loading export module...', 'info', 1000);
+    importExportModule = await import('./modules/import-export.js');
   }
+  return importExportModule.downloadListAsJSON(listName, lists);
 }
 
 // Test function to verify confirmation dialog works
@@ -440,130 +324,12 @@ window.testConfirmation = async function () {
   return result;
 };
 
-// Update Spotify/Tidal playlist for the given list
 async function updatePlaylist(listName) {
-  try {
-    // First check if playlist exists
-    showToast('Checking for existing playlist...', 'info');
-
-    let checkResult;
-    try {
-      checkResult = await apiCall(
-        `/api/playlists/${encodeURIComponent(listName)}`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ action: 'check' }),
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    } catch (checkError) {
-      // If check fails, proceed with update anyway
-      checkResult = { exists: false };
-    }
-
-    // If playlist exists, ask for confirmation
-    if (checkResult && checkResult.exists === true) {
-      const confirmed = await showConfirmation(
-        'Replace Existing Playlist?',
-        `A playlist named "${listName}" already exists in your music service. Do you want to replace it with the current list?`,
-        'This will replace all tracks in the existing playlist.',
-        'Replace'
-      );
-
-      if (!confirmed) {
-        showToast('Playlist update cancelled', 'info');
-        return;
-      }
-    }
-
-    // Show progress indicator
-    showToast('Updating playlist...', 'info');
-
-    // Create/update the playlist
-    const result = await apiCall(
-      `/api/playlists/${encodeURIComponent(listName)}`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ action: 'update' }),
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-
-    // Show success message with results
-    if (result.playlistUrl) {
-      const action = result.replacedExisting ? 'replaced' : 'created';
-      showToast(
-        `Playlist ${action} successfully! ${result.successful || 0} tracks added, ${result.failed || 0} failed`,
-        'success'
-      );
-    } else {
-      showToast('Playlist updated successfully!', 'success');
-    }
-  } catch (error) {
-    console.error('Error updating playlist:', error);
-
-    // Handle specific error cases
-    if (error.response) {
-      try {
-        const errorData = await error.response.json();
-
-        if (errorData.code === 'NO_SERVICE') {
-          // Show a more helpful message with action button
-          const toastEl = showToast(
-            'No music service selected! Please choose Spotify or Tidal as your preferred service in Settings.',
-            'error',
-            8000 // Show for 8 seconds
-          );
-
-          // Add a button to go to settings
-          if (toastEl && typeof toastEl === 'object') {
-            const actionBtn = document.createElement('button');
-            actionBtn.className =
-              'ml-3 text-blue-400 hover:text-blue-300 underline text-sm';
-            actionBtn.textContent = 'Go to Settings';
-            actionBtn.onclick = () => (window.location.href = '/settings');
-            toastEl.querySelector('.toast-message')?.appendChild(actionBtn);
-          }
-          return;
-        } else if (errorData.code === 'NOT_AUTHENTICATED') {
-          showToast(
-            `Please reconnect your ${errorData.service || 'music'} account in settings`,
-            'error'
-          );
-          return;
-        }
-
-        // Show the actual error message if available
-        if (errorData.error) {
-          // For NO_SERVICE errors, add a link to settings
-          if (errorData.code === 'NO_SERVICE') {
-            const toastEl = showToast(errorData.error, 'error', 8000);
-            if (toastEl && toastEl.querySelector) {
-              const actionBtn = document.createElement('a');
-              actionBtn.href = '/settings';
-              actionBtn.className =
-                'ml-3 text-blue-400 hover:text-blue-300 underline text-sm';
-              actionBtn.textContent = 'Go to Settings →';
-              const messageEl =
-                toastEl.querySelector('.text-sm') ||
-                toastEl.querySelector('div');
-              if (messageEl) messageEl.appendChild(actionBtn);
-            }
-          } else {
-            showToast(errorData.error, 'error');
-          }
-          return;
-        }
-      } catch (parseError) {
-        // If we can't parse the error, show generic message
-      }
-    }
-
-    showToast(
-      'Error updating playlist. Please check your music service connection.',
-      'error'
-    );
+  if (!musicServicesModule) {
+    showToast('Loading playlist integration...', 'info', 1000);
+    musicServicesModule = await import('./modules/music-services.js');
   }
+  return musicServicesModule.updatePlaylist(listName);
 }
 window.updatePlaylist = updatePlaylist;
 
@@ -1285,6 +1051,7 @@ async function apiCall(url, options = {}) {
     throw error;
   }
 }
+window.apiCall = apiCall;
 
 // Fetch link preview metadata
 async function fetchLinkPreview(url) {

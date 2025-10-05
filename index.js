@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
-const FileStore = require('session-file-store')(session);
+const pgSession = require('connect-pg-simple')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 // Datastore setup is handled in ./db which uses PostgreSQL
@@ -432,15 +432,16 @@ app.use(express.json({ limit: '10mb' }));
 
 // Request logging is handled by logger.requestLogger() middleware
 
-// Session middleware
+// Session middleware with PostgreSQL store
 app.use(
   session({
-    store: new FileStore({
-      path: path.join(dataDir, 'sessions'),
-      ttl: 86400, // 1 day in seconds
-      retries: 0,
-      reapInterval: 600, // Clean up expired sessions every 10 minutes
-      logFn: function () {}, // Disable verbose logging
+    store: new pgSession({
+      pool: pool,
+      tableName: 'session',
+      createTableIfMissing: true,
+      pruneSessionInterval: 600, // Clean up expired sessions every 10 minutes (in seconds)
+      errorLog: (err) =>
+        logger.error('Session store error', { error: err.message }),
     }),
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
@@ -449,7 +450,7 @@ app.use(
       secure: false,
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
-      sameSite: 'lax', // Explicitly set SameSite for mobile compatibility
+      sameSite: 'lax',
     },
     genid: function (_req) {
       return require('crypto').randomBytes(16).toString('hex');
@@ -682,7 +683,7 @@ app.get('/health/db', async (req, res) => {
       status: 'unhealthy',
       database: 'error',
       error: 'Health check failed',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
   }
 });
@@ -692,7 +693,7 @@ app.get('/health', (req, res) => {
   res.render('health');
 });
 
-// General health check API endpoint  
+// General health check API endpoint
 app.get('/api/health', async (req, res) => {
   try {
     const dbHealth = await healthCheck(pool);
@@ -702,9 +703,9 @@ app.get('/api/health', async (req, res) => {
       database: dbHealth,
       uptime: process.uptime(),
       memory: process.memoryUsage(),
-      version: process.version
+      version: process.version,
     };
-    
+
     const statusCode = health.status === 'healthy' ? 200 : 503;
     res.status(statusCode).json(health);
   } catch (error) {
@@ -712,7 +713,7 @@ app.get('/api/health', async (req, res) => {
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),
-      error: 'Health check failed'
+      error: 'Health check failed',
     });
   }
 });
@@ -757,15 +758,6 @@ app.use((err, req, res, next) => {
     logger.error('Headers already sent, cannot send error response', {
       error: err.message,
     });
-    return;
-  }
-
-  // For session-related errors, try to continue
-  if (err.code === 'EPERM' && err.path && err.path.includes('sessions')) {
-    logger.warn('Session file error, attempting to continue...', {
-      path: err.path,
-    });
-    // Don't send error response for session file issues
     return;
   }
 

@@ -376,23 +376,13 @@ module.exports = (app, deps) => {
           logger.error('Error calculating DB size:', e);
         }
 
-        // Count active sessions asynchronously
+        // Count active sessions from PostgreSQL
         let activeSessions = 0;
         try {
-          const sessionPath = path.join(dataDir, 'sessions');
-          const fs = require('fs').promises;
-
-          if (
-            await fs
-              .access(sessionPath)
-              .then(() => true)
-              .catch(() => false)
-          ) {
-            const sessionFiles = await fs.readdir(sessionPath);
-            activeSessions = sessionFiles.filter((f) =>
-              f.endsWith('.json')
-            ).length;
-          }
+          const { rows } = await pool.query(
+            'SELECT COUNT(*) AS count FROM session WHERE expire > NOW()'
+          );
+          activeSessions = parseInt(rows[0].count, 10);
         } catch (e) {
           logger.error('Error counting sessions:', e);
         }

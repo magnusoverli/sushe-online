@@ -43,12 +43,14 @@
     "changelog": "node scripts/update-changelog.js",
     "changelog:quick": "node scripts/update-changelog.js",
     "changelog:git": "node scripts/update-changelog.js --git",
-    "changelog:setup": "bash scripts/setup-git-hooks.sh"
+    "changelog:setup": "bash scripts/setup-git-hooks.sh",
+    "optimize:icons": "bash scripts/optimize-icons.sh"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "chokidar": "^4.0.3",
     "compression": "^1.7.4",
+    "connect-pg-simple": "^10.0.0",
     "csrf": "^3.1.0",
     "dotenv": "^16.5.0",
     "ejs": "^3.1.10",
@@ -60,7 +62,6 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.11.3",
-    "session-file-store": "^1.5.0",
     "sortablejs": "^1.15.6"
   },
   "devDependencies": {
