@@ -643,7 +643,7 @@ module.exports = (app, deps) => {
             .json({ error: 'Query parameter q is required' });
         }
 
-        const url = `https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=5`;
+        const url = `https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=30`;
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -681,9 +681,11 @@ module.exports = (app, deps) => {
           'is4-ssl.mzstatic.com',
           'is5-ssl.mzstatic.com',
           'e-cdns-images.dzcdn.net',
-          'cdn-images.dzcdn.net', // Added correct Deezer CDN host
+          'cdn-images.dzcdn.net',
           'coverartarchive.org',
           'archive.org',
+          'commons.wikimedia.org',
+          'upload.wikimedia.org',
         ];
 
         const urlObj = new URL(url);

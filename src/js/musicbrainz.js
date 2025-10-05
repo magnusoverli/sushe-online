@@ -13,6 +13,9 @@ let searchMode = 'artist';
 // Cache for searches to avoid duplicate requests
 const deezerCache = new Map();
 
+// Cache for artist images to avoid duplicate requests (keyed by artist ID)
+const artistImageCache = new Map();
+
 // Concurrent request limits for Deezer
 const DEEZER_BATCH_SIZE = 15;
 
@@ -106,8 +109,8 @@ async function rateLimitedFetch(url) {
 
 // Search for artists
 async function searchArtists(query) {
-  // Request aliases in the inc parameter
-  const url = `${MUSICBRAINZ_API}/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=10&inc=aliases`;
+  // Request aliases and tags for better popularity scoring
+  const url = `${MUSICBRAINZ_API}/artist/?query=${encodeURIComponent(query)}&fmt=json&limit=20&inc=aliases+tags`;
   const data = await rateLimitedFetch(url);
   return data.artists || [];
 }
@@ -120,6 +123,21 @@ function prioritizeSearchResults(artists, searchQuery) {
     .map((artist) => {
       let score = 0;
       const displayName = formatArtistDisplayName(artist);
+
+      // HIGHEST priority: MusicBrainz native score (includes popularity/quality)
+      // This score is typically 0-100, multiply by 10 to make it most significant
+      if (artist.score) {
+        score += artist.score * 10;
+      }
+
+      // Popularity indicators: Tags count (more tags = better documented = more popular)
+      if (artist.tags && Array.isArray(artist.tags)) {
+        const tagBonus = Math.min(artist.tags.length * 5, 50);
+        score += tagBonus;
+      }
+
+      // Popularity indicator: Has Wikidata link (well-documented artists)
+      // Note: We don't have this in search results, but keeping for future enhancement
 
       // High priority: Exact name match in Latin
       if (artist.name.toLowerCase() === query) {
@@ -152,7 +170,13 @@ function prioritizeSearchResults(artists, searchQuery) {
         score += 10;
       }
 
-      return { ...artist, _searchScore: score };
+      const result = { ...artist, _searchScore: score };
+
+      console.debug(
+        `Artist: "${artist.name}"${artist.disambiguation ? ` (${artist.disambiguation})` : ''} - Score: ${score.toFixed(0)} (MB: ${artist.score || 0}, Tags: ${artist.tags?.length || 0})`
+      );
+
+      return result;
     })
     .sort((a, b) => b._searchScore - a._searchScore);
 }
@@ -1230,8 +1254,94 @@ function showAlbumResults() {
   modalElements.albumResults.classList.remove('hidden');
 }
 
-// Search Deezer for artist image using direct artist search endpoint
-async function searchArtistImage(artistName) {
+function calculateLevenshteinDistance(str1, str2) {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  const matrix = Array(len1 + 1)
+    .fill(null)
+    .map(() => Array(len2 + 1).fill(0));
+
+  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
+  for (let j = 0; j <= len2; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[len1][len2];
+}
+
+function calculateSimilarity(str1, str2) {
+  const distance = calculateLevenshteinDistance(
+    str1.toLowerCase(),
+    str2.toLowerCase()
+  );
+  const maxLength = Math.max(str1.length, str2.length);
+  return maxLength === 0 ? 1 : 1 - distance / maxLength;
+}
+
+async function getWikidataImageFromMusicBrainz(artistId, artistName) {
+  try {
+    const url = `${MUSICBRAINZ_API}/artist/${artistId}?inc=url-rels&fmt=json`;
+    const data = await rateLimitedFetch(url);
+
+    if (!data.relations) {
+      return null;
+    }
+
+    const wikidataRel = data.relations.find(
+      (rel) => rel.type === 'wikidata' && rel.url && rel.url.resource
+    );
+
+    if (!wikidataRel) {
+      console.debug(`No Wikidata link found for "${artistName}" (${artistId})`);
+      return null;
+    }
+
+    const wikidataId = wikidataRel.url.resource.split('/').pop();
+    console.debug(`Found Wikidata ID for "${artistName}": ${wikidataId}`);
+
+    const wikidataUrl = `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${wikidataId}&property=P18&format=json`;
+    const wikidataResponse = await fetch(wikidataUrl);
+
+    if (!wikidataResponse.ok) {
+      return null;
+    }
+
+    const wikidataData = await wikidataResponse.json();
+
+    if (
+      wikidataData.claims &&
+      wikidataData.claims.P18 &&
+      wikidataData.claims.P18[0]
+    ) {
+      const imageFilename = wikidataData.claims.P18[0].mainsnak.datavalue.value;
+      const encodedFilename = encodeURIComponent(
+        imageFilename.replace(/ /g, '_')
+      );
+      const imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodedFilename}?width=500`;
+
+      console.debug(
+        `Found Wikidata image for "${artistName}": ${imageFilename}`
+      );
+      return imageUrl;
+    }
+
+    return null;
+  } catch (error) {
+    console.error(`Error fetching Wikidata image for "${artistName}":`, error);
+    return null;
+  }
+}
+
+async function searchDeezerArtistImage(artistName, disambiguation = null) {
   try {
     const searchQuery = artistName.replace(/[^\w\s]/g, ' ').trim();
     const url = `/api/proxy/deezer/artist?q=${encodeURIComponent(searchQuery)}`;
@@ -1242,7 +1352,7 @@ async function searchArtistImage(artistName) {
 
     if (!response.ok) {
       console.warn(
-        `Artist image fetch failed for "${artistName}": ${response.status}`
+        `Deezer artist image fetch failed for "${artistName}": ${response.status}`
       );
       return null;
     }
@@ -1251,43 +1361,106 @@ async function searchArtistImage(artistName) {
 
     if (data.data && data.data.length > 0) {
       const searchNameLower = artistName.toLowerCase();
+      const SIMILARITY_THRESHOLD = 0.7;
 
-      // Find exact match first
       let bestMatch = data.data.find(
         (artist) => artist.name.toLowerCase() === searchNameLower
       );
 
-      // Fall back to partial match
-      if (!bestMatch) {
-        bestMatch = data.data.find((artist) => {
-          const artistNameLower = artist.name.toLowerCase();
-          return (
-            artistNameLower.includes(searchNameLower) ||
-            searchNameLower.includes(artistNameLower)
-          );
-        });
-      }
-
-      // Use first result if no good match
-      if (!bestMatch && data.data[0]) {
-        bestMatch = data.data[0];
-      }
-
       if (bestMatch) {
-        // Use picture_xl for better quality, fallback to picture_medium
+        console.debug(
+          `Exact Deezer match found for "${artistName}"${disambiguation ? ` (${disambiguation})` : ''}: ${bestMatch.name}`
+        );
+
         const imageUrl =
           bestMatch.picture_xl ||
           bestMatch.picture_big ||
           bestMatch.picture_medium;
-        if (imageUrl) {
-          return imageUrl;
-        }
+        return imageUrl || null;
+      }
+
+      const candidates = data.data.map((deezerArtist) => ({
+        artist: deezerArtist,
+        similarity: calculateSimilarity(artistName, deezerArtist.name),
+      }));
+
+      candidates.sort((a, b) => b.similarity - a.similarity);
+
+      const topCandidate = candidates[0];
+
+      if (topCandidate.similarity >= SIMILARITY_THRESHOLD) {
+        console.debug(
+          `Similar Deezer match found for "${artistName}"${disambiguation ? ` (${disambiguation})` : ''}: ${topCandidate.artist.name} (similarity: ${topCandidate.similarity.toFixed(2)})`
+        );
+
+        const imageUrl =
+          topCandidate.artist.picture_xl ||
+          topCandidate.artist.picture_big ||
+          topCandidate.artist.picture_medium;
+        return imageUrl || null;
+      } else {
+        console.warn(
+          `No good Deezer match found for "${artistName}"${disambiguation ? ` (${disambiguation})` : ''}. Best candidate: ${topCandidate.artist.name} (similarity: ${topCandidate.similarity.toFixed(2)}, threshold: ${SIMILARITY_THRESHOLD})`
+        );
       }
     }
 
     return null;
   } catch (error) {
+    console.error(
+      `Error fetching Deezer artist image for "${artistName}":`,
+      error
+    );
+    return null;
+  }
+}
+
+async function searchArtistImage(
+  artistName,
+  disambiguation = null,
+  artistId = null
+) {
+  try {
+    if (artistId && artistImageCache.has(artistId)) {
+      const cached = artistImageCache.get(artistId);
+      console.debug(`Using cached image for "${artistName}" (${artistId})`);
+      return cached;
+    }
+
+    let imageUrl = null;
+
+    if (artistId) {
+      console.debug(
+        `Trying MusicBrainz/Wikidata for "${artistName}" (${artistId})`
+      );
+      imageUrl = await getWikidataImageFromMusicBrainz(artistId, artistName);
+
+      if (imageUrl) {
+        console.debug(`✓ Using Wikidata image for "${artistName}"`);
+        artistImageCache.set(artistId, imageUrl);
+        return imageUrl;
+      }
+    }
+
+    console.debug(`Falling back to Deezer for "${artistName}"`);
+    imageUrl = await searchDeezerArtistImage(artistName, disambiguation);
+
+    if (imageUrl) {
+      if (artistId) {
+        artistImageCache.set(artistId, imageUrl);
+      }
+      return imageUrl;
+    }
+
+    if (artistId) {
+      artistImageCache.set(artistId, null);
+    }
+    return null;
+  } catch (error) {
     console.error('Error fetching artist image:', error);
+    if (artistId) {
+      artistImageCache.set(artistId, null);
+    }
     return null;
   }
 }
@@ -1308,7 +1481,11 @@ async function displayArtistResults(artists) {
         displayName.original && !displayName.warning
           ? displayName.primary
           : artist.name;
-      const imageUrl = await searchArtistImage(searchName);
+      const imageUrl = await searchArtistImage(
+        searchName,
+        artist.disambiguation,
+        artist.id
+      );
       return { artist, imageUrl, displayName };
     } catch (error) {
       console.error(`Error processing artist ${artist.name}:`, error);
