@@ -397,14 +397,45 @@ app.use((req, res, next) => {
 // Basic Express middleware
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
+// Smart HTTP caching for static assets (before compression and no-cache middleware)
+app.use((req, res, next) => {
+  const path = req.path;
+
+  if (path.match(/\.(js|css|png|jpg|jpeg|gif|webp|svg|woff2?|ttf|eot|ico)$/)) {
+    res.set({
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Cache-Strategy': 'static-asset',
+    });
+  } else if (path.match(/\.html?$/)) {
+    res.set({
+      'Cache-Control': 'public, max-age=300',
+      'X-Cache-Strategy': 'html-short',
+    });
+  } else if (path.startsWith('/api/')) {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'X-Cache-Strategy': 'api-no-cache',
+    });
+  } else if (path === '/' || !path.includes('.')) {
+    res.set({
+      'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+      Pragma: 'no-cache',
+      Expires: '0',
+      'X-Cache-Strategy': 'dynamic-no-cache',
+    });
+  }
+
+  next();
+});
+
 // Conditional compression - skip for small API responses
 app.use((req, res, next) => {
-  // Skip compression for small API responses to reduce CPU overhead
   if (req.path.startsWith('/api/') && req.method === 'GET') {
     const originalJson = res.json;
     res.json = function (data) {
       const jsonString = JSON.stringify(data);
-      // Only compress responses larger than 1KB
       if (jsonString.length > 1024) {
         compression()(req, res, () => {
           originalJson.call(this, data);
@@ -419,14 +450,6 @@ app.use((req, res, next) => {
 
 // Apply compression for all other requests
 app.use(compression());
-app.use((req, res, next) => {
-  res.set({
-    'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-    Pragma: 'no-cache',
-    Expires: '0',
-  });
-  next();
-});
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
