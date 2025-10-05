@@ -1037,6 +1037,7 @@ async function apiCall(url, options = {}) {
 
     if (!response.ok) {
       if (response.status === 401) {
+        clearListsCache();
         window.location.href = '/login';
         return;
       }
@@ -1088,13 +1089,73 @@ function attachLinkPreview(container, comment) {
     .catch(() => previewEl.remove());
 }
 
+// Clear lists cache (useful for logout or cache corruption)
+function clearListsCache() {
+  try {
+    localStorage.removeItem('lists_cache');
+    localStorage.removeItem('lists_cache_timestamp');
+  } catch (error) {
+    console.warn('Failed to clear lists cache:', error);
+  }
+}
+
 // Load lists from server
 async function loadLists() {
   try {
-    lists = await apiCall('/api/lists');
-    window.lists = lists;
-    updateListNav();
+    const CACHE_KEY = 'lists_cache';
+    const CACHE_TIMESTAMP_KEY = 'lists_cache_timestamp';
+    const CACHE_TTL = 60000;
+
+    let loadedFromCache = false;
+
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+
+      if (cached) {
+        const cacheAge = Date.now() - (parseInt(cacheTimestamp) || 0);
+        lists = JSON.parse(cached);
+
+        if (typeof lists === 'object' && lists !== null) {
+          window.lists = lists;
+          updateListNav();
+          loadedFromCache = true;
+        } else {
+          localStorage.removeItem(CACHE_KEY);
+          localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+        }
+      }
+    } catch (cacheError) {
+      console.warn('Cache read failed, clearing:', cacheError);
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(CACHE_TIMESTAMP_KEY);
+    }
+
+    const shouldRefresh =
+      !loadedFromCache ||
+      Date.now() - (parseInt(localStorage.getItem(CACHE_TIMESTAMP_KEY)) || 0) >
+        CACHE_TTL;
+
+    if (shouldRefresh) {
+      const freshLists = await apiCall('/api/lists');
+
+      const hasChanges = JSON.stringify(freshLists) !== JSON.stringify(lists);
+
+      if (hasChanges || !loadedFromCache) {
+        lists = freshLists;
+        window.lists = lists;
+        updateListNav();
+
+        try {
+          localStorage.setItem(CACHE_KEY, JSON.stringify(lists));
+          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
+        } catch (storageError) {
+          console.warn('Failed to cache lists:', storageError);
+        }
+      }
+    }
   } catch (error) {
+    console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
   }
 }
@@ -1102,7 +1163,6 @@ async function loadLists() {
 // Save list to server
 async function saveList(name, data) {
   try {
-    // Clean up any stored points/ranks before saving
     const cleanedData = data.map((album) => {
       const cleaned = { ...album };
       delete cleaned.points;
@@ -1114,7 +1174,15 @@ async function saveList(name, data) {
       method: 'POST',
       body: JSON.stringify({ data: cleanedData }),
     });
+
     lists[name] = cleanedData;
+
+    try {
+      localStorage.setItem('lists_cache', JSON.stringify(lists));
+      localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+    } catch (storageError) {
+      console.warn('Failed to update cache after save:', storageError);
+    }
   } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
@@ -1311,15 +1379,19 @@ function initializeContextMenu() {
           method: 'DELETE',
         });
 
-        // Remove from local data
         delete lists[currentContextList];
 
-        // If we're currently viewing this list, clear the view
+        try {
+          localStorage.setItem('lists_cache', JSON.stringify(lists));
+          localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+        } catch (storageError) {
+          console.warn('Failed to update cache after delete:', storageError);
+        }
+
         if (currentList === currentContextList) {
           currentList = null;
           window.currentList = currentList;
 
-          // Hide the list name in header
           const headerSeparator = document.getElementById('headerSeparator');
           const headerListName = document.getElementById('headerListName');
           const headerAddAlbumBtn =
@@ -1339,7 +1411,6 @@ function initializeContextMenu() {
           `;
         }
 
-        // Update the navigation
         updateListNav();
 
         showToast(`List "${currentContextList}" deleted`);
@@ -1926,25 +1997,27 @@ function initializeRenameList() {
       // Create new list with new name
       await saveList(newName, listData);
 
-      // Delete old list
       await apiCall(`/api/lists/${encodeURIComponent(oldName)}`, {
         method: 'DELETE',
       });
 
-      // Update local data
       delete lists[oldName];
 
-      // If we're currently viewing this list, update the view
+      try {
+        localStorage.setItem('lists_cache', JSON.stringify(lists));
+        localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+      } catch (storageError) {
+        console.warn('Failed to update cache after rename:', storageError);
+      }
+
       if (currentList === oldName) {
         currentList = newName;
         window.currentList = currentList;
         selectList(newName);
       }
 
-      // Update navigation
       updateListNav();
 
-      // Close modal
       closeModal();
 
       showToast(`List renamed from "${oldName}" to "${newName}"`);
@@ -3883,6 +3956,33 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Failed to parse cached list names:', err);
     }
   }
+
+  // Cross-tab synchronization for cache updates
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'lists_cache' && e.newValue) {
+      try {
+        const updatedLists = JSON.parse(e.newValue);
+        if (updatedLists && typeof updatedLists === 'object') {
+          lists = updatedLists;
+          window.lists = lists;
+          updateListNav();
+
+          if (currentList && !lists[currentList]) {
+            currentList = null;
+            window.currentList = null;
+            document.getElementById('albumContainer').innerHTML = `
+              <div class="text-center text-gray-500 mt-20">
+                <p class="text-xl mb-2">No list selected</p>
+                <p class="text-sm">Create or import a list to get started</p>
+              </div>
+            `;
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to sync lists from other tab:', err);
+      }
+    }
+  });
 
   // Load all required data and initialize features
   Promise.all([loadGenres(), loadCountries(), loadLists()])
