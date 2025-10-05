@@ -1306,7 +1306,7 @@ const spotifyTemplate = (user) => `
                   <i class="fas fa-edit mr-3 text-gray-400"></i>Rename List
                 </button>
                 
-                <button onclick="if(confirm('Delete this list?')) { document.getElementById('deleteListOption').click(); currentContextList='\${listName}'; } this.closest('.fixed').remove();" 
+                <button onclick="currentContextList='\${listName}'; showConfirmation('Delete List', 'Are you sure you want to delete the list \\'' + '\${listName}' + '\\'?', 'This action cannot be undone.', 'Delete', () => document.getElementById('deleteListOption').click()); this.closest('.fixed').remove();" 
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
                   <i class="fas fa-trash mr-3"></i>Delete List
                 </button>

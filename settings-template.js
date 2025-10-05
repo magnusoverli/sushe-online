@@ -618,7 +618,7 @@ const settingsTemplate = (req, options) => {
     /* Toast styling */
     .toast {
       position: fixed;
-      top: 1rem;
+      top: 5rem;
       right: 1rem;
       padding: 1rem 1.5rem;
       border-radius: 0.5rem;

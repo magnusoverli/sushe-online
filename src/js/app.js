@@ -141,6 +141,7 @@ function showConfirmation(
       confirmBtn.removeEventListener('click', handleConfirm);
       cancelBtn.removeEventListener('click', handleCancel);
       modal.removeEventListener('click', handleBackdropClick);
+      document.removeEventListener('keydown', handleEscKey);
       resolve(true);
     };
 
@@ -149,6 +150,7 @@ function showConfirmation(
       confirmBtn.removeEventListener('click', handleConfirm);
       cancelBtn.removeEventListener('click', handleCancel);
       modal.removeEventListener('click', handleBackdropClick);
+      document.removeEventListener('keydown', handleEscKey);
       resolve(false);
     };
 
@@ -158,9 +160,16 @@ function showConfirmation(
       }
     };
 
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+
     confirmBtn.addEventListener('click', handleConfirm);
     cancelBtn.addEventListener('click', handleCancel);
     modal.addEventListener('click', handleBackdropClick);
+    document.addEventListener('keydown', handleEscKey);
 
     modal.classList.remove('hidden');
     setTimeout(() => confirmBtn.focus(), 100);
@@ -1368,12 +1377,15 @@ function initializeContextMenu() {
 
     if (!currentContextList) return;
 
-    // Confirm deletion
-    if (
-      confirm(
-        `Are you sure you want to delete the list "${currentContextList}"? This cannot be undone.`
-      )
-    ) {
+    // Confirm deletion using custom modal
+    const confirmed = await showConfirmation(
+      'Delete List',
+      `Are you sure you want to delete the list "${currentContextList}"?`,
+      'This action cannot be undone.',
+      'Delete'
+    );
+
+    if (confirmed) {
       try {
         await apiCall(`/api/lists/${encodeURIComponent(currentContextList)}`, {
           method: 'DELETE',
@@ -4054,40 +4066,8 @@ document.addEventListener('DOMContentLoaded', () => {
         };
       }
 
-      // Initialize confirmation modal handlers
-      const confirmModal = document.getElementById('confirmationModal');
-      const cancelBtn = document.getElementById('confirmationCancelBtn');
-      const confirmBtn = document.getElementById('confirmationConfirmBtn');
-
-      if (confirmModal && cancelBtn && confirmBtn) {
-        // Cancel button
-        cancelBtn.onclick = hideConfirmation;
-
-        // Confirm button
-        confirmBtn.onclick = () => {
-          if (confirmationCallback) {
-            confirmationCallback();
-          }
-          hideConfirmation();
-        };
-
-        // Click outside to close
-        confirmModal.onclick = (e) => {
-          if (e.target === confirmModal) {
-            hideConfirmation();
-          }
-        };
-
-        // ESC key to close
-        document.addEventListener('keydown', (e) => {
-          if (
-            e.key === 'Escape' &&
-            !confirmModal.classList.contains('hidden')
-          ) {
-            hideConfirmation();
-          }
-        });
-      }
+      // Confirmation modal handlers are managed by showConfirmation function
+      // No static handlers needed since we use the Promise-based approach
     })
     .catch((err) => {
       showToast('Failed to initialize', 'error');

@@ -327,21 +327,21 @@ input[list]::-webkit-list-button {
 /* Toast notifications */
 .toast {
   position: fixed;
-  bottom: 2rem;
-  right: 2rem;
+  top: 5rem;
+  right: 1rem;
   background-color: #1f2937;
   color: white;
   padding: 1rem 1.5rem;
   border-radius: 0.5rem;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-  transform: translateY(100%);
+  transform: translateX(100%);
   opacity: 0;
   transition: all 0.3s ease;
   z-index: 50;
 }
 
 .toast.show {
-  transform: translateY(0);
+  transform: translateX(0);
   opacity: 1;
 }
 
