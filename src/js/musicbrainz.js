@@ -619,6 +619,7 @@ async function displayDirectAlbumResults(releaseGroups) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  const currentYear = new Date().getFullYear().toString();
 
   for (const rg of releaseGroups) {
     const albumEl = document.createElement('div');
@@ -634,18 +635,30 @@ async function displayDirectAlbumResults(releaseGroups) {
 
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
-    const isNewRelease =
+    const isFreshRelease =
       rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
+    const isNewRelease =
+      rg['first-release-date'] &&
+      rg['first-release-date'].startsWith(currentYear);
 
     albumEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
 
     albumEl.innerHTML = `
       ${
-        isNewRelease
+        isFreshRelease || isNewRelease
           ? `
-        <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
-          NEW
+        <div class="absolute top-2 right-2 flex gap-1 z-10">
+          ${
+            isFreshRelease
+              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">FRESH</span>`
+              : ''
+          }
+          ${
+            isNewRelease
+              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>`
+              : ''
+          }
         </div>
       `
           : ''
@@ -1806,6 +1819,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  const currentYear = new Date().getFullYear().toString();
 
   // Set up intersection observer
   const observer = setupIntersectionObserver(releaseGroups, currentArtist.name);
@@ -1817,8 +1831,11 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
-    const isNewRelease =
+    const isFreshRelease =
       rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
+    const isNewRelease =
+      rg['first-release-date'] &&
+      rg['first-release-date'].startsWith(currentYear);
 
     // Use horizontal card layout like mobile
     albumEl.className =
@@ -1826,10 +1843,19 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 
     albumEl.innerHTML = `
       ${
-        isNewRelease
+        isFreshRelease || isNewRelease
           ? `
-        <div class="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded z-10 font-semibold">
-          NEW
+        <div class="absolute top-2 right-2 flex gap-1 z-10">
+          ${
+            isFreshRelease
+              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">FRESH</span>`
+              : ''
+          }
+          ${
+            isNewRelease
+              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>`
+              : ''
+          }
         </div>
       `
           : ''
