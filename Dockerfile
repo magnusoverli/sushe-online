@@ -1,11 +1,14 @@
 # ----- Build stage -----
-FROM node:22-alpine AS builder
+FROM node:24.9-alpine3.22 AS builder
+
+# Update npm to specific version
+RUN npm install -g npm@11.6.1 --no-fund
 
 WORKDIR /app
 
 # Copy package files and install all dependencies (dev included)
 COPY package*.json ./
-RUN npm ci --prefer-offline --no-audit
+RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Copy the rest of the source and build assets
 COPY . .
@@ -15,13 +18,16 @@ RUN npm run build
 RUN rm -rf node_modules
 
 # ----- Runtime stage -----
-FROM node:22-alpine AS runtime
+FROM node:24.9-alpine3.22 AS runtime
+
+# Update npm to specific version
+RUN npm install -g npm@11.6.1 --no-fund
 
 WORKDIR /app
 
 # Install only production dependencies
 COPY --chown=node:node package*.json ./
-RUN npm ci --omit=dev --prefer-offline --no-audit \
+RUN npm ci --omit=dev --prefer-offline --no-audit --no-fund \
     && apk add --no-cache curl postgresql16-client
 
 # Copy application files and built assets from the builder stage

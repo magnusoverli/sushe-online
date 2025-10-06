@@ -30,5 +30,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     sourcemap: false,
     minify: 'esbuild',
+    target: 'es2020', // Modern browsers, smaller output
+    cssCodeSplit: true,
+    assetsInlineLimit: 4096, // Inline small assets as base64
   },
 });
