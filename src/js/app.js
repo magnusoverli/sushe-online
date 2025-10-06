@@ -2674,16 +2674,16 @@ function processAlbumData(album, index) {
   const releaseDate = formatReleaseDate(album.release_date || '');
   const country = album.country || '';
   const countryDisplay = country || 'Country';
-  const countryClass = country ? 'text-gray-300' : 'text-gray-500 italic';
+  const countryClass = country ? 'text-gray-300' : 'text-gray-800 italic';
 
   const genre1 = album.genre_1 || album.genre || '';
   const genre1Display = genre1 || 'Genre 1';
-  const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-500 italic';
+  const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-800 italic';
 
   let genre2 = album.genre_2 || '';
   if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
   const genre2Display = genre2 || 'Genre 2';
-  const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-500 italic';
+  const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-800 italic';
 
   let comment = album.comments || album.comment || '';
   if (comment === 'Comment') comment = '';
@@ -2694,7 +2694,7 @@ function processAlbumData(album, index) {
   // Process track pick
   let trackPick = album.track_pick || '';
   let trackPickDisplay = '';
-  let trackPickClass = 'text-gray-500 italic';
+  let trackPickClass = 'text-gray-800 italic';
 
   if (trackPick && album.tracks && Array.isArray(album.tracks)) {
     // Find the track that matches
@@ -2795,11 +2795,11 @@ function createDesktopAlbumRow(data, index) {
       </div>
     </div>
     <div class="flex flex-col justify-center">
-      <div class="font-semibold text-white truncate">${data.albumName}</div>
+      <div class="font-semibold text-gray-100 truncate">${data.albumName}</div>
       <div class="text-xs text-gray-400 mt-0.5">${data.releaseDate}</div>
     </div>
     <div class="flex items-center">
-      <span class="text-sm text-gray-300 truncate">${data.artist}</span>
+      <span class="text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
     </div>
     <div class="flex items-center country-cell">
       <span class="text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
@@ -2811,7 +2811,7 @@ function createDesktopAlbumRow(data, index) {
       <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
     </div>
     <div class="flex items-center comment-cell relative">
-      <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-500'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
+      <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
     </div>
     <div class="flex items-center track-cell">
       <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>
@@ -3077,7 +3077,7 @@ function displayAlbums(albums) {
     // Header
     const header = document.createElement('div');
     header.className =
-      'album-row album-header album-grid gap-4 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-400 border-b border-gray-800 sticky top-0 bg-black z-10';
+      'album-header album-grid gap-4 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
     header.style.alignItems = 'center';
     header.innerHTML = `
       <div class="text-center">#</div>
