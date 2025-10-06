@@ -107,7 +107,7 @@ function getPointsForPosition(position) {
   return POSITION_POINTS[position] || 1; // Default to 1 point for positions > 40
 }
 
-function showConfirmation(
+export function showConfirmation(
   title,
   message,
   subMessage,
@@ -1029,7 +1029,7 @@ async function loadGenres() {
 let toastTimer = null;
 
 // Show toast notification with configurable duration
-function showToast(message, type = 'success', duration = null) {
+export function showToast(message, type = 'success', duration = null) {
   const toast = document.getElementById('toast');
 
   // Clear any existing timer
@@ -1072,7 +1072,7 @@ function showToast(message, type = 'success', duration = null) {
 window.showToast = showToast;
 
 // API helper functions
-async function apiCall(url, options = {}) {
+export async function apiCall(url, options = {}) {
   try {
     const response = await fetch(url, {
       ...options,

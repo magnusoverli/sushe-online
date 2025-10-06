@@ -1,4 +1,5 @@
 import { showToast, apiCall } from './utils.js';
+import { showConfirmation } from '../app.js';
 
 export async function updatePlaylist(listName) {
   try {
@@ -13,7 +14,7 @@ export async function updatePlaylist(listName) {
     );
 
     if (checkResult.exists) {
-      const confirmed = await window.showConfirmation(
+      const confirmed = await showConfirmation(
         'Playlist Exists',
         `A playlist named "${listName}" already exists in your music service. Do you want to replace it with the current list?`,
         'This will replace all tracks in the existing playlist.',
@@ -50,7 +51,7 @@ export async function updatePlaylist(listName) {
       (error.message.includes('NOT_AUTHENTICATED') ||
         error.message.includes('NO_SERVICE'))
     ) {
-      const shouldRedirect = await window.showConfirmation(
+      const shouldRedirect = await showConfirmation(
         'Music Service Required',
         'No music service selected! Please choose Spotify or Tidal as your preferred service in Settings.',
         'Would you like to go to Settings now?',
