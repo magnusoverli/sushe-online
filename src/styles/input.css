@@ -19,9 +19,8 @@
   /* SortableJS chosen element (element being dragged) */
   .sortable-chosen {
     @apply cursor-grabbing;
-    transform: scale(1.02);
     z-index: 1000;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    /* Removed transform and box-shadow for desktop - only subtle color change */
   }
 
   /* SortableJS drag element (fallback drag element) */
@@ -110,9 +109,6 @@
       /* No visual changes */
     }
   }
-  50% {
-    box-shadow: 0 0 0 8px transparent;
-  }
 }
 
 /* Prevent dragging on interactive elements */
@@ -131,6 +127,13 @@
 }
 .album-card {
   transition: box-shadow 0.2s ease;
+}
+
+/* Desktop-specific: subtle color change only when chosen, no transforms */
+@media (min-width: 1024px) {
+  .sortable-chosen.album-row {
+    background-color: rgba(31, 41, 55, 0.3) !important; /* Very subtle darker shade */
+  }
 }
 
 /* Disable transitions during sorting for better performance */

@@ -2837,6 +2837,33 @@ function attachDesktopEventHandlers(row, index) {
   const comment = album.comments || album.comment || '';
   attachLinkPreview(commentCell, comment);
 
+  // Double-click handler for opening edit modal on the entire row
+  // But prevent it from triggering on interactive cells
+  row.addEventListener('dblclick', (e) => {
+    // Check if the double-click was on an interactive/editable cell
+    const isInteractiveCell = 
+      e.target.closest('.country-cell') ||
+      e.target.closest('.genre-1-cell') ||
+      e.target.closest('.genre-2-cell') ||
+      e.target.closest('.comment-cell') ||
+      e.target.closest('.track-cell');
+    
+    // If clicked on an interactive cell, don't open the edit modal
+    if (isInteractiveCell) {
+      return;
+    }
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Verify album still exists at this index
+    if (lists[currentList] && lists[currentList][index]) {
+      showMobileEditForm(index);
+    } else {
+      showToast('Album not found', 'error');
+    }
+  });
+
   // Right-click handler for album rows
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
