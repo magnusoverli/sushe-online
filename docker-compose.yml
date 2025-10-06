@@ -42,12 +42,12 @@ services:
       POSTGRES_PASSWORD: example
       POSTGRES_DB: sushe
       # Enhanced logging for monitoring
-      POSTGRES_INITDB_ARGS: "--auth-host=md5"
+      POSTGRES_INITDB_ARGS: '--auth-host=md5'
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d sushe"]
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -64,9 +64,10 @@ services:
     command: >
       postgres 
       -c log_destination=stderr 
-      -c log_statement=mod 
-      -c log_duration=on 
-      -c log_min_duration_statement=1000
+      -c log_min_messages=error
+      -c log_statement=none 
+      -c log_duration=off 
+      -c log_min_duration_statement=-1
       -c shared_buffers=1GB
       -c effective_cache_size=3GB
       -c maintenance_work_mem=256MB

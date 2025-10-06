@@ -67,16 +67,40 @@ class PgDatastore {
     return promise;
   }
 
+  _sanitizeParams(params) {
+    if (!params || !Array.isArray(params)) return params;
+    return params.map((param) => {
+      if (
+        typeof param === 'string' &&
+        param.length > 100 &&
+        /^[A-Za-z0-9+/=]+$/.test(param)
+      ) {
+        return `[base64 data: ${param.length} chars]`;
+      }
+      if (typeof param === 'string' && param.startsWith('data:image/')) {
+        return `[data URI: ${param.length} chars]`;
+      }
+      return param;
+    });
+  }
+
   _query(text, params) {
     if (this.logQueries) {
-      logger.debug('SQL', { query: text, params });
+      logger.debug('SQL', {
+        query: text,
+        params: this._sanitizeParams(params),
+      });
     }
     return this.pool.query(text, params);
   }
 
   async _preparedQuery(name, text, params) {
     if (this.logQueries) {
-      logger.debug('Prepared SQL', { name, query: text, params });
+      logger.debug('Prepared SQL', {
+        name,
+        query: text,
+        params: this._sanitizeParams(params),
+      });
     }
 
     if (!this.preparedStatements.has(name)) {
@@ -281,7 +305,7 @@ class PgDatastore {
 
       const placeholders = albumIds.map((_, i) => `$${i + 1}`).join(',');
       const queryText = `SELECT * FROM ${this.table} WHERE ${this._mapField('albumId')} IN (${placeholders})`;
-      const queryName = `findByAlbumIds_${this.table}`;
+      const queryName = `findByAlbumIds_${this.table}_${albumIds.length}`;
       const res = await this._preparedQuery(queryName, queryText, albumIds);
       const result = res.rows.map((r) => this._mapRow(r));
 

@@ -26,7 +26,7 @@ class MusicBrainzQueue {
 
   async process() {
     if (this.processing || this.queue.length === 0) return;
-    
+
     this.processing = true;
 
     while (this.queue.length > 0) {
@@ -264,11 +264,14 @@ module.exports = (app, deps) => {
     async (req, res) => {
       try {
         const { name } = req.params;
+        logger.debug('Fetching list:', { name, userId: req.user._id });
         const list = await listsAsync.findOne({ userId: req.user._id, name });
 
         if (!list) {
+          logger.warn('List not found:', { name, userId: req.user._id });
           return res.status(404).json({ error: 'List not found' });
         }
+        logger.debug('List found:', { listId: list._id, name });
         const items = await listItemsAsync.find({ listId: list._id });
         items.sort((a, b) => a.position - b.position);
 
@@ -301,7 +304,12 @@ module.exports = (app, deps) => {
         }
         res.json(data);
       } catch (err) {
-        logger.error('Error fetching list:', err);
+        logger.error('Error fetching list:', {
+          error: err.message,
+          stack: err.stack,
+          listName: req.params.name,
+          userId: req.user?._id,
+        });
         return res.status(500).json({ error: 'Error fetching list' });
       }
     }
@@ -391,14 +399,16 @@ module.exports = (app, deps) => {
         }
 
         await client.query('COMMIT');
+
+        // Invalidate cache BEFORE sending response to prevent race condition
+        // Use req.originalUrl to match the exact cache key format (includes URL encoding)
+        responseCache.invalidate(`GET:${req.originalUrl}:${req.user._id}`);
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
         res.json({
           success: true,
           message: existingList ? 'List updated' : 'List created',
         });
-
-        // Invalidate cache for this user's lists
-        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
-        responseCache.invalidate(`GET:/api/lists/${name}:${req.user._id}`);
 
         broadcastListUpdate(req.user._id, name, data);
       } catch (dbErr) {
@@ -751,9 +761,7 @@ module.exports = (app, deps) => {
         res.json(data);
       } catch (error) {
         logger.error('MusicBrainz proxy error:', error);
-        res
-          .status(500)
-          .json({ error: 'Failed to fetch from MusicBrainz API' });
+        res.status(500).json({ error: 'Failed to fetch from MusicBrainz API' });
       }
     }
   );
