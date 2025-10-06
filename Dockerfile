@@ -25,9 +25,9 @@ RUN npm install -g npm@11.6.1 --no-fund
 
 WORKDIR /app
 
-# Install only production dependencies
+# Install only production dependencies  
 COPY --chown=node:node package*.json ./
-RUN npm ci --omit=dev --prefer-offline --no-audit --no-fund \
+RUN npm install --omit=dev --prefer-offline --no-audit --no-fund \
     && apk add --no-cache curl postgresql16-client
 
 # Copy application files and built assets from the builder stage
