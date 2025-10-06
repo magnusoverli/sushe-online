@@ -181,21 +181,26 @@ body {
 
 /* Simplified hover effect that doesn't interfere with drag */
 @media (min-width: 1024px) {
-  .album-row:hover:not(.sortable-chosen):not(.sortable-drag) {
+  .album-row:hover:not(.sortable-chosen):not(.sortable-drag):not(.sortable-ghost) {
     background: linear-gradient(
       90deg,
       var(--accent-subtle) 0%,
-      transparent 80%
+      var(--accent-subtle) 20%,
+      transparent 100%
     );
-    border-left-color: var(--accent-color);
   }
 
   /* Disable all hover effects during drag operations */
+  body.desktop-dragging .album-row {
+    background: none !important;
+    border-left-color: transparent !important;
+  }
+  
   body.desktop-dragging .album-row:hover {
-    background: inherit;
-    border-left-color: transparent;
-    transform: none;
-    box-shadow: none;
+    background: none !important;
+    border-left-color: transparent !important;
+    transform: none !important;
+    box-shadow: none !important;
   }
 
   /* Subtle border enhancement for desktop */
