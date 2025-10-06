@@ -53,6 +53,12 @@
   justify-content: center;
 }
 
+/* Album image column - align header text to the right */
+.album-grid > div:nth-child(2),
+.album-row > div:nth-child(2) {
+  justify-content: flex-end;
+}
+
 /* Special handling for cells that need different alignment */
 .album-grid > div:nth-child(3), /* Album name column */
 .album-row > div:nth-child(3) {
@@ -60,6 +66,7 @@
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
+  margin-left: -0.35rem; /* Reduce gap between album image and album name */
 }
 
 /* Ensure the date text stays with album name */

@@ -3081,8 +3081,8 @@ function displayAlbums(albums) {
     header.style.alignItems = 'center';
     header.innerHTML = `
       <div class="text-center">#</div>
-      <div></div>
       <div>Album</div>
+      <div></div>
       <div>Artist</div>
       <div>Country</div>
       <div>Genre 1</div>
