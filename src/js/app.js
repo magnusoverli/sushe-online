@@ -129,6 +129,45 @@ function showConfirmation(
   // If onConfirm is provided, use callback style
   if (onConfirm) {
     confirmationCallback = onConfirm;
+
+    const handleConfirm = () => {
+      modal.classList.add('hidden');
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      modal.removeEventListener('click', handleBackdropClick);
+      document.removeEventListener('keydown', handleEscKey);
+      if (confirmationCallback) {
+        confirmationCallback();
+        confirmationCallback = null;
+      }
+    };
+
+    const handleCancel = () => {
+      modal.classList.add('hidden');
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      modal.removeEventListener('click', handleBackdropClick);
+      document.removeEventListener('keydown', handleEscKey);
+      confirmationCallback = null;
+    };
+
+    const handleBackdropClick = (e) => {
+      if (e.target === modal) {
+        handleCancel();
+      }
+    };
+
+    const handleEscKey = (e) => {
+      if (e.key === 'Escape') {
+        handleCancel();
+      }
+    };
+
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    modal.addEventListener('click', handleBackdropClick);
+    document.addEventListener('keydown', handleEscKey);
+
     modal.classList.remove('hidden');
     setTimeout(() => confirmBtn.focus(), 100);
     return;
