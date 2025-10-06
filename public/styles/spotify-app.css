@@ -3,7 +3,7 @@
 /* Album grid column configuration with responsive behavior */
 :root {
   /* Default grid for desktop screens - Track column at the end */
-  --album-grid-columns: 0.1fr 0.18fr 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
+  --album-grid-columns: 0.04fr 0.18fr 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
   --cover-art-size: 64px;
 }
 
@@ -45,6 +45,12 @@
   min-width: 0; /* Prevent grid blowout */
   display: flex;
   align-items: center;
+}
+
+/* Position number column - center horizontally */
+.album-grid > div:nth-child(1),
+.album-row > div:nth-child(1) {
+  justify-content: center;
 }
 
 /* Special handling for cells that need different alignment */

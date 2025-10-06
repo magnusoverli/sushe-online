@@ -143,24 +143,22 @@
   transition: none !important;
 }
 
-/* Custom tooltip for comment cells */
+/* Custom tooltip for comment cells - overlays on the comment itself */
 .comment-text[data-comment]:not([data-comment=''])::after {
   content: attr(data-comment);
   position: absolute;
-  bottom: 100%;
-  left: 0;
-  margin-bottom: 0.5rem;
+  top: -0.25rem;
+  left: -0.5rem;
+  right: -0.5rem;
   padding: 0.5rem 0.75rem;
-  background-color: rgba(17, 24, 39, 0.95);
+  background-color: rgba(17, 24, 39, 0.98);
   color: #fff;
   font-size: 0.875rem;
-  font-style: italic;
   border-radius: 0.375rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   white-space: pre-wrap;
   word-wrap: break-word;
-  max-width: 400px;
-  min-width: 200px;
+  width: auto;
   z-index: 1000;
   opacity: 0;
   pointer-events: none;

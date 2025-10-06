@@ -2486,10 +2486,20 @@ function makeCommentEditable(commentDiv, albumIndex) {
         displayClass = 'text-gray-500';
       }
 
-      commentDiv.innerHTML = `<span class="text-sm ${displayClass} italic line-clamp-2 cursor-pointer hover:text-gray-100">${displayComment}</span>`;
+      commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
 
       // Re-add click handler
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
+
+      // Add tooltip only if comment is truncated
+      const commentTextEl = commentDiv.querySelector('.comment-text');
+      if (commentTextEl && newComment) {
+        setTimeout(() => {
+          if (isTextTruncated(commentTextEl)) {
+            commentTextEl.setAttribute('data-comment', newComment);
+          }
+        }, 0);
+      }
 
       if (newComment !== currentComment) {
         showToast('Comment updated');
@@ -2503,8 +2513,18 @@ function makeCommentEditable(commentDiv, albumIndex) {
         revertDisplay = 'Comment';
         revertClass = 'text-gray-500';
       }
-      commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100">${revertDisplay}</span>`;
+      commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${revertDisplay}</span>`;
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
+
+      // Add tooltip only if comment is truncated
+      const revertTextEl = commentDiv.querySelector('.comment-text');
+      if (revertTextEl && currentComment) {
+        setTimeout(() => {
+          if (isTextTruncated(revertTextEl)) {
+            revertTextEl.setAttribute('data-comment', currentComment);
+          }
+        }, 0);
+      }
     }
   };
 
@@ -2525,8 +2545,18 @@ function makeCommentEditable(commentDiv, albumIndex) {
         displayClass = 'text-gray-500';
       }
 
-      commentDiv.innerHTML = `<span class="text-sm ${displayClass} italic line-clamp-2 cursor-pointer hover:text-gray-100">${displayComment}</span>`;
+      commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
+
+      // Add tooltip only if comment is truncated
+      const cancelTextEl = commentDiv.querySelector('.comment-text');
+      if (cancelTextEl && currentComment) {
+        setTimeout(() => {
+          if (isTextTruncated(cancelTextEl)) {
+            cancelTextEl.setAttribute('data-comment', currentComment);
+          }
+        }, 0);
+      }
     }
   });
 }
@@ -2781,7 +2811,7 @@ function createDesktopAlbumRow(data, index) {
       <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
     </div>
     <div class="flex items-center comment-cell relative">
-      <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-500'} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text" data-comment="${data.comment || ''}">${data.comment || 'Comment'}</span>
+      <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-500'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
     </div>
     <div class="flex items-center track-cell">
       <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>
@@ -2836,6 +2866,17 @@ function attachDesktopEventHandlers(row, index) {
   const album = lists[currentList][index];
   const comment = album.comments || album.comment || '';
   attachLinkPreview(commentCell, comment);
+
+  // Add tooltip only if comment is truncated
+  const commentTextEl = commentCell.querySelector('.comment-text');
+  if (commentTextEl && comment) {
+    // Use setTimeout to ensure the element is rendered
+    setTimeout(() => {
+      if (isTextTruncated(commentTextEl)) {
+        commentTextEl.setAttribute('data-comment', comment);
+      }
+    }, 0);
+  }
 
   // Double-click handler for opening edit modal on the entire row
   // But prevent it from triggering on interactive cells
@@ -3160,6 +3201,12 @@ function updatePositionNumbers(container, isMobile) {
     }
     row.dataset.index = i;
   }
+}
+
+// Helper function to check if text is truncated
+function isTextTruncated(element) {
+  // For elements with line-clamp, check if scrollHeight exceeds clientHeight
+  return element.scrollHeight > element.clientHeight;
 }
 
 // Debounced save function to batch rapid changes
