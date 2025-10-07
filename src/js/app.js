@@ -2829,7 +2829,8 @@ function attachDesktopEventHandlers(row, index) {
   const trackCell = row.querySelector('.track-cell');
   if (trackCell) {
     trackCell.onclick = async () => {
-      const album = lists[currentList][index];
+      const currentIndex = parseInt(row.dataset.index);
+      const album = lists[currentList][currentIndex];
       if (!album.tracks || album.tracks.length === 0) {
         showToast('Fetching tracks...', 'info');
         try {
@@ -2843,24 +2844,36 @@ function attachDesktopEventHandlers(row, index) {
 
       // Show track selection menu at the cell position
       const rect = trackCell.getBoundingClientRect();
-      showTrackSelectionMenu(album, index, rect.left, rect.bottom);
+      showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
     };
   }
 
   // Add click handler to country cell
   const countryCell = row.querySelector('.country-cell');
-  countryCell.onclick = () => makeCountryEditable(countryCell, index);
+  countryCell.onclick = () => {
+    const currentIndex = parseInt(row.dataset.index);
+    makeCountryEditable(countryCell, currentIndex);
+  };
 
   // Add click handlers to genre cells
   const genre1Cell = row.querySelector('.genre-1-cell');
-  genre1Cell.onclick = () => makeGenreEditable(genre1Cell, index, 'genre_1');
+  genre1Cell.onclick = () => {
+    const currentIndex = parseInt(row.dataset.index);
+    makeGenreEditable(genre1Cell, currentIndex, 'genre_1');
+  };
 
   const genre2Cell = row.querySelector('.genre-2-cell');
-  genre2Cell.onclick = () => makeGenreEditable(genre2Cell, index, 'genre_2');
+  genre2Cell.onclick = () => {
+    const currentIndex = parseInt(row.dataset.index);
+    makeGenreEditable(genre2Cell, currentIndex, 'genre_2');
+  };
 
   // Add click handler to comment cell
   const commentCell = row.querySelector('.comment-cell');
-  commentCell.onclick = () => makeCommentEditable(commentCell, index);
+  commentCell.onclick = () => {
+    const currentIndex = parseInt(row.dataset.index);
+    makeCommentEditable(commentCell, currentIndex);
+  };
 
   // Attach link preview
   const album = lists[currentList][index];
@@ -2882,24 +2895,27 @@ function attachDesktopEventHandlers(row, index) {
   // But prevent it from triggering on interactive cells
   row.addEventListener('dblclick', (e) => {
     // Check if the double-click was on an interactive/editable cell
-    const isInteractiveCell = 
+    const isInteractiveCell =
       e.target.closest('.country-cell') ||
       e.target.closest('.genre-1-cell') ||
       e.target.closest('.genre-2-cell') ||
       e.target.closest('.comment-cell') ||
       e.target.closest('.track-cell');
-    
+
     // If clicked on an interactive cell, don't open the edit modal
     if (isInteractiveCell) {
       return;
     }
-    
+
     e.preventDefault();
     e.stopPropagation();
-    
+
+    // Get current index from DOM (updated after drag-drop)
+    const currentIndex = parseInt(row.dataset.index);
+
     // Verify album still exists at this index
-    if (lists[currentList] && lists[currentList][index]) {
-      showMobileEditForm(index);
+    if (lists[currentList] && lists[currentList][currentIndex]) {
+      showMobileEditForm(currentIndex);
     } else {
       showToast('Album not found', 'error');
     }
@@ -2910,12 +2926,13 @@ function attachDesktopEventHandlers(row, index) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Store both index and album identity for safety
-    const album = lists[currentList][index];
+    // Get current index from DOM (updated after drag-drop) instead of closure
+    const currentIndex = parseInt(row.dataset.index);
+    const album = lists[currentList][currentIndex];
     const albumId =
       `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
-    currentContextAlbum = index;
+    currentContextAlbum = currentIndex;
     currentContextAlbumId = albumId; // Store identity as backup
 
     const contextMenu = document.getElementById('albumContextMenu');
