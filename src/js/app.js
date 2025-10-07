@@ -1085,9 +1085,39 @@ export async function apiCall(url, options = {}) {
 
     if (!response.ok) {
       if (response.status === 401) {
-        clearListsCache();
-        window.location.href = '/login';
-        return;
+        // Try to parse error response to distinguish between session expiration and OAuth issues
+        try {
+          const errorData = await response.json();
+
+          // OAuth-specific errors (token refresh failed, music service not authenticated)
+          // These should be handled by the caller, not redirect to login
+          if (
+            errorData.code === 'TOKEN_REFRESH_FAILED' ||
+            (errorData.code === 'NOT_AUTHENTICATED' && errorData.service)
+          ) {
+            const error = new Error(
+              errorData.error || `HTTP error! status: ${response.status}`
+            );
+            error.response = response;
+            error.data = errorData;
+            throw error;
+          }
+
+          // Session expired or generic authentication failure - redirect to login
+          clearListsCache();
+          window.location.href = '/login';
+          return;
+        } catch (parseError) {
+          // If we can't parse the response, treat it as session expiration
+          if (parseError.data) {
+            // This is the error we threw above for OAuth issues
+            throw parseError;
+          }
+          // JSON parse failed, likely session expired
+          clearListsCache();
+          window.location.href = '/login';
+          return;
+        }
       }
       const error = new Error(`HTTP error! status: ${response.status}`);
       error.response = response;

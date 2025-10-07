@@ -46,6 +46,47 @@ export async function updatePlaylist(listName) {
     }
   } catch (error) {
     console.error('Error updating playlist:', error);
+
+    // Handle OAuth token refresh failure
+    if (error.data && error.data.code === 'TOKEN_REFRESH_FAILED') {
+      const serviceName =
+        error.data.service === 'spotify' ? 'Spotify' : 'Tidal';
+      const shouldRedirect = await showConfirmation(
+        `${serviceName} Connection Expired`,
+        error.data.error ||
+          `Your ${serviceName} connection has expired and needs to be refreshed.`,
+        `Would you like to go to Settings to reconnect your ${serviceName} account?`,
+        'Go to Settings'
+      );
+
+      if (shouldRedirect) {
+        window.location.href = '/settings';
+      }
+      return;
+    }
+
+    // Handle missing authentication
+    if (
+      error.data &&
+      error.data.code === 'NOT_AUTHENTICATED' &&
+      error.data.service
+    ) {
+      const serviceName =
+        error.data.service === 'spotify' ? 'Spotify' : 'Tidal';
+      const shouldRedirect = await showConfirmation(
+        `${serviceName} Not Connected`,
+        `You need to connect your ${serviceName} account to create playlists.`,
+        'Would you like to go to Settings now?',
+        'Go to Settings'
+      );
+
+      if (shouldRedirect) {
+        window.location.href = '/settings';
+      }
+      return;
+    }
+
+    // Handle missing service selection
     if (
       error.message &&
       (error.message.includes('NOT_AUTHENTICATED') ||
