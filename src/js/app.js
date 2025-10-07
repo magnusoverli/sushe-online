@@ -372,12 +372,14 @@ window.testConfirmation = async function () {
   return result;
 };
 
-async function updatePlaylist(listName) {
+async function updatePlaylist(listName, listData = null) {
   if (!musicServicesModule) {
     showToast('Loading playlist integration...', 'info', 1000);
     musicServicesModule = await import('./modules/music-services.js');
   }
-  return musicServicesModule.updatePlaylist(listName);
+  // If listData not provided, get it from global lists
+  const data = listData !== null ? listData : lists[listName] || [];
+  return musicServicesModule.updatePlaylist(listName, data);
 }
 window.updatePlaylist = updatePlaylist;
 
@@ -1432,7 +1434,9 @@ function initializeContextMenu() {
     if (!currentContextList) return;
 
     try {
-      await updatePlaylist(currentContextList);
+      // Pass both list name and list data for track validation
+      const listData = lists[currentContextList] || [];
+      await updatePlaylist(currentContextList, listData);
     } catch (err) {
       console.error('Update playlist failed', err);
     }

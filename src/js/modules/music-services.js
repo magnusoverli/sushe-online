@@ -1,8 +1,28 @@
 import { showToast, apiCall } from './utils.js';
 import { showConfirmation } from '../app.js';
 
-export async function updatePlaylist(listName) {
+export async function updatePlaylist(listName, listData = []) {
   try {
+    // Validate track selection before proceeding
+    const totalAlbums = listData.length;
+    const albumsWithTracks = listData.filter(
+      (album) => album.track_pick && album.track_pick.trim() !== ''
+    ).length;
+
+    // If list has albums but not all have tracks selected, warn the user
+    if (totalAlbums > 0 && albumsWithTracks < totalAlbums) {
+      const confirmed = await showConfirmation(
+        'Incomplete Track Selection',
+        `Only ${albumsWithTracks} of ${totalAlbums} albums in your list have tracks selected.`,
+        'Only selected tracks will be added to your playlist. Do you want to continue?',
+        'Continue Anyway'
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
     showToast('Checking for existing playlist...', 'info');
 
     const checkResult = await apiCall(
