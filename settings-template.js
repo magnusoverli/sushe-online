@@ -1096,6 +1096,8 @@ const settingsTemplate = (req, options) => {
         const formData = new FormData(e.target);
         
         try {
+          showToast('Restoring database...', 'info');
+          
           const response = await fetch('/admin/restore', {
             method: 'POST',
             body: formData,
@@ -1105,17 +1107,34 @@ const settingsTemplate = (req, options) => {
           const data = await response.json();
           
           if (data.success) {
-            showToast('Database restored successfully');
-            setTimeout(() => window.location.href = '/login', 2000);
+            document.getElementById('restoreModal').classList.add('hidden');
+            showToast('Database restored! Server restarting...', 'success');
+            
+            // Wait for server restart, then redirect
+            setTimeout(() => {
+              showToast('Reconnecting...', 'info');
+              // Poll for server availability
+              const checkServer = setInterval(async () => {
+                try {
+                  const ping = await fetch('/health', { method: 'HEAD' });
+                  if (ping.ok) {
+                    clearInterval(checkServer);
+                    window.location.href = '/login';
+                  }
+                } catch (e) {
+                  // Server still restarting
+                }
+              }, 1000);
+            }, 3000);
           } else {
             showToast(data.error || 'Error restoring database', 'error');
+            document.getElementById('restoreModal').classList.add('hidden');
           }
         } catch (error) {
           console.error('Error:', error);
           showToast('Error restoring database', 'error');
+          document.getElementById('restoreModal').classList.add('hidden');
         }
-        
-        document.getElementById('restoreModal').classList.add('hidden');
       });
     `
         : ''

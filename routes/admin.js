@@ -573,8 +573,16 @@ module.exports = (app, deps) => {
           
           res.json({
             success: true,
-            message: 'Database restored successfully',
+            message: 'Database restored successfully. Server will restart in 3 seconds...',
           });
+
+          // Schedule server restart to clear prepared statement cache
+          logger.info(
+            'Database restored successfully. Restarting server to clear prepared statement cache...'
+          );
+          setTimeout(() => {
+            process.exit(0); // Exit cleanly, Docker/nodemon will restart
+          }, 3000);
         } else {
           logger.error('pg_restore exited with code', code);
           res.status(500).json({ error: 'Error restoring database' });
