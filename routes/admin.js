@@ -559,16 +559,21 @@ module.exports = (app, deps) => {
         res.status(500).json({ error: 'Error restoring database' });
       });
 
-      restore.on('exit', (code) => {
+      restore.on('exit', async (code) => {
         fs.unlink(tmpFile, () => {});
         if (code === 0) {
-          req.sessionStore.clear((err) => {
-            if (err)
-              logger.error('Error clearing sessions after restore:', err);
-            res.json({
-              success: true,
-              message: 'Database restored successfully',
-            });
+          // Clear all sessions after restore using direct SQL
+          try {
+            const { pool } = deps;
+            await pool.query('DELETE FROM session');
+            logger.info('All sessions cleared after database restore');
+          } catch (err) {
+            logger.error('Error clearing sessions after restore:', err);
+          }
+          
+          res.json({
+            success: true,
+            message: 'Database restored successfully',
           });
         } else {
           logger.error('pg_restore exited with code', code);
@@ -579,18 +584,16 @@ module.exports = (app, deps) => {
   );
 
   // Admin: Clear all sessions
-  app.post('/admin/clear-sessions', ensureAuth, ensureAdmin, (req, res) => {
-    const sessionStore = req.sessionStore;
-
-    sessionStore.clear((err) => {
-      if (err) {
-        logger.error('Error clearing sessions:', err);
-        return res.status(500).json({ error: 'Error clearing sessions' });
-      }
-
+  app.post('/admin/clear-sessions', ensureAuth, ensureAdmin, async (req, res) => {
+    try {
+      const { pool } = deps;
+      await pool.query('DELETE FROM session');
       logger.info(`Admin ${req.user.email} cleared all sessions`);
       res.json({ success: true });
-    });
+    } catch (err) {
+      logger.error('Error clearing sessions:', err);
+      return res.status(500).json({ error: 'Error clearing sessions' });
+    }
   });
 
   // Admin status endpoint (for debugging)
