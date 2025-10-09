@@ -344,29 +344,6 @@ module.exports = (app, deps) => {
     );
   });
 
-  // Admin: Export users as CSV
-  app.get('/admin/export-users', ensureAuth, ensureAdmin, (req, res) => {
-    users.find({}, (err, allUsers) => {
-      if (err) {
-        logger.error('Error exporting users:', err);
-        return res.status(500).send('Error exporting users');
-      }
-
-      // Create CSV content
-      let csv = 'Email,Username,Role,Created At\n';
-      allUsers.forEach((user) => {
-        csv += `"${user.email}","${user.username}","${user.role || 'user'}","${new Date(user.createdAt).toISOString()}"\n`;
-      });
-
-      res.setHeader('Content-Type', 'text/csv');
-      res.setHeader(
-        'Content-Disposition',
-        'attachment; filename="users-export.csv"'
-      );
-      res.send(csv);
-    });
-  });
-
   // Admin: Get user lists
   app.get(
     '/admin/user-lists/:userId',
@@ -395,59 +372,6 @@ module.exports = (app, deps) => {
       }
     }
   );
-
-  // Admin: Export database to JSON
-  app.get('/admin/export', ensureAuth, ensureAdmin, async (req, res) => {
-    try {
-      const listsData = await listsAsync.find({});
-      for (const l of listsData) {
-        const items = await listItemsAsync.find({ listId: l._id });
-        items.sort((a, b) => a.position - b.position);
-
-        // Batch load album data to avoid N+1 queries
-        const albumIds = items.map((item) => item.albumId).filter(Boolean);
-        const albumsData =
-          albumIds.length > 0 ? await albumsAsync.findByIds(albumIds) : [];
-        const albumsMap = new Map(
-          albumsData.map((album) => [album._id, album])
-        );
-
-        const mapped = [];
-        for (const it of items) {
-          const albumData = it.albumId ? albumsMap.get(it.albumId) : null;
-          mapped.push({
-            artist: albumData?.artist || it.artist,
-            album: albumData?.album || it.album,
-            album_id: it.albumId,
-            release_date: albumData?.releaseDate || it.releaseDate,
-            country: albumData?.country || it.country,
-            genre_1: albumData?.genre1 || it.genre1,
-            genre_2: albumData?.genre2 || it.genre2,
-            comments: it.comments,
-            cover_image: albumData?.coverImage || it.coverImage,
-            cover_image_format:
-              albumData?.coverImageFormat || it.coverImageFormat,
-          });
-        }
-        l.data = mapped;
-      }
-      const backup = {
-        exportDate: new Date().toISOString(),
-        users: await usersAsync.find({}),
-        lists: listsData,
-      };
-
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader(
-        'Content-Disposition',
-        'attachment; filename="sushe-export.json"'
-      );
-      res.send(JSON.stringify(backup, null, 2));
-    } catch (error) {
-      logger.error('Export error:', error);
-      res.status(500).send('Error creating export');
-    }
-  });
 
   // Admin: Backup entire database using pg_dump
   app.get('/admin/backup', ensureAuth, ensureAdmin, (req, res) => {
@@ -590,19 +514,6 @@ module.exports = (app, deps) => {
       });
     }
   );
-
-  // Admin: Clear all sessions
-  app.post('/admin/clear-sessions', ensureAuth, ensureAdmin, async (req, res) => {
-    try {
-      const { pool } = deps;
-      await pool.query('DELETE FROM session');
-      logger.info(`Admin ${req.user.email} cleared all sessions`);
-      res.json({ success: true });
-    } catch (err) {
-      logger.error('Error clearing sessions:', err);
-      return res.status(500).json({ error: 'Error clearing sessions' });
-    }
-  });
 
   // Admin status endpoint (for debugging)
   app.get('/api/admin/status', ensureAuth, (req, res) => {

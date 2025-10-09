@@ -381,36 +381,6 @@ test('GET /admin/user-lists/:userId should return user lists', async () => {
   assert.strictEqual(response.body.lists[0].name, 'Test List');
 });
 
-test('GET /admin/export should export database as JSON', async () => {
-  const app = createTestApp();
-
-  // Add test data
-  mockUsers.set('user1', {
-    email: 'user1@example.com',
-    username: 'user1',
-  });
-
-  mockLists.set('list1', {
-    name: 'Test List',
-    userId: 'user1',
-  });
-
-  const response = await request(app).get('/admin/export').expect(200);
-
-  assert.strictEqual(
-    response.headers['content-type'],
-    'application/json; charset=utf-8'
-  );
-  assert.ok(
-    response.headers['content-disposition'].includes('sushe-export.json')
-  );
-
-  const exportData = JSON.parse(response.text);
-  assert.ok(exportData.exportDate);
-  assert.ok(Array.isArray(exportData.users));
-  assert.ok(Array.isArray(exportData.lists));
-});
-
 test('GET /admin/backup should create database backup', async () => {
   const app = createTestApp();
 
@@ -462,14 +432,6 @@ test('POST /admin/restore should require file upload', async () => {
   const response = await request(app).post('/admin/restore').expect(400);
 
   assert.ok(response.body.error.includes('No file uploaded'));
-});
-
-test('POST /admin/clear-sessions should clear all sessions', async () => {
-  const app = createTestApp();
-
-  const response = await request(app).post('/admin/clear-sessions').expect(200);
-
-  assert.strictEqual(response.body.success, true);
 });
 
 test('GET /api/admin/status should return admin status', async () => {

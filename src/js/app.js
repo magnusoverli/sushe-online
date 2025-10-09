@@ -1184,7 +1184,7 @@ async function loadLists() {
   try {
     const CACHE_KEY = 'lists_cache';
     const CACHE_TIMESTAMP_KEY = 'lists_cache_timestamp';
-    const CACHE_TTL = 60000;
+    const CACHE_TTL = 0; // Always fetch fresh data, but use cache for instant display
 
     let loadedFromCache = false;
 

@@ -403,13 +403,10 @@ const adminPanelSection = (stats, adminData) =>
     
     <!-- Admin Actions -->
     <div class="mb-8">
-      <h4 class="text-lg font-semibold text-white mb-4">Admin Actions</h4>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        ${button('Export Users', "if(confirm('Export all users as CSV?')) window.location.href='/admin/export-users'", 'bg-gray-700 hover:bg-gray-600', 'fas fa-download')}
-        ${button('Export Database', "if(confirm('Download database export as JSON?')) window.location.href='/admin/export'", 'bg-gray-700 hover:bg-gray-600', 'fas fa-file-export')}
+      <h4 class="text-lg font-semibold text-white mb-4">Database Management</h4>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
         ${button('Backup Database', "if(confirm('Download complete database backup?')) window.location.href='/admin/backup'", 'bg-gray-700 hover:bg-gray-600', 'fas fa-database')}
         ${button('Restore Backup', 'showRestoreModal()', 'bg-gray-700 hover:bg-gray-600', 'fas fa-upload')}
-        ${button('Clear Sessions', "if(confirm('Clear all active sessions? This will log out all users.')) clearSessions()", 'bg-red-700 hover:bg-red-600', 'fas fa-sign-out-alt')}
       </div>
     </div>
     
@@ -1166,27 +1163,6 @@ const settingsTemplate = (req, options) => {
         }
       }
       
-      async function clearSessions() {
-        try {
-          const response = await fetch('/admin/clear-sessions', {
-            method: 'POST',
-            credentials: 'same-origin'
-          });
-          
-          const data = await response.json();
-          
-          if (data.success) {
-            showToast('All sessions cleared');
-            setTimeout(() => window.location.href = '/login', 2000);
-          } else {
-            showToast('Error clearing sessions', 'error');
-          }
-        } catch (error) {
-          console.error('Error:', error);
-          showToast('Error clearing sessions', 'error');
-        }
-      }
-      
       function showRestoreModal() {
         document.getElementById('restoreModal').classList.remove('hidden');
         // Reset modal to initial state
@@ -1291,6 +1267,16 @@ const settingsTemplate = (req, options) => {
                     clearInterval(checkServer);
                     updateProgress(100, 'Server is back online! Redirecting...');
                     updateProgressStep('step-restart', 'complete');
+                    
+                    // Clear all localStorage cache to ensure fresh data after restore
+                    try {
+                      localStorage.removeItem('lists_cache');
+                      localStorage.removeItem('lists_cache_timestamp');
+                      localStorage.removeItem('lastSelectedList');
+                      localStorage.clear(); // Clear everything to be safe
+                    } catch (e) {
+                      console.warn('Failed to clear localStorage:', e);
+                    }
                     
                     setTimeout(() => {
                       window.location.href = '/login';
