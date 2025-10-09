@@ -679,49 +679,155 @@ const settingsTemplate = (req, options) => {
   </div>
   
   <!-- Restore Modal -->
-  <div id="restoreModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+  <div id="restoreModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-lg transform transition-all">
+      <!-- Header -->
       <div class="p-6 border-b border-gray-800">
-        <h3 class="text-xl font-bold text-white">Restore Database Backup</h3>
+        <div class="flex items-center justify-between">
+          <h3 class="text-xl font-semibold text-white flex items-center gap-3">
+            <i class="fas fa-upload text-red-500"></i>
+            Restore Database
+          </h3>
+          <button 
+            id="closeRestoreModal"
+            onclick="closeRestoreModal()"
+            class="text-gray-400 hover:text-white transition-colors"
+          >
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
       </div>
       
-      <form id="restoreForm" enctype="multipart/form-data" class="p-6">
-        <div class="mb-4">
-          <label class="block text-sm font-medium text-gray-400 mb-2">
-            Select backup file (.dump)
-          </label>
-          <input 
-            type="file" 
-            name="backup"
-            accept=".dump"
-            required
-            class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-white file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-700 file:text-white hover:file:bg-gray-600"
-          >
+      <!-- Content -->
+      <div id="restoreContent" class="p-6">
+        <!-- File Selection Phase -->
+        <form id="restoreForm" enctype="multipart/form-data">
+          <div class="space-y-6">
+            <!-- File Input -->
+            <div>
+              <label class="block text-sm font-medium text-gray-300 mb-3">
+                Select Backup File
+              </label>
+              <div class="relative">
+                <input 
+                  type="file" 
+                  id="backupFileInput"
+                  name="backup"
+                  accept=".dump"
+                  required
+                  class="w-full px-4 py-3 bg-gray-800 border-2 border-gray-700 rounded-lg text-white 
+                         file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 
+                         file:text-sm file:font-semibold file:bg-gray-700 file:text-white 
+                         hover:file:bg-gray-600 file:transition-colors file:cursor-pointer
+                         focus:outline-none focus:border-red-600 transition-colors cursor-pointer"
+                >
+              </div>
+              <p class="text-xs text-gray-500 mt-2">
+                <i class="fas fa-info-circle mr-1"></i>
+                PostgreSQL custom format (.dump) files only
+              </p>
+            </div>
+            
+            <!-- Warning Box -->
+            <div class="bg-gradient-to-r from-yellow-900/20 to-red-900/20 border-2 border-yellow-700/50 rounded-lg p-4">
+              <div class="flex items-start gap-3">
+                <i class="fas fa-exclamation-triangle text-yellow-400 text-xl mt-0.5"></i>
+                <div class="flex-1">
+                  <h4 class="text-yellow-400 font-semibold mb-1">Destructive Operation</h4>
+                  <p class="text-gray-300 text-sm leading-relaxed">
+                    This will permanently replace all current data with the backup contents. 
+                    The server will restart automatically to complete the restore.
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="flex gap-3 justify-end pt-2">
+              <button 
+                type="button"
+                onclick="closeRestoreModal()"
+                class="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg 
+                       transition-colors duration-200 font-medium flex items-center gap-2 whitespace-nowrap"
+              >
+                <i class="fas fa-times"></i>
+                Cancel
+              </button>
+              <button 
+                type="submit"
+                id="restoreButton"
+                class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg 
+                       transition-colors duration-200 font-semibold flex items-center gap-2 whitespace-nowrap"
+              >
+                <i class="fas fa-upload"></i>
+                Restore Database
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Progress Phase (Initially Hidden) -->
+      <div id="restoreProgress" class="hidden p-6">
+        <div class="space-y-6">
+          <!-- Progress Steps -->
+          <div class="space-y-4">
+            <!-- Step 1: Upload -->
+            <div id="step-upload" class="flex items-start gap-4">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+                <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-white font-medium">Uploading backup file</div>
+                <div class="text-gray-400 text-sm mt-1">Transferring file to server...</div>
+              </div>
+            </div>
+            
+            <!-- Step 2: Validate -->
+            <div id="step-validate" class="flex items-start gap-4 opacity-50">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+                <i class="fas fa-circle text-gray-600 text-xs"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-white font-medium">Validating backup</div>
+                <div class="text-gray-400 text-sm mt-1">Checking file integrity...</div>
+              </div>
+            </div>
+            
+            <!-- Step 3: Restore -->
+            <div id="step-restore" class="flex items-start gap-4 opacity-50">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+                <i class="fas fa-circle text-gray-600 text-xs"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-white font-medium">Restoring database</div>
+                <div class="text-gray-400 text-sm mt-1">Replacing current data...</div>
+              </div>
+            </div>
+            
+            <!-- Step 4: Restart -->
+            <div id="step-restart" class="flex items-start gap-4 opacity-50">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+                <i class="fas fa-circle text-gray-600 text-xs"></i>
+              </div>
+              <div class="flex-1">
+                <div class="text-white font-medium">Restarting server</div>
+                <div class="text-gray-400 text-sm mt-1">Clearing cache and reconnecting...</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div class="bg-gray-800 rounded-full h-2 overflow-hidden">
+            <div id="progressBar" class="bg-gradient-to-r from-red-600 to-red-500 h-full transition-all duration-500 ease-out" style="width: 0%"></div>
+          </div>
+          
+          <!-- Status Message -->
+          <div id="statusMessage" class="text-center text-gray-300 text-sm">
+            Please wait while the restore operation completes...
+          </div>
         </div>
-        
-        <div class="bg-yellow-900/20 border border-yellow-800 rounded p-3 mb-4">
-          <p class="text-yellow-400 text-sm">
-            <i class="fas fa-exclamation-triangle mr-2"></i>
-            Warning: This will replace all current data!
-          </p>
-        </div>
-        
-        <div class="flex gap-3 justify-end">
-          <button 
-            type="button"
-            onclick="document.getElementById('restoreModal').classList.add('hidden')"
-            class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200"
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit"
-            class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200"
-          >
-            Restore Backup
-          </button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
   
@@ -1083,20 +1189,57 @@ const settingsTemplate = (req, options) => {
       
       function showRestoreModal() {
         document.getElementById('restoreModal').classList.remove('hidden');
+        // Reset modal to initial state
+        document.getElementById('restoreContent').classList.remove('hidden');
+        document.getElementById('restoreProgress').classList.add('hidden');
+        document.getElementById('closeRestoreModal').disabled = false;
+      }
+      
+      function closeRestoreModal() {
+        document.getElementById('restoreModal').classList.add('hidden');
+      }
+      
+      function updateProgressStep(stepId, state) {
+        const step = document.getElementById(stepId);
+        const icon = step.querySelector('i');
+        const circle = step.querySelector('div');
+        
+        step.classList.remove('opacity-50');
+        
+        if (state === 'active') {
+          icon.className = 'fas fa-spinner fa-spin text-red-500 text-sm';
+          circle.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-red-900/30 border-2 border-red-600 flex items-center justify-center';
+        } else if (state === 'complete') {
+          icon.className = 'fas fa-check text-green-400 text-sm';
+          circle.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-green-900/30 border-2 border-green-600 flex items-center justify-center';
+        } else if (state === 'error') {
+          icon.className = 'fas fa-times text-red-400 text-sm';
+          circle.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-red-900/50 border-2 border-red-500 flex items-center justify-center';
+        }
+      }
+      
+      function updateProgress(percent, message) {
+        document.getElementById('progressBar').style.width = percent + '%';
+        if (message) {
+          document.getElementById('statusMessage').textContent = message;
+        }
       }
       
       // Handle restore form submission
       document.getElementById('restoreForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
-        if (!confirm('This will replace ALL current data. Are you absolutely sure?')) {
-          return;
-        }
-        
         const formData = new FormData(e.target);
         
+        // Switch to progress view
+        document.getElementById('restoreContent').classList.add('hidden');
+        document.getElementById('restoreProgress').classList.remove('hidden');
+        document.getElementById('closeRestoreModal').disabled = true;
+        
         try {
-          showToast('Restoring database...', 'info');
+          // Step 1: Upload (0-25%)
+          updateProgressStep('step-upload', 'active');
+          updateProgress(10, 'Uploading backup file to server...');
           
           const response = await fetch('/admin/restore', {
             method: 'POST',
@@ -1104,36 +1247,69 @@ const settingsTemplate = (req, options) => {
             credentials: 'same-origin'
           });
           
+          updateProgress(25, 'Upload complete');
+          updateProgressStep('step-upload', 'complete');
+          
+          // Step 2: Validate (25-50%)
+          updateProgressStep('step-validate', 'active');
+          updateProgress(35, 'Validating backup file format...');
+          
           const data = await response.json();
           
-          if (data.success) {
-            document.getElementById('restoreModal').classList.add('hidden');
-            showToast('Database restored! Server restarting...', 'success');
-            
-            // Wait for server restart, then redirect
+          if (!data.success) {
+            updateProgressStep('step-validate', 'error');
+            updateProgress(50, data.error || 'Validation failed');
             setTimeout(() => {
-              showToast('Reconnecting...', 'info');
-              // Poll for server availability
+              closeRestoreModal();
+            }, 3000);
+            return;
+          }
+          
+          updateProgress(50, 'Backup validated successfully');
+          updateProgressStep('step-validate', 'complete');
+          
+          // Step 3: Restore (50-75%)
+          updateProgressStep('step-restore', 'active');
+          updateProgress(60, 'Restoring database from backup...');
+          
+          setTimeout(() => {
+            updateProgress(75, 'Database restored successfully');
+            updateProgressStep('step-restore', 'complete');
+            
+            // Step 4: Restart (75-100%)
+            updateProgressStep('step-restart', 'active');
+            updateProgress(80, 'Server is restarting...');
+            
+            // Wait for server restart, then poll for availability
+            setTimeout(() => {
+              updateProgress(85, 'Waiting for server to come back online...');
+              
               const checkServer = setInterval(async () => {
                 try {
                   const ping = await fetch('/health', { method: 'HEAD' });
                   if (ping.ok) {
                     clearInterval(checkServer);
-                    window.location.href = '/login';
+                    updateProgress(100, 'Server is back online! Redirecting...');
+                    updateProgressStep('step-restart', 'complete');
+                    
+                    setTimeout(() => {
+                      window.location.href = '/login';
+                    }, 1000);
                   }
                 } catch (e) {
                   // Server still restarting
                 }
               }, 1000);
             }, 3000);
-          } else {
-            showToast(data.error || 'Error restoring database', 'error');
-            document.getElementById('restoreModal').classList.add('hidden');
-          }
+          }, 1500);
+          
         } catch (error) {
           console.error('Error:', error);
-          showToast('Error restoring database', 'error');
-          document.getElementById('restoreModal').classList.add('hidden');
+          updateProgressStep('step-upload', 'error');
+          updateProgress(0, 'Error: ' + error.message);
+          setTimeout(() => {
+            closeRestoreModal();
+          }, 3000);
         }
       });
     `
