@@ -2799,7 +2799,7 @@ function createAlbumItem(album, index, isMobile = false) {
 function createDesktopAlbumRow(data, index) {
   const row = document.createElement('div');
   row.className =
-    'album-row album-grid gap-4 px-4 py-2 border-b border-gray-800';
+    'album-row album-grid gap-4 py-2 border-b border-gray-800';
   row.dataset.index = index;
 
   row.innerHTML = `
@@ -3001,7 +3001,7 @@ function createMobileAlbumCard(data, index) {
   card.innerHTML = `
     <div class="flex items-center h-full">
       <!-- Position number on the far left -->
-      <div class="flex-shrink-0 px-1 flex items-center justify-start text-gray-500 font-medium text-sm position-display" data-position-element="true">
+      <div class="flex-shrink-0 flex items-center justify-center text-gray-500 font-medium text-sm position-display" data-position-element="true">
         ${data.position}
       </div>
 
@@ -3128,7 +3128,7 @@ function displayAlbums(albums) {
     // Header
     const header = document.createElement('div');
     header.className =
-      'album-header album-grid gap-4 px-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
+      'album-header album-grid gap-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
     header.style.alignItems = 'center';
     header.innerHTML = `
       <div class="text-center">#</div>

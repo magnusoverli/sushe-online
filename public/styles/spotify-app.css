@@ -3,7 +3,8 @@
 /* Album grid column configuration with responsive behavior */
 :root {
   /* Default grid for desktop screens - Track column at the end */
-  --album-grid-columns: 0.04fr 0.18fr 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
+  /* Position column is fixed at 5px, rest are flexible */
+  --album-grid-columns: 5px 0.18fr 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
   --cover-art-size: 64px;
 }
 
@@ -37,6 +38,8 @@
   display: grid;
   grid-template-columns: var(--album-grid-columns);
   align-items: center;
+  padding-left: 1rem; /* 16px - maintain edge spacing */
+  padding-right: 1rem; /* 16px - maintain edge spacing */
 }
 
 /* Fix alignment issues with flex items inside grid cells */
@@ -53,6 +56,14 @@
 .album-row > div:nth-child(1),
 .album-header > div:nth-child(1) {
   justify-content: center;
+  text-align: center;
+  padding: 0; /* Remove any inherited padding */
+}
+
+/* Ensure position display is always centered (desktop and mobile) */
+.position-display {
+  text-align: center;
+  padding: 0;
 }
 
 /* Album image column - align header text to the right */
