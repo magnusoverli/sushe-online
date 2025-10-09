@@ -452,16 +452,57 @@ module.exports = (app, deps) => {
   // Admin: Backup entire database using pg_dump
   app.get('/admin/backup', ensureAuth, ensureAdmin, (req, res) => {
     const dump = spawn(pgDumpCmd, ['-Fc', process.env.DATABASE_URL]);
-    res.setHeader(
-      'Content-Disposition',
-      'attachment; filename="sushe-db.dump"'
-    );
-    res.setHeader('Content-Type', 'application/octet-stream');
-    dump.stdout.pipe(res);
-    dump.stderr.on('data', (d) => logger.error('pg_dump:', d.toString()));
+
+    // Collect backup data in memory to verify before sending
+    const chunks = [];
+    let hasError = false;
+
+    dump.stdout.on('data', (chunk) => {
+      chunks.push(chunk);
+    });
+
+    dump.stderr.on('data', (d) => {
+      logger.error('pg_dump:', d.toString());
+      hasError = true;
+    });
+
     dump.on('error', (err) => {
       logger.error('Backup error:', err);
-      res.status(500).send('Error creating backup');
+      if (!res.headersSent) {
+        res.status(500).send('Error creating backup');
+      }
+    });
+
+    dump.on('close', (code) => {
+      if (code !== 0 || hasError) {
+        logger.error('pg_dump exited with code', code);
+        if (!res.headersSent) {
+          res.status(500).send('Error creating backup');
+        }
+        return;
+      }
+
+      const backup = Buffer.concat(chunks);
+
+      // Verify backup integrity by checking magic bytes
+      if (backup.length < 5 || backup.slice(0, 5).toString() !== 'PGDMP') {
+        logger.error('Backup verification failed: invalid format');
+        if (!res.headersSent) {
+          res.status(500).send('Backup verification failed');
+        }
+        return;
+      }
+
+      // Backup is valid, send to user
+      logger.info(
+        `Backup created successfully (${(backup.length / 1024 / 1024).toFixed(2)} MB)`
+      );
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="sushe-db.dump"'
+      );
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.send(backup);
     });
   });
 
@@ -479,8 +520,31 @@ module.exports = (app, deps) => {
 
       const tmpFile = req.file.path;
 
+      // Validate that the file is a valid PostgreSQL dump file
+      try {
+        const header = Buffer.alloc(5);
+        const fd = fs.openSync(tmpFile, 'r');
+        fs.readSync(fd, header, 0, 5, 0);
+        fs.closeSync(fd);
+
+        if (header.toString() !== 'PGDMP') {
+          fs.unlinkSync(tmpFile);
+          return res.status(400).json({
+            error: 'Invalid backup file. Must be a PostgreSQL dump file.',
+          });
+        }
+      } catch (err) {
+        logger.error('Error validating backup file:', err);
+        fs.unlinkSync(tmpFile);
+        return res.status(400).json({
+          error: 'Unable to validate backup file',
+        });
+      }
+
       const restore = spawn(pgRestoreCmd, [
-        '-c',
+        '--clean',
+        '--if-exists',
+        '--single-transaction',
         '-d',
         process.env.DATABASE_URL,
         tmpFile,
