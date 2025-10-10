@@ -533,7 +533,7 @@ const settingsTemplate = (req, options) => {
       --accent-dark: ${adjustColor(user?.accentColor || '#dc2626', -50)};
       --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
       --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
-      --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.1)};
+      --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.2)};
     }
     
     /* Custom scrollbar - reused from main page */
