@@ -878,70 +878,28 @@ module.exports = (app, deps) => {
 
   // Search Spotify for an album and return the ID
   app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
-    // Check if we need to refresh the token
-    if (req.user.spotifyAuth && req.user.spotifyAuth.refresh_token) {
-      const needsRefresh =
-        !req.user.spotifyAuth.expires_at ||
-        req.user.spotifyAuth.expires_at <= Date.now() + 300000; // Refresh if expired or expires in < 5 minutes
-
-      if (needsRefresh) {
-        try {
-          const { refreshSpotifyToken } = require('../auth-utils');
-          logger.info('Attempting to refresh Spotify token for album search', {
-            currentExpiry: req.user.spotifyAuth.expires_at,
-            now: Date.now(),
-            hasRefreshToken: !!req.user.spotifyAuth.refresh_token,
-          });
-
-          const newToken = await refreshSpotifyToken(
-            req.user.spotifyAuth.refresh_token
-          );
-
-          // Update user's token in database
-          await usersAsync.update(
-            { _id: req.user._id },
-            { $set: { spotifyAuth: newToken } }
-          );
-
-          // Update token in current request
-          req.user.spotifyAuth = newToken;
-
-          // Save session to persist the new token
-          await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-              if (err) reject(err);
-              else resolve();
-            });
-          });
-
-          logger.info('Spotify token refreshed successfully for album search', {
-            newExpiry: newToken.expires_at,
-          });
-        } catch (err) {
-          logger.error('Failed to refresh Spotify token:', {
-            error: err.message,
-            stack: err.stack,
-            hasRefreshToken: !!req.user.spotifyAuth.refresh_token,
-          });
-          return res.status(401).json({
-            error:
-              'Failed to refresh Spotify token. Please reconnect your Spotify account.',
-            code: 'TOKEN_REFRESH_FAILED',
-          });
-        }
-      }
+    // Check if user has Spotify authentication
+    if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
+      logger.warn('Spotify API request without authentication');
+      return res.status(401).json({
+        error:
+          'Not authenticated with Spotify. Please connect your account in Settings.',
+        code: 'NOT_AUTHENTICATED',
+        service: 'spotify',
+      });
     }
 
+    // Check if token is expired (with 5 min buffer for better UX)
     if (
-      !req.user.spotifyAuth ||
-      !req.user.spotifyAuth.access_token ||
-      (req.user.spotifyAuth.expires_at &&
-        req.user.spotifyAuth.expires_at <= Date.now())
+      req.user.spotifyAuth.expires_at &&
+      req.user.spotifyAuth.expires_at <= Date.now() + 300000
     ) {
-      logger.warn('Spotify API request without valid token');
+      logger.warn('Spotify token expired or expiring soon');
       return res.status(401).json({
-        error: 'Not authenticated with Spotify',
-        code: 'NOT_AUTHENTICATED',
+        error:
+          'Your Spotify connection has expired. Please reconnect in Settings.',
+        code: 'TOKEN_EXPIRED',
+        service: 'spotify',
       });
     }
 
@@ -1416,71 +1374,23 @@ module.exports = (app, deps) => {
       // Check authentication for the target service
       const authField =
         targetService === 'spotify' ? 'spotifyAuth' : 'tidalAuth';
-      let auth = req.user[authField];
+      const auth = req.user[authField];
 
-      // Try to refresh Spotify token if needed
-      if (targetService === 'spotify' && auth && auth.refresh_token) {
-        const needsRefresh =
-          !auth.expires_at || auth.expires_at <= Date.now() + 300000; // Refresh if expired or expires in < 5 minutes
-
-        if (needsRefresh) {
-          try {
-            const { refreshSpotifyToken } = require('../auth-utils');
-            logger.info('Attempting to refresh Spotify token', {
-              currentExpiry: auth.expires_at,
-              now: Date.now(),
-              hasRefreshToken: !!auth.refresh_token,
-            });
-
-            const newToken = await refreshSpotifyToken(auth.refresh_token);
-
-            await usersAsync.update(
-              { _id: req.user._id },
-              { $set: { spotifyAuth: newToken } }
-            );
-
-            req.user.spotifyAuth = newToken;
-            auth = newToken;
-
-            // Save session to persist the new token
-            await new Promise((resolve, reject) => {
-              req.session.save((err) => {
-                if (err) reject(err);
-                else resolve();
-              });
-            });
-
-            logger.info(
-              'Spotify token refreshed successfully for playlist operation',
-              {
-                newExpiry: newToken.expires_at,
-              }
-            );
-          } catch (err) {
-            logger.error('Failed to refresh Spotify token for playlist:', {
-              error: err.message,
-              stack: err.stack,
-              hasRefreshToken: !!auth.refresh_token,
-            });
-            return res.status(401).json({
-              error:
-                'Failed to refresh Spotify token. Please reconnect your Spotify account.',
-              code: 'TOKEN_REFRESH_FAILED',
-              service: targetService,
-              details: err.message,
-            });
-          }
-        }
+      // Check if user has authentication for the service
+      if (!auth || !auth.access_token) {
+        return res.status(401).json({
+          error: `Not authenticated with ${targetService}. Please connect your ${targetService} account in Settings.`,
+          code: 'NOT_AUTHENTICATED',
+          service: targetService,
+        });
       }
 
-      if (
-        !auth ||
-        !auth.access_token ||
-        (auth.expires_at && auth.expires_at <= Date.now())
-      ) {
+      // Check if token is expired (with 5 min buffer for better UX)
+      if (auth.expires_at && auth.expires_at <= Date.now() + 300000) {
+        logger.warn(`${targetService} token expired or expiring soon`);
         return res.status(401).json({
-          error: `Not authenticated with ${targetService}. Please connect your ${targetService} account.`,
-          code: 'NOT_AUTHENTICATED',
+          error: `Your ${targetService} connection has expired. Please reconnect in Settings.`,
+          code: 'TOKEN_EXPIRED',
           service: targetService,
         });
       }

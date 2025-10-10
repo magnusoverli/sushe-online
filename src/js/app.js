@@ -1091,9 +1091,10 @@ export async function apiCall(url, options = {}) {
         try {
           const errorData = await response.json();
 
-          // OAuth-specific errors (token refresh failed, music service not authenticated)
+          // OAuth-specific errors (token expired, music service not authenticated)
           // These should be handled by the caller, not redirect to login
           if (
+            errorData.code === 'TOKEN_EXPIRED' ||
             errorData.code === 'TOKEN_REFRESH_FAILED' ||
             (errorData.code === 'NOT_AUTHENTICATED' && errorData.service)
           ) {

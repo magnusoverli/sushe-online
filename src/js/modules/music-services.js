@@ -67,21 +67,30 @@ export async function updatePlaylist(listName, listData = []) {
   } catch (error) {
     console.error('Error updating playlist:', error);
 
-    // Handle OAuth token refresh failure
-    if (error.data && error.data.code === 'TOKEN_REFRESH_FAILED') {
+    // Handle OAuth token expiration - automatically reconnect
+    if (
+      error.data &&
+      (error.data.code === 'TOKEN_EXPIRED' ||
+        error.data.code === 'TOKEN_REFRESH_FAILED') &&
+      error.data.service
+    ) {
       const serviceName =
         error.data.service === 'spotify' ? 'Spotify' : 'Tidal';
-      const shouldRedirect = await showConfirmation(
-        `${serviceName} Connection Expired`,
-        error.data.error ||
-          `Your ${serviceName} connection has expired and needs to be refreshed.`,
-        `Would you like to go to Settings to reconnect your ${serviceName} account?`,
-        'Go to Settings'
+      
+      // Show a brief toast before redirecting
+      showToast(
+        `Reconnecting to ${serviceName}...`,
+        'info',
+        2000
       );
-
-      if (shouldRedirect) {
-        window.location.href = '/settings';
-      }
+      
+      // Automatically redirect to reconnect (OAuth flow)
+      // Pass the current path so we can return here after reconnecting
+      setTimeout(() => {
+        const returnTo = encodeURIComponent(window.location.pathname);
+        window.location.href = `/auth/${error.data.service}?returnTo=${returnTo}`;
+      }, 500);
+      
       return;
     }
 
