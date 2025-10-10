@@ -212,9 +212,9 @@ body {
   .album-row:hover:not(.sortable-chosen):not(.sortable-drag):not(.sortable-ghost) {
     background: linear-gradient(
       90deg,
-      var(--accent-subtle) 0%,
-      var(--accent-subtle) 20%,
-      transparent 100%
+      var(--accent-subtle-strong) 0%,
+      var(--accent-subtle-strong) 5%,
+      transparent 80%
     );
   }
 

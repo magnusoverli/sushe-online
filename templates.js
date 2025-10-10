@@ -898,6 +898,7 @@ const spotifyTemplate = (user) => `
       --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
       --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
       --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.2)};
+      --accent-subtle-strong: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.3)};
     }
     
     /* Apply accent color to text and borders only, not buttons */
