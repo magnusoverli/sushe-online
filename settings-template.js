@@ -60,7 +60,7 @@ const input = (
     id="${id}"
     ${value ? `value="${value}"` : ''}
     ${placeholder ? `placeholder="${placeholder}"` : ''}
-    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 ${className}"
+    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200 ${className}"
     ${attributes}
   >
 `;
@@ -204,7 +204,7 @@ const themeSection = (user) =>
           'Time Format',
           `
             <div class="flex gap-3">
-              <select id="timeFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-red-600">
+              <select id="timeFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500">
                 <option value="24h" ${user.timeFormat !== '12h' ? 'selected' : ''}>24-hour</option>
                 <option value="12h" ${user.timeFormat === '12h' ? 'selected' : ''}>12-hour</option>
               </select>
@@ -217,7 +217,7 @@ const themeSection = (user) =>
           'Date Format',
           `
             <div class="flex gap-3">
-              <select id="dateFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-red-600">
+              <select id="dateFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500">
                 <option value="MM/DD/YYYY" ${user.dateFormat !== 'DD/MM/YYYY' ? 'selected' : ''}>MM/DD/YYYY</option>
                 <option value="DD/MM/YYYY" ${user.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
               </select>
@@ -303,7 +303,7 @@ const musicServicesSection = (user, spotifyValid, tidalValid) =>
         'Preferred Service',
         `
           <div class="flex gap-3">
-            <select id="musicServiceSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-red-600">
+            <select id="musicServiceSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500">
               <option value="" ${!user.musicService ? 'selected' : ''}>Ask each time</option>
               <option value="spotify" ${user.musicService === 'spotify' ? 'selected' : ''} ${!user.spotifyAuth ? 'disabled' : ''}>Spotify</option>
               <option value="tidal" ${user.musicService === 'tidal' ? 'selected' : ''} ${!user.tidalAuth ? 'disabled' : ''}>Tidal</option>
@@ -716,7 +716,7 @@ const settingsTemplate = (req, options) => {
                          file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 
                          file:text-sm file:font-semibold file:bg-gray-700 file:text-white 
                          hover:file:bg-gray-600 file:transition-colors file:cursor-pointer
-                         focus:outline-none focus:border-red-600 transition-colors cursor-pointer"
+                         focus:outline-none focus:border-gray-500 transition-colors cursor-pointer"
                 >
               </div>
               <p class="text-xs text-gray-500 mt-2">

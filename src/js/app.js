@@ -892,7 +892,7 @@ function makeCountryEditable(countryDiv, albumIndex) {
   const input = document.createElement('input');
   input.type = 'text';
   input.className =
-    'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+    'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-gray-500';
   input.value = currentCountry;
   input.placeholder = 'Type to search countries...';
   input.setAttribute('list', `country-list-${currentList}-${albumIndex}`);
@@ -2354,7 +2354,7 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
   const input = document.createElement('input');
   input.type = 'text';
   input.className =
-    'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-red-600';
+    'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-gray-500';
   input.value = currentGenre;
   input.placeholder = `Type to search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
   input.setAttribute(
@@ -2492,7 +2492,7 @@ function makeCommentEditable(commentDiv, albumIndex) {
   // Create textarea
   const textarea = document.createElement('textarea');
   textarea.className =
-    'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded border border-gray-700 focus:outline-none focus:border-red-600 resize-none';
+    'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded border border-gray-700 focus:outline-none focus:border-gray-500 resize-none';
   textarea.value = currentComment;
   textarea.rows = 2;
 
@@ -3743,7 +3743,7 @@ window.showMobileEditForm = function (index) {
             type="text" 
             id="editArtist" 
             value="${album.artist || ''}"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
             placeholder="Artist name"
           >
         </div>
@@ -3755,7 +3755,7 @@ window.showMobileEditForm = function (index) {
             type="text" 
             id="editAlbum" 
             value="${album.album || ''}"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
             placeholder="Album title"
           >
         </div>
@@ -3767,7 +3767,7 @@ window.showMobileEditForm = function (index) {
             type="date"
             id="editReleaseDate"
             value="${inputReleaseDate}"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
             style="display: block; width: 100%; min-height: 48px; -webkit-appearance: none;"
           >
           ${!album.release_date ? '<p class="text-xs text-gray-500 mt-1">No date set - defaulting to today</p>' : ''}
@@ -3779,7 +3779,7 @@ window.showMobileEditForm = function (index) {
           <div class="relative">
             <select 
               id="editCountry" 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
             >
               <option value="">Select a country...</option>
               ${availableCountries
@@ -3803,7 +3803,7 @@ window.showMobileEditForm = function (index) {
           <div class="relative">
             <select 
               id="editGenre1" 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
             >
               <option value="">Select a genre...</option>
               ${availableGenres
@@ -3827,7 +3827,7 @@ window.showMobileEditForm = function (index) {
           <div class="relative">
             <select 
               id="editGenre2" 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200 appearance-none pr-10"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
             >
               <option value="">None (optional)</option>
               ${availableGenres
@@ -3856,7 +3856,7 @@ window.showMobileEditForm = function (index) {
           <textarea
             id="editComments"
             rows="3"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200 resize-none"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200 resize-none"
             placeholder="Add your notes..."
           >${album.comments || album.comment || ''}</textarea>
         </div>
@@ -3887,7 +3887,7 @@ window.showMobileEditForm = function (index) {
           `
               : `
             <input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
-                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
                    placeholder="Enter track number">
           `
           }
@@ -3945,7 +3945,7 @@ window.showMobileEditForm = function (index) {
                   )
                   .join('')}</ul>`
               : `<input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
-                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
                    placeholder="Enter track number">`;
           setupTrackPickCheckboxes();
         }

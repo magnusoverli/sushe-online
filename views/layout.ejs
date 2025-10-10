@@ -67,9 +67,10 @@
     .hover\:bg-red-700:hover, .hover\:bg-red-600:hover { background-color: var(--accent-hover) !important; }
     .hover\:text-red-500:hover, .hover\:text-red-400:hover { color: var(--accent-color) !important; }
     .border-red-600, .border-red-500 { border-color: var(--accent-color) !important; }
-    .focus\:border-red-600:focus { border-color: var(--accent-color) !important; }
     .ring-red-600 { --tw-ring-color: var(--accent-color) !important; }
-    .spotify-input:focus { box-shadow: 0 0 0 3px var(--accent-shadow); }
+    /* Input fields use neutral gray colors, not accent color */
+    .spotify-input:focus { border-color: #6b7280 !important; box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.3); }
+    .focus\:border-red-600:focus:not(.spotify-input) { border-color: var(--accent-color) !important; }
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
     .metal-title { font-family: 'Cinzel', serif; text-shadow: 0 0 20px var(--accent-glow); }
     .glow-red { animation: glow 2s ease-in-out infinite alternate; }

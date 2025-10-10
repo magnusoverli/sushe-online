@@ -138,7 +138,7 @@ const registerTemplate = (req, flash) =>
           Email Address
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
           name="email" 
           id="email"
           type="email" 
@@ -153,7 +153,7 @@ const registerTemplate = (req, flash) =>
           Username
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
           name="username" 
           id="username"
           type="text" 
@@ -170,7 +170,7 @@ const registerTemplate = (req, flash) =>
           Password
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
           name="password" 
           id="password"
           type="password" 
@@ -186,7 +186,7 @@ const registerTemplate = (req, flash) =>
           Confirm Password
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
           name="confirmPassword" 
           id="confirmPassword"
           type="password" 
@@ -237,7 +237,7 @@ const forgotPasswordTemplate = (req, flash) => `
           Email Address
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
           name="email" 
           id="email"
           type="email" 
@@ -279,7 +279,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
           New Password
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
           name="password" 
           id="password"
           type="password" 
@@ -401,7 +401,7 @@ const importConflictModalComponent = () => `
           type="text" 
           id="importNewName" 
           placeholder="Enter new name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
           maxlength="50"
         >
         <p class="text-xs text-gray-500 mt-2">Choose a unique name for the imported list</p>
@@ -505,7 +505,7 @@ const createListModalComponent = () => `
           type="text" 
           id="newListName" 
           placeholder="Enter list name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
           maxlength="50"
         >
         <p class="text-xs text-gray-500 mt-2">Give your list a unique name</p>
@@ -549,7 +549,7 @@ const renameListModalComponent = () => `
           type="text" 
           id="newListNameInput" 
           placeholder="Enter new name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
           maxlength="50"
         >
         <p class="text-xs text-gray-500 mt-2">Enter a new unique name for this list</p>
@@ -614,7 +614,7 @@ const addAlbumModalComponent = () => `
                 type="text" 
                 id="artistSearchInput" 
                 placeholder="Search for an artist..." 
-                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
               >
               <button 
                 id="searchArtistBtn" 
@@ -686,7 +686,7 @@ const addAlbumModalComponent = () => `
                       type="text" 
                       id="manualArtist" 
                       name="artist"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
                       placeholder="Enter artist name"
                       required
                     >
@@ -701,7 +701,7 @@ const addAlbumModalComponent = () => `
                       type="text" 
                       id="manualAlbum" 
                       name="album"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
                       placeholder="Enter album title"
                       required
                     >
@@ -716,7 +716,7 @@ const addAlbumModalComponent = () => `
                       type="date" 
                       id="manualReleaseDate" 
                       name="release_date"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
                     >
                   </div>
                   
@@ -728,7 +728,7 @@ const addAlbumModalComponent = () => `
                     <select 
                       id="manualCountry" 
                       name="country"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-red-600 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200"
                     >
                       <option value="">Select a country...</option>
                     </select>
