@@ -167,7 +167,7 @@ const passwordSection = (req) =>
       )}
       
       <div class="pt-4">
-        ${button('Update Password', '', 'w-full bg-red-600 hover:bg-red-700', 'fas fa-key')}
+        ${button('Update Password', '', 'w-full bg-gray-700 hover:bg-gray-600', 'fas fa-key')}
       </div>
     </form>
   `
@@ -260,7 +260,7 @@ const musicServicesSection = (user, spotifyValid, tidalValid) =>
                   </a>
                 `
                 : `
-                <a href="/auth/spotify" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition duration-200">
+                <a href="/auth/spotify" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
                   Connect
                 </a>
               `
@@ -290,7 +290,7 @@ const musicServicesSection = (user, spotifyValid, tidalValid) =>
                   </a>
                 `
                 : `
-                <a href="/auth/tidal" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm transition duration-200">
+                <a href="/auth/tidal" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
                   Connect
                 </a>
               `
@@ -362,7 +362,7 @@ const adminRequestSection = (req) =>
       )}
       
       <div class="pt-4">
-        ${button('Request Admin Access', '', 'w-full bg-red-600 hover:bg-red-700', 'fas fa-key')}
+        ${button('Request Admin Access', '', 'w-full bg-gray-700 hover:bg-gray-600', 'fas fa-key')}
       </div>
     </form>
   `
@@ -563,19 +563,10 @@ const settingsTemplate = (req, options) => {
     .text-red-600, .text-red-500, .text-red-400 { 
       color: var(--accent-color) !important; 
     }
-    .bg-red-600, .bg-red-500 { 
-      background-color: var(--accent-color) !important; 
-    }
-    .hover\\:bg-red-700:hover, .hover\\:bg-red-600:hover { 
-      background-color: var(--accent-hover) !important; 
-    }
     .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
       color: var(--accent-color) !important; 
     }
     .border-red-600, .border-red-500 { 
-      border-color: var(--accent-color) !important; 
-    }
-    .focus\\:border-red-600:focus { 
       border-color: var(--accent-color) !important; 
     }
     
@@ -753,7 +744,7 @@ const settingsTemplate = (req, options) => {
               <button 
                 type="submit"
                 id="restoreButton"
-                class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg 
+                class="px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg 
                        transition-colors duration-200 font-semibold flex items-center gap-2 whitespace-nowrap"
               >
                 <i class="fas fa-upload"></i>

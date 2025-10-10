@@ -63,8 +63,6 @@
       --accent-subtle: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.1) %>;
     }
     .text-red-600, .text-red-500, .text-red-400 { color: var(--accent-color) !important; }
-    .bg-red-600, .bg-red-500 { background-color: var(--accent-color) !important; }
-    .hover\:bg-red-700:hover, .hover\:bg-red-600:hover { background-color: var(--accent-hover) !important; }
     .hover\:text-red-500:hover, .hover\:text-red-400:hover { color: var(--accent-color) !important; }
     .border-red-600, .border-red-500 { border-color: var(--accent-color) !important; }
     .ring-red-600 { --tw-ring-color: var(--accent-color) !important; }
@@ -81,10 +79,7 @@
     .bg-red-900 { background-color: var(--accent-dark) !important; }
     .bg-red-800 { background-color: var(--accent-dark) !important; }
     .accent-glow-top { background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%); }
-    .toast.error { background-color: var(--accent-color); }
-    .bg-red-600.text-white.text-xs { background-color: var(--accent-color) !important; }
-    #mobileFAB { background-color: var(--accent-color) !important; }
-    #mobileFAB:hover { background-color: var(--accent-hover) !important; }
+    .toast.error { background-color: #dc2626; }
     .album-row.drag-placeholder { background-color: var(--accent-subtle); border-color: var(--accent-color); }
 
     ::-webkit-scrollbar { width: 8px; }

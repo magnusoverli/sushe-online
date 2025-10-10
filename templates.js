@@ -198,7 +198,7 @@ const registerTemplate = (req, flash) =>
       </div>
       
       <button 
-        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
         Create Account
@@ -246,7 +246,7 @@ const forgotPasswordTemplate = (req, flash) => `
         />
       </div>
       <button 
-        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
         Reset password
@@ -289,7 +289,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
         />
       </div>
       <button 
-        class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
         Seal the Pact
@@ -417,7 +417,7 @@ const importConflictModalComponent = () => `
         </button>
         <button 
           id="confirmImportRenameBtn" 
-          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
         >
           Import with New Name
         </button>
@@ -521,7 +521,7 @@ const createListModalComponent = () => `
         </button>
         <button 
           id="confirmCreateBtn" 
-          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
         >
           Create List
         </button>
@@ -565,7 +565,7 @@ const renameListModalComponent = () => `
         </button>
         <button 
           id="confirmRenameBtn" 
-          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
         >
           Rename List
         </button>
@@ -618,7 +618,7 @@ const addAlbumModalComponent = () => `
               >
               <button 
                 id="searchArtistBtn" 
-                class="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg transition duration-200 font-semibold whitespace-nowrap"
+                class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-3 rounded-lg transition duration-200 font-semibold whitespace-nowrap"
               >
                 <i class="fas fa-search mr-2"></i>Search
               </button>
@@ -780,7 +780,7 @@ const addAlbumModalComponent = () => `
                   </button>
                   <button 
                     type="submit"
-                    class="flex-1 lg:flex-none px-6 lg:px-8 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition duration-200 font-semibold"
+                    class="flex-1 lg:flex-none px-6 lg:px-8 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition duration-200 font-semibold"
                   >
                     Add Album
                   </button>
@@ -832,7 +832,7 @@ const confirmationModalComponent = () => `
         </button>
         <button 
           id="confirmationConfirmBtn" 
-          class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
         >
           Remove
         </button>
@@ -900,23 +900,14 @@ const spotifyTemplate = (user) => `
       --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.1)};
     }
     
-    /* Apply accent color throughout */
+    /* Apply accent color to text and borders only, not buttons */
     .text-red-600, .text-red-500, .text-red-400 { 
       color: var(--accent-color) !important; 
-    }
-    .bg-red-600, .bg-red-500 { 
-      background-color: var(--accent-color) !important; 
-    }
-    .hover\\:bg-red-700:hover, .hover\\:bg-red-600:hover { 
-      background-color: var(--accent-hover) !important; 
     }
     .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
       color: var(--accent-color) !important; 
     }
     .border-red-600, .border-red-500 { 
-      border-color: var(--accent-color) !important; 
-    }
-    .focus\\:border-red-600:focus { 
       border-color: var(--accent-color) !important; 
     }
     
@@ -1178,7 +1169,7 @@ const spotifyTemplate = (user) => `
   <!-- Floating Action Button -->
   <button
     id="addAlbumFAB"
-    class="fixed bottom-6 right-6 w-14 h-14 bg-red-600 hover:bg-red-700 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
+    class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-40"
     style="display: none;"
     onclick="if(window.openAddAlbumModal) window.openAddAlbumModal()"
   >
