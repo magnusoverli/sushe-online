@@ -1447,12 +1447,25 @@ module.exports = (app, deps) => {
 
       res.json(result);
     } catch (err) {
-      logger.error('Playlist operation error:', err);
-      logger.error('Error stack:', err.stack);
+      // Log full error details server-side for debugging
+      logger.error('Playlist operation error:', {
+        error: err.message,
+        stack: err.stack,
+        userId: req.user?._id,
+        listName,
+        targetService,
+      });
+
+      // Return safe error response to client
+      // Never expose error.message or stack traces - may contain sensitive info
       res.status(500).json({
-        error: 'Failed to update playlist',
-        details: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+        success: false,
+        error: {
+          type: 'PLAYLIST_ERROR',
+          message:
+            'Failed to update playlist. Please check your music service connection and try again.',
+          timestamp: new Date().toISOString(),
+        },
       });
     }
   });
