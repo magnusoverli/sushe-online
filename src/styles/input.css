@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hide scrollbar on mobile only */
+@media (max-width: 768px) {
+  /* For Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    display: none;
+  }
+  
+  /* For Firefox */
+  * {
+    scrollbar-width: none;
+  }
+  
+  /* For all browsers - prevent scrollbar space */
+  body, html {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
 /* Hide flash messages when JavaScript is enabled for toast conversion */
 .js-enabled .flash-message {
   display: none !important;
