@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // Lazy loading module cache
 let musicServicesModule = null;
 let importExportModule = null;

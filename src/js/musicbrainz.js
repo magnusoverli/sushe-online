@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // MusicBrainz API integration
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy

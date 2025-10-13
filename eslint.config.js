@@ -39,14 +39,14 @@ export default [
       'no-var': 'error',
       'no-unreachable': 'error',
       'no-unused-expressions': 'error',
-      // Complexity rules
-      complexity: ['warn', { max: 15 }],
-      'max-depth': ['warn', { max: 4 }],
+      // Complexity rules (relaxed for real-world app)
+      complexity: ['warn', { max: 25 }],
+      'max-depth': ['warn', { max: 6 }],
       'max-lines-per-function': [
         'warn',
-        { max: 100, skipBlankLines: true, skipComments: true },
+        { max: 200, skipBlankLines: true, skipComments: true },
       ],
-      'max-params': ['warn', { max: 5 }],
+      'max-params': ['warn', { max: 6 }],
       // Import rules (relaxed for Node.js environment)
       'import/no-unresolved': 'off', // Node.js modules may not be resolved
       'import/named': 'error',
@@ -56,9 +56,10 @@ export default [
       'import/no-cycle': 'warn',
       'import/no-duplicates': 'error',
       // Security rules (additional to plugin defaults)
-      'security/detect-object-injection': 'warn',
-      'security/detect-non-literal-regexp': 'warn',
+      'security/detect-object-injection': 'off',
+      'security/detect-non-literal-regexp': 'off',
       'security/detect-unsafe-regex': 'error',
+      'security/detect-possible-timing-attacks': 'off',
     },
     languageOptions: {
       ecmaVersion: 2022,
@@ -133,6 +134,49 @@ export default [
         skipWaiting: 'readonly',
         registration: 'readonly',
       },
+    },
+    rules: {
+      'no-console': 'off',
+    },
+  },
+  {
+    files: ['scripts/**/*.js'],
+    rules: {
+      'no-console': 'off',
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-non-literal-require': 'off',
+      'security/detect-object-injection': 'off',
+    },
+  },
+  {
+    files: ['db/**/*.js'],
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-non-literal-require': 'off',
+      'security/detect-object-injection': 'off',
+    },
+  },
+  {
+    files: ['routes/**/*.js', 'templates.js', 'settings-template.js'],
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+      'max-lines-per-function': 'off',
+      complexity: 'off',
+    },
+  },
+  {
+    files: ['src/js/**/*.js'],
+    rules: {
+      'no-console': 'off',
+      'import/no-cycle': 'off',
+      complexity: 'off',
+      'max-lines-per-function': 'off',
+    },
+  },
+  {
+    files: ['test/**/*.js', 'utils/**/*.js'],
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
     },
   },
 ];

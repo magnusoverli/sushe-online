@@ -1,6 +1,7 @@
 {
   "name": "sushe-online",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "npm run build && node index.js",

@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // SortableJS-based Drag and Drop Module for Album Reordering
 import Sortable from 'sortablejs';
 

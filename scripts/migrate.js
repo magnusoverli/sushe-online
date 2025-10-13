@@ -31,13 +31,10 @@ async function main() {
 
       case 'status': {
         const status = await migrationManager.getMigrationStatus();
-        // eslint-disable-next-line no-console
         console.log('\nMigration Status:');
-        // eslint-disable-next-line no-console
         console.log('================');
         status.forEach((migration) => {
           const status = migration.executed ? '✓ Executed' : '✗ Pending';
-          // eslint-disable-next-line no-console
           console.log(`${status} - ${migration.version}`);
         });
         break;
@@ -55,15 +52,10 @@ async function main() {
       }
 
       default:
-        // eslint-disable-next-line no-console
         console.log('Usage:');
-        // eslint-disable-next-line no-console
         console.log('  npm run migrate up      - Run pending migrations');
-        // eslint-disable-next-line no-console
         console.log('  npm run migrate down    - Rollback last migration');
-        // eslint-disable-next-line no-console
         console.log('  npm run migrate status  - Show migration status');
-        // eslint-disable-next-line no-console
         console.log('  npm run migrate create <name> - Create new migration');
         break;
     }
@@ -113,9 +105,7 @@ module.exports = {
   const filePath = path.join(migrationsDir, filename);
   fs.writeFileSync(filePath, template);
 
-  // eslint-disable-next-line no-console
   console.log(`Created migration: ${filename}`);
-  // eslint-disable-next-line no-console
   console.log(`Path: ${filePath}`);
 }
 
