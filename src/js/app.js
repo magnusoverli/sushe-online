@@ -3926,6 +3926,9 @@ window.showMobileEditForm = function (index) {
       e.preventDefault();
       e.stopPropagation();
       editModal.remove();
+      // Force scroll to top and trigger reflow to fix iOS keyboard issues
+      window.scrollTo(0, 0);
+      document.body.scrollTop = 0;
     });
   }
 
@@ -4033,6 +4036,10 @@ window.showMobileEditForm = function (index) {
 
     // Close the modal immediately for better UX
     editModal.remove();
+
+    // Force scroll to top and trigger reflow to fix iOS keyboard issues
+    window.scrollTo(0, 0);
+    document.body.scrollTop = 0;
 
     // Force refresh the display to show changes immediately
     displayAlbums(lists[currentList]);
