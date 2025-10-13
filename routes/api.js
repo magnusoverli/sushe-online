@@ -1369,9 +1369,10 @@ module.exports = (app, deps) => {
       body: req.body,
     });
 
+    // Validate user has a preferred music service or service is specified
+    const targetService = service || req.user.musicService;
+
     try {
-      // Validate user has a preferred music service or service is specified
-      const targetService = service || req.user.musicService;
       if (!targetService || !['spotify', 'tidal'].includes(targetService)) {
         return res.status(400).json({
           error:

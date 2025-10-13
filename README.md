@@ -110,12 +110,14 @@ Automatically configured by Helmet:
 The CSP automatically whitelists these trusted services:
 
 **Music Services:**
+
 - Spotify API (`api.spotify.com`, `accounts.spotify.com`)
 - Tidal API (`api.tidal.com`, `auth.tidal.com`)
 - Deezer API (`api.deezer.com`, `e-cdns-images.dzcdn.net`)
 - MusicBrainz (`musicbrainz.org`)
 
 **Content/Utilities:**
+
 - Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`)
 - Wikimedia Commons (`commons.wikimedia.org`)
 - RestCountries API (`restcountries.com`)
