@@ -3716,7 +3716,7 @@ window.showMobileEditForm = function (index) {
   editModal.innerHTML = `
     <!-- Header -->
     <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
-      <button onclick="this.closest('.fixed').remove()" class="p-2 -m-2 text-gray-400 hover:text-white">
+      <button data-close-editor class="p-2 -m-2 text-gray-400 hover:text-white">
         <i class="fas fa-times text-xl"></i>
       </button>
       <h3 class="text-lg font-semibold text-white flex-1 text-center px-4">Edit Album</h3>
@@ -3905,6 +3905,16 @@ window.showMobileEditForm = function (index) {
 
   document.body.appendChild(editModal);
 
+  // Attach close button handler
+  const closeBtn = editModal.querySelector('[data-close-editor]');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      editModal.remove();
+    });
+  }
+
   function setupTrackPickCheckboxes() {
     if (!trackPickContainer) return;
     const boxes = trackPickContainer.querySelectorAll(
@@ -4007,16 +4017,18 @@ window.showMobileEditForm = function (index) {
     // Update the album in the list
     lists[currentList][index] = updatedAlbum;
 
+    // Close the modal immediately for better UX
+    editModal.remove();
+
+    // Show saving toast
+    showToast('Saving changes...', 'info', 1000);
+
+    // Force refresh the display to show changes immediately
+    displayAlbums(lists[currentList]);
+
+    // Save to server in the background
     try {
-      // Save to server
       await saveList(currentList, lists[currentList]);
-
-      // Close the modal first
-      editModal.remove();
-
-      // Force refresh the display to show changes
-      displayAlbums(lists[currentList]);
-
       showToast('Album updated successfully');
     } catch (error) {
       console.error('Error saving album:', error);
@@ -4024,9 +4036,6 @@ window.showMobileEditForm = function (index) {
 
       // Revert changes on error
       lists[currentList][index] = album;
-
-      // Close modal even on error
-      editModal.remove();
 
       // Refresh display to show reverted state
       displayAlbums(lists[currentList]);
