@@ -98,6 +98,10 @@ module.exports = (app, deps) => {
     cacheConfigs,
     responseCache,
   } = require('../middleware/response-cache');
+  const {
+    forgotPasswordRateLimit,
+    resetPasswordRateLimit,
+  } = require('../middleware/rate-limit');
   const { URLSearchParams } = require('url');
   const {
     htmlTemplate,
@@ -472,7 +476,7 @@ module.exports = (app, deps) => {
   });
 
   // Handle forgot password submission
-  app.post('/forgot', csrfProtection, (req, res) => {
+  app.post('/forgot', forgotPasswordRateLimit, csrfProtection, (req, res) => {
     const { email } = req.body;
 
     if (!email) {
@@ -582,77 +586,82 @@ module.exports = (app, deps) => {
   });
 
   // Handle password reset
-  app.post('/reset/:token', csrfProtection, async (req, res) => {
-    users.findOne(
-      { resetToken: req.params.token, resetExpires: { $gt: Date.now() } },
-      async (err, user) => {
-        if (err) {
-          logger.error('Error finding user with reset token:', err);
-          return res.send(
-            htmlTemplate(
-              invalidTokenTemplate(),
-              'Invalid Token - Black Metal Auth'
-            )
-          );
-        }
+  app.post(
+    '/reset/:token',
+    resetPasswordRateLimit,
+    csrfProtection,
+    async (req, res) => {
+      users.findOne(
+        { resetToken: req.params.token, resetExpires: { $gt: Date.now() } },
+        async (err, user) => {
+          if (err) {
+            logger.error('Error finding user with reset token:', err);
+            return res.send(
+              htmlTemplate(
+                invalidTokenTemplate(),
+                'Invalid Token - Black Metal Auth'
+              )
+            );
+          }
 
-        if (!user) {
-          return res.send(
-            htmlTemplate(
-              invalidTokenTemplate(),
-              'Invalid Token - Black Metal Auth'
-            )
-          );
-        }
+          if (!user) {
+            return res.send(
+              htmlTemplate(
+                invalidTokenTemplate(),
+                'Invalid Token - Black Metal Auth'
+              )
+            );
+          }
 
-        try {
-          const hash = await bcrypt.hash(req.body.password, 12);
+          try {
+            const hash = await bcrypt.hash(req.body.password, 12);
 
-          users.update(
-            { _id: user._id },
-            {
-              $set: { hash },
-              $unset: { resetToken: true, resetExpires: true },
-            },
-            {},
-            (err, numReplaced) => {
-              if (err) {
-                logger.error('Password reset update error:', err);
-                req.flash(
-                  'error',
-                  'Error updating password. Please try again.'
+            users.update(
+              { _id: user._id },
+              {
+                $set: { hash },
+                $unset: { resetToken: true, resetExpires: true },
+              },
+              {},
+              (err, numReplaced) => {
+                if (err) {
+                  logger.error('Password reset update error:', err);
+                  req.flash(
+                    'error',
+                    'Error updating password. Please try again.'
+                  );
+                  return res.redirect('/reset/' + req.params.token);
+                }
+
+                if (numReplaced === 0) {
+                  logger.error('No user updated during password reset');
+                  req.flash(
+                    'error',
+                    'Error updating password. Please try again.'
+                  );
+                  return res.redirect('/reset/' + req.params.token);
+                }
+
+                logger.info(
+                  'Password successfully updated for user:',
+                  user.email
                 );
-                return res.redirect('/reset/' + req.params.token);
-              }
-
-              if (numReplaced === 0) {
-                logger.error('No user updated during password reset');
                 req.flash(
-                  'error',
-                  'Error updating password. Please try again.'
+                  'success',
+                  'Password updated successfully. Please login with your new password.'
                 );
-                return res.redirect('/reset/' + req.params.token);
+                res.redirect('/login');
               }
-
-              logger.info(
-                'Password successfully updated for user:',
-                user.email
-              );
-              req.flash(
-                'success',
-                'Password updated successfully. Please login with your new password.'
-              );
-              res.redirect('/login');
-            }
-          );
-        } catch (error) {
-          logger.error('Password hashing error:', error);
-          req.flash('error', 'Error processing password. Please try again.');
-          res.redirect('/reset/' + req.params.token);
+            );
+          } catch (error) {
+            logger.error('Password hashing error:', error);
+            req.flash('error', 'Error processing password. Please try again.');
+            res.redirect('/reset/' + req.params.token);
+          }
         }
-      }
-    );
-  });
+      );
+    }
+  );
 
   // Proxy for Deezer API to avoid CORS issues
   app.get(

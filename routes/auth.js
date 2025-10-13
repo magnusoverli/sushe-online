@@ -1,6 +1,11 @@
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const {
+    loginRateLimit,
+    registerRateLimit,
+    sensitiveSettingsRateLimit,
+  } = require('../middleware/rate-limit');
+  const {
     htmlTemplate,
     registerTemplate,
     loginTemplate,
@@ -43,7 +48,7 @@ module.exports = (app, deps) => {
     );
   });
 
-  app.post('/register', csrfProtection, async (req, res) => {
+  app.post('/register', registerRateLimit, csrfProtection, async (req, res) => {
     try {
       const { email, username, password, confirmPassword } = req.body;
 
@@ -179,7 +184,7 @@ module.exports = (app, deps) => {
     );
   });
 
-  app.post('/login', csrfProtection, async (req, res, next) => {
+  app.post('/login', loginRateLimit, csrfProtection, async (req, res, next) => {
     logger.debug('Login POST request received', {
       email: req.body.email,
       hasSession: !!req.session,
@@ -687,6 +692,7 @@ module.exports = (app, deps) => {
   app.post(
     '/settings/change-password',
     ensureAuth,
+    sensitiveSettingsRateLimit,
     csrfProtection,
     async (req, res) => {
       try {

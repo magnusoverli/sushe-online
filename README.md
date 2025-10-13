@@ -43,6 +43,21 @@ The `Dockerfile` uses a multi-stage build. The `builder` stage installs all depe
 - `BASE_URL` – base URL used in password reset emails (`http://localhost:3000` by default).
 - `ASSET_VERSION` – optional string appended to static asset URLs to bust browser caches. If omitted, the app uses the current timestamp.
 - `PORT` – server port (defaults to `3000`).
+
+### Rate Limiting Configuration
+
+The application includes production-grade rate limiting on authentication endpoints to prevent brute force attacks. Rate limiting is **enabled by default** with sensible limits that work for most deployments.
+
+- `RATE_LIMIT_LOGIN_MAX` – max login attempts per 15 minutes per IP (default: `5`)
+- `RATE_LIMIT_REGISTER_MAX` – max registration attempts per hour per IP (default: `3`)
+- `RATE_LIMIT_FORGOT_MAX` – max password reset requests per hour per IP (default: `3`)
+- `RATE_LIMIT_RESET_MAX` – max password reset submissions per hour per IP (default: `5`)
+- `RATE_LIMIT_SETTINGS_MAX` – max sensitive settings changes per hour per IP (default: `10`)
+- `RATE_LIMIT_API_MAX` – max general API requests per 15 minutes per IP (default: `100`)
+- `DISABLE_RATE_LIMITING` – set to `true` to completely disable rate limiting (not recommended for production)
+
+These limits apply per IP address and return HTTP 429 (Too Many Requests) with proper `Retry-After` headers when exceeded. The defaults are production-ready and require no configuration for most use cases.
+
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` – credentials for Spotify OAuth.
 - `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
 - `TIDAL_CLIENT_ID` – client ID for Tidal OAuth.
