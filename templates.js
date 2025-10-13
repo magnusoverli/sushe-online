@@ -1119,7 +1119,6 @@ const spotifyTemplate = (user) => `
     id="addAlbumFAB"
     class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-[9999]"
     style="display: none; touch-action: manipulation; pointer-events: auto;"
-    onclick="console.log('FAB clicked, currentList:', window.currentList); if(window.openAddAlbumModal) { console.log('Calling openAddAlbumModal'); window.openAddAlbumModal(); } else { console.error('openAddAlbumModal not found'); }"
   >
     <i class="fas fa-plus text-xl"></i>
   </button>

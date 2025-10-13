@@ -4151,6 +4151,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize sidebar collapse first
   initializeSidebarCollapse();
 
+  // Initialize FAB button click handler
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab) {
+    fab.addEventListener('click', () => {
+      if (window.openAddAlbumModal) {
+        window.openAddAlbumModal();
+      } else {
+        console.error('openAddAlbumModal not found');
+        showToast('Error: Add album function not available', 'error');
+      }
+    });
+  }
+
   // Quickly populate sidebar using cached list names
   const cachedLists = localStorage.getItem('cachedListNames');
   if (cachedLists) {
