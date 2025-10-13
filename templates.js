@@ -306,30 +306,6 @@ const invalidTokenTemplate = () => `
   </div>
 `;
 
-// Component: Sidebar - Updated with clickable account link
-const _sidebarComponent = (_req) => `
-  <div class="w-64 bg-gray-900 border-r border-gray-800 flex flex-col">
-    <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
-      <div class="flex-1">
-        <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Your Lists</h3>
-        <ul id="listNav" class="space-y-1">
-          <!-- Lists will be populated here -->
-        </ul>
-      </div>
-      
-      <div class="mt-6 pt-6 border-t border-gray-800">
-        <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200">
-          <i class="fas fa-plus mr-2"></i>Create List
-        </button>
-        <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2">
-          <i class="fas fa-file-import mr-2"></i>Import List
-        </button>
-        <input type="file" id="fileInput" accept=".json" style="display: none;">
-      </div>
-    </nav>
-  </div>
-`;
-
 // Component: Import Conflict Modal
 const importConflictModalComponent = () => `
   <div id="importConflictModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -421,24 +397,6 @@ const importConflictModalComponent = () => `
         >
           Import with New Name
         </button>
-      </div>
-    </div>
-  </div>
-`;
-
-// Component: Main Content Area
-const _mainContentComponent = () => `
-  <div class="flex-1 flex flex-col overflow-hidden">
-    <!-- Album List (removed the header section) -->
-    <div class="flex-1 overflow-y-auto">
-      <div id="dropZone" class="drop-zone min-h-full">
-        <div id="albumContainer">
-          <!-- Albums will be displayed here -->
-          <div class="text-center text-gray-500 mt-20">
-            <p class="text-xl mb-2">No list selected</p>
-            <p class="text-sm">Create or import a list to get started</p>
-          </div>
-        </div>
       </div>
     </div>
   </div>

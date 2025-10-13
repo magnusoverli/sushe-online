@@ -332,21 +332,29 @@ passport.use(
       try {
         const user = await usersAsync.findOne({ email });
 
+        // TIMING ATTACK MITIGATION:
+        // Always perform bcrypt comparison, even for non-existent users.
+        // This ensures constant-time response regardless of whether the email exists.
+        let isMatch = false;
+
         if (!user) {
+          // User doesn't exist - compare against a dummy hash to maintain constant timing
+          // This prevents attackers from using timing analysis to enumerate valid emails
+          const dummyHash =
+            '$2a$12$ZIJfCqcmsmY3xNqmJGFJh.vKMF3rKXSgPp/mDgpjLfSUJJ1oiGdX.'; // Pre-computed bcrypt hash
+          await bcrypt.compare(password, dummyHash);
           logger.warn('Login failed: Unknown email', { email });
-          // Don't reveal that the email doesn't exist
-          return done(null, false, { message: 'Invalid email or password' });
+        } else {
+          logger.debug('User found', { email: user.email, hasHash: !!user.hash });
+          isMatch = await bcrypt.compare(password, user.hash);
         }
 
-        logger.debug('User found', { email: user.email, hasHash: !!user.hash });
-
-        const isMatch = await bcrypt.compare(password, user.hash);
-
-        if (isMatch) {
+        // Always return the same message regardless of whether email or password was wrong
+        if (isMatch && user) {
           logger.info('Login successful', { email });
           return done(null, user);
         } else {
-          logger.warn('Login failed: Invalid password', { email });
+          logger.warn('Login failed: Invalid credentials', { email });
           return done(null, false, { message: 'Invalid email or password' });
         }
       } catch (err) {
