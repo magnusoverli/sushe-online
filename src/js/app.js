@@ -4020,9 +4020,6 @@ window.showMobileEditForm = function (index) {
     // Close the modal immediately for better UX
     editModal.remove();
 
-    // Show saving toast
-    showToast('Saving changes...', 'info', 1000);
-
     // Force refresh the display to show changes immediately
     displayAlbums(lists[currentList]);
 
