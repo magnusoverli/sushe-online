@@ -959,7 +959,7 @@ const spotifyTemplate = (user) => `
     
     .sortable-drag {
       opacity: 0.9 !important;
-      transform: rotate(1deg) scale(1.02);
+      transform: scale(1.02);
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
       z-index: 9999;
     }
