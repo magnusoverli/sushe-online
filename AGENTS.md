@@ -35,16 +35,6 @@ This includes:
 - **Lint**: `npm run lint` (check code quality)
 - **Format**: `npm run format` (format code with prettier)
 
-### Smart Planning Commands
-
-- **Create Plan**: `npm run smart:create "description"` (AI-powered plan creation)
-- **Quick Plan**: `npm run smart:quick "task"` (fast task creation)
-- **Dashboard**: `npm run smart:dashboard` (comprehensive metrics)
-- **Status**: `npm run smart:status` (system status summary)
-- **Analyze**: `npm run smart:analyze` (analysis with recommendations)
-- **Watch**: `npm run smart:watch` (auto-tracking mode)
-- **Update**: `npm run smart:update` (refresh all systems)
-
 ## Code Style & Best Practices
 
 - **Imports**: Prefer ES6 modules (`import`/`export`) when possible, use CommonJS for Node.js compatibility
