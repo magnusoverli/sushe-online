@@ -165,3 +165,6 @@ cookies.txt
 playwright-report/
 test-results/
 public/js/chunks/
+
+# Development docker compose
+docker-compose.dev.yml
