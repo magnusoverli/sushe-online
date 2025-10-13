@@ -345,7 +345,10 @@ passport.use(
           await bcrypt.compare(password, dummyHash);
           logger.warn('Login failed: Unknown email', { email });
         } else {
-          logger.debug('User found', { email: user.email, hasHash: !!user.hash });
+          logger.debug('User found', {
+            email: user.email,
+            hasHash: !!user.hash,
+          });
           isMatch = await bcrypt.compare(password, user.hash);
         }
 
