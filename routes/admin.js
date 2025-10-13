@@ -389,15 +389,16 @@ module.exports = (app, deps) => {
 
     // Collect backup data in memory to verify before sending
     const chunks = [];
-    let hasError = false;
+    const stderrChunks = [];
 
     dump.stdout.on('data', (chunk) => {
       chunks.push(chunk);
     });
 
     dump.stderr.on('data', (d) => {
-      logger.error('pg_dump:', d.toString());
-      hasError = true;
+      // Collect stderr output but don't treat warnings as errors
+      // pg_dump writes warnings to stderr even on successful dumps
+      stderrChunks.push(d.toString());
     });
 
     dump.on('error', (err) => {
@@ -408,7 +409,19 @@ module.exports = (app, deps) => {
     });
 
     dump.on('close', (code) => {
-      if (code !== 0 || hasError) {
+      // Log any stderr output (warnings, notices, etc.)
+      if (stderrChunks.length > 0) {
+        const stderrOutput = stderrChunks.join('');
+        if (code !== 0) {
+          logger.error('pg_dump error output:', stderrOutput);
+        } else {
+          // Log warnings but don't fail the backup
+          logger.warn('pg_dump warnings:', stderrOutput);
+        }
+      }
+
+      // Only fail if exit code is non-zero
+      if (code !== 0) {
         logger.error('pg_dump exited with code', code);
         if (!res.headersSent) {
           res.status(500).send('Error creating backup');
