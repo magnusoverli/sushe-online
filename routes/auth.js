@@ -1,5 +1,4 @@
 module.exports = (app, deps) => {
-  const path = require('path');
   const logger = require('../utils/logger');
   const {
     htmlTemplate,
@@ -28,7 +27,6 @@ module.exports = (app, deps) => {
     adminCode,
     adminCodeExpiry,
     generateAdminCode,
-    dataDir,
     pool,
     passport,
   } = deps;

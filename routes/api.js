@@ -1171,7 +1171,7 @@ module.exports = (app, deps) => {
               fetchItunesTracks(),
               fetchDeezerTracks(),
             ]);
-          } catch (err) {
+          } catch (_err) {
             // All fallbacks failed
             return null;
           }
@@ -1576,7 +1576,7 @@ module.exports = (app, deps) => {
           } else {
             return false;
           }
-        } catch (err) {
+        } catch (_err) {
           return false;
         }
       }

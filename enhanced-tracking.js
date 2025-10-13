@@ -59,7 +59,7 @@ class EnhancedTracker {
       const metricsData = await fs.readFile(this.metricsPath, 'utf8');
       this.metrics = { ...this.metrics, ...JSON.parse(metricsData) };
       logger.info('Metrics loaded successfully');
-    } catch (error) {
+    } catch (_error) {
       logger.info('No existing metrics found, starting fresh');
       await this.saveMetrics();
     }

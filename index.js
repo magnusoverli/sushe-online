@@ -46,7 +46,7 @@ process.on('SIGTERM', async () => {
   try {
     const { responseCache } = require('./middleware/response-cache');
     responseCache.shutdown();
-  } catch (e) {
+  } catch (_e) {
     // Cache module might not be loaded yet
   }
 
@@ -61,7 +61,7 @@ process.on('SIGINT', async () => {
   try {
     const { responseCache } = require('./middleware/response-cache');
     responseCache.shutdown();
-  } catch (e) {
+  } catch (_e) {
     // Cache module might not be loaded yet
   }
 
