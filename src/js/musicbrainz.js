@@ -326,7 +326,7 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
       );
     }
     return coverUrl;
-  } catch (_error) {
+  } catch (error) {
     console.error(`Error fetching cover art for "${albumTitle}":`, error);
     return null;
   }
@@ -1354,7 +1354,7 @@ async function getWikidataImageFromMusicBrainz(artistId, artistName) {
     }
 
     return null;
-  } catch (_error) {
+  } catch (error) {
     console.error(`Error fetching Wikidata image for "${artistName}":`, error);
     return null;
   }
@@ -1382,7 +1382,7 @@ async function searchDeezerArtistImage(artistName, disambiguation = null) {
       const searchNameLower = artistName.toLowerCase();
       const SIMILARITY_THRESHOLD = 0.7;
 
-      let bestMatch = data.data.find(
+      const bestMatch = data.data.find(
         (artist) => artist.name.toLowerCase() === searchNameLower
       );
 
@@ -1425,7 +1425,7 @@ async function searchDeezerArtistImage(artistName, disambiguation = null) {
     }
 
     return null;
-  } catch (_error) {
+  } catch (error) {
     console.error(
       `Error fetching Deezer artist image for "${artistName}":`,
       error
@@ -1478,7 +1478,7 @@ async function searchArtistImage(
       artistImageCache.set(artistId, null);
     }
     return null;
-  } catch (_error) {
+  } catch (error) {
     console.error('Error fetching artist image:', error);
     if (artistId) {
       artistImageCache.set(artistId, null);
@@ -1651,7 +1651,7 @@ async function selectArtist(artist) {
     }
 
     displayAlbumResultsWithLazyLoading(releaseGroups);
-  } catch (_error) {
+  } catch (error) {
     if (error.name === 'AbortError') {
       // Album loading cancelled - expected behavior
       return;
@@ -1744,7 +1744,7 @@ async function resolveCountryCode(countryCode) {
       `Country "${countryData.name.common}" (${countryCode}) not found in allowed countries list. Names tried: ${namesToTry.join(', ')}`
     );
     return '';
-  } catch (_error) {
+  } catch (error) {
     console.error(`Error resolving country code ${countryCode}:`, error);
     return '';
   }
@@ -2057,7 +2057,7 @@ async function addAlbumToList(releaseGroup) {
       }
 
       addAlbumToCurrentList(album);
-    } catch (_error) {
+    } catch (error) {
       console.warn('Error fetching cover art:', error);
       // Error fetching cover art - will proceed without
       addAlbumToCurrentList(album);

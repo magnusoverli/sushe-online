@@ -9,7 +9,12 @@ export default [
   security.configs.recommended,
   prettierConfig,
   {
-    ignores: ['public/js/bundle.js', 'dist/**', 'node_modules/**'],
+    ignores: [
+      'public/js/bundle.js',
+      'public/js/chunks/**',
+      'dist/**',
+      'node_modules/**',
+    ],
   },
   {
     files: ['**/*.js'],
@@ -84,7 +89,9 @@ export default [
         availableCountries: 'readonly',
         releaseGroups: 'readonly',
         showMobileEditForm: 'readonly',
+        showMobileEditFormSafe: 'readonly',
         showMobileListMenu: 'readonly',
+        playAlbumSafe: 'readonly',
         toggleMobileLists: 'readonly',
         list: 'readonly',
         newIndex: 'readonly',
@@ -96,6 +103,7 @@ export default [
         URLSearchParams: 'readonly',
         EventSource: 'readonly',
         clearTimeout: 'readonly',
+        setImmediate: 'readonly',
         confirm: 'readonly',
         FileReader: 'readonly',
         FormData: 'readonly',

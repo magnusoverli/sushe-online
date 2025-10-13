@@ -127,6 +127,7 @@ function createTestApp(securityConfig = {}) {
         for (const key in req.body) {
           if (typeof req.body[key] === 'string') {
             // Basic XSS prevention
+            /* eslint-disable security/detect-unsafe-regex */
             req.body[key] = req.body[key]
               .replace(
                 /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
@@ -134,6 +135,7 @@ function createTestApp(securityConfig = {}) {
               )
               .replace(/javascript:/gi, '')
               .replace(/on\w+\s*=/gi, '');
+            /* eslint-enable security/detect-unsafe-regex */
           }
         }
       }

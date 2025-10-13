@@ -262,7 +262,7 @@ if (require.main === module) {
     await smartPlanning.initialize();
 
     switch (command) {
-      case 'create':
+      case 'create': {
         if (!input) {
           console.log(
             'Usage: node smart-planning.js create "your plan description"'
@@ -272,8 +272,9 @@ if (require.main === module) {
         const result = await smartPlanning.createSmartPlan(input);
         console.log(JSON.stringify(result, null, 2));
         break;
+      }
 
-      case 'quick':
+      case 'quick': {
         if (!input) {
           console.log(
             'Usage: node smart-planning.js quick "quick task description"'
@@ -283,16 +284,19 @@ if (require.main === module) {
         const quickResult = await smartPlanning.quickPlan(input);
         console.log(JSON.stringify(quickResult, null, 2));
         break;
+      }
 
-      case 'dashboard':
+      case 'dashboard': {
         const dashboard = await smartPlanning.getDashboard();
         console.log(JSON.stringify(dashboard, null, 2));
         break;
+      }
 
-      case 'analyze':
+      case 'analyze': {
         const analysis = await smartPlanning.analyzeAndRecommend();
         console.log(JSON.stringify(analysis, null, 2));
         break;
+      }
 
       case 'update':
         await smartPlanning.autoUpdate();
@@ -306,13 +310,14 @@ if (require.main === module) {
         process.stdin.resume();
         break;
 
-      case 'export':
+      case 'export': {
         const format = input || 'json';
         const exportData = await smartPlanning.exportData(format);
         console.log(exportData);
         break;
+      }
 
-      case 'status':
+      case 'status': {
         const statusAnalysis = await smartPlanning.analyzeAndRecommend();
         console.log('\n=== Smart Planning System Status ===');
         console.log(`Status: ${statusAnalysis.summary.status}`);
@@ -338,6 +343,7 @@ if (require.main === module) {
           });
         }
         break;
+      }
 
       default:
         console.log(`

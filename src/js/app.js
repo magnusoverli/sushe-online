@@ -21,13 +21,11 @@ let confirmationCallback = null;
 
 // Track loading performance optimization variables
 let trackAbortController = null;
-let lastLoadedAlbumIndex = null;
-const trackMenuCache = new Map();
 
 // Context menu variables
 
-// Position-based points mapping
-const POSITION_POINTS = {
+// Position-based points mapping (unused but kept for reference)
+const _POSITION_POINTS = {
   1: 60,
   2: 54,
   3: 50,
@@ -101,11 +99,6 @@ document.addEventListener('contextmenu', (e) => {
     e.preventDefault();
   }
 });
-
-// Helper function to get points for a position
-function getPointsForPosition(position) {
-  return POSITION_POINTS[position] || 1; // Default to 1 point for positions > 40
-}
 
 export function showConfirmation(
   title,
@@ -348,7 +341,7 @@ async function loadCountries() {
     }
     // Expose to window for access from musicbrainz.js
     window.availableCountries = availableCountries;
-  } catch (_error) {
+  } catch (error) {
     console.error('Error loading countries:', error);
   }
 }
@@ -689,7 +682,7 @@ async function createPlaylistWithService(listName, service) {
 
     hidePlaylistProgressModal(progressModal);
     showPlaylistResultModal(listName, result);
-  } catch (_error) {
+  } catch (error) {
     console.error('Error creating playlist with service:', error);
     showToast(`Error creating playlist on ${service}`, 'error');
   }
@@ -738,7 +731,7 @@ function initializeImportConflictHandling() {
       showToast(
         `Overwritten "${pendingImportFilename}" with ${pendingImportData.length} albums`
       );
-    } catch (_err) {
+    } catch (err) {
       console.error('Import overwrite error:', err);
       showToast('Error overwriting list', 'error');
     }
@@ -807,7 +800,7 @@ function initializeImportConflictHandling() {
       } else {
         showToast(`Added ${addedCount} albums to "${pendingImportFilename}"`);
       }
-    } catch (_err) {
+    } catch (err) {
       console.error('Import merge error:', err);
       showToast('Error merging lists', 'error');
     }
@@ -848,7 +841,7 @@ function initializeImportConflictHandling() {
         showToast(
           `Imported as "${newName}" with ${pendingImportData.length} albums`
         );
-      } catch (_err) {
+      } catch (err) {
         console.error('Import with rename error:', err);
         showToast('Error importing list', 'error');
       }
@@ -1021,7 +1014,7 @@ async function loadGenres() {
       availableGenres.sort();
       availableGenres.unshift(emptyItem);
     }
-  } catch (_error) {
+  } catch (error) {
     console.error('Error loading genres:', error);
     showToast('Error loading genres', 'error');
   }
@@ -1128,7 +1121,7 @@ export async function apiCall(url, options = {}) {
     }
 
     return await response.json();
-  } catch (_error) {
+  } catch (error) {
     console.error('API call failed:', error);
     throw error;
   }
@@ -1139,7 +1132,7 @@ window.apiCall = apiCall;
 async function fetchLinkPreview(url) {
   try {
     return await apiCall(`/api/unfurl?url=${encodeURIComponent(url)}`);
-  } catch (_err) {
+  } catch (err) {
     console.error('Link preview error:', err);
     return null;
   }
@@ -1175,7 +1168,7 @@ function clearListsCache() {
   try {
     localStorage.removeItem('lists_cache');
     localStorage.removeItem('lists_cache_timestamp');
-  } catch (_error) {
+  } catch (error) {
     console.warn('Failed to clear lists cache:', error);
   }
 }
@@ -1235,7 +1228,7 @@ async function loadLists() {
         }
       }
     }
-  } catch (_error) {
+  } catch (error) {
     console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
   }
@@ -1264,7 +1257,7 @@ async function saveList(name, data) {
     } catch (storageError) {
       console.warn('Failed to update cache after save:', storageError);
     }
-  } catch (_error) {
+  } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
   }
@@ -1299,10 +1292,6 @@ async function fetchTracksForAlbum(album, signal = null) {
 }
 window.fetchTracksForAlbum = fetchTracksForAlbum;
 
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 async function autoFetchTracksForList(name) {
   const list = lists[name];
   if (!list) return;
@@ -1312,22 +1301,11 @@ async function autoFetchTracksForList(name) {
   );
   if (toFetch.length === 0) return;
 
-  let updated = false;
   for (const album of toFetch) {
     try {
       await fetchTracksForAlbum(album);
-      updated = true;
-    } catch (_err) {
+    } catch (err) {
       console.error('Auto track fetch failed:', err);
-    }
-    await wait(3000);
-  }
-
-  if (updated) {
-    try {
-      await saveList(name, list);
-    } catch (_err) {
-      console.error('Failed saving tracks for list', err);
     }
   }
 }
@@ -1362,7 +1340,7 @@ function subscribeToList(name) {
           }
         }
       }, 100);
-    } catch (_err) {
+    } catch (err) {
       console.error('Failed to parse SSE update', err);
     }
   });
@@ -1438,7 +1416,7 @@ function initializeContextMenu() {
       // Pass both list name and list data for track validation
       const listData = lists[currentContextList] || [];
       await updatePlaylist(currentContextList, listData);
-    } catch (_err) {
+    } catch (err) {
       console.error('Update playlist failed', err);
     }
 
@@ -1528,232 +1506,6 @@ function initializeAlbumContextMenu() {
   const playOption = document.getElementById('playAlbumOption');
 
   if (!contextMenu || !removeOption || !editOption || !playOption) return;
-
-  // Track selection has been removed from context menu - now available directly in the album list
-  if (false) {
-    selectTrackOption.onmouseenter = async () => {
-      if (currentContextAlbum === null) return;
-
-      // Cancel any in-flight requests if switching albums quickly
-      if (trackAbortController) {
-        trackAbortController.abort();
-        trackAbortController = null;
-      }
-
-      const album =
-        lists[currentList] && lists[currentList][currentContextAlbum];
-      if (!album) return;
-
-      // Check if we already have this menu cached and tracks haven't changed
-      const cacheKey = `${currentList}_${currentContextAlbum}_${album.track_pick || ''}`;
-      if (
-        lastLoadedAlbumIndex === currentContextAlbum &&
-        trackMenuCache.has(cacheKey) &&
-        album.tracks &&
-        album.tracks.length > 0
-      ) {
-        // Reuse cached menu
-        trackSubmenu.innerHTML = trackMenuCache.get(cacheKey);
-        trackSubmenu.classList.remove('hidden');
-
-        // Reattach event listeners to cached elements
-        reattachTrackListeners(trackSubmenu, album);
-        return;
-      }
-
-      // Clear previous tracks only if switching to a different album
-      if (lastLoadedAlbumIndex !== currentContextAlbum) {
-        trackSubmenu.innerHTML = '';
-      }
-      lastLoadedAlbumIndex = currentContextAlbum;
-
-      // Check if album has tracks
-      if (!album.tracks || album.tracks.length === 0) {
-        // Try to fetch tracks
-        trackSubmenu.innerHTML =
-          '<div class="px-4 py-2 text-sm text-gray-500">Loading tracks...</div>';
-        trackSubmenu.classList.remove('hidden');
-
-        try {
-          // Create abort controller for this request
-          trackAbortController = new AbortController();
-
-          // Fetch tracks with abort signal
-          await fetchTracksForAlbum(album, trackAbortController.signal);
-
-          // Only save if request wasn't aborted
-          if (!trackAbortController.signal.aborted) {
-            await saveList(currentList, lists[currentList]);
-            trackAbortController = null;
-          }
-        } catch (_error) {
-          if (error.name === 'AbortError') {
-            // Request was aborted, ignore
-            return;
-          }
-          console.error('Error fetching tracks:', error);
-          trackSubmenu.innerHTML =
-            '<div class="px-4 py-2 text-sm text-red-400">Failed to load tracks</div>';
-          return;
-        }
-      }
-
-      // Display tracks
-      if (album.tracks && album.tracks.length > 0) {
-        // Build the menu HTML
-        const menuHTML = buildTrackMenu(album);
-
-        // Cache the menu HTML
-        trackMenuCache.set(cacheKey, menuHTML);
-
-        // Limit cache size to prevent memory issues
-        if (trackMenuCache.size > 20) {
-          const firstKey = trackMenuCache.keys().next().value;
-          trackMenuCache.delete(firstKey);
-        }
-
-        trackSubmenu.innerHTML = menuHTML;
-        trackSubmenu.classList.remove('hidden');
-
-        // Attach event listeners
-        reattachTrackListeners(trackSubmenu, album);
-
-        // Adjust submenu position if it goes off-screen
-        setTimeout(() => {
-          const submenuRect = trackSubmenu.getBoundingClientRect();
-          const contextRect = contextMenu.getBoundingClientRect();
-
-          // Check if submenu goes off the right edge of the screen
-          if (submenuRect.right > window.innerWidth) {
-            // Position submenu to the left of the parent menu
-            trackSubmenu.style.left = 'auto';
-            trackSubmenu.style.right = '100%';
-            trackSubmenu.style.marginLeft = '0';
-            trackSubmenu.style.marginRight = '0.25rem';
-          } else {
-            // Reset to default position (right of parent)
-            trackSubmenu.style.left = '100%';
-            trackSubmenu.style.right = 'auto';
-            trackSubmenu.style.marginLeft = '0.25rem';
-            trackSubmenu.style.marginRight = '0';
-          }
-
-          // Check if submenu goes off the bottom of the screen
-          if (submenuRect.bottom > window.innerHeight) {
-            const maxHeight = window.innerHeight - contextRect.top - 20;
-            trackSubmenu.style.maxHeight = `${maxHeight}px`;
-          }
-        }, 10);
-      } else {
-        trackSubmenu.innerHTML =
-          '<div class="px-4 py-2 text-sm text-gray-500">No tracks available</div>';
-        trackSubmenu.classList.remove('hidden');
-      }
-    };
-
-    // Helper function to build track menu HTML as a string
-    function buildTrackMenu(album) {
-      // Sort tracks to ensure they start from track 1
-      const sortedTracks = [...album.tracks].sort((a, b) => {
-        const aNum = parseInt(
-          a.match(/^(\d+)[\.\s\-]/) ? a.match(/^(\d+)/)[1] : 0
-        );
-        const bNum = parseInt(
-          b.match(/^(\d+)[\.\s\-]/) ? b.match(/^(\d+)/)[1] : 0
-        );
-        if (aNum && bNum) return aNum - bNum;
-        return 0;
-      });
-
-      let html = '';
-
-      // Add "None" option
-      html += `
-        <button class="track-menu-option block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-nowrap"
-                data-track-value="">
-          <span class="${!album.track_pick ? 'text-red-500' : 'text-gray-400'}">
-            ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
-          </span>
-        </button>
-      `;
-
-      // Add track options
-      sortedTracks.forEach((track, idx) => {
-        const isSelected =
-          album.track_pick === track ||
-          album.track_pick === (idx + 1).toString();
-        html += `
-          <button class="track-menu-option block w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors whitespace-normal"
-                  data-track-value="${track.replace(/"/g, '&quot;')}">
-            <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
-              ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
-              ${idx + 1}. ${track}
-            </span>
-          </button>
-        `;
-      });
-
-      return html;
-    }
-
-    // Helper function to reattach event listeners to track menu buttons
-    function reattachTrackListeners(submenu, album) {
-      const buttons = submenu.querySelectorAll('.track-menu-option');
-      buttons.forEach((button) => {
-        button.onclick = async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          const trackValue = button.dataset.trackValue;
-          album.track_pick = trackValue;
-
-          await saveList(currentList, lists[currentList]);
-          contextMenu.classList.add('hidden');
-          trackSubmenu.classList.add('hidden');
-
-          // Clear cache since selection changed
-          trackMenuCache.clear();
-          lastLoadedAlbumIndex = null;
-
-          if (trackValue) {
-            showToast(`Selected track: ${trackValue}`);
-          } else {
-            showToast('Track selection cleared');
-          }
-        };
-      });
-    }
-
-    selectTrackOption.onmouseleave = (_e) => {
-      // Hide submenu if not hovering over it
-      setTimeout(() => {
-        if (
-          !selectTrackOption.matches(':hover') &&
-          !trackSubmenu.matches(':hover')
-        ) {
-          trackSubmenu.classList.add('hidden');
-        }
-      }, 200); // Increased timeout for better UX
-    };
-
-    trackSubmenu.onmouseleave = (_e) => {
-      // Hide submenu if not hovering over parent or submenu
-      setTimeout(() => {
-        if (
-          !selectTrackOption.matches(':hover') &&
-          !trackSubmenu.matches(':hover')
-        ) {
-          trackSubmenu.classList.add('hidden');
-        }
-      }, 200); // Increased timeout for better UX
-    };
-
-    // Ensure submenu stays interactive
-    trackSubmenu.onmouseenter = (e) => {
-      e.stopPropagation();
-      trackSubmenu.classList.remove('hidden');
-    };
-  }
 
   // Handle edit option click
   editOption.onclick = () => {
@@ -1856,7 +1608,7 @@ function initializeAlbumContextMenu() {
           selectList(currentList);
 
           showToast(`Removed "${album.album}" from the list`);
-        } catch (_error) {
+        } catch (error) {
           console.error('Error removing album:', error);
           showToast('Error removing album', 'error');
 
@@ -1935,7 +1687,7 @@ function playAlbum(index) {
           showToast('Album not found on ' + service, 'error');
         }
       })
-      .catch((_err) => {
+      .catch((err) => {
         console.error('Play album error:', err);
         showToast(err.message || 'Failed to open album', 'error');
       });
@@ -2261,7 +2013,7 @@ async function selectList(listName) {
           `/api/lists/${encodeURIComponent(listName)}`
         );
         lists[listName] = freshData;
-      } catch (_err) {
+      } catch (err) {
         console.warn('Failed to fetch latest list data:', err);
       }
     }
@@ -2333,7 +2085,7 @@ function _editMobileAlbum(_index) {
   // This replaces the inline editing on desktop
 }
 
-function _removeAlbum(_index) {
+function _removeAlbum(index) {
   lists[currentList].splice(index, 1);
   saveList(currentList, lists[currentList]);
   selectList(currentList);
@@ -2616,12 +2368,8 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
   } else {
     // Sort tracks by track number
     const sortedTracks = [...album.tracks].sort((a, b) => {
-      const numA = parseInt(
-        a.match(/^(\d+)[\.\s\-]/) ? a.match(/^(\d+)/)[1] : 0
-      );
-      const numB = parseInt(
-        b.match(/^(\d+)[\.\s\-]/) ? b.match(/^(\d+)/)[1] : 0
-      );
+      const numA = parseInt(a.match(/^(\d+)[.\s-]/) ? a.match(/^(\d+)/)[1] : 0);
+      const numB = parseInt(b.match(/^(\d+)[.\s-]/) ? b.match(/^(\d+)/)[1] : 0);
       return numA && numB ? numA - numB : 0;
     });
 
@@ -2637,7 +2385,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     sortedTracks.forEach((track, idx) => {
       const isSelected =
         album.track_pick === track || album.track_pick === (idx + 1).toString();
-      const match = track.match(/^(\d+)[\.\s\-]?\s*(.*)$/);
+      const match = track.match(/^(\d+)[.\s-]?\s*(.*)$/);
       const trackNum = match ? match[1] : idx + 1;
       const trackName = match ? match[2] : track;
 
@@ -2727,7 +2475,7 @@ function processAlbumData(album, index) {
   const imageFormat = album.cover_image_format || 'PNG';
 
   // Process track pick
-  let trackPick = album.track_pick || '';
+  const trackPick = album.track_pick || '';
   let trackPickDisplay = '';
   let trackPickClass = 'text-gray-800 italic';
 
@@ -2736,7 +2484,7 @@ function processAlbumData(album, index) {
     const trackMatch = album.tracks.find((t) => t === trackPick);
     if (trackMatch) {
       // Extract track number and name
-      const match = trackMatch.match(/^(\d+)[\.\s\-]?\s*(.*)$/);
+      const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
       if (match) {
         const trackNum = match[1];
         const trackName = match[2] || '';
@@ -3267,7 +3015,7 @@ function debouncedSaveList(listName, listData, delay = 300) {
   saveTimeout = setTimeout(async () => {
     try {
       await saveList(listName, listData);
-    } catch (_error) {
+    } catch (error) {
       console.error('Error saving list:', error);
       showToast('Error saving list order', 'error');
     }
@@ -3296,7 +3044,7 @@ function startMobileAutoscroll(_sortableContainer) {
   // Start monitoring for autoscroll
   mobileAutoscrollInterval = setInterval(() => {
     // Try multiple selectors to find the dragged element
-    let draggedElement =
+    const draggedElement =
       document.querySelector('.sortable-drag') ||
       document.querySelector('.sortable-chosen') ||
       document.querySelector('.dragging-mobile');
@@ -3492,7 +3240,7 @@ function initializeUnifiedSorting(container, isMobile) {
     scrollSpeed: isMobile ? 15 : 10,
 
     // Enhanced event handlers
-    onStart: function (_evt) {
+    onStart: function (evt) {
       // Visual feedback
       if (!isMobile) {
         document.body.classList.add('desktop-dragging');
@@ -3518,7 +3266,7 @@ function initializeUnifiedSorting(container, isMobile) {
         }
       }
     },
-    onEnd: async function (_evt) {
+    onEnd: async function (evt) {
       // Clean up visual feedback
       if (!isMobile) {
         document.body.classList.remove('desktop-dragging');
@@ -3551,7 +3299,7 @@ function initializeUnifiedSorting(container, isMobile) {
 
           // Debounced server save to batch rapid changes
           debouncedSaveList(currentList, list);
-        } catch (_error) {
+        } catch (error) {
           console.error('Error saving reorder:', error);
           if (window.showToast) {
             window.showToast('Error saving changes', 'error');
@@ -3949,7 +3697,7 @@ window.showMobileEditForm = function (index) {
           setupTrackPickCheckboxes();
         }
         showToast('Tracks loaded');
-      } catch (_err) {
+      } catch (err) {
         console.error('Track fetch error:', err);
         showToast('Error fetching tracks', 'error');
       } finally {
@@ -4014,7 +3762,7 @@ window.showMobileEditForm = function (index) {
       displayAlbums(lists[currentList]);
 
       showToast('Album updated successfully');
-    } catch (_error) {
+    } catch (error) {
       console.error('Error saving album:', error);
       showToast('Error saving changes', 'error');
 
@@ -4128,7 +3876,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lists[name]) lists[name] = [];
       });
       updateListNav();
-    } catch (_err) {
+    } catch (err) {
       console.warn('Failed to parse cached list names:', err);
     }
   }
@@ -4154,7 +3902,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
           }
         }
-      } catch (_err) {
+      } catch (err) {
         console.warn('Failed to sync lists from other tab:', err);
       }
     }
@@ -4217,7 +3965,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   selectList(fileName);
                   showToast(`Successfully imported ${data.length} albums`);
                 }
-              } catch (_err) {
+              } catch (err) {
                 showToast('Error importing file: ' + err.message, 'error');
               }
             };
