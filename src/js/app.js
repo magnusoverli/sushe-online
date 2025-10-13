@@ -2911,27 +2911,36 @@ function createMobileAlbumCard(data, index) {
 
   card.innerHTML = `
     <div class="flex items-center h-full">
-      <!-- Position number on the far left -->
-      <div class="flex-shrink-0 flex items-center justify-center text-gray-500 font-medium text-sm position-display" data-position-element="true">
-        ${data.position}
-      </div>
+      <!-- Left section: Position number, Album cover, and Release date -->
+      <div class="flex-shrink-0 flex items-center">
+        <!-- Position number -->
+        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display" data-position-element="true">
+          ${data.position}
+        </div>
 
-      <!-- Album cover -->
-      <div class="flex-shrink-0 p-1 pl-0">
-        ${
-          data.coverImage
-            ? `
-          <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
-              alt="${data.albumName}"
-              class="w-20 h-20 rounded-lg object-cover shadow-md"
-              loading="lazy">
-        `
-            : `
-          <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
-            <i class="fas fa-compact-disc text-xl text-gray-600"></i>
+        <!-- Album cover with release date below -->
+        <div class="flex flex-col items-center pl-2 py-1">
+          <div class="flex-shrink-0">
+            ${
+              data.coverImage
+                ? `
+              <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
+                  alt="${data.albumName}"
+                  class="w-20 h-20 rounded-lg object-cover shadow-md"
+                  loading="lazy">
+            `
+                : `
+              <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
+                <i class="fas fa-compact-disc text-xl text-gray-600"></i>
+              </div>
+            `
+            }
           </div>
-        `
-        }
+          <!-- Release date below image -->
+          <div class="text-xs text-gray-500 mt-1 whitespace-nowrap">
+            ${data.releaseDate}
+          </div>
+        </div>
       </div>
       
       <!-- Main content -->
@@ -2941,17 +2950,22 @@ function createMobileAlbumCard(data, index) {
             <h3 class="font-semibold text-white text-base leading-tight truncate">${data.albumName}</h3>
             <p class="text-sm text-gray-400 truncate mt-0.5">${data.artist}</p>
             
-            <!-- Date and Country row -->
-            <div class="flex items-center gap-2 mt-1 text-xs text-gray-500">
-              <span class="whitespace-nowrap">${data.releaseDate}</span>
-              ${data.country ? `<span>• ${data.country}</span>` : ''}
-            </div>
+            <!-- Country row -->
+            ${
+              data.country
+                ? `
+              <div class="text-xs text-gray-500 mt-1">
+                ${data.country}
+              </div>
+            `
+                : ''
+            }
             
             <!-- Genres row (if any) -->
             ${
               data.genre1 || data.genre2
                 ? `
-              <div class="text-xs text-gray-500 truncate">
+              <div class="text-xs text-gray-500 truncate mt-1">
                 ${data.genre1}${data.genre2 ? ` / ${data.genre2}` : ''}
               </div>
             `
