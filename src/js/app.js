@@ -2914,12 +2914,12 @@ function createMobileAlbumCard(data, index) {
       <!-- Left section: Position number, Album cover, and Release date -->
       <div class="flex-shrink-0 flex items-center">
         <!-- Position number -->
-        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display" data-position-element="true">
+        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display pl-1.5" data-position-element="true">
           ${data.position}
         </div>
 
         <!-- Album cover with release date below -->
-        <div class="flex flex-col items-center pl-2 py-1">
+        <div class="flex flex-col items-center pl-1.5 py-1">
           <div class="flex-shrink-0">
             ${
               data.coverImage
@@ -3422,7 +3422,7 @@ function initializeUnifiedSorting(container, isMobile) {
 
     // Filter to prevent dragging on interactive elements
     filter: 'button, input, textarea, select, .no-drag',
-    preventOnFilter: true,
+    preventOnFilter: false,
 
     // Configure scrolling - disable built-in autoscroll on mobile, use custom implementation
     scroll: !isMobile, // Disable built-in autoscroll on mobile
