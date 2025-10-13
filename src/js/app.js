@@ -102,8 +102,6 @@ const _POSITION_POINTS = {
   40: 1,
 };
 
-window.selectList = selectList;
-
 // Hide context menus when clicking elsewhere
 document.addEventListener('click', () => {
   const contextMenu = document.getElementById('contextMenu');
@@ -2096,6 +2094,9 @@ async function selectList(listName) {
     showToast('Error loading list', 'error');
   }
 }
+
+// Expose selectList to window after it's defined
+window.selectList = selectList;
 
 function updateHeaderTitle(listName) {
   const headerSeparator = document.getElementById('headerSeparator');
