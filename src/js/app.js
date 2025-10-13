@@ -965,9 +965,11 @@ function makeCountryEditable(countryDiv, albumIndex) {
     // Update the data
     lists[currentList][albumIndex].country = newCountry;
 
+    // Close the dropdown immediately for better UX
+    restoreDisplay(newCountry);
+
     try {
       await saveList(currentList, lists[currentList]);
-      restoreDisplay(newCountry);
       showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
     } catch (_error) {
       showToast('Error saving country', 'error');
@@ -2233,9 +2235,11 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     // Update the data
     lists[currentList][albumIndex][genreField] = newGenre;
 
+    // Close the dropdown immediately for better UX
+    restoreDisplay(newGenre);
+
     try {
       await saveList(currentList, lists[currentList]);
-      restoreDisplay(newGenre);
       showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
     } catch (_error) {
       showToast('Error saving genre', 'error');
