@@ -944,6 +944,29 @@ function makeCountryEditable(countryDiv, albumIndex) {
       return;
     }
 
+    // VALIDATION: Only allow empty string or values from availableCountries
+    if (newCountry !== '') {
+      const isValid = availableCountries.some(
+        (country) => country.toLowerCase() === newCountry.toLowerCase()
+      );
+
+      if (!isValid) {
+        // Invalid country entered - revert to original
+        showToast(
+          `"${newCountry}" is not a valid country. Please select from the list.`,
+          'error'
+        );
+        restoreDisplay(currentCountry);
+        return;
+      }
+
+      // Find the exact case-matched country from the list
+      const matchedCountry = availableCountries.find(
+        (country) => country.toLowerCase() === newCountry.toLowerCase()
+      );
+      newCountry = matchedCountry; // Use the properly cased version
+    }
+
     // Update the data
     lists[currentList][albumIndex].country = newCountry;
 
@@ -2191,6 +2214,29 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     if (newGenre === currentGenre) {
       restoreDisplay(currentGenre);
       return;
+    }
+
+    // VALIDATION: Only allow empty string or values from availableGenres
+    if (newGenre !== '') {
+      const isValid = availableGenres.some(
+        (genre) => genre.toLowerCase() === newGenre.toLowerCase()
+      );
+
+      if (!isValid) {
+        // Invalid genre entered - revert to original
+        showToast(
+          `"${newGenre}" is not a valid genre. Please select from the list.`,
+          'error'
+        );
+        restoreDisplay(currentGenre);
+        return;
+      }
+
+      // Find the exact case-matched genre from the list
+      const matchedGenre = availableGenres.find(
+        (genre) => genre.toLowerCase() === newGenre.toLowerCase()
+      );
+      newGenre = matchedGenre; // Use the properly cased version
     }
 
     // Update the data
