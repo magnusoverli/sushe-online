@@ -952,10 +952,6 @@ function makeCountryEditable(countryDiv, albumIndex) {
 
       if (!isValid) {
         // Invalid country entered - revert to original
-        showToast(
-          `"${newCountry}" is not a valid country. Please select from the list.`,
-          'error'
-        );
         restoreDisplay(currentCountry);
         return;
       }
@@ -2224,10 +2220,6 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
 
       if (!isValid) {
         // Invalid genre entered - revert to original
-        showToast(
-          `"${newGenre}" is not a valid genre. Please select from the list.`,
-          'error'
-        );
         restoreDisplay(currentGenre);
         return;
       }
