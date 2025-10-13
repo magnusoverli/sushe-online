@@ -944,8 +944,13 @@ function clearSearchResults() {
 
 // Unified open modal function
 window.openAddAlbumModal = function () {
-  console.log('openAddAlbumModal called, currentList:', window.currentList, 'modal:', modal);
-  
+  console.log(
+    'openAddAlbumModal called, currentList:',
+    window.currentList,
+    'modal:',
+    modal
+  );
+
   if (!window.currentList) {
     console.log('No list selected, showing toast');
     showToast('Please select a list first', 'error');
