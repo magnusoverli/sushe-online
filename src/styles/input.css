@@ -96,11 +96,9 @@
       transition: all 0.2s ease;
     }
 
-    /* Long press indication - subtle scale effect during delay */
+    /* Stage 2 effects removed - no visual changes during delay period */
     .sortable-delay .album-card {
-      transform: scale(0.99);
-      background-color: rgba(55, 65, 81, 0.3) !important;
-      transition: all 0.3s ease;
+      /* No visual changes */
     }
     /* No effects for album-row during sortable delay */
     .sortable-delay .album-row {
