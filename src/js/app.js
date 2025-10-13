@@ -2356,6 +2356,90 @@ function makeCommentEditable(commentDiv, albumIndex) {
   });
 }
 
+// Update track cell display without re-rendering entire list
+function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
+  const isMobile = window.innerWidth < 1024;
+
+  if (isMobile) {
+    // Mobile: Find the card and update it
+    const container = document.getElementById('albumContainer');
+    const mobileList = container?.querySelector('.mobile-album-list');
+    if (!mobileList) return;
+
+    const card = mobileList.children[albumIndex];
+    if (!card) return;
+
+    // For mobile, we'd need to re-render the card or just let it update on next interaction
+    // Mobile cards don't show track picks as prominently, so less critical
+    return;
+  }
+
+  // Desktop: Find the specific track cell and update it
+  const container = document.getElementById('albumContainer');
+  const rowsContainer = container?.querySelector('.album-rows-container');
+  if (!rowsContainer) return;
+
+  const row = rowsContainer.children[albumIndex];
+  if (!row) return;
+
+  const trackCell = row.querySelector('.track-cell');
+  if (!trackCell) return;
+
+  // Process track pick display (same logic as processAlbumData)
+  let trackPickDisplay = '';
+  let trackPickClass = 'text-gray-800 italic';
+
+  if (trackValue && tracks && Array.isArray(tracks)) {
+    const trackMatch = tracks.find((t) => t === trackValue);
+    if (trackMatch) {
+      const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
+      if (match) {
+        const trackNum = match[1];
+        const trackName = match[2] || '';
+        trackPickDisplay = trackName
+          ? `${trackNum}. ${trackName}`
+          : `Track ${trackNum}`;
+        trackPickClass = 'text-gray-300';
+      } else {
+        trackPickDisplay = trackMatch;
+        trackPickClass = 'text-gray-300';
+      }
+    } else if (trackValue.match(/^\d+$/)) {
+      trackPickDisplay = `Track ${trackValue}`;
+      trackPickClass = 'text-gray-300';
+    } else {
+      trackPickDisplay = trackValue;
+      trackPickClass = 'text-gray-300';
+    }
+  }
+
+  if (!trackPickDisplay) {
+    trackPickDisplay = 'Select Track';
+  }
+
+  // Update the cell content
+  trackCell.innerHTML = `<span class="text-sm ${trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${trackValue || 'Click to select track'}">${trackPickDisplay}</span>`;
+
+  // Re-attach click handler
+  trackCell.onclick = async () => {
+    const currentIndex = parseInt(row.dataset.index);
+    const album = lists[currentList][currentIndex];
+    if (!album.tracks || album.tracks.length === 0) {
+      showToast('Fetching tracks...', 'info');
+      try {
+        await fetchTracksForAlbum(album);
+        await saveList(currentList, lists[currentList]);
+      } catch (_err) {
+        showToast('Error fetching tracks', 'error');
+        return;
+      }
+    }
+
+    const rect = trackCell.getBoundingClientRect();
+    showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
+  };
+}
+
 // Show track selection menu for quick track picking
 function showTrackSelectionMenu(album, albumIndex, x, y) {
   // Remove any existing menu
@@ -2416,17 +2500,33 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         e.preventDefault();
         e.stopPropagation();
         const trackValue = option.dataset.trackValue;
+        const previousValue = album.track_pick;
 
+        // Update data in memory
         album.track_pick = trackValue;
-        await saveList(currentList, lists[currentList]);
 
+        // Close menu immediately
         menu.remove();
-        selectList(currentList); // Refresh the display
+
+        // Update the UI immediately for instant feedback
+        updateTrackCellDisplay(albumIndex, trackValue, album.tracks);
+
+        // Show toast
         showToast(
           trackValue
             ? `Selected track: ${trackValue.substring(0, 50)}...`
             : 'Track selection cleared'
         );
+
+        // Save to server in background
+        try {
+          await saveList(currentList, lists[currentList]);
+        } catch (_error) {
+          // Revert on error
+          album.track_pick = previousValue;
+          updateTrackCellDisplay(albumIndex, previousValue, album.tracks);
+          showToast('Error saving track selection', 'error');
+        }
       };
     });
   }
