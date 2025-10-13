@@ -1,6 +1,6 @@
 services:
   app:
-    build: .
+    image: ghcr.io/magnusoverli/sushe-online:latest
     container_name: sushe-online
     ports:
       - '3000:3000'
@@ -46,8 +46,6 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
-      - ./scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro
-    entrypoint: ['/usr/local/bin/docker-entrypoint-upgrade.sh']
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
       interval: 10s
@@ -83,5 +81,11 @@ services:
 
 volumes:
   sushe-data:
+    external: true
+    name: sushe-online_sushe-data
   postgres-data:
+    external: true
+    name: sushe-online_postgres-data
   postgres-socket:
+    external: true
+    name: sushe-online_postgres-socket
