@@ -394,13 +394,18 @@ const helmetConfig = {
 
       // Scripts - inline scripts in layout.ejs require 'unsafe-inline'
       // TODO: Migrate to nonce-based approach for better security
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        'https://cdn.jsdelivr.net', // SortableJS
+      ],
 
       // Styles - inline styles in layout.ejs and dynamic accent colors
       styleSrc: [
         "'self'",
         "'unsafe-inline'", // Required for inline styles and CSS custom properties
         'https://fonts.googleapis.com',
+        'https://cdnjs.cloudflare.com', // Font Awesome
       ],
 
       // Fonts from Google Fonts
