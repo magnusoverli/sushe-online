@@ -2996,7 +2996,7 @@ function createMobileAlbumCard(data, index) {
 
       <!-- Actions on the right -->
       <div class="flex items-center justify-center flex-shrink-0 w-8 border-l border-gray-800/50">
-        <button onclick="event.stopPropagation(); showMobileAlbumMenu(this)"
+        <button data-album-menu-btn
                 class="p-2 text-gray-400 active:text-gray-200 no-drag">
           <i class="fas fa-ellipsis-v"></i>
         </button>
@@ -3018,6 +3018,33 @@ function attachMobileEventHandlers(card, index) {
   const comment = album.comments || album.comment || '';
   const contentDiv = card.querySelector('.flex-1.min-w-0');
   if (contentDiv) attachLinkPreview(contentDiv, comment);
+
+  // Attach three-dot menu button handler
+  const menuBtn = card.querySelector('[data-album-menu-btn]');
+  if (menuBtn) {
+    // Prevent SortableJS from capturing touch events on the button
+    menuBtn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    menuBtn.addEventListener(
+      'touchend',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      showMobileAlbumMenu(menuBtn);
+    });
+  }
 }
 
 // Display albums function - now consolidated
