@@ -3042,7 +3042,7 @@ function attachMobileEventHandlers(card, index) {
     menuBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      showMobileAlbumMenu(menuBtn);
+      window.showMobileAlbumMenu(menuBtn);
     });
   }
 }
