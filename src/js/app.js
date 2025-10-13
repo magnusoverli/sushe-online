@@ -1,3 +1,7 @@
+// Import static data at build time
+import genresText from '../data/genres.txt?raw';
+import countriesText from '../data/countries.txt?raw';
+
 // Lazy loading module cache
 let musicServicesModule = null;
 let importExportModule = null;
@@ -12,8 +16,39 @@ const _genres = [];
 const _countries = [];
 let listEventSource = null;
 let sseUpdateTimeout = null;
-let availableGenres = [];
-let availableCountries = [];
+
+// Process static data at module load time
+const availableGenres = genresText
+  .split('\n')
+  .map((g) => g.trim())
+  .filter((g, index) => {
+    // Keep the first empty line if it exists, but remove other empty lines
+    return g.length > 0 || (index === 0 && g === '');
+  })
+  .sort((a, b) => {
+    // Keep empty string at top if it exists
+    if (a === '') return -1;
+    if (b === '') return 1;
+    return a.localeCompare(b);
+  });
+
+const availableCountries = countriesText
+  .split('\n')
+  .map((c) => c.trim())
+  .filter((c, index) => {
+    // Keep the first empty line if it exists, but remove other empty lines
+    return c.length > 0 || (index === 0 && c === '');
+  })
+  .sort((a, b) => {
+    // Keep empty string at top if it exists
+    if (a === '') return -1;
+    if (b === '') return 1;
+    return a.localeCompare(b);
+  });
+
+// Expose to window for access from other modules
+window.availableCountries = availableCountries;
+
 let pendingImportData = null;
 let pendingImportFilename = null;
 let confirmationCallback = null;
@@ -318,32 +353,6 @@ function formatDateForStorage(isoDate) {
 }
 
 // Load available countries
-async function loadCountries() {
-  try {
-    const response = await fetch('/countries.txt');
-    const text = await response.text();
-    availableCountries = text
-      .split('\n')
-      .map((c) => c.trim())
-      .filter((c, index, _arr) => {
-        // Keep the first empty line if it exists, but remove other empty lines
-        return c.length > 0 || (index === 0 && c === '');
-      });
-    // Don't sort if the first item is empty - keep it at the top
-    if (availableCountries[0] !== '') {
-      availableCountries.sort();
-    } else {
-      // Sort everything except the first empty item
-      const emptyItem = availableCountries.shift();
-      availableCountries.sort();
-      availableCountries.unshift(emptyItem);
-    }
-    // Expose to window for access from musicbrainz.js
-    window.availableCountries = availableCountries;
-  } catch (error) {
-    console.error('Error loading countries:', error);
-  }
-}
 
 async function downloadListAsJSON(listName) {
   if (!importExportModule) {
@@ -1013,33 +1022,6 @@ function makeCountryEditable(countryDiv, albumIndex) {
   }, 100);
 }
 
-// Load available genres
-async function loadGenres() {
-  try {
-    const response = await fetch('/genres.txt');
-    const text = await response.text();
-    availableGenres = text
-      .split('\n')
-      .map((g) => g.trim())
-      .filter((g, index, _arr) => {
-        // Keep the first empty line if it exists, but remove other empty lines
-        return g.length > 0 || (index === 0 && g === '');
-      });
-    // Don't sort if the first item is empty - keep it at the top
-    if (availableGenres[0] !== '') {
-      availableGenres.sort();
-    } else {
-      // Sort everything except the first empty item
-      const emptyItem = availableGenres.shift();
-      availableGenres.sort();
-      availableGenres.unshift(emptyItem);
-    }
-  } catch (error) {
-    console.error('Error loading genres:', error);
-    showToast('Error loading genres', 'error');
-  }
-}
-
 // Toast notification management
 let toastTimer = null;
 
@@ -1214,6 +1196,9 @@ async function loadLists() {
           window.lists = lists;
           updateListNav();
           loadedFromCache = true;
+
+          // Try to select last list immediately after loading from cache
+          trySelectLastList();
         } else {
           localStorage.removeItem(CACHE_KEY);
           localStorage.removeItem(CACHE_TIMESTAMP_KEY);
@@ -1246,11 +1231,33 @@ async function loadLists() {
         } catch (storageError) {
           console.warn('Failed to cache lists:', storageError);
         }
+
+        // If we didn't load from cache, try selecting now
+        if (!loadedFromCache) {
+          trySelectLastList();
+        }
       }
     }
   } catch (error) {
     console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
+  }
+}
+
+function trySelectLastList() {
+  // Only auto-select if no list is currently selected
+  if (window.currentList) return;
+
+  const localLastList = localStorage.getItem('lastSelectedList');
+  const serverLastList = window.lastSelectedList;
+
+  // Prioritize local storage if it exists and is valid
+  if (localLastList && lists[localLastList]) {
+    selectList(localLastList);
+  } else if (serverLastList && lists[serverLastList]) {
+    selectList(serverLastList);
+    // Also update localStorage with server value
+    localStorage.setItem('lastSelectedList', serverLastList);
   }
 }
 
@@ -4082,7 +4089,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Load all required data and initialize features
-  Promise.all([loadGenres(), loadCountries(), loadLists()])
+  // Note: Genres and countries are now loaded synchronously at module initialization
+  loadLists()
     .then(() => {
       initializeContextMenu();
       initializeAlbumContextMenu();
@@ -4090,18 +4098,7 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeRenameList();
       initializeImportConflictHandling();
 
-      // Check localStorage first, then fall back to server value
-      const localLastList = localStorage.getItem('lastSelectedList');
-      const serverLastList = window.lastSelectedList;
-
-      // Prioritize local storage if it exists and is valid
-      if (localLastList && lists[localLastList]) {
-        selectList(localLastList);
-      } else if (serverLastList && lists[serverLastList]) {
-        selectList(serverLastList);
-        // Also update localStorage with server value
-        localStorage.setItem('lastSelectedList', serverLastList);
-      }
+      // Note: Last list selection is now handled in loadLists() for faster display
 
       // Initialize file import handlers
       const importBtn = document.getElementById('importBtn');

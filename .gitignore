@@ -143,7 +143,9 @@ dist
 .env.production
 
 # Data directory (sessions, databases, user data)
-data/
+/data/
+# But allow src/data/ for bundled static assets
+!src/data/
 
 # Generated CSS files
 public/styles/output.css
