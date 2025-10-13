@@ -3717,6 +3717,12 @@ window.showMobileEditForm = function (index) {
       new Date().toISOString().split('T')[0]
     : new Date().toISOString().split('T')[0];
 
+  // Remove any existing edit modals first to prevent overlays
+  const existingModals = document.querySelectorAll(
+    '.fixed.inset-0.z-50.bg-gray-900'
+  );
+  existingModals.forEach((modal) => modal.remove());
+
   // Create the edit modal
   const editModal = document.createElement('div');
   editModal.className =
