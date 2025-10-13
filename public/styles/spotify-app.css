@@ -209,7 +209,9 @@ body {
 
 /* Simplified hover effect that doesn't interfere with drag */
 @media (min-width: 1024px) {
-  .album-row:hover:not(.sortable-chosen):not(.sortable-drag):not(.sortable-ghost) {
+  .album-row:hover:not(.sortable-chosen):not(.sortable-drag):not(
+      .sortable-ghost
+    ) {
     background: linear-gradient(
       90deg,
       var(--accent-subtle-strong) 0%,

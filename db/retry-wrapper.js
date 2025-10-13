@@ -13,15 +13,15 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
       return await operation();
     } catch (error) {
       // Define retryable error conditions
-      const isRetryable = 
-        error.code === 'ECONNREFUSED' ||     // Connection refused
-        error.code === 'ETIMEDOUT' ||        // Connection timeout
-        error.code === 'ECONNRESET' ||       // Connection reset
-        error.code === 'ENOTFOUND' ||        // DNS lookup failed
-        error.code === '57P01' ||            // PostgreSQL admin shutdown
-        error.code === '53300' ||            // PostgreSQL too many connections
-        error.code === '08006' ||            // Connection failure
-        error.code === '08001' ||            // Unable to connect
+      const isRetryable =
+        error.code === 'ECONNREFUSED' || // Connection refused
+        error.code === 'ETIMEDOUT' || // Connection timeout
+        error.code === 'ECONNRESET' || // Connection reset
+        error.code === 'ENOTFOUND' || // DNS lookup failed
+        error.code === '57P01' || // PostgreSQL admin shutdown
+        error.code === '53300' || // PostgreSQL too many connections
+        error.code === '08006' || // Connection failure
+        error.code === '08001' || // Unable to connect
         (error.message && error.message.includes('connection terminated'));
 
       if (attempt === maxRetries || !isRetryable) {
@@ -29,19 +29,22 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
           error: error.message,
           code: error.code,
           attempts: attempt,
-          operation: operation.name || 'unnamed'
+          operation: operation.name || 'unnamed',
         });
         throw error;
       }
 
       const backoffDelay = delay * Math.pow(2, attempt - 1); // Exponential backoff
-      logger.warn(`Database operation failed, retrying ${attempt}/${maxRetries}`, {
-        error: error.message,
-        code: error.code,
-        nextRetryIn: `${backoffDelay}ms`
-      });
+      logger.warn(
+        `Database operation failed, retrying ${attempt}/${maxRetries}`,
+        {
+          error: error.message,
+          code: error.code,
+          nextRetryIn: `${backoffDelay}ms`,
+        }
+      );
 
-      await new Promise(resolve => setTimeout(resolve, backoffDelay));
+      await new Promise((resolve) => setTimeout(resolve, backoffDelay));
     }
   }
 }
@@ -70,12 +73,12 @@ async function healthCheck(pool) {
     const start = Date.now();
     await pool.query('SELECT 1 as health_check');
     const duration = Date.now() - start;
-    
+
     return {
       status: 'healthy',
       database: 'connected',
       responseTime: duration,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   } catch (error) {
     return {
@@ -83,14 +86,13 @@ async function healthCheck(pool) {
       database: 'disconnected',
       error: error.message,
       code: error.code,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
   }
 }
 
-module.exports = { 
-  withRetry, 
-  retryableQuery, 
-  healthCheck 
+module.exports = {
+  withRetry,
+  retryableQuery,
+  healthCheck,
 };
-

@@ -10,44 +10,54 @@ npm run test:e2e     # Run browser tests (5 scenarios)
 ## What We Test
 
 ### Security Tests (17 tests)
+
 **File**: `test/security-middleware.test.js`
 
 Critical security features that protect users:
+
 - CSRF protection
 - XSS prevention and input sanitization
 - Rate limiting and abuse prevention
 - Security headers (CSP, X-Frame-Options, etc.)
 
 ### Session Management (12 tests)
+
 **File**: `test/session-management.test.js`
 
 Authentication and session handling:
+
 - Session creation and destruction
 - Session regeneration for security
 - Authentication persistence
 - Concurrent session handling
 
 ### Authentication Utilities (6 tests)
+
 **File**: `test/auth-utils.test.js`
 
 Core authentication logic:
+
 - Password hashing and verification
 - Token generation and validation
 - Authentication helper functions
 
 ### Basic Smoke Tests (5 tests)
+
 **File**: `test/basic.test.js`
 
 Ensures the application starts correctly:
+
 - Server initialization
 - Core routes respond
 - Database connectivity
 - Environment configuration
 
 ### End-to-End Tests
+
 **File**: `test/e2e/basic.spec.js`
 
 Critical user journeys in real browser:
+
 - User registration flow
 - Login/logout process
 - Basic list operations
@@ -123,6 +133,7 @@ Note: We don't aim for high coverage percentages. We aim for testing what matter
 ### ✅ When Tests Pass
 
 You can be confident that:
+
 - Security features are working (CSRF, XSS, rate limiting)
 - User authentication and sessions are solid
 - Core application functionality works
@@ -131,6 +142,7 @@ You can be confident that:
 ### ⚠️ Manual Testing Still Required
 
 Always manually verify:
+
 - Visual appearance and layout
 - User experience flows
 - External API integrations (Spotify, Tidal, etc.)
@@ -141,11 +153,13 @@ Always manually verify:
 ## Adding New Tests
 
 Only add tests for:
+
 1. **Security-critical features** - Always test anything touching auth or user data
 2. **Business-critical paths** - Features that would cause major issues if broken
 3. **Bug fixes** - Add a regression test when fixing a bug
 
 Don't add tests for:
+
 - Simple utility functions
 - Code that's mostly configuration
 - Features easily verified manually
@@ -181,6 +195,7 @@ test/
 ### Performance Issues
 
 These tests should run in ~30 seconds. If slower:
+
 1. Check database connection (might be timing out)
 2. Verify no network calls in unit tests
 3. Check for slow setup/teardown

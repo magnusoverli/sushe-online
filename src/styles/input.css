@@ -130,7 +130,12 @@
 /* Desktop-specific: subtle color change only when chosen, no transforms */
 @media (min-width: 1024px) {
   .sortable-chosen.album-row {
-    background-color: rgba(31, 41, 55, 0.3) !important; /* Very subtle darker shade */
+    background-color: rgba(
+      31,
+      41,
+      55,
+      0.3
+    ) !important; /* Very subtle darker shade */
   }
 }
 

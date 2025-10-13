@@ -67,12 +67,12 @@ module.exports = (app, deps) => {
     const state = crypto.randomBytes(8).toString('hex');
     logger.info('Starting Spotify OAuth flow, state:', state);
     req.session.spotifyState = state;
-    
+
     // Store returnTo path for after OAuth completes
     if (req.query.returnTo) {
       req.session.spotifyReturnTo = req.query.returnTo;
     }
-    
+
     const params = new URLSearchParams({
       client_id: process.env.SPOTIFY_CLIENT_ID || '',
       response_type: 'code',
@@ -140,7 +140,7 @@ module.exports = (app, deps) => {
       logger.error('Spotify auth error:', e);
       req.flash('error', 'Failed to authenticate with Spotify');
     }
-    
+
     // Redirect back to where the user was (for automatic reconnects) or settings
     const returnTo = req.session.spotifyReturnTo || '/settings';
     delete req.session.spotifyReturnTo; // Clean up
@@ -517,10 +517,11 @@ module.exports = (app, deps) => {
           } catch (err) {
             logger.error('Error clearing sessions after restore:', err);
           }
-          
+
           res.json({
             success: true,
-            message: 'Database restored successfully. Server will restart in 3 seconds...',
+            message:
+              'Database restored successfully. Server will restart in 3 seconds...',
           });
 
           // Schedule server restart to clear prepared statement cache

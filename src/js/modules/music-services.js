@@ -76,21 +76,17 @@ export async function updatePlaylist(listName, listData = []) {
     ) {
       const serviceName =
         error.data.service === 'spotify' ? 'Spotify' : 'Tidal';
-      
+
       // Show a brief toast before redirecting
-      showToast(
-        `Reconnecting to ${serviceName}...`,
-        'info',
-        2000
-      );
-      
+      showToast(`Reconnecting to ${serviceName}...`, 'info', 2000);
+
       // Automatically redirect to reconnect (OAuth flow)
       // Pass the current path so we can return here after reconnecting
       setTimeout(() => {
         const returnTo = encodeURIComponent(window.location.pathname);
         window.location.href = `/auth/${error.data.service}?returnTo=${returnTo}`;
       }, 500);
-      
+
       return;
     }
 

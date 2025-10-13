@@ -65,11 +65,19 @@ const errorHandler = (err, req, res, _next) => {
 
   // PostgreSQL connection errors
   if (err.code === 'ECONNREFUSED') {
-    error = new AppError('Database connection refused', 503, ErrorTypes.DATABASE);
+    error = new AppError(
+      'Database connection refused',
+      503,
+      ErrorTypes.DATABASE
+    );
   }
 
   if (err.code === 'ETIMEDOUT' || err.code === 'ECONNRESET') {
-    error = new AppError('Database connection timeout', 503, ErrorTypes.DATABASE);
+    error = new AppError(
+      'Database connection timeout',
+      503,
+      ErrorTypes.DATABASE
+    );
   }
 
   if (err.code === 'ENOTFOUND') {
@@ -77,24 +85,41 @@ const errorHandler = (err, req, res, _next) => {
   }
 
   // PostgreSQL specific error codes
-  if (err.code === '57P01') { // PostgreSQL admin shutdown
-    error = new AppError('Database temporarily unavailable', 503, ErrorTypes.DATABASE);
+  if (err.code === '57P01') {
+    // PostgreSQL admin shutdown
+    error = new AppError(
+      'Database temporarily unavailable',
+      503,
+      ErrorTypes.DATABASE
+    );
   }
 
-  if (err.code === '53300') { // PostgreSQL too many connections
+  if (err.code === '53300') {
+    // PostgreSQL too many connections
     error = new AppError('Database overloaded', 503, ErrorTypes.DATABASE);
   }
 
-  if (err.code === '08006' || err.code === '08001') { // Connection failure
-    error = new AppError('Database connection failed', 503, ErrorTypes.DATABASE);
+  if (err.code === '08006' || err.code === '08001') {
+    // Connection failure
+    error = new AppError(
+      'Database connection failed',
+      503,
+      ErrorTypes.DATABASE
+    );
   }
 
-  if (err.code === '23505') { // PostgreSQL unique violation
+  if (err.code === '23505') {
+    // PostgreSQL unique violation
     error = new AppError('Duplicate data entry', 409, ErrorTypes.VALIDATION);
   }
 
-  if (err.code === '23503') { // PostgreSQL foreign key violation
-    error = new AppError('Referenced data not found', 400, ErrorTypes.VALIDATION);
+  if (err.code === '23503') {
+    // PostgreSQL foreign key violation
+    error = new AppError(
+      'Referenced data not found',
+      400,
+      ErrorTypes.VALIDATION
+    );
   }
 
   // Default to 500 server error

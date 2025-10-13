@@ -2799,8 +2799,7 @@ function createAlbumItem(album, index, isMobile = false) {
 // Create desktop album row (preserves exact current design)
 function createDesktopAlbumRow(data, index) {
   const row = document.createElement('div');
-  row.className =
-    'album-row album-grid gap-4 py-2 border-b border-gray-800';
+  row.className = 'album-row album-grid gap-4 py-2 border-b border-gray-800';
   row.dataset.index = index;
 
   row.innerHTML = `
