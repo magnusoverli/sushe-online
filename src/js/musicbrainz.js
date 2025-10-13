@@ -944,14 +944,24 @@ function clearSearchResults() {
 
 // Unified open modal function
 window.openAddAlbumModal = function () {
+  console.log('openAddAlbumModal called, currentList:', window.currentList, 'modal:', modal);
+  
   if (!window.currentList) {
+    console.log('No list selected, showing toast');
     showToast('Please select a list first', 'error');
+    return;
+  }
+
+  if (!modal) {
+    console.error('Modal element not found!');
+    showToast('Error: Modal not initialized', 'error');
     return;
   }
 
   // Warm up connections
   warmupConnections();
 
+  console.log('Opening modal...');
   modal.classList.remove('hidden');
 
   // Reset search mode to artist when opening the modal

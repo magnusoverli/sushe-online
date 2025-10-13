@@ -50,7 +50,7 @@
   /* SortableJS fallback element for touch devices */
   .sortable-fallback {
     @apply opacity-90 cursor-grabbing;
-    transform: scale(1.05);
+    transform: scale(0.95);
     z-index: 100000;
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
     border: 2px solid var(--accent-color);
@@ -59,7 +59,7 @@
   /* Mobile-specific dragging state */
   .dragging-mobile {
     @apply opacity-70;
-    transform: scale(1.03);
+    transform: scale(0.95);
     transition: all 0.2s ease;
   }
 
