@@ -1328,6 +1328,14 @@ function subscribeToList(name) {
       // Debounce SSE updates to batch rapid changes
       clearTimeout(sseUpdateTimeout);
       sseUpdateTimeout = setTimeout(() => {
+        // CRITICAL: Ignore SSE updates if we recently made local drag changes
+        // This prevents the server from overwriting our unsaved edits during rapid drags
+        const lastDragTime = activeDragOperations.get(name);
+        if (lastDragTime && Date.now() - lastDragTime < 2000) {
+          // Ignore SSE updates within 2 seconds of our last local drag
+          return;
+        }
+
         // Prevent re-rendering if data hasn't actually changed (avoid self-updates)
         const currentData = lists[name];
         const hasChanged =
@@ -3008,16 +3016,29 @@ function isTextTruncated(element) {
   return element.scrollHeight > element.clientHeight;
 }
 
+// Track when we're actively dragging to ignore SSE updates
+const activeDragOperations = new Map(); // listName -> timestamp of last drag
+
 // Debounced save function to batch rapid changes
 let saveTimeout = null;
 function debouncedSaveList(listName, listData, delay = 300) {
   clearTimeout(saveTimeout);
+
+  // Mark that we have local changes for this list
+  activeDragOperations.set(listName, Date.now());
+
   saveTimeout = setTimeout(async () => {
     try {
       await saveList(listName, listData);
+      // After save completes, wait a bit longer before accepting SSE updates
+      // This gives the SSE echo time to arrive and be ignored
+      setTimeout(() => {
+        activeDragOperations.delete(listName);
+      }, 1000); // 1 second grace period after save completes
     } catch (error) {
       console.error('Error saving list:', error);
       showToast('Error saving list order', 'error');
+      activeDragOperations.delete(listName);
     }
   }, delay);
 }
@@ -3289,6 +3310,9 @@ function initializeUnifiedSorting(container, isMobile) {
 
       if (oldIndex !== newIndex) {
         try {
+          // Mark that we just performed a drag operation
+          activeDragOperations.set(currentList, Date.now());
+
           // Update the data
           const list = lists[currentList];
           const [movedItem] = list.splice(oldIndex, 1);
@@ -3313,6 +3337,7 @@ function initializeUnifiedSorting(container, isMobile) {
             evt.to.appendChild(itemToMove);
           }
           updatePositionNumbers(sortableContainer, isMobile);
+          activeDragOperations.delete(currentList);
         }
       }
     },
