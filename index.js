@@ -475,12 +475,14 @@ const helmetConfig = {
 
   // Permissions Policy - disable unnecessary browser features
   permissionsPolicy: {
-    camera: ['none'],
-    microphone: ['none'],
-    geolocation: ['none'],
-    payment: ['none'],
-    usb: ['none'],
-    magnetometer: ['none'],
+    camera: [],
+    microphone: [],
+    geolocation: [],
+    payment: [],
+    usb: [],
+    magnetometer: [],
+    'browsing-topics': [],
+    'interest-cohort': [],
   },
 
   // Cross-Origin policies
