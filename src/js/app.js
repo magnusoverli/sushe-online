@@ -2465,10 +2465,13 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
       return numA && numB ? numA - numB : 0;
     });
 
+    const currentAlbum = lists[currentList][albumIndex];
+    const hasNoSelection = !currentAlbum || !currentAlbum.track_pick;
+
     let menuHTML = `
       <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm" data-track-value="">
-        <span class="${!album.track_pick ? 'text-red-500' : 'text-gray-400'}">
-          ${!album.track_pick ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
+        <span class="${hasNoSelection ? 'text-red-500' : 'text-gray-400'}">
+          ${hasNoSelection ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
         </span>
       </div>
       <div class="border-t border-gray-700"></div>
@@ -2476,7 +2479,9 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
     sortedTracks.forEach((track, idx) => {
       const isSelected =
-        album.track_pick === track || album.track_pick === (idx + 1).toString();
+        currentAlbum &&
+        (currentAlbum.track_pick === track ||
+          currentAlbum.track_pick === (idx + 1).toString());
       const match = track.match(/^(\d+)[.\s-]?\s*(.*)$/);
       const trackNum = match ? match[1] : idx + 1;
       const trackName = match ? match[2] : track;
@@ -2500,31 +2505,33 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         e.preventDefault();
         e.stopPropagation();
         const trackValue = option.dataset.trackValue;
-        const previousValue = album.track_pick;
 
-        // Update data in memory
-        album.track_pick = trackValue;
+        const freshAlbum = lists[currentList][albumIndex];
+        if (!freshAlbum) {
+          showToast('Album not found - list may have been updated', 'error');
+          menu.remove();
+          return;
+        }
 
-        // Close menu immediately
+        const previousValue = freshAlbum.track_pick;
+
+        freshAlbum.track_pick = trackValue;
+
         menu.remove();
 
-        // Update the UI immediately for instant feedback
-        updateTrackCellDisplay(albumIndex, trackValue, album.tracks);
+        updateTrackCellDisplay(albumIndex, trackValue, freshAlbum.tracks);
 
-        // Show toast
         showToast(
           trackValue
             ? `Selected track: ${trackValue.substring(0, 50)}...`
             : 'Track selection cleared'
         );
 
-        // Save to server in background
         try {
           await saveList(currentList, lists[currentList]);
         } catch (_error) {
-          // Revert on error
-          album.track_pick = previousValue;
-          updateTrackCellDisplay(albumIndex, previousValue, album.tracks);
+          freshAlbum.track_pick = previousValue;
+          updateTrackCellDisplay(albumIndex, previousValue, freshAlbum.tracks);
           showToast('Error saving track selection', 'error');
         }
       };
