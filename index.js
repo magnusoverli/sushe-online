@@ -386,7 +386,101 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.set('view cache', process.env.NODE_ENV === 'production');
 
-// Conditional middleware application for performance
+// Security headers configuration with comprehensive CSP
+const helmetConfig = {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+
+      // Scripts - inline scripts in layout.ejs require 'unsafe-inline'
+      // TODO: Migrate to nonce-based approach for better security
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+
+      // Styles - inline styles in layout.ejs and dynamic accent colors
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'", // Required for inline styles and CSS custom properties
+        'https://fonts.googleapis.com',
+      ],
+
+      // Fonts from Google Fonts
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+
+      // Images from various sources (album covers, artist images, etc)
+      imgSrc: [
+        "'self'",
+        'data:', // For base64 encoded images
+        'https://e-cdns-images.dzcdn.net', // Deezer album covers
+        'https://commons.wikimedia.org', // Artist images from Wikipedia
+        'https:', // Fallback for other CDN sources
+      ],
+
+      // External API connections for music services
+      connectSrc: [
+        "'self'",
+        'https://api.spotify.com', // Spotify API
+        'https://accounts.spotify.com', // Spotify OAuth
+        'https://api.tidal.com', // Tidal API
+        'https://auth.tidal.com', // Tidal OAuth
+        'https://api.deezer.com', // Deezer API
+        'https://musicbrainz.org', // Music metadata
+        'https://restcountries.com', // Country data API
+      ],
+
+      // No frames allowed
+      frameSrc: ["'none'"],
+
+      // No objects/embeds allowed
+      objectSrc: ["'none'"],
+
+      // Restrict base URI
+      baseUri: ["'self'"],
+
+      // Only allow form submissions to same origin
+      formAction: ["'self'"],
+
+      // Upgrade insecure requests in production
+      ...(process.env.NODE_ENV === 'production' && {
+        upgradeInsecureRequests: [],
+      }),
+    },
+    // Use report-only mode if configured for testing
+    reportOnly: process.env.CSP_REPORT_ONLY === 'true',
+  },
+
+  // HTTP Strict Transport Security (HSTS)
+  // Only enabled in production when behind HTTPS
+  strictTransportSecurity:
+    process.env.NODE_ENV === 'production' && process.env.ENABLE_HSTS === 'true'
+      ? {
+          maxAge: 31536000, // 1 year in seconds
+          includeSubDomains: true,
+          preload: true,
+        }
+      : false,
+
+  // Referrer Policy - balance between privacy and functionality
+  referrerPolicy: {
+    policy: 'strict-origin-when-cross-origin',
+  },
+
+  // Permissions Policy - disable unnecessary browser features
+  permissionsPolicy: {
+    camera: ['none'],
+    microphone: ['none'],
+    geolocation: ['none'],
+    payment: ['none'],
+    usb: ['none'],
+    magnetometer: ['none'],
+  },
+
+  // Cross-Origin policies
+  crossOriginEmbedderPolicy: false, // Keep disabled for external resources
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // Allow OAuth popups
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow external resources
+};
+
+// Apply security headers with performance optimization for static assets
 app.use((req, res, next) => {
   // Skip heavy security middleware for static assets
   if (
@@ -401,8 +495,8 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // Apply helmet for all other requests
-  helmet({ contentSecurityPolicy: false })(req, res, next);
+  // Apply comprehensive security headers for all other requests
+  helmet(helmetConfig)(req, res, next);
 });
 
 // Basic Express middleware

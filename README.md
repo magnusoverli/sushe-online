@@ -58,6 +58,70 @@ The application includes production-grade rate limiting on authentication endpoi
 
 These limits apply per IP address and return HTTP 429 (Too Many Requests) with proper `Retry-After` headers when exceeded. The defaults are production-ready and require no configuration for most use cases.
 
+### Security Headers Configuration
+
+The application implements comprehensive security headers using Helmet.js to protect against common web vulnerabilities:
+
+#### Content Security Policy (CSP)
+
+A strict Content Security Policy is **enabled by default** to prevent XSS attacks and unauthorized resource loading:
+
+- **Scripts**: Only from same origin and inline (required for current implementation)
+- **Styles**: Same origin, inline styles, and Google Fonts
+- **Images**: Same origin, data URIs, and whitelisted CDNs (Deezer, Wikimedia)
+- **Connections**: Whitelisted APIs (Spotify, Tidal, Deezer, MusicBrainz, RestCountries)
+- **Frames/Objects**: Completely blocked for security
+- **Forms**: Only submit to same origin
+
+**CSP Configuration Variables:**
+
+- `CSP_REPORT_ONLY` – set to `true` to enable report-only mode for testing (default: `false`)
+- `NODE_ENV` – set to `production` to enable additional security features
+
+#### HTTP Strict Transport Security (HSTS)
+
+Forces HTTPS connections for enhanced security (production only):
+
+- `ENABLE_HSTS` – set to `true` to enable HSTS when behind HTTPS (default: `false`)
+- **Max Age**: 1 year (31536000 seconds)
+- **Include Subdomains**: Yes
+- **Preload**: Ready for HSTS preload list
+
+**Important**: Only enable HSTS when your application is behind HTTPS/SSL in production.
+
+#### Other Security Headers
+
+Automatically configured by Helmet:
+
+- **X-Content-Type-Options**: `nosniff` - Prevents MIME type sniffing
+- **X-Frame-Options**: `DENY` - Prevents clickjacking attacks
+- **X-XSS-Protection**: `1; mode=block` - Legacy XSS filter
+- **Referrer-Policy**: `strict-origin-when-cross-origin` - Privacy-focused referrer handling
+- **Permissions-Policy**: Disables camera, microphone, geolocation, payment, USB, magnetometer
+
+#### Cross-Origin Policies
+
+- **COOP**: `same-origin-allow-popups` - Allows OAuth popups while maintaining isolation
+- **CORP**: `cross-origin` - Allows loading external resources (CDNs, APIs)
+- **COEP**: Disabled - Required for external resource compatibility
+
+#### Whitelisted External Services
+
+The CSP automatically whitelists these trusted services:
+
+**Music Services:**
+- Spotify API (`api.spotify.com`, `accounts.spotify.com`)
+- Tidal API (`api.tidal.com`, `auth.tidal.com`)
+- Deezer API (`api.deezer.com`, `e-cdns-images.dzcdn.net`)
+- MusicBrainz (`musicbrainz.org`)
+
+**Content/Utilities:**
+- Google Fonts (`fonts.googleapis.com`, `fonts.gstatic.com`)
+- Wikimedia Commons (`commons.wikimedia.org`)
+- RestCountries API (`restcountries.com`)
+
+All security headers work out of the box with no configuration required. Advanced users can customize behavior using the environment variables above.
+
 - `SPOTIFY_CLIENT_ID` and `SPOTIFY_CLIENT_SECRET` – credentials for Spotify OAuth.
 - `SPOTIFY_REDIRECT_URI` – callback URL registered with Spotify.
 - `TIDAL_CLIENT_ID` – client ID for Tidal OAuth.
