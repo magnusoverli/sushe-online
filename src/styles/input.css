@@ -24,14 +24,14 @@
   /* SortableJS drag element (fallback drag element) */
   .sortable-drag {
     @apply opacity-80;
-    transform: rotate(2deg);
+    transform: none;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
   }
 
   /* SortableJS fallback element for touch devices */
   .sortable-fallback {
     @apply opacity-90 cursor-grabbing;
-    transform: scale(1.05) rotate(1deg);
+    transform: scale(1.05);
     z-index: 100000;
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
     border: 2px solid var(--accent-color);
