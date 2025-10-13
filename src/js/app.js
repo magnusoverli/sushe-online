@@ -3571,6 +3571,14 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   const albumId =
     `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
+  // Remove any existing action sheets first
+  const existingSheet = document.querySelector(
+    '.fixed.inset-0.z-50.lg\\:hidden'
+  );
+  if (existingSheet) {
+    existingSheet.remove();
+  }
+
   const actionSheet = document.createElement('div');
   actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
   actionSheet.innerHTML = `
