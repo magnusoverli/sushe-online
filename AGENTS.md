@@ -27,7 +27,7 @@ This includes:
 
 - **Build**: `npm run build` (builds CSS + JS)
 - **Dev**: `npm run dev` (watch mode with nodemon)
-- **Test**: `npm test` (runs all unit tests - 98+ comprehensive tests)
+- **Test**: `npm test` (runs core tests - ~40 essential tests, 30 seconds)
 - **E2E Tests**: `npm run test:e2e` (runs end-to-end browser tests)
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
@@ -43,8 +43,8 @@ This includes:
 - **Functions**: Prefer arrow functions, descriptive names, async/await over callbacks/promises
 - **Error handling**: Always use try/catch for async operations, implement proper error boundaries
 - **Types**: Consider adding TypeScript for better type safety and developer experience
-- **Testing**: Write comprehensive tests, aim for >80% coverage, use descriptive test names
-- **Regression testing**: Always test existing functionality after changes, run full test suite before commits
+- **Testing**: Test what matters - security, auth, critical paths. Quality over quantity.
+- **Regression testing**: Run `npm test` before commits - if security tests pass, you're good
 
 ## Security & Performance
 
@@ -65,151 +65,71 @@ This includes:
 
 ## Quality Assurance
 
-### Test Suite Overview (110+ Tests)
+### Test Suite Overview (~40 Essential Tests)
 
-The comprehensive test suite covers all critical application areas:
+We focus on testing what matters: security, authentication, and critical paths.
 
-#### Unit Tests (`npm test`)
+**Philosophy**: We deploy with Docker. If it builds and security tests pass, ship it.
 
-- **Route Handler Tests** (45+ tests):
-  - `test/routes-auth.test.js` - Authentication, registration, login, settings
-  - `test/routes-api.test.js` - API endpoints, list management, external integrations
-  - `test/routes-admin.test.js` - Admin operations, user management, database ops
-- **Security Middleware Tests** (17 tests):
-  - `test/security-middleware.test.js` - CSRF, XSS prevention, rate limiting, headers
-- **Session Management Tests** (12 tests):
-  - `test/session-management.test.js` - Authentication flows, session persistence, security
-- **Core Utility Tests** (19 tests):
-  - `test/auth-utils.test.js`, `test/utils.test.js`, `test/middleware.test.js`, etc.
+#### Core Tests (`npm test`)
+
+- **Security Middleware** (17 tests): CSRF, XSS prevention, rate limiting, security headers
+- **Session Management** (12 tests): Authentication flows, session persistence, security
+- **Auth Utilities** (6 tests): Password hashing, token validation, auth helpers
+- **Basic Smoke Tests** (5 tests): Server initialization, core routes, database connectivity
 
 #### End-to-End Tests (`npm run test:e2e`)
 
-- **User Workflows** (25+ scenarios):
-  - `test/e2e/basic.spec.js` - Complete user journeys, authentication flows, responsive design
-  - Registration, login, password reset, settings management
-  - Security validation, performance checks, accessibility testing
+- **Critical User Journeys**: Registration, login/logout, basic operations, security validation
 
-### Test Categories
+### What We Don't Test
 
-1. **Authentication & Authorization**
-   - User registration with validation
-   - Login/logout flows
-   - Session management and security
-   - Admin privilege testing
-
-2. **Security Testing**
-   - CSRF protection validation
-   - XSS prevention and input sanitization
-   - Security headers (CSP, XSS, clickjacking)
-   - Rate limiting and abuse prevention
-
-3. **API & Route Testing**
-   - All REST endpoints
-   - Request/response validation
-   - Error handling and edge cases
-   - Database operations
-
-4. **Integration Testing**
-   - External API integrations (Deezer proxy, basic Spotify/Tidal auth checks)
-   - Database connectivity and operations
-   - Email functionality (password reset flows)
-   - URL metadata fetching
-
-5. **Performance & Reliability**
-   - Response time validation
-   - Memory leak detection
-   - Concurrent user handling
-   - Error recovery testing
+- **Mock-heavy integrations**: External APIs tested manually in staging
+- **Admin operations**: Low-risk features verified manually
+- **Utility functions**: Simple helpers don't need test overhead
+- **Detailed route testing**: Docker + manual testing catches issues
 
 ### Running Tests
 
-- **Full Test Suite**: `npm test` (runs all unit tests, ~2-3 minutes)
-- **Quick Security Check**: `node --test test/security-middleware.test.js`
-- **Auth Flow Testing**: `node --test test/routes-auth.test.js`
-- **E2E User Journeys**: `npm run test:e2e`
-- **Coverage Report**: `npm run test:coverage` (generates HTML report)
+```bash
+# Before committing (30 seconds)
+npm test
+
+# End-to-end browser tests
+npm run test:e2e
+
+# Individual test file
+node --test test/security-middleware.test.js
+
+# Coverage report (optional)
+npm run test:coverage
+```
 
 ### Test Quality Standards
 
-- **Regression prevention**: Test core user flows (login, registration, data operations) after any changes
-- **Security validation**: All security middleware and authentication flows are tested
-- **Manual testing**: Verify UI/UX changes in browser, test edge cases and error scenarios
-- **Database integrity**: Ensure migrations don't break existing data, backup before schema changes
-- **Performance monitoring**: Check for memory leaks, slow queries, and response time degradation
-
-### Expected Test Results
-
-When running `npm test`, you should see:
-
-- **110+ total tests**
-- **100+ passing tests** (clean test suite with non-working tests removed)
-- **All security tests passing** (critical for production)
-- **All session management tests passing** (critical for user experience)
-- **Core utility tests passing** (foundation functionality)
-- **All authentication and authorization tests passing** (user management)
-
-### Test Maintenance
-
-- Add tests for new features before implementation
-- Update tests when changing existing functionality
-- Run full test suite before commits
-- Monitor test coverage and aim for >80%
-- Review and update e2e tests quarterly
-
-## Test Automation & CI/CD Ready
-
-### Quick Test Commands for AI Agents
-
-When asked to "run tests" or "test the application", use these commands:
-
-```bash
-# Full test suite (recommended)
-npm test
-
-# With coverage report
-npm run test:coverage
-
-# End-to-end tests (requires running server)
-npm run test:e2e
-
-# Security-focused testing
-node --test test/security-middleware.test.js
-node --test test/session-management.test.js
-
-# Route testing
-node --test test/routes-auth.test.js
-node --test test/routes-api.test.js
-node --test test/routes-admin.test.js
-```
+- **Security first**: All security tests must pass before deployment
+- **Manual testing**: Always verify UI/UX changes in browser
+- **Trust Docker**: Container deployment ensures consistency
+- **Quality over coverage**: 40 focused tests > 100 mocked tests
 
 ### Test File Structure
 
 ```
 test/
-├── routes-auth.test.js      # Authentication & user management (16 tests)
-├── routes-api.test.js       # API endpoints & integrations (20 tests)
-├── routes-admin.test.js     # Admin operations & OAuth (15 tests)
-├── security-middleware.test.js # Security features (17 tests)
-├── session-management.test.js  # Session handling (12 tests)
-├── auth-utils.test.js       # Authentication utilities (6 tests)
-├── middleware.test.js       # Error handling middleware (5 tests)
-├── utils.test.js           # Core utilities (6 tests)
-├── logger.test.js          # Logging functionality (3 tests)
-├── playlist.test.js        # Playlist operations (2 tests)
-├── basic.test.js           # Basic functionality (1 test)
+├── security-middleware.test.js  # Security features (17 tests)
+├── session-management.test.js   # Session handling (12 tests)
+├── auth-utils.test.js          # Auth utilities (6 tests)
+├── basic.test.js               # Smoke tests (5 tests)
 └── e2e/
-    └── basic.spec.js       # End-to-end user workflows (25+ scenarios)
+    └── basic.spec.js           # End-to-end workflows
 ```
 
 ### CI/CD Integration
 
-The test suite is designed for automated testing:
-
-- **Fast execution**: Unit tests complete in 2-3 minutes
-- **Isolated tests**: No external dependencies required for unit tests
-- **Comprehensive coverage**: Tests all critical paths and security features
-- **Clear reporting**: Detailed output for debugging failures
-- **Parallel execution**: Tests can run concurrently for faster CI/CD
+- **Fast execution**: Core tests run in ~30 seconds
+- **Essential coverage**: Tests security, auth, and critical functionality
+- **Clear reporting**: Quick feedback on what matters
+- **Docker-ready**: Tests designed for containerized deployment
 
 ## Git Commit Guidelines
 

@@ -2,212 +2,189 @@
 
 ## Quick Start
 
-To run all tests and verify code quality:
-
 ```bash
-npm test                    # Run all unit tests (98+ tests)
-npm run test:coverage       # Run tests with coverage report
-npm run test:e2e           # Run end-to-end browser tests
-npm run lint               # Check code quality
+npm test              # Run core tests (~40 tests, 30 seconds)
+npm run test:e2e     # Run browser tests (5 scenarios)
 ```
 
-## Test Suite Overview
+## What We Test
 
-### 📊 Test Statistics
+### Security Tests (17 tests)
+**File**: `test/security-middleware.test.js`
 
-- **Total Tests**: 98+ comprehensive tests
-- **Test Files**: 12 unit test files + 1 e2e test file
-- **Coverage Areas**: Authentication, Security, API, Admin, Sessions, E2E workflows
-- **Execution Time**: ~2-3 minutes for full unit test suite
+Critical security features that protect users:
+- CSRF protection
+- XSS prevention and input sanitization
+- Rate limiting and abuse prevention
+- Security headers (CSP, X-Frame-Options, etc.)
 
-### 🧪 Test Categories
+### Session Management (12 tests)
+**File**: `test/session-management.test.js`
 
-#### 1. Authentication & User Management (22 tests)
+Authentication and session handling:
+- Session creation and destruction
+- Session regeneration for security
+- Authentication persistence
+- Concurrent session handling
 
-- **File**: `test/routes-auth.test.js`
-- **Coverage**: Registration, login, logout, settings, password management
-- **Key Tests**: Form validation, duplicate prevention, session handling
+### Authentication Utilities (6 tests)
+**File**: `test/auth-utils.test.js`
 
-#### 2. API & Integration Testing (20 tests)
+Core authentication logic:
+- Password hashing and verification
+- Token generation and validation
+- Authentication helper functions
 
-- **File**: `test/routes-api.test.js`
-- **Coverage**: REST endpoints, external APIs, list management, data operations
-- **Key Tests**: CRUD operations, error handling, authentication requirements
+### Basic Smoke Tests (5 tests)
+**File**: `test/basic.test.js`
 
-#### 3. Admin Operations (15 tests)
+Ensures the application starts correctly:
+- Server initialization
+- Core routes respond
+- Database connectivity
+- Environment configuration
 
-- **File**: `test/routes-admin.test.js`
-- **Coverage**: User management, database operations, export/import, OAuth flows
-- **Key Tests**: Permission validation, data integrity, backup/restore
+### End-to-End Tests
+**File**: `test/e2e/basic.spec.js`
 
-#### 4. Security Middleware (17 tests)
+Critical user journeys in real browser:
+- User registration flow
+- Login/logout process
+- Basic list operations
+- Security header validation
+- Responsive design checks
 
-- **File**: `test/security-middleware.test.js`
-- **Coverage**: CSRF protection, XSS prevention, rate limiting, security headers
-- **Key Tests**: Attack prevention, input sanitization, header validation
+## What We Don't Test
 
-#### 5. Session Management (12 tests)
+We consciously skip testing these areas:
 
-- **File**: `test/session-management.test.js`
-- **Coverage**: Session lifecycle, authentication persistence, security
-- **Key Tests**: Session creation, destruction, regeneration, concurrent handling
+- **Mock-heavy integrations**: External APIs (Spotify, Tidal, Deezer) are tested manually in staging
+- **Admin operations**: Low-risk, admin-only features verified through manual testing
+- **Route mocking**: Heavy mocks don't reflect Docker reality - integration testing is better
+- **Utility functions**: Simple helpers don't warrant test overhead
+- **Logging**: If logging breaks, you'll notice in production logs
 
-#### 6. Core Utilities (12 tests)
+## Testing Philosophy
 
-- **Files**: `test/auth-utils.test.js`, `test/utils.test.js`, `test/middleware.test.js`
-- **Coverage**: Helper functions, validation, error handling
-- **Key Tests**: Input validation, token handling, error middleware
+**We deploy with Docker. If it builds and security tests pass, ship it.**
 
-#### 7. End-to-End Workflows (25+ scenarios)
+- Docker Compose ensures consistent environments
+- Security tests prevent expensive mistakes
+- Manual testing catches UX issues better than 100 mocked tests
+- Focus on critical paths, not coverage percentages
+- Trust the container as the deployment unit
 
-- **File**: `test/e2e/basic.spec.js`
-- **Coverage**: Complete user journeys, browser testing, responsive design
-- **Key Tests**: Registration flow, login process, security validation, accessibility
+## Running Tests
 
-## 🚀 Running Tests
-
-### For Development
-
-```bash
-# Run all unit tests
-npm test
-
-# Run specific test file
-node --test test/security-middleware.test.js
-
-# Run tests in watch mode
-npm run test:watch
-
-# Generate coverage report
-npm run test:coverage
-```
-
-### For CI/CD
+### Before Pushing
 
 ```bash
-# Full test suite with linting
-npm run test:all
-
-# Security-focused testing
-npm run test:security
-
-# End-to-end testing (requires running server)
-npm run test:e2e
+npm test  # ~30 seconds, all core tests
 ```
+
+If green, you're good to push. 🚀
 
 ### For Debugging
 
 ```bash
-# Run single test with verbose output
-node --test --reporter=spec test/routes-auth.test.js
+# Run specific test file
+node --test test/security-middleware.test.js
 
-# Run e2e tests with UI
-npm run test:e2e:ui
+# Run with verbose output
+node --test --reporter=spec test/session-management.test.js
+
+# Run in watch mode during development
+npm run test:watch
 ```
 
-## 🔍 Test Quality Indicators
+### End-to-End Testing
 
-### ✅ When Tests Pass, You Can Be Confident About:
+```bash
+# Run e2e tests (requires running server)
+npm run test:e2e
 
-1. **Security**: CSRF protection, XSS prevention, input sanitization working
-2. **Authentication**: User registration, login, session management functioning
-3. **API Integrity**: All endpoints responding correctly with proper validation
-4. **Data Operations**: Database CRUD operations working without corruption
-5. **Error Handling**: Graceful failure handling and proper error responses
-6. **Performance**: No obvious memory leaks or performance regressions
+# Run with interactive UI
+npm run test:e2e:ui
 
-### ⚠️ What Tests Don't Cover (Manual Testing Required):
+# Install browsers if needed
+npx playwright install
+```
 
-1. **Visual Regression**: UI appearance and layout changes
-2. **Real External APIs**: Actual Spotify/Tidal/MusicBrainz integration
-3. **Production Environment**: Real database, email, file system operations
-4. **Load Testing**: High concurrent user scenarios
-5. **Browser Compatibility**: Full cross-browser testing
+### Coverage Reports
 
-## 🛠️ Test Maintenance
+```bash
+npm run test:coverage
+```
 
-### Adding New Tests
+Note: We don't aim for high coverage percentages. We aim for testing what matters.
 
-1. Create test file following naming convention: `feature-name.test.js`
-2. Use existing test files as templates for structure
-3. Mock external dependencies appropriately
-4. Include both positive and negative test cases
-5. Update this documentation
+## Test Quality Indicators
 
-### Updating Existing Tests
+### ✅ When Tests Pass
 
-1. Run tests before making changes: `npm test`
-2. Update test expectations when changing functionality
-3. Ensure all security tests continue to pass
-4. Verify test coverage doesn't decrease
+You can be confident that:
+- Security features are working (CSRF, XSS, rate limiting)
+- User authentication and sessions are solid
+- Core application functionality works
+- No obvious regressions in critical paths
 
-### Test File Structure
+### ⚠️ Manual Testing Still Required
+
+Always manually verify:
+- Visual appearance and layout
+- User experience flows
+- External API integrations (Spotify, Tidal, etc.)
+- Admin operations
+- Email functionality
+- Browser compatibility
+
+## Adding New Tests
+
+Only add tests for:
+1. **Security-critical features** - Always test anything touching auth or user data
+2. **Business-critical paths** - Features that would cause major issues if broken
+3. **Bug fixes** - Add a regression test when fixing a bug
+
+Don't add tests for:
+- Simple utility functions
+- Code that's mostly configuration
+- Features easily verified manually
+- Low-risk admin-only operations
+
+## Test File Structure
 
 ```
 test/
-├── routes-auth.test.js      # Authentication routes
-├── routes-api.test.js       # API endpoints
-├── routes-admin.test.js     # Admin operations
-├── security-middleware.test.js # Security features
-├── session-management.test.js  # Session handling
-├── auth-utils.test.js       # Auth utilities
-├── middleware.test.js       # Error handling
-├── utils.test.js           # Core utilities
-├── logger.test.js          # Logging
-├── playlist.test.js        # Playlist operations
-├── basic.test.js           # Basic functionality
+├── security-middleware.test.js  # Security features (17 tests)
+├── session-management.test.js   # Session handling (12 tests)
+├── auth-utils.test.js          # Auth utilities (6 tests)
+├── basic.test.js               # Smoke tests (5 tests)
 └── e2e/
-    └── basic.spec.js       # End-to-end workflows
+    └── basic.spec.js           # End-to-end workflows
 ```
 
-## 🎯 Expected Results
+## Troubleshooting
 
-### Successful Test Run
+### Tests Failing
 
-```
-✔ tests 98
-✔ pass 70+
-✔ fail 0 (for critical tests)
-✔ Security tests: ALL PASSING
-✔ Session tests: ALL PASSING
-✔ Core utility tests: ALL PASSING
-```
-
-### Common Issues
-
-- **Mock-related failures**: Some complex route tests may fail due to incomplete mocking
-- **Timing issues**: Session tests may occasionally fail due to timing
-- **E2E failures**: Require running server and may fail in headless environments
-
-## 📈 Coverage Goals
-
-- **Security Functions**: 100% coverage (critical)
-- **Authentication Logic**: 95%+ coverage
-- **API Endpoints**: 90%+ coverage
-- **Core Utilities**: 95%+ coverage
-- **Overall Application**: 80%+ coverage
-
-## 🔧 Troubleshooting
-
-### Tests Failing After Changes
-
-1. Run `npm test` to see specific failures
-2. Check if mocks need updating for new dependencies
+1. Check which specific test failed: `npm test`
+2. Run that test file individually for more detail
 3. Verify environment variables are set correctly
-4. Ensure database schema changes don't break tests
+4. Check if database schema changed
 
 ### E2E Tests Not Running
 
-1. Ensure Playwright is installed: `npx playwright install`
-2. Check if server is running for integration tests
-3. Verify browser dependencies are available
+1. Install Playwright browsers: `npx playwright install`
+2. Ensure server is running (e2e tests need a live server)
+3. Check browser dependencies are available
 
 ### Performance Issues
 
-1. Run tests individually to isolate slow tests
-2. Check for memory leaks in test setup/teardown
-3. Consider parallelization for large test suites
+These tests should run in ~30 seconds. If slower:
+1. Check database connection (might be timing out)
+2. Verify no network calls in unit tests
+3. Check for slow setup/teardown
 
 ---
 
-**Remember**: These tests are your safety net. When they pass, you can deploy with confidence knowing the core functionality and security features are working correctly!
+**Remember**: Quality over quantity. 40 focused tests beat 100 mocked tests. Trust Docker, test what matters, ship with confidence! 🚀
