@@ -158,3 +158,8 @@ Thumbs.db
 *.swp
 public/js/bundle.js
 cookies.txt
+
+# Test artifacts
+playwright-report/
+test-results/
+public/js/chunks/
