@@ -408,8 +408,12 @@ const helmetConfig = {
         'https://cdnjs.cloudflare.com', // Font Awesome
       ],
 
-      // Fonts from Google Fonts
-      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+      // Fonts from Google Fonts and Font Awesome
+      fontSrc: [
+        "'self'",
+        'https://fonts.gstatic.com',
+        'https://cdnjs.cloudflare.com', // Font Awesome fonts
+      ],
 
       // Images from various sources (album covers, artist images, etc)
       imgSrc: [
