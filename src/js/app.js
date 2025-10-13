@@ -348,7 +348,7 @@ async function loadCountries() {
     }
     // Expose to window for access from musicbrainz.js
     window.availableCountries = availableCountries;
-  } catch (error) {
+  } catch (_error) {
     console.error('Error loading countries:', error);
   }
 }
@@ -384,7 +384,7 @@ async function updatePlaylist(listName, listData = null) {
 window.updatePlaylist = updatePlaylist;
 
 // Show playlist validation modal before creating playlist
-async function showPlaylistValidationModal(listName, validation) {
+async function _showPlaylistValidationModal(listName, validation) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
     modal.className =
@@ -609,7 +609,7 @@ function showPlaylistResultModal(listName, result) {
 }
 
 // Show service selection modal when no preferred service is set
-function showServiceSelectionModal(listName) {
+function _showServiceSelectionModal(listName) {
   const modal = document.createElement('div');
   modal.className =
     'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
@@ -689,7 +689,7 @@ async function createPlaylistWithService(listName, service) {
 
     hidePlaylistProgressModal(progressModal);
     showPlaylistResultModal(listName, result);
-  } catch (error) {
+  } catch (_error) {
     console.error('Error creating playlist with service:', error);
     showToast(`Error creating playlist on ${service}`, 'error');
   }
@@ -699,7 +699,7 @@ async function createPlaylistWithService(listName, service) {
 function initializeImportConflictHandling() {
   const conflictModal = document.getElementById('importConflictModal');
   const renameModal = document.getElementById('importRenameModal');
-  const conflictListNameSpan = document.getElementById('conflictListName');
+  const _conflictListNameSpan = document.getElementById('conflictListName');
   const originalImportNameSpan = document.getElementById('originalImportName');
   const importNewNameInput = document.getElementById('importNewName');
 
@@ -738,7 +738,7 @@ function initializeImportConflictHandling() {
       showToast(
         `Overwritten "${pendingImportFilename}" with ${pendingImportData.length} albums`
       );
-    } catch (err) {
+    } catch (_err) {
       console.error('Import overwrite error:', err);
       showToast('Error overwriting list', 'error');
     }
@@ -807,7 +807,7 @@ function initializeImportConflictHandling() {
       } else {
         showToast(`Added ${addedCount} albums to "${pendingImportFilename}"`);
       }
-    } catch (err) {
+    } catch (_err) {
       console.error('Import merge error:', err);
       showToast('Error merging lists', 'error');
     }
@@ -848,7 +848,7 @@ function initializeImportConflictHandling() {
         showToast(
           `Imported as "${newName}" with ${pendingImportData.length} albums`
         );
-      } catch (err) {
+      } catch (_err) {
         console.error('Import with rename error:', err);
         showToast('Error importing list', 'error');
       }
@@ -958,7 +958,7 @@ function makeCountryEditable(countryDiv, albumIndex) {
       await saveList(currentList, lists[currentList]);
       restoreDisplay(newCountry);
       showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
-    } catch (error) {
+    } catch (_error) {
       showToast('Error saving country', 'error');
       // Revert on error
       lists[currentList][albumIndex].country = currentCountry;
@@ -1008,7 +1008,7 @@ async function loadGenres() {
     availableGenres = text
       .split('\n')
       .map((g) => g.trim())
-      .filter((g, index, arr) => {
+      .filter((g, index, _arr) => {
         // Keep the first empty line if it exists, but remove other empty lines
         return g.length > 0 || (index === 0 && g === '');
       });
@@ -1021,7 +1021,7 @@ async function loadGenres() {
       availableGenres.sort();
       availableGenres.unshift(emptyItem);
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('Error loading genres:', error);
     showToast('Error loading genres', 'error');
   }
@@ -1128,7 +1128,7 @@ export async function apiCall(url, options = {}) {
     }
 
     return await response.json();
-  } catch (error) {
+  } catch (_error) {
     console.error('API call failed:', error);
     throw error;
   }
@@ -1139,7 +1139,7 @@ window.apiCall = apiCall;
 async function fetchLinkPreview(url) {
   try {
     return await apiCall(`/api/unfurl?url=${encodeURIComponent(url)}`);
-  } catch (err) {
+  } catch (_err) {
     console.error('Link preview error:', err);
     return null;
   }
@@ -1175,7 +1175,7 @@ function clearListsCache() {
   try {
     localStorage.removeItem('lists_cache');
     localStorage.removeItem('lists_cache_timestamp');
-  } catch (error) {
+  } catch (_error) {
     console.warn('Failed to clear lists cache:', error);
   }
 }
@@ -1194,7 +1194,7 @@ async function loadLists() {
       const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
 
       if (cached) {
-        const cacheAge = Date.now() - (parseInt(cacheTimestamp) || 0);
+        const _cacheAge = Date.now() - (parseInt(cacheTimestamp) || 0);
         lists = JSON.parse(cached);
 
         if (typeof lists === 'object' && lists !== null) {
@@ -1235,7 +1235,7 @@ async function loadLists() {
         }
       }
     }
-  } catch (error) {
+  } catch (_error) {
     console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
   }
@@ -1264,7 +1264,7 @@ async function saveList(name, data) {
     } catch (storageError) {
       console.warn('Failed to update cache after save:', storageError);
     }
-  } catch (error) {
+  } catch (_error) {
     showToast('Error saving list', 'error');
     throw error;
   }
@@ -1317,7 +1317,7 @@ async function autoFetchTracksForList(name) {
     try {
       await fetchTracksForAlbum(album);
       updated = true;
-    } catch (err) {
+    } catch (_err) {
       console.error('Auto track fetch failed:', err);
     }
     await wait(3000);
@@ -1326,7 +1326,7 @@ async function autoFetchTracksForList(name) {
   if (updated) {
     try {
       await saveList(name, list);
-    } catch (err) {
+    } catch (_err) {
       console.error('Failed saving tracks for list', err);
     }
   }
@@ -1362,7 +1362,7 @@ function subscribeToList(name) {
           }
         }
       }, 100);
-    } catch (err) {
+    } catch (_err) {
       console.error('Failed to parse SSE update', err);
     }
   });
@@ -1438,7 +1438,7 @@ function initializeContextMenu() {
       // Pass both list name and list data for track validation
       const listData = lists[currentContextList] || [];
       await updatePlaylist(currentContextList, listData);
-    } catch (err) {
+    } catch (_err) {
       console.error('Update playlist failed', err);
     }
 
@@ -1500,7 +1500,7 @@ function initializeContextMenu() {
         updateListNav();
 
         showToast(`List "${currentContextList}" deleted`);
-      } catch (error) {
+      } catch (_error) {
         showToast('Error deleting list', 'error');
       }
     }
@@ -1586,7 +1586,7 @@ function initializeAlbumContextMenu() {
             await saveList(currentList, lists[currentList]);
             trackAbortController = null;
           }
-        } catch (error) {
+        } catch (_error) {
           if (error.name === 'AbortError') {
             // Request was aborted, ignore
             return;
@@ -1724,7 +1724,7 @@ function initializeAlbumContextMenu() {
       });
     }
 
-    selectTrackOption.onmouseleave = (e) => {
+    selectTrackOption.onmouseleave = (_e) => {
       // Hide submenu if not hovering over it
       setTimeout(() => {
         if (
@@ -1736,7 +1736,7 @@ function initializeAlbumContextMenu() {
       }, 200); // Increased timeout for better UX
     };
 
-    trackSubmenu.onmouseleave = (e) => {
+    trackSubmenu.onmouseleave = (_e) => {
       // Hide submenu if not hovering over parent or submenu
       setTimeout(() => {
         if (
@@ -1856,7 +1856,7 @@ function initializeAlbumContextMenu() {
           selectList(currentList);
 
           showToast(`Removed "${album.album}" from the list`);
-        } catch (error) {
+        } catch (_error) {
           console.error('Error removing album:', error);
           showToast('Error removing album', 'error');
 
@@ -1935,7 +1935,7 @@ function playAlbum(index) {
           showToast('Album not found on ' + service, 'error');
         }
       })
-      .catch((err) => {
+      .catch((_err) => {
         console.error('Play album error:', err);
         showToast(err.message || 'Failed to open album', 'error');
       });
@@ -2005,7 +2005,7 @@ function initializeCreateList() {
       closeModal();
 
       showToast(`Created list "${listName}"`);
-    } catch (error) {
+    } catch (_error) {
       showToast('Error creating list', 'error');
     }
   };
@@ -2107,7 +2107,7 @@ function initializeRenameList() {
       closeModal();
 
       showToast(`List renamed from "${oldName}" to "${newName}"`);
-    } catch (error) {
+    } catch (_error) {
       showToast('Error renaming list', 'error');
     }
   };
@@ -2213,7 +2213,7 @@ function updateListNav() {
         let pressTimer;
         button.addEventListener(
           'touchstart',
-          (e) => {
+          (_e) => {
             pressTimer = setTimeout(() => {
               showMobileListMenu(listName);
             }, 500);
@@ -2261,7 +2261,7 @@ async function selectList(listName) {
           `/api/lists/${encodeURIComponent(listName)}`
         );
         lists[listName] = freshData;
-      } catch (err) {
+      } catch (_err) {
         console.warn('Failed to fetch latest list data:', err);
       }
     }
@@ -2305,7 +2305,7 @@ async function selectList(listName) {
           console.warn('Failed to save list preference:', error);
         });
     }
-  } catch (error) {
+  } catch (_error) {
     showToast('Error loading list', 'error');
   }
 }
@@ -2328,12 +2328,12 @@ function updateHeaderTitle(listName) {
 }
 
 // Mobile edit form
-function editMobileAlbum(index) {
+function _editMobileAlbum(_index) {
   // Show a mobile-friendly edit form
   // This replaces the inline editing on desktop
 }
 
-function removeAlbum(index) {
+function _removeAlbum(_index) {
   lists[currentList].splice(index, 1);
   saveList(currentList, lists[currentList]);
   selectList(currentList);
@@ -2440,7 +2440,7 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
       await saveList(currentList, lists[currentList]);
       restoreDisplay(newGenre);
       showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
-    } catch (error) {
+    } catch (_error) {
       showToast('Error saving genre', 'error');
       // Revert on error
       lists[currentList][albumIndex][genreField] = currentGenre;
@@ -2539,7 +2539,7 @@ function makeCommentEditable(commentDiv, albumIndex) {
       if (newComment !== currentComment) {
         showToast('Comment updated');
       }
-    } catch (error) {
+    } catch (_error) {
       showToast('Error saving comment', 'error');
       // Revert on error - also handle placeholder for empty comments
       let revertDisplay = currentComment;
@@ -2870,7 +2870,7 @@ function attachDesktopEventHandlers(row, index) {
         try {
           await fetchTracksForAlbum(album);
           await saveList(currentList, lists[currentList]);
-        } catch (err) {
+        } catch (_err) {
           showToast('Error fetching tracks', 'error');
           return;
         }
@@ -3180,7 +3180,7 @@ function clearPositionCache() {
 }
 
 // Rebuild position cache after clearing
-function rebuildPositionCache(container, isMobile) {
+function _rebuildPositionCache(container, isMobile) {
   clearPositionCache();
   prePopulatePositionCache(container, isMobile);
 }
@@ -3267,7 +3267,7 @@ function debouncedSaveList(listName, listData, delay = 300) {
   saveTimeout = setTimeout(async () => {
     try {
       await saveList(listName, listData);
-    } catch (error) {
+    } catch (_error) {
       console.error('Error saving list:', error);
       showToast('Error saving list order', 'error');
     }
@@ -3278,7 +3278,7 @@ function debouncedSaveList(listName, listData, delay = 300) {
 let mobileAutoscrollInterval = null;
 let mobileScrollContainer = null;
 
-function startMobileAutoscroll(sortableContainer) {
+function startMobileAutoscroll(_sortableContainer) {
   // Find the main scroll container if not already found
   if (!mobileScrollContainer) {
     mobileScrollContainer = document.querySelector(
@@ -3351,7 +3351,7 @@ function stopMobileAutoscroll() {
 let touchAutoscrollInterval = null;
 let lastTouchY = null;
 
-function startTouchAutoscroll(draggedElement) {
+function startTouchAutoscroll(_draggedElement) {
   if (!mobileScrollContainer) {
     mobileScrollContainer = document.querySelector(
       'main .h-full.overflow-y-auto'
@@ -3466,14 +3466,14 @@ function initializeUnifiedSorting(container, isMobile) {
       fallbackTolerance: 5,
       // Prevent scrolling during drag
       preventOnFilter: false,
-      onChoose: function (evt) {
+      onChoose: function (_evt) {
         // Disable scrolling on the container when drag starts
         if (mobileScrollContainer) {
           mobileScrollContainer.style.overflowY = 'hidden';
           mobileScrollContainer.style.touchAction = 'none';
         }
       },
-      onUnchoose: function (evt) {
+      onUnchoose: function (_evt) {
         // Re-enable scrolling when drag is cancelled
         if (mobileScrollContainer) {
           mobileScrollContainer.style.overflowY = 'auto';
@@ -3492,7 +3492,7 @@ function initializeUnifiedSorting(container, isMobile) {
     scrollSpeed: isMobile ? 15 : 10,
 
     // Enhanced event handlers
-    onStart: function (evt) {
+    onStart: function (_evt) {
       // Visual feedback
       if (!isMobile) {
         document.body.classList.add('desktop-dragging');
@@ -3518,7 +3518,7 @@ function initializeUnifiedSorting(container, isMobile) {
         }
       }
     },
-    onEnd: async function (evt) {
+    onEnd: async function (_evt) {
       // Clean up visual feedback
       if (!isMobile) {
         document.body.classList.remove('desktop-dragging');
@@ -3551,7 +3551,7 @@ function initializeUnifiedSorting(container, isMobile) {
 
           // Debounced server save to batch rapid changes
           debouncedSaveList(currentList, list);
-        } catch (error) {
+        } catch (_error) {
           console.error('Error saving reorder:', error);
           if (window.showToast) {
             window.showToast('Error saving changes', 'error');
@@ -3873,7 +3873,7 @@ window.showMobileEditForm = function (index) {
             <ul class="space-y-2">
               ${album.tracks
                 .map(
-                  (t, idx) => `
+                  (t, _idx) => `
                 <li>
                   <label class="flex items-center space-x-2">
                     <input type="checkbox" class="track-pick-checkbox" value="${t}" ${t === (album.track_pick || '') ? 'checked' : ''}>
@@ -3949,7 +3949,7 @@ window.showMobileEditForm = function (index) {
           setupTrackPickCheckboxes();
         }
         showToast('Tracks loaded');
-      } catch (err) {
+      } catch (_err) {
         console.error('Track fetch error:', err);
         showToast('Error fetching tracks', 'error');
       } finally {
@@ -4014,7 +4014,7 @@ window.showMobileEditForm = function (index) {
       displayAlbums(lists[currentList]);
 
       showToast('Album updated successfully');
-    } catch (error) {
+    } catch (_error) {
       console.error('Error saving album:', error);
       showToast('Error saving changes', 'error');
 
@@ -4128,7 +4128,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!lists[name]) lists[name] = [];
       });
       updateListNav();
-    } catch (err) {
+    } catch (_err) {
       console.warn('Failed to parse cached list names:', err);
     }
   }
@@ -4154,7 +4154,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
           }
         }
-      } catch (err) {
+      } catch (_err) {
         console.warn('Failed to sync lists from other tab:', err);
       }
     }
@@ -4217,7 +4217,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   selectList(fileName);
                   showToast(`Successfully imported ${data.length} albums`);
                 }
-              } catch (err) {
+              } catch (_err) {
                 showToast('Error importing file: ' + err.message, 'error');
               }
             };
@@ -4233,7 +4233,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Confirmation modal handlers are managed by showConfirmation function
       // No static handlers needed since we use the Promise-based approach
     })
-    .catch((err) => {
+    .catch((_err) => {
       showToast('Failed to initialize', 'error');
     });
 });

@@ -1,5 +1,6 @@
-import { showToast, apiCall } from './utils.js';
+import { showToast } from './utils.js';
 
+// Used on line 60
 function getPointsForPosition(position) {
   const POSITION_POINTS = {
     1: 60,

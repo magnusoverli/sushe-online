@@ -337,7 +337,7 @@ test('Session store should handle file operations', async () => {
   const sessionId = response.body.sessionId;
 
   // Check if session file was created
-  const sessionFile = path.join(tempSessionDir, sessionId + '.json');
+  const _sessionFile = path.join(tempSessionDir, sessionId + '.json');
 
   // Give it a moment for file to be written
   await new Promise((resolve) => setTimeout(resolve, 100));
@@ -395,7 +395,7 @@ test.after(async () => {
       }
       fs.rmdirSync(tempSessionDir);
     }
-  } catch (err) {
+  } catch (_err) {
     // Ignore cleanup errors in tests
   }
 });

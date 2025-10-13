@@ -166,12 +166,12 @@ function createTestApp(securityConfig = {}) {
     res.json({ sanitized: req.body });
   });
 
-  app.get('/error-test', (req, res) => {
+  app.get('/error-test', (_req, _res) => {
     throw new Error('Test error');
   });
 
   // Error handling middleware
-  app.use((err, req, res, next) => {
+  app.use((err, _req, res, _next) => {
     mockLogger.error('Test error:', err.message);
     res.status(500).json({
       error: 'Internal server error',
@@ -293,7 +293,7 @@ test('Rate limiting should block excessive requests', async () => {
   const responses = await Promise.all(requests);
 
   // Some requests should be rate limited
-  const rateLimitedResponses = responses.filter((r) => r.status === 429);
+  const _rateLimitedResponses = responses.filter((r) => r.status === 429);
 
   // In this simplified test, we might not hit the limit due to test timing
   // but the middleware is in place

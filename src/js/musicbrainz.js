@@ -3,7 +3,6 @@
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
 const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
-const USER_AGENT = 'KVLT Album Manager/1.0 (https://kvlt.example.com)';
 
 // Rate limiting is now handled on the backend, but we'll keep a small delay for the UI
 let lastRequestTime = 0;
@@ -303,7 +302,7 @@ async function searchDeezerArtwork(artistName, albumName) {
 
       deezerCache.set(cacheKey, null);
       return null;
-    } catch (error) {
+    } catch (_error) {
       deezerCache.set(cacheKey, null);
       return null;
     }
@@ -327,7 +326,7 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
       );
     }
     return coverUrl;
-  } catch (error) {
+  } catch (_error) {
     console.error(`Error fetching cover art for "${albumTitle}":`, error);
     return null;
   }
@@ -368,7 +367,7 @@ async function preloadArtistAlbums(artist) {
     }
 
     return releaseGroups;
-  } catch (error) {
+  } catch (_error) {
     // Silently handle AbortError
     return null;
   }
@@ -430,7 +429,7 @@ function setupIntersectionObserver(releaseGroups, artistName) {
 
       loadedAlbums.add(index);
       loadingAlbums.delete(index);
-    } catch (error) {
+    } catch (_error) {
       // Error loading cover - mark as loaded to avoid retry
       loadedAlbums.add(index);
       loadingAlbums.delete(index);
@@ -596,7 +595,7 @@ async function performSearch() {
 
       await displayDirectAlbumResults(albums);
     }
-  } catch (error) {
+  } catch (_error) {
     showToast(`Error searching ${searchMode}s`, 'error');
     modalElements.searchLoading.classList.add('hidden');
     modalElements.searchEmpty.classList.remove('hidden');
@@ -715,7 +714,7 @@ async function displayDirectAlbumResults(releaseGroups) {
           if (coverArt) {
             rg.coverArt = coverArt;
           }
-        } catch (error) {
+        } catch (_error) {
           // Error loading cover - will try again later
         }
       }
@@ -1135,7 +1134,7 @@ async function handleManualSubmit(e) {
       };
 
       reader.readAsDataURL(coverArtFile);
-    } catch (error) {
+    } catch (_error) {
       showToast('Error processing cover art', 'error');
     }
   } else {
@@ -1152,7 +1151,7 @@ async function finishManualAdd(album) {
     if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
       try {
         await window.fetchTracksForAlbum(album);
-      } catch (err) {
+      } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
@@ -1167,7 +1166,7 @@ async function finishManualAdd(album) {
     closeAddAlbumModal();
 
     showToast(`Added "${album.album}" by ${album.artist} to the list`);
-  } catch (error) {
+  } catch (_error) {
     showToast('Error adding album to list', 'error');
 
     // Remove from list on error
@@ -1355,7 +1354,7 @@ async function getWikidataImageFromMusicBrainz(artistId, artistName) {
     }
 
     return null;
-  } catch (error) {
+  } catch (_error) {
     console.error(`Error fetching Wikidata image for "${artistName}":`, error);
     return null;
   }
@@ -1426,7 +1425,7 @@ async function searchDeezerArtistImage(artistName, disambiguation = null) {
     }
 
     return null;
-  } catch (error) {
+  } catch (_error) {
     console.error(
       `Error fetching Deezer artist image for "${artistName}":`,
       error
@@ -1479,7 +1478,7 @@ async function searchArtistImage(
       artistImageCache.set(artistId, null);
     }
     return null;
-  } catch (error) {
+  } catch (_error) {
     console.error('Error fetching artist image:', error);
     if (artistId) {
       artistImageCache.set(artistId, null);
@@ -1652,7 +1651,7 @@ async function selectArtist(artist) {
     }
 
     displayAlbumResultsWithLazyLoading(releaseGroups);
-  } catch (error) {
+  } catch (_error) {
     if (error.name === 'AbortError') {
       // Album loading cancelled - expected behavior
       return;
@@ -1745,7 +1744,7 @@ async function resolveCountryCode(countryCode) {
       `Country "${countryData.name.common}" (${countryCode}) not found in allowed countries list. Names tried: ${namesToTry.join(', ')}`
     );
     return '';
-  } catch (error) {
+  } catch (_error) {
     console.error(`Error resolving country code ${countryCode}:`, error);
     return '';
   }
@@ -1769,7 +1768,7 @@ async function getCombinedArtistCountries(artistCredits) {
           countries.push(name);
         }
       }
-    } catch (err) {
+    } catch (_err) {
       // Error fetching artist country - non-critical
     }
   }
@@ -1926,7 +1925,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
           if (coverArt) {
             rg.coverArt = coverArt;
           }
-        } catch (error) {
+        } catch (_error) {
           // Error loading cover - will try again later
         }
       }
@@ -2032,7 +2031,7 @@ async function addAlbumToList(releaseGroup) {
         // Store it for future use
         releaseGroup.coverArt = coverArtUrl;
       }
-    } catch (error) {
+    } catch (_error) {
       // Error fetching cover art - will proceed without
     }
   }
@@ -2058,7 +2057,7 @@ async function addAlbumToList(releaseGroup) {
       }
 
       addAlbumToCurrentList(album);
-    } catch (error) {
+    } catch (_error) {
       console.warn('Error fetching cover art:', error);
       // Error fetching cover art - will proceed without
       addAlbumToCurrentList(album);
@@ -2076,7 +2075,7 @@ async function addAlbumToCurrentList(album) {
     if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
       try {
         await window.fetchTracksForAlbum(album);
-      } catch (err) {
+      } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
@@ -2088,7 +2087,7 @@ async function addAlbumToCurrentList(album) {
     closeAddAlbumModal();
 
     showToast(`Added "${album.album}" by ${album.artist} to the list`);
-  } catch (error) {
+  } catch (_error) {
     showToast('Error adding album to list', 'error');
 
     window.lists[window.currentList].pop();
