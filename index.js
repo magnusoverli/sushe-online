@@ -400,6 +400,10 @@ const helmetConfig = {
         'https://cdn.jsdelivr.net', // SortableJS
       ],
 
+      // Script attributes - inline event handlers (onclick, etc) require 'unsafe-hashes' or 'unsafe-inline'
+      // TODO: Refactor inline event handlers to use event delegation for better security
+      scriptSrcAttr: ["'unsafe-inline'"],
+
       // Styles - inline styles in layout.ejs and dynamic accent colors
       styleSrc: [
         "'self'",
