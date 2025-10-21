@@ -3820,7 +3820,7 @@ function initializeUnifiedSorting(container, isMobile) {
 
     // Touch-and-hold configuration for mobile
     ...(isMobile && {
-      delay: 500, // 500ms touch-and-hold delay
+      delay: 350, // 350ms touch-and-hold delay
       delayOnTouchOnly: true,
       touchStartThreshold: 10,
       forceFallback: true,
