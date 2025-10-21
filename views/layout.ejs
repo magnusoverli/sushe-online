@@ -14,6 +14,11 @@
   <link rel="icon" type="image/png" href="/og-image.png">
   <link rel="apple-touch-icon" href="/icons/ios/180.png">
   <link rel="manifest" href="/manifest.json">
+  
+  <!-- Fix #8: Preload critical resources for faster page load -->
+  <link rel="preload" href="<%= asset('/styles/output.css') %>" as="style">
+  <link rel="preload" href="<%= asset('/js/bundle.js') %>" as="script">
+  
   <link href="<%= asset('/styles/output.css') %>" rel="stylesheet">
   <style>
     /* Toast notification styles */
@@ -99,8 +104,9 @@
   <!-- Toast notification element -->
   <div id="toast" class="toast"></div>
   
-  <!-- Include the main JavaScript bundle -->
-  <script type="module" src="<%= asset('/js/bundle.js') %>"></script>
+  <!-- Fix #9: Defer non-critical JavaScript to avoid blocking HTML parsing -->
+  <!-- Using defer allows HTML parsing to continue while script downloads -->
+  <script type="module" src="<%= asset('/js/bundle.js') %>" defer></script>
   
   <script>
     // Temporarily disable service worker to debug CSRF issues

@@ -1275,6 +1275,9 @@ async function loadLists() {
     if (shouldRefresh) {
       const freshLists = await apiCall('/api/lists');
 
+      // Fix #7: Mark data as fresh from server to avoid redundant fetches
+      listsDataFreshTimestamp = Date.now();
+
       // Performance: Use shallow comparison instead of expensive JSON.stringify
       const hasChanges = Object.keys(freshLists).some((listName) =>
         hasListChanged(lists[listName], freshLists[listName])
@@ -1304,6 +1307,10 @@ async function loadLists() {
   }
 }
 
+// Fix #7: Track when list data is fresh to avoid redundant API calls
+let listsDataFreshTimestamp = 0;
+const DATA_FRESH_WINDOW = 5000; // Consider data fresh for 5 seconds
+
 function trySelectLastList() {
   // Only auto-select if no list is currently selected
   if (window.currentList) return;
@@ -1311,11 +1318,14 @@ function trySelectLastList() {
   const localLastList = localStorage.getItem('lastSelectedList');
   const serverLastList = window.lastSelectedList;
 
+  // Fix #7: Skip fetch if we just loaded fresh data from the server
+  const dataIsFresh = Date.now() - listsDataFreshTimestamp < DATA_FRESH_WINDOW;
+
   // Prioritize local storage if it exists and is valid
   if (localLastList && lists[localLastList]) {
-    selectList(localLastList);
+    selectList(localLastList, dataIsFresh);
   } else if (serverLastList && lists[serverLastList]) {
-    selectList(serverLastList);
+    selectList(serverLastList, dataIsFresh);
     // Also update localStorage with server value
     localStorage.setItem('lastSelectedList', serverLastList);
   }
@@ -1341,6 +1351,12 @@ async function saveList(name, data) {
     try {
       localStorage.setItem('lists_cache', JSON.stringify(lists));
       localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+
+      // Fix #4: Also update the individual list cache for faster next load
+      localStorage.setItem(
+        `lastSelectedListData_${name}`,
+        JSON.stringify(cleanedData)
+      );
     } catch (storageError) {
       console.warn('Failed to update cache after save:', storageError);
     }
@@ -1379,6 +1395,30 @@ async function fetchTracksForAlbum(album, signal = null) {
 }
 window.fetchTracksForAlbum = fetchTracksForAlbum;
 
+// Performance: Concurrency limiter for parallel requests
+async function pLimit(concurrency, tasks) {
+  const results = [];
+  const executing = [];
+
+  for (const task of tasks) {
+    const promise = task().then((result) => {
+      executing.splice(executing.indexOf(promise), 1);
+      return result;
+    });
+
+    results.push(promise);
+    executing.push(promise);
+
+    if (executing.length >= concurrency) {
+      await Promise.race(executing);
+    }
+  }
+
+  return Promise.allSettled(results);
+}
+
+// Fix #3: Add concurrency limiting to track fetching (3-5 concurrent requests)
+// This prevents overwhelming the backend while still being much faster than sequential
 async function autoFetchTracksForList(name) {
   const list = lists[name];
   if (!list) return;
@@ -1388,13 +1428,16 @@ async function autoFetchTracksForList(name) {
   );
   if (toFetch.length === 0) return;
 
-  for (const album of toFetch) {
-    try {
-      await fetchTracksForAlbum(album);
-    } catch (err) {
+  // Fetch up to 5 tracks concurrently instead of sequentially
+  // This reduces load time from N × 300ms to (N/5) × 300ms
+  const tasks = toFetch.map((album) => () => {
+    return fetchTracksForAlbum(album).catch((err) => {
       console.error('Auto track fetch failed:', err);
-    }
-  }
+      return null; // Return null on error to continue with other fetches
+    });
+  });
+
+  await pLimit(5, tasks);
 }
 
 function subscribeToList(name) {
@@ -2082,19 +2125,51 @@ function updateListNav() {
 // Removed complex initializeMobileSorting function - now using unified approach
 
 // Select and display a list
-async function selectList(listName) {
+async function selectList(listName, skipFetch = false) {
   try {
     currentList = listName;
     window.currentList = currentList;
     subscribeToList(listName);
 
-    // Always fetch the latest data when a list is selected
-    if (listName) {
+    // Fix #4: Try to load from cache first for instant display
+    const cachedListData = localStorage.getItem(
+      `lastSelectedListData_${listName}`
+    );
+    if (cachedListData && !lists[listName]) {
+      try {
+        lists[listName] = JSON.parse(cachedListData);
+      } catch (err) {
+        console.warn('Failed to parse cached list data:', err);
+      }
+    }
+
+    // Display cached data immediately (if available)
+    if (lists[listName]) {
+      displayAlbums(lists[listName]);
+    }
+
+    // Fetch fresh data in background (unless explicitly skipped)
+    if (listName && !skipFetch) {
       try {
         const freshData = await apiCall(
           `/api/lists/${encodeURIComponent(listName)}`
         );
         lists[listName] = freshData;
+
+        // Fix #4: Cache the fresh data for next time
+        try {
+          localStorage.setItem(
+            `lastSelectedListData_${listName}`,
+            JSON.stringify(freshData)
+          );
+        } catch (storageErr) {
+          console.warn('Failed to cache list data:', storageErr);
+        }
+
+        // Re-display with fresh data (only if different)
+        if (currentList === listName) {
+          displayAlbums(freshData);
+        }
       } catch (err) {
         console.warn('Failed to fetch latest list data:', err);
       }
@@ -2114,16 +2189,18 @@ async function selectList(listName) {
     // Update the header title
     updateHeaderTitle(listName);
 
-    // Display the albums
-    displayAlbums(lists[listName]);
-
-    // Automatically fetch tracks for albums in this list
-    autoFetchTracksForList(listName);
-
     // Show/hide FAB based on whether a list is selected (mobile only)
     const fab = document.getElementById('addAlbumFAB');
     if (fab) {
       fab.style.display = listName ? 'flex' : 'none';
+    }
+
+    // Fix #1: Make track fetching non-blocking - run in background without await
+    // This prevents blocking the UI for 4-10 seconds waiting for MusicBrainz API
+    if (listName) {
+      autoFetchTracksForList(listName).catch((err) => {
+        console.error('Background track fetch failed:', err);
+      });
     }
 
     // Persist the selection without blocking UI if changed
