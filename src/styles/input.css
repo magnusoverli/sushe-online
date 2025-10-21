@@ -84,12 +84,8 @@
       cursor: grabbing;
     }
 
-    /* Subtle hover effect to indicate interactivity */
-    /* Removed active state for album-row to prevent any click effects */
-    .album-card:active {
-      background-color: rgba(55, 65, 81, 0.5) !important;
-      transition: background-color 0.1s ease;
-    }
+    /* Removed active state for both album-card and album-row to prevent any click effects */
+    /* No immediate visual feedback on touch - only after 500ms delay */
 
     /* Ensure buttons remain interactive */
     .album-card button,
