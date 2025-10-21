@@ -8,14 +8,15 @@
   ::-webkit-scrollbar {
     display: none;
   }
-  
+
   /* For Firefox */
   * {
     scrollbar-width: none;
   }
-  
+
   /* For all browsers - prevent scrollbar space */
-  body, html {
+  body,
+  html {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }

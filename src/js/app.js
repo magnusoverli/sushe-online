@@ -58,18 +58,21 @@ let confirmationCallback = null;
 function hasListChanged(oldList, newList) {
   if (!oldList || !newList) return true;
   if (oldList.length !== newList.length) return true;
-  
+
   // Sample-based comparison for large lists (check first 15 items for quick detection)
   const sampleSize = Math.min(15, oldList.length);
   for (let i = 0; i < sampleSize; i++) {
     const oldAlbum = oldList[i];
     const newAlbum = newList[i];
     if (!oldAlbum || !newAlbum) return true;
-    if (oldAlbum._id !== newAlbum._id || oldAlbum.position !== newAlbum.position) {
+    if (
+      oldAlbum._id !== newAlbum._id ||
+      oldAlbum.position !== newAlbum.position
+    ) {
       return true;
     }
   }
-  
+
   // If sample looks identical, assume full list is identical
   // This is ~90% faster than JSON.stringify on large lists with base64 images
   return false;
@@ -82,25 +85,25 @@ function positionContextMenu(menu, x, y) {
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
   menu.classList.remove('hidden');
-  
+
   // Use requestAnimationFrame to batch the read phase after paint
   requestAnimationFrame(() => {
     // Read phase - measure menu dimensions and viewport
     const rect = menu.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    
+
     // Calculate phase - determine adjustments needed
     let adjustedX = x;
     let adjustedY = y;
-    
+
     if (rect.right > viewportWidth) {
       adjustedX = x - rect.width;
     }
     if (rect.bottom > viewportHeight) {
       adjustedY = y - rect.height;
     }
-    
+
     // Write phase - apply adjustments if needed
     if (adjustedX !== x || adjustedY !== y) {
       menu.style.left = `${adjustedX}px`;
@@ -1273,7 +1276,7 @@ async function loadLists() {
       const freshLists = await apiCall('/api/lists');
 
       // Performance: Use shallow comparison instead of expensive JSON.stringify
-      const hasChanges = Object.keys(freshLists).some(listName => 
+      const hasChanges = Object.keys(freshLists).some((listName) =>
         hasListChanged(lists[listName], freshLists[listName])
       );
 
@@ -2640,17 +2643,17 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     const rect = menu.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    
+
     let adjustedX = x;
     let adjustedY = y;
-    
+
     if (rect.right > viewportWidth) {
       adjustedX = viewportWidth - rect.width - 10;
     }
     if (rect.bottom > viewportHeight) {
       adjustedY = y - rect.height;
     }
-    
+
     if (adjustedX !== x || adjustedY !== y) {
       menu.style.left = `${adjustedX}px`;
       menu.style.top = `${adjustedY}px`;
@@ -3110,47 +3113,53 @@ function detectUpdateType(oldAlbums, newAlbums) {
   if (!ENABLE_INCREMENTAL_UPDATES || !oldAlbums) {
     return 'FULL_REBUILD';
   }
-  
+
   // Length changed = albums added/removed = full rebuild
   if (oldAlbums.length !== newAlbums.length) {
     return 'FULL_REBUILD';
   }
-  
+
   // Check what changed
   let positionChanges = 0;
   let fieldChanges = 0;
   let complexChanges = 0;
-  
+
   for (let i = 0; i < newAlbums.length; i++) {
     const oldAlbum = oldAlbums[i];
     const newAlbum = newAlbums[i];
-    
+
     // Generate consistent IDs for comparison
-    const oldId = oldAlbum._id || `${oldAlbum.artist}::${oldAlbum.album}::${oldAlbum.release_date}`;
-    const newId = newAlbum._id || `${newAlbum.artist}::${newAlbum.album}::${newAlbum.release_date}`;
-    
+    const oldId =
+      oldAlbum._id ||
+      `${oldAlbum.artist}::${oldAlbum.album}::${oldAlbum.release_date}`;
+    const newId =
+      newAlbum._id ||
+      `${newAlbum.artist}::${newAlbum.album}::${newAlbum.release_date}`;
+
     if (oldId !== newId) {
       positionChanges++;
     } else {
       // Same album, check fields
-      if (oldAlbum.artist !== newAlbum.artist ||
-          oldAlbum.album !== newAlbum.album ||
-          oldAlbum.release_date !== newAlbum.release_date ||
-          oldAlbum.country !== newAlbum.country ||
-          oldAlbum.genre_1 !== newAlbum.genre_1 ||
-          oldAlbum.genre_2 !== newAlbum.genre_2 ||
-          oldAlbum.comments !== newAlbum.comments ||
-          oldAlbum.track_pick !== newAlbum.track_pick) {
+      if (
+        oldAlbum.artist !== newAlbum.artist ||
+        oldAlbum.album !== newAlbum.album ||
+        oldAlbum.release_date !== newAlbum.release_date ||
+        oldAlbum.country !== newAlbum.country ||
+        oldAlbum.genre_1 !== newAlbum.genre_1 ||
+        oldAlbum.genre_2 !== newAlbum.genre_2 ||
+        oldAlbum.comments !== newAlbum.comments ||
+        oldAlbum.track_pick !== newAlbum.track_pick
+      ) {
         fieldChanges++;
       }
-      
+
       // Cover image changes require full rebuild (complex innerHTML)
       if (oldAlbum.cover_image !== newAlbum.cover_image) {
         complexChanges++;
       }
     }
   }
-  
+
   // Decide update strategy
   if (complexChanges > 0) {
     return 'FULL_REBUILD'; // Cover images changed = complex
@@ -3164,7 +3173,7 @@ function detectUpdateType(oldAlbums, newAlbums) {
   if (positionChanges + fieldChanges <= 15) {
     return 'HYBRID_UPDATE'; // Mixed but small = try incremental
   }
-  
+
   return 'FULL_REBUILD'; // Complex changes = be safe
 }
 
@@ -3172,67 +3181,71 @@ function detectUpdateType(oldAlbums, newAlbums) {
 function updateAlbumFields(albums, isMobile) {
   const container = document.getElementById('albumContainer');
   if (!container) return false;
-  
-  const rowsContainer = isMobile 
+
+  const rowsContainer = isMobile
     ? container.querySelector('.mobile-album-list')
     : container.querySelector('.album-rows-container');
-  
+
   if (!rowsContainer) return false;
-  
+
   const rows = Array.from(rowsContainer.children);
-  
+
   if (rows.length !== albums.length) {
     console.warn('DOM/data length mismatch, falling back');
     return false;
   }
-  
+
   try {
     albums.forEach((album, index) => {
       const row = rows[index];
       if (!row) return;
-      
+
       // Update dataset index
       row.dataset.index = index;
-      
+
       // Process album data
       const data = processAlbumData(album, index);
-      
+
       // Update position number
-      const positionEl = row.querySelector('[data-position-element="true"]') || 
-                        row.querySelector('.position-display');
+      const positionEl =
+        row.querySelector('[data-position-element="true"]') ||
+        row.querySelector('.position-display');
       if (positionEl && positionEl.textContent !== data.position.toString()) {
         positionEl.textContent = data.position;
       }
-      
+
       // Update artist
-      const artistSpan = isMobile 
-        ? row.querySelector('.font-semibold.text-white + .text-sm.text-gray-400')
+      const artistSpan = isMobile
+        ? row.querySelector(
+            '.font-semibold.text-white + .text-sm.text-gray-400'
+          )
         : row.querySelectorAll('.flex.items-center > span')[0];
       if (artistSpan) {
         artistSpan.textContent = data.artist;
-        artistSpan.className = isMobile 
+        artistSpan.className = isMobile
           ? 'text-sm text-gray-400 truncate'
           : `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
       }
-      
+
       // Update album name and release date
       if (!isMobile) {
         const albumNameDiv = row.querySelector('.font-semibold.text-gray-100');
         if (albumNameDiv) albumNameDiv.textContent = data.albumName;
-        
+
         const releaseDateDiv = row.querySelector('.text-xs.text-gray-400');
         if (releaseDateDiv) releaseDateDiv.textContent = data.releaseDate;
       } else {
         const albumNameEl = row.querySelector('.font-semibold.text-white');
         if (albumNameEl) albumNameEl.textContent = data.albumName;
-        
+
         const releaseDateEl = row.querySelector('.text-xs.text-gray-500.mt-1');
         if (releaseDateEl) releaseDateEl.textContent = data.releaseDate;
       }
-      
+
       // Update country
-      const countryCell = row.querySelector('.country-cell') || 
-                         row.querySelector('[data-field="country"]');
+      const countryCell =
+        row.querySelector('.country-cell') ||
+        row.querySelector('[data-field="country"]');
       if (countryCell) {
         const countrySpan = countryCell.querySelector('span');
         if (countrySpan) {
@@ -3240,10 +3253,11 @@ function updateAlbumFields(albums, isMobile) {
           countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
         }
       }
-      
+
       // Update genre 1
-      const genre1Cell = row.querySelector('.genre-1-cell') ||
-                        row.querySelector('[data-field="genre1"]');
+      const genre1Cell =
+        row.querySelector('.genre-1-cell') ||
+        row.querySelector('[data-field="genre1"]');
       if (genre1Cell) {
         const genre1Span = genre1Cell.querySelector('span');
         if (genre1Span) {
@@ -3251,10 +3265,11 @@ function updateAlbumFields(albums, isMobile) {
           genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
         }
       }
-      
+
       // Update genre 2
-      const genre2Cell = row.querySelector('.genre-2-cell') ||
-                        row.querySelector('[data-field="genre2"]');
+      const genre2Cell =
+        row.querySelector('.genre-2-cell') ||
+        row.querySelector('[data-field="genre2"]');
       if (genre2Cell) {
         const genre2Span = genre2Cell.querySelector('span');
         if (genre2Span) {
@@ -3262,16 +3277,17 @@ function updateAlbumFields(albums, isMobile) {
           genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
         }
       }
-      
+
       // Update comment
-      const commentCell = row.querySelector('.comment-cell') ||
-                         row.querySelector('[data-field="comment"]');
+      const commentCell =
+        row.querySelector('.comment-cell') ||
+        row.querySelector('[data-field="comment"]');
       if (commentCell) {
         const commentSpan = commentCell.querySelector('span');
         if (commentSpan) {
           commentSpan.textContent = data.comment || 'Comment';
           commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
-          
+
           // Update tooltip
           if (data.comment) {
             commentSpan.setAttribute('data-comment', data.comment);
@@ -3280,7 +3296,7 @@ function updateAlbumFields(albums, isMobile) {
           }
         }
       }
-      
+
       // Update track pick
       const trackCell = row.querySelector('.track-cell');
       if (trackCell) {
@@ -3292,7 +3308,7 @@ function updateAlbumFields(albums, isMobile) {
         }
       }
     });
-    
+
     return true; // Success
   } catch (err) {
     console.error('Field update failed:', err);
@@ -3304,13 +3320,13 @@ function updateAlbumFields(albums, isMobile) {
 function verifyDOMIntegrity(albums, isMobile) {
   const container = document.getElementById('albumContainer');
   if (!container) return false;
-  
-  const rowsContainer = isMobile 
+
+  const rowsContainer = isMobile
     ? container.querySelector('.mobile-album-list')
     : container.querySelector('.album-rows-container');
-  
+
   if (!rowsContainer) return false;
-  
+
   const rows = rowsContainer.children;
   return rows.length === albums.length;
 }
@@ -3327,34 +3343,36 @@ function displayAlbums(albums) {
 
   // Try incremental update if possible
   const updateType = detectUpdateType(lastRenderedAlbums, albums);
-  
+
   if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
     // Attempt incremental field update
     const success = updateAlbumFields(albums, isMobile);
-    
+
     if (success && verifyDOMIntegrity(albums, isMobile)) {
       // Incremental update succeeded!
       lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
-      
+
       // Update position cache
-      const albumContainer = isMobile 
+      const albumContainer = isMobile
         ? container.querySelector('.mobile-album-list')
         : container.querySelector('.album-rows-container');
       if (albumContainer) {
         prePopulatePositionCache(albumContainer, isMobile);
       }
-      
+
       return; // Done - skip full rebuild
     }
     // If failed, fall through to full rebuild
-    console.warn(`Incremental update (${updateType}) failed, falling back to full rebuild`);
+    console.warn(
+      `Incremental update (${updateType}) failed, falling back to full rebuild`
+    );
   }
 
   // Full rebuild path (original behavior)
   // Performance: Explicitly clear position cache before DOM rebuild
   // Ensures deterministic cleanup without waiting for garbage collection
   positionElementCache = new WeakMap();
-  
+
   container.innerHTML = '';
 
   if (!albums || albums.length === 0) {
@@ -3422,7 +3440,7 @@ function displayAlbums(albums) {
 
   // Initialize sorting
   initializeUnifiedSorting(container, isMobile);
-  
+
   // Track last rendered state for incremental updates
   lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
 }
