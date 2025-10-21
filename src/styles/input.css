@@ -76,12 +76,16 @@
     }
 
     /* Visual feedback for touch-and-hold on entire card */
+    /* Apply full dragging appearance immediately when drag is enabled (at 350ms) */
     .sortable-chosen.album-card,
     .sortable-chosen.album-row {
       background-color: var(--accent-subtle) !important;
       border-color: var(--accent-color) !important;
       animation: pulse-drag 1s ease-in-out infinite;
       cursor: grabbing;
+      /* Apply dragging effects immediately - no visual change when drag starts */
+      opacity: 0.7;
+      transform: scale(0.95);
     }
 
     /* Removed active state for both album-card and album-row to prevent any click effects */
