@@ -53,7 +53,11 @@
   .sortable-fallback {
     @apply cursor-grabbing;
     z-index: 100000;
-    /* No border/shadow on wrapper - styling applied to child elements */
+    /* Ensure wrapper is completely invisible */
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 1 !important;
   }
 
   /* Apply fallback styling to the inner card element */
