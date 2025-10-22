@@ -49,12 +49,21 @@
   }
 
   /* SortableJS fallback element for touch devices */
+  /* Wrapper should not have visible styling - only position/z-index */
   .sortable-fallback {
-    @apply opacity-90 cursor-grabbing;
-    transform: scale(0.95);
+    @apply cursor-grabbing;
     z-index: 100000;
+    /* No border/shadow on wrapper - styling applied to child elements */
+  }
+
+  /* Apply fallback styling to the inner card element */
+  .sortable-fallback .album-card,
+  .sortable-fallback .album-row {
+    opacity: 0.9;
+    transform: scale(0.95);
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
     border: 2px solid var(--accent-color);
+    background-color: var(--accent-subtle) !important;
   }
 
   /* Touch feedback for mobile */
