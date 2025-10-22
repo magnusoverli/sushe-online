@@ -80,7 +80,6 @@
     .sortable-chosen.album-card,
     .sortable-chosen.album-row {
       background-color: var(--accent-subtle) !important;
-      border-color: var(--accent-color) !important;
       animation: pulse-drag 1s ease-in-out infinite;
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
@@ -88,7 +87,10 @@
       transform: scale(0.95);
       z-index: 100000;
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
-      border: 2px solid var(--accent-color) !important;
+      /* Explicit border on all sides to override Tailwind border-b */
+      border-width: 2px !important;
+      border-style: solid !important;
+      border-color: var(--accent-color) !important;
     }
 
     /* Removed active state for both album-card and album-row to prevent any click effects */
