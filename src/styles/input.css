@@ -58,10 +58,14 @@
   }
 
   /* Mobile-specific dragging state */
+  /* When actually dragging (fallback element follows finger), fade out the original */
   .dragging-mobile {
-    @apply opacity-70;
-    transform: scale(0.95);
-    transition: all 0.2s ease;
+    opacity: 0.2 !important;
+    /* Remove transform/shadow from original - only fallback should be visible */
+    transform: none !important;
+    box-shadow: none !important;
+    border: none !important;
+    animation: none !important;
   }
 
   /* Touch feedback for mobile */
