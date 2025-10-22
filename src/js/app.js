@@ -2848,7 +2848,7 @@ function createAlbumItem(album, index, isMobile = false) {
 // Create desktop album row (preserves exact current design)
 function createDesktopAlbumRow(data, index) {
   const row = document.createElement('div');
-  row.className = 'album-row album-grid gap-4 py-2 border-b border-gray-800';
+  row.className = 'album-row album-grid gap-4 py-2';
   row.dataset.index = index;
 
   row.innerHTML = `
@@ -3033,7 +3033,7 @@ function createMobileAlbumCard(data, index) {
 
   const card = document.createElement('div');
   card.className =
-    'album-card album-row bg-gray-900 border-b border-gray-800 touch-manipulation transition-all relative overflow-hidden';
+    'album-card album-row bg-gray-900 touch-manipulation transition-all relative overflow-hidden';
   card.dataset.index = index;
 
   card.innerHTML = `
