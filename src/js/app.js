@@ -3822,7 +3822,7 @@ function initializeUnifiedSorting(container, isMobile) {
     ...(isMobile && {
       delay: 350, // 350ms touch-and-hold delay
       delayOnTouchOnly: true,
-      touchStartThreshold: 10,
+      touchStartThreshold: 3, // Reduced from 10 to detect drag sooner
       forceFallback: true,
       fallbackTolerance: 5,
       // Prevent scrolling during drag
@@ -3832,6 +3832,7 @@ function initializeUnifiedSorting(container, isMobile) {
         if (mobileScrollContainer) {
           mobileScrollContainer.style.overflowY = 'hidden';
           mobileScrollContainer.style.touchAction = 'none';
+          mobileScrollContainer.style.pointerEvents = 'none'; // Prevent all pointer interactions
         }
       },
       onUnchoose: function (_evt) {
@@ -3839,6 +3840,7 @@ function initializeUnifiedSorting(container, isMobile) {
         if (mobileScrollContainer) {
           mobileScrollContainer.style.overflowY = 'auto';
           mobileScrollContainer.style.touchAction = 'auto';
+          mobileScrollContainer.style.pointerEvents = 'auto'; // Re-enable pointer interactions
         }
       },
     }),
@@ -3890,6 +3892,7 @@ function initializeUnifiedSorting(container, isMobile) {
         if (mobileScrollContainer) {
           mobileScrollContainer.style.overflowY = 'auto';
           mobileScrollContainer.style.touchAction = 'auto';
+          mobileScrollContainer.style.pointerEvents = 'auto'; // Re-enable pointer interactions
         }
 
         // Stop custom autoscroll for mobile

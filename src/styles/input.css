@@ -79,6 +79,11 @@
       cursor: grab;
     }
 
+    /* Prevent scrolling on chosen wrapper */
+    .sortable-chosen.album-card-wrapper {
+      touch-action: none !important;
+    }
+
     /* Visual feedback for touch-and-hold on entire card */
     /* Apply fallback element appearance immediately when drag is enabled (at 350ms) */
     /* Target the wrapper (mobile) and the row itself (desktop) */
@@ -94,6 +99,8 @@
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Explicit border - use shorthand to fully override any existing borders */
       border: 2px solid var(--accent-color) !important;
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
     }
 
     /* When actually dragging, keep the EXACT same appearance as chosen state */
@@ -107,6 +114,8 @@
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Explicit border - use shorthand to fully override any existing borders */
       border: 2px solid var(--accent-color) !important;
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
     }
 
     /* Removed active state for both album-card and album-row to prevent any click effects */
