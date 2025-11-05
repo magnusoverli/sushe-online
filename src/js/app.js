@@ -3635,151 +3635,7 @@ function debouncedSaveList(listName, listData, delay = 300) {
   }, delay);
 }
 
-// Mobile autoscroll implementation
-let mobileAutoscrollInterval = null;
-let mobileScrollContainer = null;
-
-function startMobileAutoscroll(_sortableContainer) {
-  // Find the main scroll container if not already found
-  if (!mobileScrollContainer) {
-    mobileScrollContainer = document.querySelector(
-      'main .h-full.overflow-y-auto'
-    );
-  }
-  if (!mobileScrollContainer) {
-    console.warn('Mobile scroll container not found');
-    return;
-  }
-
-  // Clear any existing interval
-  stopMobileAutoscroll();
-
-  // Start monitoring for autoscroll
-  mobileAutoscrollInterval = setInterval(() => {
-    // Try multiple selectors to find the dragged element
-    const draggedElement =
-      document.querySelector('.sortable-drag') ||
-      document.querySelector('.sortable-chosen') ||
-      document.querySelector('.dragging-mobile');
-
-    if (!draggedElement) return;
-
-    const containerRect = mobileScrollContainer.getBoundingClientRect();
-    const draggedRect = draggedElement.getBoundingClientRect();
-
-    const scrollZoneSize = 100; // Increased trigger zone for easier mobile use
-    const scrollSpeed = 6; // Slightly slower for better control
-
-    // Check if dragged element is near top or bottom of scroll container
-    const distanceFromTop = draggedRect.top - containerRect.top;
-    const distanceFromBottom = containerRect.bottom - draggedRect.bottom;
-
-    // More generous boundaries for mobile
-    if (distanceFromTop < scrollZoneSize && distanceFromTop > -50) {
-      // Scroll up
-      const intensity = Math.max(0.1, 1 - distanceFromTop / scrollZoneSize);
-      const scrollAmount = scrollSpeed * intensity;
-      mobileScrollContainer.scrollTop = Math.max(
-        0,
-        mobileScrollContainer.scrollTop - scrollAmount
-      );
-    } else if (
-      distanceFromBottom < scrollZoneSize &&
-      distanceFromBottom > -50
-    ) {
-      // Scroll down
-      const intensity = Math.max(0.1, 1 - distanceFromBottom / scrollZoneSize);
-      const scrollAmount = scrollSpeed * intensity;
-      const maxScroll =
-        mobileScrollContainer.scrollHeight - mobileScrollContainer.clientHeight;
-      mobileScrollContainer.scrollTop = Math.min(
-        maxScroll,
-        mobileScrollContainer.scrollTop + scrollAmount
-      );
-    }
-  }, 16); // ~60fps
-}
-
-function stopMobileAutoscroll() {
-  if (mobileAutoscrollInterval) {
-    clearInterval(mobileAutoscrollInterval);
-    mobileAutoscrollInterval = null;
-  }
-  mobileScrollContainer = null;
-}
-
-// Touch-based autoscroll for mobile
-let touchAutoscrollInterval = null;
-let lastTouchY = null;
-
-function startTouchAutoscroll(_draggedElement) {
-  if (!mobileScrollContainer) {
-    mobileScrollContainer = document.querySelector(
-      'main .h-full.overflow-y-auto'
-    );
-  }
-  if (!mobileScrollContainer) return;
-
-  // Track touch movements
-  const handleTouchMove = (e) => {
-    if (e.touches && e.touches.length > 0) {
-      lastTouchY = e.touches[0].clientY;
-    }
-  };
-
-  document.addEventListener('touchmove', handleTouchMove, { passive: true });
-
-  // Clear any existing interval
-  stopTouchAutoscroll();
-
-  touchAutoscrollInterval = setInterval(() => {
-    if (lastTouchY === null) return;
-
-    const containerRect = mobileScrollContainer.getBoundingClientRect();
-    const scrollZoneSize = 120; // Larger zone for touch
-    const scrollSpeed = 8;
-
-    // Check touch position relative to scroll container
-    const distanceFromTop = lastTouchY - containerRect.top;
-    const distanceFromBottom = containerRect.bottom - lastTouchY;
-
-    if (distanceFromTop < scrollZoneSize && distanceFromTop > 0) {
-      // Scroll up
-      const intensity = Math.max(0.1, 1 - distanceFromTop / scrollZoneSize);
-      const scrollAmount = scrollSpeed * intensity;
-      mobileScrollContainer.scrollTop = Math.max(
-        0,
-        mobileScrollContainer.scrollTop - scrollAmount
-      );
-    } else if (distanceFromBottom < scrollZoneSize && distanceFromBottom > 0) {
-      // Scroll down
-      const intensity = Math.max(0.1, 1 - distanceFromBottom / scrollZoneSize);
-      const scrollAmount = scrollSpeed * intensity;
-      const maxScroll =
-        mobileScrollContainer.scrollHeight - mobileScrollContainer.clientHeight;
-      mobileScrollContainer.scrollTop = Math.min(
-        maxScroll,
-        mobileScrollContainer.scrollTop + scrollAmount
-      );
-    }
-  }, 16);
-
-  // Store the cleanup function
-  touchAutoscrollInterval._cleanup = () => {
-    document.removeEventListener('touchmove', handleTouchMove);
-  };
-}
-
-function stopTouchAutoscroll() {
-  if (touchAutoscrollInterval) {
-    clearInterval(touchAutoscrollInterval);
-    if (touchAutoscrollInterval._cleanup) {
-      touchAutoscrollInterval._cleanup();
-    }
-    touchAutoscrollInterval = null;
-  }
-  lastTouchY = null;
-}
+// Custom autoscroll removed - now using SortableJS built-in autoscroll for mobile
 
 // Clear cache when list changes - use rebuildPositionCache instead
 // Unified sorting function using SortableJS for both desktop and mobile
@@ -3804,12 +3660,10 @@ function initializeUnifiedSorting(container, isMobile) {
     return;
   }
 
-  // Initialize mobile scroll container reference for mobile
-  if (isMobile && !mobileScrollContainer) {
-    mobileScrollContainer = document.querySelector(
-      'main .h-full.overflow-y-auto'
-    );
-  }
+  // Find the actual scrollable element (the parent with overflow-y-auto)
+  const scrollElement = isMobile
+    ? sortableContainer.closest('.overflow-y-auto')
+    : sortableContainer;
 
   // Configure SortableJS options
   const sortableOptions = {
@@ -3825,34 +3679,17 @@ function initializeUnifiedSorting(container, isMobile) {
       touchStartThreshold: 3, // Reduced from 10 to detect drag sooner
       forceFallback: true,
       fallbackTolerance: 5,
-      // Prevent scrolling during drag
-      preventOnFilter: false,
-      onChoose: function (_evt) {
-        // Disable scrolling on the container when drag starts
-        if (mobileScrollContainer) {
-          mobileScrollContainer.style.overflowY = 'hidden';
-          mobileScrollContainer.style.touchAction = 'none';
-          mobileScrollContainer.style.pointerEvents = 'none'; // Prevent all pointer interactions
-        }
-      },
-      onUnchoose: function (_evt) {
-        // Re-enable scrolling when drag is cancelled
-        if (mobileScrollContainer) {
-          mobileScrollContainer.style.overflowY = 'auto';
-          mobileScrollContainer.style.touchAction = 'auto';
-          mobileScrollContainer.style.pointerEvents = 'auto'; // Re-enable pointer interactions
-        }
-      },
     }),
 
     // Filter to prevent dragging on interactive elements
     filter: 'button, input, textarea, select, .no-drag',
     preventOnFilter: false,
 
-    // Configure scrolling - disable built-in autoscroll on mobile, use custom implementation
-    scroll: !isMobile, // Disable built-in autoscroll on mobile
-    scrollSensitivity: isMobile ? 50 : 30,
-    scrollSpeed: isMobile ? 15 : 10,
+    // Configure scrolling - use SortableJS built-in autoscroll for both desktop and mobile
+    scroll: scrollElement, // Scroll the correct scrollable element
+    scrollSensitivity: isMobile ? 100 : 30, // Larger zone for mobile
+    scrollSpeed: isMobile ? 25 : 15, // Faster scroll for mobile
+    bubbleScroll: false, // Disable parent container scrolling to prevent double-scroll
 
     // Enhanced event handlers
     onStart: function (evt) {
@@ -3860,20 +3697,8 @@ function initializeUnifiedSorting(container, isMobile) {
       if (!isMobile) {
         document.body.classList.add('desktop-dragging');
       } else {
-        // Mobile-specific feedback - don't manipulate body overflow
+        // Mobile-specific feedback
         evt.item.classList.add('dragging-mobile');
-
-        // Disable scrolling during drag to prevent conflicts
-        if (mobileScrollContainer) {
-          mobileScrollContainer.style.overflowY = 'hidden';
-          mobileScrollContainer.style.touchAction = 'none';
-        }
-
-        // Start custom autoscroll for mobile
-        startMobileAutoscroll(sortableContainer);
-
-        // Also start touch-based autoscroll
-        startTouchAutoscroll(evt.item);
 
         // Haptic feedback if available
         if (navigator.vibrate) {
@@ -3887,17 +3712,6 @@ function initializeUnifiedSorting(container, isMobile) {
         document.body.classList.remove('desktop-dragging');
       } else {
         evt.item.classList.remove('dragging-mobile');
-
-        // Re-enable scrolling after drag ends
-        if (mobileScrollContainer) {
-          mobileScrollContainer.style.overflowY = 'auto';
-          mobileScrollContainer.style.touchAction = 'auto';
-          mobileScrollContainer.style.pointerEvents = 'auto'; // Re-enable pointer interactions
-        }
-
-        // Stop custom autoscroll for mobile
-        stopMobileAutoscroll();
-        stopTouchAutoscroll();
       }
 
       const oldIndex = evt.oldIndex;

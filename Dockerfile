@@ -1,5 +1,5 @@
 # ----- Build stage -----
-FROM node:24.9-alpine3.22 AS builder
+FROM node:24-alpine AS builder
 
 # Update npm to specific version
 RUN npm install -g npm@11.6.1 --no-fund
@@ -18,7 +18,7 @@ RUN npm run build
 RUN rm -rf node_modules
 
 # ----- Runtime stage -----
-FROM node:24.9-alpine3.22 AS runtime
+FROM node:24-alpine AS runtime
 
 # Update npm to specific version
 RUN npm install -g npm@11.6.1 --no-fund

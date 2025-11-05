@@ -388,78 +388,8 @@ app.set('view cache', process.env.NODE_ENV === 'production');
 
 // Security headers configuration with comprehensive CSP
 const helmetConfig = {
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-
-      // Scripts - inline scripts in layout.ejs require 'unsafe-inline'
-      // TODO: Migrate to nonce-based approach for better security
-      scriptSrc: [
-        "'self'",
-        "'unsafe-inline'",
-        'https://cdn.jsdelivr.net', // SortableJS
-      ],
-
-      // Script attributes - inline event handlers (onclick, etc) require 'unsafe-hashes' or 'unsafe-inline'
-      // TODO: Refactor inline event handlers to use event delegation for better security
-      scriptSrcAttr: ["'unsafe-inline'"],
-
-      // Styles - inline styles in layout.ejs and dynamic accent colors
-      styleSrc: [
-        "'self'",
-        "'unsafe-inline'", // Required for inline styles and CSS custom properties
-        'https://fonts.googleapis.com',
-        'https://cdnjs.cloudflare.com', // Font Awesome
-      ],
-
-      // Fonts from Google Fonts and Font Awesome
-      fontSrc: [
-        "'self'",
-        'https://fonts.gstatic.com',
-        'https://cdnjs.cloudflare.com', // Font Awesome fonts
-      ],
-
-      // Images from various sources (album covers, artist images, etc)
-      imgSrc: [
-        "'self'",
-        'data:', // For base64 encoded images
-        'https://e-cdns-images.dzcdn.net', // Deezer album covers
-        'https://commons.wikimedia.org', // Artist images from Wikipedia
-        'https:', // Fallback for other CDN sources
-      ],
-
-      // External API connections for music services
-      connectSrc: [
-        "'self'",
-        'https://api.spotify.com', // Spotify API
-        'https://accounts.spotify.com', // Spotify OAuth
-        'https://api.tidal.com', // Tidal API
-        'https://auth.tidal.com', // Tidal OAuth
-        'https://api.deezer.com', // Deezer API
-        'https://musicbrainz.org', // Music metadata
-        'https://restcountries.com', // Country data API
-      ],
-
-      // No frames allowed
-      frameSrc: ["'none'"],
-
-      // No objects/embeds allowed
-      objectSrc: ["'none'"],
-
-      // Restrict base URI
-      baseUri: ["'self'"],
-
-      // Only allow form submissions to same origin
-      formAction: ["'self'"],
-
-      // Upgrade insecure requests in production
-      ...(process.env.NODE_ENV === 'production' && {
-        upgradeInsecureRequests: [],
-      }),
-    },
-    // Use report-only mode if configured for testing
-    reportOnly: process.env.CSP_REPORT_ONLY === 'true',
-  },
+  // Disable CSP for hobby project - makes debugging easier
+  contentSecurityPolicy: false,
 
   // HTTP Strict Transport Security (HSTS)
   // Only enabled in production when behind HTTPS
