@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuShe Online - Extension Settings</title>
+  <style>
+    body {
+      width: 500px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      color: #fff;
+    }
+    
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px 0;
+      color: #dc2626;
+    }
+    
+    .subtitle {
+      font-size: 14px;
+      color: #6b7280;
+      margin-bottom: 24px;
+    }
+    
+    label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #d1d5db;
+    }
+    
+    input[type="url"] {
+      width: 100%;
+      padding: 10px;
+      background: #111;
+      border: 1px solid #374151;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    
+    input[type="url"]:focus {
+      outline: none;
+      border-color: #dc2626;
+    }
+    
+    .help-text {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+    
+    button {
+      margin-top: 16px;
+      padding: 10px 20px;
+      background: #dc2626;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    
+    button:hover {
+      background: #b91c1c;
+    }
+    
+    button:active {
+      background: #991b1b;
+    }
+    
+    .status {
+      margin-top: 16px;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: none;
+    }
+    
+    .status.success {
+      background: #065f46;
+      color: #d1fae5;
+      display: block;
+    }
+    
+    .status.error {
+      background: #7f1d1d;
+      color: #fecaca;
+      display: block;
+    }
+    
+    .example {
+      margin-top: 24px;
+      padding: 16px;
+      background: #111;
+      border: 1px solid #374151;
+      border-radius: 4px;
+    }
+    
+    .example h3 {
+      font-size: 14px;
+      margin: 0 0 12px 0;
+      color: #9ca3af;
+    }
+    
+    .example code {
+      display: block;
+      padding: 8px;
+      background: #000;
+      border-radius: 4px;
+      color: #10b981;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    
+    .test-section {
+      margin-top: 24px;
+      padding: 16px;
+      background: #111;
+      border: 1px solid #374151;
+      border-radius: 4px;
+    }
+    
+    .test-section h3 {
+      font-size: 14px;
+      margin: 0 0 12px 0;
+      color: #9ca3af;
+    }
+    
+    #testBtn {
+      background: #374151;
+      margin-top: 0;
+    }
+    
+    #testBtn:hover {
+      background: #4b5563;
+    }
+    
+    #testResult {
+      margin-top: 12px;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🤘 SuShe Online Settings</h1>
+  <p class="subtitle">Configure your SuShe Online instance URL</p>
+  
+  <form id="settingsForm">
+    <label for="apiUrl">SuShe Online URL</label>
+    <input 
+      type="url" 
+      id="apiUrl" 
+      name="apiUrl" 
+      placeholder="https://your-sushe-instance.com"
+      required
+    />
+    <p class="help-text">
+      Enter the full URL where your SuShe Online instance is running (without trailing slash)
+    </p>
+    
+    <button type="submit">Save Settings</button>
+  </form>
+  
+  <div id="status" class="status"></div>
+  
+  <div class="example">
+    <h3>Examples:</h3>
+    <code>http://localhost:3000</code>
+    <code>https://sushe.example.com</code>
+    <code>https://music.yourdomain.com</code>
+  </div>
+  
+  <div class="test-section">
+    <h3>Test Connection</h3>
+    <button id="testBtn">Test Connection to SuShe Online</button>
+    <div id="testResult"></div>
+  </div>
+  
+  <script src="options.js"></script>
+</body>
+</html>
+
