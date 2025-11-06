@@ -82,19 +82,23 @@ function cleanName(name) {
     name = name.normalize('NFC');
   }
 
-  // Capitalize properly (but preserve special characters)
-  name = name
-    .split(' ')
-    .map((word) => {
-      if (!word) return word;
-      // Keep all-caps words as-is (like AC/DC)
-      if (word === word.toUpperCase() && word.length > 1) {
-        return word;
-      }
-      // Capitalize first letter, preserve rest
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(' ');
+  // Capitalize only if the entire name is lowercase or all uppercase
+  // Otherwise preserve the original casing
+  const isAllLowercase = name === name.toLowerCase();
+  const isAllUppercase = name === name.toUpperCase();
+
+  if (isAllLowercase || isAllUppercase) {
+    // Only apply capitalization if name is entirely lowercase or uppercase
+    name = name
+      .split(' ')
+      .map((word) => {
+        if (!word) return word;
+        // Capitalize first letter, lowercase the rest
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(' ');
+  }
+  // Otherwise preserve original casing (e.g., "McCartney", "AC/DC")
 
   return name;
 }
