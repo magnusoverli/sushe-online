@@ -311,6 +311,41 @@ SPOTIFY_REDIRECT_URI=https://your-domain.com/auth/spotify/callback
 
 Docker Compose automatically loads this file.
 
+### Updating Your Deployment
+
+The Docker image is automatically built and published to GitHub Container Registry on every push to `main`. To update your deployment:
+
+**Quick Update:**
+```bash
+./update.sh
+```
+
+**Manual Update:**
+```bash
+# Pull latest image
+docker compose pull app
+
+# Recreate app container with new image
+docker compose up -d app
+
+# View logs
+docker compose logs -f app
+```
+
+**Automated Updates (optional):**
+
+Use [Watchtower](https://containrrr.github.io/watchtower/) to automatically update:
+
+```bash
+docker run -d \
+  --name watchtower \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower \
+  sushe-online \
+  --cleanup \
+  --interval 3600  # Check every hour
+```
+
 ### Production Deployment
 
 1. **Use a reverse proxy** (nginx, Caddy, Traefik) for SSL termination
@@ -320,6 +355,7 @@ Docker Compose automatically loads this file.
 5. **Configure email** (SENDGRID_API_KEY) for password resets
 6. **Regular backups** - Use admin dashboard or pg_dump
 7. **Monitor logs** - Check Docker logs or application logs
+8. **Keep updated** - Run `./update.sh` or use Watchtower
 
 ---
 
