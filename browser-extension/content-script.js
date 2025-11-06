@@ -40,8 +40,10 @@ function extractAlbumDataFromPage(context) {
     const match = url.match(/\/release\/[^/]+\/([^/]+)\/([^/]+)/);
 
     if (match) {
-      data.artist = decodeURIComponent(match[1].replace(/_/g, ' '));
-      data.album = decodeURIComponent(match[2].replace(/_/g, ' '));
+      // Replace both underscores and hyphens with spaces
+      // RYM uses both in URLs: some_artist and some-album
+      data.artist = decodeURIComponent(match[1].replace(/[-_]/g, ' '));
+      data.album = decodeURIComponent(match[2].replace(/[-_]/g, ' '));
 
       // Clean up artist and album names
       data.artist = cleanName(data.artist);
