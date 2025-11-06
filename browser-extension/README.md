@@ -12,6 +12,7 @@ Chrome extension that allows you to add albums from RateYourMusic.com directly t
 - **[PRIVACY_POLICY.md](PRIVACY_POLICY.md)** - Privacy policy for the store listing
 
 **Quick package for submission:**
+
 ```bash
 ./package-for-store.sh
 ```
@@ -71,15 +72,18 @@ The extension will remember your URL and use it for all API calls.
 ## What Data Is Extracted?
 
 From **RateYourMusic URL only**:
+
 - Artist name (from URL path)
 - Album name (from URL path)
 
 From **MusicBrainz** (via SuShe Online):
+
 - MusicBrainz release group ID
 - Release date
 - Artist country
 
 From **Deezer** (via SuShe Online):
+
 - Album cover art (converted to base64)
 
 **Result:** Albums have the same data quality as manually added albums!
@@ -87,22 +91,26 @@ From **Deezer** (via SuShe Online):
 ## Troubleshooting
 
 ### Context menu not appearing
+
 - Make sure you're logged into SuShe Online
 - Check API URL in Options
 - Try refreshing RateYourMusic page
 
 ### "Album not found in MusicBrainz"
+
 - The album might not be in MusicBrainz database
 - Try adding it manually in SuShe Online
 - Check if artist/album name in RYM URL is correct
 
 ### "Not logged in to SuShe Online"
+
 - Open your SuShe instance and login
 - Click extension icon and "Refresh Lists"
 
 ## Privacy & RateYourMusic ToS
 
 This extension is **RateYourMusic-friendly**:
+
 - ✅ Only reads URL path (publicly visible)
 - ✅ No scraping of page content
 - ✅ No automated requests to RateYourMusic servers
@@ -113,6 +121,7 @@ All album data comes from MusicBrainz and Deezer, not from RateYourMusic.
 ## Development
 
 Files:
+
 - `manifest.json` - Extension configuration
 - `background.js` - Service worker (context menus, MusicBrainz search, API calls)
 - `content-script.js` - Extracts artist/album from URL

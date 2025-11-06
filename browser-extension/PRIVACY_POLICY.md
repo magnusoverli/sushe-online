@@ -9,18 +9,21 @@ SuShe Online - RateYourMusic Integration ("the Extension") is designed with priv
 ## What Data Does the Extension Access?
 
 ### 1. RateYourMusic.com URLs
+
 - **What:** The extension reads album and artist names from RateYourMusic.com page URLs
 - **Why:** To identify which album you want to add to your SuShe Online lists
 - **Scope:** Only on RateYourMusic.com pages when you explicitly right-click and select an option
 - **Storage:** Not stored; processed immediately and discarded
 
 ### 2. Your SuShe Online Lists
+
 - **What:** The extension fetches your music lists from your configured SuShe Online instance
 - **Why:** To display available lists in the context menu
 - **Scope:** Only communicates with the SuShe Online URL you configure
 - **Storage:** Cached temporarily in your browser for 5 minutes to improve performance
 
 ### 3. Session Cookies
+
 - **What:** The extension uses your existing SuShe Online login session cookies
 - **Why:** To authenticate API requests to your SuShe Online instance
 - **Scope:** Only for the SuShe Online domain you configure
@@ -29,6 +32,7 @@ SuShe Online - RateYourMusic Integration ("the Extension") is designed with priv
 ## What Data Do We Store?
 
 ### Locally in Your Browser
+
 The extension stores the following data **only in your browser** using Chrome's storage API:
 
 1. **SuShe Online API URL** - The URL you configure in Options (e.g., https://your-domain.com)
@@ -49,11 +53,13 @@ The extension stores the following data **only in your browser** using Chrome's 
 ## How Does the Extension Communicate?
 
 ### Communication Flow
+
 1. **You → Extension:** You right-click on an album
 2. **Extension → Your SuShe Online Instance:** The extension sends API requests to YOUR configured SuShe Online URL
 3. **Your SuShe Online Instance → External APIs:** Your SuShe instance makes requests to MusicBrainz and Deezer (not the extension directly)
 
 **Important:** The extension ONLY communicates with:
+
 - RateYourMusic.com (to read URLs only, no data sent)
 - Your configured SuShe Online instance
 - RestCountries.com (to resolve country codes)
@@ -66,21 +72,21 @@ The extension requests the following Chrome permissions:
 
 ### Required Permissions
 
-| Permission | Why We Need It |
-|------------|----------------|
-| `contextMenus` | To add "Add to SuShe Online" to your right-click menu |
-| `storage` | To save your SuShe Online URL and cache list names locally |
-| `cookies` | To use your existing SuShe Online login session |
-| `notifications` | To show success/error notifications when adding albums |
-| `scripting` | To read album URLs on RateYourMusic.com |
+| Permission      | Why We Need It                                             |
+| --------------- | ---------------------------------------------------------- |
+| `contextMenus`  | To add "Add to SuShe Online" to your right-click menu      |
+| `storage`       | To save your SuShe Online URL and cache list names locally |
+| `cookies`       | To use your existing SuShe Online login session            |
+| `notifications` | To show success/error notifications when adding albums     |
+| `scripting`     | To read album URLs on RateYourMusic.com                    |
 
 ### Host Permissions
 
-| Host | Why We Need It |
-|------|----------------|
-| `*://*.rateyourmusic.com/*` | To detect albums and read URLs on RateYourMusic |
-| `http://localhost:3000/*` | For local development/testing of SuShe Online |
-| `https://*/*` | To communicate with your SuShe Online instance (whatever URL you configure) |
+| Host                        | Why We Need It                                                              |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `*://*.rateyourmusic.com/*` | To detect albums and read URLs on RateYourMusic                             |
+| `http://localhost:3000/*`   | For local development/testing of SuShe Online                               |
+| `https://*/*`               | To communicate with your SuShe Online instance (whatever URL you configure) |
 
 ## Data Retention
 
@@ -136,4 +142,3 @@ This extension is open source. You can review the complete source code at [GitHu
 ---
 
 **In Summary:** This extension is a simple tool to enhance your music cataloging workflow. It doesn't spy on you, doesn't collect data, and doesn't share anything with anyone. It simply helps you add albums from RateYourMusic to your own SuShe Online instance.
-

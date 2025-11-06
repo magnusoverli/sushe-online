@@ -40,7 +40,7 @@ async function createContextMenus() {
     id: 'sushe-main',
     title: 'Add to SuShe Online',
     contexts: ['image', 'link'],
-    documentUrlPatterns: ['*://*.rateyourmusic.com/*']
+    documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
   });
 
   // Create loading placeholder
@@ -49,7 +49,7 @@ async function createContextMenus() {
     parentId: 'sushe-main',
     title: 'Loading lists...',
     contexts: ['image', 'link'],
-    enabled: false
+    enabled: false,
   });
 
   // Fetch lists and update menu
@@ -59,9 +59,9 @@ async function createContextMenus() {
 // Fetch user's lists from SuShe Online API
 async function fetchUserLists() {
   const now = Date.now();
-  
+
   // Use cache if recent
-  if (userLists.length > 0 && (now - listsLastFetched) < CACHE_DURATION) {
+  if (userLists.length > 0 && now - listsLastFetched < CACHE_DURATION) {
     updateContextMenuWithLists();
     return;
   }
@@ -70,8 +70,8 @@ async function fetchUserLists() {
     const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
       credentials: 'include', // Include cookies for session auth
       headers: {
-        'Accept': 'application/json'
-      }
+        Accept: 'application/json',
+      },
     });
 
     if (response.status === 401) {
@@ -105,16 +105,16 @@ async function fetchUserLists() {
 // Update context menu with user's lists
 async function updateContextMenuWithLists() {
   console.log('Updating context menu with lists:', userLists);
-  
+
   // Remove ALL menus and rebuild from scratch to ensure clean state
   await chrome.contextMenus.removeAll();
-  
+
   // Recreate the parent menu
   chrome.contextMenus.create({
     id: 'sushe-main',
     title: 'Add to SuShe Online',
     contexts: ['image', 'link'],
-    documentUrlPatterns: ['*://*.rateyourmusic.com/*']
+    documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
   });
 
   if (userLists.length === 0) {
@@ -123,20 +123,22 @@ async function updateContextMenuWithLists() {
       parentId: 'sushe-main',
       title: 'No lists found - Create one first!',
       contexts: ['image', 'link'],
-      enabled: false
+      enabled: false,
     });
     return;
   }
 
   // Add each list as a submenu item
   userLists.forEach((listName, index) => {
-    console.log(`Creating menu item: sushe-list-${index} for list "${listName}"`);
+    console.log(
+      `Creating menu item: sushe-list-${index} for list "${listName}"`
+    );
     // Use index-based ID to avoid issues with special characters in list names
     chrome.contextMenus.create({
       id: `sushe-list-${index}`,
       parentId: 'sushe-main',
       title: listName,
-      contexts: ['image', 'link']
+      contexts: ['image', 'link'],
     });
   });
 
@@ -145,47 +147,47 @@ async function updateContextMenuWithLists() {
     id: 'sushe-separator',
     parentId: 'sushe-main',
     type: 'separator',
-    contexts: ['image', 'link']
+    contexts: ['image', 'link'],
   });
 
   chrome.contextMenus.create({
     id: 'sushe-refresh',
     parentId: 'sushe-main',
     title: '🔄 Refresh Lists',
-    contexts: ['image', 'link']
+    contexts: ['image', 'link'],
   });
-  
+
   console.log('Context menu updated successfully');
 }
 
 // Show error in context menu
 async function showErrorMenu(message) {
   console.log('Showing error menu:', message);
-  
+
   // Remove ALL menus and rebuild from scratch
   await chrome.contextMenus.removeAll();
-  
+
   // Recreate the parent menu
   chrome.contextMenus.create({
     id: 'sushe-main',
     title: 'Add to SuShe Online',
     contexts: ['image', 'link'],
-    documentUrlPatterns: ['*://*.rateyourmusic.com/*']
+    documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
   });
-  
+
   chrome.contextMenus.create({
     id: 'sushe-error',
     parentId: 'sushe-main',
     title: '⚠️ Not logged in to SuShe Online',
     contexts: ['image', 'link'],
-    enabled: false
+    enabled: false,
   });
 
   chrome.contextMenus.create({
     id: 'sushe-login',
     parentId: 'sushe-main',
     title: 'Click to login',
-    contexts: ['image', 'link']
+    contexts: ['image', 'link'],
   });
 }
 
@@ -211,13 +213,17 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   // Handle list selection
   if (info.menuItemId.startsWith('sushe-list-')) {
     const listIndex = parseInt(info.menuItemId.replace('sushe-list-', ''));
-    console.log(`Menu item clicked: ${info.menuItemId}, extracted index: ${listIndex}`);
+    console.log(
+      `Menu item clicked: ${info.menuItemId}, extracted index: ${listIndex}`
+    );
     console.log('Available lists:', userLists);
-    console.log(`Looking up index ${listIndex} in array of length ${userLists.length}`);
-    
+    console.log(
+      `Looking up index ${listIndex} in array of length ${userLists.length}`
+    );
+
     const listName = userLists[listIndex];
     console.log(`List name for index ${listIndex}: "${listName}"`);
-    
+
     if (listName && typeof listName === 'string') {
       await addAlbumToList(info, tab, listName);
     } else {
@@ -238,13 +244,13 @@ async function addAlbumToList(info, tab, listName) {
     // Send message to content script to extract album data
     console.log('Sending message to content script...');
     let albumData;
-    
+
     try {
       albumData = await chrome.tabs.sendMessage(tab.id, {
         action: 'extractAlbumData',
         srcUrl: info.srcUrl,
         linkUrl: info.linkUrl,
-        pageUrl: info.pageUrl
+        pageUrl: info.pageUrl,
       });
     } catch (err) {
       console.error('Content script communication error:', err);
@@ -253,20 +259,22 @@ async function addAlbumToList(info, tab, listName) {
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: ['content-script.js']
+          files: ['content-script.js'],
         });
         // Wait a moment for script to initialize
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
         // Try again
         albumData = await chrome.tabs.sendMessage(tab.id, {
           action: 'extractAlbumData',
           srcUrl: info.srcUrl,
           linkUrl: info.linkUrl,
-          pageUrl: info.pageUrl
+          pageUrl: info.pageUrl,
         });
       } catch (injectErr) {
         console.error('Failed to inject content script:', injectErr);
-        throw new Error('Could not communicate with page. Try refreshing RateYourMusic.');
+        throw new Error(
+          'Could not communicate with page. Try refreshing RateYourMusic.'
+        );
       }
     }
 
@@ -283,54 +291,68 @@ async function addAlbumToList(info, tab, listName) {
     console.log('Extracted album data:', albumData);
 
     // Show single progress notification
-    showNotification('Adding album...', `Adding ${albumData.album} by ${albumData.artist} to ${listName}`);
-    
+    showNotification(
+      'Adding album...',
+      `Adding ${albumData.album} by ${albumData.artist} to ${listName}`
+    );
+
     // Search MusicBrainz for the album
     console.log('Searching MusicBrainz for album...');
-    
+
     const searchQuery = `${albumData.artist} ${albumData.album}`;
     const mbEndpoint = `release-group/?query=${encodeURIComponent(searchQuery)}&type=album|ep&fmt=json&limit=5`;
-    
-    const mbResponse = await fetch(`${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`, {
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json'
+
+    const mbResponse = await fetch(
+      `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
       }
-    });
-    
+    );
+
     if (!mbResponse.ok) {
       throw new Error('Failed to search MusicBrainz');
     }
-    
+
     const mbData = await mbResponse.json();
     const releaseGroups = mbData['release-groups'] || [];
-    
+
     if (releaseGroups.length === 0) {
-      throw new Error('Album not found in MusicBrainz. Try adding manually in SuShe Online.');
+      throw new Error(
+        'Album not found in MusicBrainz. Try adding manually in SuShe Online.'
+      );
     }
-    
+
     // Take the first (best) match
     const releaseGroup = releaseGroups[0];
     console.log('Found release group:', releaseGroup);
-    
+
     // Get cover art from Deezer
     console.log('Fetching cover art from Deezer...');
-    
-    const deezerQuery = `${albumData.artist} ${albumData.album}`.replace(/[^\w\s]/g, ' ').trim();
-    const deezerResponse = await fetch(`${SUSHE_API_BASE}/api/proxy/deezer?q=${encodeURIComponent(deezerQuery)}`, {
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json'
+
+    const deezerQuery = `${albumData.artist} ${albumData.album}`
+      .replace(/[^\w\s]/g, ' ')
+      .trim();
+    const deezerResponse = await fetch(
+      `${SUSHE_API_BASE}/api/proxy/deezer?q=${encodeURIComponent(deezerQuery)}`,
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
       }
-    });
-    
+    );
+
     let coverImageData = '';
     let coverImageFormat = '';
-    
+
     if (deezerResponse.ok) {
       const deezerData = await deezerResponse.json();
       if (deezerData.data && deezerData.data.length > 0) {
-        const coverUrl = deezerData.data[0].cover_xl || deezerData.data[0].cover_big;
+        const coverUrl =
+          deezerData.data[0].cover_xl || deezerData.data[0].cover_big;
         if (coverUrl) {
           console.log('Found cover art, processing through proxy...');
           try {
@@ -338,15 +360,17 @@ async function addAlbumToList(info, tab, listName) {
             const imageResponse = await fetch(proxyUrl, {
               credentials: 'include',
               headers: {
-                'Accept': 'application/json'
-              }
+                Accept: 'application/json',
+              },
             });
-            
+
             if (imageResponse.ok) {
               const imageData = await imageResponse.json();
               if (imageData.data && imageData.contentType) {
                 coverImageData = imageData.data;
-                coverImageFormat = imageData.contentType.split('/')[1].toUpperCase();
+                coverImageFormat = imageData.contentType
+                  .split('/')[1]
+                  .toUpperCase();
                 console.log('Cover image processed successfully');
               }
             }
@@ -356,18 +380,23 @@ async function addAlbumToList(info, tab, listName) {
         }
       }
     }
-    
+
     // Get current list data
-    console.log(`Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`);
-    const listResponse = await fetch(`${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`, {
-      credentials: 'include',
-      headers: {
-        'Accept': 'application/json'
+    console.log(
+      `Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`
+    );
+    const listResponse = await fetch(
+      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
+      {
+        credentials: 'include',
+        headers: {
+          Accept: 'application/json',
+        },
       }
-    });
+    );
 
     console.log('Fetch response status:', listResponse.status);
-    
+
     let currentList = [];
     if (listResponse.ok) {
       currentList = await listResponse.json();
@@ -383,33 +412,45 @@ async function addAlbumToList(info, tab, listName) {
 
     // Check if album already exists in list
     const isDuplicate = currentList.some(
-      item => item.artist === albumData.artist && item.album === albumData.album
+      (item) =>
+        item.artist === albumData.artist && item.album === albumData.album
     );
 
     if (isDuplicate) {
-      showNotification('ℹ Already in list', `${albumData.album} is already in ${listName}`);
+      showNotification(
+        'ℹ Already in list',
+        `${albumData.album} is already in ${listName}`
+      );
       return;
     }
-    
+
     // Get artist country from MusicBrainz and resolve to full name
     let artistCountry = '';
-    if (releaseGroup['artist-credit'] && releaseGroup['artist-credit'].length > 0) {
+    if (
+      releaseGroup['artist-credit'] &&
+      releaseGroup['artist-credit'].length > 0
+    ) {
       const artistId = releaseGroup['artist-credit'][0].artist.id;
       try {
         const artistEndpoint = `artist/${artistId}?fmt=json`;
-        const artistResponse = await fetch(`${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`, {
-          credentials: 'include',
-          headers: {
-            'Accept': 'application/json'
+        const artistResponse = await fetch(
+          `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`,
+          {
+            credentials: 'include',
+            headers: {
+              Accept: 'application/json',
+            },
           }
-        });
-        
+        );
+
         if (artistResponse.ok) {
           const artistData = await artistResponse.json();
           if (artistData.country && artistData.country.length === 2) {
             // Resolve 2-letter country code to full name
             artistCountry = await resolveCountryCode(artistData.country);
-            console.log(`Resolved country code ${artistData.country} to: ${artistCountry}`);
+            console.log(
+              `Resolved country code ${artistData.country} to: ${artistCountry}`
+            );
           } else if (artistData.country) {
             // Already full name
             artistCountry = artistData.country;
@@ -419,7 +460,7 @@ async function addAlbumToList(info, tab, listName) {
         console.warn('Could not fetch artist country:', error);
       }
     }
-    
+
     // Add new album to list
     currentList.push({
       artist: albumData.artist,
@@ -433,23 +474,26 @@ async function addAlbumToList(info, tab, listName) {
       tracks: null,
       track_pick: null,
       cover_image: coverImageData,
-      cover_image_format: coverImageFormat
+      cover_image_format: coverImageFormat,
     });
 
     // Save updated list
     console.log('Saving list with', currentList.length, 'albums');
-    const saveResponse = await fetch(`${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ data: currentList })
-    });
+    const saveResponse = await fetch(
+      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
+      {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ data: currentList }),
+      }
+    );
 
     console.log('Save response status:', saveResponse.status);
-    
+
     if (!saveResponse.ok) {
       const errorText = await saveResponse.text();
       console.error('Save failed:', errorText);
@@ -463,16 +507,15 @@ async function addAlbumToList(info, tab, listName) {
     }
 
     // Success notification with album cover
-    const albumCoverUrl = coverImageData 
+    const albumCoverUrl = coverImageData
       ? `data:image/${coverImageFormat.toLowerCase()};base64,${coverImageData}`
       : 'icons/icon128.png';
-    
+
     showNotificationWithImage(
       '✓ Successfully added',
       `${albumData.album} added to ${listName}`,
       albumCoverUrl
     );
-
   } catch (error) {
     console.error('Error adding album:', error);
     showNotification('✗ Error', error.message || 'Failed to add album to list');
@@ -485,7 +528,7 @@ function showNotification(title, message) {
     type: 'basic',
     iconUrl: 'icons/icon128.png',
     title: title,
-    message: message
+    message: message,
   });
 }
 
@@ -495,7 +538,7 @@ function showNotificationWithImage(title, message, imageUrl) {
     type: 'basic',
     iconUrl: imageUrl,
     title: title,
-    message: message
+    message: message,
   });
 }
 
@@ -508,10 +551,14 @@ async function resolveCountryCode(countryCode) {
 
   try {
     // Use RestCountries API to get country info
-    const response = await fetch(`https://restcountries.com/v3.1/alpha/${countryCode}`);
+    const response = await fetch(
+      `https://restcountries.com/v3.1/alpha/${countryCode}`
+    );
 
     if (!response.ok) {
-      console.warn(`Country code ${countryCode} not found in RestCountries API`);
+      console.warn(
+        `Country code ${countryCode} not found in RestCountries API`
+      );
       return '';
     }
 
@@ -554,7 +601,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true; // Keep channel open for async response
   }
-  
+
   if (message.action === 'updateApiUrl') {
     SUSHE_API_BASE = message.apiUrl;
     console.log('API URL updated to:', SUSHE_API_BASE);
@@ -562,10 +609,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     createContextMenus();
     return true;
   }
-  
+
   if (message.action === 'getApiUrl') {
     sendResponse({ apiUrl: SUSHE_API_BASE });
     return true;
   }
 });
-

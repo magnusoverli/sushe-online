@@ -179,4 +179,18 @@ export default [
       'security/detect-non-literal-fs-filename': 'off',
     },
   },
+  {
+    files: ['browser-extension/**/*.js'],
+    languageOptions: {
+      globals: {
+        chrome: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off', // Console logging is normal in extensions for debugging
+      complexity: 'off', // Extension code can be complex
+      'max-depth': 'off', // Allow deeper nesting in extension code
+      'max-lines-per-function': 'off', // Allow longer functions in extension
+    },
+  },
 ];

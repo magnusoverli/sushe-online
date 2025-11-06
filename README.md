@@ -11,6 +11,7 @@ SuShe Online is a web application for creating, organizing, and managing your al
 ## ✨ Features
 
 ### 🎵 Music Collection Management
+
 - **Create unlimited lists** - Organize albums by year, genre, mood, or any way you like
 - **Rich album metadata** - Automatically fetch cover art, release dates, and artist info from MusicBrainz and Deezer
 - **Drag & drop** - Reorder albums with intuitive drag-and-drop interface
@@ -19,29 +20,34 @@ SuShe Online is a web application for creating, organizing, and managing your al
 - **Duplicate detection** - Prevents adding the same album twice
 
 ### 🎧 Music Service Integration
+
 - **Spotify & Tidal sync** - Create and update playlists directly in your music streaming service
 - **Smart track matching** - Automatically finds tracks across services
 - **Real-time progress** - See playlists being built track-by-track
 - **Service selection** - Choose your preferred platform or switch per-playlist
 
 ### 🔌 Browser Extension
+
 - **Chrome extension** - Add albums from RateYourMusic.com with one right-click
 - **Seamless integration** - Albums added via extension include full metadata
 - **Context menu** - Right-click any album on RateYourMusic to add it to your lists
 - **[Get the extension →](browser-extension/)**
 
 ### 🎨 Personalization
+
 - **Custom themes** - Choose your accent color
 - **Dark mode** - Spotify-inspired interface with a metal aesthetic
 - **Responsive design** - Works on desktop, tablet, and mobile
 
 ### 👥 Multi-User & Social
+
 - **User accounts** - Secure registration and login
 - **Password reset** - Email-based password recovery
 - **Shared metadata** - Album details added by one user benefit everyone
 - **Admin dashboard** - Site statistics, user management, and backups
 
 ### 🔒 Security & Performance
+
 - **Production-grade security** - Rate limiting, CSRF protection, CSP headers
 - **PostgreSQL database** - Reliable persistent storage
 - **Session management** - Secure authentication with Passport.js
@@ -65,6 +71,7 @@ SuShe Online is a web application for creating, organizing, and managing your al
 ### For Self-Hosting
 
 **Requirements:**
+
 - Docker & Docker Compose (recommended)
 - OR Node.js 22+ and PostgreSQL 16
 
@@ -106,6 +113,7 @@ BASE_URL=https://your-domain.com    # For email links
 ### Music Service Integration (Optional)
 
 **Spotify:**
+
 ```bash
 SPOTIFY_CLIENT_ID=your-client-id
 SPOTIFY_CLIENT_SECRET=your-client-secret
@@ -113,6 +121,7 @@ SPOTIFY_REDIRECT_URI=https://your-domain.com/auth/spotify/callback
 ```
 
 **Tidal:**
+
 ```bash
 TIDAL_CLIENT_ID=your-client-id
 TIDAL_REDIRECT_URI=https://your-domain.com/auth/tidal/callback
@@ -151,11 +160,13 @@ See the [Environment Variables](#environment-variables-reference) section below 
 ### Adding Albums
 
 **Method 1: Search & Add**
+
 1. Type artist or album name in the search box
 2. Select from MusicBrainz results
 3. Album is added with cover art, release date, and metadata
 
 **Method 2: Browser Extension (Chrome)**
+
 1. Install the [SuShe Online Chrome extension](browser-extension/)
 2. Browse RateYourMusic.com
 3. Right-click any album → "Add to SuShe Online" → Select list
@@ -328,6 +339,7 @@ SuShe Online implements production-grade security:
 ### Whitelisted External Services
 
 The Content Security Policy allows connections to:
+
 - **Music services**: Spotify, Tidal, Deezer, MusicBrainz
 - **Assets**: Google Fonts, Wikimedia Commons
 - **APIs**: RestCountries
@@ -341,6 +353,7 @@ All security features work out-of-the-box with no configuration required.
 The **SuShe Online Chrome Extension** lets you add albums from RateYourMusic.com with one click.
 
 ### Features
+
 - Right-click context menu on RateYourMusic albums
 - Add albums directly to any of your SuShe Online lists
 - Automatic MusicBrainz metadata lookup
@@ -348,10 +361,12 @@ The **SuShe Online Chrome Extension** lets you add albums from RateYourMusic.com
 - Duplicate detection
 
 ### Installation
+
 - **Chrome Web Store**: Coming soon! (submitted for review)
 - **Manual install**: See [browser-extension/README.md](browser-extension/README.md)
 
 ### Usage
+
 1. Install the extension
 2. Configure your SuShe Online URL (extension options)
 3. Browse RateYourMusic.com
@@ -364,6 +379,7 @@ The **SuShe Online Chrome Extension** lets you add albums from RateYourMusic.com
 Contributions are welcome! This is a personal project, but improvements are appreciated.
 
 ### How to Contribute
+
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
 3. Make your changes
@@ -372,6 +388,7 @@ Contributions are welcome! This is a personal project, but improvements are appr
 6. Push and open a Pull Request
 
 ### Code Style
+
 - Use Prettier for formatting (`npm run format`)
 - Follow ESLint rules (`npm run lint`)
 - Write tests for new features
@@ -385,52 +402,58 @@ Contributions are welcome! This is a personal project, but improvements are appr
 <summary><strong>Click to expand complete configuration reference</strong></summary>
 
 ### Core Settings
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | Server port |
-| `SESSION_SECRET` | Required | Session encryption key |
-| `DATABASE_URL` | Required | PostgreSQL connection string |
-| `DATA_DIR` | `./data` | Session file storage directory |
-| `BASE_URL` | `http://localhost:3000` | Base URL for emails and links |
-| `LOG_SQL` | `false` | Log all SQL queries (debugging) |
+
+| Variable         | Default                 | Description                     |
+| ---------------- | ----------------------- | ------------------------------- |
+| `PORT`           | `3000`                  | Server port                     |
+| `SESSION_SECRET` | Required                | Session encryption key          |
+| `DATABASE_URL`   | Required                | PostgreSQL connection string    |
+| `DATA_DIR`       | `./data`                | Session file storage directory  |
+| `BASE_URL`       | `http://localhost:3000` | Base URL for emails and links   |
+| `LOG_SQL`        | `false`                 | Log all SQL queries (debugging) |
 
 ### Email (Password Reset)
-| Variable | Default | Description |
-|----------|---------|-------------|
+
+| Variable           | Default  | Description                 |
+| ------------------ | -------- | --------------------------- |
 | `SENDGRID_API_KEY` | Optional | SendGrid API key for emails |
 
 ### Music Services
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SPOTIFY_CLIENT_ID` | Optional | Spotify OAuth client ID |
-| `SPOTIFY_CLIENT_SECRET` | Optional | Spotify OAuth secret |
-| `SPOTIFY_REDIRECT_URI` | Optional | OAuth callback URL |
-| `TIDAL_CLIENT_ID` | Optional | Tidal OAuth client ID |
-| `TIDAL_REDIRECT_URI` | Optional | OAuth callback URL |
+
+| Variable                | Required | Description             |
+| ----------------------- | -------- | ----------------------- |
+| `SPOTIFY_CLIENT_ID`     | Optional | Spotify OAuth client ID |
+| `SPOTIFY_CLIENT_SECRET` | Optional | Spotify OAuth secret    |
+| `SPOTIFY_REDIRECT_URI`  | Optional | OAuth callback URL      |
+| `TIDAL_CLIENT_ID`       | Optional | Tidal OAuth client ID   |
+| `TIDAL_REDIRECT_URI`    | Optional | OAuth callback URL      |
 
 ### Security & Rate Limiting
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DISABLE_RATE_LIMITING` | `false` | Disable rate limiting (dev only) |
-| `RATE_LIMIT_LOGIN_MAX` | `5` | Max login attempts per 15 min |
-| `RATE_LIMIT_REGISTER_MAX` | `3` | Max registrations per hour |
-| `RATE_LIMIT_FORGOT_MAX` | `3` | Max password reset requests/hour |
-| `RATE_LIMIT_RESET_MAX` | `5` | Max password resets per hour |
-| `RATE_LIMIT_SETTINGS_MAX` | `10` | Max settings changes per hour |
-| `RATE_LIMIT_API_MAX` | `100` | Max API calls per 15 min |
-| `ENABLE_HSTS` | `false` | Enable HSTS (production w/ HTTPS) |
-| `CSP_REPORT_ONLY` | `false` | CSP report-only mode |
-| `NODE_ENV` | `development` | Node environment |
+
+| Variable                  | Default       | Description                       |
+| ------------------------- | ------------- | --------------------------------- |
+| `DISABLE_RATE_LIMITING`   | `false`       | Disable rate limiting (dev only)  |
+| `RATE_LIMIT_LOGIN_MAX`    | `5`           | Max login attempts per 15 min     |
+| `RATE_LIMIT_REGISTER_MAX` | `3`           | Max registrations per hour        |
+| `RATE_LIMIT_FORGOT_MAX`   | `3`           | Max password reset requests/hour  |
+| `RATE_LIMIT_RESET_MAX`    | `5`           | Max password resets per hour      |
+| `RATE_LIMIT_SETTINGS_MAX` | `10`          | Max settings changes per hour     |
+| `RATE_LIMIT_API_MAX`      | `100`         | Max API calls per 15 min          |
+| `ENABLE_HSTS`             | `false`       | Enable HSTS (production w/ HTTPS) |
+| `CSP_REPORT_ONLY`         | `false`       | CSP report-only mode              |
+| `NODE_ENV`                | `development` | Node environment                  |
 
 ### Performance & Caching
-| Variable | Default | Description |
-|----------|---------|-------------|
+
+| Variable        | Default   | Description                             |
+| --------------- | --------- | --------------------------------------- |
 | `ASSET_VERSION` | timestamp | Cache-busting version for static assets |
 
 ### Database Tools
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PG_DUMP` | `pg_dump` | Path to pg_dump utility |
+
+| Variable     | Default      | Description                |
+| ------------ | ------------ | -------------------------- |
+| `PG_DUMP`    | `pg_dump`    | Path to pg_dump utility    |
 | `PG_RESTORE` | `pg_restore` | Path to pg_restore utility |
 
 </details>
@@ -446,6 +469,7 @@ This project is open source. Feel free to use, modify, and distribute.
 ## 🎸 Credits
 
 Built with:
+
 - **Node.js** & **Express** - Backend framework
 - **PostgreSQL** - Database
 - **Tailwind CSS** - Styling
