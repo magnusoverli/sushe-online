@@ -206,7 +206,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Handle login redirect
   if (info.menuItemId === 'sushe-login') {
-    chrome.tabs.create({ url: `${SUSHE_API_BASE}/login` });
+    // Always load the latest API URL from storage to ensure we use the configured URL
+    const settings = await chrome.storage.local.get(['apiUrl']);
+    const apiUrl = settings.apiUrl || SUSHE_API_BASE;
+    chrome.tabs.create({ url: `${apiUrl}/login` });
     return;
   }
 
