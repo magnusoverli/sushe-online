@@ -1,12 +1,11 @@
 {
   "manifest_version": 3,
   "name": "SuShe Online - RateYourMusic Integration",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Add albums from RateYourMusic directly to your SuShe Online lists",
   "permissions": [
     "contextMenus",
     "storage",
-    "cookies",
     "notifications",
     "scripting"
   ],
