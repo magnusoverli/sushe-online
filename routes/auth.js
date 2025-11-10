@@ -297,7 +297,7 @@ module.exports = (app, deps) => {
         );
         const allLists = await listsAsync.find({});
 
-        let totalAlbums = 0;
+        const uniqueAlbumIds = new Set();
         const genreCounts = new Map();
 
         const sevenDaysAgo = new Date();
@@ -335,8 +335,12 @@ module.exports = (app, deps) => {
             }
           }
 
-          totalAlbums += items.length;
           for (const album of items) {
+            // Track unique albums by album_id
+            if (album.albumId && album.albumId !== '') {
+              uniqueAlbumIds.add(album.albumId);
+            }
+
             const genre = album.genre1;
             if (genre && genre !== '' && genre !== 'Genre 1') {
               genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
@@ -355,6 +359,8 @@ module.exports = (app, deps) => {
             }
           }
         }
+
+        const totalAlbums = uniqueAlbumIds.size;
 
         // Get top genres
         const topGenres = Array.from(genreCounts.entries())

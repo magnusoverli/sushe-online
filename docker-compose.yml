@@ -21,6 +21,8 @@ services:
     volumes:
       - sushe-data:/app/data
       - postgres-socket:/var/run/postgresql
+      - ./settings-template.js:/app/settings-template.js:ro
+      - ./routes/auth.js:/app/routes/auth.js:ro
     depends_on:
       db:
         condition: service_healthy

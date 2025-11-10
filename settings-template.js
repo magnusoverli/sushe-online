@@ -378,30 +378,54 @@ const adminPanelSection = (stats, adminData) =>
     <div class="mb-8">
       <h4 class="text-lg font-semibold text-white mb-4">System Statistics</h4>
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-        <div class="text-center p-4 bg-gray-800 rounded-lg">
-          <div class="text-2xl font-bold text-white mb-1">${stats.totalUsers}</div>
-          <div class="text-xs text-gray-400">Total Users</div>
+        <!-- Total Users -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
+          <div class="text-blue-400 mb-2">
+            <i class="fas fa-users text-2xl"></i>
+          </div>
+          <div class="text-3xl font-bold text-white mb-1">${stats.totalUsers}</div>
+          <div class="text-xs text-gray-400 uppercase">Total Users</div>
         </div>
-        <div class="text-center p-4 bg-gray-800 rounded-lg">
-          <div class="text-2xl font-bold text-white mb-1">${stats.totalLists}</div>
-          <div class="text-xs text-gray-400">Total Lists</div>
+        
+        <!-- Total Lists -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
+          <div class="text-purple-400 mb-2">
+            <i class="fas fa-list-ul text-2xl"></i>
+          </div>
+          <div class="text-3xl font-bold text-white mb-1">${stats.totalLists}</div>
+          <div class="text-xs text-gray-400 uppercase">Total Lists</div>
         </div>
-        <div class="text-center p-4 bg-gray-800 rounded-lg">
-          <div class="text-2xl font-bold text-white mb-1">${stats.totalAlbums}</div>
-          <div class="text-xs text-gray-400">Total Albums</div>
+        
+        <!-- Unique Albums -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
+          <div class="text-green-400 mb-2">
+            <i class="fas fa-compact-disc text-2xl"></i>
+          </div>
+          <div class="text-3xl font-bold text-white mb-1">${stats.totalAlbums}</div>
+          <div class="text-xs text-gray-400 uppercase">Unique Albums</div>
         </div>
-        <div class="text-center p-4 bg-gray-800 rounded-lg">
-          <div class="text-2xl font-bold text-white mb-1">${stats.adminUsers}</div>
-          <div class="text-xs text-gray-400">Admin Users</div>
+        
+        <!-- Admin Users -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
+          <div class="text-yellow-400 mb-2">
+            <i class="fas fa-shield-alt text-2xl"></i>
+          </div>
+          <div class="text-3xl font-bold text-white mb-1">${stats.adminUsers}</div>
+          <div class="text-xs text-gray-400 uppercase">Admins</div>
         </div>
-        <div class="text-center p-4 bg-gray-800 rounded-lg">
-          <div class="text-2xl font-bold text-white mb-1">${stats.activeUsers}</div>
-          <div class="text-xs text-gray-400">Active Users (7d)</div>
+        
+        <!-- Active Users -->
+        <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 text-center">
+          <div class="text-red-400 mb-2">
+            <i class="fas fa-user-check text-2xl"></i>
+          </div>
+          <div class="text-3xl font-bold text-white mb-1">${stats.activeUsers}</div>
+          <div class="text-xs text-gray-400 uppercase">Active (7d)</div>
         </div>
       </div>
     </div>
     
-    <!-- Admin Actions -->
+    <!-- Database Management -->
     <div class="mb-8">
       <h4 class="text-lg font-semibold text-white mb-4">Database Management</h4>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -413,66 +437,60 @@ const adminPanelSection = (stats, adminData) =>
     <!-- User Management -->
     <div>
       <h4 class="text-lg font-semibold text-white mb-4">User Management</h4>
-      <div class="overflow-x-auto">
-        <div class="min-w-full">
-          <div class="grid grid-cols-5 gap-4 p-4 bg-gray-800 rounded-t-lg text-sm font-medium text-gray-400">
-            <div>User</div>
-            <div>Lists</div>
-            <div>Role</div>
-            <div>Last Active</div>
-            <div>Actions</div>
-          </div>
-          <div class="space-y-1">
-            ${adminData.users
-              .map(
-                (u) => `
-              <div class="grid grid-cols-5 gap-4 p-4 bg-gray-900 hover:bg-gray-800 transition-colors">
-                <div>
-                  <div class="text-sm text-white">${u.username}</div>
-                  <div class="text-xs text-gray-500">${u.email}</div>
+      
+      <div class="space-y-3">
+        ${adminData.users
+          .map(
+            (u) => `
+          <div class="bg-gray-800 rounded-lg p-5 border border-gray-700 hover:border-gray-600 transition-colors">
+            <div class="flex items-start justify-between gap-4">
+              <!-- User Info -->
+              <div class="flex items-center gap-4 flex-1 min-w-0">
+                <div class="w-12 h-12 rounded-full ${
+                  u.role === 'admin' ? 'bg-yellow-600' : 'bg-gray-600'
+                } flex items-center justify-center flex-shrink-0">
+                  <span class="text-white font-bold text-lg">
+                    ${u.username.substring(0, 2).toUpperCase()}
+                  </span>
                 </div>
-                <div class="text-sm text-gray-300">${u.listCount}</div>
-                <div>
-                  ${
-                    u.role === 'admin'
-                      ? '<span class="text-xs bg-yellow-900/50 text-yellow-400 px-2 py-1 rounded">Admin</span>'
-                      : '<span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded">User</span>'
-                  }
-                </div>
-                <div class="text-sm text-gray-300">${u.lastActivity ? formatDateTime(u.lastActivity, false, 'MM/DD/YYYY') : '-'}</div>
-                <div class="flex gap-2">
-                  ${
-                    u._id !== adminData.currentUserId
-                      ? `
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center gap-2 mb-1">
+                    <h5 class="text-white font-semibold truncate">${u.username}</h5>
                     ${
-                      u.role !== 'admin'
-                        ? `
-                      <button onclick="makeAdmin('${u._id}')" class="text-xs text-blue-400 hover:text-blue-300" title="Make Admin">
-                        <i class="fas fa-user-shield"></i>
-                      </button>
-                    `
-                        : `
-                      <button onclick="revokeAdmin('${u._id}')" class="text-xs text-yellow-400 hover:text-yellow-300" title="Revoke Admin">
-                        <i class="fas fa-user-times"></i>
-                      </button>
-                    `
+                      u.role === 'admin'
+                        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Admin</span>'
+                        : ''
                     }
-                    <button onclick="viewUserLists('${u._id}')" class="text-xs text-gray-400 hover:text-gray-300" title="View Lists">
-                      <i class="fas fa-list"></i>
-                    </button>
-                    <button onclick="deleteUser('${u._id}')" class="text-xs text-red-400 hover:text-red-300" title="Delete User">
-                      <i class="fas fa-trash"></i>
-                    </button>
-                  `
-                      : '<span class="text-xs text-gray-600">Current User</span>'
-                  }
+                  </div>
+                  <p class="text-sm text-gray-400 truncate">${u.email}</p>
+                  <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                    <span><i class="fas fa-list mr-1"></i>${u.listCount} lists</span>
+                    <span><i class="fas fa-clock mr-1"></i>${u.lastActivity ? formatDateTime(u.lastActivity, false, 'MM/DD/YYYY') : 'Never active'}</span>
+                  </div>
                 </div>
               </div>
-            `
-              )
-              .join('')}
+              
+              <!-- Actions -->
+              <div class="flex items-center gap-2 flex-shrink-0">
+                ${
+                  u._id !== adminData.currentUserId
+                    ? `
+                  ${
+                    u.role !== 'admin'
+                      ? `<button onclick="makeAdmin('${u._id}')" class="p-2 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors" title="Grant Admin"><i class="fas fa-user-shield"></i></button>`
+                      : `<button onclick="revokeAdmin('${u._id}')" class="p-2 rounded bg-yellow-600 hover:bg-yellow-700 text-white transition-colors" title="Revoke Admin"><i class="fas fa-user-times"></i></button>`
+                  }
+                  <button onclick="viewUserLists('${u._id}')" class="p-2 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors" title="View Lists"><i class="fas fa-list"></i></button>
+                  <button onclick="deleteUser('${u._id}')" class="p-2 rounded bg-red-600 hover:bg-red-700 text-white transition-colors" title="Delete User"><i class="fas fa-trash-alt"></i></button>
+                `
+                    : '<span class="text-xs text-gray-500 px-3 py-1 bg-gray-700/50 rounded">You</span>'
+                }
+              </div>
+            </div>
           </div>
-        </div>
+        `
+          )
+          .join('')}
       </div>
     </div>
   `,
