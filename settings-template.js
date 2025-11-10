@@ -65,6 +65,51 @@ const input = (
   >
 `;
 
+// Reusable User Avatar Component
+const userAvatar = (username, size = 'w-12 h-12', textSize = 'text-lg') => `
+  <div class="${size} rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+    <span class="text-white font-bold ${textSize}">
+      ${username.substring(0, 2).toUpperCase()}
+    </span>
+  </div>
+`;
+
+// Reusable User Card Component
+const userCard = (user, actions = '', isCurrentUser = false) => `
+  <div class="bg-gray-800 rounded-lg p-4 sm:p-5 border border-gray-700 hover:border-gray-600 transition-colors">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+      <!-- User Info -->
+      <div class="flex items-center gap-4 flex-1 min-w-0 w-full sm:w-auto">
+        ${userAvatar(user.username)}
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <h5 class="text-white font-semibold truncate">${user.username}</h5>
+            ${
+              user.role === 'admin'
+                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Admin</span>'
+                : ''
+            }
+          </div>
+          <p class="text-sm text-gray-400 truncate">${user.email}</p>
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+            <span><i class="fas fa-list mr-1"></i>${user.listCount} lists</span>
+            <span><i class="fas fa-clock mr-1"></i>${user.lastActivity ? formatDateTime(user.lastActivity, false, 'MM/DD/YYYY') : 'Never active'}</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Actions -->
+      <div class="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+        ${
+          isCurrentUser
+            ? '<span class="text-xs text-gray-500 px-3 py-1 bg-gray-700/50 rounded min-h-[44px] flex items-center justify-center">You</span>'
+            : actions
+        }
+      </div>
+    </div>
+  </div>
+`;
+
 // Account Information Section
 const accountInfoSection = (user) =>
   settingsCard(
@@ -440,56 +485,19 @@ const adminPanelSection = (stats, adminData) =>
       
       <div class="space-y-3">
         ${adminData.users
-          .map(
-            (u) => `
-          <div class="bg-gray-800 rounded-lg p-5 border border-gray-700 hover:border-gray-600 transition-colors">
-            <div class="flex items-start justify-between gap-4">
-              <!-- User Info -->
-              <div class="flex items-center gap-4 flex-1 min-w-0">
-                <div class="w-12 h-12 rounded-full ${
-                  u.role === 'admin' ? 'bg-yellow-600' : 'bg-gray-600'
-                } flex items-center justify-center flex-shrink-0">
-                  <span class="text-white font-bold text-lg">
-                    ${u.username.substring(0, 2).toUpperCase()}
-                  </span>
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="flex items-center gap-2 mb-1">
-                    <h5 class="text-white font-semibold truncate">${u.username}</h5>
-                    ${
-                      u.role === 'admin'
-                        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Admin</span>'
-                        : ''
-                    }
-                  </div>
-                  <p class="text-sm text-gray-400 truncate">${u.email}</p>
-                  <div class="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                    <span><i class="fas fa-list mr-1"></i>${u.listCount} lists</span>
-                    <span><i class="fas fa-clock mr-1"></i>${u.lastActivity ? formatDateTime(u.lastActivity, false, 'MM/DD/YYYY') : 'Never active'}</span>
-                  </div>
-                </div>
-              </div>
-              
-              <!-- Actions -->
-              <div class="flex items-center gap-2 flex-shrink-0">
-                ${
-                  u._id !== adminData.currentUserId
-                    ? `
-                  ${
-                    u.role !== 'admin'
-                      ? `<button onclick="makeAdmin('${u._id}')" class="p-2 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors" title="Grant Admin"><i class="fas fa-user-shield"></i></button>`
-                      : `<button onclick="revokeAdmin('${u._id}')" class="p-2 rounded bg-yellow-600 hover:bg-yellow-700 text-white transition-colors" title="Revoke Admin"><i class="fas fa-user-times"></i></button>`
-                  }
-                  <button onclick="viewUserLists('${u._id}')" class="p-2 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors" title="View Lists"><i class="fas fa-list"></i></button>
-                  <button onclick="deleteUser('${u._id}')" class="p-2 rounded bg-red-600 hover:bg-red-700 text-white transition-colors" title="Delete User"><i class="fas fa-trash-alt"></i></button>
-                `
-                    : '<span class="text-xs text-gray-500 px-3 py-1 bg-gray-700/50 rounded">You</span>'
-                }
-              </div>
-            </div>
-          </div>
-        `
-          )
+          .map((u) => {
+            const isCurrentUser = u._id === adminData.currentUserId;
+            const actions = `
+              ${
+                u.role !== 'admin'
+                  ? `<button onclick="makeAdmin('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center" title="Grant Admin"><i class="fas fa-user-shield"></i></button>`
+                  : `<button onclick="revokeAdmin('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-yellow-600 hover:bg-yellow-700 text-white transition-colors flex items-center justify-center" title="Revoke Admin"><i class="fas fa-user-times"></i></button>`
+              }
+              <button onclick="viewUserLists('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex items-center justify-center" title="View Lists"><i class="fas fa-list"></i></button>
+              <button onclick="deleteUser('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center justify-center" title="Delete User"><i class="fas fa-trash-alt"></i></button>
+            `;
+            return userCard(u, actions, isCurrentUser);
+          })
           .join('')}
       </div>
     </div>
