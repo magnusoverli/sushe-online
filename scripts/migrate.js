@@ -82,22 +82,11 @@ async function createMigration(name) {
     fs.mkdirSync(migrationsDir, { recursive: true });
   }
 
-  const template = `// ${name}
-module.exports = {
+  const template = `module.exports = {
   async up(pool) {
-    // Add your migration logic here
-    // Example:
-    // await pool.query(\`
-    //   ALTER TABLE users ADD COLUMN new_field TEXT
-    // \`);
   },
 
   async down(pool) {
-    // Add your rollback logic here
-    // Example:
-    // await pool.query(\`
-    //   ALTER TABLE users DROP COLUMN new_field
-    // \`);
   }
 };
 `;

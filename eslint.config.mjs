@@ -11,13 +11,7 @@ export default [
   {
     ignores: [
       'public/js/bundle.js',
-      'public/js/chunks/**',
-      'dist/**',
-      'node_modules/**',
-    ],
-  },
-  {
-    files: ['**/*.js'],
+      'public/js/chunks*.js'],
     plugins: {
       prettier,
       security,
@@ -39,7 +33,7 @@ export default [
       'no-var': 'error',
       'no-unreachable': 'error',
       'no-unused-expressions': 'error',
-      // Complexity rules (relaxed for real-world app)
+      
       complexity: ['warn', { max: 25 }],
       'max-depth': ['warn', { max: 6 }],
       'max-lines-per-function': [
@@ -47,15 +41,15 @@ export default [
         { max: 200, skipBlankLines: true, skipComments: true },
       ],
       'max-params': ['warn', { max: 6 }],
-      // Import rules (relaxed for Node.js environment)
-      'import/no-unresolved': 'off', // Node.js modules may not be resolved
+      
+      'import/no-unresolved': 'off', 
       'import/named': 'error',
       'import/default': 'error',
       'import/no-absolute-path': 'error',
       'import/no-self-import': 'error',
       'import/no-cycle': 'warn',
       'import/no-duplicates': 'error',
-      // Security rules (additional to plugin defaults)
+      
       'security/detect-object-injection': 'off',
       'security/detect-non-literal-regexp': 'off',
       'security/detect-unsafe-regex': 'error',
@@ -112,7 +106,7 @@ export default [
     },
   },
   {
-    files: ['test/**/*.js'],
+    files: ['test*.js'],
     languageOptions: {
       globals: {
         describe: 'readonly',
@@ -140,7 +134,7 @@ export default [
     },
   },
   {
-    files: ['scripts/**/*.js'],
+    files: ['scripts*.js'],
     rules: {
       'no-console': 'off',
       'security/detect-non-literal-fs-filename': 'off',
@@ -149,7 +143,7 @@ export default [
     },
   },
   {
-    files: ['db/**/*.js'],
+    files: ['db*.js'],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
       'security/detect-non-literal-require': 'off',
@@ -157,7 +151,7 @@ export default [
     },
   },
   {
-    files: ['routes/**/*.js', 'templates.js', 'settings-template.js'],
+    files: ['routes*.js', 'templates.js', 'settings-template.js'],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
       'max-lines-per-function': 'off',
@@ -165,7 +159,7 @@ export default [
     },
   },
   {
-    files: ['src/js/**/*.js'],
+    files: ['src/js*.js'],
     rules: {
       'no-console': 'off',
       'import/no-cycle': 'off',
@@ -174,23 +168,23 @@ export default [
     },
   },
   {
-    files: ['test/**/*.js', 'utils/**/*.js'],
+    files: ['test*.js', 'utils*.js'],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
     },
   },
   {
-    files: ['browser-extension/**/*.js'],
+    files: ['browser-extension*.js'],
     languageOptions: {
       globals: {
         chrome: 'readonly',
       },
     },
     rules: {
-      'no-console': 'off', // Console logging is normal in extensions for debugging
-      complexity: 'off', // Extension code can be complex
-      'max-depth': 'off', // Allow deeper nesting in extension code
-      'max-lines-per-function': 'off', // Allow longer functions in extension
+      'no-console': 'off', 
+      complexity: 'off', 
+      'max-depth': 'off', 
+      'max-lines-per-function': 'off', 
     },
   },
 ];

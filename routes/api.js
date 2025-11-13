@@ -1043,7 +1043,6 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Fetch metadata for link previews
   app.get(
     '/api/unfurl',
     ensureAuthAPI,
@@ -1087,7 +1086,6 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Fetch track list for a release group from MusicBrainz
   app.get(
     '/api/musicbrainz/tracks',
     ensureAuthAPI,

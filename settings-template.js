@@ -563,7 +563,7 @@ const settingsTemplate = (req, options) => {
       --accent-subtle-strong: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.3)};
     }
     
-    /* Custom scrollbar - reused from main page */
+        
     ::-webkit-scrollbar {
       width: 8px;
     }
@@ -581,7 +581,7 @@ const settingsTemplate = (req, options) => {
       background: #4b5563;
     }
     
-    /* Firefox scrollbar */
+        
     * {
       scrollbar-width: thin;
       scrollbar-color: #374151 #111827;
@@ -597,19 +597,19 @@ const settingsTemplate = (req, options) => {
       border-color: var(--accent-color) !important; 
     }
     
-    /* Mobile scrolling behavior - consistent with main page */
+        
     @media (max-width: 1023px) {
       body {
         overscroll-behavior: none;
       }
     }
     
-    /* iOS smooth scrolling optimization */
+        
     .overflow-y-auto {
       -webkit-overflow-scrolling: touch;
     }
     
-    /* Mobile-first responsive design */
+        
     .settings-grid {
       display: grid;
       gap: 1.5rem;
@@ -623,14 +623,14 @@ const settingsTemplate = (req, options) => {
       }
     }
     
-    /* Responsive form layouts */
+        
     @media (max-width: 640px) {
       .mobile-stack > * {
         width: 100% !important;
       }
     }
     
-    /* Toast styling */
+        
     .toast {
       position: fixed;
       top: 5rem;
@@ -850,7 +850,7 @@ const settingsTemplate = (req, options) => {
   <div id="toast" class="toast"></div>
   
   <script>
-    // Toast function
+        
     function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.textContent = message;
@@ -861,7 +861,7 @@ const settingsTemplate = (req, options) => {
       }, 3000);
     }
     
-    // Edit email functionality
+        
     let originalEmail = '${user.email}';
     function editEmail() {
       const input = document.getElementById('emailInput');
@@ -871,9 +871,9 @@ const settingsTemplate = (req, options) => {
       input.focus();
       input.select();
       
-      buttons[0].classList.add('hidden'); // Edit
-      buttons[1].classList.remove('hidden'); // Save
-      buttons[2].classList.remove('hidden'); // Cancel
+      buttons[0].classList.add('hidden'); ); 
+      buttons[1].classList.remove('hidden'); ); 
+      buttons[2].classList.remove('hidden'); ); 
     }
     
     function cancelEmailEdit() {
@@ -883,9 +883,9 @@ const settingsTemplate = (req, options) => {
       input.value = originalEmail;
       input.setAttribute('readonly', true);
       
-      buttons[0].classList.remove('hidden'); // Edit
-      buttons[1].classList.add('hidden'); // Save
-      buttons[2].classList.add('hidden'); // Cancel
+      buttons[0].classList.remove('hidden'); ); 
+      buttons[1].classList.add('hidden'); ); 
+      buttons[2].classList.add('hidden'); ); 
     }
     
     async function saveEmail() {
@@ -917,7 +917,7 @@ const settingsTemplate = (req, options) => {
       }
     }
     
-    // Edit username functionality
+        
     let originalUsername = '${user.username}';
     function editUsername() {
       const input = document.getElementById('usernameInput');
@@ -927,9 +927,9 @@ const settingsTemplate = (req, options) => {
       input.focus();
       input.select();
       
-      buttons[0].classList.add('hidden'); // Edit
-      buttons[1].classList.remove('hidden'); // Save
-      buttons[2].classList.remove('hidden'); // Cancel
+      buttons[0].classList.add('hidden'); ); 
+      buttons[1].classList.remove('hidden'); ); 
+      buttons[2].classList.remove('hidden'); ); 
     }
     
     function cancelUsernameEdit() {
@@ -939,9 +939,9 @@ const settingsTemplate = (req, options) => {
       input.value = originalUsername;
       input.setAttribute('readonly', true);
       
-      buttons[0].classList.remove('hidden'); // Edit
-      buttons[1].classList.add('hidden'); // Save
-      buttons[2].classList.add('hidden'); // Cancel
+      buttons[0].classList.remove('hidden'); ); 
+      buttons[1].classList.add('hidden'); ); 
+      buttons[2].classList.add('hidden'); ); 
     }
     
     async function saveUsername() {
@@ -973,7 +973,7 @@ const settingsTemplate = (req, options) => {
       }
     }
     
-    // Theme functions
+        
     async function updateAccentColor(color) {
       try {
         if (!/^#[0-9A-F]{6}$/i.test(color)) {
@@ -1183,7 +1183,7 @@ const settingsTemplate = (req, options) => {
       
       function showRestoreModal() {
         document.getElementById('restoreModal').classList.remove('hidden');
-        // Reset modal to initial state
+                
         document.getElementById('restoreContent').classList.remove('hidden');
         document.getElementById('restoreProgress').classList.add('hidden');
         document.getElementById('closeRestoreModal').disabled = false;
@@ -1219,19 +1219,19 @@ const settingsTemplate = (req, options) => {
         }
       }
       
-      // Handle restore form submission
+            
       document.getElementById('restoreForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const formData = new FormData(e.target);
         
-        // Switch to progress view
+                
         document.getElementById('restoreContent').classList.add('hidden');
         document.getElementById('restoreProgress').classList.remove('hidden');
         document.getElementById('closeRestoreModal').disabled = true;
         
         try {
-          // Step 1: Upload (0-25%)
+                    
           updateProgressStep('step-upload', 'active');
           updateProgress(10, 'Uploading backup file to server...');
           
@@ -1244,7 +1244,7 @@ const settingsTemplate = (req, options) => {
           updateProgress(25, 'Upload complete');
           updateProgressStep('step-upload', 'complete');
           
-          // Step 2: Validate (25-50%)
+                    
           updateProgressStep('step-validate', 'active');
           updateProgress(35, 'Validating backup file format...');
           
@@ -1262,7 +1262,7 @@ const settingsTemplate = (req, options) => {
           updateProgress(50, 'Backup validated successfully');
           updateProgressStep('step-validate', 'complete');
           
-          // Step 3: Restore (50-75%)
+                    
           updateProgressStep('step-restore', 'active');
           updateProgress(60, 'Restoring database from backup...');
           
@@ -1270,11 +1270,11 @@ const settingsTemplate = (req, options) => {
             updateProgress(75, 'Database restored successfully');
             updateProgressStep('step-restore', 'complete');
             
-            // Step 4: Restart (75-100%)
+                        
             updateProgressStep('step-restart', 'active');
             updateProgress(80, 'Server is restarting...');
             
-            // Wait for server restart, then poll for availability
+                        
             setTimeout(() => {
               updateProgress(85, 'Waiting for server to come back online...');
               
@@ -1286,12 +1286,12 @@ const settingsTemplate = (req, options) => {
                     updateProgress(100, 'Server is back online! Redirecting...');
                     updateProgressStep('step-restart', 'complete');
                     
-                    // Clear all localStorage cache to ensure fresh data after restore
+                                        
                     try {
                       localStorage.removeItem('lists_cache');
                       localStorage.removeItem('lists_cache_timestamp');
                       localStorage.removeItem('lastSelectedList');
-                      localStorage.clear(); // Clear everything to be safe
+                      localStorage.clear();                       localStorage.clear(); 
                     } catch (e) {
                       console.warn('Failed to clear localStorage:', e);
                     }
@@ -1301,7 +1301,7 @@ const settingsTemplate = (req, options) => {
                     }, 1000);
                   }
                 } catch (e) {
-                  // Server still restarting
+                                    
                 }
               }, 1000);
             }, 3000);

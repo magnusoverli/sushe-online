@@ -701,142 +701,7 @@ const addAlbumModalComponent = () => `
                         type="file" 
                         id="manualCoverArt" 
                         name="cover_art"
-                        accept="image/*"
-                        class="hidden"
-                      >
-                      <button 
-                        type="button"
-                        onclick="document.getElementById('manualCoverArt').click()"
-                        class="w-full lg:w-auto px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition duration-200"
-                      >
-                        <i class="fas fa-camera lg:fas lg:fa-upload mr-2"></i>Choose Image
-                      </button>
-                      <p class="text-xs text-gray-500 mt-1 lg:mt-2">Max 5MB</p>
-                    </div>
-                  </div>
-                </div>
-                
-                <!-- Submit Buttons -->
-                <div class="flex gap-3 justify-end pt-4 pb-safe">
-                  <button 
-                    type="button"
-                    id="cancelManualEntry" 
-                    class="flex-1 lg:flex-none px-4 lg:px-6 py-3 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition duration-200"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    type="submit"
-                    class="flex-1 lg:flex-none px-6 lg:px-8 py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition duration-200 font-semibold"
-                  >
-                    Add Album
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-          
-          <!-- Loading State -->
-          <div id="searchLoading" class="hidden text-center py-20">
-            <div class="inline-block animate-spin rounded-full h-10 w-10 lg:h-12 lg:w-12 border-b-2 border-red-600"></div>
-            <p class="text-gray-400 mt-4">Searching...</p>
-          </div>
-          
-          <!-- Empty State -->
-          <div id="searchEmpty" class="text-center py-20 text-gray-500 px-4">
-            <i class="fas fa-search text-4xl lg:text-5xl mb-4 opacity-50"></i>
-            <p class="text-base lg:text-lg">Search for an artist or album to add to your list</p>
-            <p class="text-sm mt-2">Or add an album manually</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-`;
-
-
-const confirmationModalComponent = () => `
-  <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-800">
-        <h3 id="confirmationTitle" class="text-xl font-bold text-white">Confirm Action</h3>
-      </div>
-      
-      <!-- Modal Content -->
-      <div class="p-6">
-        <p id="confirmationMessage" class="text-gray-300"></p>
-        <p id="confirmationSubMessage" class="text-sm text-gray-500 mt-2"></p>
-      </div>
-      
-      <!-- Modal Footer -->
-      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
-        <button 
-          id="confirmationCancelBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition duration-200"
-        >
-          Cancel
-        </button>
-        <button 
-          id="confirmationConfirmBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
-        >
-          Remove
-        </button>
-      </div>
-    </div>
-  </div>
-`;
-
-
-const serviceSelectModalComponent = () => `
-  <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-800">
-        <h3 class="text-xl font-bold text-white">Choose Service</h3>
-      </div>
-
-      <!-- Modal Content -->
-      <div class="p-6 space-y-3">
-        <button id="serviceSpotifyBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200 flex items-center justify-center">
-          <i class="fab fa-spotify mr-2"></i>Spotify
-        </button>
-        <button id="serviceTidalBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200 flex items-center justify-center">
-          <i class="fas fa-wave-square mr-2"></i>Tidal
-        </button>
-      </div>
-
-      <!-- Modal Footer -->
-      <div class="p-6 border-t border-gray-800">
-        <button id="serviceCancelBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200">Cancel</button>
-      </div>
-    </div>
-  </div>
-`;
-
-
-const spotifyTemplate = (user) => `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta property="og:title" content="SuShe Online">
-  <meta property="og:description" content="SuShe Online is a web app for managing album lists.">
-  <meta property="og:image" content="/og-image.png">
-  <title>SuShe Online</title>
-  <link rel="icon" type="image/png" href="/og-image.png">
-  <link rel="apple-touch-icon" href="/og-image.png">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
-  <link href="${asset('/styles/output.css')}" rel="stylesheet">
-  <link href="${asset('/styles/spotify-app.css')}" rel="stylesheet">
-  <style>
-    /* CSS Custom Properties for theming */
+                        accept="image
     :root {
       --accent-color: ${user?.accentColor || '#dc2626'};
       --accent-hover: ${adjustColor(user?.accentColor || '#dc2626', -30)};
@@ -848,7 +713,7 @@ const spotifyTemplate = (user) => `
       --accent-subtle-strong: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.3)};
     }
     
-    /* Apply accent color to text and borders only, not buttons */
+        
     .text-red-600, .text-red-500, .text-red-400 { 
       color: var(--accent-color) !important; 
     }
@@ -859,7 +724,7 @@ const spotifyTemplate = (user) => `
       border-color: var(--accent-color) !important; 
     }
     
-    /* Responsive layout system */
+        
     .app-layout {
       display: grid;
       grid-template-rows: auto 1fr;
@@ -869,17 +734,17 @@ const spotifyTemplate = (user) => `
     
     .main-content {
       display: grid;
-      grid-template-columns: 0 1fr; /* Mobile: no sidebar */
+      grid-template-columns: 0 1fr;       grid-template-columns: 0 1fr; 
       overflow: hidden;
     }
     
     @media (min-width: 1024px) {
       .main-content {
-        grid-template-columns: 16rem 1fr; /* Desktop: 256px sidebar */
+        grid-template-columns: 16rem 1fr;         grid-template-columns: 16rem 1fr; 
       }
     }
     
-    /* Responsive utilities */
+        
     @media (max-width: 1023px) {
       .desktop-only { display: none !important; }
       .mobile-hidden { display: none !important; }
@@ -890,7 +755,7 @@ const spotifyTemplate = (user) => `
       .desktop-hidden { display: none !important; }
     }
     
-    /* Sidebar responsive behavior */
+        
     .sidebar {
       width: 0;
       overflow: hidden;
@@ -904,7 +769,7 @@ const spotifyTemplate = (user) => `
       }
     }
     
-    /* FAB styling */
+        
     #addAlbumFAB {
       box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4),
                   0 2px 4px 0 rgba(0, 0, 0, 0.2);
@@ -915,44 +780,44 @@ const spotifyTemplate = (user) => `
       box-shadow: 0 2px 6px 0 rgba(0, 0, 0, 0.4);
     }
     
-    /* Ensure FAB positioning is consistent across all mobile devices */
+        
     @media (max-width: 1023px) {
       #addAlbumFAB {
         bottom: calc(1.5rem + env(safe-area-inset-bottom, 1rem));
       }
     }
     
-    /* Album container responsive padding */
+        
     #albumContainer {
       padding-bottom: calc(1rem + env(safe-area-inset-bottom));
     }
 
     @media (max-width: 1023px) {
       #albumContainer {
-        padding-bottom: calc(6rem + env(safe-area-inset-bottom)); /* Space for FAB + safe area on mobile */
+        padding-bottom: calc(6rem + env(safe-area-inset-bottom));         padding-bottom: calc(6rem + env(safe-area-inset-bottom)); 
       }
     }
     
-    /* Safe areas for iOS */
+        
     .safe-area-bottom {
       padding-bottom: env(safe-area-inset-bottom);
     }
     
-    /* Additional iPhone-specific fixes */
+        
     @media (max-width: 1023px) {
-      /* Ensure proper viewport handling on iPhone */
+            
       .main-content {
         min-height: calc(100vh - env(safe-area-inset-top, 0px));
         min-height: calc(100dvh - env(safe-area-inset-top, 0px));
       }
       
-      /* Fix for iPhone home indicator area */
+            
       main {
         padding-bottom: env(safe-area-inset-bottom, 0px);
       }
     }
     
-    /* Sortable enhancements */
+        
     .sortable-ghost {
       opacity: 0.4;
     }
@@ -968,7 +833,7 @@ const spotifyTemplate = (user) => `
       background-color: rgba(55, 65, 81, 0.5);
     }
     
-    /* Touch optimization */
+        
     @media (max-width: 1023px) {
       .touch-target {
         min-height: 44px;
@@ -1138,7 +1003,7 @@ const spotifyTemplate = (user) => `
   <script type="module" src="${asset('/js/bundle.js')}"></script>
 
   <script>
-    // Global state
+        
     window.currentUser = ${JSON.stringify(user)};
     window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
 
@@ -1151,25 +1016,25 @@ const spotifyTemplate = (user) => `
     window.addEventListener('resize', updateViewportHeight);
     window.addEventListener('orientationchange', updateViewportHeight);
     
-    // Mobile menu toggle
+        
     function toggleMobileMenu() {
       const menu = document.getElementById('mobileMenu');
       menu.classList.toggle('hidden');
     }
 
-    // Backwards compatibility for old toggle handler
+        
     function toggleMobileLists() {
       toggleMobileMenu();
     }
     
-    // Initialize the app
+        
     document.addEventListener('DOMContentLoaded', () => {
-      // Update the list navigation to include mobile
+            
       const originalUpdateListNav = window.updateListNav;
       window.updateListNav = function() {
         if (originalUpdateListNav) originalUpdateListNav();
         
-        // Update mobile navigation
+                
         const mobileNav = document.getElementById('mobileListNav');
         if (mobileNav) {
           mobileNav.innerHTML = '';
@@ -1200,31 +1065,31 @@ const spotifyTemplate = (user) => `
         }
       };
       
-      // Override selectList to handle responsive behavior
+            
       const originalSelectList = window.selectList;
       window.selectList = async function(listName) {
         await originalSelectList(listName);
         
-        // Update mobile header
+                
         const headerListName = document.getElementById('headerListName');
         if (headerListName) {
           headerListName.textContent = listName || '';
           headerListName.classList.toggle('hidden', !listName);
         }
         
-        // Show/hide FAB
+                
         const fab = document.getElementById('addAlbumFAB');
         if (fab) {
           fab.style.display = listName ? 'flex' : 'none';
         }
       };
       
-      // Mobile list menu (unified for both mobile and desktop)
+            
       window.showListMenu = function(listName) {
         const isMobile = window.innerWidth < 1024;
         
         if (isMobile) {
-          // Mobile action sheet
+                    
           const actionSheet = document.createElement('div');
           actionSheet.className = 'fixed inset-0 z-[60]';
           actionSheet.innerHTML = \`
@@ -1258,7 +1123,7 @@ const spotifyTemplate = (user) => `
           \`;
           document.body.appendChild(actionSheet);
         } else {
-          // Desktop context menu
+                    
           currentContextList = listName;
           const contextMenu = document.getElementById('contextMenu');
           const rect = event.currentTarget.getBoundingClientRect();
@@ -1267,7 +1132,7 @@ const spotifyTemplate = (user) => `
           contextMenu.style.top = rect.top + 'px';
           contextMenu.classList.remove('hidden');
           
-          // Adjust position if menu goes off screen
+                    
           setTimeout(() => {
             const menuRect = contextMenu.getBoundingClientRect();
             if (menuRect.right > window.innerWidth) {
@@ -1280,7 +1145,7 @@ const spotifyTemplate = (user) => `
         }
       };
       
-      // Handle right-click on desktop list items
+            
       if (window.innerWidth >= 1024) {
         document.addEventListener('contextmenu', (e) => {
           const listButton = e.target.closest('#listNav button');
@@ -1294,7 +1159,7 @@ const spotifyTemplate = (user) => `
             contextMenu.style.top = e.clientY + 'px';
             contextMenu.classList.remove('hidden');
             
-            // Adjust position if menu goes off screen
+                        
             setTimeout(() => {
               const rect = contextMenu.getBoundingClientRect();
               if (rect.right > window.innerWidth) {
@@ -1309,7 +1174,7 @@ const spotifyTemplate = (user) => `
       }
     });
 
-    // Re-render layout when viewport crosses the mobile breakpoint
+        
     let lastIsMobile = window.innerWidth < 1024;
     window.addEventListener('resize', () => {
       const isMobile = window.innerWidth < 1024;
