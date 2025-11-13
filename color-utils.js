@@ -1,7 +1,7 @@
-// color-utils.js
-// Utility functions for color manipulation
 
-// Adjust color brightness
+
+
+
 function adjustColor(color, amount) {
   const num = parseInt(color.replace('#', ''), 16);
   const amt = Math.round(2.55 * amount);
@@ -21,7 +21,7 @@ function adjustColor(color, amount) {
   );
 }
 
-// Convert hex to RGB
+
 function hexToRgb(hex) {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   return result
@@ -33,7 +33,7 @@ function hexToRgb(hex) {
     : null;
 }
 
-// Get color with opacity
+
 function colorWithOpacity(color, opacity) {
   const rgb = hexToRgb(color);
   return rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})` : color;

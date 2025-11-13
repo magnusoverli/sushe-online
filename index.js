@@ -4,7 +4,7 @@ const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
-// Datastore setup is handled in ./db which uses PostgreSQL
+
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
@@ -24,9 +24,9 @@ const upload = multer({
       cb(null, file.fieldname + '-' + unique + '.dump');
     },
   }),
-  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB limit
+  limits: { fileSize: 1024 * 1024 * 1024 }, 
 });
-// Log any unhandled errors so the server doesn't fail silently
+
 process.on('unhandledRejection', (err) => {
   logger.error('Unhandled promise rejection', {
     error: err.message,
@@ -37,17 +37,17 @@ process.on('uncaughtException', (err) => {
   logger.error('Uncaught exception', { error: err.message, stack: err.stack });
 });
 
-// Graceful shutdown handling for async logger and cache
+
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
   await logger.shutdown();
 
-  // Shutdown response cache if it exists
+  
   try {
     const { responseCache } = require('./middleware/response-cache');
     responseCache.shutdown();
   } catch (_e) {
-    // Cache module might not be loaded yet
+    
   }
 
   process.exit(0);
@@ -57,12 +57,12 @@ process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
   await logger.shutdown();
 
-  // Shutdown response cache if it exists
+  
   try {
     const { responseCache } = require('./middleware/response-cache');
     responseCache.shutdown();
   } catch (_e) {
-    // Cache module might not be loaded yet
+    
   }
 
   process.exit(0);
@@ -74,11 +74,11 @@ const {
   isValidPassword,
 } = require('./validators');
 
-//
+
 let lastCodeUsedBy = null;
 let lastCodeUsedAt = null;
 
-// Import templates
+
 const {
   htmlTemplate,
   registerTemplate,
@@ -89,10 +89,10 @@ const {
   spotifyTemplate,
 } = require('./templates');
 
-// Import the new settings template
+
 const { settingsTemplate } = require('./settings-template');
 const { isTokenValid } = require('./auth-utils');
-// Databases are initialized in ./db using PostgreSQL
+
 const {
   users,
   lists,
@@ -107,7 +107,7 @@ const {
   pool,
 } = require('./db');
 
-// Map of SSE subscribers keyed by `${userId}:${listName}`
+
 const listSubscribers = new Map();
 
 function broadcastListUpdate(userId, name, data) {
@@ -116,7 +116,7 @@ function broadcastListUpdate(userId, name, data) {
   if (subs) {
     const payload = JSON.stringify(data);
 
-    // Clean up dead connections while broadcasting
+    
     const activeConnections = new Set();
     for (const res of subs) {
       try {
@@ -128,11 +128,11 @@ function broadcastListUpdate(userId, name, data) {
           activeConnections.add(res);
         }
       } catch {
-        // Connection is dead, will be cleaned up
+        
       }
     }
 
-    // Update the subscribers set to only include active connections
+    
     listSubscribers.set(key, activeConnections);
   }
 }
@@ -166,12 +166,12 @@ function recordActivity(req) {
   }
 }
 
-// Admin code variables
-const adminCodeAttempts = new Map(); // Track failed attempts
+
+const adminCodeAttempts = new Map(); 
 let adminCode = null;
 let adminCodeExpiry = null;
 
-// Enhanced admin code generation
+
 function generateAdminCode() {
   try {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -181,7 +181,7 @@ function generateAdminCode() {
     ).join('');
     adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
-    // ANSI color codes
+    
     const colors = {
       reset: '\x1b[0m',
       bright: '\x1b[1m',
@@ -194,7 +194,7 @@ function generateAdminCode() {
       gray: '\x1b[90m',
     };
 
-    // Format time
+    
     const timeOptions = {
       hour: '2-digit',
       minute: '2-digit',
@@ -203,11 +203,11 @@ function generateAdminCode() {
     };
     const timeString = adminCodeExpiry.toLocaleTimeString('en-US', timeOptions);
 
-    // Box configuration
+    
     const BOX_WIDTH = 45;
     const INNER_WIDTH = BOX_WIDTH - 2;
 
-    // Helper functions
+    
     const centerText = (text) => {
       const ansiEscape = '\u001B';
       const visibleLength = text.replace(
@@ -226,7 +226,7 @@ function generateAdminCode() {
       return `  ${label}: ${valueColor}${value}${colors.reset}${' '.repeat(padding)}`;
     };
 
-    // Build the box
+    
     const boxLines = [];
     boxLines.push(
       '\n' + colors.cyan + '╔' + '═'.repeat(INNER_WIDTH) + '╗' + colors.reset
@@ -267,7 +267,7 @@ function generateAdminCode() {
         colors.reset
     );
 
-    // Show last usage info if available
+    
     if (lastCodeUsedBy && lastCodeUsedAt) {
       boxLines.push(
         colors.cyan + '╟' + '─'.repeat(INNER_WIDTH) + '╢' + colors.reset
@@ -306,11 +306,11 @@ function generateAdminCode() {
       colors.cyan + '╚' + '═'.repeat(INNER_WIDTH) + '╝' + colors.reset + '\n'
     );
 
-    // Output the admin code box to console (this is intentional UI output)
-    // eslint-disable-next-line no-console
+    
+    
     console.log(boxLines.join('\n'));
 
-    // Reset tracking for new code
+    
     lastCodeUsedBy = null;
     lastCodeUsedAt = null;
   } catch (error) {
@@ -318,11 +318,11 @@ function generateAdminCode() {
   }
 }
 
-// Generate initial code and rotate every 5 minutes
+
 generateAdminCode();
 setInterval(generateAdminCode, 5 * 60 * 1000);
 
-// Passport configuration
+
 passport.use(
   new LocalStrategy(
     { usernameField: 'email' },
@@ -332,16 +332,16 @@ passport.use(
       try {
         const user = await usersAsync.findOne({ email });
 
-        // TIMING ATTACK MITIGATION:
-        // Always perform bcrypt comparison, even for non-existent users.
-        // This ensures constant-time response regardless of whether the email exists.
+        
+        
+        
         let isMatch = false;
 
         if (!user) {
-          // User doesn't exist - compare against a dummy hash to maintain constant timing
-          // This prevents attackers from using timing analysis to enumerate valid emails
+          
+          
           const dummyHash =
-            '$2a$12$ZIJfCqcmsmY3xNqmJGFJh.vKMF3rKXSgPp/mDgpjLfSUJJ1oiGdX.'; // Pre-computed bcrypt hash
+            '$2a$12$ZIJfCqcmsmY3xNqmJGFJh.vKMF3rKXSgPp/mDgpjLfSUJJ1oiGdX.'; 
           await bcrypt.compare(password, dummyHash);
           logger.warn('Login failed: Unknown email', { email });
         } else {
@@ -352,7 +352,7 @@ passport.use(
           isMatch = await bcrypt.compare(password, user.hash);
         }
 
-        // Always return the same message regardless of whether email or password was wrong
+        
         if (isMatch && user) {
           logger.info('Login successful', { email });
           return done(null, user);
@@ -378,36 +378,36 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-// Create Express app
+
 const app = express();
 
-// Configure EJS view engine with caching
+
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.set('view cache', process.env.NODE_ENV === 'production');
 
-// Security headers configuration with comprehensive CSP
+
 const helmetConfig = {
-  // Disable CSP for hobby project - makes debugging easier
+  
   contentSecurityPolicy: false,
 
-  // HTTP Strict Transport Security (HSTS)
-  // Only enabled in production when behind HTTPS
+  
+  
   strictTransportSecurity:
     process.env.NODE_ENV === 'production' && process.env.ENABLE_HSTS === 'true'
       ? {
-          maxAge: 31536000, // 1 year in seconds
+          maxAge: 31536000, 
           includeSubDomains: true,
           preload: true,
         }
       : false,
 
-  // Referrer Policy - balance between privacy and functionality
+  
   referrerPolicy: {
     policy: 'strict-origin-when-cross-origin',
   },
 
-  // Permissions Policy - disable unnecessary browser features
+  
   permissionsPolicy: {
     camera: [],
     microphone: [],
@@ -419,15 +419,15 @@ const helmetConfig = {
     'interest-cohort': [],
   },
 
-  // Cross-Origin policies
-  crossOriginEmbedderPolicy: false, // Keep disabled for external resources
-  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, // Allow OAuth popups
-  crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow external resources
+  
+  crossOriginEmbedderPolicy: false, 
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' }, 
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, 
 };
 
-// Apply security headers with performance optimization for static assets
+
 app.use((req, res, next) => {
-  // Skip heavy security middleware for static assets
+  
   if (
     req.path.startsWith('/styles/') ||
     req.path.startsWith('/js/') ||
@@ -440,14 +440,14 @@ app.use((req, res, next) => {
     return next();
   }
 
-  // Apply comprehensive security headers for all other requests
+  
   helmet(helmetConfig)(req, res, next);
 });
 
-// Basic Express middleware
+
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
-// Smart HTTP caching for static assets (before compression and no-cache middleware)
+
 app.use((req, res, next) => {
   const path = req.path;
 
@@ -480,7 +480,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Conditional compression - skip for small API responses
+
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/') && req.method === 'GET') {
     const originalJson = res.json;
@@ -498,21 +498,21 @@ app.use((req, res, next) => {
   next();
 });
 
-// Apply compression for all other requests
+
 app.use(compression());
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-// Request logging is handled by logger.requestLogger() middleware
 
-// Session middleware with PostgreSQL store
+
+
 app.use(
   session({
     store: new pgSession({
       pool: pool,
       tableName: 'session',
       createTableIfMissing: true,
-      pruneSessionInterval: 600, // Clean up expired sessions every 10 minutes (in seconds)
+      pruneSessionInterval: 600, 
       errorLog: (err) =>
         logger.error('Session store error', { error: err.message }),
     }),
@@ -522,7 +522,7 @@ app.use(
     cookie: {
       secure: false,
       httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24, // 24 hours
+      maxAge: 1000 * 60 * 60 * 24, 
       sameSite: 'lax',
     },
     genid: function (_req) {
@@ -531,33 +531,33 @@ app.use(
   })
 );
 
-// Custom flash middleware
+
 app.use((req, res, next) => {
-  // Initialize flash in session if it doesn't exist
+  
   if (!req.session.flash) {
     req.session.flash = {};
   }
 
-  // Make flash messages available to templates via res.locals
-  // Clone the flash object to avoid reference issues
+  
+  
   res.locals.flash = { ...req.session.flash };
 
-  // Clear flash messages after making them available
-  // This ensures they're only shown once
+  
+  
   delete req.session.flash;
 
-  // Add flash method to request object
+  
   req.flash = (type, message) => {
-    // Ensure session.flash exists
+    
     if (!req.session.flash) {
       req.session.flash = {};
     }
-    // If called with just type, return messages of that type (getter)
+    
     if (message === undefined) {
       return req.session.flash[type] || [];
     }
 
-    // Otherwise, add message (setter)
+    
     if (!req.session.flash[type]) {
       req.session.flash[type] = [];
     }
@@ -567,19 +567,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// Request logging middleware
+
 app.use(logger.requestLogger());
 
-// Initialize Passport
+
 app.use(passport.initialize());
 app.use(passport.session());
 
-// CSRF Protection (must be after session middleware)
+
 const csrfTokens = new csrf();
 const csrfProtection = (req, res, next) => {
   if (!req.session.csrfSecret) {
     req.session.csrfSecret = csrfTokens.secretSync();
-    // Force session save when CSRF secret is created
+    
     req.session.save((err) => {
       if (err) {
         logger.error('Failed to save session with CSRF secret', {
@@ -601,7 +601,7 @@ const csrfProtection = (req, res, next) => {
 
   const token = req.body._csrf || req.headers['x-csrf-token'];
 
-  // Debug CSRF token issues
+  
   logger.debug('CSRF Debug', {
     hasSession: !!req.session,
     hasSecret: !!req.session?.csrfSecret,
@@ -621,8 +621,8 @@ const csrfProtection = (req, res, next) => {
       secretPreview: req.session?.csrfSecret?.substring(0, 8) + '...',
       userAgent: req.get('User-Agent'),
       sessionId: req.sessionID,
-      tokenFull: token, // Log full token for debugging
-      secretFull: req.session?.csrfSecret, // Log full secret for debugging
+      tokenFull: token, 
+      secretFull: req.session?.csrfSecret, 
     });
     const err = new Error('Invalid CSRF token');
     err.code = 'EBADCSRFTOKEN';
@@ -633,15 +633,15 @@ const csrfProtection = (req, res, next) => {
   next();
 };
 
-// Record user activity for every authenticated request
+
 app.use((req, res, next) => {
   recordActivity(req);
   next();
 });
 
-// ============ MIDDLEWARE FUNCTIONS ============
 
-// Middleware to protect routes
+
+
 function ensureAuth(req, res, next) {
   if (req.user || (req.isAuthenticated && req.isAuthenticated())) {
     return next();
@@ -649,7 +649,7 @@ function ensureAuth(req, res, next) {
   res.redirect('/login');
 }
 
-// API middleware to ensure authentication
+
 function ensureAuthAPI(req, res, next) {
   if (req.isAuthenticated()) {
     return next();
@@ -657,7 +657,7 @@ function ensureAuthAPI(req, res, next) {
   res.status(401).json({ error: 'Unauthorized' });
 }
 
-// Middleware to ensure admin
+
 function ensureAdmin(req, res, next) {
   if (req.user && req.user.role === 'admin') {
     return next();
@@ -665,7 +665,7 @@ function ensureAdmin(req, res, next) {
   res.status(403).send('Access denied');
 }
 
-// Rate limiting middleware for admin requests
+
 function rateLimitAdminRequest(req, res, next) {
   const userKey = req.user._id;
   const attempts = adminCodeAttempts.get(userKey) || {
@@ -673,13 +673,13 @@ function rateLimitAdminRequest(req, res, next) {
     firstAttempt: Date.now(),
   };
 
-  // Reset if more than 30 minutes since first attempt
+  
   if (Date.now() - attempts.firstAttempt > 30 * 60 * 1000) {
     attempts.count = 0;
     attempts.firstAttempt = Date.now();
   }
 
-  // Block if too many attempts
+  
   if (attempts.count >= 5) {
     logger.warn('User blocked from admin requests', {
       email: req.user.email,
@@ -742,7 +742,7 @@ const deps = {
   passport,
 };
 
-// Database health check endpoint
+
 const { healthCheck } = require('./db/retry-wrapper');
 
 app.get('/health/db', async (req, res) => {
@@ -761,12 +761,12 @@ app.get('/health/db', async (req, res) => {
   }
 });
 
-// Health monitoring UI page
+
 app.get('/health', (req, res) => {
   res.render('health');
 });
 
-// General health check API endpoint
+
 app.get('/api/health', async (req, res) => {
   try {
     const dbHealth = await healthCheck(pool);
@@ -795,20 +795,20 @@ authRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);
 
-// Icon routes for iOS/Safari compatibility
+
 app.get('/favicon.ico', (req, res) => {
   res.redirect('/icons/ios/32.png');
 });
 
 app.get('/apple-touch-icon.png', (req, res) => {
-  res.redirect('/icons/ios/180.png'); // Standard iOS touch icon size
+  res.redirect('/icons/ios/180.png'); 
 });
 
 app.get('/apple-touch-icon-precomposed.png', (req, res) => {
   res.redirect('/icons/ios/180.png');
 });
 
-// Additional common iOS icon sizes
+
 app.get('/apple-touch-icon-120x120.png', (req, res) => {
   res.redirect('/icons/ios/120.png');
 });
@@ -821,12 +821,12 @@ app.get('/apple-touch-icon-180x180.png', (req, res) => {
   res.redirect('/icons/ios/180.png');
 });
 
-// 404 handler for unmatched routes
+
 app.use(notFoundHandler);
 
-// Centralized error handling middleware
+
 app.use((err, req, res, next) => {
-  // Check if headers were already sent
+  
   if (res.headersSent) {
     logger.error('Headers already sent, cannot send error response', {
       error: err.message,
@@ -834,11 +834,11 @@ app.use((err, req, res, next) => {
     return;
   }
 
-  // Use centralized error handler
+  
   errorHandler(err, req, res, next);
 });
 
-// Start server once database is ready
+
 const PORT = process.env.PORT || 3000;
 ready
   .then(() => {

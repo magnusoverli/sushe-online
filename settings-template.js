@@ -6,7 +6,7 @@ const {
 } = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
-// Reusable Settings Card Component
+
 const settingsCard = (title, icon, children, className = '') => `
   <div class="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden ${className}">
     <div class="p-4 lg:p-6 border-b border-gray-800">
@@ -21,7 +21,7 @@ const settingsCard = (title, icon, children, className = '') => `
   </div>
 `;
 
-// Reusable Form Field Component
+
 const formField = (label, input, description = '') => `
   <div class="space-y-2">
     <label class="block text-sm font-medium text-gray-300">${label}</label>
@@ -30,7 +30,7 @@ const formField = (label, input, description = '') => `
   </div>
 `;
 
-// Reusable Button Component
+
 const button = (
   text,
   onClick = '',
@@ -46,7 +46,7 @@ const button = (
   </button>
 `;
 
-// Reusable Input Component
+
 const input = (
   type,
   id,
@@ -65,7 +65,7 @@ const input = (
   >
 `;
 
-// Reusable User Avatar Component
+
 const userAvatar = (username, size = 'w-12 h-12', textSize = 'text-lg') => `
   <div class="${size} rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
     <span class="text-white font-bold ${textSize}">
@@ -74,7 +74,7 @@ const userAvatar = (username, size = 'w-12 h-12', textSize = 'text-lg') => `
   </div>
 `;
 
-// Reusable User Card Component
+
 const userCard = (user, actions = '', isCurrentUser = false) => `
   <div class="bg-gray-800 rounded-lg p-4 sm:p-5 border border-gray-700 hover:border-gray-600 transition-colors">
     <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -110,7 +110,7 @@ const userCard = (user, actions = '', isCurrentUser = false) => `
   </div>
 `;
 
-// Account Information Section
+
 const accountInfoSection = (user) =>
   settingsCard(
     'Account Information',
@@ -165,7 +165,7 @@ const accountInfoSection = (user) =>
   `
   );
 
-// Password Change Section
+
 const passwordSection = (req) =>
   settingsCard(
     'Change Password',
@@ -218,7 +218,7 @@ const passwordSection = (req) =>
   `
   );
 
-// Theme Settings Section
+
 const themeSection = (user) =>
   settingsCard(
     'Theme & Appearance',
@@ -275,7 +275,7 @@ const themeSection = (user) =>
   `
   );
 
-// Music Services Section
+
 const musicServicesSection = (user, spotifyValid, tidalValid) =>
   settingsCard(
     'Music Services',
@@ -362,7 +362,7 @@ const musicServicesSection = (user, spotifyValid, tidalValid) =>
   `
   );
 
-// Statistics Section
+
 const statisticsSection = (userStats) =>
   settingsCard(
     'Your Statistics',
@@ -381,7 +381,7 @@ const statisticsSection = (userStats) =>
   `
   );
 
-// Admin Request Section
+
 const adminRequestSection = (req) =>
   settingsCard(
     'Admin Access',
@@ -413,7 +413,7 @@ const adminRequestSection = (req) =>
   `
   );
 
-// Admin Panel Section
+
 const adminPanelSection = (stats, adminData) =>
   settingsCard(
     'Admin Panel',
@@ -505,7 +505,7 @@ const adminPanelSection = (stats, adminData) =>
     'lg:col-span-full'
   );
 
-// Flash Messages Component
+
 const flashMessages = (flash) => `
   ${
     flash.error && flash.error.length
@@ -534,7 +534,7 @@ const flashMessages = (flash) => `
   }
 `;
 
-// Main Settings Template
+
 const settingsTemplate = (req, options) => {
   const { user, userStats, stats, adminData, flash, spotifyValid, tidalValid } =
     options;
@@ -1082,7 +1082,7 @@ const settingsTemplate = (req, options) => {
     ${
       user.role === 'admin'
         ? `
-      // Admin functions
+      
       async function makeAdmin(userId) {
         if (!confirm('Grant admin privileges to this user?')) return;
         

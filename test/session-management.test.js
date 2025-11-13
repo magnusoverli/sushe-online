@@ -8,7 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// Mock logger to avoid file operations
+
 const mockLogger = {
   error: () => {},
   warn: () => {},
@@ -16,12 +16,12 @@ const mockLogger = {
   debug: () => {},
 };
 
-// Mock the logger module
+
 require.cache[require.resolve('../utils/logger')] = {
   exports: mockLogger,
 };
 
-// Create temporary directory for session tests
+
 const tempSessionDir = path.join(os.tmpdir(), 'test-sessions-' + Date.now());
 
 function createTestApp(sessionConfig = {}) {
@@ -30,7 +30,7 @@ function createTestApp(sessionConfig = {}) {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Session configuration
+  
   const defaultSessionConfig = {
     secret: 'test-session-secret',
     resave: false,
@@ -38,18 +38,18 @@ function createTestApp(sessionConfig = {}) {
     cookie: {
       secure: false,
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      maxAge: 24 * 60 * 60 * 1000, 
     },
     store: new FileStore({
       path: tempSessionDir,
-      ttl: 86400, // 1 day
-      reapInterval: 3600, // 1 hour
+      ttl: 86400, 
+      reapInterval: 3600, 
     }),
   };
 
   app.use(session({ ...defaultSessionConfig, ...sessionConfig }));
 
-  // Test routes
+  
   app.get('/set-session', (req, res) => {
     req.session.testData = 'session-value';
     req.session.userId = 'test-user-123';
@@ -70,7 +70,7 @@ function createTestApp(sessionConfig = {}) {
   app.post('/login', (req, res) => {
     const { username, password } = req.body;
 
-    // Simple mock authentication
+    
     if (username === 'testuser' && password === 'password123') {
       req.session.user = {
         id: 'user-123',
@@ -156,13 +156,13 @@ test('Session should be created and persist across requests', async () => {
   const app = createTestApp();
   const agent = request.agent(app);
 
-  // Set session data
+  
   const setResponse = await agent.get('/set-session').expect(200);
 
   assert.strictEqual(setResponse.body.success, true);
   assert.ok(setResponse.body.sessionId);
 
-  // Get session data in subsequent request
+  
   const getResponse = await agent.get('/get-session').expect(200);
 
   assert.strictEqual(getResponse.body.testData, 'session-value');
@@ -174,11 +174,11 @@ test('Session should be created and persist across requests', async () => {
 test('Session should not persist across different clients', async () => {
   const app = createTestApp();
 
-  // First client sets session
+  
   const agent1 = request.agent(app);
   await agent1.get('/set-session').expect(200);
 
-  // Second client should not see first client's session
+  
   const agent2 = request.agent(app);
   const response = await agent2.get('/get-session').expect(200);
 
@@ -190,7 +190,7 @@ test('User authentication should work with sessions', async () => {
   const app = createTestApp();
   const agent = request.agent(app);
 
-  // Login
+  
   const loginResponse = await agent
     .post('/login')
     .send({ username: 'testuser', password: 'password123' })
@@ -198,7 +198,7 @@ test('User authentication should work with sessions', async () => {
 
   assert.strictEqual(loginResponse.body.success, true);
 
-  // Access protected route
+  
   const profileResponse = await agent.get('/profile').expect(200);
 
   assert.strictEqual(profileResponse.body.user.username, 'testuser');
@@ -229,21 +229,21 @@ test('Session logout should destroy session', async () => {
   const app = createTestApp();
   const agent = request.agent(app);
 
-  // Login first
+  
   await agent
     .post('/login')
     .send({ username: 'testuser', password: 'password123' })
     .expect(200);
 
-  // Verify authenticated
+  
   await agent.get('/profile').expect(200);
 
-  // Logout
+  
   const logoutResponse = await agent.post('/logout').expect(200);
 
   assert.strictEqual(logoutResponse.body.success, true);
 
-  // Should no longer be authenticated
+  
   await agent.get('/profile').expect(401);
 });
 
@@ -255,7 +255,7 @@ test('Session should have proper cookie configuration', async () => {
 
   assert.ok(response.body.cookie);
   assert.strictEqual(response.body.cookie.httpOnly, true);
-  assert.strictEqual(response.body.cookie.secure, false); // Test environment
+  assert.strictEqual(response.body.cookie.secure, false); 
   assert.ok(response.body.cookie.maxAge || response.body.cookie._expires);
 });
 
@@ -263,12 +263,12 @@ test('Session regeneration should work', async () => {
   const app = createTestApp();
   const agent = request.agent(app);
 
-  // Set initial session
+  
   const initialResponse = await agent.get('/set-session').expect(200);
 
   const oldSessionId = initialResponse.body.sessionId;
 
-  // Regenerate session
+  
   const regenerateResponse = await agent
     .post('/regenerate-session')
     .expect(200);
@@ -277,7 +277,7 @@ test('Session regeneration should work', async () => {
   assert.strictEqual(regenerateResponse.body.oldSessionId, oldSessionId);
   assert.notStrictEqual(regenerateResponse.body.newSessionId, oldSessionId);
 
-  // Verify session data persists after regeneration
+  
   const getResponse = await agent.get('/get-session').expect(200);
 
   assert.strictEqual(
@@ -297,18 +297,18 @@ test('Session save should work explicitly', async () => {
 
   assert.strictEqual(response.body.success, true);
 
-  // Verify data was saved
+  
   const getResponse = await agent.get('/get-session').expect(200);
 
-  // Note: customData won't be in get-session response as it's not explicitly returned,
-  // but the session save operation should have succeeded
+  
+  
   assert.ok(getResponse.body.sessionId);
 });
 
 test('Session with custom configuration should work', async () => {
   const customConfig = {
     cookie: {
-      maxAge: 60000, // 1 minute
+      maxAge: 60000, 
       secure: false,
       httpOnly: true,
     },
@@ -331,42 +331,42 @@ test('Session store should handle file operations', async () => {
   const app = createTestApp();
   const agent = request.agent(app);
 
-  // Create session
+  
   const response = await agent.get('/set-session').expect(200);
 
   const sessionId = response.body.sessionId;
 
-  // Check if session file was created
+  
   const _sessionFile = path.join(tempSessionDir, sessionId + '.json');
 
-  // Give it a moment for file to be written
+  
   await new Promise((resolve) => setTimeout(resolve, 100));
 
-  // Note: In a real test environment, you might want to check if the file exists
-  // For this mock test, we'll just verify the session works
+  
+  
   assert.ok(sessionId);
 });
 
 test('Concurrent sessions should be independent', async () => {
   const app = createTestApp();
 
-  // Create multiple agents (simulating different browsers/clients)
+  
   const agent1 = request.agent(app);
   const agent2 = request.agent(app);
   const agent3 = request.agent(app);
 
-  // Each agent logs in as different user
+  
   await agent1
     .post('/login')
     .send({ username: 'testuser', password: 'password123' });
 
-  // Agent 2 and 3 don't log in
+  
 
-  // Verify agent 1 is authenticated
+  
   const profile1 = await agent1.get('/profile').expect(200);
   assert.strictEqual(profile1.body.user.username, 'testuser');
 
-  // Verify agent 2 and 3 are not authenticated
+  
   await agent2.get('/profile').expect(401);
   await agent3.get('/profile').expect(401);
 });
@@ -374,19 +374,19 @@ test('Concurrent sessions should be independent', async () => {
 test('Session should handle malformed session data gracefully', async () => {
   const app = createTestApp();
 
-  // This test verifies that the session middleware handles edge cases
-  // In a real scenario, you might corrupt a session file and test recovery
+  
+  
 
   const response = await request(app).get('/get-session').expect(200);
 
-  // Should get a new session even if no prior session exists
+  
   assert.ok(response.body.sessionId);
   assert.strictEqual(response.body.hasSession, true);
 });
 
-// Cleanup after tests
+
 test.after(async () => {
-  // Clean up temporary session directory
+  
   try {
     if (fs.existsSync(tempSessionDir)) {
       const files = fs.readdirSync(tempSessionDir);
@@ -396,6 +396,6 @@ test.after(async () => {
       fs.rmdirSync(tempSessionDir);
     }
   } catch (_err) {
-    // Ignore cleanup errors in tests
+    
   }
 });

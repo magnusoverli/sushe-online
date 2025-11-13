@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Log levels
+
 const LogLevels = {
   ERROR: 0,
   WARN: 1,
@@ -18,18 +18,18 @@ class Logger {
     this.enableConsole = options.enableConsole !== false;
     this.enableFile = options.enableFile !== false;
 
-    // Async file writing queue
+    
     this.writeQueue = [];
     this.isWriting = false;
-    this.batchSize = 50; // Write logs in batches for better performance
-    this.flushInterval = 1000; // Flush every 1 second
+    this.batchSize = 50; 
+    this.flushInterval = 1000; 
 
-    // Ensure log directory exists
+    
     if (this.enableFile && !fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
     }
 
-    // Start periodic flush for async logging
+    
     if (this.enableFile) {
       this.flushTimer = setInterval(() => {
         this.flushWriteQueue();
@@ -59,10 +59,10 @@ class Logger {
     const filepath = path.join(this.logDir, filename);
     const logLine = formattedMessage + '\n';
 
-    // Add to async write queue instead of synchronous write
+    
     this.writeQueue.push({ filepath, logLine });
 
-    // Flush immediately if queue is getting large
+    
     if (this.writeQueue.length >= this.batchSize) {
       this.flushWriteQueue();
     }
@@ -74,7 +74,7 @@ class Logger {
     this.isWriting = true;
     const batch = this.writeQueue.splice(0, this.batchSize);
 
-    // Group by filepath for efficient writing
+    
     const fileGroups = new Map();
     for (const { filepath, logLine } of batch) {
       if (!fileGroups.has(filepath)) {
@@ -83,17 +83,17 @@ class Logger {
       fileGroups.get(filepath).push(logLine);
     }
 
-    // Write all files asynchronously
+    
     const writePromises = Array.from(fileGroups.entries()).map(
       async ([filepath, lines]) => {
         try {
           const content = lines.join('');
           await fs.promises.appendFile(filepath, content);
         } catch (err) {
-          // Fallback to console if file write fails
-          // eslint-disable-next-line no-console
+          
+          
           console.error('Failed to write to log file:', err);
-          // eslint-disable-next-line no-console
+          
           console.error('Lost log entries:', lines.length);
         }
       }
@@ -102,25 +102,25 @@ class Logger {
     try {
       await Promise.all(writePromises);
     } catch (err) {
-      // eslint-disable-next-line no-console
+      
       console.error('Batch log write failed:', err);
     } finally {
       this.isWriting = false;
 
-      // Process any new items that arrived during write
+      
       if (this.writeQueue.length > 0) {
         setImmediate(() => this.flushWriteQueue());
       }
     }
   }
 
-  // Graceful shutdown - flush remaining logs
+  
   async shutdown() {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
     }
 
-    // Flush any remaining logs
+    
     while (this.writeQueue.length > 0) {
       await this.flushWriteQueue();
     }
@@ -132,10 +132,10 @@ class Logger {
     const timestamp = new Date().toISOString();
     const levelName = LogLevelNames[level];
     const colors = {
-      ERROR: '\x1b[31m', // Red
-      WARN: '\x1b[33m', // Yellow
-      INFO: '\x1b[36m', // Cyan
-      DEBUG: '\x1b[90m', // Gray
+      ERROR: '\x1b[31m', 
+      WARN: '\x1b[33m', 
+      INFO: '\x1b[36m', 
+      DEBUG: '\x1b[90m', 
     };
     const reset = '\x1b[0m';
 
@@ -143,15 +143,15 @@ class Logger {
     const prefix = `${color}[${timestamp}] ${levelName}:${reset}`;
 
     if (typeof message === 'object') {
-      // eslint-disable-next-line no-console
+      
       console.log(prefix, JSON.stringify(message, null, 2));
     } else {
-      // eslint-disable-next-line no-console
+      
       console.log(prefix, message);
     }
 
     if (Object.keys(meta).length > 0) {
-      // eslint-disable-next-line no-console
+      
       console.log('  Meta:', JSON.stringify(meta, null, 2));
     }
   }
@@ -181,7 +181,7 @@ class Logger {
     this.log(LogLevels.DEBUG, message, meta);
   }
 
-  // Request logging middleware
+  
   requestLogger() {
     return (req, res, next) => {
       const start = Date.now();
@@ -210,7 +210,7 @@ class Logger {
   }
 }
 
-// Create default logger instance
+
 const logger = new Logger({
   level: process.env.LOG_LEVEL
     ? LogLevels[process.env.LOG_LEVEL.toUpperCase()]

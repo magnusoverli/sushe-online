@@ -26,9 +26,9 @@ module.exports = (app, deps) => {
     ? path.join(binDir, 'pg_restore')
     : process.env.PG_RESTORE || 'pg_restore';
 
-  // ============ ADMIN API ENDPOINTS ============
+  
 
-  // Admin: Delete user
+  
   app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
     const { userId } = req.body;
 
@@ -36,14 +36,14 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'Cannot delete yourself' });
     }
 
-    // Delete user's lists first
+    
     lists.remove({ userId }, { multi: true }, (err) => {
       if (err) {
         logger.error('Error deleting user lists:', err);
         return res.status(500).json({ error: 'Error deleting user data' });
       }
 
-      // Then delete the user
+      
       users.remove({ _id: userId }, {}, (err, numRemoved) => {
         if (err) {
           logger.error('Error deleting user:', err);
@@ -60,13 +60,13 @@ module.exports = (app, deps) => {
     });
   });
 
-  // ===== Music Service Authentication =====
+  
   app.get('/auth/spotify', ensureAuth, (req, res) => {
     const state = crypto.randomBytes(8).toString('hex');
     logger.info('Starting Spotify OAuth flow, state:', state);
     req.session.spotifyState = state;
 
-    // Store returnTo path for after OAuth completes
+    
     if (req.query.returnTo) {
       req.session.spotifyReturnTo = req.query.returnTo;
     }
@@ -139,9 +139,9 @@ module.exports = (app, deps) => {
       req.flash('error', 'Failed to authenticate with Spotify');
     }
 
-    // Redirect back to where the user was (for automatic reconnects) or settings
+    
     const returnTo = req.session.spotifyReturnTo || '/settings';
-    delete req.session.spotifyReturnTo; // Clean up
+    delete req.session.spotifyReturnTo; 
     res.redirect(returnTo);
   });
 
@@ -160,7 +160,7 @@ module.exports = (app, deps) => {
     res.redirect('/settings');
   });
 
-  // Tidal OAuth flow
+  
   app.get('/auth/tidal', ensureAuth, (req, res) => {
     const state = crypto.randomBytes(8).toString('hex');
     const verifier = crypto.randomBytes(32).toString('base64url');
@@ -170,16 +170,16 @@ module.exports = (app, deps) => {
       .digest('base64')
       .replace(/=/g, '')
       .replace(/\+/g, '-')
-      .replace(/\//g, '_');
+      .replace(/\
     req.session.tidalState = state;
     req.session.tidalVerifier = verifier;
-    // The TIDAL application grants these scopes:
-    //   user.read, collection.read, search.read, playlists.write,
-    //   playlists.read, entitlements.read, collection.write, playback,
-    //   recommendations.read, search.write
-    // The integration requests all available scopes. The `offline_access` scope
-    // is not available to this app, so tokens cannot be refreshed and must be
-    // re-authorized when they expire.
+    
+    
+    
+    
+    
+    
+    
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.TIDAL_CLIENT_ID || '',
@@ -289,7 +289,7 @@ module.exports = (app, deps) => {
     res.redirect('/settings');
   });
 
-  // Admin: Make user admin
+  
   app.post('/admin/make-admin', ensureAuth, ensureAdmin, (req, res) => {
     const { userId } = req.body;
 
@@ -317,11 +317,11 @@ module.exports = (app, deps) => {
     );
   });
 
-  // Admin: Revoke admin
+  
   app.post('/admin/revoke-admin', ensureAuth, ensureAdmin, (req, res) => {
     const { userId } = req.body;
 
-    // Prevent revoking your own admin rights
+    
     if (userId === req.user._id) {
       return res
         .status(400)
@@ -352,7 +352,7 @@ module.exports = (app, deps) => {
     );
   });
 
-  // Admin: Get user lists
+  
   app.get(
     '/admin/user-lists/:userId',
     ensureAuth,
@@ -381,11 +381,11 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Admin: Backup entire database using pg_dump
+  
   app.get('/admin/backup', ensureAuth, ensureAdmin, (req, res) => {
     const dump = spawn(pgDumpCmd, ['-Fc', process.env.DATABASE_URL]);
 
-    // Collect backup data in memory to verify before sending
+    
     const chunks = [];
     const stderrChunks = [];
 
@@ -394,8 +394,8 @@ module.exports = (app, deps) => {
     });
 
     dump.stderr.on('data', (d) => {
-      // Collect stderr output but don't treat warnings as errors
-      // pg_dump writes warnings to stderr even on successful dumps
+      
+      
       stderrChunks.push(d.toString());
     });
 
@@ -407,18 +407,18 @@ module.exports = (app, deps) => {
     });
 
     dump.on('close', (code) => {
-      // Log any stderr output (warnings, notices, etc.)
+      
       if (stderrChunks.length > 0) {
         const stderrOutput = stderrChunks.join('');
         if (code !== 0) {
           logger.error('pg_dump error output:', stderrOutput);
         } else {
-          // Log warnings but don't fail the backup
+          
           logger.warn('pg_dump warnings:', stderrOutput);
         }
       }
 
-      // Only fail if exit code is non-zero
+      
       if (code !== 0) {
         logger.error('pg_dump exited with code', code);
         if (!res.headersSent) {
@@ -429,7 +429,7 @@ module.exports = (app, deps) => {
 
       const backup = Buffer.concat(chunks);
 
-      // Verify backup integrity by checking magic bytes
+      
       if (backup.length < 5 || backup.slice(0, 5).toString() !== 'PGDMP') {
         logger.error('Backup verification failed: invalid format');
         if (!res.headersSent) {
@@ -438,7 +438,7 @@ module.exports = (app, deps) => {
         return;
       }
 
-      // Backup is valid, send to user
+      
       logger.info(
         `Backup created successfully (${(backup.length / 1024 / 1024).toFixed(2)} MB)`
       );
@@ -451,7 +451,7 @@ module.exports = (app, deps) => {
     });
   });
 
-  // Admin: Restore database from pg_dump file
+  
 
   app.post(
     '/admin/restore',
@@ -465,7 +465,7 @@ module.exports = (app, deps) => {
 
       const tmpFile = req.file.path;
 
-      // Validate that the file is a valid PostgreSQL dump file
+      
       try {
         const header = Buffer.alloc(5);
         const fd = fs.openSync(tmpFile, 'r');
@@ -507,7 +507,7 @@ module.exports = (app, deps) => {
       restore.on('exit', async (code) => {
         fs.unlink(tmpFile, () => {});
         if (code === 0) {
-          // Clear all sessions after restore using direct SQL
+          
           try {
             const { pool } = deps;
             await pool.query('DELETE FROM session');
@@ -522,12 +522,12 @@ module.exports = (app, deps) => {
               'Database restored successfully. Server will restart in 3 seconds...',
           });
 
-          // Schedule server restart to clear prepared statement cache
+          
           logger.info(
             'Database restored successfully. Restarting server to clear prepared statement cache...'
           );
           setTimeout(() => {
-            process.exit(0); // Exit cleanly, Docker/nodemon will restart
+            process.exit(0); 
           }, 3000);
         } else {
           logger.error('pg_restore exited with code', code);
@@ -537,7 +537,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Admin status endpoint (for debugging)
+  
   app.get('/api/admin/status', ensureAuth, (req, res) => {
     res.json({
       isAdmin: req.user.role === 'admin',

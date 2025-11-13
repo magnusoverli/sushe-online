@@ -1,24 +1,24 @@
-// MusicBrainz API integration
-const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
-const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
-const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
 
-// Rate limiting is now handled on the backend, but we'll keep a small delay for the UI
+const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; 
+const WIKIDATA_PROXY = '/api/proxy/wikidata'; 
+const DEEZER_PROXY = '/api/proxy/deezer'; 
+
+
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 100; // Small delay for UI responsiveness
+const MIN_REQUEST_INTERVAL = 100; 
 
 let searchMode = 'artist';
 
-// Cache for searches to avoid duplicate requests
+
 const deezerCache = new Map();
 
-// Cache for artist images to avoid duplicate requests (keyed by artist ID)
+
 const artistImageCache = new Map();
 
-// Concurrent request limits for Deezer
+
 const DEEZER_BATCH_SIZE = 15;
 
-// Queue for managing concurrent requests
+
 class RequestQueue {
   constructor(batchSize) {
     this.batchSize = batchSize;
@@ -51,20 +51,20 @@ class RequestQueue {
 
 const deezerQueue = new RequestQueue(DEEZER_BATCH_SIZE);
 
-// Modal management
+
 let currentArtist = null;
 let modal = null;
 let modalElements = {};
 let currentLoadingController = null;
 
-// Preload cache for hovering
+
 const preloadCache = new Map();
 let currentPreloadController = null;
 
-// Browser Connection Optimization
+
 function warmupConnections() {
   const cdns = [
-    'https://e-cdns-images.dzcdn.net', // Deezer CDN
+    'https://e-cdns-images.dzcdn.net', 
   ];
 
   cdns.forEach((origin) => {
@@ -79,13 +79,13 @@ function warmupConnections() {
   });
 }
 
-// Fetch via MusicBrainz proxy (rate limiting handled on backend)
-// priority: 'high' (user searches), 'normal' (displayed data), 'low' (background images)
+
+
 async function rateLimitedFetch(endpoint, priority = 'normal') {
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
 
-  // Small UI delay to prevent overwhelming the interface
+  
   if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
     await new Promise((resolve) =>
       setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest)
@@ -96,7 +96,7 @@ async function rateLimitedFetch(endpoint, priority = 'normal') {
 
   const url = `${MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(endpoint)}&priority=${priority}`;
   const response = await fetch(url, {
-    credentials: 'same-origin', // Include cookies for authentication
+    credentials: 'same-origin', 
   });
 
   if (!response.ok) {
@@ -106,16 +106,16 @@ async function rateLimitedFetch(endpoint, priority = 'normal') {
   return response.json();
 }
 
-// Search for artists
+
 async function searchArtists(query) {
-  // Request aliases and tags for better popularity scoring
+  
   const endpoint = `artist/?query=${encodeURIComponent(query)}&fmt=json&limit=20&inc=aliases+tags`;
-  // HIGH priority: user-initiated search
+  
   const data = await rateLimitedFetch(endpoint, 'high');
   return data.artists || [];
 }
 
-// Add this function to sort and prioritize search results
+
 function prioritizeSearchResults(artists, searchQuery) {
   const query = searchQuery.toLowerCase();
 
@@ -124,32 +124,32 @@ function prioritizeSearchResults(artists, searchQuery) {
       let score = 0;
       const displayName = formatArtistDisplayName(artist);
 
-      // HIGHEST priority: MusicBrainz native score (includes popularity/quality)
-      // This score is typically 0-100, multiply by 10 to make it most significant
+      
+      
       if (artist.score) {
         score += artist.score * 10;
       }
 
-      // Popularity indicators: Tags count (more tags = better documented = more popular)
+      
       if (artist.tags && Array.isArray(artist.tags)) {
         const tagBonus = Math.min(artist.tags.length * 5, 50);
         score += tagBonus;
       }
 
-      // Popularity indicator: Has Wikidata link (well-documented artists)
-      // Note: We don't have this in search results, but keeping for future enhancement
+      
+      
 
-      // High priority: Exact name match in Latin
+      
       if (artist.name.toLowerCase() === query) {
         score += 100;
       }
 
-      // High priority: Latin script name
+      
       if (!hasNonLatinCharacters(artist.name)) {
         score += 50;
       }
 
-      // Medium priority: Has Latin transliteration
+      
       if (
         displayName.primary !== displayName.original &&
         !displayName.warning
@@ -157,12 +157,12 @@ function prioritizeSearchResults(artists, searchQuery) {
         score += 30;
       }
 
-      // Medium priority: Name contains search query
+      
       if (artist.name.toLowerCase().includes(query)) {
         score += 20;
       }
 
-      // Low priority: Disambiguation contains query
+      
       if (
         artist.disambiguation &&
         artist.disambiguation.toLowerCase().includes(query)
@@ -181,10 +181,10 @@ function prioritizeSearchResults(artists, searchQuery) {
     .sort((a, b) => b._searchScore - a._searchScore);
 }
 
-// Get release groups - ONLY pure Albums and EPs (no secondary types)
+
 async function getArtistReleaseGroups(artistId) {
   const endpoint = `release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
-  // HIGH priority: user clicked on artist, wants to see albums
+  
   const data = await rateLimitedFetch(endpoint, 'high');
 
   let releaseGroups = data['release-groups'] || [];
@@ -201,7 +201,7 @@ async function getArtistReleaseGroups(artistId) {
       (primaryType === 'Album' || primaryType === 'EP') &&
       secondaryTypes.length === 0;
 
-    // Exclude releases without a release date
+    
     if (!releaseDate) {
       return false;
     }
@@ -231,7 +231,7 @@ async function getArtistReleaseGroups(artistId) {
   return releaseGroups;
 }
 
-// Search Deezer for album artwork (via proxy)
+
 async function searchDeezerArtwork(artistName, albumName) {
   const cacheKey = `${artistName}::${albumName}`.toLowerCase();
 
@@ -247,7 +247,7 @@ async function searchDeezerArtwork(artistName, albumName) {
       const url = `${DEEZER_PROXY}?q=${encodeURIComponent(searchQuery)}`;
 
       const response = await fetch(url, {
-        credentials: 'same-origin', // Include cookies for authentication
+        credentials: 'same-origin', 
       });
 
       if (!response.ok) {
@@ -308,7 +308,7 @@ async function searchDeezerArtwork(artistName, albumName) {
   });
 }
 
-// Get cover art from Deezer
+
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   if (!artistName || !albumTitle) {
     console.warn(
@@ -331,13 +331,13 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   }
 }
 
-// Convert date to year format
+
 function formatReleaseDate(date) {
   if (!date) return '';
   return date.split('-')[0];
 }
 
-// Optimization 1: Preload on hover
+
 async function preloadArtistAlbums(artist) {
   if (preloadCache.has(artist.id)) {
     return preloadCache.get(artist.id);
@@ -355,7 +355,7 @@ async function preloadArtistAlbums(artist) {
     if (!currentPreloadController.signal.aborted) {
       preloadCache.set(artist.id, releaseGroups);
 
-      // Preload first 6 album covers
+      
       releaseGroups.slice(0, 6).forEach(async (rg) => {
         const coverArt = await getCoverArt(rg.id, artist.name, rg.title);
         if (coverArt) {
@@ -367,26 +367,26 @@ async function preloadArtistAlbums(artist) {
 
     return releaseGroups;
   } catch (_error) {
-    // Silently handle AbortError
+    
     return null;
   }
 }
 
-// Optimization 2: Intersection Observer with background loading
+
 let imageObserver = null;
 let isBackgroundLoading = false;
 
 function setupIntersectionObserver(releaseGroups, artistName) {
-  // Clean up existing observer
+  
   if (imageObserver) {
     imageObserver.disconnect();
   }
 
-  // Track which albums have been loaded
+  
   const loadedAlbums = new Set();
   const loadingAlbums = new Set();
 
-  // Function to load a specific album's cover
+  
   const loadAlbumCover = async (index) => {
     if (loadedAlbums.has(index) || loadingAlbums.has(index)) {
       return;
@@ -410,10 +410,10 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       );
 
       if (coverArt && !currentLoadingController?.signal.aborted) {
-        // Store the cover URL immediately
+        
         releaseGroups[index].coverArt = coverArt;
 
-        // Then update the DOM
+        
         const isMobile = window.innerWidth < 1024;
         coverContainer.innerHTML = `
           <img src="${coverArt}" 
@@ -429,19 +429,19 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       loadedAlbums.add(index);
       loadingAlbums.delete(index);
     } catch (_error) {
-      // Error loading cover - mark as loaded to avoid retry
+      
       loadedAlbums.add(index);
       loadingAlbums.delete(index);
     }
   };
 
-  // Function to start background loading of remaining images
+  
   const startBackgroundLoading = async () => {
     if (isBackgroundLoading || currentLoadingController?.signal.aborted) return;
 
     isBackgroundLoading = true;
 
-    // Get all unloaded albums
+    
     const unloadedIndexes = [];
     for (let i = 0; i < releaseGroups.length; i++) {
       if (!loadedAlbums.has(i) && !loadingAlbums.has(i)) {
@@ -449,29 +449,29 @@ function setupIntersectionObserver(releaseGroups, artistName) {
       }
     }
 
-    // Load ALL remaining albums in parallel (let the queue manage concurrency)
-    // This is much faster than sequential batches
+    
+    
     if (unloadedIndexes.length > 0) {
       const allPromises = unloadedIndexes.map((index) => loadAlbumCover(index));
 
-      // Wait for all to complete (the RequestQueue will handle rate limiting)
+      
       await Promise.allSettled(allPromises);
     }
 
     isBackgroundLoading = false;
   };
 
-  // Track visible images loaded
+  
   let visibleImagesLoaded = 0;
   let totalVisibleImages = 0;
 
-  // Collect intersecting albums for parallel loading
+  
   const pendingLoads = new Set();
   let loadTimer = null;
 
   imageObserver = new IntersectionObserver(
     (entries, observer) => {
-      // Collect all newly visible albums
+      
       const newlyVisible = [];
 
       entries.forEach((entry) => {
@@ -485,70 +485,70 @@ function setupIntersectionObserver(releaseGroups, artistName) {
             totalVisibleImages++;
           }
 
-          // Stop observing this element
+          
           observer.unobserve(albumEl);
         }
       });
 
-      // Clear existing timer
+      
       if (loadTimer) clearTimeout(loadTimer);
 
-      // Batch load all pending items with a small debounce
+      
       loadTimer = setTimeout(() => {
         if (pendingLoads.size > 0) {
-          // Load all pending albums in parallel
+          
           const toLoad = Array.from(pendingLoads);
           pendingLoads.clear();
 
           Promise.all(toLoad.map((index) => loadAlbumCover(index))).then(() => {
             visibleImagesLoaded += toLoad.length;
 
-            // Check if we should start background loading
+            
             if (
               visibleImagesLoaded >= totalVisibleImages &&
               visibleImagesLoaded > 0
             ) {
-              // Start loading remaining images immediately for better performance
+              
               startBackgroundLoading();
             }
           });
         }
-      }, 50); // Small debounce to batch multiple intersection events
+      }, 50); 
     },
     {
-      rootMargin: '100px', // Start loading 100px before entering viewport
+      rootMargin: '100px', 
       threshold: 0.01,
     }
   );
 
-  // Also start loading immediately for visible albums and background loading
+  
   setTimeout(() => {
-    // Force check for visible albums that might not have triggered intersection
+    
     const visibleAlbums = Array.from(
       modalElements.albumList.querySelectorAll('[data-album-index]')
     ).filter((el) => {
       const rect = el.getBoundingClientRect();
-      return rect.top < window.innerHeight + 100 && rect.bottom > -100; // Include near-visible
+      return rect.top < window.innerHeight + 100 && rect.bottom > -100; 
     });
 
-    // Get indexes of visible albums not yet loading
+    
     const albumIndexes = visibleAlbums
       .map((el) => parseInt(el.dataset.albumIndex))
       .filter((index) => !loadedAlbums.has(index) && !loadingAlbums.has(index));
 
     if (albumIndexes.length > 0) {
-      // Load all visible albums in parallel
+      
       Promise.all(albumIndexes.map((index) => loadAlbumCover(index))).then(
         () => {
-          // After visible albums are loaded, start background loading
+          
           startBackgroundLoading();
         }
       );
     } else if (visibleImagesLoaded > 0) {
-      // If some images already loaded via intersection, start background
+      
       startBackgroundLoading();
     }
-  }, 100); // Even faster initial check
+  }, 100); 
 
   return imageObserver;
 }
@@ -577,11 +577,11 @@ async function performSearch() {
         return;
       }
 
-      // Prioritize results to show Latin-script and better matches first
+      
       const prioritizedArtists = prioritizeSearchResults(artists, query);
       await displayArtistResults(prioritizedArtists);
     } else {
-      // Album search mode
+      
       const albums = await searchAlbums(query);
 
       if (albums.length === 0) {
@@ -605,12 +605,12 @@ async function displayDirectAlbumResults(releaseGroups) {
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
 
-  // Hide the back button since we're not coming from artist selection
+  
   if (modalElements.backToArtists) {
     modalElements.backToArtists.style.display = 'none';
   }
 
-  // Store releaseGroups globally
+  
   window.currentReleaseGroups = releaseGroups;
 
   modalElements.albumList.className = 'space-y-3';
@@ -627,7 +627,7 @@ async function displayDirectAlbumResults(releaseGroups) {
     albumEl.dataset.albumIndex = releaseGroups.indexOf(rg);
     albumEl.dataset.albumId = rg.id;
 
-    // Get artist credits for this release group
+    
     const artistCredits = rg['artist-credit'] || [];
     const artistNames = artistCredits.map(
       (credit) => credit.name || credit.artist?.name || 'Unknown Artist'
@@ -680,11 +680,11 @@ async function displayDirectAlbumResults(releaseGroups) {
       </div>
     `;
 
-    // Store artist info for album addition
+    
     rg._artistDisplay = artistDisplay;
-    rg._artistCredit = artistCredits[0]; // Use first artist for metadata
+    rg._artistCredit = artistCredits[0]; 
 
-    // Click handler
+    
     albumEl.onclick = async () => {
       const coverContainer = albumEl.querySelector('.album-cover-container');
       coverContainer.innerHTML = `
@@ -702,7 +702,7 @@ async function displayDirectAlbumResults(releaseGroups) {
         country: combinedCountries,
       };
 
-      // Load cover art if not already loaded
+      
       if (!rg.coverArt) {
         try {
           const coverArt = await getCoverArt(
@@ -714,7 +714,7 @@ async function displayDirectAlbumResults(releaseGroups) {
             rg.coverArt = coverArt;
           }
         } catch (_error) {
-          // Error loading cover - will try again later
+          
         }
       }
 
@@ -723,7 +723,7 @@ async function displayDirectAlbumResults(releaseGroups) {
 
     modalElements.albumList.appendChild(albumEl);
 
-    // Start lazy loading covers
+    
     requestAnimationFrame(() => {
       getCoverArt(rg.id, artistDisplay, rg.title).then((coverArt) => {
         if (coverArt && !currentLoadingController?.signal.aborted) {
@@ -753,7 +753,7 @@ async function displayDirectAlbumResults(releaseGroups) {
   }
 }
 
-// Initialize modal
+
 function initializeAddAlbumFeature() {
   modal = document.getElementById('addAlbumModal');
 
@@ -762,7 +762,7 @@ function initializeAddAlbumFeature() {
     return;
   }
 
-  // Single set of modal elements - no more mobile/desktop separation
+  
   modalElements = {
     artistSearchInput: document.getElementById('artistSearchInput'),
     searchArtistBtn: document.getElementById('searchArtistBtn'),
@@ -786,7 +786,7 @@ function initializeAddAlbumFeature() {
     cancelBtn: document.getElementById('cancelManualEntry'),
   };
 
-  // Check if all essential elements exist
+  
   const essentialElements = [
     'closeModalBtn',
     'searchArtistBtn',
@@ -801,7 +801,7 @@ function initializeAddAlbumFeature() {
     return;
   }
 
-  // Unified close button handler (works for both mobile back arrow and desktop X)
+  
   const setupCloseHandlers = () => {
     if (modalElements.closeModalBtn) {
       modalElements.closeModalBtn.onclick = closeAddAlbumModal;
@@ -812,14 +812,14 @@ function initializeAddAlbumFeature() {
   };
   setupCloseHandlers();
 
-  // Modal backdrop click handler - only on desktop
+  
   modal.onclick = (e) => {
     if (e.target === modal && window.innerWidth >= 1024) {
       closeAddAlbumModal();
     }
   };
 
-  // Search functionality - same for both mobile and desktop
+  
   modalElements.searchArtistBtn.onclick = performSearch;
   modalElements.artistSearchInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
@@ -827,7 +827,7 @@ function initializeAddAlbumFeature() {
     }
   };
 
-  // Back to artists button
+  
   if (modalElements.backToArtists) {
     modalElements.backToArtists.onclick = () => {
       if (currentLoadingController) {
@@ -839,7 +839,7 @@ function initializeAddAlbumFeature() {
     };
   }
 
-  // Manual entry handlers - unified
+  
   if (modalElements.manualEntryBtn) {
     modalElements.manualEntryBtn.onclick = showManualEntryForm;
   }
@@ -860,16 +860,16 @@ function initializeAddAlbumFeature() {
     modalElements.coverArtInput.onchange = handleCoverArtUpload;
   }
 
-  // Initialize search mode toggle - unified buttons
+  
   const searchModeButtons = document.querySelectorAll('.search-mode-btn');
   searchModeButtons.forEach((btn) => {
     btn.onclick = () => updateSearchMode(btn.dataset.mode);
   });
 
-  // Populate country dropdown
+  
   populateCountryDropdown();
 
-  // ESC key to close (desktop only)
+  
   document.addEventListener('keydown', (e) => {
     if (
       e.key === 'Escape' &&
@@ -880,14 +880,14 @@ function initializeAddAlbumFeature() {
     }
   });
 
-  // Handle window resize to ensure proper modal behavior
+  
   let resizeTimeout;
   window.addEventListener('resize', () => {
     clearTimeout(resizeTimeout);
     resizeTimeout = setTimeout(() => {
-      // Re-setup handlers if needed after resize
+      
       if (!modal.classList.contains('hidden')) {
-        // Ensure proper modal styling based on new viewport
+        
         const isMobile = window.innerWidth < 1024;
         modal.style.overflow = isMobile ? 'hidden' : '';
       }
@@ -895,11 +895,11 @@ function initializeAddAlbumFeature() {
   });
 }
 
-// Update the search mode function to be unified
+
 function updateSearchMode(mode) {
   searchMode = mode;
 
-  // Update all search mode buttons (both mobile and desktop use same class)
+  
   document.querySelectorAll('.search-mode-btn').forEach((btn) => {
     const isActive = btn.dataset.mode === mode;
     btn.classList.toggle('active', isActive);
@@ -908,7 +908,7 @@ function updateSearchMode(mode) {
     btn.classList.toggle('text-gray-400', !isActive);
   });
 
-  // Update search placeholder
+  
   const placeholder =
     mode === 'artist' ? 'Search for an artist...' : 'Search for an album...';
 
@@ -916,7 +916,7 @@ function updateSearchMode(mode) {
     modalElements.artistSearchInput.placeholder = placeholder;
   }
 
-  // Update search button text - responsive based on viewport
+  
   const buttonText = mode === 'artist' ? 'Search Artists' : 'Search Albums';
   const isMobile = window.innerWidth < 1024;
 
@@ -926,11 +926,11 @@ function updateSearchMode(mode) {
       : `<i class="fas fa-search mr-2"></i>${buttonText}`;
   }
 
-  // Clear previous results
+  
   clearSearchResults();
 }
 
-// Unified function to clear search results
+
 function clearSearchResults() {
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.add('hidden');
@@ -940,9 +940,9 @@ function clearSearchResults() {
   modalElements.albumList.innerHTML = '';
 }
 
-// Unified manual entry form functions
 
-// Unified open modal function
+
+
 window.openAddAlbumModal = function () {
   console.log(
     'openAddAlbumModal called, currentList:',
@@ -963,17 +963,17 @@ window.openAddAlbumModal = function () {
     return;
   }
 
-  // Warm up connections
+  
   warmupConnections();
 
   console.log('Opening modal...');
   modal.classList.remove('hidden');
 
-  // Reset search mode to artist when opening the modal
+  
   searchMode = 'artist';
   updateSearchMode('artist');
 
-  // Focus the search input
+  
   if (modalElements.artistSearchInput) {
     modalElements.artistSearchInput.value = '';
     setTimeout(() => modalElements.artistSearchInput.focus(), 100);
@@ -981,41 +981,41 @@ window.openAddAlbumModal = function () {
 
   resetModalState();
 
-  // Populate country dropdown when modal opens
+  
   populateCountryDropdown();
 
-  // Handle body scroll for mobile
+  
   if (window.innerWidth < 1024) {
     document.body.style.overflow = 'hidden';
   }
 };
 
-// Unified close modal function
 
-// Unified display functions that handle both mobile and desktop layouts
 
-// New functions for manual entry
+
+
+
 function showManualEntryForm() {
-  // Hide all other views
+  
   modalElements.artistResults.classList.add('hidden');
   modalElements.albumResults.classList.add('hidden');
   modalElements.searchLoading.classList.add('hidden');
   modalElements.searchEmpty.classList.add('hidden');
 
-  // Hide the search section
+  
   const searchSection = document.getElementById('searchSection');
   if (searchSection) {
     searchSection.classList.add('hidden');
   }
 
-  // Show manual entry form
+  
   modalElements.manualEntryForm.classList.remove('hidden');
 
-  // Reset form
+  
   modalElements.form.reset();
   resetCoverPreview();
 
-  // Populate country dropdown (in case it wasn't populated yet)
+  
   populateCountryDropdown();
 }
 
@@ -1023,13 +1023,13 @@ function hideManualEntryForm() {
   modalElements.manualEntryForm.classList.add('hidden');
   modalElements.searchEmpty.classList.remove('hidden');
 
-  // Show the search section again
+  
   const searchSection = document.getElementById('searchSection');
   if (searchSection) {
     searchSection.classList.remove('hidden');
   }
 
-  // Reset form
+  
   modalElements.form.reset();
   resetCoverPreview();
 }
@@ -1039,12 +1039,12 @@ function populateCountryDropdown() {
 
   if (!select) return;
 
-  // Clear existing options except the first one
+  
   while (select.options.length > 1) {
     select.remove(1);
   }
 
-  // Add countries from the global availableCountries array
+  
   if (window.availableCountries && Array.isArray(window.availableCountries)) {
     window.availableCountries.forEach((country) => {
       const option = document.createElement('option');
@@ -1072,21 +1072,21 @@ async function handleCoverArtUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
 
-  // Validate file size (5MB max)
+  
   if (file.size > 5 * 1024 * 1024) {
     showToast('Image file size must be less than 5MB', 'error');
     e.target.value = '';
     return;
   }
 
-  // Validate file type
+  
   if (!file.type.startsWith('image/')) {
     showToast('Please select a valid image file', 'error');
     e.target.value = '';
     return;
   }
 
-  // Show preview
+  
   const reader = new FileReader();
   reader.onload = function (event) {
     modalElements.coverPreview.innerHTML = `
@@ -1101,7 +1101,7 @@ async function handleManualSubmit(e) {
 
   const formData = new FormData(modalElements.form);
 
-  // Validate required fields
+  
   const artist = formData.get('artist').trim();
   const albumTitle = formData.get('album').trim();
 
@@ -1110,11 +1110,11 @@ async function handleManualSubmit(e) {
     return;
   }
 
-  // Create album object
+  
   const album = {
     artist: artist,
     album: albumTitle,
-    album_id: 'manual-' + Date.now(), // Generate a unique ID for manual entries
+    album_id: 'manual-' + Date.now(), 
     release_date: formData.get('release_date') || '',
     country: formData.get('country') || '',
     genre_1: '',
@@ -1122,13 +1122,13 @@ async function handleManualSubmit(e) {
     comments: '',
   };
 
-  // Handle cover art if uploaded
+  
   const coverArtFile = formData.get('cover_art');
   if (coverArtFile && coverArtFile.size > 0) {
     showToast('Processing cover art...', 'info');
 
     try {
-      // Convert to base64
+      
       const reader = new FileReader();
 
       reader.onloadend = async function () {
@@ -1138,12 +1138,12 @@ async function handleManualSubmit(e) {
           .split('/')[1]
           .toUpperCase();
 
-        // Add to list
+        
         await finishManualAdd(album);
       };
 
       reader.onerror = function () {
-        // Error reading cover art
+        
         showToast('Error processing cover art', 'error');
       };
 
@@ -1152,38 +1152,38 @@ async function handleManualSubmit(e) {
       showToast('Error processing cover art', 'error');
     }
   } else {
-    // No cover art, add directly
+    
     await finishManualAdd(album);
   }
 }
 
 async function finishManualAdd(album) {
   try {
-    // Add to current list
+    
     window.lists[window.currentList].push(album);
 
     if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
       try {
         await window.fetchTracksForAlbum(album);
       } catch (_err) {
-        // Auto track fetch failed - not critical
+        
       }
     }
 
-    // Save to server
+    
     await window.saveList(window.currentList, window.lists[window.currentList]);
 
-    // Refresh the list view
+    
     window.selectList(window.currentList);
 
-    // Close modal
+    
     closeAddAlbumModal();
 
     showToast(`Added "${album.album}" by ${album.artist} to the list`);
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    // Remove from list on error
+    
     window.lists[window.currentList].pop();
   }
 }
@@ -1198,10 +1198,10 @@ function closeAddAlbumModal() {
     currentPreloadController = null;
   }
 
-  // Stop background loading
+  
   isBackgroundLoading = false;
 
-  // Disconnect observer
+  
   if (imageObserver) {
     imageObserver.disconnect();
     imageObserver = null;
@@ -1210,7 +1210,7 @@ function closeAddAlbumModal() {
   modal.classList.add('hidden');
   resetModalState();
 
-  // Restore body scroll on mobile
+  
   if (window.innerWidth < 1024) {
     document.body.style.overflow = '';
   }
@@ -1224,10 +1224,10 @@ function resetModalState() {
   modalElements.artistList.innerHTML = '';
   modalElements.albumList.innerHTML = '';
 
-  // Don't reset search mode here - it should maintain its current state
-  // Only reset to artist when opening the modal fresh
+  
+  
 
-  // Update button states to match current search mode
+  
   document.querySelectorAll('.search-mode-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.mode === searchMode);
     btn.classList.toggle('bg-gray-700', btn.dataset.mode === searchMode);
@@ -1235,7 +1235,7 @@ function resetModalState() {
     btn.classList.toggle('text-gray-400', btn.dataset.mode !== searchMode);
   });
 
-  // Update placeholder to match current mode
+  
   const placeholder =
     searchMode === 'artist'
       ? 'Search for an artist...'
@@ -1245,13 +1245,13 @@ function resetModalState() {
     modalElements.artistSearchInput.placeholder = placeholder;
   }
 
-  // Show the search section
+  
   const searchSection = document.getElementById('searchSection');
   if (searchSection) {
     searchSection.classList.remove('hidden');
   }
 
-  // Reset manual entry
+  
   if (modalElements.manualEntryForm) {
     modalElements.manualEntryForm.classList.add('hidden');
     if (modalElements.form) {
@@ -1319,7 +1319,7 @@ function calculateSimilarity(str1, str2) {
 async function getWikidataImageFromMusicBrainz(artistId, artistName) {
   try {
     const endpoint = `artist/${artistId}?inc=url-rels&fmt=json`;
-    // LOW priority: background image fetching, not critical
+    
     const data = await rateLimitedFetch(endpoint, 'low');
 
     if (!data.relations) {
@@ -1338,7 +1338,7 @@ async function getWikidataImageFromMusicBrainz(artistId, artistName) {
     const wikidataId = wikidataRel.url.resource.split('/').pop();
     console.debug(`Found Wikidata ID for "${artistName}": ${wikidataId}`);
 
-    // Use Wikidata proxy
+    
     const wikidataUrl = `${WIKIDATA_PROXY}?entity=${encodeURIComponent(wikidataId)}&property=P18`;
     const wikidataResponse = await fetch(wikidataUrl, {
       credentials: 'same-origin',
@@ -1462,7 +1462,7 @@ async function searchArtistImage(
 
     let imageUrl = null;
 
-    // Try Deezer FIRST (fast, no rate limiting)
+    
     console.debug(`Trying Deezer for "${artistName}"`);
     imageUrl = await searchDeezerArtistImage(artistName, disambiguation);
 
@@ -1474,7 +1474,7 @@ async function searchArtistImage(
       return imageUrl;
     }
 
-    // Fallback to Wikidata only if Deezer fails (slower but higher quality)
+    
     if (artistId) {
       console.debug(
         `Deezer failed, trying MusicBrainz/Wikidata for "${artistName}" (${artistId})`
@@ -1501,27 +1501,27 @@ async function searchArtistImage(
   }
 }
 
-// Display artist results with lazy-loaded images
+
 async function displayArtistResults(artists) {
   modalElements.artistList.innerHTML = '';
 
-  // Desktop now uses the same list-style layout as mobile
+  
   modalElements.artistList.className = 'space-y-3';
 
-  // Render artists immediately with placeholders, then lazy-load images
+  
   for (const artist of artists) {
     const displayName = formatArtistDisplayName(artist);
     const artistEl = document.createElement('div');
     artistEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors flex items-center gap-4';
 
-    // Build disambiguation/secondary text
+    
     let secondaryText = '';
     if (displayName.secondary) {
       secondaryText = displayName.secondary;
     }
 
-    // Add any additional disambiguation that's not already shown
+    
     if (
       artist.disambiguation &&
       artist.disambiguation !== displayName.secondary &&
@@ -1532,7 +1532,7 @@ async function displayArtistResults(artists) {
         : artist.disambiguation;
     }
 
-    // Resolve country code to full name (async but don't block rendering)
+    
     let countryDisplay = '';
     resolveCountryCode(artist.country).then((fullCountryName) => {
       if (fullCountryName) {
@@ -1544,7 +1544,7 @@ async function displayArtistResults(artists) {
       }
     });
 
-    // Start with placeholder image
+    
     artistEl.innerHTML = `
       <div class="artist-image-container flex-shrink-0">
         <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
@@ -1567,13 +1567,13 @@ async function displayArtistResults(artists) {
       </div>
     `;
 
-    // Store the original artist data with enhanced display info
+    
     const enhancedArtist = {
       ...artist,
       _displayName: displayName,
     };
 
-    // Optimization 1: Preload on hover
+    
     let preloadTimeout;
     artistEl.addEventListener('mouseenter', () => {
       preloadTimeout = setTimeout(() => {
@@ -1589,7 +1589,7 @@ async function displayArtistResults(artists) {
 
     modalElements.artistList.appendChild(artistEl);
 
-    // Lazy-load artist image in the background
+    
     const searchName =
       displayName.original && !displayName.warning
         ? displayName.primary
@@ -1611,7 +1611,7 @@ async function displayArtistResults(artists) {
             `;
           }
         } else {
-          // No image found, remove pulse animation
+          
           const imageContainer = artistEl.querySelector(
             '.artist-image-container div'
           );
@@ -1621,7 +1621,7 @@ async function displayArtistResults(artists) {
         }
       })
       .catch(() => {
-        // Error loading image, remove pulse animation
+        
         const imageContainer = artistEl.querySelector(
           '.artist-image-container div'
         );
@@ -1635,12 +1635,12 @@ async function displayArtistResults(artists) {
 }
 
 async function selectArtist(artist) {
-  // Use the enhanced artist with display name
+  
   currentArtist = artist._displayName
     ? {
         ...artist,
-        name: artist._displayName.primary, // Use the Latin name for album displays
-        originalName: artist.name, // Keep the original for API calls
+        name: artist._displayName.primary, 
+        originalName: artist.name, 
       }
     : artist;
 
@@ -1649,7 +1649,7 @@ async function selectArtist(artist) {
   currentLoadingController = new AbortController();
 
   try {
-    // Use original ID for API calls
+    
     let releaseGroups = preloadCache.get(artist.id);
 
     if (!releaseGroups) {
@@ -1667,7 +1667,7 @@ async function selectArtist(artist) {
     displayAlbumResultsWithLazyLoading(releaseGroups);
   } catch (error) {
     if (error.name === 'AbortError') {
-      // Album loading cancelled - expected behavior
+      
       return;
     }
     showToast('Error fetching albums', 'error');
@@ -1682,7 +1682,7 @@ async function resolveCountryCode(countryCode) {
   }
 
   try {
-    // Use RestCountries API to get country info
+    
     const response = await fetch(
       `https://restcountries.com/v3.1/alpha/${countryCode}`
     );
@@ -1702,15 +1702,15 @@ async function resolveCountryCode(countryCode) {
 
     const countryData = data[0];
 
-    // Try different name variations to match against our countries list
+    
     const namesToTry = [
       countryData.name.common,
       countryData.name.official,
-      // Also check alternative names
+      
       ...(countryData.altSpellings || []),
     ];
 
-    // Special cases for common variations
+    
     if (countryCode === 'US') {
       namesToTry.push('United States');
     } else if (countryCode === 'GB') {
@@ -1721,7 +1721,7 @@ async function resolveCountryCode(countryCode) {
       namesToTry.push('Korea, North');
     }
 
-    // Check if availableCountries is loaded
+    
     if (
       !window.availableCountries ||
       !Array.isArray(window.availableCountries)
@@ -1730,7 +1730,7 @@ async function resolveCountryCode(countryCode) {
       return countryData.name.common;
     }
 
-    // Find the first name that matches our countries list
+    
     for (const name of namesToTry) {
       if (name && window.availableCountries.includes(name)) {
         console.debug(`Resolved ${countryCode} to ${name}`);
@@ -1738,7 +1738,7 @@ async function resolveCountryCode(countryCode) {
       }
     }
 
-    // If no exact match, try case-insensitive partial matching
+    
     const commonName = countryData.name.common.toLowerCase();
     const closeMatch = window.availableCountries.find((country) => {
       const countryLower = country.toLowerCase();
@@ -1764,7 +1764,7 @@ async function resolveCountryCode(countryCode) {
   }
 }
 
-// Get combined country names for multiple artists
+
 async function getCombinedArtistCountries(artistCredits) {
   const countries = [];
 
@@ -1774,7 +1774,7 @@ async function getCombinedArtistCountries(artistCredits) {
 
     try {
       const endpoint = `artist/${id}?fmt=json`;
-      // NORMAL priority: needed for display but not critical
+      
       const artistData = await rateLimitedFetch(endpoint, 'normal');
       if (artistData && artistData.country) {
         const name = await resolveCountryCode(artistData.country);
@@ -1783,7 +1783,7 @@ async function getCombinedArtistCountries(artistCredits) {
         }
       }
     } catch (_err) {
-      // Error fetching artist country - non-critical
+      
     }
   }
 
@@ -1792,12 +1792,12 @@ async function getCombinedArtistCountries(artistCredits) {
 
 async function searchAlbums(query) {
   const endpoint = `release-group/?query=${encodeURIComponent(query)}&type=album|ep&fmt=json&limit=20`;
-  // HIGH priority: user-initiated album search
+  
   const data = await rateLimitedFetch(endpoint, 'high');
 
   let releaseGroups = data['release-groups'] || [];
 
-  // Filter and sort similar to getArtistReleaseGroups
+  
   const today = new Date();
   const todayStr = today.toISOString().split('T')[0];
 
@@ -1824,7 +1824,7 @@ async function searchAlbums(query) {
     return isValidType && comparableDate <= todayStr;
   });
 
-  // Sort by relevance (MusicBrainz already does this) and then by date
+  
   releaseGroups.sort((a, b) => {
     const dateA = a['first-release-date'] || '0000';
     const dateB = b['first-release-date'] || '0000';
@@ -1838,13 +1838,13 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
 
-  // Store releaseGroups globally for access in addAlbumToList
+  
   window.currentReleaseGroups = releaseGroups;
 
-  // Desktop now uses the same list-style layout as mobile
-  modalElements.albumList.className = 'space-y-3'; // Changed from grid to vertical list
+  
+  modalElements.albumList.className = 'space-y-3'; 
 
-  // Reset background loading state
+  
   isBackgroundLoading = false;
 
   const thirtyDaysAgo = new Date();
@@ -1852,7 +1852,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
   const currentYear = new Date().getFullYear().toString();
 
-  // Set up intersection observer
+  
   const observer = setupIntersectionObserver(releaseGroups, currentArtist.name);
 
   releaseGroups.forEach((rg, index) => {
@@ -1868,7 +1868,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       rg['first-release-date'] &&
       rg['first-release-date'].startsWith(currentYear);
 
-    // Use horizontal card layout like mobile
+    
     albumEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
 
@@ -1907,9 +1907,9 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       </div>
     `;
 
-    // Click handler
+    
     albumEl.onclick = async () => {
-      // Show loading state
+      
       const coverContainer = albumEl.querySelector('.album-cover-container');
       coverContainer.innerHTML = `
         <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
@@ -1917,7 +1917,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
         </div>
       `;
 
-      // Check if cover is already loaded in DOM but not in data
+      
       const imgEl = albumEl.querySelector('.album-cover-container img');
       if (
         imgEl &&
@@ -1928,7 +1928,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
         rg.coverArt = imgEl.src;
       }
 
-      // If still no cover, try to load it before adding
+      
       if (!rg.coverArt) {
         try {
           const coverArt = await getCoverArt(
@@ -1940,7 +1940,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
             rg.coverArt = coverArt;
           }
         } catch (_error) {
-          // Error loading cover - will try again later
+          
         }
       }
 
@@ -1949,14 +1949,14 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 
     modalElements.albumList.appendChild(albumEl);
 
-    // Start observing this element for lazy loading
+    
     observer.observe(albumEl);
   });
 
-  // Store reference to current release groups
+  
   window.currentReleaseGroups = releaseGroups;
 
-  // Also immediately check for visible albums
+  
   requestAnimationFrame(() => {
     const visibleAlbums = Array.from(
       modalElements.albumList.querySelectorAll('[data-album-index]')
@@ -1965,7 +1965,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       return rect.top < window.innerHeight && rect.bottom > 0;
     });
 
-    // Trigger intersection observer for visible albums
+    
     visibleAlbums.forEach((el) => {
       if (observer) {
         observer.unobserve(el);
@@ -1976,7 +1976,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 }
 
 async function addAlbumToList(releaseGroup) {
-  // Show initial loading message
+  
   showToast('Adding album...', 'info');
 
   console.debug('Adding album for artist:', currentArtist);
@@ -2010,12 +2010,12 @@ async function addAlbumToList(releaseGroup) {
 
   console.debug('Album object being saved:', album);
 
-  // Enhanced cover art retrieval
+  
   let coverArtUrl = releaseGroup.coverArt;
 
-  // If not in the data structure, check if it's already loaded in the DOM
+  
   if (!coverArtUrl) {
-    // Find the album element in the list
+    
     const albumElements = document.querySelectorAll('[data-album-index]');
     for (const el of albumElements) {
       if (
@@ -2024,7 +2024,7 @@ async function addAlbumToList(releaseGroup) {
         const imgEl = el.querySelector('.album-cover-container img');
         if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
           coverArtUrl = imgEl.src;
-          // Store it back in the releaseGroup for consistency
+          
           releaseGroup.coverArt = coverArtUrl;
           break;
         }
@@ -2032,7 +2032,7 @@ async function addAlbumToList(releaseGroup) {
     }
   }
 
-  // If still no cover, try fetching it directly
+  
   if (!coverArtUrl) {
     showToast('Fetching album cover...', 'info');
     try {
@@ -2042,18 +2042,18 @@ async function addAlbumToList(releaseGroup) {
         releaseGroup.title
       );
       if (coverArtUrl) {
-        // Store it for future use
+        
         releaseGroup.coverArt = coverArtUrl;
       }
     } catch (_error) {
-      // Error fetching cover art - will proceed without
+      
     }
   }
 
-  // Process cover art if found
+  
   if (coverArtUrl) {
     try {
-      // Use the image proxy endpoint to fetch external images
+      
       const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(coverArtUrl)}`;
       const response = await fetch(proxyUrl, {
         credentials: 'same-origin',
@@ -2073,11 +2073,11 @@ async function addAlbumToList(releaseGroup) {
       addAlbumToCurrentList(album);
     } catch (error) {
       console.warn('Error fetching cover art:', error);
-      // Error fetching cover art - will proceed without
+      
       addAlbumToCurrentList(album);
     }
   } else {
-    // No cover art available
+    
     addAlbumToCurrentList(album);
   }
 }
@@ -2090,7 +2090,7 @@ async function addAlbumToCurrentList(album) {
       try {
         await window.fetchTracksForAlbum(album);
       } catch (_err) {
-        // Auto track fetch failed - not critical
+        
       }
     }
 
@@ -2110,7 +2110,7 @@ async function addAlbumToCurrentList(album) {
 
 function hasNonLatinCharacters(str) {
   if (!str) return false;
-  // Check if more than 50% of alphabetic characters are non-Latin
+  
   const alphaChars = str.match(/\p{L}/gu) || [];
   const nonLatinChars = str.match(/[^\u0020-\u024F\u1E00-\u1EFF]/gu) || [];
   return (
@@ -2118,17 +2118,17 @@ function hasNonLatinCharacters(str) {
   );
 }
 
-// Helper to extract Latin name from various sources
+
 function extractLatinName(artist) {
   let latinName = null;
 
-  // Strategy 1: Check if sort-name is different and contains Latin characters
+  
   if (artist['sort-name'] && artist['sort-name'] !== artist.name) {
     if (!hasNonLatinCharacters(artist['sort-name'])) {
-      // sort-name might be "Lastname, Firstname" format, so clean it up
+      
       const sortName = artist['sort-name'];
       if (sortName.includes(',')) {
-        // Reverse "Lastname, Firstname" to "Firstname Lastname"
+        
         const parts = sortName.split(',').map((p) => p.trim());
         if (parts.length === 2) {
           latinName = `${parts[1]} ${parts[0]}`;
@@ -2141,7 +2141,7 @@ function extractLatinName(artist) {
     }
   }
 
-  // Strategy 2: Check name for parentheses pattern (e.g., "מזמור (Mizmor)")
+  
   if (!latinName && artist.name) {
     const nameParenMatch = artist.name.match(/\(([^)]+)\)/);
     if (nameParenMatch) {
@@ -2152,11 +2152,11 @@ function extractLatinName(artist) {
     }
   }
 
-  // Strategy 3: Check disambiguation for Latin version
+  
   if (!latinName && artist.disambiguation) {
-    // Sometimes the entire disambiguation is the Latin name
+    
     if (!hasNonLatinCharacters(artist.disambiguation)) {
-      // But only if it looks like a name, not a description
+      
       const looksLikeName =
         !artist.disambiguation.includes(' ') ||
         artist.disambiguation.split(' ').length <= 3;
@@ -2170,18 +2170,18 @@ function extractLatinName(artist) {
     }
   }
 
-  // Strategy 4: Check aliases if available
+  
   if (!latinName && artist.aliases && Array.isArray(artist.aliases)) {
     for (const alias of artist.aliases) {
       if (alias.name && !hasNonLatinCharacters(alias.name)) {
-        // Prefer primary aliases or those marked as artist name
+        
         if (alias.primary || alias.type === 'Artist name') {
           latinName = alias.name;
           break;
         }
       }
     }
-    // If no primary alias found, use any Latin alias
+    
     if (!latinName) {
       const latinAlias = artist.aliases.find(
         (a) => a.name && !hasNonLatinCharacters(a.name)
@@ -2195,12 +2195,12 @@ function extractLatinName(artist) {
   return latinName;
 }
 
-// Helper to format artist display name
+
 function formatArtistDisplayName(artist) {
   const hasNonLatin = hasNonLatinCharacters(artist.name);
 
   if (!hasNonLatin) {
-    // Name is already in Latin script
+    
     return {
       primary: artist.name,
       secondary: artist.disambiguation || null,
@@ -2208,18 +2208,18 @@ function formatArtistDisplayName(artist) {
     };
   }
 
-  // Try to extract Latin version using multiple strategies
+  
   const latinName = extractLatinName(artist);
 
   if (latinName) {
-    // Show Latin name as primary, original as secondary
+    
     return {
       primary: latinName,
       secondary: artist.name,
       original: artist.name,
     };
   } else {
-    // No Latin version found, show as-is with warning
+    
     return {
       primary: artist.name,
       secondary: 'Non-Latin script',
@@ -2229,9 +2229,9 @@ function formatArtistDisplayName(artist) {
   }
 }
 
-// Initialize when the page loads
+
 document.addEventListener('DOMContentLoaded', () => {
-  // Only initialize on pages that have the add album feature
+  
   const isAuthPage = window.location.pathname.match(
     /\/(login|register|forgot)/
   );

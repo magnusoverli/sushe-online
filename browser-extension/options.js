@@ -1,17 +1,17 @@
-// Options page script for SuShe Online extension
+
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load saved settings on page load
+  
   const settings = await chrome.storage.local.get(['apiUrl']);
 
   if (settings.apiUrl) {
     document.getElementById('apiUrl').value = settings.apiUrl;
   } else {
-    // Default to localhost for development
+    
     document.getElementById('apiUrl').value = 'http://localhost:3000';
   }
 
-  // Handle form submission
+  
   document
     .getElementById('settingsForm')
     .addEventListener('submit', async (e) => {
@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       const apiUrl = document.getElementById('apiUrl').value.trim();
 
-      // Validate URL
+      
       try {
         new URL(apiUrl);
       } catch (_err) {
@@ -27,13 +27,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // Remove trailing slash if present
+      
       const cleanUrl = apiUrl.replace(/\/$/, '');
 
-      // Save to storage
+      
       await chrome.storage.local.set({ apiUrl: cleanUrl });
 
-      // Notify background script to update
+      
       chrome.runtime.sendMessage({ action: 'updateApiUrl', apiUrl: cleanUrl });
 
       showStatus(
@@ -42,11 +42,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         'success'
       );
 
-      // Clear lists cache to force refresh with new URL
+      
       await chrome.storage.local.remove(['userLists', 'listsLastFetched']);
     });
 
-  // Test connection button
+  
   document.getElementById('testBtn').addEventListener('click', async () => {
     const apiUrl = document
       .getElementById('apiUrl')
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     resultEl.innerHTML = '';
 
     try {
-      // Try to fetch from the API
+      
       const response = await fetch(`${apiUrl}/api/lists`, {
         credentials: 'include',
         headers: {
@@ -91,7 +91,7 @@ function showStatus(message, type) {
   statusEl.textContent = message;
   statusEl.className = 'status ' + type;
 
-  // Auto-hide success messages after 3 seconds
+  
   if (type === 'success') {
     setTimeout(() => {
       statusEl.style.display = 'none';

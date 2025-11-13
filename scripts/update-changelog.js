@@ -35,7 +35,7 @@ class ChangelogUpdater {
   async interactiveUpdate() {
     console.log('\n📝 Changelog Update Assistant\n');
 
-    // Get category
+    
     console.log('Categories:');
     Object.entries(this.categories).forEach(([key, label]) => {
       console.log(`  ${key}: ${label}`);
@@ -51,7 +51,7 @@ class ChangelogUpdater {
       process.exit(1);
     }
 
-    // Get description
+    
     const description = await this.promptForInput('Enter change description: ');
 
     if (!description) {
@@ -59,24 +59,24 @@ class ChangelogUpdater {
       process.exit(1);
     }
 
-    // Get optional details
+    
     const details = await this.promptForInput(
       'Add details (optional, press Enter to skip): '
     );
 
-    // Update changelog
+    
     this.updateChangelog(category, description, details);
   }
 
   parseGitCommit() {
-    // Parse from git commit message format
+    
     const commitMsg = process.argv[2];
 
     if (!commitMsg) {
       return null;
     }
 
-    // Patterns to detect category from commit
+    
     const patterns = {
       feature: /^(feat|feature|add):/i,
       fix: /^(fix|bugfix|patch):/i,
@@ -103,7 +103,7 @@ class ChangelogUpdater {
   updateChangelog(category, description, details = '') {
     const today = new Date().toISOString().split('T')[0];
 
-    // Read existing changelog
+    
     let content = '';
     if (fs.existsSync(CHANGELOG_PATH)) {
       content = fs.readFileSync(CHANGELOG_PATH, 'utf8');
@@ -112,13 +112,13 @@ class ChangelogUpdater {
         '# Changelog\n\nAll notable user-facing changes to this project will be documented in this file.\n\n## Recent Updates\n';
     }
 
-    // Check if today's date section exists
+    
     const dateHeader = `### ${today}`;
     const lines = content.split('\n');
     let dateIndex = lines.findIndex((line) => line === dateHeader);
 
     if (dateIndex === -1) {
-      // Add new date section after "## Recent Updates"
+      
       const recentIndex = lines.findIndex(
         (line) => line === '## Recent Updates'
       );
@@ -128,15 +128,15 @@ class ChangelogUpdater {
       }
     }
 
-    // Format the entry
+    
     let entry = `- **${description}**`;
     if (details) {
       entry += ` - ${details}`;
     }
 
-    // Find where to insert the entry
+    
     if (dateIndex !== -1) {
-      // Find the next section or end of current date section
+      
       let insertIndex = dateIndex + 1;
       while (
         insertIndex < lines.length &&
@@ -144,17 +144,17 @@ class ChangelogUpdater {
         !lines[insertIndex].startsWith('##')
       ) {
         if (lines[insertIndex] === '') {
-          // Found empty line after date header
+          
           break;
         }
         insertIndex++;
       }
 
-      // Insert the new entry
+      
       lines.splice(insertIndex, 0, entry);
     }
 
-    // Write back to file
+    
     fs.writeFileSync(CHANGELOG_PATH, lines.join('\n'), 'utf8');
 
     console.log(`\n✅ Changelog updated successfully!`);
@@ -180,12 +180,12 @@ class ChangelogUpdater {
     const args = process.argv.slice(2);
 
     if (args.length === 0) {
-      // Interactive mode
+      
       await this.interactiveUpdate();
     } else if (args[0] === '--help' || args[0] === '-h') {
       this.showHelp();
     } else if (args[0] === '--git') {
-      // Parse from git commit
+      
       const parsed = this.parseGitCommit();
       if (parsed) {
         this.updateChangelog(parsed.category, parsed.description);
@@ -194,10 +194,10 @@ class ChangelogUpdater {
         process.exit(1);
       }
     } else if (args.length === 1) {
-      // Quick update with description only
+      
       await this.quickUpdate(args[0]);
     } else if (args.length === 2) {
-      // Quick update with category and description
+      
       await this.quickUpdate(args[1], args[0]);
     } else {
       this.showHelp();
@@ -231,6 +231,6 @@ Examples:
   }
 }
 
-// Run the updater
+
 const updater = new ChangelogUpdater();
 updater.run().catch(console.error);

@@ -1,18 +1,18 @@
 #!/bin/bash
-# Package SuShe Online Extension for Chrome Web Store Submission
+
 
 set -e
 
 echo "📦 Packaging SuShe Online Extension for Chrome Web Store..."
 echo ""
 
-# Navigate to the extension directory
+
 cd "$(dirname "$0")"
 
-# Output file
+
 OUTPUT_FILE="sushe-online-extension.zip"
 
-# Remove old package if it exists
+
 if [ -f "$OUTPUT_FILE" ]; then
     echo "🗑️  Removing old package..."
     rm "$OUTPUT_FILE"
@@ -29,7 +29,7 @@ echo "  ✓ popup.js"
 echo "  ✓ icons/"
 echo ""
 
-# Create the ZIP file with only the necessary files
+
 zip -q "$OUTPUT_FILE" \
     manifest.json \
     background.js \
@@ -43,12 +43,12 @@ zip -q "$OUTPUT_FILE" \
 echo "✅ Package created: $OUTPUT_FILE"
 echo ""
 
-# Show file size
+
 FILE_SIZE=$(du -h "$OUTPUT_FILE" | cut -f1)
 echo "📊 Package size: $FILE_SIZE"
 echo ""
 
-# Test the package
+
 echo "🔍 Verifying package contents..."
 zip -sf "$OUTPUT_FILE"
 echo ""

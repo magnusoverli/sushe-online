@@ -15,7 +15,7 @@
   <link rel="apple-touch-icon" href="/icons/ios/180.png">
   <link rel="manifest" href="/manifest.json">
   
-  <!-- Fix #8: Preload critical resources for faster page load -->
+  
   <link rel="preload" href="<%= asset('/styles/output.css') %>" as="style">
   <link rel="preload" href="<%= asset('/js/bundle.js') %>" as="script">
   
@@ -101,11 +101,11 @@
   <div class="relative z-10 max-w-md w-full px-4">
     <%- content %>
   </div>
-  <!-- Toast notification element -->
+  
   <div id="toast" class="toast"></div>
   
-  <!-- Fix #9: Defer non-critical JavaScript to avoid blocking HTML parsing -->
-  <!-- Using defer allows HTML parsing to continue while script downloads -->
+  
+  
   <script type="module" src="<%= asset('/js/bundle.js') %>" defer></script>
   
   <script>

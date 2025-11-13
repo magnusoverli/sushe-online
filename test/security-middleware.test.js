@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const csrf = require('csrf');
 const compression = require('compression');
 
-// Mock logger to avoid file operations
+
 const mockLogger = {
   error: () => {},
   warn: () => {},
@@ -14,7 +14,7 @@ const mockLogger = {
   debug: () => {},
 };
 
-// Mock the logger module
+
 require.cache[require.resolve('../utils/logger')] = {
   exports: mockLogger,
 };
@@ -25,7 +25,7 @@ function createTestApp(securityConfig = {}) {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Apply security middleware based on config
+  
   if (securityConfig.helmet !== false) {
     app.use(
       helmet({
@@ -57,7 +57,7 @@ function createTestApp(securityConfig = {}) {
     app.use(compression());
   }
 
-  // CSRF protection setup
+  
   if (securityConfig.csrf !== false) {
     const tokens = new csrf();
     const secret = 'test-csrf-secret';
@@ -67,7 +67,7 @@ function createTestApp(securityConfig = {}) {
       next();
     });
 
-    // CSRF validation middleware
+    
     app.use('/protected', (req, res, next) => {
       if (
         req.method === 'POST' ||
@@ -83,14 +83,14 @@ function createTestApp(securityConfig = {}) {
     });
   }
 
-  // Rate limiting simulation
+  
   if (securityConfig.rateLimit !== false) {
     const rateLimitStore = new Map();
 
     app.use('/api', (req, res, next) => {
       const clientId = req.ip || 'unknown';
       const now = Date.now();
-      const windowMs = 60000; // 1 minute
+      const windowMs = 60000; 
       const maxRequests = 100;
 
       if (!rateLimitStore.has(clientId)) {
@@ -101,7 +101,7 @@ function createTestApp(securityConfig = {}) {
       const clientData = rateLimitStore.get(clientId);
 
       if (now > clientData.resetTime) {
-        // Reset window
+        
         clientData.count = 1;
         clientData.resetTime = now + windowMs;
         return next();
@@ -119,15 +119,15 @@ function createTestApp(securityConfig = {}) {
     });
   }
 
-  // Input validation middleware
+  
   if (securityConfig.validation !== false) {
     app.use('/validate', (req, res, next) => {
-      // Simulate input sanitization
+      
       if (req.body) {
         for (const key in req.body) {
           if (typeof req.body[key] === 'string') {
-            // Basic XSS prevention
-            /* eslint-disable security/detect-unsafe-regex */
+            
+            
             req.body[key] = req.body[key]
               .replace(
                 /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
@@ -135,7 +135,7 @@ function createTestApp(securityConfig = {}) {
               )
               .replace(/javascript:/gi, '')
               .replace(/on\w+\s*=/gi, '');
-            /* eslint-enable security/detect-unsafe-regex */
+            
           }
         }
       }
@@ -143,7 +143,7 @@ function createTestApp(securityConfig = {}) {
     });
   }
 
-  // Test routes
+  
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', timestamp: Date.now() });
   });
@@ -172,7 +172,7 @@ function createTestApp(securityConfig = {}) {
     throw new Error('Test error');
   });
 
-  // Error handling middleware
+  
   app.use((err, _req, res, _next) => {
     mockLogger.error('Test error:', err.message);
     res.status(500).json({
@@ -192,7 +192,7 @@ test('Helmet should set security headers', async () => {
 
   const response = await request(app).get('/health').expect(200);
 
-  // Check for common security headers set by Helmet
+  
   assert.ok(response.headers['x-content-type-options']);
   assert.ok(response.headers['x-frame-options']);
   assert.ok(response.headers['x-xss-protection']);
@@ -219,21 +219,21 @@ test('Compression should work for responses', async () => {
     .set('Accept-Encoding', 'gzip')
     .expect(200);
 
-  // Note: supertest may not show compression headers in test environment
-  // but we can verify the middleware is applied
+  
+  
   assert.ok(response.body.status === 'ok');
 });
 
 test('CSRF protection should work', async () => {
   const app = createTestApp();
 
-  // Get CSRF token first
+  
   const tokenResponse = await request(app).get('/csrf-token').expect(200);
 
   const csrfToken = tokenResponse.body.csrfToken;
   assert.ok(csrfToken);
 
-  // Valid request with CSRF token
+  
   const validResponse = await request(app)
     .post('/protected/data')
     .send({ _csrf: csrfToken, message: 'test data' })
@@ -267,7 +267,7 @@ test('CSRF protection should reject requests with invalid token', async () => {
 test('Rate limiting should work', async () => {
   const app = createTestApp();
 
-  // Make multiple requests quickly
+  
   const requests = [];
   for (let i = 0; i < 5; i++) {
     requests.push(request(app).get('/api/test'));
@@ -275,7 +275,7 @@ test('Rate limiting should work', async () => {
 
   const responses = await Promise.all(requests);
 
-  // All should succeed (under rate limit)
+  
   responses.forEach((response) => {
     assert.strictEqual(response.status, 200);
   });
@@ -284,21 +284,21 @@ test('Rate limiting should work', async () => {
 test('Rate limiting should block excessive requests', async () => {
   const app = createTestApp();
 
-  // Simulate hitting rate limit by making many requests
-  // Note: This is a simplified test - in reality you'd need more requests
+  
+  
   const requests = [];
   for (let i = 0; i < 105; i++) {
-    // Over the 100 request limit
+    
     requests.push(request(app).get('/api/test'));
   }
 
   const responses = await Promise.all(requests);
 
-  // Some requests should be rate limited
+  
   const _rateLimitedResponses = responses.filter((r) => r.status === 429);
 
-  // In this simplified test, we might not hit the limit due to test timing
-  // but the middleware is in place
+  
+  
   assert.ok(responses.length > 0);
 });
 
@@ -317,12 +317,12 @@ test('Input validation should sanitize XSS attempts', async () => {
     .send(maliciousInput)
     .expect(200);
 
-  // Scripts should be removed
+  
   assert.ok(!response.body.sanitized.name.includes('<script>'));
   assert.ok(!response.body.sanitized.comment.includes('<script>'));
   assert.ok(!response.body.sanitized.link.includes('javascript:'));
 
-  // Safe content should remain
+  
   assert.ok(response.body.sanitized.name.includes('John'));
   assert.ok(response.body.sanitized.comment.includes('Hello'));
   assert.ok(response.body.sanitized.comment.includes('world'));
@@ -334,8 +334,8 @@ test('Error handling should not expose sensitive information', async () => {
   const response = await request(app).get('/error-test').expect(500);
 
   assert.strictEqual(response.body.error, 'Internal server error');
-  // In production, detailed error messages should not be exposed
-  // In development, they might be (controlled by NODE_ENV)
+  
+  
 });
 
 test('Security headers should prevent clickjacking', async () => {
@@ -375,7 +375,7 @@ test('App should work without security middleware', async () => {
 
   assert.strictEqual(response.body.status, 'ok');
 
-  // Should not have security headers when helmet is disabled
+  
   assert.ok(!response.headers['x-frame-options']);
 });
 
@@ -405,7 +405,7 @@ test('Request headers should be accessible for security analysis', async () => {
 test('Security middleware should handle edge cases gracefully', async () => {
   const app = createTestApp();
 
-  // Test with empty body
+  
   const response1 = await request(app)
     .post('/validate/input')
     .send({})
@@ -413,7 +413,7 @@ test('Security middleware should handle edge cases gracefully', async () => {
 
   assert.ok(response1.body.sanitized);
 
-  // Test with null values
+  
   const response2 = await request(app)
     .post('/validate/input')
     .send({ name: null, value: undefined })
@@ -425,12 +425,12 @@ test('Security middleware should handle edge cases gracefully', async () => {
 test('Multiple security layers should work together', async () => {
   const app = createTestApp();
 
-  // Get CSRF token
+  
   const tokenResponse = await request(app).get('/csrf-token').expect(200);
 
   const csrfToken = tokenResponse.body.csrfToken;
 
-  // Make request with CSRF token and potentially malicious input
+  
   const response = await request(app)
     .post('/protected/data')
     .send({
@@ -440,6 +440,6 @@ test('Multiple security layers should work together', async () => {
     .expect(200);
 
   assert.strictEqual(response.body.success, true);
-  // Input should be passed through (validation middleware not on /protected route)
+  
   assert.ok(response.body.data.message);
 });

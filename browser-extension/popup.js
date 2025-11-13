@@ -1,9 +1,9 @@
-// Popup script for SuShe Online extension
+
 
 let SUSHE_API_BASE = 'http://localhost:3000';
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load API URL from storage
+  
   const settings = await chrome.storage.local.get(['apiUrl']);
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
@@ -46,7 +46,7 @@ async function loadLists() {
       return;
     }
 
-    // Display lists
+    
     listItemsEl.innerHTML = '';
     listNames.forEach((name) => {
       const count = listsData[name].length;
@@ -70,7 +70,7 @@ async function refreshLists() {
   btn.disabled = true;
   btn.textContent = 'Refreshing...';
 
-  // Tell background script to refresh
+  
   chrome.runtime.sendMessage({ action: 'refreshLists' }, (_response) => {
     btn.disabled = false;
     btn.textContent = 'Refresh Lists';

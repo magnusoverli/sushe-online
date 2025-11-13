@@ -3,8 +3,8 @@ const logger = require('../../../utils/logger');
 async function up(pool) {
   logger.info('Adding performance indexes for low latency queries...');
 
-  // Note: Using regular CREATE INDEX instead of CONCURRENTLY since we're in a transaction
-  // Composite indexes for common query patterns
+  
+  
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_users_email_hash 
     ON users(email, hash) 
@@ -47,7 +47,7 @@ async function up(pool) {
     WHERE album_id IS NOT NULL
   `);
 
-  // Index for recent activity lookups
+  
   await pool.query(`
     CREATE INDEX IF NOT EXISTS idx_users_recent_activity 
     ON users(last_activity) 

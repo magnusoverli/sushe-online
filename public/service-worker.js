@@ -28,13 +28,13 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Skip service worker for navigation requests to avoid redirect issues
+  
   if (event.request.mode === 'navigate') {
     console.log('SW: Skipping navigation request:', event.request.url);
     return;
   }
 
-  // Skip service worker for POST/PUT/DELETE requests (forms, API calls)
+  
   if (event.request.method !== 'GET') {
     console.log(
       'SW: Skipping non-GET request:',
@@ -46,7 +46,7 @@ self.addEventListener('fetch', (event) => {
 
   console.log('SW: Handling GET request:', event.request.url);
 
-  // Don't cache pages with forms or dynamic content
+  
   const url = new URL(event.request.url);
   if (
     url.pathname === '/login' ||
@@ -67,7 +67,7 @@ self.addEventListener('fetch', (event) => {
           return response;
         }
         return fetch(event.request).then((response) => {
-          // Don't cache redirects or non-successful responses
+          
           if (
             !response ||
             response.status !== 200 ||
@@ -84,7 +84,7 @@ self.addEventListener('fetch', (event) => {
         });
       })
       .catch(() => {
-        // Only serve cached fallback for static assets, not navigation
+        
         if (event.request.destination === 'document') {
           return fetch(event.request);
         }

@@ -1,12 +1,12 @@
-// Background service worker for SuShe Online extension
-// Handles context menu creation and API communication
 
-let SUSHE_API_BASE = 'http://localhost:3000'; // Default, will be loaded from storage
+
+
+let SUSHE_API_BASE = 'http://localhost:3000'; 
 let userLists = [];
 let listsLastFetched = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 5 * 60 * 1000; 
 
-// Load API URL from storage on startup
+
 async function loadApiUrl() {
   const settings = await chrome.storage.local.get(['apiUrl']);
   if (settings.apiUrl) {
@@ -17,25 +17,25 @@ async function loadApiUrl() {
   }
 }
 
-// Create main context menu on extension install
+
 chrome.runtime.onInstalled.addListener(async () => {
   console.log('SuShe Online extension installed');
   await loadApiUrl();
   createContextMenus();
 });
 
-// Recreate context menus on startup
+
 chrome.runtime.onStartup.addListener(async () => {
   await loadApiUrl();
   createContextMenus();
 });
 
-// Create the base context menu structure
+
 async function createContextMenus() {
-  // Remove all existing menus first
+  
   await chrome.contextMenus.removeAll();
 
-  // Create parent menu item
+  
   chrome.contextMenus.create({
     id: 'sushe-main',
     title: 'Add to SuShe Online',
@@ -43,7 +43,7 @@ async function createContextMenus() {
     documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
   });
 
-  // Create loading placeholder
+  
   chrome.contextMenus.create({
     id: 'sushe-loading',
     parentId: 'sushe-main',
@@ -52,15 +52,15 @@ async function createContextMenus() {
     enabled: false,
   });
 
-  // Fetch lists and update menu
+  
   fetchUserLists();
 }
 
-// Fetch user's lists from SuShe Online API
+
 async function fetchUserLists() {
   const now = Date.now();
 
-  // Use cache if recent
+  
   if (userLists.length > 0 && now - listsLastFetched < CACHE_DURATION) {
     updateContextMenuWithLists();
     return;
@@ -68,7 +68,7 @@ async function fetchUserLists() {
 
   try {
     const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
-      credentials: 'include', // Include cookies for session auth
+      credentials: 'include', 
       headers: {
         Accept: 'application/json',
       },
@@ -90,26 +90,26 @@ async function fetchUserLists() {
     userLists = Object.keys(listsData);
     listsLastFetched = now;
 
-    // Store in chrome.storage for persistence
+    
     await chrome.storage.local.set({ userLists, listsLastFetched });
 
     updateContextMenuWithLists();
   } catch (error) {
     console.error('Failed to fetch lists:', error);
-    // Don't log out, just show error
+    
     userLists = [];
     showErrorMenu(error.message);
   }
 }
 
-// Update context menu with user's lists
+
 async function updateContextMenuWithLists() {
   console.log('Updating context menu with lists:', userLists);
 
-  // Remove ALL menus and rebuild from scratch to ensure clean state
+  
   await chrome.contextMenus.removeAll();
 
-  // Recreate the parent menu
+  
   chrome.contextMenus.create({
     id: 'sushe-main',
     title: 'Add to SuShe Online',
@@ -128,12 +128,12 @@ async function updateContextMenuWithLists() {
     return;
   }
 
-  // Add each list as a submenu item
+  
   userLists.forEach((listName, index) => {
     console.log(
       `Creating menu item: sushe-list-${index} for list "${listName}"`
     );
-    // Use index-based ID to avoid issues with special characters in list names
+    
     chrome.contextMenus.create({
       id: `sushe-list-${index}`,
       parentId: 'sushe-main',
@@ -142,7 +142,7 @@ async function updateContextMenuWithLists() {
     });
   });
 
-  // Add refresh option at the end
+  
   chrome.contextMenus.create({
     id: 'sushe-separator',
     parentId: 'sushe-main',
@@ -160,14 +160,14 @@ async function updateContextMenuWithLists() {
   console.log('Context menu updated successfully');
 }
 
-// Show error in context menu
+
 async function showErrorMenu(message) {
   console.log('Showing error menu:', message);
 
-  // Remove ALL menus and rebuild from scratch
+  
   await chrome.contextMenus.removeAll();
 
-  // Recreate the parent menu
+  
   chrome.contextMenus.create({
     id: 'sushe-main',
     title: 'Add to SuShe Online',
@@ -191,29 +191,29 @@ async function showErrorMenu(message) {
   });
 }
 
-// Handle context menu clicks
+
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   console.log('Context menu clicked:', info.menuItemId);
 
-  // Handle refresh
+  
   if (info.menuItemId === 'sushe-refresh') {
     console.log('Refreshing lists...');
-    listsLastFetched = 0; // Force refresh
-    userLists = []; // Clear cache
+    listsLastFetched = 0; 
+    userLists = []; 
     await fetchUserLists();
     return;
   }
 
-  // Handle login redirect
+  
   if (info.menuItemId === 'sushe-login') {
-    // Always load the latest API URL from storage to ensure we use the configured URL
+    
     const settings = await chrome.storage.local.get(['apiUrl']);
     const apiUrl = settings.apiUrl || SUSHE_API_BASE;
     chrome.tabs.create({ url: `${apiUrl}/login` });
     return;
   }
 
-  // Handle list selection
+  
   if (info.menuItemId.startsWith('sushe-list-')) {
     const listIndex = parseInt(info.menuItemId.replace('sushe-list-', ''));
     console.log(
@@ -237,14 +237,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// Extract album data and add to list
+
 async function addAlbumToList(info, tab, listName) {
   console.log('Adding album to list:', listName);
   console.log('Context info:', info);
   console.log('Using API base:', SUSHE_API_BASE);
 
   try {
-    // Send message to content script to extract album data
+    
     console.log('Sending message to content script...');
     let albumData;
 
@@ -257,16 +257,16 @@ async function addAlbumToList(info, tab, listName) {
       });
     } catch (err) {
       console.error('Content script communication error:', err);
-      // Try to inject the content script if it's not loaded
+      
       console.log('Attempting to inject content script...');
       try {
         await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['content-script.js'],
         });
-        // Wait a moment for script to initialize
+        
         await new Promise((resolve) => setTimeout(resolve, 100));
-        // Try again
+        
         albumData = await chrome.tabs.sendMessage(tab.id, {
           action: 'extractAlbumData',
           srcUrl: info.srcUrl,
@@ -293,13 +293,13 @@ async function addAlbumToList(info, tab, listName) {
 
     console.log('Extracted album data:', albumData);
 
-    // Show single progress notification
+    
     showNotification(
       'Adding album...',
       `Adding ${albumData.album} by ${albumData.artist} to ${listName}`
     );
 
-    // Search MusicBrainz for the album
+    
     console.log('Searching MusicBrainz for album...');
 
     const searchQuery = `${albumData.artist} ${albumData.album}`;
@@ -328,11 +328,11 @@ async function addAlbumToList(info, tab, listName) {
       );
     }
 
-    // Take the first (best) match
+    
     const releaseGroup = releaseGroups[0];
     console.log('Found release group:', releaseGroup);
 
-    // Get cover art from Deezer
+    
     console.log('Fetching cover art from Deezer...');
 
     const deezerQuery = `${albumData.artist} ${albumData.album}`
@@ -384,7 +384,7 @@ async function addAlbumToList(info, tab, listName) {
       }
     }
 
-    // Get current list data
+    
     console.log(
       `Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`
     );
@@ -408,12 +408,12 @@ async function addAlbumToList(info, tab, listName) {
       throw new Error('Not logged in to SuShe Online. Please login first.');
     } else if (listResponse.status === 404) {
       console.log('List not found, will create new one');
-      // List doesn't exist yet, that's okay
+      
     } else {
       throw new Error(`API returned status ${listResponse.status}`);
     }
 
-    // Check if album already exists in list
+    
     const isDuplicate = currentList.some(
       (item) =>
         item.artist === albumData.artist && item.album === albumData.album
@@ -427,7 +427,7 @@ async function addAlbumToList(info, tab, listName) {
       return;
     }
 
-    // Get artist country from MusicBrainz and resolve to full name
+    
     let artistCountry = '';
     if (
       releaseGroup['artist-credit'] &&
@@ -449,13 +449,13 @@ async function addAlbumToList(info, tab, listName) {
         if (artistResponse.ok) {
           const artistData = await artistResponse.json();
           if (artistData.country && artistData.country.length === 2) {
-            // Resolve 2-letter country code to full name
+            
             artistCountry = await resolveCountryCode(artistData.country);
             console.log(
               `Resolved country code ${artistData.country} to: ${artistCountry}`
             );
           } else if (artistData.country) {
-            // Already full name
+            
             artistCountry = artistData.country;
           }
         }
@@ -464,7 +464,7 @@ async function addAlbumToList(info, tab, listName) {
       }
     }
 
-    // Add new album to list
+    
     currentList.push({
       artist: albumData.artist,
       album: albumData.album,
@@ -480,7 +480,7 @@ async function addAlbumToList(info, tab, listName) {
       cover_image_format: coverImageFormat,
     });
 
-    // Save updated list
+    
     console.log('Saving list with', currentList.length, 'albums');
     const saveResponse = await fetch(
       `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
@@ -509,7 +509,7 @@ async function addAlbumToList(info, tab, listName) {
       throw new Error(errorData.error || 'Failed to save album');
     }
 
-    // Success notification with album cover
+    
     const albumCoverUrl = coverImageData
       ? `data:image/${coverImageFormat.toLowerCase()};base64,${coverImageData}`
       : 'icons/icon128.png';
@@ -525,7 +525,7 @@ async function addAlbumToList(info, tab, listName) {
   }
 }
 
-// Show browser notification
+
 function showNotification(title, message) {
   chrome.notifications.create({
     type: 'basic',
@@ -535,7 +535,7 @@ function showNotification(title, message) {
   });
 }
 
-// Show browser notification with custom image
+
 function showNotificationWithImage(title, message, imageUrl) {
   chrome.notifications.create({
     type: 'basic',
@@ -545,7 +545,7 @@ function showNotificationWithImage(title, message, imageUrl) {
   });
 }
 
-// Resolve 2-letter country code to full country name
+
 async function resolveCountryCode(countryCode) {
   if (!countryCode || countryCode.length !== 2) {
     console.debug(`Invalid country code: ${countryCode}`);
@@ -553,7 +553,7 @@ async function resolveCountryCode(countryCode) {
   }
 
   try {
-    // Use RestCountries API to get country info
+    
     const response = await fetch(
       `https://restcountries.com/v3.1/alpha/${countryCode}`
     );
@@ -573,10 +573,10 @@ async function resolveCountryCode(countryCode) {
 
     const countryData = data[0];
 
-    // Use the common name (e.g., "United States" instead of "United States of America")
+    
     let countryName = countryData.name.common;
 
-    // Special cases to match SuShe Online's country list
+    
     if (countryCode === 'US') {
       countryName = 'United States';
     } else if (countryCode === 'GB') {
@@ -595,20 +595,20 @@ async function resolveCountryCode(countryCode) {
   }
 }
 
-// Listen for messages from content script or popup
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'refreshLists') {
     listsLastFetched = 0;
     fetchUserLists().then(() => {
       sendResponse({ success: true });
     });
-    return true; // Keep channel open for async response
+    return true; 
   }
 
   if (message.action === 'updateApiUrl') {
     SUSHE_API_BASE = message.apiUrl;
     console.log('API URL updated to:', SUSHE_API_BASE);
-    listsLastFetched = 0; // Force refresh with new URL
+    listsLastFetched = 0; 
     createContextMenus();
     return true;
   }

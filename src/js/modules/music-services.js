@@ -3,13 +3,13 @@ import { showConfirmation } from '../app.js';
 
 export async function updatePlaylist(listName, listData = []) {
   try {
-    // Validate track selection before proceeding
+    
     const totalAlbums = listData.length;
     const albumsWithTracks = listData.filter(
       (album) => album.track_pick && album.track_pick.trim() !== ''
     ).length;
 
-    // If list has albums but not all have tracks selected, warn the user
+    
     if (totalAlbums > 0 && albumsWithTracks < totalAlbums) {
       const confirmed = await showConfirmation(
         'Incomplete Track Selection',
@@ -67,7 +67,7 @@ export async function updatePlaylist(listName, listData = []) {
   } catch (error) {
     console.error('Error updating playlist:', error);
 
-    // Handle OAuth token expiration - automatically reconnect
+    
     if (
       error.data &&
       (error.data.code === 'TOKEN_EXPIRED' ||
@@ -77,11 +77,11 @@ export async function updatePlaylist(listName, listData = []) {
       const serviceName =
         error.data.service === 'spotify' ? 'Spotify' : 'Tidal';
 
-      // Show a brief toast before redirecting
+      
       showToast(`Reconnecting to ${serviceName}...`, 'info', 2000);
 
-      // Automatically redirect to reconnect (OAuth flow)
-      // Pass the current path so we can return here after reconnecting
+      
+      
       setTimeout(() => {
         const returnTo = encodeURIComponent(window.location.pathname);
         window.location.href = `/auth/${error.data.service}?returnTo=${returnTo}`;
@@ -90,7 +90,7 @@ export async function updatePlaylist(listName, listData = []) {
       return;
     }
 
-    // Handle missing authentication
+    
     if (
       error.data &&
       error.data.code === 'NOT_AUTHENTICATED' &&
@@ -111,7 +111,7 @@ export async function updatePlaylist(listName, listData = []) {
       return;
     }
 
-    // Handle missing service selection
+    
     if (
       error.message &&
       (error.message.includes('NOT_AUTHENTICATED') ||

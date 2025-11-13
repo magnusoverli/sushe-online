@@ -1,7 +1,7 @@
-// Initial database schema migration
+
 module.exports = {
   async up(pool) {
-    // Create users table
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
@@ -25,7 +25,7 @@ module.exports = {
       )
     `);
 
-    // Create indexes for users table
+    
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)
     `);
@@ -39,7 +39,7 @@ module.exports = {
       CREATE INDEX IF NOT EXISTS idx_users_reset_token_expires ON users(reset_token, reset_expires)
     `);
 
-    // Create lists table
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS lists (
         id SERIAL PRIMARY KEY,
@@ -52,7 +52,7 @@ module.exports = {
       )
     `);
 
-    // Create indexes for lists table
+    
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_lists_user_id ON lists(user_id)
     `);
@@ -60,7 +60,7 @@ module.exports = {
       CREATE INDEX IF NOT EXISTS idx_lists_name ON lists(name)
     `);
 
-    // Create list_items table
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS list_items (
         id SERIAL PRIMARY KEY,
@@ -83,7 +83,7 @@ module.exports = {
       )
     `);
 
-    // Create indexes for list_items table
+    
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_list_items_list_id ON list_items(list_id)
     `);
@@ -94,7 +94,7 @@ module.exports = {
       CREATE INDEX IF NOT EXISTS idx_list_items_position ON list_items(list_id, position)
     `);
 
-    // Create albums table
+    
     await pool.query(`
       CREATE TABLE IF NOT EXISTS albums (
         id SERIAL PRIMARY KEY,
@@ -114,7 +114,7 @@ module.exports = {
       )
     `);
 
-    // Create indexes for albums table
+    
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_albums_artist ON albums(artist)
     `);
@@ -127,7 +127,7 @@ module.exports = {
   },
 
   async down(pool) {
-    // Drop tables in reverse order due to foreign key constraints
+    
     await pool.query('DROP TABLE IF EXISTS albums CASCADE');
     await pool.query('DROP TABLE IF EXISTS list_items CASCADE');
     await pool.query('DROP TABLE IF EXISTS lists CASCADE');

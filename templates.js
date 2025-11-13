@@ -2,7 +2,7 @@ const { adjustColor, colorWithOpacity } = require('./color-utils');
 const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');
-// Use a timestamp-based asset version to avoid browser caching issues
+
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = (p) => `${p}?v=${assetVersion}`;
 
@@ -27,7 +27,7 @@ const formatDateTime = (date, hour12, format = 'MM/DD/YYYY') => {
 };
 
 const viewsDir = path.join(__dirname, 'views');
-// Precompile EJS templates for caching
+
 const layoutTemplateFn = ejs.compile(
   fs.readFileSync(path.join(viewsDir, 'layout.ejs'), 'utf8'),
   { filename: 'layout.ejs', cache: true }
@@ -37,7 +37,7 @@ const loginSnippetFn = ejs.compile(
   { filename: 'login.ejs', cache: true }
 );
 
-// Shared header component
+
 const headerComponent = (
   user,
   activeSection = 'home',
@@ -111,7 +111,7 @@ const headerComponent = (
   </header>
 `;
 
-// Base HTML template rendered with EJS
+
 const htmlTemplate = (content, title = 'SuShe Auth', user = null) =>
   layoutTemplateFn({
     content,
@@ -122,7 +122,7 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) =>
     colorWithOpacity,
   });
 
-// Registration form template - Updated with flash parameter
+
 const registerTemplate = (req, flash) =>
   htmlTemplate(
     `
@@ -219,11 +219,11 @@ const registerTemplate = (req, flash) =>
     null
   );
 
-// Login form template rendered with EJS
+
 const loginTemplate = (req, flash) =>
   loginSnippetFn({ req, flash, csrfToken: req.csrfToken() });
 
-// Forgot password template - Updated with flash parameter
+
 const forgotPasswordTemplate = (req, flash) => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
@@ -264,7 +264,7 @@ const forgotPasswordTemplate = (req, flash) => `
   </div>
 `;
 
-// Reset password template
+
 const resetPasswordTemplate = (token, csrfToken = '') => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
@@ -298,7 +298,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
   </div>
 `;
 
-// Invalid token template
+
 const invalidTokenTemplate = () => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <p class="text-red-500 text-center mb-4">This recovery rune has expired or been corrupted</p>
@@ -306,7 +306,7 @@ const invalidTokenTemplate = () => `
   </div>
 `;
 
-// Component: Import Conflict Modal
+
 const importConflictModalComponent = () => `
   <div id="importConflictModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
@@ -402,7 +402,7 @@ const importConflictModalComponent = () => `
   </div>
 `;
 
-// Component: Context Menus
+
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
@@ -434,7 +434,7 @@ const contextMenusComponent = () => `
   </div>
 `;
 
-// Component: Create List Modal
+
 const createListModalComponent = () => `
   <div id="createListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
@@ -477,7 +477,7 @@ const createListModalComponent = () => `
   </div>
 `;
 
-// Component: Rename List Modal
+
 const renameListModalComponent = () => `
   <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
@@ -521,7 +521,7 @@ const renameListModalComponent = () => `
   </div>
 `;
 
-// Component: Add Album Modal - Consolidated Version
+
 const addAlbumModalComponent = () => `
   <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center lg:p-4">
     <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col">
@@ -754,7 +754,7 @@ const addAlbumModalComponent = () => `
   </div>
 `;
 
-// Component: Confirmation Modal
+
 const confirmationModalComponent = () => `
   <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
@@ -788,7 +788,7 @@ const confirmationModalComponent = () => `
   </div>
 `;
 
-// Component: Service Select Modal
+
 const serviceSelectModalComponent = () => `
   <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
@@ -815,7 +815,7 @@ const serviceSelectModalComponent = () => `
   </div>
 `;
 
-// Main Spotify template - Consolidated version
+
 const spotifyTemplate = (user) => `
 <!DOCTYPE html>
 <html lang="en">

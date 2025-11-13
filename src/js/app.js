@@ -1,32 +1,32 @@
-// Import static data at build time
+
 import genresText from '../data/genres.txt?raw';
 import countriesText from '../data/countries.txt?raw';
 
-// Lazy loading module cache
+
 let musicServicesModule = null;
 let importExportModule = null;
 
-// Global variables
+
 let lists = {};
 let currentList = '';
 let currentContextAlbum = null;
-let currentContextAlbumId = null; // Store album identity as backup
+let currentContextAlbumId = null; 
 let currentContextList = null;
 const _genres = [];
 const _countries = [];
 let listEventSource = null;
 let sseUpdateTimeout = null;
 
-// Process static data at module load time
+
 const availableGenres = genresText
   .split('\n')
   .map((g) => g.trim())
   .filter((g, index) => {
-    // Keep the first empty line if it exists, but remove other empty lines
+    
     return g.length > 0 || (index === 0 && g === '');
   })
   .sort((a, b) => {
-    // Keep empty string at top if it exists
+    
     if (a === '') return -1;
     if (b === '') return 1;
     return a.localeCompare(b);
@@ -36,30 +36,30 @@ const availableCountries = countriesText
   .split('\n')
   .map((c) => c.trim())
   .filter((c, index) => {
-    // Keep the first empty line if it exists, but remove other empty lines
+    
     return c.length > 0 || (index === 0 && c === '');
   })
   .sort((a, b) => {
-    // Keep empty string at top if it exists
+    
     if (a === '') return -1;
     if (b === '') return 1;
     return a.localeCompare(b);
   });
 
-// Expose to window for access from other modules
+
 window.availableCountries = availableCountries;
 
 let pendingImportData = null;
 let pendingImportFilename = null;
 let confirmationCallback = null;
 
-// Performance optimization: Shallow list comparison instead of expensive JSON.stringify
-// Compares list structure (length, IDs, positions) rather than full serialization
+
+
 function hasListChanged(oldList, newList) {
   if (!oldList || !newList) return true;
   if (oldList.length !== newList.length) return true;
 
-  // Sample-based comparison for large lists (check first 15 items for quick detection)
+  
   const sampleSize = Math.min(15, oldList.length);
   for (let i = 0; i < sampleSize; i++) {
     const oldAlbum = oldList[i];
@@ -73,27 +73,27 @@ function hasListChanged(oldList, newList) {
     }
   }
 
-  // If sample looks identical, assume full list is identical
-  // This is ~90% faster than JSON.stringify on large lists with base64 images
+  
+  
   return false;
 }
 
-// Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
-// Positions a menu element and adjusts if it would overflow the viewport
+
+
 function positionContextMenu(menu, x, y) {
-  // Initial position
+  
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
   menu.classList.remove('hidden');
 
-  // Use requestAnimationFrame to batch the read phase after paint
+  
   requestAnimationFrame(() => {
-    // Read phase - measure menu dimensions and viewport
+    
     const rect = menu.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
 
-    // Calculate phase - determine adjustments needed
+    
     let adjustedX = x;
     let adjustedY = y;
 
@@ -104,7 +104,7 @@ function positionContextMenu(menu, x, y) {
       adjustedY = y - rect.height;
     }
 
-    // Write phase - apply adjustments if needed
+    
     if (adjustedX !== x || adjustedY !== y) {
       menu.style.left = `${adjustedX}px`;
       menu.style.top = `${adjustedY}px`;
@@ -112,12 +112,12 @@ function positionContextMenu(menu, x, y) {
   });
 }
 
-// Track loading performance optimization variables
+
 let trackAbortController = null;
 
-// Context menu variables
 
-// Position-based points mapping (unused but kept for reference)
+
+
 const _POSITION_POINTS = {
   1: 60,
   2: 54,
@@ -161,7 +161,7 @@ const _POSITION_POINTS = {
   40: 1,
 };
 
-// Hide context menus when clicking elsewhere
+
 document.addEventListener('click', () => {
   const contextMenu = document.getElementById('contextMenu');
   if (contextMenu) {
@@ -171,11 +171,11 @@ document.addEventListener('click', () => {
   const albumContextMenu = document.getElementById('albumContextMenu');
   if (albumContextMenu) {
     albumContextMenu.classList.add('hidden');
-    // Clear context album references when menu is hidden
+    
     currentContextAlbum = null;
     currentContextAlbumId = null;
 
-    // Cancel any pending track fetches
+    
     if (trackAbortController) {
       trackAbortController.abort();
       trackAbortController = null;
@@ -183,7 +183,7 @@ document.addEventListener('click', () => {
   }
 });
 
-// Prevent default context menu on right-click in list nav
+
 document.addEventListener('contextmenu', (e) => {
   const listButton = e.target.closest('#listNav button');
   if (listButton) {
@@ -210,7 +210,7 @@ export function showConfirmation(
   subMessageEl.textContent = subMessage || '';
   confirmBtn.textContent = confirmText;
 
-  // If onConfirm is provided, use callback style
+  
   if (onConfirm) {
     confirmationCallback = onConfirm;
 
@@ -257,7 +257,7 @@ export function showConfirmation(
     return;
   }
 
-  // Otherwise return a promise for async/await style
+  
   return new Promise((resolve) => {
     const handleConfirm = () => {
       modal.classList.add('hidden');
@@ -305,7 +305,7 @@ function hideConfirmation() {
   confirmationCallback = null;
 }
 
-// Show modal to choose a music service
+
 async function showServicePicker(hasSpotify, hasTidal) {
   if (!musicServicesModule) {
     musicServicesModule = await import('./modules/music-services.js');
@@ -313,18 +313,18 @@ async function showServicePicker(hasSpotify, hasTidal) {
   return musicServicesModule.showServicePicker(hasSpotify, hasTidal);
 }
 
-// Standardize date formats for release dates
+
 function formatReleaseDate(dateStr) {
   if (!dateStr) return '';
 
   const userFormat = window.currentUser?.dateFormat || 'MM/DD/YYYY';
 
-  // Year only
+  
   if (/^\d{4}$/.test(dateStr)) {
     return dateStr;
   }
 
-  // Year-month
+  
   if (/^\d{4}-\d{2}$/.test(dateStr)) {
     const [year, month] = dateStr.split('-');
     return `${month}/${year}`;
@@ -341,28 +341,28 @@ function formatReleaseDate(dateStr) {
   return `${month}/${day}/${year}`;
 }
 
-// Convert various date formats to ISO YYYY-MM-DD for date input fields
+
 function normalizeDateForInput(dateStr) {
   if (!dateStr) return '';
 
   const userFormat = window.currentUser?.dateFormat;
 
-  // Year only
+  
   if (/^\d{4}$/.test(dateStr)) {
     return `${dateStr}-01-01`;
   }
 
-  // Year-month
+  
   if (/^\d{4}-\d{2}$/.test(dateStr)) {
     return `${dateStr}-01`;
   }
 
-  // ISO already
+  
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     return dateStr;
   }
 
-  // Formats like DD/MM/YYYY or MM/DD/YYYY or with dashes
+  
   const parts = dateStr.split(/[/-]/);
   if (
     parts.length === 3 &&
@@ -398,7 +398,7 @@ function normalizeDateForInput(dateStr) {
   return '';
 }
 
-// Convert YYYY-MM-DD to the user's preferred format
+
 function formatDateForStorage(isoDate) {
   if (!isoDate) return '';
   const userFormat = window.currentUser?.dateFormat || 'MM/DD/YYYY';
@@ -409,7 +409,7 @@ function formatDateForStorage(isoDate) {
   return `${month}/${day}/${year}`;
 }
 
-// Load available countries
+
 
 async function downloadListAsJSON(listName) {
   if (!importExportModule) {
@@ -419,7 +419,7 @@ async function downloadListAsJSON(listName) {
   return importExportModule.downloadListAsJSON(listName, lists);
 }
 
-// Test function to verify confirmation dialog works
+
 window.testConfirmation = async function () {
   const result = await showConfirmation(
     'Test Dialog',
@@ -435,13 +435,13 @@ async function updatePlaylist(listName, listData = null) {
     showToast('Loading playlist integration...', 'info', 1000);
     musicServicesModule = await import('./modules/music-services.js');
   }
-  // If listData not provided, get it from global lists
+  
   const data = listData !== null ? listData : lists[listName] || [];
   return musicServicesModule.updatePlaylist(listName, data);
 }
 window.updatePlaylist = updatePlaylist;
 
-// Show playlist validation modal before creating playlist
+
 async function _showPlaylistValidationModal(listName, validation) {
   return new Promise((resolve) => {
     const modal = document.createElement('div');
@@ -524,7 +524,7 @@ async function _showPlaylistValidationModal(listName, validation) {
       resolve(true);
     };
 
-    // Close on backdrop click
+    
     modal.onclick = (e) => {
       if (e.target === modal) {
         document.body.removeChild(modal);
@@ -534,7 +534,7 @@ async function _showPlaylistValidationModal(listName, validation) {
   });
 }
 
-// Show progress modal during playlist creation
+
 function showPlaylistProgressModal(listName) {
   const modal = document.createElement('div');
   modal.className =
@@ -564,14 +564,14 @@ function showPlaylistProgressModal(listName) {
   return modal;
 }
 
-// Hide progress modal
+
 function hidePlaylistProgressModal(modal) {
   if (modal && modal.parentNode) {
     document.body.removeChild(modal);
   }
 }
 
-// Show playlist creation results
+
 function showPlaylistResultModal(listName, result) {
   const modal = document.createElement('div');
   modal.className =
@@ -650,14 +650,14 @@ function showPlaylistResultModal(listName, result) {
     document.body.removeChild(modal);
   };
 
-  // Close on backdrop click
+  
   modal.onclick = (e) => {
     if (e.target === modal) {
       document.body.removeChild(modal);
     }
   };
 
-  // Show success toast
+  
   if (isSuccess) {
     showToast(
       `Playlist "${listName}" created with ${result.successful} tracks`,
@@ -666,7 +666,7 @@ function showPlaylistResultModal(listName, result) {
   }
 }
 
-// Show service selection modal when no preferred service is set
+
 function _showServiceSelectionModal(listName) {
   const modal = document.createElement('div');
   modal.className =
@@ -723,7 +723,7 @@ function _showServiceSelectionModal(listName) {
     document.body.removeChild(modal);
   };
 
-  // Close on backdrop click
+  
   modal.onclick = (e) => {
     if (e.target === modal) {
       document.body.removeChild(modal);
@@ -731,7 +731,7 @@ function _showServiceSelectionModal(listName) {
   };
 }
 
-// Create playlist with specific service
+
 async function createPlaylistWithService(listName, service) {
   try {
     const progressModal = showPlaylistProgressModal(listName);
@@ -753,7 +753,7 @@ async function createPlaylistWithService(listName, service) {
   }
 }
 
-// Initialize import conflict handling
+
 function initializeImportConflictHandling() {
   const conflictModal = document.getElementById('importConflictModal');
   const renameModal = document.getElementById('importRenameModal');
@@ -761,7 +761,7 @@ function initializeImportConflictHandling() {
   const originalImportNameSpan = document.getElementById('originalImportName');
   const importNewNameInput = document.getElementById('importNewName');
 
-  // Check if elements exist before setting handlers
+  
   const importOverwriteBtn = document.getElementById('importOverwriteBtn');
   const importRenameBtn = document.getElementById('importRenameBtn');
   const importMergeBtn = document.getElementById('importMergeBtn');
@@ -779,11 +779,11 @@ function initializeImportConflictHandling() {
     !importMergeBtn ||
     !importCancelBtn
   ) {
-    // Elements don't exist on this page, skip initialization
+    
     return;
   }
 
-  // Overwrite option
+  
   importOverwriteBtn.onclick = async () => {
     if (!pendingImportData || !pendingImportFilename) return;
 
@@ -805,12 +805,12 @@ function initializeImportConflictHandling() {
     pendingImportFilename = null;
   };
 
-  // Rename option
+  
   importRenameBtn.onclick = () => {
     conflictModal.classList.add('hidden');
     originalImportNameSpan.textContent = pendingImportFilename;
 
-    // Suggest a new name
+    
     let suggestedName = pendingImportFilename;
     let counter = 1;
     while (lists[suggestedName]) {
@@ -827,17 +827,17 @@ function initializeImportConflictHandling() {
     }, 100);
   };
 
-  // Merge option
+  
   importMergeBtn.onclick = async () => {
     if (!pendingImportData || !pendingImportFilename) return;
 
     conflictModal.classList.add('hidden');
 
     try {
-      // Get existing list
+      
       const existingList = lists[pendingImportFilename] || [];
 
-      // Merge the lists (avoiding duplicates based on artist + album)
+      
       const existingKeys = new Set(
         existingList.map((album) =>
           `${album.artist}::${album.album}`.toLowerCase()
@@ -874,7 +874,7 @@ function initializeImportConflictHandling() {
     pendingImportFilename = null;
   };
 
-  // Cancel import
+  
   importCancelBtn.onclick = () => {
     conflictModal.classList.add('hidden');
     pendingImportData = null;
@@ -882,7 +882,7 @@ function initializeImportConflictHandling() {
     showToast('Import cancelled');
   };
 
-  // Rename modal handlers
+  
   if (confirmImportRenameBtn) {
     confirmImportRenameBtn.onclick = async () => {
       const newName = importNewNameInput.value.trim();
@@ -919,14 +919,14 @@ function initializeImportConflictHandling() {
   if (cancelImportRenameBtn) {
     cancelImportRenameBtn.onclick = () => {
       renameModal.classList.add('hidden');
-      // Go back to conflict modal
+      
       document.getElementById('conflictListName').textContent =
         pendingImportFilename;
       conflictModal.classList.remove('hidden');
     };
   }
 
-  // Enter key in rename input
+  
   if (importNewNameInput) {
     importNewNameInput.onkeypress = (e) => {
       if (e.key === 'Enter' && confirmImportRenameBtn) {
@@ -936,17 +936,17 @@ function initializeImportConflictHandling() {
   }
 }
 
-// Make country editable with datalist
+
 function makeCountryEditable(countryDiv, albumIndex) {
-  // Check if we're already editing
+  
   if (countryDiv.querySelector('input')) {
     return;
   }
 
-  // Get current country from the live data
+  
   const currentCountry = lists[currentList][albumIndex].country || '';
 
-  // Create input with datalist
+  
   const input = document.createElement('input');
   input.type = 'text';
   input.className =
@@ -955,39 +955,39 @@ function makeCountryEditable(countryDiv, albumIndex) {
   input.placeholder = 'Type to search countries...';
   input.setAttribute('list', `country-list-${currentList}-${albumIndex}`);
 
-  // Create datalist
+  
   const datalist = document.createElement('datalist');
   datalist.id = `country-list-${currentList}-${albumIndex}`;
 
-  // Add all available countries
+  
   availableCountries.forEach((country) => {
     const option = document.createElement('option');
     option.value = country;
     datalist.appendChild(option);
   });
 
-  // Store the original onclick handler
+  
   const originalOnClick = countryDiv.onclick;
-  countryDiv.onclick = null; // Temporarily remove click handler
+  countryDiv.onclick = null; 
 
-  // Replace content with input and datalist
+  
   countryDiv.innerHTML = '';
   countryDiv.appendChild(input);
   countryDiv.appendChild(datalist);
   input.focus();
   input.select();
 
-  // Create handleClickOutside function so we can reference it for removal
+  
   let handleClickOutside;
 
   const restoreDisplay = (valueToDisplay) => {
-    // Remove the click outside listener if it exists
+    
     if (handleClickOutside) {
       document.removeEventListener('click', handleClickOutside);
       handleClickOutside = null;
     }
 
-    // Show placeholder if empty
+    
     const displayValue = valueToDisplay || 'Country';
     const displayClass = valueToDisplay
       ? 'text-gray-300'
@@ -995,43 +995,43 @@ function makeCountryEditable(countryDiv, albumIndex) {
 
     countryDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
 
-    // Restore the original click handler
+    
     countryDiv.onclick = originalOnClick;
   };
 
   const saveCountry = async (newCountry) => {
-    // Trim the input
+    
     newCountry = newCountry.trim();
 
-    // Check if value actually changed
+    
     if (newCountry === currentCountry) {
       restoreDisplay(currentCountry);
       return;
     }
 
-    // VALIDATION: Only allow empty string or values from availableCountries
+    
     if (newCountry !== '') {
       const isValid = availableCountries.some(
         (country) => country.toLowerCase() === newCountry.toLowerCase()
       );
 
       if (!isValid) {
-        // Invalid country entered - revert to original
+        
         restoreDisplay(currentCountry);
         return;
       }
 
-      // Find the exact case-matched country from the list
+      
       const matchedCountry = availableCountries.find(
         (country) => country.toLowerCase() === newCountry.toLowerCase()
       );
-      newCountry = matchedCountry; // Use the properly cased version
+      newCountry = matchedCountry; 
     }
 
-    // Update the data
+    
     lists[currentList][albumIndex].country = newCountry;
 
-    // Close the dropdown immediately for better UX
+    
     restoreDisplay(newCountry);
 
     try {
@@ -1039,23 +1039,23 @@ function makeCountryEditable(countryDiv, albumIndex) {
       showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
     } catch (_error) {
       showToast('Error saving country', 'error');
-      // Revert on error
+      
       lists[currentList][albumIndex].country = currentCountry;
       restoreDisplay(currentCountry);
     }
   };
 
-  // Handle input change (when selecting from datalist)
+  
   input.addEventListener('change', (e) => {
     saveCountry(e.target.value);
   });
 
-  // Handle blur (when clicking away)
+  
   input.addEventListener('blur', () => {
     saveCountry(input.value);
   });
 
-  // Handle keyboard
+  
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -1066,66 +1066,66 @@ function makeCountryEditable(countryDiv, albumIndex) {
     }
   });
 
-  // Define handleClickOutside
+  
   handleClickOutside = (e) => {
     if (!countryDiv.contains(e.target)) {
       saveCountry(input.value);
     }
   };
 
-  // Small delay to prevent immediate trigger
+  
   setTimeout(() => {
     document.addEventListener('click', handleClickOutside);
   }, 100);
 }
 
-// Toast notification management
+
 let toastTimer = null;
 
-// Show toast notification with configurable duration
+
 export function showToast(message, type = 'success', duration = null) {
   const toast = document.getElementById('toast');
 
-  // Clear any existing timer
+  
   if (toastTimer) {
     clearTimeout(toastTimer);
     toastTimer = null;
   }
 
-  // Remove 'show' class immediately to reset animation
+  
   toast.classList.remove('show');
 
   toast.textContent = message;
   toast.className = 'toast ' + type;
 
-  // Show the toast
+  
   setTimeout(() => toast.classList.add('show'), 10);
 
-  // Determine duration based on type and content
+  
   if (duration === null) {
-    // Default durations
+    
     if (type === 'success' && message.includes('successfully')) {
-      duration = 5000; // 5 seconds for success messages
+      duration = 5000; 
     } else if (type === 'error') {
-      duration = 5000; // 5 seconds for errors
+      duration = 5000; 
     } else if (message.includes('...')) {
-      duration = 10000; // 10 seconds for "loading" messages
+      duration = 10000; 
     } else {
-      duration = 3000; // 3 seconds for other messages
+      duration = 3000; 
     }
   }
 
-  // Set timer to hide the toast
+  
   toastTimer = setTimeout(() => {
     toast.classList.remove('show');
     toastTimer = null;
   }, duration);
 }
 
-// Make showToast globally available immediately
+
 window.showToast = showToast;
 
-// API helper functions
+
 export async function apiCall(url, options = {}) {
   try {
     const response = await fetch(url, {
@@ -1139,12 +1139,12 @@ export async function apiCall(url, options = {}) {
 
     if (!response.ok) {
       if (response.status === 401) {
-        // Try to parse error response to distinguish between session expiration and OAuth issues
+        
         try {
           const errorData = await response.json();
 
-          // OAuth-specific errors (token expired, music service not authenticated)
-          // These should be handled by the caller, not redirect to login
+          
+          
           if (
             errorData.code === 'TOKEN_EXPIRED' ||
             errorData.code === 'TOKEN_REFRESH_FAILED' ||
@@ -1158,17 +1158,17 @@ export async function apiCall(url, options = {}) {
             throw error;
           }
 
-          // Session expired or generic authentication failure - redirect to login
+          
           clearListsCache();
           window.location.href = '/login';
           return;
         } catch (parseError) {
-          // If we can't parse the response, treat it as session expiration
+          
           if (parseError.data) {
-            // This is the error we threw above for OAuth issues
+            
             throw parseError;
           }
-          // JSON parse failed, likely session expired
+          
           clearListsCache();
           window.location.href = '/login';
           return;
@@ -1187,7 +1187,7 @@ export async function apiCall(url, options = {}) {
 }
 window.apiCall = apiCall;
 
-// Fetch link preview metadata
+
 async function fetchLinkPreview(url) {
   try {
     return await apiCall(`/api/unfurl?url=${encodeURIComponent(url)}`);
@@ -1222,7 +1222,7 @@ function attachLinkPreview(container, comment) {
     .catch(() => previewEl.remove());
 }
 
-// Clear lists cache (useful for logout or cache corruption)
+
 function clearListsCache() {
   try {
     localStorage.removeItem('lists_cache');
@@ -1232,12 +1232,12 @@ function clearListsCache() {
   }
 }
 
-// Load lists from server
+
 async function loadLists() {
   try {
     const CACHE_KEY = 'lists_cache';
     const CACHE_TIMESTAMP_KEY = 'lists_cache_timestamp';
-    const CACHE_TTL = 0; // Always fetch fresh data, but use cache for instant display
+    const CACHE_TTL = 0; 
 
     let loadedFromCache = false;
 
@@ -1254,7 +1254,7 @@ async function loadLists() {
           updateListNav();
           loadedFromCache = true;
 
-          // Try to select last list immediately after loading from cache
+          
           trySelectLastList();
         } else {
           localStorage.removeItem(CACHE_KEY);
@@ -1275,10 +1275,10 @@ async function loadLists() {
     if (shouldRefresh) {
       const freshLists = await apiCall('/api/lists');
 
-      // Fix #7: Mark data as fresh from server to avoid redundant fetches
+      
       listsDataFreshTimestamp = Date.now();
 
-      // Performance: Use shallow comparison instead of expensive JSON.stringify
+      
       const hasChanges = Object.keys(freshLists).some((listName) =>
         hasListChanged(lists[listName], freshLists[listName])
       );
@@ -1295,7 +1295,7 @@ async function loadLists() {
           console.warn('Failed to cache lists:', storageError);
         }
 
-        // If we didn't load from cache, try selecting now
+        
         if (!loadedFromCache) {
           trySelectLastList();
         }
@@ -1307,31 +1307,31 @@ async function loadLists() {
   }
 }
 
-// Fix #7: Track when list data is fresh to avoid redundant API calls
+
 let listsDataFreshTimestamp = 0;
-const DATA_FRESH_WINDOW = 5000; // Consider data fresh for 5 seconds
+const DATA_FRESH_WINDOW = 5000; 
 
 function trySelectLastList() {
-  // Only auto-select if no list is currently selected
+  
   if (window.currentList) return;
 
   const localLastList = localStorage.getItem('lastSelectedList');
   const serverLastList = window.lastSelectedList;
 
-  // Fix #7: Skip fetch if we just loaded fresh data from the server
+  
   const dataIsFresh = Date.now() - listsDataFreshTimestamp < DATA_FRESH_WINDOW;
 
-  // Prioritize local storage if it exists and is valid
+  
   if (localLastList && lists[localLastList]) {
     selectList(localLastList, dataIsFresh);
   } else if (serverLastList && lists[serverLastList]) {
     selectList(serverLastList, dataIsFresh);
-    // Also update localStorage with server value
+    
     localStorage.setItem('lastSelectedList', serverLastList);
   }
 }
 
-// Save list to server
+
 async function saveList(name, data) {
   try {
     const cleanedData = data.map((album) => {
@@ -1352,7 +1352,7 @@ async function saveList(name, data) {
       localStorage.setItem('lists_cache', JSON.stringify(lists));
       localStorage.setItem('lists_cache_timestamp', Date.now().toString());
 
-      // Fix #4: Also update the individual list cache for faster next load
+      
       localStorage.setItem(
         `lastSelectedListData_${name}`,
         JSON.stringify(cleanedData)
@@ -1365,7 +1365,7 @@ async function saveList(name, data) {
     throw error;
   }
 }
-// Expose saveList for other modules
+
 window.saveList = saveList;
 
 async function fetchTracksForAlbum(album, signal = null) {
@@ -1379,7 +1379,7 @@ async function fetchTracksForAlbum(album, signal = null) {
     credentials: 'include',
   };
 
-  // Add abort signal if provided
+  
   if (signal) {
     fetchOptions.signal = signal;
   }
@@ -1395,7 +1395,7 @@ async function fetchTracksForAlbum(album, signal = null) {
 }
 window.fetchTracksForAlbum = fetchTracksForAlbum;
 
-// Performance: Concurrency limiter for parallel requests
+
 async function pLimit(concurrency, tasks) {
   const results = [];
   const executing = [];
@@ -1417,8 +1417,8 @@ async function pLimit(concurrency, tasks) {
   return Promise.allSettled(results);
 }
 
-// Fix #3: Add concurrency limiting to track fetching (3-5 concurrent requests)
-// This prevents overwhelming the backend while still being much faster than sequential
+
+
 async function autoFetchTracksForList(name) {
   const list = lists[name];
   if (!list) return;
@@ -1428,12 +1428,12 @@ async function autoFetchTracksForList(name) {
   );
   if (toFetch.length === 0) return;
 
-  // Fetch up to 5 tracks concurrently instead of sequentially
-  // This reduces load time from N × 300ms to (N/5) × 300ms
+  
+  
   const tasks = toFetch.map((album) => () => {
     return fetchTracksForAlbum(album).catch((err) => {
       console.error('Auto track fetch failed:', err);
-      return null; // Return null on error to continue with other fetches
+      return null; 
     });
   });
 
@@ -1455,19 +1455,19 @@ function subscribeToList(name) {
     try {
       const data = JSON.parse(e.data);
 
-      // Debounce SSE updates to batch rapid changes
+      
       clearTimeout(sseUpdateTimeout);
       sseUpdateTimeout = setTimeout(() => {
-        // CRITICAL: Ignore SSE updates if we recently made local drag changes
-        // This prevents the server from overwriting our unsaved edits during rapid drags
+        
+        
         const lastDragTime = activeDragOperations.get(name);
         if (lastDragTime && Date.now() - lastDragTime < 2000) {
-          // Ignore SSE updates within 2 seconds of our last local drag
+          
           return;
         }
 
-        // Prevent re-rendering if data hasn't actually changed (avoid self-updates)
-        // Performance: Use shallow comparison instead of expensive JSON.stringify
+        
+        
         const currentData = lists[name];
         const hasChanged = hasListChanged(currentData, data);
 
@@ -1487,7 +1487,7 @@ function subscribeToList(name) {
   };
 }
 
-// Initialize context menu
+
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
   const downloadOption = document.getElementById('downloadListOption');
@@ -1504,7 +1504,7 @@ function initializeContextMenu() {
   )
     return;
 
-  // Update the playlist option text based on user's music service
+  
   const updatePlaylistText = document.getElementById('updatePlaylistText');
   if (updatePlaylistText) {
     const musicService = window.currentUser?.musicService;
@@ -1524,7 +1524,7 @@ function initializeContextMenu() {
     }
   }
 
-  // Handle download option click
+  
   downloadOption.onclick = () => {
     contextMenu.classList.add('hidden');
 
@@ -1535,7 +1535,7 @@ function initializeContextMenu() {
     currentContextList = null;
   };
 
-  // Handle rename option click
+  
   renameOption.onclick = () => {
     contextMenu.classList.add('hidden');
 
@@ -1544,14 +1544,14 @@ function initializeContextMenu() {
     openRenameModal(currentContextList);
   };
 
-  // Handle update playlist option click
+  
   updatePlaylistOption.onclick = async () => {
     contextMenu.classList.add('hidden');
 
     if (!currentContextList) return;
 
     try {
-      // Pass both list name and list data for track validation
+      
       const listData = lists[currentContextList] || [];
       await updatePlaylist(currentContextList, listData);
     } catch (err) {
@@ -1561,13 +1561,13 @@ function initializeContextMenu() {
     currentContextList = null;
   };
 
-  // Handle delete option click
+  
   deleteOption.onclick = async () => {
     contextMenu.classList.add('hidden');
 
     if (!currentContextList) return;
 
-    // Confirm deletion using custom modal
+    
     const confirmed = await showConfirmation(
       'Delete List',
       `Are you sure you want to delete the list "${currentContextList}"?`,
@@ -1636,7 +1636,7 @@ function updateMobileHeader() {
   }
 }
 
-// Initialize album context menu
+
 function initializeAlbumContextMenu() {
   const contextMenu = document.getElementById('albumContextMenu');
   const removeOption = document.getElementById('removeAlbumOption');
@@ -1645,26 +1645,26 @@ function initializeAlbumContextMenu() {
 
   if (!contextMenu || !removeOption || !editOption || !playOption) return;
 
-  // Handle edit option click
+  
   editOption.onclick = () => {
     contextMenu.classList.add('hidden');
 
     if (currentContextAlbum === null) return;
 
-    // Verify the album is still at the expected index, fallback to identity search
+    
     const expectedAlbum =
       lists[currentList] && lists[currentList][currentContextAlbum];
     if (expectedAlbum && currentContextAlbumId) {
       const expectedId =
         `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
       if (expectedId === currentContextAlbumId) {
-        // Index is still valid
+        
         showMobileEditForm(currentContextAlbum);
         return;
       }
     }
 
-    // Index is stale, search by identity
+    
     if (currentContextAlbumId) {
       showMobileEditFormSafe(currentContextAlbumId);
     } else {
@@ -1672,25 +1672,25 @@ function initializeAlbumContextMenu() {
     }
   };
 
-  // Handle play option click
+  
   playOption.onclick = () => {
     contextMenu.classList.add('hidden');
     if (currentContextAlbum === null) return;
 
-    // Verify the album is still at the expected index, fallback to identity search
+    
     const expectedAlbum =
       lists[currentList] && lists[currentList][currentContextAlbum];
     if (expectedAlbum && currentContextAlbumId) {
       const expectedId =
         `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
       if (expectedId === currentContextAlbumId) {
-        // Index is still valid
+        
         playAlbum(currentContextAlbum);
         return;
       }
     }
 
-    // Index is stale, search by identity
+    
     if (currentContextAlbumId) {
       playAlbumSafe(currentContextAlbumId);
     } else {
@@ -1698,12 +1698,12 @@ function initializeAlbumContextMenu() {
     }
   };
 
-  // Handle remove option click
+  
   removeOption.onclick = async () => {
     contextMenu.classList.add('hidden');
     if (currentContextAlbum === null) return;
 
-    // Verify the album is still at the expected index, fallback to identity search
+    
     let album = lists[currentList] && lists[currentList][currentContextAlbum];
     let indexToRemove = currentContextAlbum;
 
@@ -1711,7 +1711,7 @@ function initializeAlbumContextMenu() {
       const expectedId =
         `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
       if (expectedId !== currentContextAlbumId) {
-        // Index is stale, search by identity
+        
         const result = findAlbumByIdentity(currentContextAlbumId);
         if (result) {
           album = result.album;
@@ -1736,13 +1736,13 @@ function initializeAlbumContextMenu() {
       'Remove',
       async () => {
         try {
-          // Remove from the list using the correct index
+          
           lists[currentList].splice(indexToRemove, 1);
 
-          // Save to server
+          
           await saveList(currentList, lists[currentList]);
 
-          // Update display
+          
           selectList(currentList);
 
           showToast(`Removed "${album.album}" from the list`);
@@ -1750,7 +1750,7 @@ function initializeAlbumContextMenu() {
           console.error('Error removing album:', error);
           showToast('Error removing album', 'error');
 
-          // Reload the list to ensure consistency
+          
           await loadLists();
           selectList(currentList);
         }
@@ -1762,7 +1762,7 @@ function initializeAlbumContextMenu() {
   };
 }
 
-// Play the selected album on the connected music service
+
 function playAlbum(index) {
   const album = lists[currentList][index];
   if (!album) return;
@@ -1832,7 +1832,7 @@ function playAlbum(index) {
   });
 }
 
-// Create list functionality
+
 function initializeCreateList() {
   const createBtn = document.getElementById('createListBtn');
   const modal = document.getElementById('createListModal');
@@ -1842,14 +1842,14 @@ function initializeCreateList() {
 
   if (!createBtn || !modal) return;
 
-  // Open modal
+  
   createBtn.onclick = () => {
     modal.classList.remove('hidden');
     nameInput.value = '';
     nameInput.focus();
   };
 
-  // Close modal
+  
   const closeModal = () => {
     modal.classList.add('hidden');
     nameInput.value = '';
@@ -1857,14 +1857,14 @@ function initializeCreateList() {
 
   cancelBtn.onclick = closeModal;
 
-  // Click outside to close
+  
   modal.onclick = (e) => {
     if (e.target === modal) {
       closeModal();
     }
   };
 
-  // Create list
+  
   const createList = async () => {
     const listName = nameInput.value.trim();
 
@@ -1874,7 +1874,7 @@ function initializeCreateList() {
       return;
     }
 
-    // Check if list already exists
+    
     if (lists[listName]) {
       showToast('A list with this name already exists', 'error');
       nameInput.focus();
@@ -1882,16 +1882,16 @@ function initializeCreateList() {
     }
 
     try {
-      // Create empty list
+      
       await saveList(listName, []);
 
-      // Update navigation
+      
       updateListNav();
 
-      // Select the new list
+      
       selectList(listName);
 
-      // Close modal
+      
       closeModal();
 
       showToast(`Created list "${listName}"`);
@@ -1902,14 +1902,14 @@ function initializeCreateList() {
 
   confirmBtn.onclick = createList;
 
-  // Enter key to create
+  
   nameInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
       createList();
     }
   };
 
-  // ESC key to close
+  
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
       closeModal();
@@ -1917,7 +1917,7 @@ function initializeCreateList() {
   });
 }
 
-// Rename list functionality
+
 function initializeRenameList() {
   const modal = document.getElementById('renameListModal');
   const currentNameSpan = document.getElementById('currentListName');
@@ -1927,7 +1927,7 @@ function initializeRenameList() {
 
   if (!modal) return;
 
-  // Close modal function
+  
   const closeModal = () => {
     modal.classList.add('hidden');
     nameInput.value = '';
@@ -1935,14 +1935,14 @@ function initializeRenameList() {
 
   cancelBtn.onclick = closeModal;
 
-  // Click outside to close
+  
   modal.onclick = (e) => {
     if (e.target === modal) {
       closeModal();
     }
   };
 
-  // Rename list function
+  
   const renameList = async () => {
     const oldName = currentNameSpan.textContent;
     const newName = nameInput.value.trim();
@@ -1959,7 +1959,7 @@ function initializeRenameList() {
       return;
     }
 
-    // Check if new name already exists
+    
     if (lists[newName]) {
       showToast('A list with this name already exists', 'error');
       nameInput.focus();
@@ -1967,10 +1967,10 @@ function initializeRenameList() {
     }
 
     try {
-      // Get the list data
+      
       const listData = lists[oldName];
 
-      // Create new list with new name
+      
       await saveList(newName, listData);
 
       await apiCall(`/api/lists/${encodeURIComponent(oldName)}`, {
@@ -2004,7 +2004,7 @@ function initializeRenameList() {
 
   confirmBtn.onclick = renameList;
 
-  // Enter key to rename
+  
   nameInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
       renameList();
@@ -2012,7 +2012,7 @@ function initializeRenameList() {
   };
 }
 
-// Open rename modal
+
 function openRenameModal(listName) {
   const modal = document.getElementById('renameListModal');
   const currentNameSpan = document.getElementById('currentListName');
@@ -2024,14 +2024,14 @@ function openRenameModal(listName) {
   nameInput.value = listName;
   modal.classList.remove('hidden');
 
-  // Select all text in the input for easy editing
+  
   setTimeout(() => {
     nameInput.focus();
     nameInput.select();
   }, 100);
 }
 
-// Update sidebar navigation
+
 function updateListNav() {
   const nav = document.getElementById('listNav');
   const mobileNav = document.getElementById('mobileListNav');
@@ -2051,7 +2051,7 @@ function updateListNav() {
       const button = li.querySelector('button');
 
       if (!isMobile) {
-        // Desktop: keep right-click
+        
         button.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -2061,7 +2061,7 @@ function updateListNav() {
           const contextMenu = document.getElementById('contextMenu');
           if (!contextMenu) return;
 
-          // Update the playlist option text based on user's music service
+          
           const updatePlaylistText =
             document.getElementById('updatePlaylistText');
           if (updatePlaylistText) {
@@ -2082,11 +2082,11 @@ function updateListNav() {
             }
           }
 
-          // Position the menu at cursor (using batched style operations)
+          
           positionContextMenu(contextMenu, e.clientX, e.clientY);
         });
       } else {
-        // Mobile: long press
+        
         let pressTimer;
         button.addEventListener(
           'touchstart',
@@ -2114,7 +2114,7 @@ function updateListNav() {
   createListItems(nav);
   if (mobileNav) createListItems(mobileNav, true);
 
-  // Cache list names locally for faster startup
+  
   try {
     localStorage.setItem('cachedListNames', JSON.stringify(Object.keys(lists)));
   } catch (e) {
@@ -2122,16 +2122,16 @@ function updateListNav() {
   }
 }
 
-// Removed complex initializeMobileSorting function - now using unified approach
 
-// Select and display a list
+
+
 async function selectList(listName, skipFetch = false) {
   try {
     currentList = listName;
     window.currentList = currentList;
     subscribeToList(listName);
 
-    // Fix #4: Try to load from cache first for instant display
+    
     const cachedListData = localStorage.getItem(
       `lastSelectedListData_${listName}`
     );
@@ -2143,12 +2143,12 @@ async function selectList(listName, skipFetch = false) {
       }
     }
 
-    // Display cached data immediately (if available)
+    
     if (lists[listName]) {
       displayAlbums(lists[listName]);
     }
 
-    // Fetch fresh data in background (unless explicitly skipped)
+    
     if (listName && !skipFetch) {
       try {
         const freshData = await apiCall(
@@ -2156,7 +2156,7 @@ async function selectList(listName, skipFetch = false) {
         );
         lists[listName] = freshData;
 
-        // Fix #4: Cache the fresh data for next time
+        
         try {
           localStorage.setItem(
             `lastSelectedListData_${listName}`,
@@ -2166,7 +2166,7 @@ async function selectList(listName, skipFetch = false) {
           console.warn('Failed to cache list data:', storageErr);
         }
 
-        // Re-display with fresh data (only if different)
+        
         if (currentList === listName) {
           displayAlbums(freshData);
         }
@@ -2175,35 +2175,35 @@ async function selectList(listName, skipFetch = false) {
       }
     }
 
-    // Save to localStorage immediately (synchronous)
+    
     if (listName) {
       localStorage.setItem('lastSelectedList', listName);
     }
 
-    // Update the header with current list name
+    
     updateMobileHeader();
 
-    // Update the active state in the list navigation
+    
     updateListNav();
 
-    // Update the header title
+    
     updateHeaderTitle(listName);
 
-    // Show/hide FAB based on whether a list is selected (mobile only)
+    
     const fab = document.getElementById('addAlbumFAB');
     if (fab) {
       fab.style.display = listName ? 'flex' : 'none';
     }
 
-    // Fix #1: Make track fetching non-blocking - run in background without await
-    // This prevents blocking the UI for 4-10 seconds waiting for MusicBrainz API
+    
+    
     if (listName) {
       autoFetchTracksForList(listName).catch((err) => {
         console.error('Background track fetch failed:', err);
       });
     }
 
-    // Persist the selection without blocking UI if changed
+    
     if (listName && listName !== window.lastSelectedList) {
       apiCall('/api/user/last-list', {
         method: 'POST',
@@ -2221,7 +2221,7 @@ async function selectList(listName, skipFetch = false) {
   }
 }
 
-// Expose selectList to window after it's defined
+
 window.selectList = selectList;
 
 function updateHeaderTitle(listName) {
@@ -2234,17 +2234,17 @@ function updateHeaderTitle(listName) {
     headerListName.classList.remove('hidden');
     headerListName.textContent = listName;
 
-    // Also show the add album button in header if it exists
+    
     if (headerAddAlbumBtn) {
       headerAddAlbumBtn.classList.remove('hidden');
     }
   }
 }
 
-// Mobile edit form
+
 function _editMobileAlbum(_index) {
-  // Show a mobile-friendly edit form
-  // This replaces the inline editing on desktop
+  
+  
 }
 
 function _removeAlbum(index) {
@@ -2254,17 +2254,17 @@ function _removeAlbum(index) {
   showToast('Album removed');
 }
 
-// Make genre editable with datalist
+
 function makeGenreEditable(genreDiv, albumIndex, genreField) {
-  // Check if we're already editing
+  
   if (genreDiv.querySelector('input')) {
     return;
   }
 
-  // Get current genre from the live data
+  
   const currentGenre = lists[currentList][albumIndex][genreField] || '';
 
-  // Create input with datalist
+  
   const input = document.createElement('input');
   input.type = 'text';
   input.className =
@@ -2276,48 +2276,48 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     `genre-list-${currentList}-${albumIndex}-${genreField}`
   );
 
-  // Create datalist
+  
   const datalist = document.createElement('datalist');
   datalist.id = `genre-list-${currentList}-${albumIndex}-${genreField}`;
 
-  // Add all available genres
+  
   availableGenres.forEach((genre) => {
     const option = document.createElement('option');
     option.value = genre;
     datalist.appendChild(option);
   });
 
-  // Store the original onclick handler
+  
   const originalOnClick = genreDiv.onclick;
-  genreDiv.onclick = null; // Temporarily remove click handler
+  genreDiv.onclick = null; 
 
-  // Replace content with input and datalist
+  
   genreDiv.innerHTML = '';
   genreDiv.appendChild(input);
   genreDiv.appendChild(datalist);
   input.focus();
   input.select();
 
-  // Create handleClickOutside function so we can reference it for removal
+  
   let handleClickOutside;
 
   const restoreDisplay = (valueToDisplay) => {
-    // Remove the click outside listener if it exists
+    
     if (handleClickOutside) {
       document.removeEventListener('click', handleClickOutside);
       handleClickOutside = null;
     }
 
-    // Determine what to display based on value and field
+    
     let displayValue = valueToDisplay;
     let displayClass;
 
     if (genreField === 'genre_1') {
-      // For Genre 1: show placeholder if empty
+      
       displayValue = valueToDisplay || 'Genre 1';
       displayClass = valueToDisplay ? 'text-gray-300' : 'text-gray-500 italic';
     } else {
-      // For Genre 2: show placeholder if empty, but treat 'Genre 2' and '-' as empty
+      
       if (
         !valueToDisplay ||
         valueToDisplay === 'Genre 2' ||
@@ -2333,43 +2333,43 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
 
     genreDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
 
-    // Restore the original click handler
+    
     genreDiv.onclick = originalOnClick;
   };
 
   const saveGenre = async (newGenre) => {
-    // Trim the input
+    
     newGenre = newGenre.trim();
 
-    // Check if value actually changed
+    
     if (newGenre === currentGenre) {
       restoreDisplay(currentGenre);
       return;
     }
 
-    // VALIDATION: Only allow empty string or values from availableGenres
+    
     if (newGenre !== '') {
       const isValid = availableGenres.some(
         (genre) => genre.toLowerCase() === newGenre.toLowerCase()
       );
 
       if (!isValid) {
-        // Invalid genre entered - revert to original
+        
         restoreDisplay(currentGenre);
         return;
       }
 
-      // Find the exact case-matched genre from the list
+      
       const matchedGenre = availableGenres.find(
         (genre) => genre.toLowerCase() === newGenre.toLowerCase()
       );
-      newGenre = matchedGenre; // Use the properly cased version
+      newGenre = matchedGenre; 
     }
 
-    // Update the data
+    
     lists[currentList][albumIndex][genreField] = newGenre;
 
-    // Close the dropdown immediately for better UX
+    
     restoreDisplay(newGenre);
 
     try {
@@ -2377,23 +2377,23 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
       showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
     } catch (_error) {
       showToast('Error saving genre', 'error');
-      // Revert on error
+      
       lists[currentList][albumIndex][genreField] = currentGenre;
       restoreDisplay(currentGenre);
     }
   };
 
-  // Handle input change (when selecting from datalist)
+  
   input.addEventListener('change', (e) => {
     saveGenre(e.target.value);
   });
 
-  // Handle blur (when clicking away)
+  
   input.addEventListener('blur', () => {
     saveGenre(input.value);
   });
 
-  // Handle keyboard
+  
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -2404,40 +2404,40 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     }
   });
 
-  // Define handleClickOutside
+  
   handleClickOutside = (e) => {
     if (!genreDiv.contains(e.target)) {
       saveGenre(input.value);
     }
   };
 
-  // Small delay to prevent immediate trigger
+  
   setTimeout(() => {
     document.addEventListener('click', handleClickOutside);
   }, 100);
 }
 
-// Make comment editable
+
 function makeCommentEditable(commentDiv, albumIndex) {
   const currentComment =
     lists[currentList][albumIndex].comments ||
     lists[currentList][albumIndex].comment ||
     '';
 
-  // Create textarea
+  
   const textarea = document.createElement('textarea');
   textarea.className =
     'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded border border-gray-700 focus:outline-none focus:border-gray-500 resize-none';
   textarea.value = currentComment;
   textarea.rows = 2;
 
-  // Replace div content with textarea
+  
   commentDiv.innerHTML = '';
   commentDiv.appendChild(textarea);
   textarea.focus();
   textarea.select();
 
-  // Save on blur or enter
+  
   const saveComment = async () => {
     const newComment = textarea.value.trim();
     lists[currentList][albumIndex].comments = newComment;
@@ -2446,11 +2446,11 @@ function makeCommentEditable(commentDiv, albumIndex) {
     try {
       await saveList(currentList, lists[currentList]);
 
-      // Update display without re-rendering everything
+      
       let displayComment = newComment;
       let displayClass = 'text-gray-300';
 
-      // If comment is empty, show placeholder
+      
       if (!displayComment) {
         displayComment = 'Comment';
         displayClass = 'text-gray-500';
@@ -2458,10 +2458,10 @@ function makeCommentEditable(commentDiv, albumIndex) {
 
       commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
 
-      // Re-add click handler
+      
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
 
-      // Add tooltip only if comment is truncated
+      
       const commentTextEl = commentDiv.querySelector('.comment-text');
       if (commentTextEl && newComment) {
         setTimeout(() => {
@@ -2476,7 +2476,7 @@ function makeCommentEditable(commentDiv, albumIndex) {
       }
     } catch (_error) {
       showToast('Error saving comment', 'error');
-      // Revert on error - also handle placeholder for empty comments
+      
       let revertDisplay = currentComment;
       let revertClass = 'text-gray-300';
       if (!revertDisplay) {
@@ -2486,7 +2486,7 @@ function makeCommentEditable(commentDiv, albumIndex) {
       commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${revertDisplay}</span>`;
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
 
-      // Add tooltip only if comment is truncated
+      
       const revertTextEl = commentDiv.querySelector('.comment-text');
       if (revertTextEl && currentComment) {
         setTimeout(() => {
@@ -2505,11 +2505,11 @@ function makeCommentEditable(commentDiv, albumIndex) {
       textarea.blur();
     }
     if (e.key === 'Escape') {
-      // Cancel editing
+      
       let displayComment = currentComment;
       let displayClass = 'text-gray-300';
 
-      // If comment is empty, show placeholder
+      
       if (!displayComment) {
         displayComment = 'Comment';
         displayClass = 'text-gray-500';
@@ -2518,7 +2518,7 @@ function makeCommentEditable(commentDiv, albumIndex) {
       commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
       commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
 
-      // Add tooltip only if comment is truncated
+      
       const cancelTextEl = commentDiv.querySelector('.comment-text');
       if (cancelTextEl && currentComment) {
         setTimeout(() => {
@@ -2531,12 +2531,12 @@ function makeCommentEditable(commentDiv, albumIndex) {
   });
 }
 
-// Update track cell display without re-rendering entire list
+
 function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   const isMobile = window.innerWidth < 1024;
 
   if (isMobile) {
-    // Mobile: Find the card and update it
+    
     const container = document.getElementById('albumContainer');
     const mobileList = container?.querySelector('.mobile-album-list');
     if (!mobileList) return;
@@ -2544,12 +2544,12 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
     const card = mobileList.children[albumIndex];
     if (!card) return;
 
-    // For mobile, we'd need to re-render the card or just let it update on next interaction
-    // Mobile cards don't show track picks as prominently, so less critical
+    
+    
     return;
   }
 
-  // Desktop: Find the specific track cell and update it
+  
   const container = document.getElementById('albumContainer');
   const rowsContainer = container?.querySelector('.album-rows-container');
   if (!rowsContainer) return;
@@ -2560,7 +2560,7 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   const trackCell = row.querySelector('.track-cell');
   if (!trackCell) return;
 
-  // Process track pick display (same logic as processAlbumData)
+  
   let trackPickDisplay = '';
   let trackPickClass = 'text-gray-800 italic';
 
@@ -2592,10 +2592,10 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
     trackPickDisplay = 'Select Track';
   }
 
-  // Update the cell content
+  
   trackCell.innerHTML = `<span class="text-sm ${trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${trackValue || 'Click to select track'}">${trackPickDisplay}</span>`;
 
-  // Re-attach click handler
+  
   trackCell.onclick = async () => {
     const currentIndex = parseInt(row.dataset.index);
     const album = lists[currentList][currentIndex];
@@ -2615,9 +2615,9 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   };
 }
 
-// Show track selection menu for quick track picking
+
 function showTrackSelectionMenu(album, albumIndex, x, y) {
-  // Remove any existing menu
+  
   const existingMenu = document.getElementById('quickTrackMenu');
   if (existingMenu) existingMenu.remove();
 
@@ -2633,7 +2633,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     menu.innerHTML =
       '<div class="px-4 py-2 text-sm text-gray-500">No tracks available</div>';
   } else {
-    // Sort tracks by track number
+    
     const sortedTracks = [...album.tracks].sort((a, b) => {
       const numA = parseInt(a.match(/^(\d+)[.\s-]/) ? a.match(/^(\d+)/)[1] : 0);
       const numB = parseInt(b.match(/^(\d+)[.\s-]/) ? b.match(/^(\d+)/)[1] : 0);
@@ -2674,7 +2674,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
     menu.innerHTML = menuHTML;
 
-    // Add click handlers
+    
     menu.querySelectorAll('.track-menu-option').forEach((option) => {
       option.onclick = async (e) => {
         e.preventDefault();
@@ -2715,7 +2715,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
   document.body.appendChild(menu);
 
-  // Position adjustment to keep menu on screen (using batched style operations)
+  
   requestAnimationFrame(() => {
     const rect = menu.getBoundingClientRect();
     const viewportWidth = window.innerWidth;
@@ -2737,7 +2737,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     }
   });
 
-  // Close menu when clicking outside
+  
   const closeMenu = (e) => {
     if (!menu.contains(e.target)) {
       menu.remove();
@@ -2750,7 +2750,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
   }, 0);
 }
 
-// Shared album data processing
+
 function processAlbumData(album, index) {
   const position = index + 1;
   const albumName = album.album || 'Unknown Album';
@@ -2775,16 +2775,16 @@ function processAlbumData(album, index) {
   const coverImage = album.cover_image || '';
   const imageFormat = album.cover_image_format || 'PNG';
 
-  // Process track pick
+  
   const trackPick = album.track_pick || '';
   let trackPickDisplay = '';
   let trackPickClass = 'text-gray-800 italic';
 
   if (trackPick && album.tracks && Array.isArray(album.tracks)) {
-    // Find the track that matches
+    
     const trackMatch = album.tracks.find((t) => t === trackPick);
     if (trackMatch) {
-      // Extract track number and name
+      
       const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
       if (match) {
         const trackNum = match[1];
@@ -2798,7 +2798,7 @@ function processAlbumData(album, index) {
         trackPickClass = 'text-gray-300';
       }
     } else if (trackPick.match(/^\d+$/)) {
-      // Just a track number
+      
       trackPickDisplay = `Track ${trackPick}`;
       trackPickClass = 'text-gray-300';
     } else {
@@ -2834,7 +2834,7 @@ function processAlbumData(album, index) {
   };
 }
 
-// Create album item component (works for both desktop and mobile)
+
 function createAlbumItem(album, index, isMobile = false) {
   const data = processAlbumData(album, index);
 
@@ -2845,7 +2845,7 @@ function createAlbumItem(album, index, isMobile = false) {
   }
 }
 
-// Create desktop album row (preserves exact current design)
+
 function createDesktopAlbumRow(data, index) {
   const row = document.createElement('div');
   row.className = 'album-row album-grid gap-4 py-2';
@@ -2901,14 +2901,14 @@ function createDesktopAlbumRow(data, index) {
     </div>
   `;
 
-  // Add shared event handlers
+  
   attachDesktopEventHandlers(row, index);
   return row;
 }
 
-// Shared event handlers for desktop rows
+
 function attachDesktopEventHandlers(row, index) {
-  // Add click handler to track cell for quick selection
+  
   const trackCell = row.querySelector('.track-cell');
   if (trackCell) {
     trackCell.onclick = async () => {
@@ -2925,20 +2925,20 @@ function attachDesktopEventHandlers(row, index) {
         }
       }
 
-      // Show track selection menu at the cell position
+      
       const rect = trackCell.getBoundingClientRect();
       showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
     };
   }
 
-  // Add click handler to country cell
+  
   const countryCell = row.querySelector('.country-cell');
   countryCell.onclick = () => {
     const currentIndex = parseInt(row.dataset.index);
     makeCountryEditable(countryCell, currentIndex);
   };
 
-  // Add click handlers to genre cells
+  
   const genre1Cell = row.querySelector('.genre-1-cell');
   genre1Cell.onclick = () => {
     const currentIndex = parseInt(row.dataset.index);
@@ -2951,22 +2951,22 @@ function attachDesktopEventHandlers(row, index) {
     makeGenreEditable(genre2Cell, currentIndex, 'genre_2');
   };
 
-  // Add click handler to comment cell
+  
   const commentCell = row.querySelector('.comment-cell');
   commentCell.onclick = () => {
     const currentIndex = parseInt(row.dataset.index);
     makeCommentEditable(commentCell, currentIndex);
   };
 
-  // Attach link preview
+  
   const album = lists[currentList][index];
   const comment = album.comments || album.comment || '';
   attachLinkPreview(commentCell, comment);
 
-  // Add tooltip only if comment is truncated
+  
   const commentTextEl = commentCell.querySelector('.comment-text');
   if (commentTextEl && comment) {
-    // Use setTimeout to ensure the element is rendered
+    
     setTimeout(() => {
       if (isTextTruncated(commentTextEl)) {
         commentTextEl.setAttribute('data-comment', comment);
@@ -2974,10 +2974,10 @@ function attachDesktopEventHandlers(row, index) {
     }, 0);
   }
 
-  // Double-click handler for opening edit modal on the entire row
-  // But prevent it from triggering on interactive cells
+  
+  
   row.addEventListener('dblclick', (e) => {
-    // Check if the double-click was on an interactive/editable cell
+    
     const isInteractiveCell =
       e.target.closest('.country-cell') ||
       e.target.closest('.genre-1-cell') ||
@@ -2985,7 +2985,7 @@ function attachDesktopEventHandlers(row, index) {
       e.target.closest('.comment-cell') ||
       e.target.closest('.track-cell');
 
-    // If clicked on an interactive cell, don't open the edit modal
+    
     if (isInteractiveCell) {
       return;
     }
@@ -2993,10 +2993,10 @@ function attachDesktopEventHandlers(row, index) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Get current index from DOM (updated after drag-drop)
+    
     const currentIndex = parseInt(row.dataset.index);
 
-    // Verify album still exists at this index
+    
     if (lists[currentList] && lists[currentList][currentIndex]) {
       showMobileEditForm(currentIndex);
     } else {
@@ -3004,29 +3004,29 @@ function attachDesktopEventHandlers(row, index) {
     }
   });
 
-  // Right-click handler for album rows
+  
   row.addEventListener('contextmenu', (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Get current index from DOM (updated after drag-drop) instead of closure
+    
     const currentIndex = parseInt(row.dataset.index);
     const album = lists[currentList][currentIndex];
     const albumId =
       `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
     currentContextAlbum = currentIndex;
-    currentContextAlbumId = albumId; // Store identity as backup
+    currentContextAlbumId = albumId; 
 
     const contextMenu = document.getElementById('albumContextMenu');
     if (!contextMenu) return;
 
-    // Position the menu at cursor (using batched style operations)
+    
     positionContextMenu(contextMenu, e.clientX, e.clientY);
   });
 }
 
-// Create mobile album card (preserves exact current design)
+
 function createMobileAlbumCard(data, index) {
   const cardWrapper = document.createElement('div');
   cardWrapper.className = 'album-card-wrapper';
@@ -3133,23 +3133,23 @@ function createMobileAlbumCard(data, index) {
 
   cardWrapper.appendChild(card);
 
-  // Add shared event handlers
+  
   attachMobileEventHandlers(card, index);
   return cardWrapper;
 }
 
-// Shared event handlers for mobile cards
+
 function attachMobileEventHandlers(card, index) {
-  // Attach link preview to content area
+  
   const album = lists[currentList][index];
   const comment = album.comments || album.comment || '';
   const contentDiv = card.querySelector('.flex-1.min-w-0');
   if (contentDiv) attachLinkPreview(contentDiv, comment);
 
-  // Attach three-dot menu button handler
+  
   const menuBtn = card.querySelector('[data-album-menu-btn]');
   if (menuBtn) {
-    // Prevent SortableJS from capturing touch events on the button
+    
     menuBtn.addEventListener(
       'touchstart',
       (e) => {
@@ -3174,29 +3174,29 @@ function attachMobileEventHandlers(card, index) {
   }
 }
 
-// ============ INCREMENTAL DOM UPDATE SYSTEM ============
-// Performance optimization: Update only changed albums instead of full rebuild
-// Reduces render time from ~300ms to ~5-10ms for typical SSE updates
 
-// Feature flag for incremental updates (can be disabled if issues arise)
+
+
+
+
 const ENABLE_INCREMENTAL_UPDATES = true;
 
-// Track last rendered state to detect changes
+
 let lastRenderedAlbums = null;
 
-// Detect what type of update is needed
+
 function detectUpdateType(oldAlbums, newAlbums) {
-  // Always do full rebuild if feature disabled or no previous state
+  
   if (!ENABLE_INCREMENTAL_UPDATES || !oldAlbums) {
     return 'FULL_REBUILD';
   }
 
-  // Length changed = albums added/removed = full rebuild
+  
   if (oldAlbums.length !== newAlbums.length) {
     return 'FULL_REBUILD';
   }
 
-  // Check what changed
+  
   let positionChanges = 0;
   let fieldChanges = 0;
   let complexChanges = 0;
@@ -3205,7 +3205,7 @@ function detectUpdateType(oldAlbums, newAlbums) {
     const oldAlbum = oldAlbums[i];
     const newAlbum = newAlbums[i];
 
-    // Generate consistent IDs for comparison
+    
     const oldId =
       oldAlbum._id ||
       `${oldAlbum.artist}::${oldAlbum.album}::${oldAlbum.release_date}`;
@@ -3216,7 +3216,7 @@ function detectUpdateType(oldAlbums, newAlbums) {
     if (oldId !== newId) {
       positionChanges++;
     } else {
-      // Same album, check fields
+      
       if (
         oldAlbum.artist !== newAlbum.artist ||
         oldAlbum.album !== newAlbum.album ||
@@ -3230,31 +3230,31 @@ function detectUpdateType(oldAlbums, newAlbums) {
         fieldChanges++;
       }
 
-      // Cover image changes require full rebuild (complex innerHTML)
+      
       if (oldAlbum.cover_image !== newAlbum.cover_image) {
         complexChanges++;
       }
     }
   }
 
-  // Decide update strategy
+  
   if (complexChanges > 0) {
-    return 'FULL_REBUILD'; // Cover images changed = complex
+    return 'FULL_REBUILD'; 
   }
   if (positionChanges === 0 && fieldChanges > 0 && fieldChanges <= 10) {
-    return 'FIELD_UPDATE'; // Only fields changed = safe incremental update
+    return 'FIELD_UPDATE'; 
   }
   if (fieldChanges === 0 && positionChanges > 0) {
-    return 'POSITION_UPDATE'; // Only positions changed = reorder DOM
+    return 'POSITION_UPDATE'; 
   }
   if (positionChanges + fieldChanges <= 15) {
-    return 'HYBRID_UPDATE'; // Mixed but small = try incremental
+    return 'HYBRID_UPDATE'; 
   }
 
-  return 'FULL_REBUILD'; // Complex changes = be safe
+  return 'FULL_REBUILD'; 
 }
 
-// Update only changed fields in existing DOM elements
+
 function updateAlbumFields(albums, isMobile) {
   const container = document.getElementById('albumContainer');
   if (!container) return false;
@@ -3277,13 +3277,13 @@ function updateAlbumFields(albums, isMobile) {
       const row = rows[index];
       if (!row) return;
 
-      // Update dataset index
+      
       row.dataset.index = index;
 
-      // Process album data
+      
       const data = processAlbumData(album, index);
 
-      // Update position number
+      
       const positionEl =
         row.querySelector('[data-position-element="true"]') ||
         row.querySelector('.position-display');
@@ -3291,7 +3291,7 @@ function updateAlbumFields(albums, isMobile) {
         positionEl.textContent = data.position;
       }
 
-      // Update artist
+      
       const artistSpan = isMobile
         ? row.querySelector(
             '.font-semibold.text-white + .text-sm.text-gray-400'
@@ -3304,7 +3304,7 @@ function updateAlbumFields(albums, isMobile) {
           : `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
       }
 
-      // Update album name and release date
+      
       if (!isMobile) {
         const albumNameDiv = row.querySelector('.font-semibold.text-gray-100');
         if (albumNameDiv) albumNameDiv.textContent = data.albumName;
@@ -3319,7 +3319,7 @@ function updateAlbumFields(albums, isMobile) {
         if (releaseDateEl) releaseDateEl.textContent = data.releaseDate;
       }
 
-      // Update country
+      
       const countryCell =
         row.querySelector('.country-cell') ||
         row.querySelector('[data-field="country"]');
@@ -3331,7 +3331,7 @@ function updateAlbumFields(albums, isMobile) {
         }
       }
 
-      // Update genre 1
+      
       const genre1Cell =
         row.querySelector('.genre-1-cell') ||
         row.querySelector('[data-field="genre1"]');
@@ -3343,7 +3343,7 @@ function updateAlbumFields(albums, isMobile) {
         }
       }
 
-      // Update genre 2
+      
       const genre2Cell =
         row.querySelector('.genre-2-cell') ||
         row.querySelector('[data-field="genre2"]');
@@ -3355,7 +3355,7 @@ function updateAlbumFields(albums, isMobile) {
         }
       }
 
-      // Update comment
+      
       const commentCell =
         row.querySelector('.comment-cell') ||
         row.querySelector('[data-field="comment"]');
@@ -3365,7 +3365,7 @@ function updateAlbumFields(albums, isMobile) {
           commentSpan.textContent = data.comment || 'Comment';
           commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
 
-          // Update tooltip
+          
           if (data.comment) {
             commentSpan.setAttribute('data-comment', data.comment);
           } else {
@@ -3374,7 +3374,7 @@ function updateAlbumFields(albums, isMobile) {
         }
       }
 
-      // Update track pick
+      
       const trackCell = row.querySelector('.track-cell');
       if (trackCell) {
         const trackSpan = trackCell.querySelector('span');
@@ -3386,14 +3386,14 @@ function updateAlbumFields(albums, isMobile) {
       }
     });
 
-    return true; // Success
+    return true; 
   } catch (err) {
     console.error('Field update failed:', err);
     return false;
   }
 }
 
-// Verify DOM integrity (safety check)
+
 function verifyDOMIntegrity(albums, isMobile) {
   const container = document.getElementById('albumContainer');
   if (!container) return false;
@@ -3408,9 +3408,9 @@ function verifyDOMIntegrity(albums, isMobile) {
   return rows.length === albums.length;
 }
 
-// Display albums function - now consolidated with incremental updates
+
 function displayAlbums(albums) {
-  const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
+  const isMobile = window.innerWidth < 1024; 
   const container = document.getElementById('albumContainer');
 
   if (!container) {
@@ -3418,18 +3418,18 @@ function displayAlbums(albums) {
     return;
   }
 
-  // Try incremental update if possible
+  
   const updateType = detectUpdateType(lastRenderedAlbums, albums);
 
   if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
-    // Attempt incremental field update
+    
     const success = updateAlbumFields(albums, isMobile);
 
     if (success && verifyDOMIntegrity(albums, isMobile)) {
-      // Incremental update succeeded!
+      
       lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
 
-      // Update position cache
+      
       const albumContainer = isMobile
         ? container.querySelector('.mobile-album-list')
         : container.querySelector('.album-rows-container');
@@ -3437,17 +3437,17 @@ function displayAlbums(albums) {
         prePopulatePositionCache(albumContainer, isMobile);
       }
 
-      return; // Done - skip full rebuild
+      return; 
     }
-    // If failed, fall through to full rebuild
+    
     console.warn(
       `Incremental update (${updateType}) failed, falling back to full rebuild`
     );
   }
 
-  // Full rebuild path (original behavior)
-  // Performance: Explicitly clear position cache before DOM rebuild
-  // Ensures deterministic cleanup without waiting for garbage collection
+  
+  
+  
   positionElementCache = new WeakMap();
 
   container.innerHTML = '';
@@ -3462,15 +3462,15 @@ function displayAlbums(albums) {
     return;
   }
 
-  // Create container based on view type
+  
   let albumContainer;
 
   if (!isMobile) {
-    // Desktop: Table layout with header
+    
     albumContainer = document.createElement('div');
     albumContainer.className = 'w-full relative';
 
-    // Header
+    
     const header = document.createElement('div');
     header.className =
       'album-header album-grid gap-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
@@ -3491,7 +3491,7 @@ function displayAlbums(albums) {
     const rowsContainer = document.createElement('div');
     rowsContainer.className = 'album-rows-container relative';
 
-    // Create album rows
+    
     albums.forEach((album, index) => {
       const row = createAlbumItem(album, index, false);
       rowsContainer.appendChild(row);
@@ -3499,11 +3499,11 @@ function displayAlbums(albums) {
 
     albumContainer.appendChild(rowsContainer);
   } else {
-    // Mobile: Card layout
+    
     albumContainer = document.createElement('div');
-    albumContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
+    albumContainer.className = 'mobile-album-list pb-20'; 
 
-    // Create album cards
+    
     albums.forEach((album, index) => {
       const card = createAlbumItem(album, index, true);
       albumContainer.appendChild(card);
@@ -3512,28 +3512,28 @@ function displayAlbums(albums) {
 
   container.appendChild(albumContainer);
 
-  // Pre-populate position element cache for better performance
+  
   prePopulatePositionCache(albumContainer, isMobile);
 
-  // Initialize sorting
+  
   initializeUnifiedSorting(container, isMobile);
 
-  // Track last rendered state for incremental updates
+  
   lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
 }
 
-// Clear position cache when rebuilding
+
 function clearPositionCache() {
   positionElementCache = new WeakMap();
 }
 
-// Rebuild position cache after clearing
+
 function _rebuildPositionCache(container, isMobile) {
   clearPositionCache();
   prePopulatePositionCache(container, isMobile);
 }
 
-// Pre-populate position element cache for better performance
+
 function prePopulatePositionCache(container, isMobile) {
   let rows;
 
@@ -3544,14 +3544,14 @@ function prePopulatePositionCache(container, isMobile) {
     rows = rowsContainer ? rowsContainer.children : container.children;
   }
 
-  // Pre-populate cache during initial render
+  
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
 
-    // Try O(1) lookup first using data attribute
+    
     let positionEl = row.querySelector('[data-position-element="true"]');
 
-    // Fallback to optimized single class selector
+    
     if (!positionEl) {
       positionEl = row.querySelector('.position-display');
     }
@@ -3564,7 +3564,7 @@ function prePopulatePositionCache(container, isMobile) {
 
 let positionElementCache = new WeakMap();
 
-// Optimized position number update with caching
+
 function updatePositionNumbers(container, isMobile) {
   let rows;
 
@@ -3575,17 +3575,17 @@ function updatePositionNumbers(container, isMobile) {
     rows = rowsContainer ? rowsContainer.children : container.children;
   }
 
-  // Direct execution for immediate position updates
+  
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
 
-    // Use cached position element or find and cache it
+    
     let positionEl = positionElementCache.get(row);
     if (!positionEl) {
-      // Try O(1) lookup first using data attribute
+      
       positionEl = row.querySelector('[data-position-element="true"]');
 
-      // Fallback to optimized single class selector
+      
       if (!positionEl) {
         positionEl = row.querySelector('.position-display');
       }
@@ -3602,31 +3602,31 @@ function updatePositionNumbers(container, isMobile) {
   }
 }
 
-// Helper function to check if text is truncated
+
 function isTextTruncated(element) {
-  // For elements with line-clamp, check if scrollHeight exceeds clientHeight
+  
   return element.scrollHeight > element.clientHeight;
 }
 
-// Track when we're actively dragging to ignore SSE updates
-const activeDragOperations = new Map(); // listName -> timestamp of last drag
 
-// Debounced save function to batch rapid changes
+const activeDragOperations = new Map(); 
+
+
 let saveTimeout = null;
 function debouncedSaveList(listName, listData, delay = 300) {
   clearTimeout(saveTimeout);
 
-  // Mark that we have local changes for this list
+  
   activeDragOperations.set(listName, Date.now());
 
   saveTimeout = setTimeout(async () => {
     try {
       await saveList(listName, listData);
-      // After save completes, wait a bit longer before accepting SSE updates
-      // This gives the SSE echo time to arrive and be ignored
+      
+      
       setTimeout(() => {
         activeDragOperations.delete(listName);
-      }, 1000); // 1 second grace period after save completes
+      }, 1000); 
     } catch (error) {
       console.error('Error saving list:', error);
       showToast('Error saving list order', 'error');
@@ -3635,22 +3635,22 @@ function debouncedSaveList(listName, listData, delay = 300) {
   }, delay);
 }
 
-// Custom autoscroll removed - now using SortableJS built-in autoscroll for mobile
 
-// Clear cache when list changes - use rebuildPositionCache instead
-// Unified sorting function using SortableJS for both desktop and mobile
+
+
+
 function initializeUnifiedSorting(container, isMobile) {
   if (!window.Sortable) {
     console.error('SortableJS not loaded');
     return;
   }
 
-  // Clean up any existing sortable instance
+  
   if (container._sortable) {
     container._sortable.destroy();
   }
 
-  // Find the sortable container
+  
   const sortableContainer = isMobile
     ? container.querySelector('.mobile-album-list') || container
     : container.querySelector('.album-rows-container') || container;
@@ -3660,54 +3660,54 @@ function initializeUnifiedSorting(container, isMobile) {
     return;
   }
 
-  // Find the actual scrollable element (the parent with overflow-y-auto)
+  
   const scrollElement = isMobile
     ? sortableContainer.closest('.overflow-y-auto')
     : sortableContainer;
 
-  // Configure SortableJS options
+  
   const sortableOptions = {
     animation: 200,
     ghostClass: 'sortable-ghost',
     chosenClass: 'sortable-chosen',
     dragClass: 'sortable-drag',
 
-    // Touch-and-hold configuration for mobile
+    
     ...(isMobile && {
-      delay: 350, // 350ms touch-and-hold delay
+      delay: 350, 
       delayOnTouchOnly: true,
-      touchStartThreshold: 3, // Reduced from 10 to detect drag sooner
+      touchStartThreshold: 3, 
       forceFallback: true,
       fallbackTolerance: 5,
     }),
 
-    // Filter to prevent dragging on interactive elements
+    
     filter: 'button, input, textarea, select, .no-drag',
     preventOnFilter: false,
 
-    // Configure scrolling - use SortableJS built-in autoscroll for both desktop and mobile
-    scroll: scrollElement, // Scroll the correct scrollable element
-    scrollSensitivity: isMobile ? 100 : 30, // Larger zone for mobile
-    scrollSpeed: isMobile ? 25 : 15, // Faster scroll for mobile
-    bubbleScroll: false, // Disable parent container scrolling to prevent double-scroll
+    
+    scroll: scrollElement, 
+    scrollSensitivity: isMobile ? 100 : 30, 
+    scrollSpeed: isMobile ? 25 : 15, 
+    bubbleScroll: false, 
 
-    // Enhanced event handlers
+    
     onStart: function (evt) {
-      // Visual feedback
+      
       if (!isMobile) {
         document.body.classList.add('desktop-dragging');
       } else {
-        // Mobile-specific feedback
+        
         evt.item.classList.add('dragging-mobile');
 
-        // Haptic feedback if available
+        
         if (navigator.vibrate) {
           navigator.vibrate(50);
         }
       }
     },
     onEnd: async function (evt) {
-      // Clean up visual feedback
+      
       if (!isMobile) {
         document.body.classList.remove('desktop-dragging');
       } else {
@@ -3719,25 +3719,25 @@ function initializeUnifiedSorting(container, isMobile) {
 
       if (oldIndex !== newIndex) {
         try {
-          // Mark that we just performed a drag operation
+          
           activeDragOperations.set(currentList, Date.now());
 
-          // Update the data
+          
           const list = lists[currentList];
           const [movedItem] = list.splice(oldIndex, 1);
           list.splice(newIndex, 0, movedItem);
 
-          // Immediate optimistic UI update
+          
           updatePositionNumbers(sortableContainer, isMobile);
 
-          // Debounced server save to batch rapid changes
+          
           debouncedSaveList(currentList, list);
         } catch (error) {
           console.error('Error saving reorder:', error);
           if (window.showToast) {
             window.showToast('Error saving changes', 'error');
           }
-          // Revert the change on error
+          
           const items = Array.from(evt.to.children);
           const itemToMove = items[newIndex];
           if (oldIndex < items.length) {
@@ -3751,14 +3751,14 @@ function initializeUnifiedSorting(container, isMobile) {
       }
     },
   };
-  // Initialize SortableJS
+  
   const sortable = new Sortable(sortableContainer, sortableOptions);
 
-  // Store reference for cleanup
+  
   container._sortable = sortable;
 }
 
-// Add this function to handle mobile album actions
+
 window.showMobileAlbumMenu = function (indexOrElement) {
   let index = indexOrElement;
   if (typeof indexOrElement !== 'number') {
@@ -3767,7 +3767,7 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     index = parseInt(card.dataset.index);
   }
 
-  // Validate index
+  
   if (
     isNaN(index) ||
     index < 0 ||
@@ -3780,11 +3780,11 @@ window.showMobileAlbumMenu = function (indexOrElement) {
 
   const album = lists[currentList][index];
 
-  // Create a unique identifier for this album to prevent stale index issues
+  
   const albumId =
     `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
-  // Remove any existing action sheets first
+  
   const existingSheet = document.querySelector(
     '.fixed.inset-0.z-50.lg\\:hidden'
   );
@@ -3826,7 +3826,7 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   `;
   document.body.appendChild(actionSheet);
 
-  // Attach event listeners to buttons
+  
   const backdrop = actionSheet.querySelector('[data-backdrop]');
   const editBtn = actionSheet.querySelector('[data-action="edit"]');
   const playBtn = actionSheet.querySelector('[data-action="play"]');
@@ -3862,7 +3862,7 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   });
 };
 
-// Helper function to find album by identity instead of index
+
 function findAlbumByIdentity(albumId) {
   if (!currentList || !lists[currentList]) return null;
 
@@ -3877,7 +3877,7 @@ function findAlbumByIdentity(albumId) {
   return null;
 }
 
-// Safe wrapper for mobile edit form that uses album identity
+
 window.showMobileEditFormSafe = function (albumId) {
   const result = findAlbumByIdentity(albumId);
   if (!result) {
@@ -3887,7 +3887,7 @@ window.showMobileEditFormSafe = function (albumId) {
   showMobileEditForm(result.index);
 };
 
-// Safe wrapper for play album that uses album identity
+
 window.playAlbumSafe = function (albumId) {
   const result = findAlbumByIdentity(albumId);
   if (!result) {
@@ -3897,7 +3897,7 @@ window.playAlbumSafe = function (albumId) {
   playAlbum(result.index);
 };
 
-// Safe wrapper for remove album that uses album identity
+
 window.removeAlbumSafe = function (albumId) {
   const result = findAlbumByIdentity(albumId);
   if (!result) {
@@ -3905,14 +3905,14 @@ window.removeAlbumSafe = function (albumId) {
     return;
   }
 
-  // Use the existing remove logic but with the current index
+  
   currentContextAlbum = result.index;
   document.getElementById('removeAlbumOption').click();
 };
 
-// Mobile edit form (basic implementation)
+
 window.showMobileEditForm = function (index) {
-  // Validate inputs
+  
   if (!currentList || !lists[currentList]) {
     showToast('No list selected', 'error');
     return;
@@ -3930,13 +3930,13 @@ window.showMobileEditForm = function (index) {
       new Date().toISOString().split('T')[0]
     : new Date().toISOString().split('T')[0];
 
-  // Remove any existing edit modals first to prevent overlays
+  
   const existingModals = document.querySelectorAll(
     '.fixed.inset-0.z-50.bg-gray-900'
   );
   existingModals.forEach((modal) => modal.remove());
 
-  // Create the edit modal
+  
   const editModal = document.createElement('div');
   editModal.className =
     'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl';
@@ -4132,14 +4132,14 @@ window.showMobileEditForm = function (index) {
 
   document.body.appendChild(editModal);
 
-  // Attach close button handler
+  
   const closeBtn = editModal.querySelector('[data-close-editor]');
   if (closeBtn) {
     closeBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       editModal.remove();
-      // Force scroll to top and trigger reflow to fix iOS keyboard issues
+      
       window.scrollTo(0, 0);
       document.body.scrollTop = 0;
     });
@@ -4161,7 +4161,7 @@ window.showMobileEditForm = function (index) {
     });
   }
 
-  // Fetch track list when button is clicked
+  
   const fetchBtn = document.getElementById('fetchTracksBtn');
   const trackPickContainer = document.getElementById('trackPickContainer');
   setupTrackPickCheckboxes();
@@ -4203,9 +4203,9 @@ window.showMobileEditForm = function (index) {
     };
   }
 
-  // Handle save (rest of the code remains the same)
+  
   document.getElementById('mobileEditSaveBtn').onclick = async function () {
-    // Gather all the values
+    
     const newDateValue = document.getElementById('editReleaseDate').value;
     const normalizedOriginal = normalizeDateForInput(originalReleaseDate);
     const finalReleaseDate =
@@ -4220,9 +4220,9 @@ window.showMobileEditForm = function (index) {
       release_date: finalReleaseDate,
       country: document.getElementById('editCountry').value,
       genre_1: document.getElementById('editGenre1').value,
-      genre: document.getElementById('editGenre1').value, // Keep both for compatibility
+      genre: document.getElementById('editGenre1').value, 
       genre_2: document.getElementById('editGenre2').value,
-      // Persist tracks that may have been fetched while editing
+      
       tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
       track_pick: (() => {
         if (Array.isArray(album.tracks) && album.tracks.length > 0) {
@@ -4235,29 +4235,29 @@ window.showMobileEditForm = function (index) {
         return numInput ? numInput.value.trim() : '';
       })(),
       comments: document.getElementById('editComments').value.trim(),
-      comment: document.getElementById('editComments').value.trim(), // Keep both for compatibility
+      comment: document.getElementById('editComments').value.trim(), 
     };
 
-    // Validate required fields
+    
     if (!updatedAlbum.artist || !updatedAlbum.album) {
       showToast('Artist and Album are required', 'error');
       return;
     }
 
-    // Update the album in the list
+    
     lists[currentList][index] = updatedAlbum;
 
-    // Close the modal immediately for better UX
+    
     editModal.remove();
 
-    // Force scroll to top and trigger reflow to fix iOS keyboard issues
+    
     window.scrollTo(0, 0);
     document.body.scrollTop = 0;
 
-    // Force refresh the display to show changes immediately
+    
     displayAlbums(lists[currentList]);
 
-    // Save to server in the background
+    
     try {
       await saveList(currentList, lists[currentList]);
       showToast('Album updated successfully');
@@ -4265,41 +4265,41 @@ window.showMobileEditForm = function (index) {
       console.error('Error saving album:', error);
       showToast('Error saving changes', 'error');
 
-      // Revert changes on error
+      
       lists[currentList][index] = album;
 
-      // Refresh display to show reverted state
+      
       displayAlbums(lists[currentList]);
     }
   };
 
-  // Focus on first input
+  
   setTimeout(() => {
     document.getElementById('editArtist').focus();
   }, 100);
 };
 
-// File import handlers moved inside DOMContentLoaded
+
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Convert server-side flash messages to toast notifications
+  
   function convertFlashToToast() {
-    // Add 'js-enabled' class to body to enable CSS that hides flash messages
+    
     document.body.classList.add('js-enabled');
 
-    // Find all flash messages with data-flash attribute
+    
     const flashMessages = document.querySelectorAll('[data-flash]');
 
     console.log('Flash messages found:', flashMessages.length);
     flashMessages.forEach((element) => {
-      const type = element.dataset.flash; // 'error', 'success', 'info'
+      const type = element.dataset.flash; 
       let message;
 
-      // For login.ejs which uses data-flash-content
+      
       if (element.dataset.flashContent) {
         message = element.dataset.flashContent;
       } else {
-        // For templates.js which has text content directly
+        
         message = element.textContent.trim();
       }
 
@@ -4315,19 +4315,19 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Call the conversion function immediately - this works on all pages
+  
   convertFlashToToast();
 
-  // Check if we're on a main app page (not auth pages)
+  
   const isAuthPage = window.location.pathname.match(
     /\/(login|register|forgot)/
   );
   if (isAuthPage) {
-    // Don't initialize main app features on auth pages
+    
     return;
   }
 
-  // Sidebar collapse functionality
+  
   function initializeSidebarCollapse() {
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
@@ -4335,16 +4335,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (!sidebar || !sidebarToggle || !mainContent) return;
 
-    // Check localStorage for saved state
+    
     const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
 
-    // Apply initial state
+    
     if (isCollapsed) {
       sidebar.classList.add('collapsed');
       mainContent.classList.add('sidebar-collapsed');
     }
 
-    // Toggle handler
+    
     sidebarToggle.addEventListener('click', () => {
       const isCurrentlyCollapsed = sidebar.classList.contains('collapsed');
 
@@ -4360,10 +4360,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize sidebar collapse first
+  
   initializeSidebarCollapse();
 
-  // Initialize FAB button click handler
+  
   const fab = document.getElementById('addAlbumFAB');
   if (fab) {
     fab.addEventListener('click', () => {
@@ -4376,7 +4376,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Quickly populate sidebar using cached list names
+  
   const cachedLists = localStorage.getItem('cachedListNames');
   if (cachedLists) {
     try {
@@ -4390,7 +4390,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Cross-tab synchronization for cache updates
+  
   window.addEventListener('storage', (e) => {
     if (e.key === 'lists_cache' && e.newValue) {
       try {
@@ -4417,8 +4417,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Load all required data and initialize features
-  // Note: Genres and countries are now loaded synchronously at module initialization
+  
+  
   loadLists()
     .then(() => {
       initializeContextMenu();
@@ -4427,9 +4427,9 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeRenameList();
       initializeImportConflictHandling();
 
-      // Note: Last list selection is now handled in loadLists() for faster display
+      
 
-      // Initialize file import handlers
+      
       const importBtn = document.getElementById('importBtn');
       const fileInput = document.getElementById('fileInput');
 
@@ -4447,9 +4447,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const data = JSON.parse(e.target.result);
                 const fileName = file.name.replace(/\.json$/, '');
 
-                // Check for existing list
+                
                 if (lists[fileName]) {
-                  // Show import conflict modal
+                  
                   pendingImportData = data;
                   pendingImportFilename = fileName;
                   document.getElementById('conflictListName').textContent =
@@ -4458,7 +4458,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     .getElementById('importConflictModal')
                     .classList.remove('hidden');
                 } else {
-                  // Import directly
+                  
                   await saveList(fileName, data);
                   updateListNav();
                   selectList(fileName);
@@ -4473,18 +4473,18 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             reader.readAsText(file);
           }
-          e.target.value = ''; // Reset file input
+          e.target.value = ''; 
         };
       }
 
-      // Confirmation modal handlers are managed by showConfirmation function
-      // No static handlers needed since we use the Promise-based approach
+      
+      
     })
     .catch((_err) => {
       showToast('Failed to initialize', 'error');
     });
 });
-// Add this right after the DOMContentLoaded event listener
+
 window.addEventListener('beforeunload', () => {
   if (currentList) {
     localStorage.setItem('lastSelectedList', currentList);
@@ -4494,5 +4494,5 @@ window.addEventListener('beforeunload', () => {
   }
 });
 
-// Expose playAlbum for inline handlers
+
 window.playAlbum = playAlbum;

@@ -1,21 +1,21 @@
 #!/bin/bash
-# Update script for SuShe Online Docker deployment
-# This pulls the latest image and recreates the app container
+
+
 
 set -e
 
 echo "🎸 Updating SuShe Online..."
 echo ""
 
-# Pull latest image
+
 echo "📦 Pulling latest image from GitHub Container Registry..."
 docker compose pull app
 
-# Recreate app container
+
 echo "🔄 Recreating app container..."
 docker compose up -d app
 
-# Check health
+
 echo "🏥 Checking application health..."
 sleep 5
 

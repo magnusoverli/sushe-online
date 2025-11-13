@@ -61,10 +61,10 @@ class MigrationManager {
       const migrationModule = require(filePath);
       const checksum = await this.calculateChecksum(filePath);
 
-      // Start transaction
+      
       await this.pool.query('BEGIN');
 
-      // Execute the migration
+      
       if (typeof migrationModule.up === 'function') {
         await migrationModule.up(this.pool);
       } else {
@@ -73,18 +73,18 @@ class MigrationManager {
         );
       }
 
-      // Record the migration
+      
       await this.pool.query(
         `INSERT INTO ${this.migrationTableName} (version, name, checksum) VALUES ($1, $2, $3)`,
         [version, path.basename(filePath, '.js'), checksum]
       );
 
-      // Commit transaction
+      
       await this.pool.query('COMMIT');
 
       logger.info(`Migration ${version} executed successfully`);
     } catch (error) {
-      // Rollback transaction
+      
       await this.pool.query('ROLLBACK');
       logger.error(`Migration ${version} failed:`, { error: error.message });
       throw error;
@@ -99,10 +99,10 @@ class MigrationManager {
 
       const migrationModule = require(filePath);
 
-      // Start transaction
+      
       await this.pool.query('BEGIN');
 
-      // Execute the rollback
+      
       if (typeof migrationModule.down === 'function') {
         await migrationModule.down(this.pool);
       } else {
@@ -111,18 +111,18 @@ class MigrationManager {
         );
       }
 
-      // Remove the migration record
+      
       await this.pool.query(
         `DELETE FROM ${this.migrationTableName} WHERE version = $1`,
         [version]
       );
 
-      // Commit transaction
+      
       await this.pool.query('COMMIT');
 
       logger.info(`Migration ${version} rolled back successfully`);
     } catch (error) {
-      // Rollback transaction
+      
       await this.pool.query('ROLLBACK');
       logger.error(`Rollback of migration ${version} failed:`, {
         error: error.message,

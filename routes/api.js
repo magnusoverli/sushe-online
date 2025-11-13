@@ -1,21 +1,21 @@
-// Ensure fetch is available
+
 const fetch = globalThis.fetch || require('node-fetch');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// Smart MusicBrainz request queue with priority and batching
+
 class MusicBrainzQueue {
   constructor() {
     this.queue = [];
     this.processing = false;
     this.lastRequestTime = 0;
-    this.minInterval = 1000; // 1 req/second as per MusicBrainz policy
+    this.minInterval = 1000; 
   }
 
   async add(url, options, priority = 'normal') {
     return new Promise((resolve, reject) => {
       this.queue.push({ url, options, priority, resolve, reject });
-      // Sort by priority: high > normal > low
+      
       this.queue.sort((a, b) => {
         const priorityMap = { high: 3, normal: 2, low: 1 };
         return priorityMap[b.priority] - priorityMap[a.priority];
@@ -33,7 +33,7 @@ class MusicBrainzQueue {
       const now = Date.now();
       const timeSinceLastRequest = now - this.lastRequestTime;
 
-      // Wait if we need to respect rate limit
+      
       if (timeSinceLastRequest < this.minInterval) {
         await wait(this.minInterval - timeSinceLastRequest);
       }
@@ -59,7 +59,7 @@ function mbFetch(url, options, priority = 'normal') {
   return mbQueue.add(url, options, priority);
 }
 
-// Image proxy request queue to prevent overwhelming the server
+
 class RequestQueue {
   constructor(maxConcurrent = 10) {
     this.maxConcurrent = maxConcurrent;
@@ -90,7 +90,7 @@ class RequestQueue {
   }
 }
 
-const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
+const imageProxyQueue = new RequestQueue(10); 
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
@@ -173,9 +173,9 @@ module.exports = (app, deps) => {
     );
   }
 
-  // ============ API ENDPOINTS FOR LISTS ============
+  
 
-  // Get all lists for current user
+  
   app.get(
     '/api/lists',
     ensureAuthAPI,
@@ -189,7 +189,7 @@ module.exports = (app, deps) => {
           const items = await listItemsAsync.find({ listId: list._id });
           items.sort((a, b) => a.position - b.position);
 
-          // Batch load album data to avoid N+1 queries
+          
           const albumIds = items.map((item) => item.albumId).filter(Boolean);
           const albumsData =
             albumIds.length > 0
@@ -229,7 +229,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Server-sent events subscription for a specific list
+  
   app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
     const { name } = req.params;
     const key = `${req.user._id}:${name}`;
@@ -260,7 +260,7 @@ module.exports = (app, deps) => {
     });
   });
 
-  // Get a single list
+  
   app.get(
     '/api/lists/:name',
     ensureAuthAPI,
@@ -279,7 +279,7 @@ module.exports = (app, deps) => {
         const items = await listItemsAsync.find({ listId: list._id });
         items.sort((a, b) => a.position - b.position);
 
-        // Batch load album data to avoid N+1 queries
+        
         const albumIds = items.map((item) => item.albumId).filter(Boolean);
         const albumsData =
           albumIds.length > 0 ? await albumsAsync.findByAlbumIds(albumIds) : [];
@@ -319,7 +319,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Create or update a list
+  
   app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
     const { name } = req.params;
     const { data } = req.body;
@@ -328,7 +328,7 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'Invalid list data' });
     }
 
-    // Check if list exists
+    
     lists.findOne({ userId: req.user._id, name }, async (err, existingList) => {
       if (err) {
         logger.error('Error checking list:', err);
@@ -349,7 +349,7 @@ module.exports = (app, deps) => {
             listId,
           ]);
         } else {
-          // Create new list
+          
           const resList = await client.query(
             'INSERT INTO lists (_id, user_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) RETURNING _id',
             [
@@ -404,8 +404,8 @@ module.exports = (app, deps) => {
 
         await client.query('COMMIT');
 
-        // Invalidate cache BEFORE sending response to prevent race condition
-        // Use req.originalUrl to match the exact cache key format (includes URL encoding)
+        
+        
         responseCache.invalidate(`GET:${req.originalUrl}:${req.user._id}`);
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
@@ -425,7 +425,7 @@ module.exports = (app, deps) => {
     });
   });
 
-  // Delete a specific list
+  
   app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
     const { name } = req.params;
 
@@ -439,7 +439,7 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      // If this was the user's last selected list, clear it
+      
       if (req.user.lastSelectedList === name) {
         users.update(
           { _id: req.user._id },
@@ -457,15 +457,15 @@ module.exports = (app, deps) => {
 
       res.json({ success: true, message: 'List deleted' });
 
-      // Invalidate cache for this user's lists
+      
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
       responseCache.invalidate(`GET:/api/lists/${name}:${req.user._id}`);
     });
   });
 
-  // ============ PASSWORD RESET ROUTES ============
+  
 
-  // Forgot password page
+  
   app.get('/forgot', csrfProtection, (req, res) => {
     res.send(
       htmlTemplate(
@@ -475,7 +475,7 @@ module.exports = (app, deps) => {
     );
   });
 
-  // Handle forgot password submission
+  
   app.post('/forgot', forgotPasswordRateLimit, csrfProtection, (req, res) => {
     const { email } = req.body;
 
@@ -491,16 +491,16 @@ module.exports = (app, deps) => {
         return res.redirect('/forgot');
       }
 
-      // Always show the same message for security reasons
+      
       req.flash('info', 'If that email exists, you will receive a reset link');
 
       if (!user) {
-        // Don't reveal that the email doesn't exist
+        
         return res.redirect('/forgot');
       }
 
       const token = crypto.randomBytes(20).toString('hex');
-      const expires = Date.now() + 3600000; // 1 hour
+      const expires = Date.now() + 3600000; 
 
       users.update(
         { _id: user._id },
@@ -509,13 +509,13 @@ module.exports = (app, deps) => {
         (err, numReplaced) => {
           if (err) {
             logger.error('Failed to set reset token:', err);
-            // Don't show error to user for security reasons
+            
             return res.redirect('/forgot');
           }
 
           if (numReplaced === 0) {
             logger.error('No user updated when setting reset token');
-            // Don't show error to user for security reasons
+            
             return res.redirect('/forgot');
           }
 
@@ -562,7 +562,7 @@ module.exports = (app, deps) => {
     });
   });
 
-  // Reset password page
+  
   app.get('/reset/:token', csrfProtection, (req, res) => {
     users.findOne(
       { resetToken: req.params.token, resetExpires: { $gt: Date.now() } },
@@ -585,7 +585,7 @@ module.exports = (app, deps) => {
     );
   });
 
-  // Handle password reset
+  
   app.post(
     '/reset/:token',
     resetPasswordRateLimit,
@@ -663,7 +663,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Proxy for Deezer API to avoid CORS issues
+  
   app.get(
     '/api/proxy/deezer',
     ensureAuthAPI,
@@ -695,7 +695,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Deezer artist search proxy for direct artist image fetching
+  
   app.get(
     '/api/proxy/deezer/artist',
     ensureAuthAPI,
@@ -727,7 +727,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Proxy for MusicBrainz API to avoid CORS issues and handle rate limiting
+  
   app.get(
     '/api/proxy/musicbrainz',
     ensureAuthAPI,
@@ -741,13 +741,13 @@ module.exports = (app, deps) => {
             .json({ error: 'Query parameter endpoint is required' });
         }
 
-        // Determine request priority
-        // high: user-initiated searches, album lists
-        // normal: artist metadata for display
-        // low: background image fetching
+        
+        
+        
+        
         const requestPriority = priority || 'normal';
 
-        // Use the MusicBrainz rate-limited fetch function with priority
+        
         const url = `https://musicbrainz.org/ws/2/${endpoint}`;
         const response = await mbFetch(
           url,
@@ -775,7 +775,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Proxy for Wikidata API to avoid CORS issues
+  
   app.get(
     '/api/proxy/wikidata',
     ensureAuthAPI,
@@ -812,7 +812,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Image proxy endpoint for fetching external cover art
+  
   app.get(
     '/api/proxy/image',
     ensureAuthAPI,
@@ -824,7 +824,7 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'URL parameter is required' });
         }
 
-        // Validate URL to prevent SSRF attacks
+        
         const allowedHosts = [
           'is1-ssl.mzstatic.com',
           'is2-ssl.mzstatic.com',
@@ -849,7 +849,7 @@ module.exports = (app, deps) => {
           return res.status(403).json({ error: 'URL host not allowed' });
         }
 
-        // Use request queue to limit concurrent image fetches
+        
         const result = await imageProxyQueue.add(async () => {
           const response = await fetch(url, {
             headers: {
@@ -885,9 +885,9 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Search Spotify for an album and return the ID
+  
   app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
-    // Check if user has Spotify authentication
+    
     if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
       logger.warn('Spotify API request without authentication');
       return res.status(401).json({
@@ -898,7 +898,7 @@ module.exports = (app, deps) => {
       });
     }
 
-    // Check if token is expired (with 5 min buffer for better UX)
+    
     if (
       req.user.spotifyAuth.expires_at &&
       req.user.spotifyAuth.expires_at <= Date.now() + 300000
@@ -942,7 +942,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Search Tidal for an album and return the ID
+  
   app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     if (
       !req.user.tidalAuth ||
@@ -1004,8 +1004,8 @@ module.exports = (app, deps) => {
       }
 
       const query = `${album} ${artist}`;
-      // encodeURIComponent does not escape apostrophes, which breaks the
-      // Tidal searchResults path. Replace them manually after encoding.
+      
+      
       const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
       const params = new URLSearchParams({ countryCode });
       const url =
@@ -1174,14 +1174,14 @@ module.exports = (app, deps) => {
         };
 
         const runFallbacks = async () => {
-          // Race both services and return first successful result
+          
           try {
             return await Promise.any([
               fetchItunesTracks(),
               fetchDeezerTracks(),
             ]);
           } catch (_err) {
-            // All fallbacks failed
+            
             return null;
           }
         };
@@ -1223,7 +1223,7 @@ module.exports = (app, deps) => {
           }
 
           if (!groups.length) {
-            // Fallback: try release search instead of release-group
+            
             const relUrl =
               `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(`${albumClean} ${artistClean}`)}` +
               `&fmt=json&limit=10`;
@@ -1318,7 +1318,7 @@ module.exports = (app, deps) => {
           )
             s += 15;
           const date = new Date(rel.date || '1900-01-01');
-          if (!isNaN(date)) s += date.getTime() / 1e10; // minor weight
+          if (!isNaN(date)) s += date.getTime() / 1e10; 
           return s;
         };
 
@@ -1357,7 +1357,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Playlist management endpoint
+  
   app.post('/api/playlists/:listName', ensureAuthAPI, async (req, res) => {
     const { listName } = req.params;
     const { action = 'update', service } = req.body;
@@ -1369,7 +1369,7 @@ module.exports = (app, deps) => {
       body: req.body,
     });
 
-    // Validate user has a preferred music service or service is specified
+    
     const targetService = service || req.user.musicService;
 
     try {
@@ -1381,12 +1381,12 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Check authentication for the target service
+      
       const authField =
         targetService === 'spotify' ? 'spotifyAuth' : 'tidalAuth';
       const auth = req.user[authField];
 
-      // Check if user has authentication for the service
+      
       if (!auth || !auth.access_token) {
         return res.status(401).json({
           error: `Not authenticated with ${targetService}. Please connect your ${targetService} account in Settings.`,
@@ -1395,7 +1395,7 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Check if token is expired (with 5 min buffer for better UX)
+      
       if (auth.expires_at && auth.expires_at <= Date.now() + 300000) {
         logger.warn(`${targetService} token expired or expiring soon`);
         return res.status(401).json({
@@ -1405,7 +1405,7 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Check if playlist exists (for confirmation dialog)
+      
       if (action === 'check') {
         logger.info('Playlist check action received:', {
           listName,
@@ -1416,7 +1416,7 @@ module.exports = (app, deps) => {
         return res.json({ exists, playlistName: listName });
       }
 
-      // Get the list and its items
+      
       const list = await listsAsync.findOne({
         userId: req.user._id,
         name: listName,
@@ -1429,14 +1429,14 @@ module.exports = (app, deps) => {
       const items = await listItemsAsync.find({ listId: list._id });
       items.sort((a, b) => a.position - b.position);
 
-      // Pre-flight validation
+      
       const validation = await validatePlaylistData(items, targetService, auth);
 
       if (action === 'validate') {
         return res.json(validation);
       }
 
-      // Create or update playlist
+      
       const result = await createOrUpdatePlaylist(
         listName,
         items,
@@ -1448,7 +1448,7 @@ module.exports = (app, deps) => {
 
       res.json(result);
     } catch (err) {
-      // Log full error details server-side for debugging
+      
       logger.error('Playlist operation error:', {
         error: err.message,
         stack: err.stack,
@@ -1457,8 +1457,8 @@ module.exports = (app, deps) => {
         targetService,
       });
 
-      // Return safe error response to client
-      // Never expose error.message or stack traces - may contain sensitive info
+      
+      
       res.status(500).json({
         success: false,
         error: {
@@ -1471,7 +1471,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Check if playlist exists in the music service
+  
   async function checkPlaylistExists(playlistName, targetService, auth) {
     logger.info('checkPlaylistExists called:', { playlistName, targetService });
 
@@ -1497,12 +1497,12 @@ module.exports = (app, deps) => {
             const playlists = await resp.json();
             totalChecked += playlists.items.length;
 
-            // Collect all playlist names for debugging
+            
             allPlaylistNames = allPlaylistNames.concat(
               playlists.items.map((p) => p.name)
             );
 
-            // Log details about this batch
+            
             logger.info('Spotify playlists batch:', {
               count: playlists.items.length,
               total: playlists.total,
@@ -1519,7 +1519,7 @@ module.exports = (app, deps) => {
             });
 
             const exists = playlists.items.some((p) => {
-              // Log every comparison for debugging
+              
               logger.debug('Comparing playlist names:', {
                 searchName: playlistName,
                 searchNameLength: playlistName.length,
@@ -1566,7 +1566,7 @@ module.exports = (app, deps) => {
         searchName: playlistName,
         searchNameLength: playlistName.length,
         found: false,
-        allPlaylistNames: allPlaylistNames.slice(0, 100), // Log first 100 names
+        allPlaylistNames: allPlaylistNames.slice(0, 100), 
         totalPlaylists: allPlaylistNames.length,
       });
       return false;
@@ -1609,7 +1609,7 @@ module.exports = (app, deps) => {
     return false;
   }
 
-  // Pre-flight validation for playlist creation
+  
   async function validatePlaylistData(items, _service, _auth) {
     const validation = {
       totalAlbums: items.length,
@@ -1649,7 +1649,7 @@ module.exports = (app, deps) => {
     return validation;
   }
 
-  // Create or update playlist in the specified service
+  
   async function createOrUpdatePlaylist(
     playlistName,
     items,
@@ -1694,7 +1694,7 @@ module.exports = (app, deps) => {
     }
   }
 
-  // Spotify playlist handling
+  
   async function handleSpotifyPlaylist(
     playlistName,
     items,
@@ -1713,7 +1713,7 @@ module.exports = (app, deps) => {
       'Content-Type': 'application/json',
     };
 
-    // Get user's Spotify profile
+    
     logger.debug('Fetching Spotify profile');
     const profileResp = await fetch(`${baseUrl}/me`, { headers });
     if (!profileResp.ok) {
@@ -1729,7 +1729,7 @@ module.exports = (app, deps) => {
     const profile = await profileResp.json();
     logger.debug('Spotify profile fetched', { userId: profile.id });
 
-    // Check if playlist exists
+    
     let playlistId = null;
     let existingPlaylist = null;
 
@@ -1754,7 +1754,7 @@ module.exports = (app, deps) => {
       });
     }
 
-    // Create playlist if it doesn't exist
+    
     if (!playlistId) {
       logger.debug('Creating new playlist');
       const createResp = await fetch(
@@ -1788,11 +1788,11 @@ module.exports = (app, deps) => {
       result.playlistUrl = existingPlaylist.external_urls.spotify;
     }
 
-    // Collect track URIs with parallel processing
+    
     const trackUris = [];
     const albumCache = new Map();
 
-    // Process tracks in parallel batches to respect rate limits
+    
     const batchSize = 10;
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
@@ -1836,7 +1836,7 @@ module.exports = (app, deps) => {
         })
       );
 
-      // Process batch results
+      
       for (const promiseResult of batchResults) {
         if (promiseResult.status === 'fulfilled') {
           const trackResult = promiseResult.value;
@@ -1868,16 +1868,16 @@ module.exports = (app, deps) => {
       }
     }
 
-    // Update playlist with tracks
+    
     if (trackUris.length > 0) {
-      // Clear existing tracks
+      
       await fetch(`${baseUrl}/playlists/${playlistId}/tracks`, {
         method: 'PUT',
         headers,
         body: JSON.stringify({ uris: [] }),
       });
 
-      // Add new tracks in batches of 100 (Spotify limit)
+      
       for (let i = 0; i < trackUris.length; i += 100) {
         const batch = trackUris.slice(i, i + 100);
         const addResp = await fetch(
@@ -1900,14 +1900,14 @@ module.exports = (app, deps) => {
     return result;
   }
 
-  // Find Spotify track URI with caching
+  
   async function findSpotifyTrack(item, auth, albumCache = new Map()) {
     const trackPick = item.trackPick || item.track_pick;
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
     };
 
-    // First try to get album tracks if we have album_id
+    
     if (item.albumId) {
       try {
         const cacheKey = `${item.artist}::${item.album}`;
@@ -1939,7 +1939,7 @@ module.exports = (app, deps) => {
         }
 
         if (albumData && albumData.tracks) {
-          // Try to match by track number
+          
           const trackNum = parseInt(trackPick);
           if (
             !isNaN(trackNum) &&
@@ -1949,7 +1949,7 @@ module.exports = (app, deps) => {
             return albumData.tracks[trackNum - 1].uri;
           }
 
-          // Try to match by track name
+          
           const matchingTrack = albumData.tracks.find(
             (t) =>
               t.name.toLowerCase().includes(trackPick.toLowerCase()) ||
@@ -1964,7 +1964,7 @@ module.exports = (app, deps) => {
       }
     }
 
-    // Fallback to general track search
+    
     try {
       const query = `track:${trackPick} album:${item.album} artist:${item.artist}`;
       const searchResp = await fetch(
@@ -1984,7 +1984,7 @@ module.exports = (app, deps) => {
     return null;
   }
 
-  // Tidal playlist handling
+  
   async function handleTidalPlaylist(playlistName, items, auth, user, result) {
     const baseUrl = 'https://openapi.tidal.com/v2';
     const headers = {
@@ -1993,7 +1993,7 @@ module.exports = (app, deps) => {
       Accept: 'application/vnd.api+json',
     };
 
-    // Get user's Tidal profile
+    
     const profileResp = await fetch(`${baseUrl}/me`, { headers });
     if (!profileResp.ok) {
       throw new Error(`Failed to get Tidal profile: ${profileResp.status}`);
@@ -2001,7 +2001,7 @@ module.exports = (app, deps) => {
     const profile = await profileResp.json();
     const _userId = profile.data.id;
 
-    // Check if playlist exists
+    
     let playlistId = null;
     let existingPlaylist = null;
 
@@ -2022,7 +2022,7 @@ module.exports = (app, deps) => {
       logger.debug('Error fetching Tidal playlists:', err);
     }
 
-    // Create playlist if it doesn't exist
+    
     if (!playlistId) {
       const createResp = await fetch(`${baseUrl}/playlists`, {
         method: 'POST',
@@ -2058,11 +2058,11 @@ module.exports = (app, deps) => {
       result.playlistUrl = `https://tidal.com/browse/playlist/${playlistId}`;
     }
 
-    // Collect track IDs with parallel processing
+    
     const trackIds = [];
     const albumCache = new Map();
 
-    // Process tracks in parallel batches to respect rate limits
+    
     const batchSize = 10;
     for (let i = 0; i < items.length; i += batchSize) {
       const batch = items.slice(i, i + batchSize);
@@ -2111,7 +2111,7 @@ module.exports = (app, deps) => {
         })
       );
 
-      // Process batch results
+      
       for (const promiseResult of batchResults) {
         if (promiseResult.status === 'fulfilled') {
           const trackResult = promiseResult.value;
@@ -2143,9 +2143,9 @@ module.exports = (app, deps) => {
       }
     }
 
-    // Update playlist with tracks
+    
     if (trackIds.length > 0) {
-      // Clear existing tracks first
+      
       try {
         await fetch(`${baseUrl}/playlists/${playlistId}/items`, {
           method: 'DELETE',
@@ -2155,7 +2155,7 @@ module.exports = (app, deps) => {
         logger.debug('Error clearing Tidal playlist:', err);
       }
 
-      // Add new tracks in batches
+      
       for (let i = 0; i < trackIds.length; i += 50) {
         const batch = trackIds.slice(i, i + 50);
         const trackData = batch.map((id) => ({
@@ -2189,7 +2189,7 @@ module.exports = (app, deps) => {
     return result;
   }
 
-  // Find Tidal track ID with caching
+  
   async function findTidalTrack(
     item,
     auth,
@@ -2202,7 +2202,7 @@ module.exports = (app, deps) => {
       Accept: 'application/vnd.api+json',
     };
 
-    // First try to search for the album and get tracks
+    
     try {
       const cacheKey = `${item.artist}::${item.album}`;
       let albumData = albumCache.get(cacheKey);
@@ -2219,7 +2219,7 @@ module.exports = (app, deps) => {
           if (searchData.data && searchData.data.length > 0) {
             const tidalAlbumId = searchData.data[0].id;
 
-            // Get album tracks
+            
             const tracksResp = await fetch(
               `https://openapi.tidal.com/v2/albums/${tidalAlbumId}/items?countryCode=${countryCode}`,
               { headers }
@@ -2238,7 +2238,7 @@ module.exports = (app, deps) => {
       }
 
       if (albumData && albumData.tracks) {
-        // Try to match by track number
+        
         const trackNum = parseInt(trackPick);
         if (
           !isNaN(trackNum) &&
@@ -2248,7 +2248,7 @@ module.exports = (app, deps) => {
           return albumData.tracks[trackNum - 1].id;
         }
 
-        // Try to match by track name
+        
         const matchingTrack = albumData.tracks.find(
           (t) =>
             t.attributes.title
@@ -2264,7 +2264,7 @@ module.exports = (app, deps) => {
       logger.debug('Tidal album-based track search failed:', err);
     }
 
-    // Fallback to general track search
+    
     try {
       const query = `${trackPick} ${item.album} ${item.artist}`;
       const searchResp = await fetch(

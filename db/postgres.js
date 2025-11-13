@@ -21,7 +21,7 @@ async function warmConnections(pool) {
   logger.info('Warming database connections...');
   const warmupPromises = [];
 
-  // Create minimum number of connections by running simple queries
+  
   for (let i = 0; i < (pool.options.min || 5); i++) {
     warmupPromises.push(
       pool.query('SELECT 1 as warmup').catch((err) => {
@@ -45,7 +45,7 @@ class PgDatastore {
     );
     this.preparedStatements = new Map();
     this.cache = new Map();
-    this.cacheTimeout = 60000; // 1 minute cache for static data
+    this.cacheTimeout = 60000; 
   }
 
   _prepareValue(val) {
@@ -260,12 +260,12 @@ class PgDatastore {
     return this._callbackify(promise, cb);
   }
 
-  // Batch find by IDs for efficient loading
+  
   async findByIds(ids, cb) {
     const promise = (async () => {
       if (!ids || ids.length === 0) return [];
 
-      // Check cache for static data (albums table)
+      
       if (this.table === 'albums') {
         const cacheKey = `findByIds_${ids.sort().join(',')}`;
         const cached = this.cache.get(cacheKey);
@@ -280,7 +280,7 @@ class PgDatastore {
       const res = await this._preparedQuery(queryName, queryText, ids);
       const result = res.rows.map((r) => this._mapRow(r));
 
-      // Cache result for albums (static data)
+      
       if (this.table === 'albums') {
         const cacheKey = `findByIds_${ids.sort().join(',')}`;
         this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
@@ -291,12 +291,12 @@ class PgDatastore {
     return this._callbackify(promise, cb);
   }
 
-  // Find albums by album_id (MusicBrainz IDs)
+  
   async findByAlbumIds(albumIds, cb) {
     const promise = (async () => {
       if (!albumIds || albumIds.length === 0) return [];
 
-      // Check cache
+      
       const cacheKey = `findByAlbumIds_${albumIds.sort().join(',')}`;
       const cached = this.cache.get(cacheKey);
       if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
@@ -309,14 +309,14 @@ class PgDatastore {
       const res = await this._preparedQuery(queryName, queryText, albumIds);
       const result = res.rows.map((r) => this._mapRow(r));
 
-      // Cache result
+      
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
 
       return result;
     })();
     return this._callbackify(promise, cb);
   }
-  // Placeholder for API compatibility
+  
   ensureIndex() {}
 }
 

@@ -16,7 +16,7 @@ test('isTokenValid should return false for token without access_token', () => {
 test('isTokenValid should return false for expired token', () => {
   const expiredToken = {
     access_token: 'test_token',
-    expires_at: Date.now() - 1000, // Expired 1 second ago
+    expires_at: Date.now() - 1000, 
   };
   assert.strictEqual(isTokenValid(expiredToken), false);
 });
@@ -31,7 +31,7 @@ test('isTokenValid should return true for valid token without expiry', () => {
 test('isTokenValid should return true for valid token with future expiry', () => {
   const validToken = {
     access_token: 'test_token',
-    expires_at: Date.now() + 3600000, // Expires in 1 hour
+    expires_at: Date.now() + 3600000, 
   };
   assert.strictEqual(isTokenValid(validToken), true);
 });

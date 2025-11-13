@@ -1,7 +1,7 @@
-// forgot_email.js
+
 
 const composeForgotPasswordEmail = (userEmail, resetUrl) => {
-  // Email content with black metal theme
+  
   const textContent = `A password reset has been requested for your account.
 
 Click here to reset your password: ${resetUrl}
@@ -9,7 +9,7 @@ Click here to reset your password: ${resetUrl}
 If you did not request this, ignore this email and your password will remain unchanged.
 `;
 
-  // HTML version with styling matching the app's theme
+  
   const htmlContent = `
 <!DOCTYPE html>
 <html>
@@ -142,7 +142,7 @@ If you did not request this, ignore this email and your password will remain unc
 </html>
   `;
 
-  // Return email configuration object
+  
   return {
     to: userEmail,
     from: process.env.EMAIL_FROM || 'magnus@overli.dev',

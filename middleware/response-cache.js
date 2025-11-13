@@ -3,11 +3,11 @@ const logger = require('../utils/logger');
 class ResponseCache {
   constructor(options = {}) {
     this.cache = new Map();
-    this.defaultTTL = options.defaultTTL || 60000; // 1 minute default
-    this.maxSize = options.maxSize || 1000; // Max cache entries
-    this.cleanupInterval = options.cleanupInterval || 300000; // 5 minutes
+    this.defaultTTL = options.defaultTTL || 60000; 
+    this.maxSize = options.maxSize || 1000; 
+    this.cleanupInterval = options.cleanupInterval || 300000; 
 
-    // Periodic cleanup of expired entries
+    
     this.cleanupTimer = setInterval(() => {
       this.cleanup();
     }, this.cleanupInterval);
@@ -24,7 +24,7 @@ class ResponseCache {
       }
     }
 
-    // If cache is still too large, remove oldest entries
+    
     if (this.cache.size > this.maxSize) {
       const entries = Array.from(this.cache.entries()).sort(
         (a, b) => a[1].createdAt - b[1].createdAt
@@ -43,7 +43,7 @@ class ResponseCache {
   }
 
   generateKey(req) {
-    // Create cache key from method, path, and user ID (for user-specific data)
+    
     const userId = req.user?._id || 'anonymous';
     return `${req.method}:${req.originalUrl}:${userId}`;
   }
@@ -70,7 +70,7 @@ class ResponseCache {
   }
 
   invalidate(pattern) {
-    // Invalidate cache entries matching a pattern
+    
     for (const key of this.cache.keys()) {
       if (key.includes(pattern)) {
         this.cache.delete(key);
@@ -90,13 +90,13 @@ class ResponseCache {
   }
 }
 
-// Create global cache instance
+
 const responseCache = new ResponseCache();
 
-// Middleware factory for response caching
+
 function createCacheMiddleware(options = {}) {
   const {
-    ttl = 60000, // 1 minute default
+    ttl = 60000, 
     keyGenerator = null,
     shouldCache = () => true,
     onHit = null,
@@ -104,12 +104,12 @@ function createCacheMiddleware(options = {}) {
   } = options;
 
   return (req, res, next) => {
-    // Skip caching for non-GET requests
+    
     if (req.method !== 'GET') {
       return next();
     }
 
-    // Skip if shouldCache returns false
+    
     if (!shouldCache(req)) {
       return next();
     }
@@ -120,10 +120,10 @@ function createCacheMiddleware(options = {}) {
     const cached = responseCache.get(cacheKey);
 
     if (cached) {
-      // Cache hit
+      
       if (onHit) onHit(req, cacheKey);
 
-      // Set cache headers
+      
       res.set({
         'X-Cache': 'HIT',
         'X-Cache-Key': cacheKey,
@@ -132,16 +132,16 @@ function createCacheMiddleware(options = {}) {
       return res.json(cached.data);
     }
 
-    // Cache miss - intercept response
+    
     if (onMiss) onMiss(req, cacheKey);
 
     const originalJson = res.json;
     res.json = function (data) {
-      // Only cache successful responses
+      
       if (res.statusCode >= 200 && res.statusCode < 300) {
         responseCache.set(cacheKey, data, ttl);
 
-        // Set cache headers
+        
         res.set({
           'X-Cache': 'MISS',
           'X-Cache-Key': cacheKey,
@@ -155,28 +155,28 @@ function createCacheMiddleware(options = {}) {
   };
 }
 
-// Predefined cache configurations for common use cases
+
 const cacheConfigs = {
-  // Static data that rarely changes (albums, genres)
+  
   static: createCacheMiddleware({
-    ttl: 300000, // 5 minutes
+    ttl: 300000, 
     shouldCache: (req) => {
-      // Only cache for authenticated users to avoid leaking data
+      
       return req.user && req.path.includes('/api/');
     },
   }),
 
-  // User-specific data with shorter TTL
+  
   userSpecific: createCacheMiddleware({
-    ttl: 60000, // 1 minute
+    ttl: 60000, 
     shouldCache: (req) => {
       return req.user && req.path.includes('/api/lists');
     },
   }),
 
-  // Public data with longer TTL
+  
   public: createCacheMiddleware({
-    ttl: 600000, // 10 minutes
+    ttl: 600000, 
     keyGenerator: (req) => `public:${req.method}:${req.originalUrl}`,
     shouldCache: (req) => {
       return (
@@ -185,10 +185,10 @@ const cacheConfigs = {
     },
   }),
 
-  // Album cover images with very long TTL (URLs don't change)
+  
   images: createCacheMiddleware({
-    ttl: 3600000, // 1 hour - images rarely change
-    keyGenerator: (req) => `image:${req.query.url}`, // Key by image URL only
+    ttl: 3600000, 
+    keyGenerator: (req) => `image:${req.query.url}`, 
     shouldCache: (req) => {
       return req.path === '/api/proxy/image';
     },

@@ -1,4 +1,4 @@
-/** @type {import('tailwindcss').Config} */
+
 module.exports = {
   content: [
     './index.js',
@@ -9,7 +9,7 @@ module.exports = {
     './templates.js',
   ],
   safelist: [
-    // Album display classes
+    
     'album-grid',
     'album-cover-container',
     'album-cover',
@@ -17,19 +17,19 @@ module.exports = {
     'album-row',
     'position-display',
 
-    // Drag and drop classes
+    
     'dragging',
     'drag-active',
     'drop-target',
 
-    // Editable cell classes
+    
     'comment-cell',
     'genre-cell',
     'genre-1-cell',
     'genre-2-cell',
     'country-cell',
 
-    // Common utility classes
+    
     'hidden',
     'relative',
     'absolute',
@@ -41,7 +41,7 @@ module.exports = {
     'right-2',
     'z-10',
 
-    // Flexbox/Grid
+    
     'flex',
     'flex-col',
     'flex-1',
@@ -54,7 +54,7 @@ module.exports = {
     'lg:grid-cols-4',
     'col-span-full',
 
-    // Spacing
+    
     'p-1',
     'p-2',
     'p-4',
@@ -75,7 +75,7 @@ module.exports = {
     'space-y-1',
     'space-y-2',
 
-    // Sizing
+    
     'w-12',
     'h-12',
     'w-64',
@@ -86,7 +86,7 @@ module.exports = {
     'max-w-4xl',
     'max-h-[90vh]',
 
-    // Typography
+    
     'text-xs',
     'text-sm',
     'text-lg',
@@ -110,7 +110,7 @@ module.exports = {
     'truncate',
     'line-clamp-2',
 
-    // Backgrounds
+    
     'bg-black',
     'bg-gray-700',
     'bg-gray-800',
@@ -121,7 +121,7 @@ module.exports = {
     'bg-opacity-50',
     'backdrop-blur-sm',
 
-    // Borders
+    
     'border',
     'border-b',
     'border-r',
@@ -132,14 +132,14 @@ module.exports = {
     'rounded',
     'rounded-full',
 
-    // Hover states
+    
     'hover:text-gray-100',
     'hover:text-red-400',
     'hover:bg-gray-700',
     'hover:bg-gray-800/30',
     'hover:bg-red-700',
 
-    // Transitions
+    
     'transition',
     'transition-colors',
     'transition-transform',
@@ -149,23 +149,23 @@ module.exports = {
     'group',
     'group-hover:scale-105',
 
-    // Animations
+    
     'animate-spin',
 
-    // Focus/Form
+    
     'focus:outline-none',
     'focus:border-red-600',
     'resize-none',
     'cursor-pointer',
     'cursor-move',
 
-    // Layout
+    
     'overflow-hidden',
     'overflow-y-auto',
     'object-cover',
     'shadow-lg',
 
-    // Custom classes
+    
     'metal-title',
     'glow-red',
   ],

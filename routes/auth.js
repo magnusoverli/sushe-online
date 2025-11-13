@@ -36,9 +36,9 @@ module.exports = (app, deps) => {
     passport,
   } = deps;
 
-  // ============ ROUTES ============
+  
 
-  // Registration routes
+  
   app.get('/register', csrfProtection, (req, res) => {
     res.send(
       htmlTemplate(
@@ -52,25 +52,25 @@ module.exports = (app, deps) => {
     try {
       const { email, username, password, confirmPassword } = req.body;
 
-      // Validate all fields are present
+      
       if (!email || !username || !password || !confirmPassword) {
         req.flash('error', 'All fields are required');
         return res.redirect('/register');
       }
 
-      // Check passwords match
+      
       if (password !== confirmPassword) {
         req.flash('error', 'Passwords do not match');
         return res.redirect('/register');
       }
 
-      // Validate email format
+      
       if (!isValidEmail(email)) {
         req.flash('error', 'Please enter a valid email address');
         return res.redirect('/register');
       }
 
-      // Validate username format/length
+      
       if (!isValidUsername(username)) {
         req.flash(
           'error',
@@ -79,13 +79,13 @@ module.exports = (app, deps) => {
         return res.redirect('/register');
       }
 
-      // Validate password length
+      
       if (!isValidPassword(password)) {
         req.flash('error', 'Password must be at least 8 characters');
         return res.redirect('/register');
       }
 
-      // Check if email already exists
+      
       try {
         const existingEmailUser = await usersAsync.findOne({ email });
         if (existingEmailUser) {
@@ -93,7 +93,7 @@ module.exports = (app, deps) => {
           return res.redirect('/register');
         }
 
-        // Check if username already exists
+        
         const existingUsernameUser = await usersAsync.findOne({ username });
 
         if (existingUsernameUser) {
@@ -101,14 +101,14 @@ module.exports = (app, deps) => {
           return res.redirect('/register');
         }
 
-        // Hash password and create user
+        
         const hash = await bcrypt.hash(password, 12);
         if (!hash) {
           req.flash('error', 'Registration error. Please try again.');
           return res.redirect('/register');
         }
 
-        // Insert new user
+        
         const _newUser = await usersAsync.insert({
           email,
           username,
@@ -155,7 +155,7 @@ module.exports = (app, deps) => {
             .json({ error: 'Error updating last selected list' });
         }
 
-        // Update the session user object
+        
         req.user.lastSelectedList = listName;
         req.session.save();
 
@@ -164,14 +164,14 @@ module.exports = (app, deps) => {
     );
   });
 
-  // Login routes
+  
   app.get('/login', csrfProtection, (req, res) => {
-    // Redirect if already authenticated
+    
     if (req.isAuthenticated()) {
       return res.redirect('/');
     }
 
-    // Debug CSRF token generation
+    
     logger.debug('Login GET - CSRF token generation', {
       hasSession: !!req.session,
       hasSecret: !!req.session?.csrfSecret,
@@ -206,7 +206,7 @@ module.exports = (app, deps) => {
         logger.info('Authentication failed:', info);
         req.flash('error', info.message || 'Invalid credentials');
 
-        // Force session save before redirect to ensure flash messages persist
+        
         await new Promise((resolve) => {
           req.session.save((err) => {
             if (err) {
@@ -228,7 +228,7 @@ module.exports = (app, deps) => {
 
       logger.info('User logged in successfully', { email: user.email });
 
-      // Record last activity
+      
       const timestamp = new Date();
       req.user.lastActivity = timestamp;
       await usersAsync.update(
@@ -236,12 +236,12 @@ module.exports = (app, deps) => {
         { $set: { lastActivity: timestamp } }
       );
 
-      // Force session save and handle errors
+      
       await new Promise((resolve) => {
         req.session.save((err) => {
           if (err) {
             logger.error('Session save error:', err);
-            // Continue anyway - session might still work
+            
           }
           resolve();
         });
@@ -255,24 +255,24 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Logout
+  
   app.get('/logout', (req, res) => {
     req.logout(() => res.redirect('/login'));
   });
 
-  // Home (protected) - Spotify-like interface
+  
   app.get('/', ensureAuth, (req, res) => {
     res.send(spotifyTemplate(sanitizeUser(req.user)));
   });
 
-  // Unified Settings Page
+  
   app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
     try {
       const spotifyValid = isTokenValid(req.user.spotifyAuth);
       const tidalValid = isTokenValid(req.user.tidalAuth);
 
       const sanitized = sanitizeUser(req.user);
-      // Get user's personal stats
+      
       const userLists = await listsAsync.find({ userId: req.user._id });
       let albumCount = 0;
       for (const l of userLists) {
@@ -283,7 +283,7 @@ module.exports = (app, deps) => {
         totalAlbums: albumCount,
       };
 
-      // If admin, get admin data
+      
       let adminData = null;
       let stats = null;
 
@@ -336,7 +336,7 @@ module.exports = (app, deps) => {
           }
 
           for (const album of items) {
-            // Track unique albums by album_id
+            
             if (album.albumId && album.albumId !== '') {
               uniqueAlbumIds.add(album.albumId);
             }
@@ -362,19 +362,19 @@ module.exports = (app, deps) => {
 
         const totalAlbums = uniqueAlbumIds.size;
 
-        // Get top genres
+        
         const topGenres = Array.from(genreCounts.entries())
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count)
           .slice(0, 5);
 
-        // Get top users by list count
+        
         const topUsers = usersWithCounts
           .filter((u) => u.listCount > 0)
           .sort((a, b) => b.listCount - a.listCount)
           .slice(0, 5);
 
-        // Calculate database size
+        
         let dbSize = 'N/A';
         try {
           const { rows } = await pool.query(
@@ -385,7 +385,7 @@ module.exports = (app, deps) => {
           logger.error('Error calculating DB size:', e);
         }
 
-        // Count active sessions from PostgreSQL
+        
         let activeSessions = 0;
         try {
           const { rows } = await pool.query(
@@ -409,10 +409,10 @@ module.exports = (app, deps) => {
           topUsers,
         };
 
-        // Generate real recent activity based on actual data
+        
         const recentActivity = [];
 
-        // Find recent user registrations
+        
         const recentUsers = allUsers
           .filter((u) => u.createdAt)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -428,7 +428,7 @@ module.exports = (app, deps) => {
           });
         });
 
-        // Find recent list creations
+        
         const recentLists = allLists
           .filter((l) => l.createdAt)
           .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -444,7 +444,7 @@ module.exports = (app, deps) => {
           });
         });
 
-        // Find recent admin grants
+        
         const recentAdmins = allUsers
           .filter((u) => u.role === 'admin' && u.adminGrantedAt)
           .sort(
@@ -462,9 +462,9 @@ module.exports = (app, deps) => {
           });
         });
 
-        // Sort by time and take the most recent 4
+        
         recentActivity.sort((a, b) => {
-          // This is a simplified sort - in production you'd want to store actual timestamps
+          
           const timeValues = {
             'just now': 0,
             'minutes ago': 1,
@@ -480,7 +480,7 @@ module.exports = (app, deps) => {
           return timeValues[aValue] - timeValues[bValue];
         });
 
-        // Ensure we have at least 4 items (pad with defaults if needed)
+        
         while (recentActivity.length < 4) {
           recentActivity.push({
             icon: 'fa-clock',
@@ -515,12 +515,12 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Update accent color endpoint
+  
   app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
     try {
       const { accentColor } = req.body;
 
-      // Validate hex color format
+      
       const hexColorRegex = /^#[0-9A-F]{6}$/i;
       if (!hexColorRegex.test(accentColor)) {
         return res.status(400).json({
@@ -528,7 +528,7 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Update user's accent color
+      
       users.update(
         { _id: req.user._id },
         { $set: { accentColor, updatedAt: new Date() } },
@@ -541,7 +541,7 @@ module.exports = (app, deps) => {
               .json({ error: 'Error updating theme color' });
           }
 
-          // Update session
+          
           req.user.accentColor = accentColor;
           req.session.save((err) => {
             if (err) logger.error('Session save error:', err);
@@ -559,7 +559,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Update time format endpoint
+  
   app.post('/settings/update-time-format', ensureAuth, async (req, res) => {
     try {
       const { timeFormat } = req.body;
@@ -596,7 +596,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Update date format endpoint
+  
   app.post('/settings/update-date-format', ensureAuth, async (req, res) => {
     try {
       const { dateFormat } = req.body;
@@ -633,7 +633,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Update preferred music service endpoint
+  
   app.post('/settings/update-music-service', ensureAuth, async (req, res) => {
     try {
       const { musicService } = req.body;
@@ -684,17 +684,17 @@ module.exports = (app, deps) => {
       return days === 1 ? '1 day ago' : `${days} days ago`;
     }
 
-    // For "recent activity", cap at months - anything older isn't really "recent"
+    
     const months = Math.floor(seconds / 2592000);
     if (months === 0) return '< 1 month ago';
     if (months === 1) return '1 month ago';
     if (months < 12) return `${months} months ago`;
 
-    // For anything over a year, just show "over a year ago" for recent activity
+    
     return 'over a year ago';
   }
 
-  // Change password endpoint
+  
   app.post(
     '/settings/change-password',
     ensureAuth,
@@ -704,7 +704,7 @@ module.exports = (app, deps) => {
       try {
         const { currentPassword, newPassword, confirmPassword } = req.body;
 
-        // Validate inputs
+        
         if (!currentPassword || !newPassword || !confirmPassword) {
           req.flash('error', 'All fields are required');
           return res.redirect('/settings');
@@ -720,17 +720,17 @@ module.exports = (app, deps) => {
           return res.redirect('/settings');
         }
 
-        // Verify current password
+        
         const isMatch = await bcrypt.compare(currentPassword, req.user.hash);
         if (!isMatch) {
           req.flash('error', 'Current password is incorrect');
           return res.redirect('/settings');
         }
 
-        // Hash new password
+        
         const newHash = await bcrypt.hash(newPassword, 12);
 
-        // Update user
+        
         users.update(
           { _id: req.user._id },
           { $set: { hash: newHash, updatedAt: new Date() } },
@@ -754,7 +754,7 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Admin request endpoint
+  
   app.post(
     '/settings/request-admin',
     ensureAuth,
@@ -766,7 +766,7 @@ module.exports = (app, deps) => {
       try {
         const { code } = req.body;
 
-        // Validate code
+        
         if (
           !code ||
           code.toUpperCase() !== adminCode ||
@@ -774,7 +774,7 @@ module.exports = (app, deps) => {
         ) {
           logger.info('Invalid code attempt');
 
-          // Increment failed attempts
+          
           const attempts = req.adminAttempts;
           attempts.count++;
           adminCodeAttempts.set(req.user._id, attempts);
@@ -783,10 +783,10 @@ module.exports = (app, deps) => {
           return res.redirect('/settings');
         }
 
-        // Clear failed attempts on success
+        
         adminCodeAttempts.delete(req.user._id);
 
-        // Grant admin
+        
         users.update(
           { _id: req.user._id },
           {
@@ -805,15 +805,15 @@ module.exports = (app, deps) => {
 
             logger.info(`✅ Admin access granted to: ${req.user.email}`);
 
-            // Track code usage
+            
             deps.lastCodeUsedBy = req.user.email;
             deps.lastCodeUsedAt = Date.now();
 
-            // REGENERATE CODE IMMEDIATELY after successful use
+            
             logger.info('🔄 Regenerating admin code after successful use...');
             generateAdminCode();
 
-            // Update the session
+            
             req.user.role = 'admin';
             req.session.save((err) => {
               if (err) logger.error('Session save error:', err);
@@ -830,12 +830,12 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Update email endpoint
+  
   app.post('/settings/update-email', ensureAuth, async (req, res) => {
     try {
       const { email } = req.body;
 
-      // Validate email
+      
       if (!email || !email.trim()) {
         return res.status(400).json({ error: 'Email is required' });
       }
@@ -844,7 +844,7 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Invalid email format' });
       }
 
-      // Check if email is already taken by another user
+      
       users.findOne(
         { email, _id: { $ne: req.user._id } },
         (err, existingUser) => {
@@ -857,7 +857,7 @@ module.exports = (app, deps) => {
             return res.status(400).json({ error: 'Email already in use' });
           }
 
-          // Update user email
+          
           users.update(
             { _id: req.user._id },
             { $set: { email: email.trim(), updatedAt: new Date() } },
@@ -868,7 +868,7 @@ module.exports = (app, deps) => {
                 return res.status(500).json({ error: 'Error updating email' });
               }
 
-              // Update session
+              
               req.user.email = email.trim();
               req.session.save((err) => {
                 if (err) logger.error('Session save error:', err);
@@ -885,12 +885,12 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Update username endpoint
+  
   app.post('/settings/update-username', ensureAuth, async (req, res) => {
     try {
       const { username } = req.body;
 
-      // Validate username
+      
       if (!username || !username.trim()) {
         return res.status(400).json({ error: 'Username is required' });
       }
@@ -902,7 +902,7 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Check if username is already taken by another user
+      
       users.findOne(
         { username, _id: { $ne: req.user._id } },
         (err, existingUser) => {
@@ -915,7 +915,7 @@ module.exports = (app, deps) => {
             return res.status(400).json({ error: 'Username already taken' });
           }
 
-          // Update username
+          
           users.update(
             { _id: req.user._id },
             { $set: { username: username.trim(), updatedAt: new Date() } },
@@ -928,7 +928,7 @@ module.exports = (app, deps) => {
                   .json({ error: 'Error updating username' });
               }
 
-              // Update session
+              
               req.user.username = username.trim();
               req.session.save((err) => {
                 if (err) logger.error('Session save error:', err);

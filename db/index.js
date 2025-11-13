@@ -112,7 +112,7 @@ async function ensureTables(pool) {
     created_at TIMESTAMPTZ,
     updated_at TIMESTAMPTZ
   )`);
-  // Handle legacy column from early migrations
+  
   const legacyCheck = await pool.query(
     `SELECT 1 FROM information_schema.columns WHERE table_name='albums' AND column_name='_id'`
   );
@@ -173,16 +173,16 @@ if (process.env.DATABASE_URL) {
   logger.info('Using PostgreSQL backend');
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 30, // Increase max connections for better performance with more resources
-    min: 10, // Keep more connections warm for faster response
-    idleTimeoutMillis: 600000, // 10 minutes - longer idle timeout for stability
-    connectionTimeoutMillis: 5000, // 5 seconds - more reasonable for production
-    acquireTimeoutMillis: 5000, // 5 seconds - prevent cascade failures
-    keepAlive: true, // Enable TCP keep-alive
-    keepAliveInitialDelayMillis: 10000, // 10 second initial delay for keep-alive
-    statement_timeout: 60000, // 60 seconds for complex queries
-    query_timeout: 60000, // 60 seconds query timeout
-    allowExitOnIdle: false, // Don't exit when idle
+    max: 30, 
+    min: 10, 
+    idleTimeoutMillis: 600000, 
+    connectionTimeoutMillis: 5000, 
+    acquireTimeoutMillis: 5000, 
+    keepAlive: true, 
+    keepAliveInitialDelayMillis: 10000, 
+    statement_timeout: 60000, 
+    query_timeout: 60000, 
+    allowExitOnIdle: false, 
   });
   const usersMap = {
     _id: '_id',
@@ -257,7 +257,7 @@ if (process.env.DATABASE_URL) {
   albumsAsync = albums;
   async function migrateUsers() {
     try {
-      // Run user migrations in parallel for better performance
+      
       await Promise.all([
         users.update(
           { accentColor: { $exists: false } },
@@ -301,7 +301,7 @@ if (process.env.DATABASE_URL) {
   }
   async function migrateLists() {
     try {
-      // Check if data column exists (for legacy migration)
+      
       const columnCheck = await pool.query(`
         SELECT column_name 
         FROM information_schema.columns 
@@ -411,7 +411,7 @@ if (process.env.DATABASE_URL) {
         });
         logger.info('Admin login: email=admin@localhost.com, password=admin');
 
-        // Verify we can find the user by email
+        
         const verifyUser = await users.findOne({
           email: 'admin@localhost.com',
         });

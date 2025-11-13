@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Icon Optimization Script
-# This script optimizes PWA icons by converting to WebP and removing unnecessary sizes
-# Run this script after installing imagemagick and webp tools:
-# - Ubuntu/Debian: sudo apt-get install imagemagick webp
-# - macOS: brew install imagemagick webp
+
+
+
+
+
 
 set -e
 
@@ -14,7 +14,7 @@ ANDROID_DIR="public/icons/android"
 echo "🎨 Icon Optimization Script"
 echo "=============================="
 
-# Check if required tools are installed
+
 if ! command -v convert &> /dev/null; then
     echo "❌ ImageMagick not found. Please install it first."
     echo "   Ubuntu/Debian: sudo apt-get install imagemagick"
@@ -32,7 +32,7 @@ fi
 echo "✅ All required tools found"
 echo ""
 
-# Optimize iOS icons - keep only essential sizes
+
 ESSENTIAL_SIZES=(180 192 512)
 echo "📱 Optimizing iOS icons..."
 
@@ -41,7 +41,7 @@ for file in "$ICON_DIR"/*.png; do
         filename=$(basename "$file")
         size="${filename%.*}"
         
-        # Check if this is an essential size
+        
         is_essential=false
         for essential in "${ESSENTIAL_SIZES[@]}"; do
             if [[ "$filename" == *"$essential"* ]]; then
@@ -51,24 +51,24 @@ for file in "$ICON_DIR"/*.png; do
         done
         
         if [ "$is_essential" = true ]; then
-            # Optimize with pngquant or optipng
+            
             if command -v pngquant &> /dev/null; then
                 pngquant --quality=65-80 --skip-if-larger --force --output "$file" "$file" 2>/dev/null || true
                 echo "  ✓ Optimized $filename"
             fi
             
-            # Create WebP version (smaller file size, modern browsers)
+            
             cwebp -q 80 "$file" -o "${file%.*}.webp" &>/dev/null
             echo "  ✓ Created ${filename%.*}.webp"
         else
-            # Remove non-essential sizes to save space
+            
             echo "  🗑️  Removed non-essential $filename"
             rm "$file"
         fi
     fi
 done
 
-# Optimize Android icons
+
 echo ""
 echo "🤖 Optimizing Android icons..."
 
@@ -76,7 +76,7 @@ for file in "$ANDROID_DIR"/*.png; do
     if [ -f "$file" ]; then
         filename=$(basename "$file")
         
-        # Keep only 192 and 512 for Android
+        
         if [[ "$filename" == *"192"* ]] || [[ "$filename" == *"512"* ]]; then
             if command -v pngquant &> /dev/null; then
                 pngquant --quality=65-80 --skip-if-larger --force --output "$file" "$file" 2>/dev/null || true
