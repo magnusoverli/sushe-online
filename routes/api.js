@@ -521,15 +521,23 @@ module.exports = (app, deps) => {
 
           logger.info('Reset token set for user:', user.email);
 
-          if (process.env.SENDGRID_API_KEY) {
+          // Support both Resend and SendGrid for email delivery
+          // Prefer Resend if RESEND_API_KEY is set, otherwise fall back to SendGrid
+          if (process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY) {
+            const useResend = !!process.env.RESEND_API_KEY;
+            const serviceName = useResend ? 'Resend' : 'SendGrid';
+
             const transporter = nodemailer.createTransport({
-              host: 'smtp.sendgrid.net',
+              host: useResend ? 'smtp.resend.com' : 'smtp.sendgrid.net',
               port: 587,
               auth: {
-                user: 'apikey',
-                pass: process.env.SENDGRID_API_KEY,
+                user: useResend ? 'resend' : 'apikey',
+                pass:
+                  process.env.RESEND_API_KEY || process.env.SENDGRID_API_KEY,
               },
             });
+
+            logger.info(`Email service configured: ${serviceName}`);
 
             const resetUrl = `${process.env.BASE_URL || 'http://localhost:3000'}/reset/${token}`;
             const emailOptions = composeForgotPasswordEmail(
@@ -540,18 +548,21 @@ module.exports = (app, deps) => {
             transporter.sendMail(emailOptions, (error, _info) => {
               if (error) {
                 logger.error(
-                  'Failed to send password reset email:',
+                  `Failed to send password reset email via ${serviceName}:`,
                   error.message
                 );
               } else {
-                logger.info('Password reset email sent successfully', {
-                  email: user.email,
-                });
+                logger.info(
+                  `Password reset email sent successfully via ${serviceName}`,
+                  {
+                    email: user.email,
+                  }
+                );
               }
             });
           } else {
             logger.warn(
-              'SENDGRID_API_KEY not configured - password reset email not sent'
+              'No email service configured (RESEND_API_KEY or SENDGRID_API_KEY required) - password reset email not sent'
             );
             logger.info('Reset token for testing:', token);
           }
