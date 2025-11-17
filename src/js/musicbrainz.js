@@ -293,12 +293,25 @@ async function searchDeezerArtwork(artistName, albumName) {
           bestMatch = data.data[0];
         }
 
-        if (bestMatch && bestMatch.cover_xl) {
-          deezerCache.set(cacheKey, bestMatch.cover_xl);
-          return bestMatch.cover_xl;
+        if (bestMatch) {
+          // Try different cover sizes in order of preference
+          const coverUrl =
+            bestMatch.cover_xl ||
+            bestMatch.cover_big ||
+            bestMatch.cover_medium ||
+            bestMatch.cover_small;
+
+          if (coverUrl) {
+            deezerCache.set(cacheKey, coverUrl);
+            return coverUrl;
+          }
         }
       }
 
+      // Only log when actually searching (not from cache)
+      console.warn(
+        `No cover art found for "${albumName}" by ${artistName} - album will use placeholder`
+      );
       deezerCache.set(cacheKey, null);
       return null;
     } catch (_error) {
@@ -319,11 +332,6 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
 
   try {
     const coverUrl = await searchDeezerArtwork(artistName, albumTitle);
-    if (!coverUrl) {
-      console.warn(
-        `No cover art found for "${albumTitle}" by ${artistName} - album will use placeholder`
-      );
-    }
     return coverUrl;
   } catch (error) {
     console.error(`Error fetching cover art for "${albumTitle}":`, error);
