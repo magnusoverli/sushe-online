@@ -104,9 +104,8 @@
   <!-- Toast notification element -->
   <div id="toast" class="toast"></div>
   
-  <!-- Fix #9: Defer non-critical JavaScript to avoid blocking HTML parsing -->
-  <!-- Using defer allows HTML parsing to continue while script downloads -->
-  <script type="module" src="<%= asset('/js/bundle.js') %>" defer></script>
+  <!-- Note: Auth pages (login/register/reset) don't need app.js -->
+  <!-- The main app uses spotifyTemplate which has its own script tag -->
   
   <script>
     // Temporarily disable service worker to debug CSRF issues
