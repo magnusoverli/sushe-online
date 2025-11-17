@@ -54,6 +54,36 @@ function getAuthHeaders() {
   return headers;
 }
 
+// Ensure critical state is loaded from storage (handles service worker restarts)
+async function ensureStateLoaded() {
+  if (!AUTH_TOKEN || userLists.length === 0 || !SUSHE_API_BASE) {
+    console.log('State potentially lost, reloading from storage...');
+    const settings = await chrome.storage.local.get([
+      'apiUrl',
+      'authToken',
+      'userLists',
+    ]);
+
+    if (settings.apiUrl && !SUSHE_API_BASE) {
+      SUSHE_API_BASE = settings.apiUrl;
+    }
+
+    if (settings.authToken && !AUTH_TOKEN) {
+      AUTH_TOKEN = settings.authToken;
+    }
+
+    if (settings.userLists && userLists.length === 0) {
+      userLists = settings.userLists;
+    }
+
+    console.log('State reloaded:', {
+      apiUrl: SUSHE_API_BASE,
+      hasToken: !!AUTH_TOKEN,
+      listsCount: userLists.length,
+    });
+  }
+}
+
 // Create main context menu on extension install
 chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('SuShe Online extension installed:', details.reason);
@@ -653,6 +683,24 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     console.log(
       `Menu item clicked: ${info.menuItemId}, extracted index: ${listIndex}`
     );
+
+    // Ensure userLists is loaded (service worker might have restarted and lost state)
+    if (userLists.length === 0) {
+      console.log('userLists is empty, loading from storage...');
+      const cached = await chrome.storage.local.get(['userLists']);
+      if (cached.userLists && Array.isArray(cached.userLists)) {
+        userLists = cached.userLists;
+        console.log('Loaded cached userLists:', userLists);
+      } else {
+        console.error('No cached lists found in storage');
+        showNotification(
+          '✗ Error',
+          'Lists not loaded. Please refresh the page and try again.'
+        );
+        return;
+      }
+    }
+
     console.log('Available lists:', userLists);
     console.log(
       `Looking up index ${listIndex} in array of length ${userLists.length}`
@@ -675,7 +723,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 async function addAlbumToList(info, tab, listName) {
   console.log('Adding album to list:', listName);
   console.log('Context info:', info);
+
+  // Ensure state is loaded in case service worker restarted
+  await ensureStateLoaded();
+
   console.log('Using API base:', SUSHE_API_BASE);
+  console.log('Auth token present:', !!AUTH_TOKEN);
 
   try {
     // Send message to content script to extract album data
