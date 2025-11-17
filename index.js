@@ -664,11 +664,38 @@ function ensureAuth(req, res, next) {
   res.redirect('/login');
 }
 
-// API middleware to ensure authentication
-function ensureAuthAPI(req, res, next) {
+// API middleware to ensure authentication (supports both session and bearer token)
+async function ensureAuthAPI(req, res, next) {
+  // First check if authenticated via session
   if (req.isAuthenticated()) {
+    recordActivity(req);
     return next();
   }
+
+  // Check for bearer token
+  const authHeader = req.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.substring(7);
+    const { validateExtensionToken } = require('./auth-utils');
+
+    try {
+      const userId = await validateExtensionToken(token, pool);
+
+      if (userId) {
+        // Load user and attach to request
+        const user = await usersAsync.findOne({ _id: userId });
+        if (user) {
+          req.user = user;
+          // Mark this as token-based auth for logging
+          req.authMethod = 'token';
+          return next();
+        }
+      }
+    } catch (error) {
+      logger.error('Token validation error in middleware:', error);
+    }
+  }
+
   res.status(401).json({ error: 'Unauthorized' });
 }
 
