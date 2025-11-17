@@ -6,67 +6,86 @@
     <title>SuShe Online - Extension Settings</title>
     <style>
       body {
-        width: 500px;
-        padding: 20px;
+        max-width: 600px;
+        margin: 0 auto;
+        padding: 0;
         font-family:
           -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         background: #000;
-        color: #fff;
+        color: #e5e7eb;
+        min-height: 100vh;
+      }
+
+      .header {
+        background: #111827;
+        border-bottom: 1px solid #1f2937;
+        padding: 24px;
+        margin-bottom: 24px;
       }
 
       h1 {
-        font-size: 24px;
+        font-size: 28px;
         margin: 0 0 8px 0;
         color: #dc2626;
+        font-weight: 700;
       }
 
       .subtitle {
         font-size: 14px;
-        color: #6b7280;
-        margin-bottom: 24px;
+        color: #9ca3af;
+        margin: 0;
+      }
+
+      .container {
+        padding: 0 24px 24px;
       }
 
       label {
         display: block;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         margin-bottom: 8px;
-        color: #d1d5db;
+        color: #e5e7eb;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
 
       input[type='url'] {
         width: 100%;
-        padding: 10px;
-        background: #111;
-        border: 1px solid #374151;
-        border-radius: 4px;
+        padding: 12px;
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
         color: #fff;
         font-size: 14px;
         box-sizing: border-box;
+        transition: all 0.2s;
       }
 
       input[type='url']:focus {
         outline: none;
         border-color: #dc2626;
+        background: #1f2937;
       }
 
       .help-text {
         font-size: 12px;
         color: #6b7280;
-        margin-top: 6px;
+        margin-top: 8px;
+        line-height: 1.5;
       }
 
       button {
         margin-top: 16px;
-        padding: 10px 20px;
+        padding: 12px 20px;
         background: #dc2626;
         color: white;
         border: none;
-        border-radius: 4px;
+        border-radius: 6px;
         font-size: 14px;
         font-weight: 600;
         cursor: pointer;
-        transition: background 0.2s;
+        transition: all 0.2s;
       }
 
       button:hover {
@@ -75,24 +94,28 @@
 
       button:active {
         background: #991b1b;
+        transform: scale(0.98);
       }
 
       .status {
         margin-top: 16px;
-        padding: 12px;
-        border-radius: 4px;
+        padding: 12px 16px;
+        border-radius: 6px;
         font-size: 14px;
         display: none;
+        border-left: 3px solid;
       }
 
       .status.success {
-        background: #065f46;
+        background: rgba(6, 95, 70, 0.1);
+        border-left-color: #059669;
         color: #d1fae5;
         display: block;
       }
 
       .status.error {
-        background: #7f1d1d;
+        background: rgba(127, 29, 29, 0.1);
+        border-left-color: #dc2626;
         color: #fecaca;
         display: block;
       }
@@ -100,39 +123,45 @@
       .example {
         margin-top: 24px;
         padding: 16px;
-        background: #111;
-        border: 1px solid #374151;
-        border-radius: 4px;
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
       }
 
       .example h3 {
-        font-size: 14px;
+        font-size: 13px;
         margin: 0 0 12px 0;
         color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
 
       .example code {
         display: block;
-        padding: 8px;
+        padding: 10px 12px;
         background: #000;
+        border: 1px solid #1f2937;
         border-radius: 4px;
         color: #10b981;
         font-size: 13px;
         margin-bottom: 8px;
+        font-family: 'Courier New', monospace;
       }
 
       .test-section {
         margin-top: 24px;
         padding: 16px;
-        background: #111;
-        border: 1px solid #374151;
-        border-radius: 4px;
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 6px;
       }
 
       .test-section h3 {
-        font-size: 14px;
+        font-size: 13px;
         margin: 0 0 12px 0;
         color: #9ca3af;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
       }
 
       #testBtn {
@@ -147,64 +176,73 @@
       #testResult {
         margin-top: 12px;
         font-size: 13px;
+        line-height: 1.5;
       }
     </style>
   </head>
   <body>
-    <h1>🤘 SuShe Online Settings</h1>
-    <p class="subtitle">Configure your SuShe Online instance</p>
+    <div class="header">
+      <h1>🤘 SuShe Online Settings</h1>
+      <p class="subtitle">Configure your SuShe Online instance</p>
+    </div>
 
-    <form id="settingsForm">
-      <label for="apiUrl">SuShe Online URL</label>
-      <input
-        type="url"
-        id="apiUrl"
-        name="apiUrl"
-        placeholder="https://your-sushe-instance.com"
-        required
-      />
-      <p class="help-text">
-        Enter the full URL where your SuShe Online instance is running (without
-        trailing slash)
-      </p>
+    <div class="container">
+      <form id="settingsForm">
+        <label for="apiUrl">SuShe Online URL</label>
+        <input
+          type="url"
+          id="apiUrl"
+          name="apiUrl"
+          placeholder="https://your-sushe-instance.com"
+          required
+        />
+        <p class="help-text">
+          Enter the full URL where your SuShe Online instance is running
+          (without trailing slash)
+        </p>
 
-      <button type="submit">Save Settings</button>
-    </form>
+        <button type="submit">Save Settings</button>
+      </form>
 
-    <div id="status" class="status"></div>
+      <div id="status" class="status"></div>
 
-    <!-- Authentication Status Section -->
-    <div class="test-section" style="margin-top: 24px">
-      <h3>Authentication Status</h3>
-      <p class="help-text" style="margin-top: 0; margin-bottom: 12px">
-        Make sure the URL above is correct before logging in
-      </p>
-      <div id="authStatus" style="font-size: 14px; margin-bottom: 12px">
-        <span style="color: #6b7280">Checking...</span>
+      <!-- Authentication Status Section -->
+      <div class="test-section" style="margin-top: 24px">
+        <h3>Authentication Status</h3>
+        <p class="help-text" style="margin-top: 0; margin-bottom: 12px">
+          Make sure the URL above is correct before logging in
+        </p>
+        <div id="authStatus" style="font-size: 14px; margin-bottom: 12px">
+          <span style="color: #6b7280">Checking...</span>
+        </div>
+        <button
+          type="button"
+          id="loginBtn"
+          style="margin-top: 0; display: none"
+        >
+          Login to SuShe Online
+        </button>
+        <button
+          type="button"
+          id="logoutBtn"
+          style="margin-top: 0; display: none; background: #374151"
+        >
+          Logout
+        </button>
       </div>
-      <button type="button" id="loginBtn" style="margin-top: 0; display: none">
-        Login to SuShe Online
-      </button>
-      <button
-        type="button"
-        id="logoutBtn"
-        style="margin-top: 0; display: none; background: #374151"
-      >
-        Logout
-      </button>
-    </div>
 
-    <div class="example">
-      <h3>Examples:</h3>
-      <code>http://localhost:3000</code>
-      <code>https://sushe.example.com</code>
-      <code>https://music.yourdomain.com</code>
-    </div>
+      <div class="example">
+        <h3>Examples:</h3>
+        <code>http://localhost:3000</code>
+        <code>https://sushe.example.com</code>
+        <code>https://music.yourdomain.com</code>
+      </div>
 
-    <div class="test-section">
-      <h3>Test Connection</h3>
-      <button id="testBtn">Test Connection to SuShe Online</button>
-      <div id="testResult"></div>
+      <div class="test-section">
+        <h3>Test Connection</h3>
+        <button id="testBtn">Test Connection to SuShe Online</button>
+        <div id="testResult"></div>
+      </div>
     </div>
 
     <script src="options.js"></script>
