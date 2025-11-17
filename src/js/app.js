@@ -2251,6 +2251,37 @@ window.updateListNav = updateListNav;
 
 // Removed complex initializeMobileSorting function - now using unified approach
 
+// Helper function to cache list data with quota handling
+function cacheListData(listName, data) {
+  try {
+    localStorage.setItem(
+      `lastSelectedListData_${listName}`,
+      JSON.stringify(data)
+    );
+  } catch (storageErr) {
+    if (storageErr.name === 'QuotaExceededError') {
+      console.warn('LocalStorage quota exceeded, clearing old cache...');
+      // Clear old caches and retry
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('lastSelectedListData_')) {
+          localStorage.removeItem(key);
+        }
+      }
+      try {
+        localStorage.setItem(
+          `lastSelectedListData_${listName}`,
+          JSON.stringify(data)
+        );
+      } catch (retryErr) {
+        console.warn('Cache save failed after cleanup:', retryErr);
+      }
+    } else {
+      console.warn('Failed to cache list data:', storageErr);
+    }
+  }
+}
+
 // Select and display a list
 async function selectList(listName, skipFetch = false) {
   try {
@@ -2284,33 +2315,7 @@ async function selectList(listName, skipFetch = false) {
         lists[listName] = freshData;
 
         // Fix #4: Cache the fresh data for next time
-        try {
-          localStorage.setItem(
-            `lastSelectedListData_${listName}`,
-            JSON.stringify(freshData)
-          );
-        } catch (storageErr) {
-          if (storageErr.name === 'QuotaExceededError') {
-            // Clear old caches and retry
-            console.warn('LocalStorage quota exceeded, clearing old cache...');
-            for (let i = localStorage.length - 1; i >= 0; i--) {
-              const key = localStorage.key(i);
-              if (key && key.startsWith('lastSelectedListData_')) {
-                localStorage.removeItem(key);
-              }
-            }
-            try {
-              localStorage.setItem(
-                `lastSelectedListData_${listName}`,
-                JSON.stringify(freshData)
-              );
-            } catch (retryErr) {
-              console.warn('Cache save failed after cleanup:', retryErr);
-            }
-          } else {
-            console.warn('Failed to cache list data:', storageErr);
-          }
-        }
+        cacheListData(listName, freshData);
 
         // Re-display with fresh data (only if different)
         if (currentList === listName) {
