@@ -1794,9 +1794,27 @@ function initializeAlbumContextMenu() {
   // Handle move option click - show submenu
   const moveOption = document.getElementById('moveAlbumOption');
   if (moveOption) {
+    let hideTimeout;
+
     moveOption.addEventListener('mouseenter', () => {
+      if (hideTimeout) clearTimeout(hideTimeout);
       showMoveToListSubmenu();
     });
+
+    moveOption.addEventListener('mouseleave', (e) => {
+      const submenu = document.getElementById('albumMoveSubmenu');
+      // Check if moving to submenu
+      const toSubmenu =
+        submenu &&
+        (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
+
+      if (!toSubmenu) {
+        hideTimeout = setTimeout(() => {
+          if (submenu) submenu.classList.add('hidden');
+        }, 200);
+      }
+    });
+
     moveOption.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
