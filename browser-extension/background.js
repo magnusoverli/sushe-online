@@ -2,32 +2,112 @@
 // Handles context menu creation and API communication
 
 let SUSHE_API_BASE = 'http://localhost:3000'; // Default, will be loaded from storage
+let AUTH_TOKEN = null; // Authentication token
 let userLists = [];
 let listsLastFetched = 0;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-// Load API URL from storage on startup
-async function loadApiUrl() {
-  const settings = await chrome.storage.local.get(['apiUrl']);
+// Load API URL and auth token from storage on startup
+async function loadSettings() {
+  const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
     console.log('Loaded API URL from settings:', SUSHE_API_BASE);
   } else {
     console.log('Using default API URL:', SUSHE_API_BASE);
   }
+
+  if (settings.authToken) {
+    AUTH_TOKEN = settings.authToken;
+    console.log('Loaded auth token from storage');
+  } else {
+    console.log('No auth token found');
+  }
+}
+
+// Get authorization headers for API requests
+function getAuthHeaders() {
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  if (AUTH_TOKEN) {
+    headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+  }
+
+  return headers;
 }
 
 // Create main context menu on extension install
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
   console.log('SuShe Online extension installed');
-  await loadApiUrl();
+
+  // Show update notification
+  if (details.reason === 'update') {
+    const previousVersion = details.previousVersion;
+    const currentVersion = chrome.runtime.getManifest().version;
+
+    console.log(`Updated from ${previousVersion} to ${currentVersion}`);
+
+    // Show notification for major updates
+    if (previousVersion && previousVersion.startsWith('1.0')) {
+      chrome.notifications.create('sushe-update', {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: '🎉 SuShe Extension Updated!',
+        message:
+          'Login issues fixed! You now stay logged in. Click to learn more.',
+        priority: 2,
+        requireInteraction: false,
+      });
+
+      // Auto-dismiss after 8 seconds
+      setTimeout(() => {
+        chrome.notifications.clear('sushe-update');
+      }, 8000);
+    }
+  }
+
+  await loadSettings();
   createContextMenus();
 });
 
 // Recreate context menus on startup
 chrome.runtime.onStartup.addListener(async () => {
-  await loadApiUrl();
+  await loadSettings();
   createContextMenus();
+});
+
+// Listen for storage changes to update token and invalidate cache
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local') {
+    if (changes.authToken) {
+      AUTH_TOKEN = changes.authToken?.newValue || null;
+      console.log('Auth token updated:', AUTH_TOKEN ? 'present' : 'removed');
+
+      // Invalidate cache when auth changes
+      userLists = [];
+      listsLastFetched = 0;
+
+      // Refresh lists if token is present
+      if (AUTH_TOKEN) {
+        fetchUserLists();
+      } else {
+        showErrorMenu('Not logged in');
+      }
+    }
+
+    if (changes.apiUrl) {
+      SUSHE_API_BASE = changes.apiUrl?.newValue || 'http://localhost:3000';
+      console.log('API URL updated:', SUSHE_API_BASE);
+
+      // Invalidate cache when API URL changes
+      userLists = [];
+      listsLastFetched = 0;
+      createContextMenus();
+    }
+  }
 });
 
 // Create the base context menu structure
@@ -68,10 +148,7 @@ async function fetchUserLists() {
 
   try {
     const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
-      credentials: 'include', // Include cookies for session auth
-      headers: {
-        Accept: 'application/json',
-      },
+      headers: getAuthHeaders(),
     });
 
     if (response.status === 401) {
@@ -209,7 +286,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     // Always load the latest API URL from storage to ensure we use the configured URL
     const settings = await chrome.storage.local.get(['apiUrl']);
     const apiUrl = settings.apiUrl || SUSHE_API_BASE;
-    chrome.tabs.create({ url: `${apiUrl}/login` });
+    chrome.tabs.create({ url: `${apiUrl}/extension/auth` });
     return;
   }
 
@@ -308,10 +385,7 @@ async function addAlbumToList(info, tab, listName) {
     const mbResponse = await fetch(
       `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,
       {
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: getAuthHeaders(),
       }
     );
 
@@ -341,10 +415,7 @@ async function addAlbumToList(info, tab, listName) {
     const deezerResponse = await fetch(
       `${SUSHE_API_BASE}/api/proxy/deezer?q=${encodeURIComponent(deezerQuery)}`,
       {
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: getAuthHeaders(),
       }
     );
 
@@ -361,10 +432,7 @@ async function addAlbumToList(info, tab, listName) {
           try {
             const proxyUrl = `${SUSHE_API_BASE}/api/proxy/image?url=${encodeURIComponent(coverUrl)}`;
             const imageResponse = await fetch(proxyUrl, {
-              credentials: 'include',
-              headers: {
-                Accept: 'application/json',
-              },
+              headers: getAuthHeaders(),
             });
 
             if (imageResponse.ok) {
@@ -391,10 +459,7 @@ async function addAlbumToList(info, tab, listName) {
     const listResponse = await fetch(
       `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
       {
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-        },
+        headers: getAuthHeaders(),
       }
     );
 
@@ -439,10 +504,7 @@ async function addAlbumToList(info, tab, listName) {
         const artistResponse = await fetch(
           `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`,
           {
-            credentials: 'include',
-            headers: {
-              Accept: 'application/json',
-            },
+            headers: getAuthHeaders(),
           }
         );
 
@@ -486,11 +548,7 @@ async function addAlbumToList(info, tab, listName) {
       `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
       {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ data: currentList }),
       }
     );
@@ -616,5 +674,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'getApiUrl') {
     sendResponse({ apiUrl: SUSHE_API_BASE });
     return true;
+  }
+});
+
+// Handle notification clicks
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (notificationId === 'sushe-update') {
+    // Open the main site or extension page
+    chrome.tabs.create({ url: SUSHE_API_BASE || 'http://localhost:3000' });
+    chrome.notifications.clear('sushe-update');
   }
 });

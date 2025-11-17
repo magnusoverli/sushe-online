@@ -1,33 +1,69 @@
 // Popup script for SuShe Online extension
 
 let SUSHE_API_BASE = 'http://localhost:3000';
+let AUTH_TOKEN = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load API URL from storage
-  const settings = await chrome.storage.local.get(['apiUrl']);
+  // Load API URL and auth token from storage
+  const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
+  }
+  if (settings.authToken) {
+    AUTH_TOKEN = settings.authToken;
   }
 
   loadLists();
 
   document.getElementById('refreshBtn').addEventListener('click', refreshLists);
-  document.getElementById('loginBtn').addEventListener('click', openSuShe);
+  document.getElementById('loginBtn').addEventListener('click', openLogin);
+  document.getElementById('logoutBtn').addEventListener('click', logout);
 });
+
+// Listen for storage changes to auto-refresh when auth token changes
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.authToken) {
+    AUTH_TOKEN = changes.authToken?.newValue || null;
+    console.log('Auth token changed, reloading lists');
+    loadLists();
+  }
+});
+
+// Get authorization headers for API requests
+function getAuthHeaders() {
+  const headers = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  if (AUTH_TOKEN) {
+    headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
+  }
+
+  return headers;
+}
 
 async function loadLists() {
   const statusEl = document.getElementById('status');
   const listsEl = document.getElementById('lists');
   const listItemsEl = document.getElementById('listItems');
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  // Show/hide buttons based on auth state
+  if (AUTH_TOKEN) {
+    loginBtn.style.display = 'none';
+    logoutBtn.style.display = 'block';
+  } else {
+    loginBtn.style.display = 'block';
+    logoutBtn.style.display = 'none';
+  }
 
   statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
 
   try {
     const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
-      credentials: 'include',
-      headers: {
-        Accept: 'application/json',
-      },
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -78,6 +114,19 @@ async function refreshLists() {
   });
 }
 
-function openSuShe() {
-  chrome.tabs.create({ url: SUSHE_API_BASE });
+function openLogin() {
+  // Open login page
+  chrome.tabs.create({ url: `${SUSHE_API_BASE}/extension/auth` });
+
+  // The auth page will use chrome.runtime.sendMessage to send the token
+  // We listen for storage changes instead (already set up in loadSettings)
+}
+
+async function logout() {
+  // Clear token from storage
+  await chrome.storage.local.remove(['authToken', 'tokenExpiresAt']);
+  AUTH_TOKEN = null;
+
+  // Reload the popup to show logged out state
+  loadLists();
 }

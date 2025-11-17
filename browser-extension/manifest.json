@@ -1,14 +1,9 @@
 {
   "manifest_version": 3,
   "name": "SuShe Online - RateYourMusic Integration",
-  "version": "1.0.2",
+  "version": "1.1.1",
   "description": "Add albums from RateYourMusic directly to your SuShe Online lists",
-  "permissions": [
-    "contextMenus",
-    "storage",
-    "notifications",
-    "scripting"
-  ],
+  "permissions": ["contextMenus", "storage", "notifications", "scripting"],
   "host_permissions": [
     "*://*.rateyourmusic.com/*",
     "http://localhost:3000/*",
@@ -22,6 +17,16 @@
       "matches": ["*://*.rateyourmusic.com/*"],
       "js": ["content-script.js"],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:3000/extension/auth",
+        "http://localhost:3000/extension/auth*",
+        "https://*/extension/auth",
+        "https://*/extension/auth*"
+      ],
+      "js": ["auth-listener.js"],
+      "run_at": "document_end"
     }
   ],
   "icons": {

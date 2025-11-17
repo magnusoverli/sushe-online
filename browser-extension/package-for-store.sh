@@ -22,6 +22,7 @@ echo "📋 Including files:"
 echo "  ✓ manifest.json"
 echo "  ✓ background.js"
 echo "  ✓ content-script.js"
+echo "  ✓ auth-listener.js"
 echo "  ✓ options.html"
 echo "  ✓ options.js"
 echo "  ✓ popup.html"
@@ -34,6 +35,7 @@ zip -q "$OUTPUT_FILE" \
     manifest.json \
     background.js \
     content-script.js \
+    auth-listener.js \
     options.html \
     options.js \
     popup.html \
