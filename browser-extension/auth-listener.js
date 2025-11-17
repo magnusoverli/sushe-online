@@ -1,6 +1,8 @@
 // Content script that runs on /extension/auth page
 // Listens for auth success event and stores token in chrome.storage
 
+/* global CustomEvent, sessionStorage */
+
 console.log('SuShe auth listener loaded');
 
 // Listen for custom event from the page

@@ -65,6 +65,7 @@ async function validateExtensionToken(token, pool) {
 
     return tokenData.user_id;
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Error validating extension token:', error);
     return null;
   }
@@ -80,6 +81,7 @@ async function cleanupExpiredTokens(pool) {
     );
     return result.rowCount;
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Error cleaning up expired tokens:', error);
     return 0;
   }

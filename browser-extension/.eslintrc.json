@@ -1,0 +1,13 @@
+{
+  "env": {
+    "browser": true,
+    "webextensions": true
+  },
+  "globals": {
+    "CustomEvent": "readonly",
+    "sessionStorage": "readonly"
+  },
+  "rules": {
+    "no-console": "off"
+  }
+}
