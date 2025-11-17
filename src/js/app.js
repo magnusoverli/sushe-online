@@ -2121,6 +2121,7 @@ function updateListNav() {
     console.warn('Failed to cache list names', e);
   }
 }
+window.updateListNav = updateListNav;
 
 // Removed complex initializeMobileSorting function - now using unified approach
 
@@ -3757,6 +3758,7 @@ function initializeUnifiedSorting(container, isMobile) {
   // Store reference for cleanup
   container._sortable = sortable;
 }
+window.displayAlbums = displayAlbums;
 
 // Add this function to handle mobile album actions
 window.showMobileAlbumMenu = function (indexOrElement) {
