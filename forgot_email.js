@@ -97,14 +97,14 @@ If you did not request this, ignore this email and your password will remain unc
 <body>
   <div class="container">
     <div class="header">
-      <h1 class="title">KVLT</h1>
+      <h1 class="title">SuShe Online</h1>
       <p style="color: #9ca3af; margin: 10px 0 0 0;">Password Reset Request</p>
     </div>
     
     <div class="content">
       <p class="message">
-        A password reset has been requested for your account. 
-        If you made this request, click the button below to reset your password.
+        We received a request to reset the password for your SuShe Online account. 
+        If you made this request, click the button below to create a new password.
       </p>
       
       <div class="button-wrapper">
@@ -128,7 +128,7 @@ If you did not request this, ignore this email and your password will remain unc
       </div>
       
       <div class="signature">
-        <p>Magnus</p>
+        <p>- The SuShe Online Team</p>
       </div>
     </div>
     

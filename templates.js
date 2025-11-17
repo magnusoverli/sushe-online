@@ -268,8 +268,8 @@ const forgotPasswordTemplate = (req, flash) => `
 const resetPasswordTemplate = (token, csrfToken = '') => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
-      <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">FORGE NEW DARKNESS</h1>
-      <p class="text-gray-400 text-sm">Create a new password to secure your soul</p>
+      <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">Reset Your Password</h1>
+      <p class="text-gray-400 text-sm">Create a new password for your account</p>
     </div>
     
     <form method="post" action="/reset/${token}" class="space-y-6">
@@ -292,7 +292,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
         class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
-        Seal the Pact
+        Reset Password
       </button>
     </form>
   </div>
@@ -301,8 +301,8 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
 // Invalid token template
 const invalidTokenTemplate = () => `
   <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
-    <p class="text-red-500 text-center mb-4">This recovery rune has expired or been corrupted</p>
-    <a href="/forgot" class="block text-center text-red-500 hover:text-red-400 font-semibold">Request new recovery rune</a>
+    <p class="text-red-500 text-center mb-4">This password reset link has expired or is invalid</p>
+    <a href="/forgot" class="block text-center text-red-500 hover:text-red-400 font-semibold">Request a new reset link</a>
   </div>
 `;
 
