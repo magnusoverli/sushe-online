@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const compression = require('compression');
+const cors = require('cors');
 const helmet = require('helmet');
 const csrf = require('csrf');
 const multer = require('multer');
@@ -458,6 +459,49 @@ app.use((req, res, next) => {
   // Apply comprehensive security headers for all other requests
   helmet(helmetConfig)(req, res, next);
 });
+
+// CORS configuration for browser extension support
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+
+    // Allow chrome-extension:// origins (browser extensions)
+    if (origin.startsWith('chrome-extension://')) {
+      return callback(null, true);
+    }
+
+    // Allow moz-extension:// origins (Firefox extensions)
+    if (origin.startsWith('moz-extension://')) {
+      return callback(null, true);
+    }
+
+    // Allow localhost for development
+    if (
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('[::1]')
+    ) {
+      return callback(null, true);
+    }
+
+    // In production, you might want to whitelist specific domains
+    // For now, allow all HTTPS origins for flexibility
+    if (origin.startsWith('https://')) {
+      return callback(null, true);
+    }
+
+    // Reject all other origins
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true, // Allow cookies and authentication headers
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Content-Length', 'X-Request-Id'],
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
 
 // Basic Express middleware
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
