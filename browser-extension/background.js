@@ -785,10 +785,12 @@ async function addAlbumToList(info, tab, listName) {
 
     console.log('Extracted album data:', albumData);
 
-    // Show single progress notification
-    showNotification(
+    // Show progress notification with album cover from RateYourMusic
+    const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
+    showNotificationWithImage(
       'Adding album...',
-      `Adding ${albumData.album} by ${albumData.artist} to ${listName}`
+      `Adding ${albumData.album} by ${albumData.artist} to ${listName}`,
+      rymCoverUrl
     );
 
     // Search MusicBrainz for the album
