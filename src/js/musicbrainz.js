@@ -2019,7 +2019,8 @@ async function addAlbumToList(releaseGroup) {
     const albumElements = document.querySelectorAll('[data-album-index]');
     for (const el of albumElements) {
       if (
-        parseInt(el.dataset.albumIndex) === releaseGroups.indexOf(releaseGroup)
+        parseInt(el.dataset.albumIndex) ===
+        window.currentReleaseGroups.indexOf(releaseGroup)
       ) {
         const imgEl = el.querySelector('.album-cover-container img');
         if (imgEl && imgEl.src && !imgEl.src.includes('data:image/svg')) {
