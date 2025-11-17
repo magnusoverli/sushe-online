@@ -247,6 +247,12 @@ module.exports = (app, deps) => {
         });
       });
 
+      // Check if this login was for extension authorization
+      if (req.session.extensionAuth) {
+        delete req.session.extensionAuth;
+        return res.redirect('/extension/auth');
+      }
+
       return res.redirect('/');
     } catch (err) {
       logger.error('Authentication error', { error: err.message });
@@ -942,6 +948,365 @@ module.exports = (app, deps) => {
     } catch (error) {
       logger.error('Update username error:', error);
       res.status(500).json({ error: 'Error updating username' });
+    }
+  });
+
+  // ============ EXTENSION AUTHENTICATION ============
+
+  // Extension login page - redirects user to login, then generates token
+  app.get('/extension/auth', (req, res) => {
+    if (!req.isAuthenticated()) {
+      // Save the extension auth intent in session
+      req.session.extensionAuth = true;
+      return res.redirect('/login');
+    }
+
+    // User is already logged in, render token generation page
+    res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authorize SuShe Extension</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #000;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 500px;
+      padding: 40px;
+      text-align: center;
+    }
+    h1 {
+      font-size: 32px;
+      margin: 0 0 16px 0;
+      color: #dc2626;
+    }
+    p {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #9ca3af;
+      margin: 0 0 24px 0;
+    }
+    .success {
+      padding: 16px;
+      background: #065f46;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      font-size: 14px;
+      color: #d1fae5;
+    }
+    .token-box {
+      padding: 16px;
+      background: #1f2937;
+      border: 1px solid #374151;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      word-break: break-all;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #60a5fa;
+    }
+    button {
+      padding: 12px 24px;
+      background: #dc2626;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    button:hover {
+      background: #b91c1c;
+    }
+    button:disabled {
+      background: #374151;
+      cursor: not-allowed;
+    }
+    .info {
+      font-size: 14px;
+      color: #6b7280;
+      margin-top: 24px;
+    }
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.6s linear infinite;
+      margin-right: 8px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤘 Authorize Browser Extension</h1>
+    <p>Click the button below to authorize the SuShe Online browser extension.</p>
+    
+    <div id="status"></div>
+    
+    <button id="authorizeBtn" onclick="generateToken()">
+      Authorize Extension
+    </button>
+    
+    <div class="info">
+      This will generate a secure token that allows your browser extension to access your SuShe lists.
+      You can revoke this access anytime from your settings page.
+    </div>
+  </div>
+
+  <script>
+    async function generateToken() {
+      const btn = document.getElementById('authorizeBtn');
+      const status = document.getElementById('status');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span>Generating token...';
+      status.innerHTML = '';
+      
+      try {
+        const response = await fetch('/api/auth/extension-token', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to generate token');
+        }
+        
+        const data = await response.json();
+        
+        // Redirect to a special callback URL that the extension will intercept
+        const callbackUrl = \`chrome-extension://callback?token=\${encodeURIComponent(data.token)}&expires=\${encodeURIComponent(data.expiresAt)}\`;
+        
+        // Store in sessionStorage as backup
+        try {
+          sessionStorage.setItem('sushe_auth_token', data.token);
+          sessionStorage.setItem('sushe_auth_expires', data.expiresAt);
+        } catch (e) {
+          console.log('Could not store in sessionStorage:', e);
+        }
+        
+        status.innerHTML = \`
+          <div class="success">
+            ✓ Authorization successful!
+            <br><br>
+            Connecting to extension...
+          </div>
+        \`;
+        
+        btn.innerHTML = 'Authorization Complete';
+        
+        // Try to detect if we can communicate with extension
+        // Method 1: Check if page was opened by extension
+        if (window.opener) {
+          // Try postMessage to opener
+          try {
+            window.opener.postMessage({
+              type: 'SUSHE_AUTH_SUCCESS',
+              token: data.token,
+              expiresAt: data.expiresAt
+            }, '*');
+          } catch (e) {
+            console.log('Could not post to opener:', e);
+          }
+        }
+        
+        // Method 2: Set a custom event that content script can listen for
+        window.dispatchEvent(new CustomEvent('sushe-auth-complete', {
+          detail: {
+            token: data.token,
+            expiresAt: data.expiresAt
+          }
+        }));
+        
+        // Give the extension time to pick up the event
+        setTimeout(() => {
+          status.innerHTML = \`
+            <div class="success">
+              ✓ Extension should now be authorized!
+              <br><br>
+              You can close this window.
+            </div>
+          \`;
+          
+          // Auto-close after another 2 seconds
+          setTimeout(() => {
+            window.close();
+          }, 2000);
+        }, 500);
+        
+      } catch (error) {
+        console.error('Error generating token:', error);
+        status.innerHTML = \`
+          <div style="padding: 16px; background: #7f1d1d; border-radius: 8px; margin-bottom: 24px; color: #fecaca;">
+            ✗ Failed to generate token. Please try again.
+          </div>
+        \`;
+        btn.disabled = false;
+        btn.innerHTML = 'Retry';
+      }
+    }
+  </script>
+</body>
+</html>
+    `);
+  });
+
+  // ============ EXTENSION TOKEN ENDPOINTS ============
+
+  const {
+    generateExtensionToken,
+    validateExtensionToken,
+    cleanupExpiredTokens,
+  } = require('../auth-utils');
+
+  // Generate a new extension token (requires active session)
+  app.post('/api/auth/extension-token', ensureAuth, async (req, res) => {
+    try {
+      const token = generateExtensionToken();
+      const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+      const userAgent = req.get('User-Agent') || 'Unknown';
+
+      await pool.query(
+        `INSERT INTO extension_tokens (user_id, token, expires_at, user_agent)
+         VALUES ($1, $2, $3, $4)`,
+        [req.user._id, token, expiresAt, userAgent]
+      );
+
+      logger.info('Extension token generated', {
+        userId: req.user._id,
+        email: req.user.email,
+      });
+
+      res.json({
+        token,
+        expiresAt: expiresAt.toISOString(),
+      });
+    } catch (error) {
+      logger.error('Error generating extension token:', error);
+      res.status(500).json({ error: 'Error generating token' });
+    }
+  });
+
+  // Validate extension token (for testing)
+  app.get('/api/auth/validate-token', async (req, res) => {
+    try {
+      const authHeader = req.get('Authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'No token provided' });
+      }
+
+      const token = authHeader.substring(7);
+      const userId = await validateExtensionToken(token, pool);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Invalid or expired token' });
+      }
+
+      const user = await usersAsync.findOne({ _id: userId });
+      if (!user) {
+        return res.status(401).json({ error: 'User not found' });
+      }
+
+      res.json({
+        valid: true,
+        user: sanitizeUser(user),
+      });
+    } catch (error) {
+      logger.error('Error validating token:', error);
+      res.status(500).json({ error: 'Error validating token' });
+    }
+  });
+
+  // Revoke extension token
+  app.delete('/api/auth/extension-token', ensureAuth, async (req, res) => {
+    try {
+      const { token } = req.body;
+
+      if (!token) {
+        return res.status(400).json({ error: 'Token required' });
+      }
+
+      // Only allow users to revoke their own tokens
+      const result = await pool.query(
+        `UPDATE extension_tokens 
+         SET is_revoked = TRUE 
+         WHERE token = $1 AND user_id = $2`,
+        [token, req.user._id]
+      );
+
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Token not found' });
+      }
+
+      logger.info('Extension token revoked', {
+        userId: req.user._id,
+        email: req.user.email,
+      });
+
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('Error revoking token:', error);
+      res.status(500).json({ error: 'Error revoking token' });
+    }
+  });
+
+  // List user's extension tokens
+  app.get('/api/auth/extension-tokens', ensureAuth, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
+         FROM extension_tokens 
+         WHERE user_id = $1
+         ORDER BY created_at DESC`,
+        [req.user._id]
+      );
+
+      res.json({ tokens: result.rows });
+    } catch (error) {
+      logger.error('Error listing tokens:', error);
+      res.status(500).json({ error: 'Error listing tokens' });
+    }
+  });
+
+  // Cleanup expired tokens (can be called periodically or manually)
+  app.post('/api/auth/cleanup-tokens', ensureAuth, async (req, res) => {
+    try {
+      // Only allow admins to cleanup all tokens
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+      }
+
+      const deletedCount = await cleanupExpiredTokens(pool);
+
+      logger.info('Cleaned up expired tokens', { count: deletedCount });
+
+      res.json({ deletedCount });
+    } catch (error) {
+      logger.error('Error cleaning up tokens:', error);
+      res.status(500).json({ error: 'Error cleaning up tokens' });
     }
   });
 };
