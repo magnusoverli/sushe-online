@@ -381,6 +381,21 @@ passport.deserializeUser(async (id, done) => {
 // Create Express app
 const app = express();
 
+// Trust proxy - REQUIRED when behind reverse proxy (nginx, cloudflare, etc.)
+// This allows express to get real client IPs from X-Forwarded-For headers
+// which is critical for rate limiting to work correctly
+if (process.env.TRUST_PROXY) {
+  // Allow manual override via environment variable
+  app.set('trust proxy', process.env.TRUST_PROXY);
+  logger.info('Trust proxy enabled via TRUST_PROXY env var', {
+    value: process.env.TRUST_PROXY,
+  });
+} else if (process.env.NODE_ENV === 'production') {
+  // In production, assume we're behind a proxy (common for Docker/cloud deployments)
+  app.set('trust proxy', 1);
+  logger.info('Trust proxy auto-enabled for production environment');
+}
+
 // Configure EJS view engine with caching
 app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
