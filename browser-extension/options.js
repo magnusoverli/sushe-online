@@ -2,14 +2,13 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Load saved settings on page load
-  const settings = await chrome.storage.local.get(['apiUrl']);
+  const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
 
-  if (settings.apiUrl) {
-    document.getElementById('apiUrl').value = settings.apiUrl;
-  } else {
-    // Default to localhost for development
-    document.getElementById('apiUrl').value = 'http://localhost:3000';
-  }
+  let apiUrl = settings.apiUrl || 'http://localhost:3000';
+  document.getElementById('apiUrl').value = apiUrl;
+
+  // Update authentication status
+  await updateAuthStatus(apiUrl, settings.authToken);
 
   // Handle form submission
   document
@@ -34,7 +33,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       await chrome.storage.local.set({ apiUrl: cleanUrl });
 
       // Notify background script to update
-      chrome.runtime.sendMessage({ action: 'updateApiUrl', apiUrl: cleanUrl });
+      await chrome.runtime.sendMessage({
+        action: 'updateApiUrl',
+        apiUrl: cleanUrl,
+      });
 
       showStatus(
         '✓ Settings saved successfully! The extension will now use: ' +
@@ -98,3 +100,94 @@ function showStatus(message, type) {
     }, 3000);
   }
 }
+
+// Update authentication status display
+async function updateAuthStatus(apiUrl, authToken) {
+  const authStatusEl = document.getElementById('authStatus');
+  const loginBtn = document.getElementById('loginBtn');
+  const logoutBtn = document.getElementById('logoutBtn');
+
+  if (!authToken) {
+    authStatusEl.innerHTML =
+      '<span style="color: #f59e0b;">⚠ Not logged in</span>';
+    loginBtn.style.display = 'inline-block';
+    logoutBtn.style.display = 'none';
+    return;
+  }
+
+  // Verify token is valid by checking with API
+  try {
+    const response = await fetch(`${apiUrl}/api/lists`, {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        Accept: 'application/json',
+      },
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const listCount = Object.keys(data).length;
+      authStatusEl.innerHTML = `<span style="color: #10b981;">✓ Logged in</span> <span style="color: #6b7280;">(${listCount} list${listCount !== 1 ? 's' : ''})</span>`;
+      loginBtn.style.display = 'none';
+      logoutBtn.style.display = 'inline-block';
+    } else {
+      authStatusEl.innerHTML =
+        '<span style="color: #f59e0b;">⚠ Session expired</span>';
+      loginBtn.style.display = 'inline-block';
+      logoutBtn.style.display = 'none';
+    }
+  } catch (error) {
+    authStatusEl.innerHTML = `<span style="color: #6b7280;">Unable to verify (${error.message})</span>`;
+    loginBtn.style.display = 'inline-block';
+    logoutBtn.style.display = 'none';
+  }
+}
+
+// Login button handler
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const apiUrl = document
+    .getElementById('apiUrl')
+    .value.trim()
+    .replace(/\/$/, '');
+  const loginUrl = `${apiUrl}/extension/auth`;
+
+  // Open login page in new tab
+  chrome.tabs.create({ url: loginUrl });
+
+  // Show message
+  showStatus(
+    'Opening login page... Close this tab and return here after logging in.',
+    'success'
+  );
+
+  // Poll for auth token changes
+  const checkAuth = setInterval(async () => {
+    const settings = await chrome.storage.local.get(['authToken']);
+    if (settings.authToken) {
+      clearInterval(checkAuth);
+      await updateAuthStatus(apiUrl, settings.authToken);
+      showStatus('✓ Successfully logged in!', 'success');
+    }
+  }, 1000);
+
+  // Stop checking after 5 minutes
+  setTimeout(() => clearInterval(checkAuth), 300000);
+});
+
+// Logout button handler
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  if (
+    confirm('Are you sure you want to logout? You will need to login again.')
+  ) {
+    await chrome.storage.local.remove(['authToken', 'userLists']);
+    const apiUrl = document
+      .getElementById('apiUrl')
+      .value.trim()
+      .replace(/\/$/, '');
+    await updateAuthStatus(apiUrl, null);
+    showStatus('✓ Logged out successfully', 'success');
+
+    // Notify background script to refresh
+    chrome.runtime.sendMessage({ action: 'refreshLists' });
+  }
+});

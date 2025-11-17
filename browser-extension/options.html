@@ -152,7 +152,7 @@
   </head>
   <body>
     <h1>🤘 SuShe Online Settings</h1>
-    <p class="subtitle">Configure your SuShe Online instance URL</p>
+    <p class="subtitle">Configure your SuShe Online instance</p>
 
     <form id="settingsForm">
       <label for="apiUrl">SuShe Online URL</label>
@@ -172,6 +172,27 @@
     </form>
 
     <div id="status" class="status"></div>
+
+    <!-- Authentication Status Section -->
+    <div class="test-section" style="margin-top: 24px">
+      <h3>Authentication Status</h3>
+      <p class="help-text" style="margin-top: 0; margin-bottom: 12px">
+        Make sure the URL above is correct before logging in
+      </p>
+      <div id="authStatus" style="font-size: 14px; margin-bottom: 12px">
+        <span style="color: #6b7280">Checking...</span>
+      </div>
+      <button type="button" id="loginBtn" style="margin-top: 0; display: none">
+        Login to SuShe Online
+      </button>
+      <button
+        type="button"
+        id="logoutBtn"
+        style="margin-top: 0; display: none; background: #374151"
+      >
+        Logout
+      </button>
+    </div>
 
     <div class="example">
       <h3>Examples:</h3>
