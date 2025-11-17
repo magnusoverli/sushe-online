@@ -958,7 +958,14 @@ module.exports = (app, deps) => {
     if (!req.isAuthenticated()) {
       // Save the extension auth intent in session
       req.session.extensionAuth = true;
-      return res.redirect('/login');
+      // Force session save before redirect to ensure flag persists
+      req.session.save((err) => {
+        if (err) {
+          logger.error('Session save error:', err);
+        }
+        res.redirect('/login');
+      });
+      return;
     }
 
     // User is already logged in, render token generation page
