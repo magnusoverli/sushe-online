@@ -308,10 +308,7 @@ async function searchDeezerArtwork(artistName, albumName) {
         }
       }
 
-      // Only log when actually searching (not from cache)
-      console.warn(
-        `No cover art found for "${albumName}" by ${artistName} - album will use placeholder`
-      );
+      // Don't log here - let getCoverArt handle it after trying MusicBrainz
       deezerCache.set(cacheKey, null);
       return null;
     } catch (_error) {
@@ -321,7 +318,38 @@ async function searchDeezerArtwork(artistName, albumName) {
   });
 }
 
-// Get cover art from Deezer
+// Get cover art from MusicBrainz Cover Art Archive
+async function getMusicBrainzCoverArt(releaseGroupId) {
+  if (!releaseGroupId) return null;
+
+  try {
+    const url = `https://coverartarchive.org/release-group/${releaseGroupId}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return null; // No cover art available
+    }
+
+    const data = await response.json();
+
+    // Find the front cover
+    const frontCover = data.images?.find((img) => img.front);
+    if (!frontCover) return null;
+
+    // Return best quality thumbnail (1200px, then 500px, then 250px)
+    return (
+      frontCover.thumbnails?.['1200'] ||
+      frontCover.thumbnails?.large ||
+      frontCover.thumbnails?.['500'] ||
+      frontCover.thumbnails?.small ||
+      frontCover.image
+    );
+  } catch (_error) {
+    return null;
+  }
+}
+
+// Get cover art from Deezer with MusicBrainz fallback
 async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   if (!artistName || !albumTitle) {
     console.warn(
@@ -331,7 +359,26 @@ async function getCoverArt(releaseGroupId, artistName, albumTitle) {
   }
 
   try {
-    const coverUrl = await searchDeezerArtwork(artistName, albumTitle);
+    // Try Deezer first (faster, better CDN)
+    let coverUrl = await searchDeezerArtwork(artistName, albumTitle);
+
+    // Fallback to MusicBrainz Cover Art Archive
+    if (!coverUrl && releaseGroupId) {
+      coverUrl = await getMusicBrainzCoverArt(releaseGroupId);
+      if (coverUrl) {
+        console.debug(
+          `Found cover art from MusicBrainz for "${albumTitle}" by ${artistName}`
+        );
+      }
+    }
+
+    // Only log warning if both sources failed
+    if (!coverUrl) {
+      console.warn(
+        `No cover art found for "${albumTitle}" by ${artistName} - album will use placeholder`
+      );
+    }
+
     return coverUrl;
   } catch (error) {
     console.error(`Error fetching cover art for "${albumTitle}":`, error);
