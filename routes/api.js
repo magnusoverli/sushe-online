@@ -588,7 +588,7 @@ module.exports = (app, deps) => {
         }
         res.send(
           htmlTemplate(
-            resetPasswordTemplate(req.params.token),
+            resetPasswordTemplate(req.params.token, req.csrfToken()),
             'Reset Password - Black Metal Auth'
           )
         );
