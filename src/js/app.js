@@ -181,6 +181,11 @@ document.addEventListener('click', () => {
       trackAbortController = null;
     }
   }
+
+  const albumMoveSubmenu = document.getElementById('albumMoveSubmenu');
+  if (albumMoveSubmenu) {
+    albumMoveSubmenu.classList.add('hidden');
+  }
 });
 
 // Prevent default context menu on right-click in list nav
@@ -1785,6 +1790,102 @@ function initializeAlbumContextMenu() {
       }
     );
   };
+
+  // Handle move option click - show submenu
+  const moveOption = document.getElementById('moveAlbumOption');
+  if (moveOption) {
+    moveOption.addEventListener('mouseenter', () => {
+      showMoveToListSubmenu();
+    });
+    moveOption.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showMoveToListSubmenu();
+    });
+  }
+}
+
+// Show the move to list submenu for desktop
+function showMoveToListSubmenu() {
+  const submenu = document.getElementById('albumMoveSubmenu');
+  const moveOption = document.getElementById('moveAlbumOption');
+
+  if (!submenu || !moveOption) return;
+
+  // Get all list names except the current one
+  const listNames = Object.keys(lists).filter((name) => name !== currentList);
+
+  if (listNames.length === 0) {
+    submenu.innerHTML =
+      '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
+  } else {
+    submenu.innerHTML = listNames
+      .map(
+        (listName) => `
+        <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listName}">
+          ${listName}
+        </button>
+      `
+      )
+      .join('');
+
+    // Add click handlers to each list option
+    submenu.querySelectorAll('[data-target-list]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const targetList = btn.dataset.targetList;
+
+        // Hide both menus
+        document.getElementById('albumContextMenu')?.classList.add('hidden');
+        submenu.classList.add('hidden');
+
+        // Show confirmation modal
+        showMoveConfirmation(currentContextAlbumId, targetList);
+      });
+    });
+  }
+
+  // Position submenu next to the move option
+  const moveRect = moveOption.getBoundingClientRect();
+  const contextMenu = document.getElementById('albumContextMenu');
+  const menuRect = contextMenu.getBoundingClientRect();
+
+  submenu.style.left = `${menuRect.right}px`;
+  submenu.style.top = `${moveRect.top}px`;
+  submenu.classList.remove('hidden');
+}
+
+// Hide submenu when mouse leaves the context menu area
+function hideSubmenuOnLeave() {
+  const contextMenu = document.getElementById('albumContextMenu');
+  const submenu = document.getElementById('albumMoveSubmenu');
+
+  if (!contextMenu || !submenu) return;
+
+  let submenuTimeout;
+
+  const hideSubmenu = () => {
+    submenuTimeout = setTimeout(() => {
+      submenu.classList.add('hidden');
+    }, 200);
+  };
+
+  const cancelHide = () => {
+    if (submenuTimeout) clearTimeout(submenuTimeout);
+  };
+
+  contextMenu.addEventListener('mouseleave', (e) => {
+    // Check if moving to submenu
+    const toSubmenu =
+      e.relatedTarget === submenu || submenu.contains(e.relatedTarget);
+    if (!toSubmenu) {
+      hideSubmenu();
+    }
+  });
+
+  submenu.addEventListener('mouseenter', cancelHide);
+  submenu.addEventListener('mouseleave', hideSubmenu);
 }
 
 // Play the selected album on the connected music service
@@ -3858,6 +3959,11 @@ window.showMobileAlbumMenu = function (indexOrElement) {
           <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
         </button>
 
+        <button data-action="move"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-arrow-right mr-3 text-gray-400"></i>Move to List...
+        </button>
+
         <button data-action="remove"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
           <i class="fas fa-trash mr-3"></i>Remove from List
@@ -3876,6 +3982,7 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   const backdrop = actionSheet.querySelector('[data-backdrop]');
   const editBtn = actionSheet.querySelector('[data-action="edit"]');
   const playBtn = actionSheet.querySelector('[data-action="play"]');
+  const moveBtn = actionSheet.querySelector('[data-action="move"]');
   const removeBtn = actionSheet.querySelector('[data-action="remove"]');
   const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
 
@@ -3900,11 +4007,217 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     window.playAlbumSafe(albumId);
   });
 
+  moveBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSheet();
+    window.showMobileMoveToListSheet(index, albumId);
+  });
+
   removeBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
     closeSheet();
     window.removeAlbumSafe(albumId);
+  });
+};
+
+// Move album from current list to target list
+async function moveAlbumToList(index, albumId, targetList) {
+  if (
+    !currentList ||
+    !lists[currentList] ||
+    !targetList ||
+    !lists[targetList]
+  ) {
+    throw new Error('Invalid source or target list');
+  }
+
+  // Verify album is still at expected index
+  let album = lists[currentList][index];
+  let indexToMove = index;
+
+  if (album && albumId) {
+    const expectedId =
+      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+    if (expectedId !== albumId) {
+      // Index is stale, search by identity
+      const result = findAlbumByIdentity(albumId);
+      if (result) {
+        album = result.album;
+        indexToMove = result.index;
+      } else {
+        throw new Error('Album not found');
+      }
+    }
+  } else if (!album) {
+    throw new Error('Album not found');
+  }
+
+  // Clone the album data to preserve all metadata
+  const albumToMove = { ...album };
+
+  // Remove from source list
+  lists[currentList].splice(indexToMove, 1);
+
+  // Add to target list
+  lists[targetList].push(albumToMove);
+
+  try {
+    // Save both lists to the server
+    await Promise.all([
+      saveList(currentList, lists[currentList]),
+      saveList(targetList, lists[targetList]),
+    ]);
+
+    // Update the current view
+    selectList(currentList);
+
+    showToast(`Moved "${album.album}" to "${targetList}"`);
+  } catch (error) {
+    console.error('Error saving lists after move:', error);
+
+    // Rollback: add back to source, remove from target
+    lists[currentList].splice(indexToMove, 0, albumToMove);
+    lists[targetList].pop();
+
+    throw error;
+  }
+}
+
+// Show confirmation modal for moving album to another list
+function showMoveConfirmation(albumId, targetList) {
+  if (!albumId || !targetList) {
+    console.error('Invalid albumId or targetList');
+    return;
+  }
+
+  // Find the album by identity
+  const result = findAlbumByIdentity(albumId);
+  if (!result) {
+    showToast('Album not found - it may have been moved or removed', 'error');
+    return;
+  }
+
+  const { album, index } = result;
+
+  showConfirmation(
+    'Move Album',
+    `Move "${album.album}" by ${album.artist} to "${targetList}"?`,
+    `This will remove the album from "${currentList}" and add it to "${targetList}".`,
+    'Move',
+    async () => {
+      try {
+        await moveAlbumToList(index, albumId, targetList);
+      } catch (error) {
+        console.error('Error moving album:', error);
+        showToast('Error moving album', 'error');
+      }
+    }
+  );
+}
+
+// Show mobile sheet to select target list for moving album
+window.showMobileMoveToListSheet = function (index, albumId) {
+  // Validate index
+  if (
+    isNaN(index) ||
+    index < 0 ||
+    !lists[currentList] ||
+    index >= lists[currentList].length
+  ) {
+    console.error('Invalid album index:', index);
+    return;
+  }
+
+  const album = lists[currentList][index];
+
+  // Get all list names except the current one
+  const listNames = Object.keys(lists).filter((name) => name !== currentList);
+
+  // Remove any existing sheets
+  const existingSheet = document.querySelector(
+    '.fixed.inset-0.z-50.lg\\:hidden'
+  );
+  if (existingSheet) {
+    existingSheet.remove();
+  }
+
+  const actionSheet = document.createElement('div');
+  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+
+  if (listNames.length === 0) {
+    actionSheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          <h3 class="font-semibold text-white mb-1">Move to List</h3>
+          <p class="text-sm text-gray-400 mb-4">${album.album} by ${album.artist}</p>
+          
+          <div class="py-8 text-center text-gray-500">
+            No other lists available
+          </div>
+          
+          <button data-action="cancel"
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    const listButtons = listNames
+      .map(
+        (listName) => `
+        <button data-target-list="${listName}"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-list mr-3 text-gray-400"></i>${listName}
+        </button>
+      `
+      )
+      .join('');
+
+    actionSheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[80vh] overflow-y-auto">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          <h3 class="font-semibold text-white mb-1">Move to List</h3>
+          <p class="text-sm text-gray-400 mb-4 truncate">${album.album} by ${album.artist}</p>
+          
+          ${listButtons}
+          
+          <button data-action="cancel"
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  document.body.appendChild(actionSheet);
+
+  const backdrop = actionSheet.querySelector('[data-backdrop]');
+  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+
+  const closeSheet = () => {
+    actionSheet.remove();
+  };
+
+  backdrop.addEventListener('click', closeSheet);
+  cancelBtn.addEventListener('click', closeSheet);
+
+  // Attach click handlers to list buttons
+  actionSheet.querySelectorAll('[data-target-list]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetList = btn.dataset.targetList;
+      closeSheet();
+      showMoveConfirmation(albumId, targetList);
+    });
   });
 };
 
@@ -4469,6 +4782,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(() => {
       initializeContextMenu();
       initializeAlbumContextMenu();
+      hideSubmenuOnLeave();
       initializeCreateList();
       initializeRenameList();
       initializeImportConflictHandling();
