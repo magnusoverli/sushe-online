@@ -1681,6 +1681,17 @@ async function resolveCountryCode(countryCode) {
     return '';
   }
 
+  // Handle special MusicBrainz codes not in RestCountries
+  const specialCodes = {
+    XW: 'Worldwide',
+    XE: 'Europe',
+    XU: 'Unknown',
+  };
+
+  if (specialCodes[countryCode]) {
+    return specialCodes[countryCode];
+  }
+
   try {
     // Use RestCountries API to get country info
     const response = await fetch(

@@ -1358,7 +1358,32 @@ async function saveList(name, data) {
         JSON.stringify(cleanedData)
       );
     } catch (storageError) {
-      console.warn('Failed to update cache after save:', storageError);
+      if (storageError.name === 'QuotaExceededError') {
+        // Clear old cache data and retry
+        console.warn('LocalStorage quota exceeded, clearing old cache...');
+        localStorage.removeItem('lists_cache');
+        localStorage.removeItem('lists_cache_timestamp');
+        // Clear old individual list caches
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('lastSelectedListData_')) {
+            localStorage.removeItem(key);
+          }
+        }
+        // Retry save
+        try {
+          localStorage.setItem('lists_cache', JSON.stringify(lists));
+          localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+          localStorage.setItem(
+            `lastSelectedListData_${name}`,
+            JSON.stringify(cleanedData)
+          );
+        } catch (retryError) {
+          console.warn('Cache save failed after cleanup:', retryError);
+        }
+      } else {
+        console.warn('Failed to update cache after save:', storageError);
+      }
     }
   } catch (error) {
     showToast('Error saving list', 'error');
@@ -2164,7 +2189,26 @@ async function selectList(listName, skipFetch = false) {
             JSON.stringify(freshData)
           );
         } catch (storageErr) {
-          console.warn('Failed to cache list data:', storageErr);
+          if (storageErr.name === 'QuotaExceededError') {
+            // Clear old caches and retry
+            console.warn('LocalStorage quota exceeded, clearing old cache...');
+            for (let i = localStorage.length - 1; i >= 0; i--) {
+              const key = localStorage.key(i);
+              if (key && key.startsWith('lastSelectedListData_')) {
+                localStorage.removeItem(key);
+              }
+            }
+            try {
+              localStorage.setItem(
+                `lastSelectedListData_${listName}`,
+                JSON.stringify(freshData)
+              );
+            } catch (retryErr) {
+              console.warn('Cache save failed after cleanup:', retryErr);
+            }
+          } else {
+            console.warn('Failed to cache list data:', storageErr);
+          }
         }
 
         // Re-display with fresh data (only if different)
