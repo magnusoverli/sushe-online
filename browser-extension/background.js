@@ -9,7 +9,13 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Load API URL and auth token from storage on startup
 async function loadSettings() {
-  const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
+  const settings = await chrome.storage.local.get([
+    'apiUrl',
+    'authToken',
+    'userLists',
+    'listsLastFetched',
+  ]);
+
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
     console.log('Loaded API URL from settings:', SUSHE_API_BASE);
@@ -22,6 +28,15 @@ async function loadSettings() {
     console.log('Loaded auth token from storage');
   } else {
     console.log('No auth token found');
+  }
+
+  // Load cached lists if available
+  if (settings.userLists && Array.isArray(settings.userLists)) {
+    userLists = settings.userLists;
+    listsLastFetched = settings.listsLastFetched || 0;
+    console.log('Loaded cached lists from storage:', userLists.length, 'lists');
+  } else {
+    console.log('No cached lists found in storage');
   }
 }
 
@@ -41,7 +56,25 @@ function getAuthHeaders() {
 
 // Create main context menu on extension install
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('SuShe Online extension installed');
+  console.log('SuShe Online extension installed:', details.reason);
+
+  // Show welcome notification on first install
+  if (details.reason === 'install') {
+    chrome.notifications.create('sushe-welcome', {
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: '🤘 Welcome to SuShe Online!',
+      message:
+        'Click the extension icon to configure your SuShe instance and login.',
+      priority: 2,
+      requireInteraction: false,
+    });
+
+    // Auto-dismiss after 10 seconds
+    setTimeout(() => {
+      chrome.notifications.clear('sushe-welcome');
+    }, 10000);
+  }
 
   // Show update notification
   if (details.reason === 'update') {
@@ -83,18 +116,26 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === 'local') {
     if (changes.authToken) {
+      const hadToken = !!changes.authToken.oldValue;
+      const hasToken = !!changes.authToken.newValue;
+
       AUTH_TOKEN = changes.authToken?.newValue || null;
       console.log('Auth token updated:', AUTH_TOKEN ? 'present' : 'removed');
 
       // Invalidate cache when auth changes
-      userLists = [];
       listsLastFetched = 0;
 
       // Refresh lists if token is present
       if (AUTH_TOKEN) {
+        // New login - fetch fresh lists and mark as authenticated
+        userLists = [];
+        // Track that user has successfully authenticated at least once
+        chrome.storage.local.set({ hasEverAuthenticated: true });
         fetchUserLists();
-      } else {
-        showErrorMenu('Not logged in');
+      } else if (hadToken && !hasToken) {
+        // Token was removed/expired - keep cached lists but mark as stale
+        // Don't clear the menu immediately - wait for next fetch to fail
+        console.log('Auth token removed - cached lists remain available');
       }
     }
 
@@ -110,30 +151,116 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
   }
 });
 
+// Helper to safely remove all context menus
+async function removeAllMenus() {
+  return new Promise((resolve) => {
+    chrome.contextMenus.removeAll(() => {
+      if (chrome.runtime.lastError) {
+        console.log(
+          'Remove all menus error (ignored):',
+          chrome.runtime.lastError
+        );
+      }
+      resolve();
+    });
+  });
+}
+
+// Classify fetch errors to provide better user feedback
+function classifyFetchError(error) {
+  const errorMsg = error.message.toLowerCase();
+
+  // Network connectivity issues
+  if (
+    errorMsg.includes('failed to fetch') ||
+    errorMsg.includes('network request failed') ||
+    errorMsg.includes('networkerror') ||
+    errorMsg.includes('network error')
+  ) {
+    return 'network';
+  }
+
+  // CORS issues (usually appear as fetch failures)
+  if (errorMsg.includes('cors') || errorMsg.includes('cross-origin')) {
+    return 'cors';
+  }
+
+  // Authentication issues
+  if (
+    errorMsg.includes('401') ||
+    errorMsg.includes('unauthorized') ||
+    errorMsg.includes('not authenticated')
+  ) {
+    return 'auth';
+  }
+
+  // Server errors (5xx)
+  if (errorMsg.includes('500') || errorMsg.includes('50')) {
+    return 'server';
+  }
+
+  // Client errors (4xx) that aren't auth
+  if (errorMsg.includes('400') || errorMsg.includes('404')) {
+    return 'client';
+  }
+
+  // Timeout errors
+  if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+    return 'timeout';
+  }
+
+  // Unknown error
+  return 'unknown';
+}
+
 // Create the base context menu structure
 async function createContextMenus() {
-  // Remove all existing menus first
-  await chrome.contextMenus.removeAll();
+  try {
+    // Remove all existing menus first
+    await removeAllMenus();
 
-  // Create parent menu item
-  chrome.contextMenus.create({
-    id: 'sushe-main',
-    title: 'Add to SuShe Online',
-    contexts: ['image', 'link'],
-    documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-  });
+    // Create parent menu item
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-main',
+        title: 'Add to SuShe Online',
+        contexts: ['image', 'link'],
+        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
 
-  // Create loading placeholder
-  chrome.contextMenus.create({
-    id: 'sushe-loading',
-    parentId: 'sushe-main',
-    title: 'Loading lists...',
-    contexts: ['image', 'link'],
-    enabled: false,
-  });
+    // Create loading placeholder
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-loading',
+        parentId: 'sushe-main',
+        title: 'Loading lists...',
+        contexts: ['image', 'link'],
+        enabled: false,
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
 
-  // Fetch lists and update menu
-  fetchUserLists();
+    // Fetch lists and update menu
+    fetchUserLists();
+  } catch (error) {
+    console.error('Error creating context menus:', error);
+  }
 }
 
 // Fetch user's lists from SuShe Online API
@@ -142,8 +269,28 @@ async function fetchUserLists() {
 
   // Use cache if recent
   if (userLists.length > 0 && now - listsLastFetched < CACHE_DURATION) {
+    console.log('Using cached lists:', userLists.length);
     updateContextMenuWithLists();
     return;
+  }
+
+  console.log('Fetching lists from API...');
+  console.log('API Base:', SUSHE_API_BASE);
+  console.log('Auth Token present:', !!AUTH_TOKEN);
+
+  // If there's no auth token, check if we've ever had one
+  if (!AUTH_TOKEN) {
+    const hasEverBeenLoggedIn = await chrome.storage.local.get([
+      'hasEverAuthenticated',
+    ]);
+
+    if (!hasEverBeenLoggedIn.hasEverAuthenticated) {
+      // First time user - show friendly welcome message
+      console.log('First-time user, showing welcome menu');
+      showWelcomeMenu();
+      return;
+    }
+    // If they've been logged in before but token is gone, fall through to show login error
   }
 
   try {
@@ -151,8 +298,10 @@ async function fetchUserLists() {
       headers: getAuthHeaders(),
     });
 
+    console.log('API response status:', response.status);
+
     if (response.status === 401) {
-      console.log('Not authenticated, showing login menu');
+      console.log('Not authenticated (401), showing login menu');
       userLists = [];
       listsLastFetched = 0;
       showErrorMenu('Not logged in');
@@ -173,9 +322,30 @@ async function fetchUserLists() {
     updateContextMenuWithLists();
   } catch (error) {
     console.error('Failed to fetch lists:', error);
-    // Don't log out, just show error
-    userLists = [];
-    showErrorMenu(error.message);
+
+    // Classify error type for better user feedback
+    const errorType = classifyFetchError(error);
+
+    // Don't clear existing lists or show error menu for temporary failures
+    // Only reset if there were no cached lists to begin with
+    if (userLists.length === 0) {
+      // Show appropriate error message based on error type
+      if (errorType === 'auth') {
+        showErrorMenu('Not logged in');
+      } else if (errorType === 'network') {
+        showErrorMenu('Network error - check connection');
+      } else if (errorType === 'server') {
+        showErrorMenu('Server error - try again later');
+      } else {
+        showErrorMenu('Connection failed');
+      }
+    } else {
+      console.warn(
+        `Failed to refresh lists (${errorType}), keeping cached version:`,
+        error.message
+      );
+      // Keep using cached lists - they're better than nothing
+    }
   }
 }
 
@@ -183,89 +353,270 @@ async function fetchUserLists() {
 async function updateContextMenuWithLists() {
   console.log('Updating context menu with lists:', userLists);
 
-  // Remove ALL menus and rebuild from scratch to ensure clean state
-  await chrome.contextMenus.removeAll();
+  try {
+    // Remove ALL menus and rebuild from scratch to ensure clean state
+    await removeAllMenus();
 
-  // Recreate the parent menu
-  chrome.contextMenus.create({
-    id: 'sushe-main',
-    title: 'Add to SuShe Online',
-    contexts: ['image', 'link'],
-    documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-  });
-
-  if (userLists.length === 0) {
-    chrome.contextMenus.create({
-      id: 'sushe-no-lists',
-      parentId: 'sushe-main',
-      title: 'No lists found - Create one first!',
-      contexts: ['image', 'link'],
-      enabled: false,
-    });
-    return;
-  }
-
-  // Add each list as a submenu item
-  userLists.forEach((listName, index) => {
-    console.log(
-      `Creating menu item: sushe-list-${index} for list "${listName}"`
+    // Recreate the parent menu
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-main',
+        title: 'Add to SuShe Online',
+        contexts: ['image', 'link'],
+        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
     );
-    // Use index-based ID to avoid issues with special characters in list names
-    chrome.contextMenus.create({
-      id: `sushe-list-${index}`,
-      parentId: 'sushe-main',
-      title: listName,
-      contexts: ['image', 'link'],
+
+    if (userLists.length === 0) {
+      chrome.contextMenus.create(
+        {
+          id: 'sushe-no-lists',
+          parentId: 'sushe-main',
+          title: 'No lists found - Create one first!',
+          contexts: ['image', 'link'],
+          enabled: false,
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.log(
+              'Menu creation error (ignored):',
+              chrome.runtime.lastError
+            );
+          }
+        }
+      );
+      return;
+    }
+
+    // Add each list as a submenu item
+    userLists.forEach((listName, index) => {
+      console.log(
+        `Creating menu item: sushe-list-${index} for list "${listName}"`
+      );
+      // Use index-based ID to avoid issues with special characters in list names
+      chrome.contextMenus.create(
+        {
+          id: `sushe-list-${index}`,
+          parentId: 'sushe-main',
+          title: listName,
+          contexts: ['image', 'link'],
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.log(
+              'Menu creation error (ignored):',
+              chrome.runtime.lastError
+            );
+          }
+        }
+      );
     });
-  });
 
-  // Add refresh option at the end
-  chrome.contextMenus.create({
-    id: 'sushe-separator',
-    parentId: 'sushe-main',
-    type: 'separator',
-    contexts: ['image', 'link'],
-  });
+    // Add refresh option at the end
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-separator',
+        parentId: 'sushe-main',
+        type: 'separator',
+        contexts: ['image', 'link'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
 
-  chrome.contextMenus.create({
-    id: 'sushe-refresh',
-    parentId: 'sushe-main',
-    title: '🔄 Refresh Lists',
-    contexts: ['image', 'link'],
-  });
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-refresh',
+        parentId: 'sushe-main',
+        title: '🔄 Refresh Lists',
+        contexts: ['image', 'link'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
 
-  console.log('Context menu updated successfully');
+    console.log('Context menu updated successfully');
+  } catch (error) {
+    console.error('Error updating context menu:', error);
+  }
+}
+
+// Show welcome menu for first-time users
+async function showWelcomeMenu() {
+  console.log('Showing welcome menu for first-time user');
+
+  try {
+    await removeAllMenus();
+
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-main',
+        title: 'Add to SuShe Online',
+        contexts: ['image', 'link'],
+        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
+
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-welcome',
+        parentId: 'sushe-main',
+        title: '👋 Welcome! Click to get started',
+        contexts: ['image', 'link'],
+        enabled: false,
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
+
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-setup',
+        parentId: 'sushe-main',
+        title: '⚙️ Open Settings & Login',
+        contexts: ['image', 'link'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Error showing welcome menu:', error);
+  }
 }
 
 // Show error in context menu
 async function showErrorMenu(message) {
   console.log('Showing error menu:', message);
 
-  // Remove ALL menus and rebuild from scratch
-  await chrome.contextMenus.removeAll();
+  try {
+    // Remove ALL menus and rebuild from scratch
+    await removeAllMenus();
 
-  // Recreate the parent menu
-  chrome.contextMenus.create({
-    id: 'sushe-main',
-    title: 'Add to SuShe Online',
-    contexts: ['image', 'link'],
-    documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
-  });
+    // Recreate the parent menu
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-main',
+        title: 'Add to SuShe Online',
+        contexts: ['image', 'link'],
+        documentUrlPatterns: ['*://*.rateyourmusic.com/*'],
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
 
-  chrome.contextMenus.create({
-    id: 'sushe-error',
-    parentId: 'sushe-main',
-    title: '⚠️ Not logged in to SuShe Online',
-    contexts: ['image', 'link'],
-    enabled: false,
-  });
+    // Show appropriate error message based on the error type
+    const isAuthError =
+      message === 'Not logged in' ||
+      message.includes('401') ||
+      message.includes('authenticated');
+    const errorTitle = isAuthError
+      ? '⚠️ Not logged in to SuShe Online'
+      : `⚠️ Error: ${message.substring(0, 50)}`;
 
-  chrome.contextMenus.create({
-    id: 'sushe-login',
-    parentId: 'sushe-main',
-    title: 'Click to login',
-    contexts: ['image', 'link'],
-  });
+    chrome.contextMenus.create(
+      {
+        id: 'sushe-error',
+        parentId: 'sushe-main',
+        title: errorTitle,
+        contexts: ['image', 'link'],
+        enabled: false,
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          console.log(
+            'Menu creation error (ignored):',
+            chrome.runtime.lastError
+          );
+        }
+      }
+    );
+
+    // Only show login option for authentication errors
+    if (isAuthError) {
+      chrome.contextMenus.create(
+        {
+          id: 'sushe-login',
+          parentId: 'sushe-main',
+          title: 'Click to login',
+          contexts: ['image', 'link'],
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.log(
+              'Menu creation error (ignored):',
+              chrome.runtime.lastError
+            );
+          }
+        }
+      );
+    } else {
+      // For other errors, show a refresh option
+      chrome.contextMenus.create(
+        {
+          id: 'sushe-refresh',
+          parentId: 'sushe-main',
+          title: '🔄 Try again',
+          contexts: ['image', 'link'],
+        },
+        () => {
+          if (chrome.runtime.lastError) {
+            console.log(
+              'Menu creation error (ignored):',
+              chrome.runtime.lastError
+            );
+          }
+        }
+      );
+    }
+  } catch (error) {
+    console.error('Error showing error menu:', error);
+  }
 }
 
 // Handle context menu clicks
@@ -278,6 +629,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     listsLastFetched = 0; // Force refresh
     userLists = []; // Clear cache
     await fetchUserLists();
+    return;
+  }
+
+  // Handle setup/welcome redirect
+  if (info.menuItemId === 'sushe-setup') {
+    chrome.runtime.openOptionsPage();
     return;
   }
 
@@ -360,12 +717,17 @@ async function addAlbumToList(info, tab, listName) {
 
     if (!albumData || albumData.error) {
       console.error('Content script returned error:', albumData?.error);
-      throw new Error(albumData?.error || 'Content script error');
+      throw new Error(
+        albumData?.error ||
+          'Failed to extract album data. Make sure you are on an album page.'
+      );
     }
 
     if (!albumData.artist || !albumData.album) {
       console.error('Invalid album data received:', albumData);
-      throw new Error('Could not extract album information from page');
+      throw new Error(
+        `Could not extract album information from page. Artist: "${albumData?.artist}", Album: "${albumData?.album}"`
+      );
     }
 
     console.log('Extracted album data:', albumData);
@@ -470,7 +832,12 @@ async function addAlbumToList(info, tab, listName) {
       currentList = await listResponse.json();
       console.log('Current list has', currentList.length, 'albums');
     } else if (listResponse.status === 401) {
-      throw new Error('Not logged in to SuShe Online. Please login first.');
+      // Clear auth token since it's invalid
+      AUTH_TOKEN = null;
+      await chrome.storage.local.remove('authToken');
+      throw new Error(
+        'Your session has expired. Please click the extension icon and login again.'
+      );
     } else if (listResponse.status === 404) {
       console.log('List not found, will create new one');
       // List doesn't exist yet, that's okay
@@ -558,6 +925,14 @@ async function addAlbumToList(info, tab, listName) {
     if (!saveResponse.ok) {
       const errorText = await saveResponse.text();
       console.error('Save failed:', errorText);
+
+      // Handle specific error cases
+      if (saveResponse.status === 401) {
+        throw new Error(
+          'Not authenticated. Please click the extension icon and login again.'
+        );
+      }
+
       let errorData;
       try {
         errorData = JSON.parse(errorText);
@@ -668,6 +1043,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('API URL updated to:', SUSHE_API_BASE);
     listsLastFetched = 0; // Force refresh with new URL
     createContextMenus();
+    sendResponse({ success: true });
     return true;
   }
 
@@ -675,10 +1051,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ apiUrl: SUSHE_API_BASE });
     return true;
   }
+
+  // Return false for unknown actions to avoid channel errors
+  return false;
 });
 
 // Handle notification clicks
 chrome.notifications.onClicked.addListener((notificationId) => {
+  if (notificationId === 'sushe-welcome') {
+    // Open options page for first-time setup
+    chrome.runtime.openOptionsPage();
+    chrome.notifications.clear('sushe-welcome');
+  }
+
   if (notificationId === 'sushe-update') {
     // Open the main site or extension page
     chrome.tabs.create({ url: SUSHE_API_BASE || 'http://localhost:3000' });
