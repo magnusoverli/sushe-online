@@ -316,11 +316,13 @@ Docker Compose automatically loads this file.
 The Docker image is automatically built and published to GitHub Container Registry on every push to `main`. To update your deployment:
 
 **Quick Update:**
+
 ```bash
 ./update.sh
 ```
 
 **Manual Update:**
+
 ```bash
 # Pull latest image
 docker compose pull app
