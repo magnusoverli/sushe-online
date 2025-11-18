@@ -653,6 +653,9 @@ async function showErrorMenu(message) {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   console.log('Context menu clicked:', info.menuItemId);
 
+  // CRITICAL: Ensure state is loaded FIRST (service worker may have restarted)
+  await ensureStateLoaded();
+
   // Handle refresh
   if (info.menuItemId === 'sushe-refresh') {
     console.log('Refreshing lists...');
@@ -670,10 +673,8 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
 
   // Handle login redirect
   if (info.menuItemId === 'sushe-login') {
-    // Always load the latest API URL from storage to ensure we use the configured URL
-    const settings = await chrome.storage.local.get(['apiUrl']);
-    const apiUrl = settings.apiUrl || SUSHE_API_BASE;
-    chrome.tabs.create({ url: `${apiUrl}/extension/auth` });
+    // Use the loaded API URL (already loaded by ensureStateLoaded above)
+    chrome.tabs.create({ url: `${SUSHE_API_BASE}/extension/auth` });
     return;
   }
 
@@ -684,23 +685,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       `Menu item clicked: ${info.menuItemId}, extracted index: ${listIndex}`
     );
 
-    // Ensure userLists is loaded (service worker might have restarted and lost state)
-    if (userLists.length === 0) {
-      console.log('userLists is empty, loading from storage...');
-      const cached = await chrome.storage.local.get(['userLists']);
-      if (cached.userLists && Array.isArray(cached.userLists)) {
-        userLists = cached.userLists;
-        console.log('Loaded cached userLists:', userLists);
-      } else {
-        console.error('No cached lists found in storage');
-        showNotification(
-          '✗ Error',
-          'Lists not loaded. Please refresh the page and try again.'
-        );
-        return;
-      }
-    }
-
+    // State already loaded by ensureStateLoaded() above
     console.log('Available lists:', userLists);
     console.log(
       `Looking up index ${listIndex} in array of length ${userLists.length}`
@@ -714,7 +699,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     } else {
       console.error('List not found for index:', listIndex);
       console.error('userLists array:', JSON.stringify(userLists));
-      showNotification('✗ Error', 'List not found. Try refreshing lists.');
+      showNotification(
+        '✗ Error',
+        'List not found. Try refreshing lists.',
+        'error',
+        tab.id
+      );
     }
   }
 });
@@ -790,7 +780,9 @@ async function addAlbumToList(info, tab, listName) {
     showNotificationWithImage(
       'Adding album...',
       `Adding ${albumData.album} by ${albumData.artist} to ${listName}`,
-      rymCoverUrl
+      rymCoverUrl,
+      'progress',
+      tab.id
     );
 
     // Search MusicBrainz for the album
@@ -909,7 +901,9 @@ async function addAlbumToList(info, tab, listName) {
     if (isDuplicate) {
       showNotification(
         'ℹ Already in list',
-        `${albumData.album} is already in ${listName}`
+        `${albumData.album} is already in ${listName}`,
+        'info',
+        tab.id
       );
       return;
     }
@@ -1005,11 +999,18 @@ async function addAlbumToList(info, tab, listName) {
     showNotificationWithImage(
       '✓ Successfully added',
       `${albumData.album} added to ${listName}`,
-      albumCoverUrl
+      albumCoverUrl,
+      'success',
+      tab.id
     );
   } catch (error) {
     console.error('Error adding album:', error);
-    showNotification('✗ Error', error.message || 'Failed to add album to list');
+    showNotification(
+      '✗ Error',
+      error.message || 'Failed to add album to list',
+      'error',
+      tab.id
+    );
   }
 }
 
@@ -1083,27 +1084,71 @@ async function resolveCountryCode(countryCode) {
   }
 }
 
+// Handle notification clicks (kept for install/update notifications)
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (notificationId === 'sushe-welcome') {
+    // Open options page for first-time setup
+    chrome.runtime.openOptionsPage();
+    chrome.notifications.clear('sushe-welcome');
+  }
+
+  if (notificationId === 'sushe-update') {
+    // Open the main site or extension page
+    chrome.tabs.create({ url: SUSHE_API_BASE || 'http://localhost:3000' });
+    chrome.notifications.clear('sushe-update');
+  }
+});
+
 // Listen for messages from content script or popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle async operations with proper error handling
   if (message.action === 'refreshLists') {
-    listsLastFetched = 0;
-    fetchUserLists().then(() => {
-      sendResponse({ success: true });
-    });
+    // Async operation - keep channel open
+    (async () => {
+      try {
+        await ensureStateLoaded();
+        listsLastFetched = 0;
+        userLists = [];
+        await fetchUserLists();
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Error refreshing lists:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true; // Keep channel open for async response
   }
 
   if (message.action === 'updateApiUrl') {
-    SUSHE_API_BASE = message.apiUrl;
-    console.log('API URL updated to:', SUSHE_API_BASE);
-    listsLastFetched = 0; // Force refresh with new URL
-    createContextMenus();
-    sendResponse({ success: true });
+    // Async operation - keep channel open
+    (async () => {
+      try {
+        await ensureStateLoaded();
+        SUSHE_API_BASE = message.apiUrl;
+        console.log('API URL updated to:', SUSHE_API_BASE);
+        listsLastFetched = 0; // Force refresh with new URL
+        userLists = [];
+        await createContextMenus();
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('Error updating API URL:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
     return true;
   }
 
   if (message.action === 'getApiUrl') {
-    sendResponse({ apiUrl: SUSHE_API_BASE });
+    // Async operation - ensure state loaded first
+    (async () => {
+      try {
+        await ensureStateLoaded();
+        sendResponse({ apiUrl: SUSHE_API_BASE });
+      } catch (error) {
+        console.error('Error getting API URL:', error);
+        sendResponse({ apiUrl: 'http://localhost:3000' });
+      }
+    })();
     return true;
   }
 
