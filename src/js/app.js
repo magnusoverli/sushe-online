@@ -15,6 +15,7 @@ let currentContextList = null;
 const _genres = [];
 const _countries = [];
 let listEventSource = null;
+let globalListsEventSource = null;
 let sseUpdateTimeout = null;
 
 // Process static data at module load time
@@ -1468,6 +1469,85 @@ async function autoFetchTracksForList(name) {
   });
 
   await pLimit(5, tasks);
+}
+
+// Subscribe to global list events (create/delete) across all devices
+function subscribeToGlobalListEvents() {
+  if (globalListsEventSource) {
+    globalListsEventSource.close();
+  }
+
+  globalListsEventSource = new EventSource('/api/lists/subscribe', {
+    withCredentials: true,
+  });
+
+  globalListsEventSource.addEventListener('delete', (e) => {
+    try {
+      const { listName } = JSON.parse(e.data);
+      console.log(`List "${listName}" was deleted on another device`);
+
+      // Remove from lists object
+      delete lists[listName];
+
+      // Update localStorage cache
+      try {
+        localStorage.setItem('lists_cache', JSON.stringify(lists));
+        localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+      } catch (storageError) {
+        console.warn('Failed to update cache after delete:', storageError);
+      }
+
+      // Update UI
+      updateListNav();
+
+      // If viewing deleted list, clear display
+      if (currentList === listName) {
+        currentList = null;
+        window.currentList = null;
+        document.getElementById('albumContainer').innerHTML = `
+          <div class="text-center text-gray-500 mt-20">
+            <p class="text-xl mb-2">List was deleted</p>
+            <p class="text-sm">This list was deleted on another device</p>
+          </div>
+        `;
+        updateMobileHeader();
+        updateHeaderTitle(null);
+      }
+
+      showToast(`List "${listName}" was deleted on another device`, 'info');
+    } catch (err) {
+      console.error('Failed to process delete event:', err);
+    }
+  });
+
+  globalListsEventSource.addEventListener('create', (e) => {
+    try {
+      const { listName } = JSON.parse(e.data);
+      console.log(`List "${listName}" was created on another device`);
+
+      // Initialize empty list
+      lists[listName] = [];
+
+      // Update localStorage cache
+      try {
+        localStorage.setItem('lists_cache', JSON.stringify(lists));
+        localStorage.setItem('lists_cache_timestamp', Date.now().toString());
+      } catch (storageError) {
+        console.warn('Failed to update cache after create:', storageError);
+      }
+
+      // Update UI
+      updateListNav();
+
+      showToast(`List "${listName}" was created on another device`, 'info');
+    } catch (err) {
+      console.error('Failed to process create event:', err);
+    }
+  });
+
+  globalListsEventSource.onerror = (err) => {
+    console.error('Global lists SSE error:', err);
+  };
 }
 
 function subscribeToList(name) {
@@ -4803,6 +4883,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // Note: Genres and countries are now loaded synchronously at module initialization
   loadLists()
     .then(() => {
+      // Subscribe to global list events (create/delete) for cross-device sync
+      subscribeToGlobalListEvents();
+
       initializeContextMenu();
       initializeAlbumContextMenu();
       hideSubmenuOnLeave();
@@ -4874,6 +4957,9 @@ window.addEventListener('beforeunload', () => {
   }
   if (listEventSource) {
     listEventSource.close();
+  }
+  if (globalListsEventSource) {
+    globalListsEventSource.close();
   }
 });
 

@@ -122,7 +122,11 @@ module.exports = (app, deps) => {
     composeForgotPasswordEmail,
     csrfProtection,
     broadcastListUpdate,
+    broadcastListDelete,
+    broadcastListCreate,
     listSubscribers,
+    userConnectionCounts,
+    MAX_CONNECTIONS_PER_USER,
     pool,
   } = deps;
 
@@ -229,10 +233,19 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Server-sent events subscription for a specific list
-  app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
-    const { name } = req.params;
-    const key = `${req.user._id}:${name}`;
+  // Server-sent events subscription for user-level list events (create/delete)
+  app.get('/api/lists/subscribe', ensureAuthAPI, (req, res) => {
+    const userId = req.user._id;
+    const key = `${userId}`;
+
+    // Rate limit SSE connections per user
+    const currentCount = userConnectionCounts.get(userId) || 0;
+    if (currentCount >= MAX_CONNECTIONS_PER_USER) {
+      logger.warn(`User ${userId} exceeded SSE connection limit`);
+      return res.status(429).json({
+        error: 'Too many concurrent connections. Please close some browser tabs.',
+      });
+    }
 
     res.set({
       'Content-Type': 'text/event-stream',
@@ -242,6 +255,9 @@ module.exports = (app, deps) => {
     });
     res.flushHeaders();
     res.write('retry: 10000\n\n');
+
+    // Track connection
+    userConnectionCounts.set(userId, currentCount + 1);
 
     const heartbeat = setInterval(() => {
       res.write(':\n\n');
@@ -257,6 +273,56 @@ module.exports = (app, deps) => {
     req.on('close', () => {
       clearInterval(heartbeat);
       subs.delete(res);
+      // Decrement connection count
+      const count = userConnectionCounts.get(userId) || 1;
+      userConnectionCounts.set(userId, Math.max(0, count - 1));
+    });
+  });
+
+  // Server-sent events subscription for a specific list
+  app.get('/api/lists/subscribe/:name', ensureAuthAPI, (req, res) => {
+    const { name } = req.params;
+    const userId = req.user._id;
+    const key = `${userId}:${name}`;
+
+    // Rate limit SSE connections per user
+    const currentCount = userConnectionCounts.get(userId) || 0;
+    if (currentCount >= MAX_CONNECTIONS_PER_USER) {
+      logger.warn(`User ${userId} exceeded SSE connection limit`);
+      return res.status(429).json({
+        error: 'Too many concurrent connections. Please close some browser tabs.',
+      });
+    }
+
+    res.set({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    res.flushHeaders();
+    res.write('retry: 10000\n\n');
+
+    // Track connection
+    userConnectionCounts.set(userId, currentCount + 1);
+
+    const heartbeat = setInterval(() => {
+      res.write(':\n\n');
+      if (typeof res.flush === 'function') {
+        res.flush();
+      }
+    }, 25000);
+
+    const subs = listSubscribers.get(key) || new Set();
+    subs.add(res);
+    listSubscribers.set(key, subs);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      subs.delete(res);
+      // Decrement connection count
+      const count = userConnectionCounts.get(userId) || 1;
+      userConnectionCounts.set(userId, Math.max(0, count - 1));
     });
   });
 
@@ -415,6 +481,11 @@ module.exports = (app, deps) => {
         });
 
         broadcastListUpdate(req.user._id, name, data);
+
+        // Broadcast list creation to other devices
+        if (!existingList) {
+          broadcastListCreate(req.user._id, name);
+        }
       } catch (dbErr) {
         await client.query('ROLLBACK');
         logger.error('Error updating list:', dbErr);
@@ -460,6 +531,9 @@ module.exports = (app, deps) => {
       // Invalidate cache for this user's lists
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
       responseCache.invalidate(`GET:/api/lists/${name}:${req.user._id}`);
+
+      // Broadcast deletion to other devices
+      broadcastListDelete(req.user._id, name);
     });
   });
 

@@ -108,8 +108,14 @@ const {
   pool,
 } = require('./db');
 
-// Map of SSE subscribers keyed by `${userId}:${listName}`
+// Map of SSE subscribers
+// Per-list subscribers keyed by `${userId}:${listName}` (for list content updates)
+// User-level subscribers keyed by `${userId}` (for list create/delete events)
 const listSubscribers = new Map();
+
+// Track connections per user for rate limiting
+const userConnectionCounts = new Map();
+const MAX_CONNECTIONS_PER_USER = 10;
 
 function broadcastListUpdate(userId, name, data) {
   const key = `${userId}:${name}`;
@@ -123,6 +129,60 @@ function broadcastListUpdate(userId, name, data) {
       try {
         if (!res.destroyed && res.writable) {
           res.write(`event: update\ndata: ${payload}\n\n`);
+          if (typeof res.flush === 'function') {
+            res.flush();
+          }
+          activeConnections.add(res);
+        }
+      } catch {
+        // Connection is dead, will be cleaned up
+      }
+    }
+
+    // Update the subscribers set to only include active connections
+    listSubscribers.set(key, activeConnections);
+  }
+}
+
+function broadcastListDelete(userId, listName) {
+  const key = `${userId}`;
+  const subs = listSubscribers.get(key);
+  if (subs) {
+    const payload = JSON.stringify({ listName });
+
+    // Clean up dead connections while broadcasting
+    const activeConnections = new Set();
+    for (const res of subs) {
+      try {
+        if (!res.destroyed && res.writable) {
+          res.write(`event: delete\ndata: ${payload}\n\n`);
+          if (typeof res.flush === 'function') {
+            res.flush();
+          }
+          activeConnections.add(res);
+        }
+      } catch {
+        // Connection is dead, will be cleaned up
+      }
+    }
+
+    // Update the subscribers set to only include active connections
+    listSubscribers.set(key, activeConnections);
+  }
+}
+
+function broadcastListCreate(userId, listName) {
+  const key = `${userId}`;
+  const subs = listSubscribers.get(key);
+  if (subs) {
+    const payload = JSON.stringify({ listName });
+
+    // Clean up dead connections while broadcasting
+    const activeConnections = new Set();
+    for (const res of subs) {
+      try {
+        if (!res.destroyed && res.writable) {
+          res.write(`event: create\ndata: ${payload}\n\n`);
           if (typeof res.flush === 'function') {
             res.flush();
           }
@@ -815,7 +875,11 @@ const deps = {
   isValidUsername,
   isValidPassword,
   broadcastListUpdate,
+  broadcastListDelete,
+  broadcastListCreate,
   listSubscribers,
+  userConnectionCounts,
+  MAX_CONNECTIONS_PER_USER,
   sanitizeUser,
   adminCodeAttempts,
   adminCode,
