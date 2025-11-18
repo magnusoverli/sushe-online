@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadLists();
 
   document.getElementById('refreshBtn').addEventListener('click', refreshLists);
+  document.getElementById('optionsBtn').addEventListener('click', openOptions);
   document.getElementById('loginBtn').addEventListener('click', openLogin);
   document.getElementById('logoutBtn').addEventListener('click', logout);
 });
@@ -112,6 +113,11 @@ async function refreshLists() {
     btn.textContent = 'Refresh Lists';
     loadLists();
   });
+}
+
+function openOptions() {
+  // Open the extension options page
+  chrome.runtime.openOptionsPage();
 }
 
 function openLogin() {
