@@ -243,7 +243,8 @@ module.exports = (app, deps) => {
     if (currentCount >= MAX_CONNECTIONS_PER_USER) {
       logger.warn(`User ${userId} exceeded SSE connection limit`);
       return res.status(429).json({
-        error: 'Too many concurrent connections. Please close some browser tabs.',
+        error:
+          'Too many concurrent connections. Please close some browser tabs.',
       });
     }
 
@@ -290,7 +291,8 @@ module.exports = (app, deps) => {
     if (currentCount >= MAX_CONNECTIONS_PER_USER) {
       logger.warn(`User ${userId} exceeded SSE connection limit`);
       return res.status(429).json({
-        error: 'Too many concurrent connections. Please close some browser tabs.',
+        error:
+          'Too many concurrent connections. Please close some browser tabs.',
       });
     }
 
