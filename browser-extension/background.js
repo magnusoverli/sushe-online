@@ -1155,18 +1155,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   // Return false for unknown actions to avoid channel errors
   return false;
 });
-
-// Handle notification clicks
-chrome.notifications.onClicked.addListener((notificationId) => {
-  if (notificationId === 'sushe-welcome') {
-    // Open options page for first-time setup
-    chrome.runtime.openOptionsPage();
-    chrome.notifications.clear('sushe-welcome');
-  }
-
-  if (notificationId === 'sushe-update') {
-    // Open the main site or extension page
-    chrome.tabs.create({ url: SUSHE_API_BASE || 'http://localhost:3000' });
-    chrome.notifications.clear('sushe-update');
-  }
-});
