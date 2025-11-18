@@ -437,7 +437,7 @@ const contextMenusComponent = () => `
   </div>
   
   <!-- Submenu for Move to List -->
-  <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-48">
+  <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
     <!-- Populated dynamically -->
   </div>
 `;
