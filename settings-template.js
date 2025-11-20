@@ -1223,7 +1223,23 @@ const settingsTemplate = (req, options) => {
       document.getElementById('restoreForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
+        const restoreStartTime = Date.now();
+        const restoreId = 'restore_' + restoreStartTime;
+        
+        console.log(\`[\${restoreId}] === CLIENT: RESTORE STARTED ===\`, {
+          timestamp: new Date().toISOString(),
+          userAgent: navigator.userAgent,
+        });
+        
         const formData = new FormData(e.target);
+        const file = formData.get('backup');
+        
+        console.log(\`[\${restoreId}] File selected\`, {
+          name: file.name,
+          size: file.size,
+          sizeMB: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+          type: file.type,
+        });
         
         // Switch to progress view
         document.getElementById('restoreContent').classList.add('hidden');
@@ -1232,17 +1248,23 @@ const settingsTemplate = (req, options) => {
         
         // Helper function to wait for server restart
         const waitForServerRestart = () => {
+          console.log(\`[\${restoreId}] Waiting for server restart...\`);
           updateProgressStep('step-restart', 'active');
           updateProgress(80, 'Server is restarting...');
           
           setTimeout(() => {
             updateProgress(85, 'Waiting for server to come back online...');
             
+            let pingCount = 0;
             const checkServer = setInterval(async () => {
+              pingCount++;
+              console.log(\`[\${restoreId}] Ping #\${pingCount} - checking if server is back...\`);
+              
               try {
                 const ping = await fetch('/health', { method: 'HEAD' });
                 if (ping.ok) {
                   clearInterval(checkServer);
+                  console.log(\`[\${restoreId}] Server is back online after \${pingCount} pings!\`);
                   updateProgress(100, 'Server is back online! Redirecting...');
                   updateProgressStep('step-restart', 'complete');
                   
@@ -1261,7 +1283,7 @@ const settingsTemplate = (req, options) => {
                   }, 1000);
                 }
               } catch (e) {
-                // Server still restarting, keep polling
+                console.log(\`[\${restoreId}] Ping #\${pingCount} - server still down:\`, e.message);
               }
             }, 1000);
           }, 2000);
@@ -1272,6 +1294,12 @@ const settingsTemplate = (req, options) => {
           updateProgressStep('step-upload', 'active');
           updateProgress(10, 'Uploading backup file to server...');
           
+          const fetchStartTime = Date.now();
+          console.log(\`[\${restoreId}] Starting fetch request...\`, {
+            url: '/admin/restore',
+            method: 'POST',
+          });
+          
           let response;
           try {
             response = await fetch('/admin/restore', {
@@ -1279,8 +1307,21 @@ const settingsTemplate = (req, options) => {
               body: formData,
               credentials: 'same-origin'
             });
+            
+            const fetchDuration = Date.now() - fetchStartTime;
+            console.log(\`[\${restoreId}] Fetch completed\`, {
+              duration: fetchDuration + 'ms',
+              status: response.status,
+              statusText: response.statusText,
+              ok: response.ok,
+              headers: {
+                contentType: response.headers.get('content-type'),
+                contentLength: response.headers.get('content-length'),
+              },
+            });
           } catch (fetchError) {
-            // If fetch fails completely, it might be a network error
+            const fetchDuration = Date.now() - fetchStartTime;
+            console.error(\`[\${restoreId}] Fetch failed after \${fetchDuration}ms\`, fetchError);
             throw new Error('Failed to upload backup file: ' + fetchError.message);
           }
           
@@ -1293,13 +1334,49 @@ const settingsTemplate = (req, options) => {
           
           // Try to parse JSON, but handle the case where server restarts during parsing
           let data;
+          const jsonParseStart = Date.now();
+          console.log(\`[\${restoreId}] Starting to parse response.json()...\`);
+          
+          // Set up a timeout detector
+          let timeoutWarningShown = false;
+          const timeoutWarning = setTimeout(() => {
+            const elapsed = Date.now() - jsonParseStart;
+            console.warn(\`[\${restoreId}] ⚠️  response.json() is taking a long time! Elapsed: \${elapsed}ms\`);
+            timeoutWarningShown = true;
+          }, 5000); // Warn after 5 seconds
+          
+          // Set up interval to log how long we've been waiting
+          const waitLogger = setInterval(() => {
+            const elapsed = Date.now() - jsonParseStart;
+            console.log(\`[\${restoreId}] Still waiting for response.json()... Elapsed: \${elapsed}ms\`);
+          }, 10000); // Log every 10 seconds
+          
           try {
             data = await response.json();
+            clearTimeout(timeoutWarning);
+            clearInterval(waitLogger);
+            
+            const jsonParseDuration = Date.now() - jsonParseStart;
+            console.log(\`[\${restoreId}] Successfully parsed JSON response\`, {
+              duration: jsonParseDuration + 'ms',
+              data: data,
+            });
           } catch (jsonError) {
+            clearTimeout(timeoutWarning);
+            clearInterval(waitLogger);
+            
+            const jsonParseDuration = Date.now() - jsonParseStart;
+            console.error(\`[\${restoreId}] Failed to parse JSON after \${jsonParseDuration}ms\`, {
+              error: jsonError.message,
+              errorName: jsonError.name,
+              responseOk: response.ok,
+              responseStatus: response.status,
+            });
+            
             // If JSON parsing fails AND response status was OK, server likely restarted
             // This means restore succeeded (server only restarts on success)
             if (response.ok) {
-              console.log('Server restarted during response - restore likely succeeded');
+              console.log(\`[\${restoreId}] Server restarted during response - restore likely succeeded\`);
               updateProgress(50, 'Backup validated successfully');
               updateProgressStep('step-validate', 'complete');
               
@@ -1320,6 +1397,7 @@ const settingsTemplate = (req, options) => {
           
           // Check if restore failed (response was parsed successfully)
           if (!data.success) {
+            console.error(\`[\${restoreId}] Server reported failure\`, data);
             updateProgressStep('step-validate', 'error');
             updateProgress(50, data.error || 'Validation failed');
             setTimeout(() => {
@@ -1330,6 +1408,7 @@ const settingsTemplate = (req, options) => {
           }
           
           // Success response received
+          console.log(\`[\${restoreId}] Server reported success, proceeding...\`);
           updateProgress(50, 'Backup validated successfully');
           updateProgressStep('step-validate', 'complete');
           
@@ -1343,7 +1422,11 @@ const settingsTemplate = (req, options) => {
           waitForServerRestart();
           
         } catch (error) {
-          console.error('Restore error:', error);
+          const totalDuration = Date.now() - restoreStartTime;
+          console.error(\`[\${restoreId}] Restore error after \${totalDuration}ms\`, {
+            error: error.message,
+            stack: error.stack,
+          });
           updateProgressStep('step-upload', 'error');
           updateProgress(0, 'Error: ' + error.message);
           setTimeout(() => {
@@ -1351,6 +1434,8 @@ const settingsTemplate = (req, options) => {
             document.getElementById('closeRestoreModal').disabled = false;
           }, 3000);
         }
+        
+        console.log(\`[\${restoreId}] === CLIENT: RESTORE FLOW COMPLETED ===\`);
       });
     `
         : ''

@@ -459,32 +459,66 @@ module.exports = (app, deps) => {
     ensureAdmin,
     upload.single('backup'),
     (req, res) => {
+      const restoreStartTime = Date.now();
+      const restoreId = `restore_${restoreStartTime}`;
+
+      logger.info(`[${restoreId}] === DATABASE RESTORE STARTED ===`, {
+        user: req.user.username,
+        fileSize: req.file?.size,
+        clientIp: req.ip,
+        timestamp: new Date().toISOString(),
+      });
+
       if (!req.file) {
+        logger.error(`[${restoreId}] No file uploaded`);
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
       const tmpFile = req.file.path;
+      const fileSize = req.file.size;
+      const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+
+      logger.info(`[${restoreId}] File upload complete`, {
+        tmpFile,
+        fileSize,
+        fileSizeMB: `${fileSizeMB} MB`,
+        uploadDuration: `${Date.now() - restoreStartTime}ms`,
+      });
 
       // Validate that the file is a valid PostgreSQL dump file
       try {
+        const validationStart = Date.now();
         const header = Buffer.alloc(5);
         const fd = fs.openSync(tmpFile, 'r');
         fs.readSync(fd, header, 0, 5, 0);
         fs.closeSync(fd);
 
         if (header.toString() !== 'PGDMP') {
+          logger.error(`[${restoreId}] Invalid backup file header`, {
+            header: header.toString(),
+          });
           fs.unlinkSync(tmpFile);
           return res.status(400).json({
             error: 'Invalid backup file. Must be a PostgreSQL dump file.',
           });
         }
+
+        logger.info(`[${restoreId}] File validation passed`, {
+          validationDuration: `${Date.now() - validationStart}ms`,
+        });
       } catch (err) {
-        logger.error('Error validating backup file:', err);
+        logger.error(`[${restoreId}] Error validating backup file:`, err);
         fs.unlinkSync(tmpFile);
         return res.status(400).json({
           error: 'Unable to validate backup file',
         });
       }
+
+      const pgRestoreStart = Date.now();
+      logger.info(`[${restoreId}] Starting pg_restore process`, {
+        command: pgRestoreCmd,
+        args: ['--clean', '--if-exists', '--single-transaction', '-d', '***'],
+      });
 
       const restore = spawn(pgRestoreCmd, [
         '--clean',
@@ -495,44 +529,130 @@ module.exports = (app, deps) => {
         tmpFile,
       ]);
 
-      restore.stderr.on('data', (data) =>
-        logger.error('pg_restore:', data.toString())
-      );
+      let stderrData = '';
+      restore.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderrData += output;
+        logger.error(`[${restoreId}] pg_restore stderr:`, output);
+      });
 
       restore.on('error', (err) => {
-        logger.error('Restore error:', err);
-        res.status(500).json({ error: 'Error restoring database' });
+        const elapsed = Date.now() - pgRestoreStart;
+        logger.error(`[${restoreId}] Restore process error`, {
+          error: err.message,
+          elapsed: `${elapsed}ms`,
+        });
+
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Error restoring database' });
+        } else {
+          logger.error(
+            `[${restoreId}] Cannot send error response - headers already sent`
+          );
+        }
       });
 
       restore.on('exit', async (code) => {
+        const pgRestoreDuration = Date.now() - pgRestoreStart;
+        logger.info(`[${restoreId}] pg_restore process exited`, {
+          exitCode: code,
+          duration: `${pgRestoreDuration}ms`,
+          durationSeconds: (pgRestoreDuration / 1000).toFixed(2),
+        });
+
         fs.unlink(tmpFile, () => {});
+
         if (code === 0) {
           // Clear all sessions after restore using direct SQL
           try {
+            const sessionClearStart = Date.now();
             const { pool } = deps;
             await pool.query('DELETE FROM session');
-            logger.info('All sessions cleared after database restore');
+            logger.info(`[${restoreId}] All sessions cleared`, {
+              duration: `${Date.now() - sessionClearStart}ms`,
+            });
           } catch (err) {
-            logger.error('Error clearing sessions after restore:', err);
+            logger.error(
+              `[${restoreId}] Error clearing sessions after restore:`,
+              err
+            );
           }
 
-          res.json({
-            success: true,
-            message:
-              'Database restored successfully. Server will restart in 3 seconds...',
+          const totalDuration = Date.now() - restoreStartTime;
+          logger.info(`[${restoreId}] Sending success response to client`, {
+            totalDuration: `${totalDuration}ms`,
+            totalSeconds: (totalDuration / 1000).toFixed(2),
+            responseHeadersSent: res.headersSent,
           });
+
+          if (!res.headersSent) {
+            res.json({
+              success: true,
+              message:
+                'Database restored successfully. Server will restart in 3 seconds...',
+            });
+            logger.info(
+              `[${restoreId}] Success response sent, headers now sent: ${res.headersSent}`
+            );
+          } else {
+            logger.error(
+              `[${restoreId}] CRITICAL: Cannot send response - headers already sent!`
+            );
+          }
 
           // Schedule server restart to clear prepared statement cache
           logger.info(
-            'Database restored successfully. Restarting server to clear prepared statement cache...'
+            `[${restoreId}] Scheduling server restart in 3 seconds...`
           );
           setTimeout(() => {
+            logger.info(`[${restoreId}] Restarting server now...`);
             process.exit(0); // Exit cleanly, Docker/nodemon will restart
           }, 3000);
         } else {
-          logger.error('pg_restore exited with code', code);
-          res.status(500).json({ error: 'Error restoring database' });
+          const totalDuration = Date.now() - restoreStartTime;
+          logger.error(`[${restoreId}] pg_restore failed`, {
+            exitCode: code,
+            totalDuration: `${totalDuration}ms`,
+            stderrSample: stderrData.slice(-500), // Last 500 chars of stderr
+          });
+
+          if (!res.headersSent) {
+            res.status(500).json({ error: 'Error restoring database' });
+          } else {
+            logger.error(
+              `[${restoreId}] Cannot send error response - headers already sent`
+            );
+          }
         }
+
+        logger.info(
+          `[${restoreId}] === DATABASE RESTORE COMPLETED (exit code: ${code}) ===`
+        );
+      });
+
+      // Log if the connection closes unexpectedly
+      req.on('close', () => {
+        const elapsed = Date.now() - restoreStartTime;
+        logger.warn(`[${restoreId}] Client connection closed`, {
+          elapsed: `${elapsed}ms`,
+          finished: req.complete,
+        });
+      });
+
+      res.on('finish', () => {
+        const elapsed = Date.now() - restoreStartTime;
+        logger.info(`[${restoreId}] Response finished event fired`, {
+          elapsed: `${elapsed}ms`,
+          statusCode: res.statusCode,
+        });
+      });
+
+      res.on('close', () => {
+        const elapsed = Date.now() - restoreStartTime;
+        logger.warn(`[${restoreId}] Response connection closed`, {
+          elapsed: `${elapsed}ms`,
+          finished: res.writableEnded,
+        });
       });
     }
   );
