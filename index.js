@@ -394,16 +394,10 @@ const helmetConfig = {
     policy: 'strict-origin-when-cross-origin',
   },
 
-  // Permissions Policy - disable unnecessary browser features
-  // Only include widely-supported, stable features to avoid console warnings
-  permissionsPolicy: {
-    camera: [],
-    microphone: [],
-    geolocation: [],
-    payment: [],
-    usb: [],
-    magnetometer: [],
-  },
+  // Disable Permissions Policy entirely to avoid experimental features
+  // Helmet 8.x includes browsing-topics, run-ad-auction, join-ad-interest-group by default
+  // These cause console warnings in browsers that don't support them
+  permissionsPolicy: false,
 
   // Cross-Origin policies
   crossOriginEmbedderPolicy: false, // Keep disabled for external resources
