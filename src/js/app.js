@@ -1256,10 +1256,14 @@ async function loadLists() {
       // Fix #7: Mark data as fresh from server to avoid redundant fetches
       listsDataFreshTimestamp = Date.now();
 
-      // Performance: Use shallow comparison instead of expensive JSON.stringify
-      const hasChanges = Object.keys(freshLists).some((listName) =>
-        hasListChanged(lists[listName], freshLists[listName])
-      );
+      // Check if lists have changed by comparing keys and basic structure
+      const hasChanges =
+        Object.keys(freshLists).length !== Object.keys(lists).length ||
+        Object.keys(freshLists).some(
+          (listName) =>
+            !lists[listName] ||
+            lists[listName].length !== freshLists[listName]?.length
+        );
 
       if (hasChanges || !loadedFromCache) {
         lists = freshLists;
