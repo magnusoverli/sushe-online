@@ -1271,7 +1271,12 @@ async function loadLists() {
         updateListNav();
 
         try {
-          localStorage.setItem(CACHE_KEY, JSON.stringify(lists));
+          // Strip images from cache to prevent quota errors
+          const listsForCache = {};
+          for (const listName in lists) {
+            listsForCache[listName] = stripImagesForCache(lists[listName]);
+          }
+          localStorage.setItem(CACHE_KEY, JSON.stringify(listsForCache));
           localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
         } catch (storageError) {
           console.warn('Failed to cache lists:', storageError);
@@ -1313,6 +1318,17 @@ function trySelectLastList() {
   }
 }
 
+// Helper function to strip cover images from data for caching
+function stripImagesForCache(albums) {
+  return albums.map((album) => {
+    const cached = { ...album };
+    // Remove large base64 images to save localStorage space
+    delete cached.cover_image;
+    delete cached.cover_image_format;
+    return cached;
+  });
+}
+
 // Save list to server
 async function saveList(name, data) {
   try {
@@ -1331,13 +1347,19 @@ async function saveList(name, data) {
     lists[name] = cleanedData;
 
     try {
-      localStorage.setItem('lists_cache', JSON.stringify(lists));
+      // Strip images from cache to prevent quota errors
+      // Images will be fetched from server when needed
+      const cacheData = stripImagesForCache(cleanedData);
+      const listsForCache = { ...lists };
+      listsForCache[name] = cacheData;
+
+      localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
       localStorage.setItem('lists_cache_timestamp', Date.now().toString());
 
       // Fix #4: Also update the individual list cache for faster next load
       localStorage.setItem(
         `lastSelectedListData_${name}`,
-        JSON.stringify(cleanedData)
+        JSON.stringify(cacheData)
       );
     } catch (storageError) {
       if (storageError.name === 'QuotaExceededError') {
@@ -1354,11 +1376,15 @@ async function saveList(name, data) {
         }
         // Retry save
         try {
-          localStorage.setItem('lists_cache', JSON.stringify(lists));
+          const cacheData = stripImagesForCache(cleanedData);
+          const listsForCache = { ...lists };
+          listsForCache[name] = cacheData;
+
+          localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
           localStorage.setItem('lists_cache_timestamp', Date.now().toString());
           localStorage.setItem(
             `lastSelectedListData_${name}`,
-            JSON.stringify(cleanedData)
+            JSON.stringify(cacheData)
           );
         } catch (retryError) {
           console.warn('Cache save failed after cleanup:', retryError);
@@ -1544,7 +1570,12 @@ function initializeContextMenu() {
         delete lists[currentContextList];
 
         try {
-          localStorage.setItem('lists_cache', JSON.stringify(lists));
+          // Strip images from cache
+          const listsForCache = {};
+          for (const listName in lists) {
+            listsForCache[listName] = stripImagesForCache(lists[listName]);
+          }
+          localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
           localStorage.setItem('lists_cache_timestamp', Date.now().toString());
         } catch (storageError) {
           console.warn('Failed to update cache after delete:', storageError);
@@ -2054,7 +2085,12 @@ function initializeRenameList() {
       delete lists[oldName];
 
       try {
-        localStorage.setItem('lists_cache', JSON.stringify(lists));
+        // Strip images from cache
+        const listsForCache = {};
+        for (const listName in lists) {
+          listsForCache[listName] = stripImagesForCache(lists[listName]);
+        }
+        localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
         localStorage.setItem('lists_cache_timestamp', Date.now().toString());
       } catch (storageError) {
         console.warn('Failed to update cache after rename:', storageError);
@@ -2202,9 +2238,11 @@ window.updateListNav = updateListNav;
 // Helper function to cache list data with quota handling
 function cacheListData(listName, data) {
   try {
+    // Strip images to save space
+    const cacheData = stripImagesForCache(data);
     localStorage.setItem(
       `lastSelectedListData_${listName}`,
-      JSON.stringify(data)
+      JSON.stringify(cacheData)
     );
   } catch (storageErr) {
     if (storageErr.name === 'QuotaExceededError') {
@@ -2217,9 +2255,10 @@ function cacheListData(listName, data) {
         }
       }
       try {
+        const cacheData = stripImagesForCache(data);
         localStorage.setItem(
           `lastSelectedListData_${listName}`,
-          JSON.stringify(data)
+          JSON.stringify(cacheData)
         );
       } catch (retryErr) {
         console.warn('Cache save failed after cleanup:', retryErr);
@@ -2248,26 +2287,24 @@ async function selectList(listName, skipFetch = false) {
       }
     }
 
-    // Display data immediately if available
+    // Display data immediately if available (cached data without images)
     if (lists[listName]) {
       displayAlbums(lists[listName]);
     }
 
-    // Only fetch if data is missing or explicitly requested (not skipped)
-    // /api/lists already fetches all album data, so we trust that
-    const hasListData = lists[listName] && Array.isArray(lists[listName]);
-
-    if (listName && !skipFetch && !hasListData) {
+    // Always fetch fresh data to get images (unless skipFetch is true)
+    // The cache is just for instant initial display, but we need server data for images
+    if (listName && !skipFetch) {
       try {
         const freshData = await apiCall(
           `/api/lists/${encodeURIComponent(listName)}`
         );
         lists[listName] = freshData;
 
-        // Cache the fresh data for next time
+        // Cache the fresh data for next time (without images to save space)
         cacheListData(listName, freshData);
 
-        // Display the fetched data
+        // Display the fetched data with images
         if (currentList === listName) {
           displayAlbums(freshData);
         }
