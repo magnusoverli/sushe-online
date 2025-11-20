@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sushe-online-v2';
+const CACHE_NAME = 'sushe-online-v4'; // Bumped to force update and clear old problematic SW
 const STATIC_ASSETS = ['/styles/output.css', '/manifest.json', '/og-image.png'];
 
 self.addEventListener('install', (event) => {
@@ -15,9 +15,11 @@ self.addEventListener('activate', (event) => {
     caches
       .keys()
       .then((cacheNames) => {
+        // Delete all old caches including the problematic API cache
         return Promise.all(
           cacheNames.map((cacheName) => {
             if (cacheName !== CACHE_NAME) {
+              console.log('SW: Deleting old cache:', cacheName);
               return caches.delete(cacheName);
             }
           })
@@ -44,10 +46,17 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const url = new URL(event.request.url);
+  
+  // Skip ALL API routes - never cache API responses
+  if (url.pathname.startsWith('/api/')) {
+    console.log('SW: Skipping API route:', url.pathname);
+    return;
+  }
+
   console.log('SW: Handling GET request:', event.request.url);
 
   // Don't cache pages with forms or dynamic content
-  const url = new URL(event.request.url);
   if (
     url.pathname === '/login' ||
     url.pathname === '/register' ||
