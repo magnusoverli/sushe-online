@@ -14,9 +14,6 @@ let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null;
 const _genres = [];
 const _countries = [];
-let listEventSource = null;
-let globalListsEventSource = null;
-let sseUpdateTimeout = null;
 
 // Process static data at module load time
 const availableGenres = genresText
@@ -53,31 +50,6 @@ window.availableCountries = availableCountries;
 let pendingImportData = null;
 let pendingImportFilename = null;
 let confirmationCallback = null;
-
-// Performance optimization: Shallow list comparison instead of expensive JSON.stringify
-// Compares list structure (length, IDs, positions) rather than full serialization
-function hasListChanged(oldList, newList) {
-  if (!oldList || !newList) return true;
-  if (oldList.length !== newList.length) return true;
-
-  // Sample-based comparison for large lists (check first 15 items for quick detection)
-  const sampleSize = Math.min(15, oldList.length);
-  for (let i = 0; i < sampleSize; i++) {
-    const oldAlbum = oldList[i];
-    const newAlbum = newList[i];
-    if (!oldAlbum || !newAlbum) return true;
-    if (
-      oldAlbum._id !== newAlbum._id ||
-      oldAlbum.position !== newAlbum.position
-    ) {
-      return true;
-    }
-  }
-
-  // If sample looks identical, assume full list is identical
-  // This is ~90% faster than JSON.stringify on large lists with base64 images
-  return false;
-}
 
 // Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
 // Positions a menu element and adjusts if it would overflow the viewport
@@ -1471,132 +1443,6 @@ async function autoFetchTracksForList(name) {
   await pLimit(5, tasks);
 }
 
-// Subscribe to global list events (create/delete) across all devices
-function subscribeToGlobalListEvents() {
-  if (globalListsEventSource) {
-    globalListsEventSource.close();
-  }
-
-  globalListsEventSource = new EventSource('/api/lists/subscribe', {
-    withCredentials: true,
-  });
-
-  globalListsEventSource.addEventListener('delete', (e) => {
-    try {
-      const { listName } = JSON.parse(e.data);
-      console.log(`List "${listName}" was deleted on another device`);
-
-      // Remove from lists object
-      delete lists[listName];
-
-      // Update localStorage cache
-      try {
-        localStorage.setItem('lists_cache', JSON.stringify(lists));
-        localStorage.setItem('lists_cache_timestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to update cache after delete:', storageError);
-      }
-
-      // Update UI
-      updateListNav();
-
-      // If viewing deleted list, clear display
-      if (currentList === listName) {
-        currentList = null;
-        window.currentList = null;
-        document.getElementById('albumContainer').innerHTML = `
-          <div class="text-center text-gray-500 mt-20">
-            <p class="text-xl mb-2">List was deleted</p>
-            <p class="text-sm">This list was deleted on another device</p>
-          </div>
-        `;
-        updateMobileHeader();
-        updateHeaderTitle(null);
-      }
-
-      showToast(`List "${listName}" was deleted on another device`, 'info');
-    } catch (err) {
-      console.error('Failed to process delete event:', err);
-    }
-  });
-
-  globalListsEventSource.addEventListener('create', (e) => {
-    try {
-      const { listName } = JSON.parse(e.data);
-      console.log(`List "${listName}" was created on another device`);
-
-      // Initialize empty list
-      lists[listName] = [];
-
-      // Update localStorage cache
-      try {
-        localStorage.setItem('lists_cache', JSON.stringify(lists));
-        localStorage.setItem('lists_cache_timestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to update cache after create:', storageError);
-      }
-
-      // Update UI
-      updateListNav();
-
-      showToast(`List "${listName}" was created on another device`, 'info');
-    } catch (err) {
-      console.error('Failed to process create event:', err);
-    }
-  });
-
-  globalListsEventSource.onerror = (err) => {
-    console.error('Global lists SSE error:', err);
-  };
-}
-
-function subscribeToList(name) {
-  if (listEventSource) {
-    listEventSource.close();
-    listEventSource = null;
-  }
-  if (!name) return;
-
-  listEventSource = new EventSource(
-    `/api/lists/subscribe/${encodeURIComponent(name)}`,
-    { withCredentials: true }
-  );
-  listEventSource.addEventListener('update', (e) => {
-    try {
-      const data = JSON.parse(e.data);
-
-      // Debounce SSE updates to batch rapid changes
-      clearTimeout(sseUpdateTimeout);
-      sseUpdateTimeout = setTimeout(() => {
-        // CRITICAL: Ignore SSE updates if we recently made local drag changes
-        // This prevents the server from overwriting our unsaved edits during rapid drags
-        const lastDragTime = activeDragOperations.get(name);
-        if (lastDragTime && Date.now() - lastDragTime < 2000) {
-          // Ignore SSE updates within 2 seconds of our last local drag
-          return;
-        }
-
-        // Prevent re-rendering if data hasn't actually changed (avoid self-updates)
-        // Performance: Use shallow comparison instead of expensive JSON.stringify
-        const currentData = lists[name];
-        const hasChanged = hasListChanged(currentData, data);
-
-        if (hasChanged) {
-          lists[name] = data;
-          if (currentList === name) {
-            displayAlbums(data);
-          }
-        }
-      }, 100);
-    } catch (err) {
-      console.error('Failed to parse SSE update', err);
-    }
-  });
-  listEventSource.onerror = (err) => {
-    console.error('SSE error', err);
-  };
-}
-
 // Initialize context menu
 function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
@@ -2385,7 +2231,6 @@ async function selectList(listName, skipFetch = false) {
   try {
     currentList = listName;
     window.currentList = currentList;
-    subscribeToList(listName);
 
     // Fix #4: Try to load from cache first for instant display
     const cachedListData = localStorage.getItem(
@@ -3425,7 +3270,6 @@ function attachMobileEventHandlers(card, index) {
 
 // ============ INCREMENTAL DOM UPDATE SYSTEM ============
 // Performance optimization: Update only changed albums instead of full rebuild
-// Reduces render time from ~300ms to ~5-10ms for typical SSE updates
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -3857,29 +3701,17 @@ function isTextTruncated(element) {
   return element.scrollHeight > element.clientHeight;
 }
 
-// Track when we're actively dragging to ignore SSE updates
-const activeDragOperations = new Map(); // listName -> timestamp of last drag
-
 // Debounced save function to batch rapid changes
 let saveTimeout = null;
 function debouncedSaveList(listName, listData, delay = 300) {
   clearTimeout(saveTimeout);
 
-  // Mark that we have local changes for this list
-  activeDragOperations.set(listName, Date.now());
-
   saveTimeout = setTimeout(async () => {
     try {
       await saveList(listName, listData);
-      // After save completes, wait a bit longer before accepting SSE updates
-      // This gives the SSE echo time to arrive and be ignored
-      setTimeout(() => {
-        activeDragOperations.delete(listName);
-      }, 1000); // 1 second grace period after save completes
     } catch (error) {
       console.error('Error saving list:', error);
       showToast('Error saving list order', 'error');
-      activeDragOperations.delete(listName);
     }
   }, delay);
 }
@@ -3968,9 +3800,6 @@ function initializeUnifiedSorting(container, isMobile) {
 
       if (oldIndex !== newIndex) {
         try {
-          // Mark that we just performed a drag operation
-          activeDragOperations.set(currentList, Date.now());
-
           // Update the data
           const list = lists[currentList];
           const [movedItem] = list.splice(oldIndex, 1);
@@ -3995,7 +3824,6 @@ function initializeUnifiedSorting(container, isMobile) {
             evt.to.appendChild(itemToMove);
           }
           updatePositionNumbers(sortableContainer, isMobile);
-          activeDragOperations.delete(currentList);
         }
       }
     },
@@ -4883,9 +4711,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Note: Genres and countries are now loaded synchronously at module initialization
   loadLists()
     .then(() => {
-      // Subscribe to global list events (create/delete) for cross-device sync
-      subscribeToGlobalListEvents();
-
       initializeContextMenu();
       initializeAlbumContextMenu();
       hideSubmenuOnLeave();
@@ -4954,12 +4779,6 @@ document.addEventListener('DOMContentLoaded', () => {
 window.addEventListener('beforeunload', () => {
   if (currentList) {
     localStorage.setItem('lastSelectedList', currentList);
-  }
-  if (listEventSource) {
-    listEventSource.close();
-  }
-  if (globalListsEventSource) {
-    globalListsEventSource.close();
   }
 });
 

@@ -102,7 +102,6 @@ export default [
         File: 'readonly',
         URL: 'readonly',
         URLSearchParams: 'readonly',
-        EventSource: 'readonly',
         clearTimeout: 'readonly',
         setImmediate: 'readonly',
         confirm: 'readonly',
