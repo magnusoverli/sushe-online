@@ -1137,7 +1137,6 @@ export async function apiCall(url, options = {}) {
           }
 
           // Session expired or generic authentication failure - redirect to login
-          clearListsCache();
           window.location.href = '/login';
           return;
         } catch (parseError) {
@@ -1147,7 +1146,6 @@ export async function apiCall(url, options = {}) {
             throw parseError;
           }
           // JSON parse failed, likely session expired
-          clearListsCache();
           window.location.href = '/login';
           return;
         }
@@ -1200,103 +1198,25 @@ function attachLinkPreview(container, comment) {
     .catch(() => previewEl.remove());
 }
 
-// Clear lists cache (useful for logout or cache corruption)
-function clearListsCache() {
-  try {
-    localStorage.removeItem('lists_cache');
-    localStorage.removeItem('lists_cache_timestamp');
-  } catch (error) {
-    console.warn('Failed to clear lists cache:', error);
-  }
-}
-
 // Load lists from server
 async function loadLists() {
   try {
-    const CACHE_KEY = 'lists_cache';
-    const CACHE_TIMESTAMP_KEY = 'lists_cache_timestamp';
-    const CACHE_TTL = 0; // Always fetch fresh data, but use cache for instant display
+    // Fetch list metadata from server (server caches for 60s)
+    const fetchedLists = await apiCall('/api/lists');
 
-    let loadedFromCache = false;
+    lists = fetchedLists;
+    window.lists = lists;
 
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      const cacheTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+    // Update navigation with list names
+    updateListNav();
 
-      if (cached) {
-        const _cacheAge = Date.now() - (parseInt(cacheTimestamp) || 0);
-        lists = JSON.parse(cached);
-
-        if (typeof lists === 'object' && lists !== null) {
-          window.lists = lists;
-          updateListNav();
-          loadedFromCache = true;
-
-          // Try to select last list immediately after loading from cache
-          trySelectLastList();
-        } else {
-          localStorage.removeItem(CACHE_KEY);
-          localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-        }
-      }
-    } catch (cacheError) {
-      console.warn('Cache read failed, clearing:', cacheError);
-      localStorage.removeItem(CACHE_KEY);
-      localStorage.removeItem(CACHE_TIMESTAMP_KEY);
-    }
-
-    const shouldRefresh =
-      !loadedFromCache ||
-      Date.now() - (parseInt(localStorage.getItem(CACHE_TIMESTAMP_KEY)) || 0) >
-        CACHE_TTL;
-
-    if (shouldRefresh) {
-      const freshLists = await apiCall('/api/lists');
-
-      // Fix #7: Mark data as fresh from server to avoid redundant fetches
-      listsDataFreshTimestamp = Date.now();
-
-      // Check if lists have changed by comparing keys and basic structure
-      const hasChanges =
-        Object.keys(freshLists).length !== Object.keys(lists).length ||
-        Object.keys(freshLists).some(
-          (listName) =>
-            !lists[listName] ||
-            lists[listName].length !== freshLists[listName]?.length
-        );
-
-      if (hasChanges || !loadedFromCache) {
-        lists = freshLists;
-        window.lists = lists;
-        updateListNav();
-
-        try {
-          // Strip images from cache to prevent quota errors
-          const listsForCache = {};
-          for (const listName in lists) {
-            listsForCache[listName] = stripImagesForCache(lists[listName]);
-          }
-          localStorage.setItem(CACHE_KEY, JSON.stringify(listsForCache));
-          localStorage.setItem(CACHE_TIMESTAMP_KEY, Date.now().toString());
-        } catch (storageError) {
-          console.warn('Failed to cache lists:', storageError);
-        }
-
-        // If we didn't load from cache, try selecting now
-        if (!loadedFromCache) {
-          trySelectLastList();
-        }
-      }
-    }
+    // Try to restore last selected list
+    trySelectLastList();
   } catch (error) {
     console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
   }
 }
-
-// Fix #7: Track when list data is fresh to avoid redundant API calls
-let listsDataFreshTimestamp = 0;
-const DATA_FRESH_WINDOW = 5000; // Consider data fresh for 5 seconds
 
 function trySelectLastList() {
   // Only auto-select if no list is currently selected
@@ -1305,28 +1225,14 @@ function trySelectLastList() {
   const localLastList = localStorage.getItem('lastSelectedList');
   const serverLastList = window.lastSelectedList;
 
-  // Fix #7: Skip fetch if we just loaded fresh data from the server
-  const dataIsFresh = Date.now() - listsDataFreshTimestamp < DATA_FRESH_WINDOW;
-
   // Prioritize local storage if it exists and is valid
   if (localLastList && lists[localLastList]) {
-    selectList(localLastList, dataIsFresh);
+    selectList(localLastList);
   } else if (serverLastList && lists[serverLastList]) {
-    selectList(serverLastList, dataIsFresh);
+    selectList(serverLastList);
     // Also update localStorage with server value
     localStorage.setItem('lastSelectedList', serverLastList);
   }
-}
-
-// Helper function to strip cover images from data for caching
-function stripImagesForCache(albums) {
-  return albums.map((album) => {
-    const cached = { ...album };
-    // Remove large base64 images to save localStorage space
-    delete cached.cover_image;
-    delete cached.cover_image_format;
-    return cached;
-  });
 }
 
 // Save list to server
@@ -1344,55 +1250,8 @@ async function saveList(name, data) {
       body: JSON.stringify({ data: cleanedData }),
     });
 
+    // Update in-memory list data
     lists[name] = cleanedData;
-
-    try {
-      // Strip images from cache to prevent quota errors
-      // Images will be fetched from server when needed
-      const cacheData = stripImagesForCache(cleanedData);
-      const listsForCache = { ...lists };
-      listsForCache[name] = cacheData;
-
-      localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
-      localStorage.setItem('lists_cache_timestamp', Date.now().toString());
-
-      // Fix #4: Also update the individual list cache for faster next load
-      localStorage.setItem(
-        `lastSelectedListData_${name}`,
-        JSON.stringify(cacheData)
-      );
-    } catch (storageError) {
-      if (storageError.name === 'QuotaExceededError') {
-        // Clear old cache data and retry
-        console.warn('LocalStorage quota exceeded, clearing old cache...');
-        localStorage.removeItem('lists_cache');
-        localStorage.removeItem('lists_cache_timestamp');
-        // Clear old individual list caches
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && key.startsWith('lastSelectedListData_')) {
-            localStorage.removeItem(key);
-          }
-        }
-        // Retry save
-        try {
-          const cacheData = stripImagesForCache(cleanedData);
-          const listsForCache = { ...lists };
-          listsForCache[name] = cacheData;
-
-          localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
-          localStorage.setItem('lists_cache_timestamp', Date.now().toString());
-          localStorage.setItem(
-            `lastSelectedListData_${name}`,
-            JSON.stringify(cacheData)
-          );
-        } catch (retryError) {
-          console.warn('Cache save failed after cleanup:', retryError);
-        }
-      } else {
-        console.warn('Failed to update cache after save:', storageError);
-      }
-    }
   } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
@@ -1568,18 +1427,6 @@ function initializeContextMenu() {
         });
 
         delete lists[currentContextList];
-
-        try {
-          // Strip images from cache
-          const listsForCache = {};
-          for (const listName in lists) {
-            listsForCache[listName] = stripImagesForCache(lists[listName]);
-          }
-          localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
-          localStorage.setItem('lists_cache_timestamp', Date.now().toString());
-        } catch (storageError) {
-          console.warn('Failed to update cache after delete:', storageError);
-        }
 
         if (currentList === currentContextList) {
           currentList = null;
@@ -2084,18 +1931,6 @@ function initializeRenameList() {
 
       delete lists[oldName];
 
-      try {
-        // Strip images from cache
-        const listsForCache = {};
-        for (const listName in lists) {
-          listsForCache[listName] = stripImagesForCache(lists[listName]);
-        }
-        localStorage.setItem('lists_cache', JSON.stringify(listsForCache));
-        localStorage.setItem('lists_cache_timestamp', Date.now().toString());
-      } catch (storageError) {
-        console.warn('Failed to update cache after rename:', storageError);
-      }
-
       if (currentList === oldName) {
         currentList = newName;
         window.currentList = currentList;
@@ -2235,78 +2070,23 @@ window.updateListNav = updateListNav;
 
 // Removed complex initializeMobileSorting function - now using unified approach
 
-// Helper function to cache list data with quota handling
-function cacheListData(listName, data) {
-  try {
-    // Strip images to save space
-    const cacheData = stripImagesForCache(data);
-    localStorage.setItem(
-      `lastSelectedListData_${listName}`,
-      JSON.stringify(cacheData)
-    );
-  } catch (storageErr) {
-    if (storageErr.name === 'QuotaExceededError') {
-      console.warn('LocalStorage quota exceeded, clearing old cache...');
-      // Clear old caches and retry
-      for (let i = localStorage.length - 1; i >= 0; i--) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('lastSelectedListData_')) {
-          localStorage.removeItem(key);
-        }
-      }
-      try {
-        const cacheData = stripImagesForCache(data);
-        localStorage.setItem(
-          `lastSelectedListData_${listName}`,
-          JSON.stringify(cacheData)
-        );
-      } catch (retryErr) {
-        console.warn('Cache save failed after cleanup:', retryErr);
-      }
-    } else {
-      console.warn('Failed to cache list data:', storageErr);
-    }
-  }
-}
-
 // Select and display a list
-async function selectList(listName, skipFetch = false) {
+async function selectList(listName) {
   try {
     currentList = listName;
     window.currentList = currentList;
 
-    // Fix #4: Try to load from cache first for instant display
-    const cachedListData = localStorage.getItem(
-      `lastSelectedListData_${listName}`
-    );
-    if (cachedListData && !lists[listName]) {
+    // Fetch list data from server (server caches for 60s)
+    if (listName) {
       try {
-        lists[listName] = JSON.parse(cachedListData);
-      } catch (err) {
-        console.warn('Failed to parse cached list data:', err);
-      }
-    }
-
-    // Display data immediately if available (cached data without images)
-    if (lists[listName]) {
-      displayAlbums(lists[listName]);
-    }
-
-    // Always fetch fresh data to get images (unless skipFetch is true)
-    // The cache is just for instant initial display, but we need server data for images
-    if (listName && !skipFetch) {
-      try {
-        const freshData = await apiCall(
+        const data = await apiCall(
           `/api/lists/${encodeURIComponent(listName)}`
         );
-        lists[listName] = freshData;
+        lists[listName] = data;
 
-        // Cache the fresh data for next time (without images to save space)
-        cacheListData(listName, freshData);
-
-        // Display the fetched data with images
+        // Display the fetched data with images (single render)
         if (currentList === listName) {
-          displayAlbums(freshData);
+          displayAlbums(data);
         }
       } catch (err) {
         console.warn('Failed to fetch list data:', err);
@@ -4711,6 +4491,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Clean up old cache keys from previous implementation
+  try {
+    localStorage.removeItem('lists_cache');
+    localStorage.removeItem('lists_cache_timestamp');
+    // Clean up individual list caches
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('lastSelectedListData_')) {
+        localStorage.removeItem(key);
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to clean up old cache:', err);
+  }
+
   // Quickly populate sidebar using cached list names
   const cachedLists = localStorage.getItem('cachedListNames');
   if (cachedLists) {
@@ -4724,33 +4519,6 @@ document.addEventListener('DOMContentLoaded', () => {
       console.warn('Failed to parse cached list names:', err);
     }
   }
-
-  // Cross-tab synchronization for cache updates
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'lists_cache' && e.newValue) {
-      try {
-        const updatedLists = JSON.parse(e.newValue);
-        if (updatedLists && typeof updatedLists === 'object') {
-          lists = updatedLists;
-          window.lists = lists;
-          updateListNav();
-
-          if (currentList && !lists[currentList]) {
-            currentList = null;
-            window.currentList = null;
-            document.getElementById('albumContainer').innerHTML = `
-              <div class="text-center text-gray-500 mt-20">
-                <p class="text-xl mb-2">No list selected</p>
-                <p class="text-sm">Create or import a list to get started</p>
-              </div>
-            `;
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to sync lists from other tab:', err);
-      }
-    }
-  });
 
   // Load all required data and initialize features
   // Note: Genres and countries are now loaded synchronously at module initialization
