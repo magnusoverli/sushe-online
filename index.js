@@ -449,6 +449,16 @@ const corsOptions = {
       return callback(null, true);
     }
 
+    // Allow private network IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    // This allows direct IP access for admin operations bypassing Cloudflare
+    const ipMatch = origin.match(
+      // eslint-disable-next-line security/detect-unsafe-regex
+      /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/
+    );
+    if (ipMatch) {
+      return callback(null, true);
+    }
+
     // In production, you might want to whitelist specific domains
     // For now, allow all HTTPS origins for flexibility
     if (origin.startsWith('https://')) {
