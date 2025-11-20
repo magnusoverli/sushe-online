@@ -7,3 +7,25 @@ npm-debug.log
 README.md
 .DS_Store
 data/
+
+# Built assets (will be generated during Docker build)
+public/js/bundle.js
+public/js/chunks/
+public/styles/output.css
+
+# Test artifacts
+playwright-report/
+test-results/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+
+# Browser extension development
+browser-extension/test-install/
+browser-extension/*.zip
+
+# Development files
+docker-compose.dev.yml
+cookies.txt
