@@ -1976,7 +1976,38 @@ function openRenameModal(listName) {
   }, 100);
 }
 
-// Update sidebar navigation
+// Update only the active state in sidebar (optimized - no DOM rebuild)
+function updateListNavActiveState(activeListName) {
+  const nav = document.getElementById('listNav');
+  const mobileNav = document.getElementById('mobileListNav');
+
+  const updateActiveState = (container) => {
+    if (!container) return;
+
+    // Find all list buttons and update their classes
+    const buttons = container.querySelectorAll('button');
+    buttons.forEach((button) => {
+      const listName = button.querySelector('span')?.textContent;
+      if (!listName) return;
+
+      const isActive = listName === activeListName;
+
+      // Update classes efficiently
+      if (isActive) {
+        button.classList.add('bg-gray-800', 'text-red-500');
+        button.classList.remove('text-gray-300');
+      } else {
+        button.classList.remove('bg-gray-800', 'text-red-500');
+        button.classList.add('text-gray-300');
+      }
+    });
+  };
+
+  updateActiveState(nav);
+  updateActiveState(mobileNav);
+}
+
+// Update sidebar navigation (full rebuild - only called when list names change)
 function updateListNav() {
   const nav = document.getElementById('listNav');
   const mobileNav = document.getElementById('mobileListNav');
@@ -2063,7 +2094,30 @@ function updateListNav() {
   try {
     localStorage.setItem('cachedListNames', JSON.stringify(Object.keys(lists)));
   } catch (e) {
-    console.warn('Failed to cache list names', e);
+    // Handle quota exceeded error gracefully
+    if (e.name === 'QuotaExceededError') {
+      console.warn('LocalStorage quota exceeded, skipping cache');
+      // Attempt to free up space by removing old cache entries
+      try {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          // Remove old cache keys (from previous implementations)
+          if (
+            key &&
+            (key.startsWith('lists_cache') ||
+              key.startsWith('lastSelectedListData_'))
+          ) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+      } catch (cleanupErr) {
+        console.warn('Failed to cleanup localStorage:', cleanupErr);
+      }
+    } else {
+      console.warn('Failed to cache list names', e);
+    }
   }
 }
 window.updateListNav = updateListNav;
@@ -2076,6 +2130,34 @@ async function selectList(listName) {
     currentList = listName;
     window.currentList = currentList;
 
+    // === IMMEDIATE UI UPDATES (before network call) ===
+    // Update active state in sidebar immediately (optimized - no full rebuild)
+    updateListNavActiveState(listName);
+
+    // Update the header title immediately
+    updateHeaderTitle(listName);
+
+    // Show/hide FAB based on whether a list is selected (mobile only)
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = listName ? 'flex' : 'none';
+    }
+
+    // Save to localStorage immediately (synchronous)
+    if (listName) {
+      try {
+        localStorage.setItem('lastSelectedList', listName);
+      } catch (e) {
+        // Silently fail if localStorage is full - not critical
+        if (e.name === 'QuotaExceededError') {
+          console.warn(
+            'LocalStorage quota exceeded, skipping lastSelectedList save'
+          );
+        }
+      }
+    }
+
+    // === FETCH AND RENDER DATA ===
     // Fetch list data from server (server caches for 60s)
     if (listName) {
       try {
@@ -2094,26 +2176,10 @@ async function selectList(listName) {
       }
     }
 
-    // Save to localStorage immediately (synchronous)
-    if (listName) {
-      localStorage.setItem('lastSelectedList', listName);
-    }
-
-    // Update the header with current list name
+    // Update the header with current list name (after data loaded)
     updateMobileHeader();
 
-    // Update the active state in the list navigation
-    updateListNav();
-
-    // Update the header title
-    updateHeaderTitle(listName);
-
-    // Show/hide FAB based on whether a list is selected (mobile only)
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = listName ? 'flex' : 'none';
-    }
-
+    // === BACKGROUND TASKS (non-blocking) ===
     // Fix #1: Make track fetching non-blocking - run in background without await
     // This prevents blocking the UI for 4-10 seconds waiting for MusicBrainz API
     if (listName) {
@@ -2780,7 +2846,7 @@ function createDesktopAlbumRow(data, index) {
           <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
               alt="${data.albumName}" 
               class="album-cover rounded shadow-lg"
-              loading="lazy"
+              decoding="async"
               onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
           >
         `
@@ -2973,7 +3039,7 @@ function createMobileAlbumCard(data, index) {
               <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
                   alt="${data.albumName}"
                   class="w-20 h-20 rounded-lg object-cover shadow-md"
-                  loading="lazy">
+                  decoding="async">
             `
                 : `
               <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
@@ -3368,21 +3434,24 @@ function displayAlbums(albums) {
   // Ensures deterministic cleanup without waiting for garbage collection
   positionElementCache = new WeakMap();
 
-  container.innerHTML = '';
+  // Build new content completely before touching the DOM
+  // This prevents the staggered rendering issue where the first image appears before others
+  let albumContainer;
 
   if (!albums || albums.length === 0) {
-    container.innerHTML = `
-      <div class="text-center text-gray-500 mt-20 px-4">
-        <p class="text-xl mb-2">This list is empty</p>
-        <p class="text-sm">Click the + button to add albums${isMobile ? '' : ' or use the Add Album button'}</p>
-      </div>
+    // Create empty state message
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'text-center text-gray-500 mt-20 px-4';
+    emptyDiv.innerHTML = `
+      <p class="text-xl mb-2">This list is empty</p>
+      <p class="text-sm">Click the + button to add albums${isMobile ? '' : ' or use the Add Album button'}</p>
     `;
+    // Atomic replacement - single DOM operation prevents progressive rendering
+    container.replaceChildren(emptyDiv);
     return;
   }
 
   // Create container based on view type
-  let albumContainer;
-
   if (!isMobile) {
     // Desktop: Table layout with header
     albumContainer = document.createElement('div');
@@ -3409,11 +3478,14 @@ function displayAlbums(albums) {
     const rowsContainer = document.createElement('div');
     rowsContainer.className = 'album-rows-container relative';
 
-    // Create album rows
+    // Create album rows - use DocumentFragment for batch DOM operations
+    // This prevents progressive rendering and ensures all images appear simultaneously
+    const fragment = document.createDocumentFragment();
     albums.forEach((album, index) => {
       const row = createAlbumItem(album, index, false);
-      rowsContainer.appendChild(row);
+      fragment.appendChild(row);
     });
+    rowsContainer.appendChild(fragment);
 
     albumContainer.appendChild(rowsContainer);
   } else {
@@ -3421,14 +3493,19 @@ function displayAlbums(albums) {
     albumContainer = document.createElement('div');
     albumContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
 
-    // Create album cards
+    // Create album cards - use DocumentFragment for batch DOM operations
+    // This prevents progressive rendering and ensures all images appear simultaneously
+    const fragment = document.createDocumentFragment();
     albums.forEach((album, index) => {
       const card = createAlbumItem(album, index, true);
-      albumContainer.appendChild(card);
+      fragment.appendChild(card);
     });
+    albumContainer.appendChild(fragment);
   }
 
-  container.appendChild(albumContainer);
+  // Atomic replacement - single DOM operation prevents progressive rendering
+  // This ensures all images decode and render simultaneously
+  container.replaceChildren(albumContainer);
 
   // Pre-populate position element cache for better performance
   prePopulatePositionCache(albumContainer, isMobile);
@@ -4591,7 +4668,12 @@ document.addEventListener('DOMContentLoaded', () => {
 // Add this right after the DOMContentLoaded event listener
 window.addEventListener('beforeunload', () => {
   if (currentList) {
-    localStorage.setItem('lastSelectedList', currentList);
+    try {
+      localStorage.setItem('lastSelectedList', currentList);
+    } catch (e) {
+      // Silently fail - not critical during page unload
+      console.warn('Failed to save last selected list on unload:', e.name);
+    }
   }
 });
 

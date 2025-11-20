@@ -166,9 +166,11 @@ const cacheConfigs = {
     },
   }),
 
-  // User-specific data with shorter TTL
+  // User-specific data with moderate TTL
+  // Cache is invalidated on any list modification (see routes/api.js POST /api/lists/:name)
+  // so longer TTL is safe and improves perceived performance
   userSpecific: createCacheMiddleware({
-    ttl: 60000, // 1 minute
+    ttl: 300000, // 5 minutes - safe because cache is invalidated on writes
     shouldCache: (req) => {
       return req.user && req.path.includes('/api/lists');
     },

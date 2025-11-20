@@ -316,6 +316,66 @@ class PgDatastore {
     })();
     return this._callbackify(promise, cb);
   }
+
+  /**
+   * Find list items with album data in a single JOIN query
+   * Optimized for performance - reduces 3 queries to 1
+   * @param {string} listId - The list ID to fetch items for
+   * @returns {Promise<Array>} Array of list items with merged album data
+   */
+  async findWithAlbumData(listId) {
+    if (this.table !== 'list_items') {
+      throw new Error('findWithAlbumData only available for list_items table');
+    }
+
+    // Use prepared statement with consistent naming
+    const queryName = 'findListItemsWithAlbums';
+    const queryText = `
+      SELECT 
+        li._id,
+        li.list_id,
+        li.position,
+        li.track_pick,
+        li.comments,
+        li.album_id,
+        -- Prefer list_items data, fallback to albums table using COALESCE
+        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
+        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        COALESCE(NULLIF(li.release_date, ''), a.release_date) as release_date,
+        COALESCE(NULLIF(li.country, ''), a.country) as country,
+        COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
+        COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
+        COALESCE(li.tracks, a.tracks) as tracks,
+        COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
+        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format
+      FROM list_items li
+      LEFT JOIN albums a ON li.album_id = a.album_id
+      WHERE li.list_id = $1
+      ORDER BY li.position
+    `;
+
+    const res = await this._preparedQuery(queryName, queryText, [listId]);
+
+    // Map result rows to expected format
+    return res.rows.map((row) => ({
+      _id: row._id,
+      listId: row.list_id,
+      position: row.position,
+      artist: row.artist || '',
+      album: row.album || '',
+      albumId: row.album_id || '',
+      releaseDate: row.release_date || '',
+      country: row.country || '',
+      genre1: row.genre_1 || '',
+      genre2: row.genre_2 || '',
+      trackPick: row.track_pick || '',
+      comments: row.comments || '',
+      tracks: row.tracks || null,
+      coverImage: row.cover_image || '',
+      coverImageFormat: row.cover_image_format || '',
+    }));
+  }
+
   // Placeholder for API compatibility
   ensureIndex() {}
 }
