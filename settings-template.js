@@ -1230,16 +1230,59 @@ const settingsTemplate = (req, options) => {
         document.getElementById('restoreProgress').classList.remove('hidden');
         document.getElementById('closeRestoreModal').disabled = true;
         
+        // Helper function to wait for server restart
+        const waitForServerRestart = () => {
+          updateProgressStep('step-restart', 'active');
+          updateProgress(80, 'Server is restarting...');
+          
+          setTimeout(() => {
+            updateProgress(85, 'Waiting for server to come back online...');
+            
+            const checkServer = setInterval(async () => {
+              try {
+                const ping = await fetch('/health', { method: 'HEAD' });
+                if (ping.ok) {
+                  clearInterval(checkServer);
+                  updateProgress(100, 'Server is back online! Redirecting...');
+                  updateProgressStep('step-restart', 'complete');
+                  
+                  // Clear all localStorage cache to ensure fresh data after restore
+                  try {
+                    localStorage.removeItem('lists_cache');
+                    localStorage.removeItem('lists_cache_timestamp');
+                    localStorage.removeItem('lastSelectedList');
+                    localStorage.clear(); // Clear everything to be safe
+                  } catch (e) {
+                    console.warn('Failed to clear localStorage:', e);
+                  }
+                  
+                  setTimeout(() => {
+                    window.location.href = '/login';
+                  }, 1000);
+                }
+              } catch (e) {
+                // Server still restarting, keep polling
+              }
+            }, 1000);
+          }, 2000);
+        };
+        
         try {
           // Step 1: Upload (0-25%)
           updateProgressStep('step-upload', 'active');
           updateProgress(10, 'Uploading backup file to server...');
           
-          const response = await fetch('/admin/restore', {
-            method: 'POST',
-            body: formData,
-            credentials: 'same-origin'
-          });
+          let response;
+          try {
+            response = await fetch('/admin/restore', {
+              method: 'POST',
+              body: formData,
+              credentials: 'same-origin'
+            });
+          } catch (fetchError) {
+            // If fetch fails completely, it might be a network error
+            throw new Error('Failed to upload backup file: ' + fetchError.message);
+          }
           
           updateProgress(25, 'Upload complete');
           updateProgressStep('step-upload', 'complete');
@@ -1248,71 +1291,64 @@ const settingsTemplate = (req, options) => {
           updateProgressStep('step-validate', 'active');
           updateProgress(35, 'Validating backup file format...');
           
-          const data = await response.json();
+          // Try to parse JSON, but handle the case where server restarts during parsing
+          let data;
+          try {
+            data = await response.json();
+          } catch (jsonError) {
+            // If JSON parsing fails AND response status was OK, server likely restarted
+            // This means restore succeeded (server only restarts on success)
+            if (response.ok) {
+              console.log('Server restarted during response - restore likely succeeded');
+              updateProgress(50, 'Backup validated successfully');
+              updateProgressStep('step-validate', 'complete');
+              
+              // Step 3: Restore
+              updateProgressStep('step-restore', 'active');
+              updateProgress(60, 'Restoring database from backup...');
+              updateProgress(75, 'Database restored successfully');
+              updateProgressStep('step-restore', 'complete');
+              
+              // Step 4: Wait for restart
+              waitForServerRestart();
+              return;
+            } else {
+              // Actual error - response was not OK
+              throw new Error('Failed to parse server response');
+            }
+          }
           
+          // Check if restore failed (response was parsed successfully)
           if (!data.success) {
             updateProgressStep('step-validate', 'error');
             updateProgress(50, data.error || 'Validation failed');
             setTimeout(() => {
               closeRestoreModal();
+              document.getElementById('closeRestoreModal').disabled = false;
             }, 3000);
             return;
           }
           
+          // Success response received
           updateProgress(50, 'Backup validated successfully');
           updateProgressStep('step-validate', 'complete');
           
           // Step 3: Restore (50-75%)
           updateProgressStep('step-restore', 'active');
           updateProgress(60, 'Restoring database from backup...');
+          updateProgress(75, 'Database restored successfully');
+          updateProgressStep('step-restore', 'complete');
           
-          setTimeout(() => {
-            updateProgress(75, 'Database restored successfully');
-            updateProgressStep('step-restore', 'complete');
-            
-            // Step 4: Restart (75-100%)
-            updateProgressStep('step-restart', 'active');
-            updateProgress(80, 'Server is restarting...');
-            
-            // Wait for server restart, then poll for availability
-            setTimeout(() => {
-              updateProgress(85, 'Waiting for server to come back online...');
-              
-              const checkServer = setInterval(async () => {
-                try {
-                  const ping = await fetch('/health', { method: 'HEAD' });
-                  if (ping.ok) {
-                    clearInterval(checkServer);
-                    updateProgress(100, 'Server is back online! Redirecting...');
-                    updateProgressStep('step-restart', 'complete');
-                    
-                    // Clear all localStorage cache to ensure fresh data after restore
-                    try {
-                      localStorage.removeItem('lists_cache');
-                      localStorage.removeItem('lists_cache_timestamp');
-                      localStorage.removeItem('lastSelectedList');
-                      localStorage.clear(); // Clear everything to be safe
-                    } catch (e) {
-                      console.warn('Failed to clear localStorage:', e);
-                    }
-                    
-                    setTimeout(() => {
-                      window.location.href = '/login';
-                    }, 1000);
-                  }
-                } catch (e) {
-                  // Server still restarting
-                }
-              }, 1000);
-            }, 3000);
-          }, 1500);
+          // Step 4: Wait for server restart
+          waitForServerRestart();
           
         } catch (error) {
-          console.error('Error:', error);
+          console.error('Restore error:', error);
           updateProgressStep('step-upload', 'error');
           updateProgress(0, 'Error: ' + error.message);
           setTimeout(() => {
             closeRestoreModal();
+            document.getElementById('closeRestoreModal').disabled = false;
           }, 3000);
         }
       });
