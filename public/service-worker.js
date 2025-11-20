@@ -47,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   const url = new URL(event.request.url);
-  
+
   // Skip ALL API routes - never cache API responses
   if (url.pathname.startsWith('/api/')) {
     console.log('SW: Skipping API route:', url.pathname);
