@@ -395,6 +395,7 @@ const helmetConfig = {
   },
 
   // Permissions Policy - disable unnecessary browser features
+  // Only include widely-supported, stable features to avoid console warnings
   permissionsPolicy: {
     camera: [],
     microphone: [],
@@ -402,8 +403,6 @@ const helmetConfig = {
     payment: [],
     usb: [],
     magnetometer: [],
-    'browsing-topics': [],
-    'interest-cohort': [],
   },
 
   // Cross-Origin policies
