@@ -2248,28 +2248,32 @@ async function selectList(listName, skipFetch = false) {
       }
     }
 
-    // Display cached data immediately (if available)
+    // Display data immediately if available
     if (lists[listName]) {
       displayAlbums(lists[listName]);
     }
 
-    // Fetch fresh data in background (unless explicitly skipped)
-    if (listName && !skipFetch) {
+    // Only fetch if data is missing or explicitly requested (not skipped)
+    // /api/lists already fetches all album data, so we trust that
+    const hasListData = lists[listName] && Array.isArray(lists[listName]);
+
+    if (listName && !skipFetch && !hasListData) {
       try {
         const freshData = await apiCall(
           `/api/lists/${encodeURIComponent(listName)}`
         );
         lists[listName] = freshData;
 
-        // Fix #4: Cache the fresh data for next time
+        // Cache the fresh data for next time
         cacheListData(listName, freshData);
 
-        // Re-display with fresh data (only if different)
+        // Display the fetched data
         if (currentList === listName) {
           displayAlbums(freshData);
         }
       } catch (err) {
-        console.warn('Failed to fetch latest list data:', err);
+        console.warn('Failed to fetch list data:', err);
+        showToast('Error loading list data', 'error');
       }
     }
 
