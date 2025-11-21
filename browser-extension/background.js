@@ -1,6 +1,10 @@
 // Background service worker for SuShe Online extension
 // Handles context menu creation and API communication
 
+// Debug mode - set to false for production
+const DEBUG = false;
+const log = DEBUG ? console.log.bind(console) : () => {};
+
 let SUSHE_API_BASE = 'http://localhost:3000'; // Default, will be loaded from storage
 let AUTH_TOKEN = null; // Authentication token
 let userLists = [];
@@ -18,25 +22,25 @@ async function loadSettings() {
 
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
-    console.log('Loaded API URL from settings:', SUSHE_API_BASE);
+    log('Loaded API URL from settings:', SUSHE_API_BASE);
   } else {
-    console.log('Using default API URL:', SUSHE_API_BASE);
+    log('Using default API URL:', SUSHE_API_BASE);
   }
 
   if (settings.authToken) {
     AUTH_TOKEN = settings.authToken;
-    console.log('Loaded auth token from storage');
+    log('Loaded auth token from storage');
   } else {
-    console.log('No auth token found');
+    log('No auth token found');
   }
 
   // Load cached lists if available
   if (settings.userLists && Array.isArray(settings.userLists)) {
     userLists = settings.userLists;
     listsLastFetched = settings.listsLastFetched || 0;
-    console.log('Loaded cached lists from storage:', userLists.length, 'lists');
+    log('Loaded cached lists from storage:', userLists.length, 'lists');
   } else {
-    console.log('No cached lists found in storage');
+    log('No cached lists found in storage');
   }
 }
 
@@ -54,6 +58,27 @@ function getAuthHeaders() {
   return headers;
 }
 
+// Fetch with timeout wrapper to prevent hung requests
+async function fetchWithTimeout(url, options = {}, timeout = 30000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeout / 1000} seconds`);
+    }
+    throw error;
+  }
+}
+
 // Ensure critical state is loaded from storage (handles service worker restarts)
 async function ensureStateLoaded() {
   if (
@@ -61,7 +86,7 @@ async function ensureStateLoaded() {
     userLists.length === 0 ||
     SUSHE_API_BASE === 'http://localhost:3000'
   ) {
-    console.log('State potentially lost, reloading from storage...');
+    log('State potentially lost, reloading from storage...');
     const settings = await chrome.storage.local.get([
       'apiUrl',
       'authToken',
@@ -81,7 +106,7 @@ async function ensureStateLoaded() {
       userLists = settings.userLists;
     }
 
-    console.log('State reloaded:', {
+    log('State reloaded:', {
       apiUrl: SUSHE_API_BASE,
       hasToken: !!AUTH_TOKEN,
       listsCount: userLists.length,
@@ -91,7 +116,7 @@ async function ensureStateLoaded() {
 
 // Create main context menu on extension install
 chrome.runtime.onInstalled.addListener(async (details) => {
-  console.log('SuShe Online extension installed:', details.reason);
+  log('SuShe Online extension installed:', details.reason);
 
   // Show welcome notification on first install
   if (details.reason === 'install') {
@@ -116,7 +141,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     const previousVersion = details.previousVersion;
     const currentVersion = chrome.runtime.getManifest().version;
 
-    console.log(`Updated from ${previousVersion} to ${currentVersion}`);
+    log(`Updated from ${previousVersion} to ${currentVersion}`);
   }
 
   await loadSettings();
@@ -137,7 +162,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
       const hasToken = !!changes.authToken.newValue;
 
       AUTH_TOKEN = changes.authToken?.newValue || null;
-      console.log('Auth token updated:', AUTH_TOKEN ? 'present' : 'removed');
+      log('Auth token updated:', AUTH_TOKEN ? 'present' : 'removed');
 
       // Invalidate cache when auth changes
       listsLastFetched = 0;
@@ -158,7 +183,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 
     if (changes.apiUrl) {
       SUSHE_API_BASE = changes.apiUrl?.newValue || 'http://localhost:3000';
-      console.log('API URL updated:', SUSHE_API_BASE);
+      log('API URL updated:', SUSHE_API_BASE);
 
       // Invalidate cache when API URL changes
       userLists = [];
@@ -291,9 +316,9 @@ async function fetchUserLists() {
     return;
   }
 
-  console.log('Fetching lists from API...');
-  console.log('API Base:', SUSHE_API_BASE);
-  console.log('Auth Token present:', !!AUTH_TOKEN);
+  log('Fetching lists from API...');
+  log('API Base:', SUSHE_API_BASE);
+  log('Auth Token present:', !!AUTH_TOKEN);
 
   // If there's no auth token, check if we've ever had one
   if (!AUTH_TOKEN) {
@@ -311,14 +336,16 @@ async function fetchUserLists() {
   }
 
   try {
-    const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithTimeout(
+      `${SUSHE_API_BASE}/api/lists`,
+      { headers: getAuthHeaders() },
+      10000 // 10 second timeout
+    );
 
-    console.log('API response status:', response.status);
+    log('API response status:', response.status);
 
     if (response.status === 401) {
-      console.log('Not authenticated (401), showing login menu');
+      log('Not authenticated (401), showing login menu');
       userLists = [];
       listsLastFetched = 0;
       showErrorMenu('Not logged in');
@@ -368,7 +395,7 @@ async function fetchUserLists() {
 
 // Update context menu with user's lists
 async function updateContextMenuWithLists() {
-  console.log('Updating context menu with lists:', userLists);
+  log('Updating context menu with lists:', userLists);
 
   try {
     // Remove ALL menus and rebuild from scratch to ensure clean state
@@ -702,6 +729,15 @@ async function addAlbumToList(info, tab, listName) {
   console.log('Using API base:', SUSHE_API_BASE);
   console.log('Auth token present:', !!AUTH_TOKEN);
 
+  // Verify token is present before starting
+  if (!AUTH_TOKEN) {
+    showNotification(
+      '✗ Not logged in',
+      'Please click the extension icon and login to SuShe Online.'
+    );
+    return;
+  }
+
   try {
     // Send message to content script to extract album data
     console.log('Sending message to content script...');
@@ -771,11 +807,10 @@ async function addAlbumToList(info, tab, listName) {
     const searchQuery = `${albumData.artist} ${albumData.album}`;
     const mbEndpoint = `release-group/?query=${encodeURIComponent(searchQuery)}&type=album|ep&fmt=json&limit=5`;
 
-    const mbResponse = await fetch(
+    const mbResponse = await fetchWithTimeout(
       `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,
-      {
-        headers: getAuthHeaders(),
-      }
+      { headers: getAuthHeaders() },
+      15000 // 15 second timeout for MusicBrainz
     );
 
     if (!mbResponse.ok) {
@@ -801,11 +836,10 @@ async function addAlbumToList(info, tab, listName) {
     const deezerQuery = `${albumData.artist} ${albumData.album}`
       .replace(/[^\w\s]/g, ' ')
       .trim();
-    const deezerResponse = await fetch(
+    const deezerResponse = await fetchWithTimeout(
       `${SUSHE_API_BASE}/api/proxy/deezer?q=${encodeURIComponent(deezerQuery)}`,
-      {
-        headers: getAuthHeaders(),
-      }
+      { headers: getAuthHeaders() },
+      20000 // 20 second timeout for Deezer
     );
 
     let coverImageData = '';
@@ -820,9 +854,11 @@ async function addAlbumToList(info, tab, listName) {
           console.log('Found cover art, processing through proxy...');
           try {
             const proxyUrl = `${SUSHE_API_BASE}/api/proxy/image?url=${encodeURIComponent(coverUrl)}`;
-            const imageResponse = await fetch(proxyUrl, {
-              headers: getAuthHeaders(),
-            });
+            const imageResponse = await fetchWithTimeout(
+              proxyUrl,
+              { headers: getAuthHeaders() },
+              30000 // 30 second timeout for image proxy
+            );
 
             if (imageResponse.ok) {
               const imageData = await imageResponse.json();
@@ -845,11 +881,10 @@ async function addAlbumToList(info, tab, listName) {
     console.log(
       `Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`
     );
-    const listResponse = await fetch(
+    const listResponse = await fetchWithTimeout(
       `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
-      {
-        headers: getAuthHeaders(),
-      }
+      { headers: getAuthHeaders() },
+      15000 // 15 second timeout
     );
 
     console.log('Fetch response status:', listResponse.status);
@@ -859,11 +894,10 @@ async function addAlbumToList(info, tab, listName) {
       currentList = await listResponse.json();
       console.log('Current list has', currentList.length, 'albums');
     } else if (listResponse.status === 401) {
-      // Clear auth token since it's invalid
-      AUTH_TOKEN = null;
-      await chrome.storage.local.remove('authToken');
+      // Don't clear token immediately - prevents race conditions with concurrent operations
+      // Let user manually re-authenticate via extension popup
       throw new Error(
-        'Your session has expired. Please click the extension icon and login again.'
+        'Authentication failed. Please click the extension icon and login again.'
       );
     } else if (listResponse.status === 404) {
       console.log('List not found, will create new one');
@@ -895,11 +929,10 @@ async function addAlbumToList(info, tab, listName) {
       const artistId = releaseGroup['artist-credit'][0].artist.id;
       try {
         const artistEndpoint = `artist/${artistId}?fmt=json`;
-        const artistResponse = await fetch(
+        const artistResponse = await fetchWithTimeout(
           `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(artistEndpoint)}&priority=normal`,
-          {
-            headers: getAuthHeaders(),
-          }
+          { headers: getAuthHeaders() },
+          15000 // 15 second timeout
         );
 
         if (artistResponse.ok) {
@@ -938,13 +971,14 @@ async function addAlbumToList(info, tab, listName) {
 
     // Save updated list
     console.log('Saving list with', currentList.length, 'albums');
-    const saveResponse = await fetch(
+    const saveResponse = await fetchWithTimeout(
       `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
       {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ data: currentList }),
-      }
+      },
+      60000 // 60 second timeout for saves (large lists)
     );
 
     console.log('Save response status:', saveResponse.status);
@@ -1014,8 +1048,10 @@ async function resolveCountryCode(countryCode) {
 
   try {
     // Use RestCountries API to get country info
-    const response = await fetch(
-      `https://restcountries.com/v3.1/alpha/${countryCode}`
+    const response = await fetchWithTimeout(
+      `https://restcountries.com/v3.1/alpha/${countryCode}`,
+      {},
+      10000 // 10 second timeout
     );
 
     if (!response.ok) {

@@ -1,5 +1,29 @@
 // Options page script for SuShe Online extension
 
+// Store interval reference for cleanup
+let authCheckInterval = null;
+
+// Fetch with timeout wrapper
+async function fetchWithTimeout(url, options = {}, timeout = 30000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeout / 1000} seconds`);
+    }
+    throw error;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   // Load saved settings on page load
   const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
@@ -7,7 +31,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const apiUrl = settings.apiUrl || 'http://localhost:3000';
   document.getElementById('apiUrl').value = apiUrl;
 
-  // Update authentication status
+  // Update authentication status (single API call)
   await updateAuthStatus(apiUrl, settings.authToken);
 
   // Handle form submission
@@ -63,12 +87,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       // Try to fetch from the API
-      const response = await fetch(`${apiUrl}/api/lists`, {
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
+      const response = await fetchWithTimeout(
+        `${apiUrl}/api/lists`,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
         },
-      });
+        10000 // 10 second timeout
+      );
 
       if (response.ok) {
         const data = await response.json();
@@ -117,12 +144,16 @@ async function updateAuthStatus(apiUrl, authToken) {
 
   // Verify token is valid by checking with API
   try {
-    const response = await fetch(`${apiUrl}/api/lists`, {
-      headers: {
-        Authorization: `Bearer ${authToken}`,
-        Accept: 'application/json',
+    const response = await fetchWithTimeout(
+      `${apiUrl}/api/lists`,
+      {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          Accept: 'application/json',
+        },
       },
-    });
+      10000 // 10 second timeout
+    );
 
     if (response.ok) {
       const data = await response.json();
@@ -160,18 +191,30 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
     'success'
   );
 
+  // Clear any existing interval
+  if (authCheckInterval) {
+    clearInterval(authCheckInterval);
+    authCheckInterval = null;
+  }
+
   // Poll for auth token changes
-  const checkAuth = setInterval(async () => {
+  authCheckInterval = setInterval(async () => {
     const settings = await chrome.storage.local.get(['authToken']);
     if (settings.authToken) {
-      clearInterval(checkAuth);
+      clearInterval(authCheckInterval);
+      authCheckInterval = null;
       await updateAuthStatus(apiUrl, settings.authToken);
       showStatus('✓ Successfully logged in!', 'success');
     }
   }, 1000);
 
   // Stop checking after 5 minutes
-  setTimeout(() => clearInterval(checkAuth), 300000);
+  setTimeout(() => {
+    if (authCheckInterval) {
+      clearInterval(authCheckInterval);
+      authCheckInterval = null;
+    }
+  }, 300000);
 });
 
 // Logout button handler
@@ -189,5 +232,13 @@ document.getElementById('logoutBtn').addEventListener('click', async () => {
 
     // Notify background script to refresh
     chrome.runtime.sendMessage({ action: 'refreshLists' });
+  }
+});
+
+// Cleanup on page unload to prevent memory leaks
+window.addEventListener('beforeunload', () => {
+  if (authCheckInterval) {
+    clearInterval(authCheckInterval);
+    authCheckInterval = null;
   }
 });

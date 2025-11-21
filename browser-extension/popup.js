@@ -44,6 +44,27 @@ function getAuthHeaders() {
   return headers;
 }
 
+// Fetch with timeout wrapper
+async function fetchWithTimeout(url, options = {}, timeout = 30000) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeout / 1000} seconds`);
+    }
+    throw error;
+  }
+}
+
 async function loadLists() {
   const statusEl = document.getElementById('status');
   const listsEl = document.getElementById('lists');
@@ -64,9 +85,11 @@ async function loadLists() {
 
   try {
     // Use metadata API for faster loading (no album data needed)
-    const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetchWithTimeout(
+      `${SUSHE_API_BASE}/api/lists`,
+      { headers: getAuthHeaders() },
+      10000 // 10 second timeout
+    );
 
     if (!response.ok) {
       if (response.status === 401) {
