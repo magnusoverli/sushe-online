@@ -83,16 +83,26 @@ async function fetchWithTimeout(url, options = {}, timeout = 30000) {
 async function ensureStateLoaded() {
   // Always reload from storage to ensure we're using the user-configured URL
   // Service workers can restart at any time, resetting in-memory state
-  log('Ensuring state is loaded from storage...');
+  console.log('[ensureStateLoaded] Called - current SUSHE_API_BASE:', SUSHE_API_BASE);
+  
   const settings = await chrome.storage.local.get([
     'apiUrl',
     'authToken',
     'userLists',
   ]);
 
+  console.log('[ensureStateLoaded] Storage contents:', {
+    apiUrl: settings.apiUrl,
+    hasToken: !!settings.authToken,
+    listsCount: settings.userLists?.length || 0,
+  });
+
   // Always use the stored API URL if available - this is the user's configured instance
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
+    console.log('[ensureStateLoaded] Updated SUSHE_API_BASE to:', SUSHE_API_BASE);
+  } else {
+    console.warn('[ensureStateLoaded] NO apiUrl in storage! Using default:', SUSHE_API_BASE);
   }
 
   // Load auth token if not already in memory
@@ -105,7 +115,7 @@ async function ensureStateLoaded() {
     userLists = settings.userLists;
   }
 
-  log('State loaded:', {
+  console.log('[ensureStateLoaded] Final state:', {
     apiUrl: SUSHE_API_BASE,
     hasToken: !!AUTH_TOKEN,
     listsCount: userLists.length,
