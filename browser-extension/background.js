@@ -81,37 +81,35 @@ async function fetchWithTimeout(url, options = {}, timeout = 30000) {
 
 // Ensure critical state is loaded from storage (handles service worker restarts)
 async function ensureStateLoaded() {
-  if (
-    !AUTH_TOKEN ||
-    userLists.length === 0 ||
-    SUSHE_API_BASE === 'http://localhost:3000'
-  ) {
-    log('State potentially lost, reloading from storage...');
-    const settings = await chrome.storage.local.get([
-      'apiUrl',
-      'authToken',
-      'userLists',
-    ]);
+  // Always reload from storage to ensure we're using the user-configured URL
+  // Service workers can restart at any time, resetting in-memory state
+  log('Ensuring state is loaded from storage...');
+  const settings = await chrome.storage.local.get([
+    'apiUrl',
+    'authToken',
+    'userLists',
+  ]);
 
-    // Always reload API URL from storage if available (fixes service worker restart issue)
-    if (settings.apiUrl) {
-      SUSHE_API_BASE = settings.apiUrl;
-    }
-
-    if (settings.authToken && !AUTH_TOKEN) {
-      AUTH_TOKEN = settings.authToken;
-    }
-
-    if (settings.userLists && userLists.length === 0) {
-      userLists = settings.userLists;
-    }
-
-    log('State reloaded:', {
-      apiUrl: SUSHE_API_BASE,
-      hasToken: !!AUTH_TOKEN,
-      listsCount: userLists.length,
-    });
+  // Always use the stored API URL if available - this is the user's configured instance
+  if (settings.apiUrl) {
+    SUSHE_API_BASE = settings.apiUrl;
   }
+
+  // Load auth token if not already in memory
+  if (settings.authToken && !AUTH_TOKEN) {
+    AUTH_TOKEN = settings.authToken;
+  }
+
+  // Load cached lists if not already in memory
+  if (settings.userLists && userLists.length === 0) {
+    userLists = settings.userLists;
+  }
+
+  log('State loaded:', {
+    apiUrl: SUSHE_API_BASE,
+    hasToken: !!AUTH_TOKEN,
+    listsCount: userLists.length,
+  });
 }
 
 // Create main context menu on extension install
