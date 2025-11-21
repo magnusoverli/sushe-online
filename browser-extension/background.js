@@ -686,10 +686,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     } else {
       console.error('List not found for index:', listIndex);
       console.error('userLists array:', JSON.stringify(userLists));
-      showNotification(
-        '✗ Error',
-        'List not found. Try refreshing lists.'
-      );
+      showNotification('✗ Error', 'List not found. Try refreshing lists.');
     }
   }
 });
@@ -984,10 +981,7 @@ async function addAlbumToList(info, tab, listName) {
     );
   } catch (error) {
     console.error('Error adding album:', error);
-    showNotification(
-      '✗ Error',
-      error.message || 'Failed to add album to list'
-    );
+    showNotification('✗ Error', error.message || 'Failed to add album to list');
   }
 }
 

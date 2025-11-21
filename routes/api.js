@@ -430,7 +430,7 @@ module.exports = (app, deps) => {
   );
 
   // Create or update a list
-  app.post('/api/lists/:name', ensureAuthAPI, (req, res) => {
+  app.post('/api/lists/:name', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
     const { data } = req.body;
 
@@ -438,15 +438,14 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'Invalid list data' });
     }
 
-    // Check if list exists
-    lists.findOne({ userId: req.user._id, name }, async (err, existingList) => {
-      if (err) {
-        logger.error('Error checking list:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
+    let client;
+    try {
+      // Check if list exists
+      const existingList = await lists.findOne({ userId: req.user._id, name });
 
       const timestamp = new Date();
-      const client = await pool.connect();
+      client = await pool.connect();
+
       try {
         await client.query('BEGIN');
         let listId = existingList ? existingList._id : null;
@@ -586,7 +585,14 @@ module.exports = (app, deps) => {
       } finally {
         client.release();
       }
-    });
+    } catch (err) {
+      logger.error('Error in list update:', err);
+      // Only release client if it was acquired
+      if (client) {
+        client.release();
+      }
+      return res.status(500).json({ error: 'Database error' });
+    }
   });
 
   // Delete a specific list
