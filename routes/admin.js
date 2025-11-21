@@ -17,6 +17,12 @@ module.exports = (app, deps) => {
   const path = require('path');
   const { URLSearchParams } = require('url');
 
+  // Check if running in Docker (database container name from docker-compose)
+  const isDocker =
+    process.env.DATABASE_URL &&
+    process.env.DATABASE_URL.includes('host=/var/run/postgresql');
+  const dbContainerName = process.env.DB_CONTAINER_NAME || 'sushe-online-db-1';
+
   const pgMajor = process.env.PG_MAJOR || '16';
   const binDir = process.env.PG_BIN || `/usr/lib/postgresql/${pgMajor}/bin`;
   const pgDumpCmd = fs.existsSync(path.join(binDir, 'pg_dump'))
@@ -383,7 +389,26 @@ module.exports = (app, deps) => {
 
   // Admin: Backup entire database using pg_dump
   app.get('/admin/backup', ensureAuth, ensureAdmin, (req, res) => {
-    const dump = spawn(pgDumpCmd, ['-Fc', '-d', process.env.DATABASE_URL]);
+    // Use Docker exec to run pg_dump from the database container to avoid version mismatch
+    // The database container has the matching pg_dump version for its PostgreSQL server
+    let dump;
+    if (isDocker) {
+      // Run pg_dump inside the database container where versions match
+      dump = spawn('docker', [
+        'exec',
+        dbContainerName,
+        'pg_dump',
+        '-Fc',
+        '-U',
+        'postgres',
+        '-d',
+        'sushe',
+      ]);
+      logger.info('Using Docker exec for pg_dump to avoid version mismatch');
+    } else {
+      // Local development fallback
+      dump = spawn(pgDumpCmd, ['-Fc', '-d', process.env.DATABASE_URL]);
+    }
 
     // Collect backup data in memory to verify before sending
     const chunks = [];
@@ -515,19 +540,67 @@ module.exports = (app, deps) => {
       }
 
       const pgRestoreStart = Date.now();
-      logger.info(`[${restoreId}] Starting pg_restore process`, {
-        command: pgRestoreCmd,
-        args: ['--clean', '--if-exists', '--single-transaction', '-d', '***'],
-      });
 
-      const restore = spawn(pgRestoreCmd, [
-        '--clean',
-        '--if-exists',
-        '--single-transaction',
-        '-d',
-        process.env.DATABASE_URL,
-        tmpFile,
-      ]);
+      let restore;
+      if (isDocker) {
+        // For Docker, we need to copy the file into the container first, then restore
+        logger.info(
+          `[${restoreId}] Starting pg_restore process via Docker exec`,
+          {
+            command: 'docker',
+            args: [
+              'exec',
+              '-i',
+              dbContainerName,
+              'pg_restore',
+              '--clean',
+              '--if-exists',
+              '--single-transaction',
+              '-U',
+              'postgres',
+              '-d',
+              'sushe',
+            ],
+          }
+        );
+
+        // Use docker exec with stdin to pipe the backup file
+        restore = spawn('docker', [
+          'exec',
+          '-i',
+          dbContainerName,
+          'pg_restore',
+          '--clean',
+          '--if-exists',
+          '--single-transaction',
+          '-U',
+          'postgres',
+          '-d',
+          'sushe',
+        ]);
+
+        // Pipe the backup file content to pg_restore via stdin
+        const fileStream = fs.createReadStream(tmpFile);
+        fileStream.pipe(restore.stdin);
+        fileStream.on('error', (err) => {
+          logger.error(`[${restoreId}] Error reading backup file:`, err);
+        });
+      } else {
+        // Local development fallback
+        logger.info(`[${restoreId}] Starting pg_restore process`, {
+          command: pgRestoreCmd,
+          args: ['--clean', '--if-exists', '--single-transaction', '-d', '***'],
+        });
+
+        restore = spawn(pgRestoreCmd, [
+          '--clean',
+          '--if-exists',
+          '--single-transaction',
+          '-d',
+          process.env.DATABASE_URL,
+          tmpFile,
+        ]);
+      }
 
       let stderrData = '';
       restore.stderr.on('data', (data) => {
