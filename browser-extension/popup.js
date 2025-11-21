@@ -158,7 +158,6 @@ function openLogin() {
     openOptions();
     return;
   }
-  
   // Open login page
   chrome.tabs.create({ url: `${SUSHE_API_BASE}/extension/auth` });
 }
