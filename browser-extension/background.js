@@ -5,7 +5,8 @@
 const DEBUG = false;
 const log = DEBUG ? console.log.bind(console) : () => {};
 
-let SUSHE_API_BASE = 'http://localhost:3000'; // Default, will be loaded from storage
+// NO DEFAULT URL - user MUST configure their instance
+let SUSHE_API_BASE = null; // Will be loaded from storage
 let AUTH_TOKEN = null; // Authentication token
 let userLists = [];
 let listsLastFetched = 0;
@@ -97,12 +98,13 @@ async function ensureStateLoaded() {
     listsCount: settings.userLists?.length || 0,
   });
 
-  // Always use the stored API URL if available - this is the user's configured instance
+  // CRITICAL: Only use stored API URL - NO fallback to localhost
   if (settings.apiUrl) {
     SUSHE_API_BASE = settings.apiUrl;
-    console.log('[ensureStateLoaded] Updated SUSHE_API_BASE to:', SUSHE_API_BASE);
+    console.log('[ensureStateLoaded] Using configured URL:', SUSHE_API_BASE);
   } else {
-    console.warn('[ensureStateLoaded] NO apiUrl in storage! Using default:', SUSHE_API_BASE);
+    SUSHE_API_BASE = null;
+    console.error('[ensureStateLoaded] NO URL CONFIGURED! User must set URL in options.');
   }
 
   // Load auth token if not already in memory
@@ -190,8 +192,8 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
     }
 
     if (changes.apiUrl) {
-      SUSHE_API_BASE = changes.apiUrl?.newValue || 'http://localhost:3000';
-      log('API URL updated:', SUSHE_API_BASE);
+      SUSHE_API_BASE = changes.apiUrl?.newValue || null;
+      console.log('API URL updated:', SUSHE_API_BASE);
 
       // Invalidate cache when API URL changes
       userLists = [];
@@ -737,6 +739,15 @@ async function addAlbumToList(info, tab, listName) {
   console.log('Using API base:', SUSHE_API_BASE);
   console.log('Auth token present:', !!AUTH_TOKEN);
 
+  // Verify URL is configured
+  if (!SUSHE_API_BASE) {
+    showNotification(
+      '✗ Not configured',
+      'Please click the extension icon → Options to configure your SuShe Online URL.'
+    );
+    return;
+  }
+
   // Verify token is present before starting
   if (!AUTH_TOKEN) {
     showNotification(
@@ -1155,7 +1166,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ apiUrl: SUSHE_API_BASE });
       } catch (error) {
         console.error('Error getting API URL:', error);
-        sendResponse({ apiUrl: 'http://localhost:3000' });
+        sendResponse({ apiUrl: null });
       }
     })();
     return true;

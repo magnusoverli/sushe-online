@@ -1,6 +1,6 @@
 // Popup script for SuShe Online extension
 
-let SUSHE_API_BASE = 'http://localhost:3000';
+let SUSHE_API_BASE = null; // No default - user must configure
 let AUTH_TOKEN = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -81,6 +81,13 @@ async function loadLists() {
     logoutBtn.style.display = 'none';
   }
 
+  // Check if URL is configured
+  if (!SUSHE_API_BASE) {
+    statusEl.innerHTML =
+      '<div class="status error">⚠️ Not configured. Click Options to set your SuShe Online URL.</div>';
+    return;
+  }
+
   statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
 
   try {
@@ -146,11 +153,14 @@ function openOptions() {
 }
 
 function openLogin() {
+  if (!SUSHE_API_BASE) {
+    alert('Please configure your SuShe Online URL in Options first.');
+    openOptions();
+    return;
+  }
+  
   // Open login page
   chrome.tabs.create({ url: `${SUSHE_API_BASE}/extension/auth` });
-
-  // The auth page will use chrome.runtime.sendMessage to send the token
-  // We listen for storage changes instead (already set up in loadSettings)
 }
 
 async function logout() {

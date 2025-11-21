@@ -28,7 +28,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load saved settings on page load
   const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
 
-  const apiUrl = settings.apiUrl || 'http://localhost:3000';
+  // No default - force user to configure
+  const apiUrl = settings.apiUrl || '';
   document.getElementById('apiUrl').value = apiUrl;
 
   // Update authentication status (single API call)
