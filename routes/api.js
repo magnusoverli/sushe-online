@@ -1,5 +1,6 @@
 // Ensure fetch is available
 const fetch = globalThis.fetch || require('node-fetch');
+const sharp = require('sharp');
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -844,11 +845,23 @@ module.exports = (app, deps) => {
           }
 
           const buffer = await response.arrayBuffer();
-          const base64 = Buffer.from(buffer).toString('base64');
+
+          // Resize image to 350x350 pixels using sharp
+          // Use 'inside' fit to maintain aspect ratio without cropping
+          // Convert to JPEG for consistent format and smaller file size
+          const resizedBuffer = await sharp(Buffer.from(buffer))
+            .resize(350, 350, {
+              fit: 'inside', // Maintain aspect ratio
+              withoutEnlargement: true, // Don't upscale small images
+            })
+            .jpeg({ quality: 85 }) // Convert to JPEG with good quality
+            .toBuffer();
+
+          const base64 = resizedBuffer.toString('base64');
 
           return {
             data: base64,
-            contentType: contentType,
+            contentType: 'image/jpeg', // Always JPEG after processing
           };
         });
 

@@ -1204,23 +1204,57 @@ async function handleManualSubmit(e) {
     showToast('Processing cover art...', 'info');
 
     try {
-      // Convert to base64
+      // Resize image to 350x350 using Canvas API
+      const img = new Image();
       const reader = new FileReader();
 
-      reader.onloadend = async function () {
-        const base64data = reader.result;
-        album.cover_image = base64data.split(',')[1];
-        album.cover_image_format = coverArtFile.type
-          .split('/')[1]
-          .toUpperCase();
+      reader.onload = function (e) {
+        img.onload = async function () {
+          // Create canvas for resizing
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
 
-        // Add to list
-        await finishManualAdd(album);
+          // Calculate dimensions to maintain aspect ratio (fit inside 350x350)
+          let width = img.width;
+          let height = img.height;
+          const maxSize = 350;
+
+          if (width > height) {
+            if (width > maxSize) {
+              height = (height * maxSize) / width;
+              width = maxSize;
+            }
+          } else {
+            if (height > maxSize) {
+              width = (width * maxSize) / height;
+              height = maxSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          // Draw resized image
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Convert to base64 JPEG (quality 0.85)
+          const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          album.cover_image = resizedDataUrl.split(',')[1];
+          album.cover_image_format = 'JPEG';
+
+          // Add to list
+          await finishManualAdd(album);
+        };
+
+        img.onerror = function () {
+          showToast('Error processing cover art', 'error');
+        };
+
+        img.src = e.target.result;
       };
 
       reader.onerror = function () {
-        // Error reading cover art
-        showToast('Error processing cover art', 'error');
+        showToast('Error reading cover art file', 'error');
       };
 
       reader.readAsDataURL(coverArtFile);
