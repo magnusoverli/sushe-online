@@ -37,7 +37,7 @@ services:
           cpus: '0.5'
 
   db:
-    image: postgres:17
+    image: postgres:18
     ports:
       - '5433:5432' # Expose PostgreSQL for local development
     environment:
@@ -48,6 +48,8 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - postgres-socket:/var/run/postgresql
+      - ./scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro
+    entrypoint: ["/usr/local/bin/docker-entrypoint-upgrade.sh"]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
       interval: 10s
@@ -80,6 +82,9 @@ services:
       -c effective_io_concurrency=200
       -c work_mem=16MB
       -c max_connections=100
+      -c io_method=worker
+      -c io_workers=4
+      -c io_combine_limit=128kB
 
 volumes:
   sushe-data:
