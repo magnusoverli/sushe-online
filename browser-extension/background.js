@@ -56,7 +56,11 @@ function getAuthHeaders() {
 
 // Ensure critical state is loaded from storage (handles service worker restarts)
 async function ensureStateLoaded() {
-  if (!AUTH_TOKEN || userLists.length === 0 || !SUSHE_API_BASE) {
+  if (
+    !AUTH_TOKEN ||
+    userLists.length === 0 ||
+    SUSHE_API_BASE === 'http://localhost:3000'
+  ) {
     console.log('State potentially lost, reloading from storage...');
     const settings = await chrome.storage.local.get([
       'apiUrl',
@@ -64,7 +68,8 @@ async function ensureStateLoaded() {
       'userLists',
     ]);
 
-    if (settings.apiUrl && !SUSHE_API_BASE) {
+    // Always reload API URL from storage if available (fixes service worker restart issue)
+    if (settings.apiUrl) {
       SUSHE_API_BASE = settings.apiUrl;
     }
 
