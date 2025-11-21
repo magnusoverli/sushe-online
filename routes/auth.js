@@ -1104,9 +1104,6 @@ module.exports = (app, deps) => {
         
         const data = await response.json();
         
-        // Redirect to a special callback URL that the extension will intercept
-        const callbackUrl = \`chrome-extension://callback?token=\${encodeURIComponent(data.token)}&expires=\${encodeURIComponent(data.expiresAt)}\`;
-        
         // Store in sessionStorage as backup
         try {
           sessionStorage.setItem('sushe_auth_token', data.token);

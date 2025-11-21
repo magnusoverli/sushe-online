@@ -111,30 +111,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     }, 10000);
   }
 
-  // Show update notification
+  // Log update information
   if (details.reason === 'update') {
     const previousVersion = details.previousVersion;
     const currentVersion = chrome.runtime.getManifest().version;
 
     console.log(`Updated from ${previousVersion} to ${currentVersion}`);
-
-    // Show notification for major updates
-    if (previousVersion && previousVersion.startsWith('1.0')) {
-      chrome.notifications.create('sushe-update', {
-        type: 'basic',
-        iconUrl: 'icons/icon128.png',
-        title: '🎉 SuShe Extension Updated!',
-        message:
-          'Login issues fixed! You now stay logged in. Click to learn more.',
-        priority: 2,
-        requireInteraction: false,
-      });
-
-      // Auto-dismiss after 8 seconds
-      setTimeout(() => {
-        chrome.notifications.clear('sushe-update');
-      }, 8000);
-    }
   }
 
   await loadSettings();
@@ -706,9 +688,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       console.error('userLists array:', JSON.stringify(userLists));
       showNotification(
         '✗ Error',
-        'List not found. Try refreshing lists.',
-        'error',
-        tab.id
+        'List not found. Try refreshing lists.'
       );
     }
   }
@@ -785,9 +765,7 @@ async function addAlbumToList(info, tab, listName) {
     showNotificationWithImage(
       'Adding album...',
       `Adding ${albumData.album} by ${albumData.artist} to ${listName}`,
-      rymCoverUrl,
-      'progress',
-      tab.id
+      rymCoverUrl
     );
 
     // Search MusicBrainz for the album
@@ -906,9 +884,7 @@ async function addAlbumToList(info, tab, listName) {
     if (isDuplicate) {
       showNotification(
         'ℹ Already in list',
-        `${albumData.album} is already in ${listName}`,
-        'info',
-        tab.id
+        `${albumData.album} is already in ${listName}`
       );
       return;
     }
@@ -1004,17 +980,13 @@ async function addAlbumToList(info, tab, listName) {
     showNotificationWithImage(
       '✓ Successfully added',
       `${albumData.album} added to ${listName}`,
-      albumCoverUrl,
-      'success',
-      tab.id
+      albumCoverUrl
     );
   } catch (error) {
     console.error('Error adding album:', error);
     showNotification(
       '✗ Error',
-      error.message || 'Failed to add album to list',
-      'error',
-      tab.id
+      error.message || 'Failed to add album to list'
     );
   }
 }
@@ -1089,18 +1061,12 @@ async function resolveCountryCode(countryCode) {
   }
 }
 
-// Handle notification clicks (kept for install/update notifications)
+// Handle notification clicks (for install notification)
 chrome.notifications.onClicked.addListener((notificationId) => {
   if (notificationId === 'sushe-welcome') {
     // Open options page for first-time setup
     chrome.runtime.openOptionsPage();
     chrome.notifications.clear('sushe-welcome');
-  }
-
-  if (notificationId === 'sushe-update') {
-    // Open the main site or extension page
-    chrome.tabs.create({ url: SUSHE_API_BASE || 'http://localhost:3000' });
-    chrome.notifications.clear('sushe-update');
   }
 });
 

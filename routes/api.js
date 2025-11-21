@@ -934,7 +934,7 @@ module.exports = (app, deps) => {
           url,
           {
             headers: {
-              'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+              'User-Agent': `SuSheOnline/1.0 ( ${process.env.BASE_URL || 'https://github.com/yourusername/sushe-online'} )`,
               Accept: 'application/json',
             },
           },

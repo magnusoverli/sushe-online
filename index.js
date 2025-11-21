@@ -632,6 +632,14 @@ const csrfProtection = (req, res, next) => {
     return next();
   }
 
+  // Skip CSRF validation for Bearer token authentication (browser extensions)
+  // These requests are already authenticated via JWT tokens stored securely
+  // and don't have access to session-based CSRF tokens
+  const authHeader = req.get('Authorization');
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
   const token = req.body._csrf || req.headers['x-csrf-token'];
 
   // Debug CSRF token issues

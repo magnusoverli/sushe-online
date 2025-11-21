@@ -14,6 +14,8 @@ window.addEventListener('sushe-auth-complete', async (event) => {
   if (token) {
     try {
       // Store token in chrome.storage
+      // Note: Token expiry is validated server-side. We store expiresAt for future use,
+      // but rely on 401 responses from the API to handle expired tokens.
       await chrome.storage.local.set({
         authToken: token,
         tokenExpiresAt: expiresAt,
