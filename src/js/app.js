@@ -2776,6 +2776,8 @@ function processAlbumData(album, index) {
   let comment = album.comments || album.comment || '';
   if (comment === 'Comment') comment = '';
 
+  // OPTIMIZED: Support both URL-based images (new) and base64 (fallback/legacy)
+  const coverImageUrl = album.cover_image_url || '';
   const coverImage = album.cover_image || '';
   const imageFormat = album.cover_image_format || 'PNG';
 
@@ -2830,6 +2832,7 @@ function processAlbumData(album, index) {
     genre2Display,
     genre2Class,
     comment,
+    coverImageUrl,
     coverImage,
     imageFormat,
     trackPick,
@@ -2860,12 +2863,13 @@ function createDesktopAlbumRow(data, index) {
     <div class="flex items-center">
       <div class="album-cover-container">
         ${
-          data.coverImage
+          data.coverImageUrl || data.coverImage
             ? `
-          <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
+          <img src="${data.coverImageUrl || `data:image/${data.imageFormat};base64,${data.coverImage}`}" 
               alt="${data.albumName}" 
               class="album-cover rounded shadow-lg"
               decoding="async"
+              loading="lazy"
               onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
           >
         `
@@ -3053,12 +3057,13 @@ function createMobileAlbumCard(data, index) {
         <div class="flex flex-col items-center pl-1.5 py-1">
           <div class="flex-shrink-0">
             ${
-              data.coverImage
+              data.coverImageUrl || data.coverImage
                 ? `
-              <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
+              <img src="${data.coverImageUrl || `data:image/${data.imageFormat};base64,${data.coverImage}`}"
                   alt="${data.albumName}"
                   class="w-20 h-20 rounded-lg object-cover shadow-md"
-                  decoding="async">
+                  decoding="async"
+                  loading="lazy">
             `
                 : `
               <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">

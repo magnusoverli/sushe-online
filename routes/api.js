@@ -93,6 +93,83 @@ class RequestQueue {
 
 const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
 
+/**
+ * Deduplication helpers: Compare list_item values with albums table
+ * Return NULL if values match (save storage), return value if different (custom override)
+ */
+
+// Cache for album data during batch operations
+const albumCache = new Map();
+
+async function getAlbumData(albumId, pool) {
+  if (!albumId) return null;
+  
+  if (albumCache.has(albumId)) {
+    return albumCache.get(albumId);
+  }
+  
+  const result = await pool.query(
+    'SELECT artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format FROM albums WHERE album_id = $1',
+    [albumId]
+  );
+  
+  const albumData = result.rows[0] || null;
+  albumCache.set(albumId, albumData);
+  return albumData;
+}
+
+function clearAlbumCache() {
+  albumCache.clear();
+}
+
+/**
+ * Compare list_item value with albums table value
+ * Returns NULL if they match (to save storage), or the value if different (custom override)
+ */
+async function getStorableValue(listItemValue, albumId, field, pool) {
+  // No album reference or no value - store as-is
+  if (!albumId || listItemValue === null || listItemValue === undefined) {
+    return listItemValue || null;
+  }
+  
+  // Fetch album data
+  const albumData = await getAlbumData(albumId, pool);
+  if (!albumData) {
+    // No matching album in database - store the value
+    return listItemValue || null;
+  }
+  
+  // Compare values: if identical, return NULL (save space)
+  // Handle both null/undefined and empty string as "no value"
+  const albumValue = albumData[field];
+  const normalizedListValue = listItemValue === '' ? null : listItemValue;
+  const normalizedAlbumValue = albumValue === '' ? null : albumValue;
+  
+  if (normalizedListValue === normalizedAlbumValue) {
+    return null; // Duplicate - don't store
+  }
+  
+  return listItemValue; // Different - store custom value
+}
+
+/**
+ * Special handler for tracks field (JSONB - needs deep comparison)
+ */
+async function getStorableTracksValue(listItemTracks, albumId, pool) {
+  if (!albumId || !listItemTracks) {
+    return listItemTracks || null;
+  }
+  
+  const albumData = await getAlbumData(albumId, pool);
+  if (!albumData || !albumData.tracks) {
+    return listItemTracks || null;
+  }
+  
+  // Deep comparison for JSONB
+  const tracksEqual = JSON.stringify(listItemTracks) === JSON.stringify(albumData.tracks);
+  return tracksEqual ? null : listItemTracks;
+}
+
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const {
@@ -175,6 +252,53 @@ module.exports = (app, deps) => {
   // ============ API ENDPOINTS FOR LISTS ============
 
   // Get all lists for current user
+  // Get album cover image
+  app.get(
+    '/api/albums/:album_id/cover',
+    ensureAuthAPI,
+    async (req, res) => {
+      try {
+        const { album_id } = req.params;
+        
+        // Query albums table for cover image
+        const result = await pool.query(
+          'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
+          [album_id]
+        );
+        
+        if (!result.rows.length || !result.rows[0].cover_image) {
+          return res.status(404).json({ error: 'Image not found' });
+        }
+        
+        const { cover_image, cover_image_format } = result.rows[0];
+        
+        // Convert base64 to buffer
+        const imageBuffer = Buffer.from(cover_image, 'base64');
+        
+        // Determine content type
+        const contentType = cover_image_format 
+          ? `image/${cover_image_format.toLowerCase()}`
+          : 'image/jpeg';
+        
+        // Set aggressive caching headers (images rarely change)
+        res.set({
+          'Content-Type': contentType,
+          'Content-Length': imageBuffer.length,
+          'Cache-Control': 'public, max-age=31536000, immutable', // 1 year
+          'ETag': `"${album_id}-${cover_image.length}"`,
+        });
+        
+        res.send(imageBuffer);
+      } catch (err) {
+        logger.error('Error fetching album cover:', {
+          error: err.message,
+          albumId: req.params.album_id,
+        });
+        res.status(500).json({ error: 'Error fetching image' });
+      }
+    }
+  );
+
   app.get(
     '/api/lists',
     ensureAuthAPI,
@@ -252,6 +376,7 @@ module.exports = (app, deps) => {
         const items = await listItemsAsync.findWithAlbumData(list._id);
 
         // Transform to API response format (already sorted by position in query)
+        // OPTIMIZED: Return image URLs instead of base64 for faster loading
         const data = items.map((item) => ({
           artist: item.artist,
           album: item.album,
@@ -263,8 +388,11 @@ module.exports = (app, deps) => {
           track_pick: item.trackPick,
           comments: item.comments,
           tracks: item.tracks,
-          cover_image: item.coverImage,
+          // Return URL instead of base64 for parallel loading & caching
+          cover_image_url: item.albumId ? `/api/albums/${item.albumId}/cover` : null,
           cover_image_format: item.coverImageFormat,
+          // Keep base64 as fallback for custom images (not in albums table)
+          ...(item.coverImage && !item.albumId ? { cover_image: item.coverImage } : {}),
         }));
 
         res.json(data);
@@ -327,11 +455,20 @@ module.exports = (app, deps) => {
         const placeholders = [];
         const values = [];
         let idx = 1;
+        
+        // Clear album cache for this batch operation
+        clearAlbumCache();
+        
         for (let i = 0; i < data.length; i++) {
           const album = data[i];
           if (album.album_id) {
             await upsertAlbumRecord(album, timestamp);
           }
+          
+          // Deduplicate: Only store values that differ from albums table
+          // NULL = "use albums table value", non-NULL = "custom override"
+          const albumId = album.album_id || '';
+          
           placeholders.push(
             `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`
           );
@@ -339,22 +476,29 @@ module.exports = (app, deps) => {
             crypto.randomBytes(12).toString('hex'),
             listId,
             i + 1,
-            album.artist || '',
-            album.album || '',
-            album.album_id || '',
-            album.release_date || '',
-            album.country || '',
-            album.genre_1 || album.genre || '',
-            album.genre_2 || '',
-            album.comments || album.comment || '',
-            Array.isArray(album.tracks) ? JSON.stringify(album.tracks) : null,
-            album.track_pick || null,
-            album.cover_image || '',
-            album.cover_image_format || '',
+            await getStorableValue(album.artist || null, albumId, 'artist', client),
+            await getStorableValue(album.album || null, albumId, 'album', client),
+            albumId,
+            await getStorableValue(album.release_date || null, albumId, 'release_date', client),
+            await getStorableValue(album.country || null, albumId, 'country', client),
+            await getStorableValue(album.genre_1 || album.genre || null, albumId, 'genre_1', client),
+            await getStorableValue(album.genre_2 || null, albumId, 'genre_2', client),
+            album.comments || album.comment || null, // Always store (list-specific)
+            await getStorableTracksValue(
+              Array.isArray(album.tracks) ? album.tracks : null,
+              albumId,
+              client
+            ),
+            album.track_pick || null, // Always store (list-specific)
+            await getStorableValue(album.cover_image || null, albumId, 'cover_image', client),
+            await getStorableValue(album.cover_image_format || null, albumId, 'cover_image_format', client),
             timestamp,
             timestamp
           );
         }
+        
+        // Clear cache after batch
+        clearAlbumCache();
 
         if (placeholders.length) {
           await client.query(
