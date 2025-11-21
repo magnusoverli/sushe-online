@@ -46,7 +46,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-USER node
+# Note: Running as root to allow Docker socket access for backup/restore
+# In production, this is mitigated by read-only Docker socket mount
+# USER node
 
 # Use exec form for better signal handling
 CMD ["node", "index.js"]
