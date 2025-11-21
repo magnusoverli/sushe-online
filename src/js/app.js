@@ -1201,37 +1201,59 @@ function attachLinkPreview(container, comment) {
 // Load lists from server
 async function loadLists() {
   try {
-    // Fetch list metadata from server (server caches for 60s)
-    const fetchedLists = await apiCall('/api/lists');
+    // OPTIMIZATION: Determine which list to load
+    const localLastList = localStorage.getItem('lastSelectedList');
+    const serverLastList = window.lastSelectedList;
+    const targetList = localLastList || serverLastList;
 
-    lists = fetchedLists;
+    // OPTIMIZATION: Parallel execution - fetch metadata and target list simultaneously
+    // This dramatically improves page refresh performance by:
+    // 1. Loading only metadata (tiny payload) for the sidebar
+    // 2. Loading the target list data in parallel (only what's needed)
+    const metadataPromise = apiCall('/api/lists'); // Metadata only (default)
+    const listDataPromise = targetList
+      ? apiCall(`/api/lists/${encodeURIComponent(targetList)}`)
+      : null;
+
+    // Wait for metadata (fast - just list names and counts)
+    const fetchedLists = await metadataPromise;
+
+    // Initialize lists object with metadata placeholders
+    lists = {};
+    Object.keys(fetchedLists).forEach((name) => {
+      lists[name] = []; // Empty array placeholder
+    });
     window.lists = lists;
 
-    // Update navigation with list names
+    // Update navigation immediately - sidebar appears right away
     updateListNav();
 
-    // Try to restore last selected list
-    trySelectLastList();
+    // If we're loading a specific list, wait for it and display
+    if (listDataPromise && targetList) {
+      try {
+        const listData = await listDataPromise;
+        lists[targetList] = listData; // Store the actual data
+
+        // Only auto-select if no list is currently selected
+        if (!window.currentList) {
+          selectList(targetList);
+          // Sync localStorage if we used server preference
+          if (!localLastList && serverLastList) {
+            try {
+              localStorage.setItem('lastSelectedList', serverLastList);
+            } catch (_e) {
+              // Silently fail if localStorage is full
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load last selected list:', err);
+        // Sidebar is still populated, user can manually select a list
+      }
+    }
   } catch (error) {
     console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
-  }
-}
-
-function trySelectLastList() {
-  // Only auto-select if no list is currently selected
-  if (window.currentList) return;
-
-  const localLastList = localStorage.getItem('lastSelectedList');
-  const serverLastList = window.lastSelectedList;
-
-  // Prioritize local storage if it exists and is valid
-  if (localLastList && lists[localLastList]) {
-    selectList(localLastList);
-  } else if (serverLastList && lists[serverLastList]) {
-    selectList(serverLastList);
-    // Also update localStorage with server value
-    localStorage.setItem('lastSelectedList', serverLastList);
   }
 }
 
@@ -2182,10 +2204,16 @@ async function selectList(listName) {
     // Fetch list data from server (server caches for 5min)
     if (listName) {
       try {
-        const data = await apiCall(
-          `/api/lists/${encodeURIComponent(listName)}`
-        );
-        lists[listName] = data;
+        let data = lists[listName];
+
+        // OPTIMIZATION: Only fetch if data is missing or is an empty placeholder
+        // This avoids duplicate fetches when loadLists() already loaded the data
+        const needsFetch = !data || (Array.isArray(data) && data.length === 0);
+
+        if (needsFetch) {
+          data = await apiCall(`/api/lists/${encodeURIComponent(listName)}`);
+          lists[listName] = data;
+        }
 
         // Display the fetched data with images (single render)
         // Pass forceFullRebuild flag to skip incremental update checks when switching lists

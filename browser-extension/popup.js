@@ -63,6 +63,7 @@ async function loadLists() {
   statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
 
   try {
+    // Use metadata API for faster loading (no album data needed)
     const response = await fetch(`${SUSHE_API_BASE}/api/lists`, {
       headers: getAuthHeaders(),
     });
@@ -83,10 +84,11 @@ async function loadLists() {
       return;
     }
 
-    // Display lists
+    // Display lists with metadata
     listItemsEl.innerHTML = '';
     listNames.forEach((name) => {
-      const count = listsData[name].length;
+      // Use metadata count instead of array length
+      const count = listsData[name].count;
       const item = document.createElement('div');
       item.className = 'list-item';
       item.textContent = `${name} (${count} albums)`;

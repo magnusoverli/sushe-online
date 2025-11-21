@@ -303,42 +303,62 @@ module.exports = (app, deps) => {
     async (req, res) => {
       try {
         const userLists = await listsAsync.find({ userId: req.user._id });
+        const { full } = req.query;
 
         const listsObj = {};
-        for (const list of userLists) {
-          const items = await listItemsAsync.find({ listId: list._id });
-          items.sort((a, b) => a.position - b.position);
 
-          // Batch load album data to avoid N+1 queries
-          const albumIds = items.map((item) => item.albumId).filter(Boolean);
-          const albumsData =
-            albumIds.length > 0
-              ? await albumsAsync.findByAlbumIds(albumIds)
-              : [];
-          const albumsMap = new Map(
-            albumsData.map((album) => [album.albumId, album])
-          );
+        if (full === 'true') {
+          // FULL MODE: Return all album data (backward compatibility)
+          for (const list of userLists) {
+            const items = await listItemsAsync.find({ listId: list._id });
+            items.sort((a, b) => a.position - b.position);
 
-          const mapped = [];
-          for (const item of items) {
-            const albumData = item.albumId ? albumsMap.get(item.albumId) : null;
-            mapped.push({
-              artist: item.artist || albumData?.artist,
-              album: item.album || albumData?.album,
-              album_id: item.albumId,
-              release_date: item.releaseDate || albumData?.releaseDate,
-              country: item.country || albumData?.country,
-              genre_1: item.genre1 || albumData?.genre1,
-              genre_2: item.genre2 || albumData?.genre2,
-              track_pick: item.trackPick,
-              comments: item.comments,
-              tracks: item.tracks || albumData?.tracks,
-              cover_image: item.coverImage || albumData?.coverImage,
-              cover_image_format:
-                item.coverImageFormat || albumData?.coverImageFormat,
-            });
+            // Batch load album data to avoid N+1 queries
+            const albumIds = items.map((item) => item.albumId).filter(Boolean);
+            const albumsData =
+              albumIds.length > 0
+                ? await albumsAsync.findByAlbumIds(albumIds)
+                : [];
+            const albumsMap = new Map(
+              albumsData.map((album) => [album.albumId, album])
+            );
+
+            const mapped = [];
+            for (const item of items) {
+              const albumData = item.albumId
+                ? albumsMap.get(item.albumId)
+                : null;
+              mapped.push({
+                artist: item.artist || albumData?.artist,
+                album: item.album || albumData?.album,
+                album_id: item.albumId,
+                release_date: item.releaseDate || albumData?.releaseDate,
+                country: item.country || albumData?.country,
+                genre_1: item.genre1 || albumData?.genre1,
+                genre_2: item.genre2 || albumData?.genre2,
+                track_pick: item.trackPick,
+                comments: item.comments,
+                tracks: item.tracks || albumData?.tracks,
+                cover_image: item.coverImage || albumData?.coverImage,
+                cover_image_format:
+                  item.coverImageFormat || albumData?.coverImageFormat,
+              });
+            }
+            listsObj[list.name] = mapped;
           }
-          listsObj[list.name] = mapped;
+        } else {
+          // METADATA MODE (default): Return only list metadata for fast loading
+          // This dramatically improves page refresh performance by avoiding
+          // loading all album data when we only need list names for the sidebar
+          for (const list of userLists) {
+            const count = await listItemsAsync.count({ listId: list._id });
+            listsObj[list.name] = {
+              name: list.name,
+              count: count,
+              updatedAt: list.updatedAt,
+              createdAt: list.createdAt,
+            };
+          }
         }
 
         res.json(listsObj);
