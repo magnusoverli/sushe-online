@@ -383,7 +383,7 @@ module.exports = (app, deps) => {
 
   // Admin: Backup entire database using pg_dump
   app.get('/admin/backup', ensureAuth, ensureAdmin, (req, res) => {
-    const dump = spawn(pgDumpCmd, ['-Fc', process.env.DATABASE_URL]);
+    const dump = spawn(pgDumpCmd, ['-Fc', '-d', process.env.DATABASE_URL]);
 
     // Collect backup data in memory to verify before sending
     const chunks = [];
