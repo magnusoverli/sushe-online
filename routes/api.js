@@ -1625,8 +1625,7 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      const items = await listItemsAsync.find({ listId: list._id });
-      items.sort((a, b) => a.position - b.position);
+      const items = await listItemsAsync.findWithAlbumData(list._id);
 
       // Pre-flight validation
       const validation = await validatePlaylistData(items, targetService, auth);
