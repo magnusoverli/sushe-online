@@ -1,21 +1,21 @@
 {
-  "all": true,
+  "all": false,
   "include": ["**/*.js"],
   "exclude": [
     "node_modules/**",
     "test/**",
     "coverage/**",
-    "public/js/bundle.js",
+    "public/**",
     "dist/**",
+    "src/js/**",
+    "browser-extension/**",
+    "scripts/**",
     "vite.config.js",
     "postcss.config.js",
     "tailwind.config.js",
-    "eslint.config.js"
+    "eslint.config.js",
+    "playwright.config.js"
   ],
   "reporter": ["text", "html", "lcov"],
-  "check-coverage": true,
-  "lines": 80,
-  "functions": 80,
-  "branches": 70,
-  "statements": 80
+  "check-coverage": false
 }

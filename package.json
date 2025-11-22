@@ -10,7 +10,7 @@
     "build:js": "vite build",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
-    "test": "npm run lint && node --test test/security-middleware.test.js test/session-management.test.js test/auth-utils.test.js test/basic.test.js",
+    "test": "npm run lint && c8 node --test test/security-middleware.test.js test/session-management.test.js test/auth-utils.test.js test/basic.test.js",
     "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov node --test",
     "test:watch": "node --test --watch",
     "test:e2e": "playwright test",
