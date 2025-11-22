@@ -2897,7 +2897,7 @@ function createDesktopAlbumRow(data, index) {
             ? `
           <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
               alt="${data.albumName}" 
-              class="album-cover rounded shadow-lg bg-gray-800"
+              class="album-cover rounded shadow-lg"
               data-album-id="${data.albumId}"
               decoding="async"
               onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
@@ -3100,7 +3100,7 @@ function createMobileAlbumCard(data, index) {
                 ? `
               <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
                   alt="${data.albumName}"
-                  class="w-20 h-20 rounded-lg object-cover shadow-md bg-gray-800"
+                  class="w-20 h-20 rounded-lg object-cover shadow-md"
                   data-album-id="${data.albumId}"
                   decoding="async">
             `
