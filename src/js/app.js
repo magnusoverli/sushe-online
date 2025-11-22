@@ -394,7 +394,7 @@ async function downloadListAsJSON(listName) {
     showToast('Loading export module...', 'info', 1000);
     importExportModule = await import('./modules/import-export.js');
   }
-  return importExportModule.downloadListAsJSON(listName, lists);
+  return importExportModule.downloadListAsJSON(listName);
 }
 
 async function updatePlaylist(listName, listData = null) {

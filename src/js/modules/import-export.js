@@ -1,66 +1,25 @@
 import { showToast } from './utils.js';
 
-// Used on line 60
-function getPointsForPosition(position) {
-  const POSITION_POINTS = {
-    1: 60,
-    2: 54,
-    3: 50,
-    4: 46,
-    5: 43,
-    6: 40,
-    7: 38,
-    8: 36,
-    9: 34,
-    10: 32,
-    11: 30,
-    12: 29,
-    13: 28,
-    14: 27,
-    15: 26,
-    16: 25,
-    17: 24,
-    18: 23,
-    19: 22,
-    20: 21,
-    21: 20,
-    22: 19,
-    23: 18,
-    24: 17,
-    25: 16,
-    26: 15,
-    27: 14,
-    28: 13,
-    29: 12,
-    30: 11,
-    31: 10,
-    32: 9,
-    33: 8,
-    34: 7,
-    35: 6,
-    36: 5,
-    37: 4,
-    38: 3,
-    39: 2,
-    40: 1,
-  };
-  return POSITION_POINTS[position] || 1;
-}
-
-export async function downloadListAsJSON(listName, lists) {
-  const listData = lists[listName];
-  if (!listData) {
-    showToast('List not found', 'error');
-    return;
-  }
-
+export async function downloadListAsJSON(listName) {
   try {
-    const exportData = listData.map((album, index) => {
-      const exported = { ...album };
-      exported.rank = index + 1;
-      exported.points = getPointsForPosition(index + 1);
-      return exported;
-    });
+    // Fetch list with embedded base64 images from server
+    showToast('Preparing export with images...', 'info', 2000);
+
+    const response = await fetch(
+      `/api/lists/${encodeURIComponent(listName)}?export=true`,
+      { credentials: 'include' }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        showToast('List not found', 'error');
+        return;
+      }
+      throw new Error(`Failed to fetch list: ${response.status}`);
+    }
+
+    // Server returns data with rank, points, and cover_image already included
+    const exportData = await response.json();
 
     const jsonStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });

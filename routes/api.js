@@ -428,7 +428,53 @@ module.exports = (app, deps) => {
     }
   );
 
+  // Points calculation for export (matches client-side logic in import-export.js)
+  const POSITION_POINTS = {
+    1: 60,
+    2: 54,
+    3: 50,
+    4: 46,
+    5: 43,
+    6: 40,
+    7: 38,
+    8: 36,
+    9: 34,
+    10: 32,
+    11: 30,
+    12: 29,
+    13: 28,
+    14: 27,
+    15: 26,
+    16: 25,
+    17: 24,
+    18: 23,
+    19: 22,
+    20: 21,
+    21: 20,
+    22: 19,
+    23: 18,
+    24: 17,
+    25: 16,
+    26: 15,
+    27: 14,
+    28: 13,
+    29: 12,
+    30: 11,
+    31: 10,
+    32: 9,
+    33: 8,
+    34: 7,
+    35: 6,
+    36: 5,
+    37: 4,
+    38: 3,
+    39: 2,
+    40: 1,
+  };
+  const getPointsForPosition = (position) => POSITION_POINTS[position] || 1;
+
   // Get a single list
+  // Use ?export=true to get full data with embedded base64 images for JSON export
   app.get(
     '/api/lists/:name',
     ensureAuthAPI,
@@ -436,7 +482,12 @@ module.exports = (app, deps) => {
     async (req, res) => {
       try {
         const { name } = req.params;
-        logger.debug('Fetching list:', { name, userId: req.user._id });
+        const isExport = req.query.export === 'true';
+        logger.debug('Fetching list:', {
+          name,
+          userId: req.user._id,
+          isExport,
+        });
         const list = await listsAsync.findOne({ userId: req.user._id, name });
 
         if (!list) {
@@ -452,8 +503,9 @@ module.exports = (app, deps) => {
         const items = await listItemsAsync.findWithAlbumData(list._id);
 
         // Transform to API response format (already sorted by position in query)
-        // OPTIMIZED: Return image URLs instead of base64 for faster loading
-        const data = items.map((item) => ({
+        // When export=true: include base64 images, rank, and points for JSON export
+        // Otherwise: return image URLs for faster page loading
+        const data = items.map((item, index) => ({
           artist: item.artist,
           album: item.album,
           album_id: item.albumId,
@@ -464,15 +516,24 @@ module.exports = (app, deps) => {
           track_pick: item.trackPick,
           comments: item.comments,
           tracks: item.tracks,
-          // Return URL instead of base64 for parallel loading & caching
-          cover_image_url: item.albumId
-            ? `/api/albums/${item.albumId}/cover`
-            : null,
           cover_image_format: item.coverImageFormat,
-          // Keep base64 as fallback for custom images (not in albums table)
-          ...(item.coverImage && !item.albumId
-            ? { cover_image: item.coverImage }
-            : {}),
+          // Export mode: embed base64 images + rank/points for shareable JSON
+          // Normal mode: return URLs for fast parallel loading & caching
+          ...(isExport
+            ? {
+                cover_image: item.coverImage || '',
+                rank: index + 1,
+                points: getPointsForPosition(index + 1),
+              }
+            : {
+                cover_image_url: item.albumId
+                  ? `/api/albums/${item.albumId}/cover`
+                  : null,
+                // Keep base64 as fallback for custom images (not in albums table)
+                ...(item.coverImage && !item.albumId
+                  ? { cover_image: item.coverImage }
+                  : {}),
+              }),
         }));
 
         res.json(data);
