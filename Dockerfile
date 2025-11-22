@@ -1,5 +1,5 @@
 # ----- Build stage -----
-FROM node:24-alpine AS builder
+FROM node:24-slim AS builder
 
 # Update npm to specific version
 RUN npm install -g npm@11.6.1 --no-fund
@@ -18,7 +18,7 @@ RUN npm run build
 RUN rm -rf node_modules
 
 # ----- Runtime stage -----
-FROM node:24-alpine AS runtime
+FROM node:24-slim AS runtime
 
 # Update npm to specific version
 RUN npm install -g npm@11.6.1 --no-fund
@@ -27,8 +27,19 @@ WORKDIR /app
 
 # Install only production dependencies  
 COPY --chown=node:node package*.json ./
-RUN npm install --omit=dev --prefer-offline --no-audit --no-fund \
-    && apk add --no-cache curl docker-cli
+
+# Add PGDG repository for PostgreSQL 18 client
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    && . /etc/os-release \
+    && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends postgresql-client-18 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN npm install --omit=dev --prefer-offline --no-audit --no-fund
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
@@ -46,9 +57,7 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-# Note: Running as root to allow Docker socket access for backup/restore
-# In production, this is mitigated by read-only Docker socket mount
-# USER node
+USER node
 
 # Use exec form for better signal handling
 CMD ["node", "index.js"]

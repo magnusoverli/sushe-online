@@ -1,0 +1,50 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sushe-online-local
+    ports:
+      - '3000:3000'
+    environment:
+      - NODE_ENV=production
+      - SESSION_SECRET=test-secret-change-in-production
+      - EMAIL_FROM=noreply@example.com
+      - BASE_URL=http://localhost:3000
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - DATABASE_URL=postgres://postgres:example@/sushe?host=/var/run/postgresql
+      - PG_MAJOR=18
+    volumes:
+      - sushe-data-local:/app/data
+      - postgres-socket-local:/var/run/postgresql
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:18
+    container_name: sushe-db-local
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_PASSWORD: example
+      POSTGRES_DB: sushe
+      POSTGRES_INITDB_ARGS: '--auth-host=md5'
+    volumes:
+      - postgres-data-local:/var/lib/postgresql
+      - postgres-socket-local:/var/run/postgresql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  sushe-data-local:
+  postgres-data-local:
+  postgres-socket-local:
+

@@ -21,10 +21,8 @@ services:
     volumes:
       - sushe-data:/app/data
       - postgres-socket:/var/run/postgresql
-      - /var/run/docker.sock:/var/run/docker.sock
       - ./settings-template.js:/app/settings-template.js:ro
       - ./routes/auth.js:/app/routes/auth.js:ro
-    user: root
     depends_on:
       db:
         condition: service_healthy
@@ -39,7 +37,7 @@ services:
           cpus: '0.5'
 
   db:
-    image: postgres:17
+    image: postgres:18
     ports:
       - '5433:5432' # Expose PostgreSQL for local development
     environment:
@@ -48,7 +46,7 @@ services:
       # Enhanced logging for monitoring
       POSTGRES_INITDB_ARGS: '--auth-host=md5'
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
       - postgres-socket:/var/run/postgresql
       - ./scripts/docker-entrypoint-upgrade.sh:/usr/local/bin/docker-entrypoint-upgrade.sh:ro
     entrypoint: ['/usr/local/bin/docker-entrypoint-upgrade.sh']
