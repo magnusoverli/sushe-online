@@ -260,37 +260,6 @@ class PgDatastore {
     return this._callbackify(promise, cb);
   }
 
-  // Batch find by IDs for efficient loading
-  async findByIds(ids, cb) {
-    const promise = (async () => {
-      if (!ids || ids.length === 0) return [];
-
-      // Check cache for static data (albums table)
-      if (this.table === 'albums') {
-        const cacheKey = `findByIds_${ids.sort().join(',')}`;
-        const cached = this.cache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-          return cached.data;
-        }
-      }
-
-      const placeholders = ids.map((_, i) => `$${i + 1}`).join(',');
-      const queryText = `SELECT * FROM ${this.table} WHERE ${this._mapField('_id')} IN (${placeholders})`;
-      const queryName = `findByIds_${this.table}`;
-      const res = await this._preparedQuery(queryName, queryText, ids);
-      const result = res.rows.map((r) => this._mapRow(r));
-
-      // Cache result for albums (static data)
-      if (this.table === 'albums') {
-        const cacheKey = `findByIds_${ids.sort().join(',')}`;
-        this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
-      }
-
-      return result;
-    })();
-    return this._callbackify(promise, cb);
-  }
-
   // Find albums by album_id (MusicBrainz IDs)
   async findByAlbumIds(albumIds, cb) {
     const promise = (async () => {
@@ -375,9 +344,6 @@ class PgDatastore {
       coverImageFormat: row.cover_image_format || '',
     }));
   }
-
-  // Placeholder for API compatibility
-  ensureIndex() {}
 }
 
 module.exports = { PgDatastore, Pool, waitForPostgres, warmConnections };

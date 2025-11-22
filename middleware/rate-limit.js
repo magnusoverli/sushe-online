@@ -92,20 +92,6 @@ const resetPasswordRateLimit = rateLimit({
   ),
 });
 
-// General API rate limiting
-// 100 requests per 15 minutes per IP (for general API endpoints)
-const apiRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_API_MAX) || 100,
-  message: 'Too many requests. Please try again later.',
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: false,
-  handler: createRateLimitHandler(
-    'Too many requests. Please try again in 15 minutes.'
-  ),
-});
-
 // Strict rate limiting for sensitive settings changes
 // 10 attempts per hour per IP
 const sensitiveSettingsRateLimit = rateLimit({
@@ -133,7 +119,6 @@ module.exports = {
   resetPasswordRateLimit: isRateLimitingDisabled
     ? noopMiddleware
     : resetPasswordRateLimit,
-  apiRateLimit: isRateLimitingDisabled ? noopMiddleware : apiRateLimit,
   sensitiveSettingsRateLimit: isRateLimitingDisabled
     ? noopMiddleware
     : sensitiveSettingsRateLimit,

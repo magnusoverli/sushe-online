@@ -97,38 +97,3 @@ export async function downloadListAsJSON(listName, lists) {
     showToast('Error exporting list', 'error');
   }
 }
-
-export function initializeImportHandler(onImport) {
-  const importInput = document.getElementById('importInput');
-  const importBtn = document.getElementById('importBtn');
-
-  if (!importInput || !importBtn) return;
-
-  importBtn.addEventListener('click', () => {
-    importInput.click();
-  });
-
-  importInput.addEventListener('change', async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid format: expected an array of albums');
-      }
-
-      if (onImport) {
-        await onImport(data, file.name);
-      }
-
-      importInput.value = '';
-    } catch (error) {
-      console.error('Import error:', error);
-      showToast('Error importing file: ' + error.message, 'error');
-      importInput.value = '';
-    }
-  });
-}

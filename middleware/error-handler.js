@@ -158,11 +158,6 @@ const errorHandler = (err, req, res, _next) => {
   res.status(error.statusCode).send(error.message);
 };
 
-// Async error wrapper to catch async errors
-const asyncHandler = (fn) => (req, res, next) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
-
 // 404 handler
 const notFoundHandler = (req, res, next) => {
   const error = new AppError(
@@ -177,6 +172,5 @@ module.exports = {
   AppError,
   ErrorTypes,
   errorHandler,
-  asyncHandler,
   notFoundHandler,
 };

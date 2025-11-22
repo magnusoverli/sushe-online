@@ -50,20 +50,6 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
 }
 
 /**
- * Wrapper for pool queries with retry logic
- * @param {Object} pool - Database connection pool
- * @param {string} text - SQL query text
- * @param {Array} params - Query parameters
- * @param {number} maxRetries - Maximum retry attempts
- * @returns {Promise} - Query result
- */
-async function retryableQuery(pool, text, params = [], maxRetries = 3) {
-  return withRetry(async () => {
-    return await pool.query(text, params);
-  }, maxRetries);
-}
-
-/**
  * Health check function that verifies database connectivity
  * @param {Object} pool - Database connection pool
  * @returns {Promise<Object>} - Health status object
@@ -93,6 +79,5 @@ async function healthCheck(pool) {
 
 module.exports = {
   withRetry,
-  retryableQuery,
   healthCheck,
 };

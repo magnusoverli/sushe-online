@@ -21,7 +21,6 @@ module.exports = (app, deps) => {
     usersAsync,
     listsAsync,
     listItemsAsync,
-    _albumsAsync,
     bcrypt,
     isValidEmail,
     isValidUsername,

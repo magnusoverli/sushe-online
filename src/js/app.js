@@ -397,17 +397,6 @@ async function downloadListAsJSON(listName) {
   return importExportModule.downloadListAsJSON(listName, lists);
 }
 
-// Test function to verify confirmation dialog works
-window.testConfirmation = async function () {
-  const result = await showConfirmation(
-    'Test Dialog',
-    'This is a test message',
-    'This is a sub-message',
-    'Confirm'
-  );
-  return result;
-};
-
 async function updatePlaylist(listName, listData = null) {
   if (!musicServicesModule) {
     showToast('Loading playlist integration...', 'info', 1000);
