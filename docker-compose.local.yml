@@ -47,4 +47,3 @@ volumes:
   sushe-data-local:
   postgres-data-local:
   postgres-socket-local:
-

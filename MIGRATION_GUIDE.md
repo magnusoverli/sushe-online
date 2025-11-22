@@ -3,6 +3,7 @@
 ## Overview
 
 This branch migrates the application from:
+
 - **Node.js**: `node:24-alpine` → `node:24-slim` (Debian)
 - **PostgreSQL**: v17 → v18
 - **Architecture**: Docker exec approach → Direct TCP connections
@@ -11,17 +12,20 @@ This branch migrates the application from:
 ## Changes Made
 
 ### 1. Dockerfile
+
 - Switched from Alpine Linux to Debian Slim base image
 - Installed PostgreSQL 18 client from PGDG repository
 - Removed `docker-cli` dependency
 - Enabled proper `node` user (no longer running as root)
 
 ### 2. docker-compose.yml
+
 - Updated database image: `postgres:17` → `postgres:18`
 - Removed Docker socket mount (`/var/run/docker.sock`)
 - Removed `user: root` directive (now runs as node user)
 
 ### 3. routes/admin.js
+
 - Updated default `PG_MAJOR` from 16 → 18
 - Replaced `docker exec` approach with direct TCP connections
 - Uses environment variables (PGHOST, PGPORT, etc.) for DB access
@@ -56,6 +60,7 @@ docker-compose -f docker-compose.local.yml down -v
 ### Option 1: Export/Import (Recommended)
 
 1. **Backup current production data:**
+
    ```bash
    # Use the admin interface to download a backup
    # Or use docker exec on current production:
@@ -77,6 +82,7 @@ docker-compose -f docker-compose.local.yml down -v
 ### Option 2: In-place Upgrade (Advanced)
 
 The `docker-entrypoint-upgrade.sh` script supports PostgreSQL 17→18 upgrades:
+
 1. It detects PostgreSQL 17 data
 2. Installs PostgreSQL 17 binaries
 3. Runs `pg_upgrade` to migrate to PostgreSQL 18
@@ -105,6 +111,7 @@ The `docker-entrypoint-upgrade.sh` script supports PostgreSQL 17→18 upgrades:
 ## Rollback Plan
 
 If issues arise:
+
 ```bash
 git checkout main
 docker-compose pull  # Get the old images
@@ -119,4 +126,3 @@ Then restore data from the backup taken in step 1.
 - PostgreSQL credentials are passed via environment variables
 - The `postgres-socket` volume is still mounted but connection is via TCP
 - Image size increases by ~25MB (70MB vs 45MB), acceptable tradeoff
-

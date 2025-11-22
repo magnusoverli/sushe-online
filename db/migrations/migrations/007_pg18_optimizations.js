@@ -37,7 +37,7 @@ async function up(pool) {
     SELECT 1 FROM information_schema.columns 
     WHERE table_name='users' AND column_name='playlist_preferences'
   `);
-  
+
   if (playlistPrefExists.rowCount > 0) {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_users_playlist_preferences 
@@ -61,4 +61,3 @@ async function down(pool) {
 }
 
 module.exports = { up, down };
-

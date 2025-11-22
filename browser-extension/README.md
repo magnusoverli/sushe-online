@@ -159,6 +159,7 @@ Files:
 ### v1.2.1 (2025-11-21)
 
 **Bug Fixes:**
+
 - Fixed critical bug where albums were being added to `http://localhost:3000` instead of the configured production URL
 - Issue occurred after Chrome service worker restarts - the API URL from storage was not properly reloaded
 - Updated `ensureStateLoaded()` function to always reload API URL from storage when default localhost URL is detected
@@ -166,6 +167,7 @@ Files:
 ### v1.2.0
 
 **Features:**
+
 - Token-based authentication for browser extension
 - Persistent login state across browser restarts
 - Settings page with connection testing
@@ -173,6 +175,7 @@ Files:
 ### v1.0.0
 
 **Initial Release:**
+
 - RateYourMusic integration
 - MusicBrainz album lookup
 - Deezer cover art fetching
