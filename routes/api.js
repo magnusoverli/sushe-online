@@ -157,18 +157,20 @@ async function getStorableValue(listItemValue, albumId, field, pool) {
  */
 async function getStorableTracksValue(listItemTracks, albumId, pool) {
   if (!albumId || !listItemTracks) {
-    return listItemTracks || null;
+    // JSONB columns need JSON string, not raw array
+    return listItemTracks ? JSON.stringify(listItemTracks) : null;
   }
 
   const albumData = await getAlbumData(albumId, pool);
   if (!albumData || !albumData.tracks) {
-    return listItemTracks || null;
+    return JSON.stringify(listItemTracks);
   }
 
   // Deep comparison for JSONB
   const tracksEqual =
     JSON.stringify(listItemTracks) === JSON.stringify(albumData.tracks);
-  return tracksEqual ? null : listItemTracks;
+  // Return JSON string for JSONB column, or null if duplicate
+  return tracksEqual ? null : JSON.stringify(listItemTracks);
 }
 
 module.exports = (app, deps) => {
