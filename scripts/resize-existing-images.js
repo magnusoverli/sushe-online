@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration script to resize all existing album cover images to 350x350 pixels
+ * Migration script to resize all existing album cover images to 256x256 pixels
  * Processes both albums and list_items tables
  */
 
@@ -14,7 +14,7 @@ const pool = new Pool({
 });
 
 const BATCH_SIZE = 50; // Process 50 images at a time
-const TARGET_SIZE = 350;
+const TARGET_SIZE = 256;
 const JPEG_QUALITY = 85;
 
 // Statistics tracking
@@ -24,7 +24,7 @@ const stats = {
 };
 
 /**
- * Resize a base64-encoded image to 350x350 pixels
+ * Resize a base64-encoded image to 256x256 pixels
  */
 async function resizeImage(base64Data) {
   if (!base64Data || base64Data.length === 0) {

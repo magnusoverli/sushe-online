@@ -1204,7 +1204,7 @@ async function handleManualSubmit(e) {
     showToast('Processing cover art...', 'info');
 
     try {
-      // Resize image to 350x350 using Canvas API
+      // Resize image to 256x256 using Canvas API
       const img = new Image();
       const reader = new FileReader();
 
@@ -1214,10 +1214,10 @@ async function handleManualSubmit(e) {
           const canvas = document.createElement('canvas');
           const ctx = canvas.getContext('2d');
 
-          // Calculate dimensions to maintain aspect ratio (fit inside 350x350)
+          // Calculate dimensions to maintain aspect ratio (fit inside 256x256)
           let width = img.width;
           let height = img.height;
-          const maxSize = 350;
+          const maxSize = 256;
 
           if (width > height) {
             if (width > maxSize) {

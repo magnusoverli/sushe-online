@@ -1116,11 +1116,11 @@ module.exports = (app, deps) => {
 
           const buffer = await response.arrayBuffer();
 
-          // Resize image to 350x350 pixels using sharp
+          // Resize image to 256x256 pixels using sharp
           // Use 'inside' fit to maintain aspect ratio without cropping
           // Convert to JPEG for consistent format and smaller file size
           const resizedBuffer = await sharp(Buffer.from(buffer))
-            .resize(350, 350, {
+            .resize(256, 256, {
               fit: 'inside', // Maintain aspect ratio
               withoutEnlargement: true, // Don't upscale small images
             })

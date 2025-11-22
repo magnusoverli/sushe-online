@@ -3615,13 +3615,53 @@ async function fetchAndApplyCovers(albums) {
 
     if (!covers || Object.keys(covers).length === 0) return;
 
-    // Apply covers to all matching img elements
+    // Query DOM once and build lookup map (avoids N querySelectorAll calls)
+    const imgElements = document.querySelectorAll('img[data-album-id]');
+    const imgMap = new Map();
+    imgElements.forEach((img) => {
+      const id = img.dataset.albumId;
+      if (!imgMap.has(id)) {
+        imgMap.set(id, []);
+      }
+      imgMap.get(id).push(img);
+    });
+
+    // Pre-decode all images in parallel, then apply in single batch
+    const decodePromises = [];
+    const updates = [];
+
     for (const [albumId, dataUri] of Object.entries(covers)) {
-      const imgs = document.querySelectorAll(`img[data-album-id="${albumId}"]`);
-      imgs.forEach((img) => {
-        img.src = dataUri;
-      });
+      const imgs = imgMap.get(albumId);
+      if (!imgs) continue;
+
+      for (const img of imgs) {
+        // Create temporary image for decoding
+        const tempImg = new Image();
+        tempImg.src = dataUri;
+
+        const decodePromise = tempImg
+          .decode()
+          .then(() => {
+            updates.push({ img, dataUri });
+          })
+          .catch(() => {
+            // Fallback: still update even if decode fails
+            updates.push({ img, dataUri });
+          });
+
+        decodePromises.push(decodePromise);
+      }
     }
+
+    // Wait for all decodes to complete
+    await Promise.all(decodePromises);
+
+    // Apply all updates in a single animation frame to minimize reflows
+    requestAnimationFrame(() => {
+      for (const { img, dataUri } of updates) {
+        img.src = dataUri;
+      }
+    });
   } catch (err) {
     console.warn('Failed to batch fetch covers:', err);
     // Fallback: individual images will still load via their original URLs
