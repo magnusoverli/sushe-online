@@ -1451,26 +1451,33 @@ function initializeContextMenu() {
         delete lists[currentContextList];
 
         if (currentList === currentContextList) {
-          currentList = null;
-          window.currentList = currentList;
+          const remainingLists = Object.keys(lists);
+          if (remainingLists.length > 0) {
+            // Select the first list in the sidebar
+            selectList(remainingLists[0]);
+          } else {
+            // No lists remain - show empty state
+            currentList = null;
+            window.currentList = currentList;
 
-          const headerSeparator = document.getElementById('headerSeparator');
-          const headerListName = document.getElementById('headerListName');
-          const headerAddAlbumBtn =
-            document.getElementById('headerAddAlbumBtn');
+            const headerSeparator = document.getElementById('headerSeparator');
+            const headerListName = document.getElementById('headerListName');
+            const headerAddAlbumBtn =
+              document.getElementById('headerAddAlbumBtn');
 
-          if (headerSeparator && headerListName && headerAddAlbumBtn) {
-            headerSeparator.classList.add('hidden');
-            headerListName.classList.add('hidden');
-            headerAddAlbumBtn.classList.add('hidden');
+            if (headerSeparator && headerListName && headerAddAlbumBtn) {
+              headerSeparator.classList.add('hidden');
+              headerListName.classList.add('hidden');
+              headerAddAlbumBtn.classList.add('hidden');
+            }
+
+            document.getElementById('albumContainer').innerHTML = `
+              <div class="text-center text-gray-500 mt-20">
+                <p class="text-xl mb-2">No list selected</p>
+                <p class="text-sm">Create or import a list to get started</p>
+              </div>
+            `;
           }
-
-          document.getElementById('albumContainer').innerHTML = `
-            <div class="text-center text-gray-500 mt-20">
-              <p class="text-xl mb-2">No list selected</p>
-              <p class="text-sm">Create or import a list to get started</p>
-            </div>
-          `;
         }
 
         updateListNav();
