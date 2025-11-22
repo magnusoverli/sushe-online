@@ -3953,6 +3953,23 @@ async function moveAlbumToList(index, albumId, targetList) {
   // Clone the album data to preserve all metadata
   const albumToMove = { ...album };
 
+  // Check for duplicate in target list
+  const albumKey =
+    `${albumToMove.artist}::${albumToMove.album}::${albumToMove.release_date || ''}`.toLowerCase();
+  const isDuplicate = lists[targetList].some((existing) => {
+    const existingKey =
+      `${existing.artist}::${existing.album}::${existing.release_date || ''}`.toLowerCase();
+    return existingKey === albumKey;
+  });
+
+  if (isDuplicate) {
+    showToast(
+      `"${albumToMove.album}" already exists in "${targetList}"`,
+      'error'
+    );
+    return;
+  }
+
   // Remove from source list
   lists[currentList].splice(indexToMove, 1);
 
