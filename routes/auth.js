@@ -1103,14 +1103,6 @@ module.exports = (app, deps) => {
         
         const data = await response.json();
         
-        // Store in sessionStorage as backup
-        try {
-          sessionStorage.setItem('sushe_auth_token', data.token);
-          sessionStorage.setItem('sushe_auth_expires', data.expiresAt);
-        } catch (e) {
-          console.log('Could not store in sessionStorage:', e);
-        }
-        
         status.innerHTML = \`
           <div class="success">
             ✓ Authorization successful!
@@ -1121,22 +1113,7 @@ module.exports = (app, deps) => {
         
         btn.innerHTML = 'Authorization Complete';
         
-        // Try to detect if we can communicate with extension
-        // Method 1: Check if page was opened by extension
-        if (window.opener) {
-          // Try postMessage to opener
-          try {
-            window.opener.postMessage({
-              type: 'SUSHE_AUTH_SUCCESS',
-              token: data.token,
-              expiresAt: data.expiresAt
-            }, '*');
-          } catch (e) {
-            console.log('Could not post to opener:', e);
-          }
-        }
-        
-        // Method 2: Set a custom event that content script can listen for
+        // Dispatch custom event for content script to receive token
         window.dispatchEvent(new CustomEvent('sushe-auth-complete', {
           detail: {
             token: data.token,
