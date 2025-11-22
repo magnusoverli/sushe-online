@@ -298,6 +298,63 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Batch fetch multiple album covers - reduces N requests to 1
+  app.get('/api/albums/covers', ensureAuthAPI, async (req, res) => {
+    try {
+      const { ids } = req.query;
+
+      if (!ids) {
+        return res.status(400).json({ error: 'Missing ids parameter' });
+      }
+
+      // Parse comma-separated IDs and validate
+      const albumIds = ids
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id.length > 0);
+
+      if (albumIds.length === 0) {
+        return res.json({ covers: {} });
+      }
+
+      // Limit to prevent abuse (100 covers per request should be plenty)
+      if (albumIds.length > 100) {
+        return res
+          .status(400)
+          .json({ error: 'Too many IDs requested (max 100)' });
+      }
+
+      // Single query for all covers
+      const result = await pool.query(
+        'SELECT album_id, cover_image, cover_image_format FROM albums WHERE album_id = ANY($1)',
+        [albumIds]
+      );
+
+      // Build response object with data URIs
+      const covers = {};
+      for (const row of result.rows) {
+        if (row.cover_image) {
+          const format = (row.cover_image_format || 'jpeg').toLowerCase();
+          covers[row.album_id] =
+            `data:image/${format};base64,${row.cover_image}`;
+        }
+      }
+
+      // Cache for 1 hour (covers don't change often)
+      res.set({
+        'Cache-Control': 'private, max-age=3600',
+      });
+
+      res.json({ covers });
+    } catch (err) {
+      logger.error('Error fetching album covers batch:', {
+        error: err.message,
+        idsCount: req.query.ids?.split(',').length,
+      });
+      res.status(500).json({ error: 'Error fetching covers' });
+    }
+  });
+
   app.get(
     '/api/lists',
     ensureAuthAPI,

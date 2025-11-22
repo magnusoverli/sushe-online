@@ -2215,6 +2215,10 @@ async function selectList(listName) {
         // Pass forceFullRebuild flag to skip incremental update checks when switching lists
         if (currentList === listName) {
           displayAlbums(data, { forceFullRebuild: true });
+          // Batch fetch all album covers in a single request (non-blocking)
+          fetchAndApplyCovers(data).catch((err) => {
+            console.warn('Background cover fetch failed:', err);
+          });
         }
       } catch (err) {
         console.warn('Failed to fetch list data:', err);
@@ -2781,6 +2785,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 // Shared album data processing
 function processAlbumData(album, index) {
   const position = index + 1;
+  const albumId = album.album_id || '';
   const albumName = album.album || 'Unknown Album';
   const artist = album.artist || 'Unknown Artist';
   const releaseDate = formatReleaseDate(album.release_date || '');
@@ -2843,6 +2848,7 @@ function processAlbumData(album, index) {
 
   return {
     position,
+    albumId,
     albumName,
     artist,
     releaseDate,
@@ -2887,17 +2893,26 @@ function createDesktopAlbumRow(data, index) {
     <div class="flex items-center">
       <div class="album-cover-container">
         ${
-          data.coverImageUrl || data.coverImage
+          data.albumId
             ? `
-          <img src="${data.coverImageUrl || `data:image/${data.imageFormat};base64,${data.coverImage}`}" 
+          <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
               alt="${data.albumName}" 
-              class="album-cover rounded shadow-lg"
+              class="album-cover rounded shadow-lg bg-gray-800"
+              data-album-id="${data.albumId}"
               decoding="async"
-              loading="lazy"
               onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
           >
         `
-            : `
+            : data.coverImage
+              ? `
+          <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
+              alt="${data.albumName}" 
+              class="album-cover rounded shadow-lg"
+              decoding="async"
+              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+          >
+        `
+              : `
           <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -3081,15 +3096,22 @@ function createMobileAlbumCard(data, index) {
         <div class="flex flex-col items-center pl-1.5 py-1">
           <div class="flex-shrink-0">
             ${
-              data.coverImageUrl || data.coverImage
+              data.albumId
                 ? `
-              <img src="${data.coverImageUrl || `data:image/${data.imageFormat};base64,${data.coverImage}`}"
+              <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                  alt="${data.albumName}"
+                  class="w-20 h-20 rounded-lg object-cover shadow-md bg-gray-800"
+                  data-album-id="${data.albumId}"
+                  decoding="async">
+            `
+                : data.coverImage
+                  ? `
+              <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
                   alt="${data.albumName}"
                   class="w-20 h-20 rounded-lg object-cover shadow-md"
-                  decoding="async"
-                  loading="lazy">
+                  decoding="async">
             `
-                : `
+                  : `
               <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
                 <i class="fas fa-compact-disc text-xl text-gray-600"></i>
               </div>
@@ -3574,6 +3596,36 @@ function displayAlbums(albums, options = {}) {
   requestAnimationFrame(() => {
     lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
   });
+}
+
+// Batch fetch and apply album covers - reduces N HTTP requests to 1
+async function fetchAndApplyCovers(albums) {
+  if (!albums || albums.length === 0) return;
+
+  // Collect album IDs that need covers
+  const albumIds = albums.map((a) => a.album_id).filter((id) => id); // Filter out empty/null IDs
+
+  if (albumIds.length === 0) return;
+
+  try {
+    const response = await apiCall(
+      `/api/albums/covers?ids=${albumIds.join(',')}`
+    );
+    const { covers } = response;
+
+    if (!covers || Object.keys(covers).length === 0) return;
+
+    // Apply covers to all matching img elements
+    for (const [albumId, dataUri] of Object.entries(covers)) {
+      const imgs = document.querySelectorAll(`img[data-album-id="${albumId}"]`);
+      imgs.forEach((img) => {
+        img.src = dataUri;
+      });
+    }
+  } catch (err) {
+    console.warn('Failed to batch fetch covers:', err);
+    // Fallback: individual images will still load via their original URLs
+  }
 }
 
 // Clear position cache when rebuilding
