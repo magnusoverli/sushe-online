@@ -938,7 +938,6 @@ const spotifyTemplate = (user) => `
     .sidebar {
       width: 0;
       overflow: hidden;
-      transition: none;
     }
     
     @media (min-width: 1024px) {
@@ -1030,7 +1029,7 @@ const spotifyTemplate = (user) => `
   <div class="app-layout">
     <!-- Unified Header -->
     <header class="bg-gray-900 border-b border-gray-800 z-50">
-      <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-6">
+      <div class="relative flex items-center justify-between py-3 lg:py-4 px-3 lg:px-6">
         <!-- Mobile menu button / Desktop logo -->
         <div class="flex items-center gap-2 lg:gap-8">
           <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
@@ -1048,7 +1047,14 @@ const spotifyTemplate = (user) => `
         
         <!-- Current list name (mobile only) -->
         <div class="mobile-only flex items-center gap-2 min-w-0 flex-1 mx-2">
-          <span id="headerListName" class="text-sm text-yellow-500 font-medium truncate ${user.lastSelectedList ? '' : 'hidden'}">
+          <span id="headerListName" class="text-base font-medium truncate ${user.lastSelectedList ? '' : 'hidden'}" style="color: var(--accent-color);">
+            ${user.lastSelectedList || ''}
+          </span>
+        </div>
+        
+        <!-- Current list name (desktop - centered) -->
+        <div class="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+          <span id="headerListNameDesktop" class="text-xl font-semibold truncate max-w-md ${user.lastSelectedList ? '' : 'hidden'}" style="color: var(--accent-color);">
             ${user.lastSelectedList || ''}
           </span>
         </div>
@@ -1254,6 +1260,13 @@ const spotifyTemplate = (user) => `
         if (headerListName) {
           headerListName.textContent = listName || '';
           headerListName.classList.toggle('hidden', !listName);
+        }
+        
+        // Update desktop header (centered)
+        const headerListNameDesktop = document.getElementById('headerListNameDesktop');
+        if (headerListNameDesktop) {
+          headerListNameDesktop.textContent = listName || '';
+          headerListNameDesktop.classList.toggle('hidden', !listName);
         }
         
         // Show/hide FAB

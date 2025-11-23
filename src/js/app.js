@@ -1634,14 +1634,17 @@ function initializeContextMenu() {
 
             const headerSeparator = document.getElementById('headerSeparator');
             const headerListName = document.getElementById('headerListName');
+            const headerListNameDesktop = document.getElementById(
+              'headerListNameDesktop'
+            );
             const headerAddAlbumBtn =
               document.getElementById('headerAddAlbumBtn');
 
-            if (headerSeparator && headerListName && headerAddAlbumBtn) {
-              headerSeparator.classList.add('hidden');
-              headerListName.classList.add('hidden');
-              headerAddAlbumBtn.classList.add('hidden');
-            }
+            if (headerSeparator) headerSeparator.classList.add('hidden');
+            if (headerListName) headerListName.classList.add('hidden');
+            if (headerListNameDesktop)
+              headerListNameDesktop.classList.add('hidden');
+            if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
 
             document.getElementById('albumContainer').innerHTML = `
               <div class="text-center text-gray-500 mt-20">
@@ -2722,12 +2725,24 @@ window.selectList = selectList;
 function updateHeaderTitle(listName) {
   const headerSeparator = document.getElementById('headerSeparator');
   const headerListName = document.getElementById('headerListName');
+  const headerListNameDesktop = document.getElementById(
+    'headerListNameDesktop'
+  );
   const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
 
-  if (listName && headerSeparator && headerListName) {
-    headerSeparator.classList.remove('hidden');
-    headerListName.classList.remove('hidden');
-    headerListName.textContent = listName;
+  if (listName) {
+    // Update mobile header
+    if (headerSeparator) headerSeparator.classList.remove('hidden');
+    if (headerListName) {
+      headerListName.classList.remove('hidden');
+      headerListName.textContent = listName;
+    }
+
+    // Update desktop header (centered)
+    if (headerListNameDesktop) {
+      headerListNameDesktop.classList.remove('hidden');
+      headerListNameDesktop.textContent = listName;
+    }
 
     // Also show the add album button in header if it exists
     if (headerAddAlbumBtn) {
