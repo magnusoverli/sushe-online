@@ -59,22 +59,9 @@ const headerComponent = (user, activeSection = 'home') => `
         <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
       </div>
       
-      ${
-        activeSection !== 'home'
-          ? `
-      <!-- Home link (desktop only, when not on home) -->
-      <nav class="hidden lg:flex gap-6">
-        <a href="/" class="text-gray-300 hover:text-white transition duration-200">
-          <i class="fas fa-home mr-2"></i>Home
-        </a>
-      </nav>
-      `
-          : ''
-      }
-      
       <!-- User menu -->
-      <div class="flex items-center gap-2 lg:gap-6">
-        <span class="hidden lg:inline text-sm text-gray-400">${user?.email}</span>
+      <div class="flex items-center gap-2 lg:gap-6 pr-3 lg:pr-6">
+        <span class="hidden lg:inline text-sm text-gray-400">${user?.username || user?.email}</span>
         <a href="/settings" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
           <i class="fas fa-cog text-lg"></i>
         </a>

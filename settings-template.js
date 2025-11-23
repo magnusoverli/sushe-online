@@ -661,7 +661,7 @@ const settingsTemplate = (req, options) => {
   <div class="h-screen flex flex-col">
     ${headerComponent(user, 'settings')}
     
-    <main class="flex-1 overflow-y-auto overflow-x-hidden min-h-0">
+    <main class="flex-1 overflow-y-auto overflow-x-hidden min-h-0 pt-4 lg:pt-6">
       <div class="container mx-auto px-4 py-6 lg:py-8 max-w-7xl">
       <div class="mb-6 lg:mb-8">
         <h1 class="text-2xl lg:text-3xl font-bold text-white">Settings</h1>
