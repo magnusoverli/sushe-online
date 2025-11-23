@@ -48,11 +48,17 @@ const headerComponent = (
     <div class="hidden lg:flex items-center justify-between py-4 px-6">
       <div class="flex items-center gap-8">
         <a href="/" class="text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
+        ${
+          activeSection !== 'home'
+            ? `
         <nav class="flex gap-6">
-          <a href="/" class="${activeSection === 'home' ? 'text-red-600' : 'text-gray-300 hover:text-white'} transition duration-200">
+          <a href="/" class="text-gray-300 hover:text-white transition duration-200">
             <i class="fas fa-home mr-2"></i>Home
           </a>
         </nav>
+        `
+            : ''
+        }
       </div>
       
       <div class="flex items-center gap-6">
@@ -1036,13 +1042,6 @@ const spotifyTemplate = (user) => `
             <i class="fas fa-bars text-lg"></i>
           </button>
           <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
-          
-          <!-- Desktop navigation -->
-          <nav class="hidden lg:flex gap-6">
-            <a href="/" class="text-red-600 transition duration-200">
-              <i class="fas fa-home mr-2"></i>Home
-            </a>
-          </nav>
         </div>
         
         <!-- Current list name (mobile only) -->
