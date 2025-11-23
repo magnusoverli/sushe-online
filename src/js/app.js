@@ -52,6 +52,152 @@ let pendingImportData = null;
 let pendingImportFilename = null;
 let confirmationCallback = null;
 
+// ============ LIST DATA ACCESS HELPERS ============
+// These helpers provide a clean abstraction for accessing list data
+// Lists now use metadata objects: { name, year, count, _data, updatedAt, createdAt }
+
+/**
+ * Get the album array for a list
+ * @param {string} listName - The name of the list
+ * @returns {Array|null} - The album array or null if not found/loaded
+ */
+function getListData(listName) {
+  if (!listName || !lists[listName]) {
+    return null;
+  }
+
+  const listEntry = lists[listName];
+
+  // Handle legacy array format (for backward compatibility during transition)
+  if (Array.isArray(listEntry)) {
+    console.warn(
+      `Legacy array format detected for list "${listName}". Consider reloading.`
+    );
+    return listEntry;
+  }
+
+  // New metadata object format
+  return listEntry._data || null;
+}
+
+/**
+ * Set the album array for a list, preserving metadata
+ * @param {string} listName - The name of the list
+ * @param {Array} albums - The album array to set
+ */
+function setListData(listName, albums) {
+  if (!listName) return;
+
+  if (!lists[listName]) {
+    // Create new metadata object if list doesn't exist
+    lists[listName] = {
+      name: listName,
+      year: null,
+      count: albums ? albums.length : 0,
+      _data: albums || [],
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+  } else if (Array.isArray(lists[listName])) {
+    // Handle legacy array format - convert to metadata object
+    console.warn(
+      `Converting legacy array format for list "${listName}" to metadata object.`
+    );
+    lists[listName] = {
+      name: listName,
+      year: null,
+      count: albums ? albums.length : 0,
+      _data: albums || [],
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+  } else {
+    // Update existing metadata object
+    lists[listName]._data = albums || [];
+    lists[listName].count = albums ? albums.length : 0;
+  }
+}
+
+/**
+ * Get metadata for a list (name, year, count, etc.)
+ * @param {string} listName - The name of the list
+ * @returns {Object|null} - The metadata object or null
+ */
+function getListMetadata(listName) {
+  if (!listName || !lists[listName]) {
+    return null;
+  }
+
+  const listEntry = lists[listName];
+
+  // Handle legacy array format
+  if (Array.isArray(listEntry)) {
+    return {
+      name: listName,
+      year: null,
+      count: listEntry.length,
+      _data: listEntry,
+      updatedAt: null,
+      createdAt: null,
+    };
+  }
+
+  return listEntry;
+}
+
+/**
+ * Update metadata for a list (year, name, etc.)
+ * @param {string} listName - The name of the list
+ * @param {Object} updates - The metadata fields to update
+ */
+function updateListMetadata(listName, updates) {
+  if (!listName || !lists[listName]) return;
+
+  const listEntry = lists[listName];
+
+  // Handle legacy array format - convert first
+  if (Array.isArray(listEntry)) {
+    lists[listName] = {
+      name: listName,
+      year: null,
+      count: listEntry.length,
+      _data: listEntry,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  // Apply updates
+  Object.assign(lists[listName], updates);
+}
+
+/**
+ * Check if list data has been loaded
+ * @param {string} listName - The name of the list
+ * @returns {boolean}
+ */
+function isListDataLoaded(listName) {
+  if (!listName || !lists[listName]) return false;
+
+  const listEntry = lists[listName];
+
+  // Legacy array format is always "loaded"
+  if (Array.isArray(listEntry)) return true;
+
+  // Check if _data is populated (not null/empty when count > 0)
+  return (
+    listEntry._data !== null &&
+    (listEntry._data.length > 0 || listEntry.count === 0)
+  );
+}
+
+// Expose helpers to window for other modules
+window.getListData = getListData;
+window.setListData = setListData;
+window.getListMetadata = getListMetadata;
+window.updateListMetadata = updateListMetadata;
+window.isListDataLoaded = isListDataLoaded;
+
 // Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
 // Positions a menu element and adjusts if it would overflow the viewport
 function positionContextMenu(menu, x, y) {
@@ -135,8 +281,8 @@ const _POSITION_POINTS = {
   40: 1,
 };
 
-// Hide context menus when clicking elsewhere
-document.addEventListener('click', () => {
+// Hide all context menus helper
+function hideAllContextMenus() {
   const contextMenu = document.getElementById('contextMenu');
   if (contextMenu) {
     contextMenu.classList.add('hidden');
@@ -160,7 +306,13 @@ document.addEventListener('click', () => {
   if (albumMoveSubmenu) {
     albumMoveSubmenu.classList.add('hidden');
   }
-});
+}
+
+// Hide context menus when clicking elsewhere
+document.addEventListener('click', hideAllContextMenus);
+
+// Hide context menus when right-clicking elsewhere (before new menu opens)
+document.addEventListener('contextmenu', hideAllContextMenus);
 
 // Prevent default context menu on right-click in list nav
 document.addEventListener('contextmenu', (e) => {
@@ -907,7 +1059,9 @@ function makeCountryEditable(countryDiv, albumIndex) {
   }
 
   // Get current country from the live data
-  const currentCountry = lists[currentList][albumIndex].country || '';
+  const albums = getListData(currentList);
+  if (!albums || !albums[albumIndex]) return;
+  const currentCountry = albums[albumIndex].country || '';
 
   // Create input with datalist
   const input = document.createElement('input');
@@ -992,18 +1146,20 @@ function makeCountryEditable(countryDiv, albumIndex) {
     }
 
     // Update the data
-    lists[currentList][albumIndex].country = newCountry;
+    const albumsToUpdate = getListData(currentList);
+    if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
+    albumsToUpdate[albumIndex].country = newCountry;
 
     // Close the dropdown immediately for better UX
     restoreDisplay(newCountry);
 
     try {
-      await saveList(currentList, lists[currentList]);
+      await saveList(currentList, albumsToUpdate);
       showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
     } catch (_error) {
       showToast('Error saving country', 'error');
       // Revert on error
-      lists[currentList][albumIndex].country = currentCountry;
+      albumsToUpdate[albumIndex].country = currentCountry;
       restoreDisplay(currentCountry);
     }
   };
@@ -1200,13 +1356,22 @@ async function loadLists() {
       ? apiCall(`/api/lists/${encodeURIComponent(targetList)}`)
       : null;
 
-    // Wait for metadata (fast - just list names and counts)
+    // Wait for metadata (fast - just list names, years, and counts)
     const fetchedLists = await metadataPromise;
 
-    // Initialize lists object with metadata placeholders
+    // Initialize lists object with metadata objects (not arrays)
+    // Structure: { name, year, count, _data, updatedAt, createdAt }
     lists = {};
     Object.keys(fetchedLists).forEach((name) => {
-      lists[name] = []; // Empty array placeholder
+      const meta = fetchedLists[name];
+      lists[name] = {
+        name: meta.name || name,
+        year: meta.year || null,
+        count: meta.count || 0,
+        _data: null, // Data not loaded yet (lazy load)
+        updatedAt: meta.updatedAt || null,
+        createdAt: meta.createdAt || null,
+      };
     });
     window.lists = lists;
 
@@ -1217,7 +1382,8 @@ async function loadLists() {
     if (listDataPromise && targetList) {
       try {
         const listData = await listDataPromise;
-        lists[targetList] = listData; // Store the actual data
+        // Store the actual data in the metadata object
+        setListData(targetList, listData);
 
         // Only auto-select if no list is currently selected
         if (!window.currentList) {
@@ -1243,7 +1409,10 @@ async function loadLists() {
 }
 
 // Save list to server
-async function saveList(name, data) {
+// @param {string} name - List name
+// @param {Array} data - Album array
+// @param {number|null} year - Optional year for the list (required for new lists)
+async function saveList(name, data, year = undefined) {
   try {
     const cleanedData = data.map((album) => {
       const cleaned = { ...album };
@@ -1252,13 +1421,31 @@ async function saveList(name, data) {
       return cleaned;
     });
 
+    const body = { data: cleanedData };
+
+    // Include year if provided (required for new lists)
+    if (year !== undefined) {
+      body.year = year;
+    } else {
+      // For existing lists, preserve current year if not explicitly provided
+      const existingMeta = getListMetadata(name);
+      if (existingMeta && existingMeta.year) {
+        body.year = existingMeta.year;
+      }
+    }
+
     await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
       method: 'POST',
-      body: JSON.stringify({ data: cleanedData }),
+      body: JSON.stringify(body),
     });
 
-    // Update in-memory list data
-    lists[name] = cleanedData;
+    // Update in-memory list data using helper (preserves metadata)
+    setListData(name, cleanedData);
+
+    // Update year in metadata if provided
+    if (year !== undefined) {
+      updateListMetadata(name, { year: year });
+    }
   } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
@@ -1319,8 +1506,8 @@ async function pLimit(concurrency, tasks) {
 // Fix #3: Add concurrency limiting to track fetching (3-5 concurrent requests)
 // This prevents overwhelming the backend while still being much faster than sequential
 async function autoFetchTracksForList(name) {
-  const list = lists[name];
-  if (!list) return;
+  const list = getListData(name);
+  if (!list || !Array.isArray(list)) return;
 
   const toFetch = list.filter(
     (album) => !Array.isArray(album.tracks) || album.tracks.length === 0
@@ -1504,8 +1691,8 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
-    const expectedAlbum =
-      lists[currentList] && lists[currentList][currentContextAlbum];
+    const albumsForEdit = getListData(currentList);
+    const expectedAlbum = albumsForEdit && albumsForEdit[currentContextAlbum];
     if (expectedAlbum && currentContextAlbumId) {
       const expectedId =
         `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
@@ -1530,8 +1717,8 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
-    const expectedAlbum =
-      lists[currentList] && lists[currentList][currentContextAlbum];
+    const albumsForPlay = getListData(currentList);
+    const expectedAlbum = albumsForPlay && albumsForPlay[currentContextAlbum];
     if (expectedAlbum && currentContextAlbumId) {
       const expectedId =
         `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
@@ -1556,7 +1743,8 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
-    let album = lists[currentList] && lists[currentList][currentContextAlbum];
+    const albumsForRemove = getListData(currentList);
+    let album = albumsForRemove && albumsForRemove[currentContextAlbum];
     let indexToRemove = currentContextAlbum;
 
     if (album && currentContextAlbumId) {
@@ -1589,10 +1777,15 @@ function initializeAlbumContextMenu() {
       async () => {
         try {
           // Remove from the list using the correct index
-          lists[currentList].splice(indexToRemove, 1);
+          const albumsToModify = getListData(currentList);
+          if (!albumsToModify) {
+            showToast('Error: List data not found', 'error');
+            return;
+          }
+          albumsToModify.splice(indexToRemove, 1);
 
           // Save to server
-          await saveList(currentList, lists[currentList]);
+          await saveList(currentList, albumsToModify);
 
           // Update display
           selectList(currentList);
@@ -1730,7 +1923,8 @@ function hideSubmenuOnLeave() {
 
 // Play the selected album on the connected music service
 function playAlbum(index) {
-  const album = lists[currentList][index];
+  const albums = getListData(currentList);
+  const album = albums && albums[index];
   if (!album) return;
 
   const hasSpotify = window.currentUser?.spotifyAuth;
@@ -1808,10 +2002,15 @@ function initializeCreateList() {
 
   if (!createBtn || !modal) return;
 
+  const yearInput = document.getElementById('newListYear');
+  const yearError = document.getElementById('createYearError');
+
   // Open modal
   createBtn.onclick = () => {
     modal.classList.remove('hidden');
     nameInput.value = '';
+    yearInput.value = '';
+    if (yearError) yearError.classList.add('hidden');
     nameInput.focus();
   };
 
@@ -1819,6 +2018,8 @@ function initializeCreateList() {
   const closeModal = () => {
     modal.classList.add('hidden');
     nameInput.value = '';
+    yearInput.value = '';
+    if (yearError) yearError.classList.add('hidden');
   };
 
   cancelBtn.onclick = closeModal;
@@ -1830,15 +2031,41 @@ function initializeCreateList() {
     }
   };
 
+  // Validate year input
+  const validateYear = (yearValue) => {
+    if (!yearValue || yearValue === '') {
+      return { valid: false, error: 'Year is required for new lists' };
+    }
+    const year = parseInt(yearValue, 10);
+    if (!Number.isInteger(year) || year < 1000 || year > 9999) {
+      return { valid: false, error: 'Year must be between 1000 and 9999' };
+    }
+    return { valid: true, value: year };
+  };
+
   // Create list
   const createList = async () => {
     const listName = nameInput.value.trim();
+    const yearValue = yearInput.value.trim();
 
     if (!listName) {
       showToast('Please enter a list name', 'error');
       nameInput.focus();
       return;
     }
+
+    // Validate year
+    const yearValidation = validateYear(yearValue);
+    if (!yearValidation.valid) {
+      if (yearError) {
+        yearError.textContent = yearValidation.error;
+        yearError.classList.remove('hidden');
+      }
+      showToast(yearValidation.error, 'error');
+      yearInput.focus();
+      return;
+    }
+    if (yearError) yearError.classList.add('hidden');
 
     // Check if list already exists
     if (lists[listName]) {
@@ -1848,8 +2075,8 @@ function initializeCreateList() {
     }
 
     try {
-      // Create empty list
-      await saveList(listName, []);
+      // Create empty list with year
+      await saveList(listName, [], yearValidation.value);
 
       // Update navigation
       updateListNav();
@@ -1860,7 +2087,7 @@ function initializeCreateList() {
       // Close modal
       closeModal();
 
-      showToast(`Created list "${listName}"`);
+      showToast(`Created list "${listName}" (${yearValidation.value})`);
     } catch (_error) {
       showToast('Error creating list', 'error');
     }
@@ -1868,8 +2095,15 @@ function initializeCreateList() {
 
   confirmBtn.onclick = createList;
 
-  // Enter key to create
+  // Enter key to create (on name input)
   nameInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      createList();
+    }
+  };
+
+  // Enter key to create (on year input)
+  yearInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
       createList();
     }
@@ -1883,11 +2117,13 @@ function initializeCreateList() {
   });
 }
 
-// Rename list functionality
+// Edit list details functionality (formerly Rename list)
 function initializeRenameList() {
   const modal = document.getElementById('renameListModal');
   const currentNameSpan = document.getElementById('currentListName');
   const nameInput = document.getElementById('newListNameInput');
+  const yearInput = document.getElementById('editListYear');
+  const yearError = document.getElementById('editYearError');
   const cancelBtn = document.getElementById('cancelRenameBtn');
   const confirmBtn = document.getElementById('confirmRenameBtn');
 
@@ -1897,6 +2133,8 @@ function initializeRenameList() {
   const closeModal = () => {
     modal.classList.add('hidden');
     nameInput.value = '';
+    if (yearInput) yearInput.value = '';
+    if (yearError) yearError.classList.add('hidden');
   };
 
   cancelBtn.onclick = closeModal;
@@ -1908,79 +2146,158 @@ function initializeRenameList() {
     }
   };
 
-  // Rename list function
-  const renameList = async () => {
+  // Validate year input (optional for editing)
+  const validateYear = (yearValue) => {
+    if (!yearValue || yearValue === '') {
+      return { valid: true, value: null }; // Empty is valid (removes year)
+    }
+    const year = parseInt(yearValue, 10);
+    if (!Number.isInteger(year) || year < 1000 || year > 9999) {
+      return { valid: false, error: 'Year must be between 1000 and 9999' };
+    }
+    return { valid: true, value: year };
+  };
+
+  // Edit list function
+  const editList = async () => {
     const oldName = currentNameSpan.textContent;
     const newName = nameInput.value.trim();
+    const yearValue = yearInput ? yearInput.value.trim() : '';
 
     if (!newName) {
-      showToast('Please enter a new list name', 'error');
+      showToast('Please enter a list name', 'error');
       nameInput.focus();
       return;
     }
 
-    if (newName === oldName) {
-      showToast('New name must be different from current name', 'error');
-      nameInput.focus();
+    // Validate year if provided
+    const yearValidation = validateYear(yearValue);
+    if (!yearValidation.valid) {
+      if (yearError) {
+        yearError.textContent = yearValidation.error;
+        yearError.classList.remove('hidden');
+      }
+      showToast(yearValidation.error, 'error');
+      if (yearInput) yearInput.focus();
       return;
     }
+    if (yearError) yearError.classList.add('hidden');
 
-    // Check if new name already exists
-    if (lists[newName]) {
+    // Check if new name already exists (only if renaming)
+    if (newName !== oldName && lists[newName]) {
       showToast('A list with this name already exists', 'error');
       nameInput.focus();
       return;
     }
 
-    try {
-      // Get the list data
-      const listData = lists[oldName];
+    // Determine what changed
+    const oldMeta = getListMetadata(oldName);
+    const nameChanged = newName !== oldName;
+    const yearChanged = yearValidation.value !== (oldMeta?.year || null);
 
-      // Create new list with new name
-      await saveList(newName, listData);
+    // If nothing changed, just close
+    if (!nameChanged && !yearChanged) {
+      closeModal();
+      return;
+    }
+
+    try {
+      // Use PATCH endpoint to update name and/or year
+      const patchData = {};
+      if (nameChanged) patchData.newName = newName;
+      if (yearChanged) patchData.year = yearValidation.value;
 
       await apiCall(`/api/lists/${encodeURIComponent(oldName)}`, {
-        method: 'DELETE',
+        method: 'PATCH',
+        body: JSON.stringify(patchData),
       });
 
-      delete lists[oldName];
+      // Update local state
+      if (nameChanged) {
+        // Move the list entry to new key
+        lists[newName] = lists[oldName];
+        lists[newName].name = newName;
+        delete lists[oldName];
 
-      if (currentList === oldName) {
-        currentList = newName;
-        window.currentList = currentList;
-        selectList(newName);
+        if (currentList === oldName) {
+          currentList = newName;
+          window.currentList = currentList;
+        }
+      }
+
+      // Update year in metadata
+      if (yearChanged) {
+        const listToUpdate = nameChanged ? lists[newName] : lists[oldName];
+        if (listToUpdate) {
+          listToUpdate.year = yearValidation.value;
+        }
       }
 
       updateListNav();
 
+      // Update display if current list was renamed
+      if (nameChanged && currentList === newName) {
+        selectList(newName);
+      }
+
       closeModal();
 
-      showToast(`List renamed from "${oldName}" to "${newName}"`);
-    } catch (_error) {
-      showToast('Error renaming list', 'error');
+      // Show appropriate message
+      if (nameChanged && yearChanged) {
+        showToast(
+          `List updated: "${newName}" (${yearValidation.value || 'no year'})`
+        );
+      } else if (nameChanged) {
+        showToast(`List renamed to "${newName}"`);
+      } else {
+        showToast(`Year updated to ${yearValidation.value || 'none'}`);
+      }
+    } catch (error) {
+      console.error('Error updating list:', error);
+      showToast('Error updating list', 'error');
     }
   };
 
-  confirmBtn.onclick = renameList;
+  confirmBtn.onclick = editList;
 
-  // Enter key to rename
+  // Enter key to save
   nameInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
-      renameList();
+      editList();
     }
   };
+
+  if (yearInput) {
+    yearInput.onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        editList();
+      }
+    };
+  }
 }
 
-// Open rename modal
+// Open edit list details modal (formerly rename modal)
 function openRenameModal(listName) {
   const modal = document.getElementById('renameListModal');
   const currentNameSpan = document.getElementById('currentListName');
   const nameInput = document.getElementById('newListNameInput');
+  const yearInput = document.getElementById('editListYear');
+  const yearError = document.getElementById('editYearError');
 
   if (!modal || !currentNameSpan || !nameInput) return;
 
   currentNameSpan.textContent = listName;
   nameInput.value = listName;
+
+  // Populate year from metadata
+  const meta = getListMetadata(listName);
+  if (yearInput) {
+    yearInput.value = meta?.year || '';
+  }
+  if (yearError) {
+    yearError.classList.add('hidden');
+  }
+
   modal.classList.remove('hidden');
 
   // Select all text in the input for easy editing
@@ -1998,21 +2315,19 @@ function updateListNavActiveState(activeListName) {
   const updateActiveState = (container) => {
     if (!container) return;
 
-    // Find all list buttons and update their classes
-    const buttons = container.querySelectorAll('button');
+    // Find only list buttons inside .year-lists containers (not year header buttons)
+    const buttons = container.querySelectorAll('.year-lists button');
     buttons.forEach((button) => {
       const listName = button.querySelector('span')?.textContent;
       if (!listName) return;
 
       const isActive = listName === activeListName;
 
-      // Update classes efficiently
+      // Update only background color, keep text color consistent
       if (isActive) {
-        button.classList.add('bg-gray-800', 'text-red-500');
-        button.classList.remove('text-gray-300');
+        button.classList.add('bg-gray-800');
       } else {
-        button.classList.remove('bg-gray-800', 'text-red-500');
-        button.classList.add('text-gray-300');
+        button.classList.remove('bg-gray-800');
       }
     });
   };
@@ -2021,7 +2336,48 @@ function updateListNavActiveState(activeListName) {
   updateActiveState(mobileNav);
 }
 
-// Update sidebar navigation (full rebuild - only called when list names change)
+// Get expand/collapse state from localStorage
+function getYearExpandState() {
+  try {
+    const state = localStorage.getItem('yearExpandState');
+    return state ? JSON.parse(state) : {};
+  } catch (_e) {
+    return {};
+  }
+}
+
+// Save expand/collapse state to localStorage
+function saveYearExpandState(state) {
+  try {
+    localStorage.setItem('yearExpandState', JSON.stringify(state));
+  } catch (_e) {
+    // Silently fail if localStorage is full
+  }
+}
+
+// Toggle year section expand/collapse
+function toggleYearSection(year, container) {
+  const state = getYearExpandState();
+  const isExpanded = state[year] !== false; // Default to expanded
+  state[year] = !isExpanded;
+  saveYearExpandState(state);
+
+  // Update UI
+  const section = container.querySelector(`[data-year-section="${year}"]`);
+  if (section) {
+    const listsContainer = section.querySelector('.year-lists');
+    const chevron = section.querySelector('.year-chevron');
+    if (listsContainer) {
+      listsContainer.classList.toggle('hidden', isExpanded);
+    }
+    if (chevron) {
+      chevron.classList.toggle('fa-chevron-right', isExpanded);
+      chevron.classList.toggle('fa-chevron-down', !isExpanded);
+    }
+  }
+}
+
+// Update sidebar navigation with year tree view
 function updateListNav() {
   const nav = document.getElementById('listNav');
   const mobileNav = document.getElementById('mobileListNav');
@@ -2029,76 +2385,183 @@ function updateListNav() {
   const createListItems = (container, isMobile = false) => {
     container.innerHTML = '';
 
+    // Group lists by year
+    const listsByYear = {};
+    const uncategorized = [];
+
     Object.keys(lists).forEach((listName) => {
-      const li = document.createElement('li');
-      li.innerHTML = `
-        <button class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 ${currentList === listName ? 'bg-gray-800 text-red-500' : 'text-gray-300'} flex items-center">
-          <i class="fas fa-list mr-2 flex-shrink-0"></i>
-          <span class="truncate">${listName}</span>
-        </button>
-      `;
+      const meta = getListMetadata(listName);
+      const year = meta?.year;
 
-      const button = li.querySelector('button');
-
-      if (!isMobile) {
-        // Desktop: keep right-click
-        button.addEventListener('contextmenu', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-
-          currentContextList = listName;
-
-          const contextMenu = document.getElementById('contextMenu');
-          if (!contextMenu) return;
-
-          // Update the playlist option text based on user's music service
-          const updatePlaylistText =
-            document.getElementById('updatePlaylistText');
-          if (updatePlaylistText) {
-            const musicService = window.currentUser?.musicService;
-            const hasSpotify = window.currentUser?.spotifyAuth;
-            const hasTidal = window.currentUser?.tidalAuth;
-
-            if (musicService === 'spotify' && hasSpotify) {
-              updatePlaylistText.textContent = 'Send to Spotify';
-            } else if (musicService === 'tidal' && hasTidal) {
-              updatePlaylistText.textContent = 'Send to Tidal';
-            } else if (hasSpotify && !hasTidal) {
-              updatePlaylistText.textContent = 'Send to Spotify';
-            } else if (hasTidal && !hasSpotify) {
-              updatePlaylistText.textContent = 'Send to Tidal';
-            } else {
-              updatePlaylistText.textContent = 'Send to Music Service';
-            }
-          }
-
-          // Position the menu at cursor (using batched style operations)
-          positionContextMenu(contextMenu, e.clientX, e.clientY);
-        });
+      if (year) {
+        if (!listsByYear[year]) {
+          listsByYear[year] = [];
+        }
+        listsByYear[year].push({ name: listName, meta });
       } else {
-        // Mobile: long press
-        let pressTimer;
-        button.addEventListener(
-          'touchstart',
-          (_e) => {
-            pressTimer = setTimeout(() => {
-              showMobileListMenu(listName);
-            }, 500);
-          },
-          { passive: true }
-        );
-        button.addEventListener('touchend', () => clearTimeout(pressTimer), {
-          passive: true,
-        });
+        uncategorized.push({ name: listName, meta });
       }
+    });
 
-      button.onclick = () => {
-        selectList(listName);
-        if (isMobile) toggleMobileLists();
+    // Sort years descending
+    const sortedYears = Object.keys(listsByYear).sort(
+      (a, b) => parseInt(b) - parseInt(a)
+    );
+
+    // Get expand state
+    const expandState = getYearExpandState();
+
+    // Create year sections
+    sortedYears.forEach((year) => {
+      const yearLists = listsByYear[year];
+      const isExpanded = expandState[year] !== false; // Default to expanded
+
+      const section = document.createElement('div');
+      section.className = 'year-section mb-1';
+      section.setAttribute('data-year-section', year);
+
+      // Year header
+      const header = document.createElement('button');
+      header.className = `w-full text-left px-3 py-${isMobile ? '2' : '1.5'} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+      header.innerHTML = `
+        <div class="flex items-center">
+          <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
+          <span>${year}</span>
+        </div>
+        <span class="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded font-normal">${yearLists.length}</span>
+      `;
+      header.onclick = (e) => {
+        e.preventDefault();
+        toggleYearSection(year, container);
       };
 
-      container.appendChild(li);
+      section.appendChild(header);
+
+      // Lists container
+      const listsContainer = document.createElement('ul');
+      listsContainer.className = `year-lists pl-4 ${isExpanded ? '' : 'hidden'}`;
+
+      yearLists.forEach(({ name: listName }) => {
+        const li = createListButton(listName, isMobile, container);
+        listsContainer.appendChild(li);
+      });
+
+      section.appendChild(listsContainer);
+      container.appendChild(section);
     });
+
+    // Add uncategorized section if there are any
+    if (uncategorized.length > 0) {
+      const section = document.createElement('div');
+      section.className = 'year-section mb-1';
+      section.setAttribute('data-year-section', 'uncategorized');
+
+      const isExpanded = expandState['uncategorized'] !== false;
+
+      // Header for uncategorized
+      const header = document.createElement('button');
+      header.className = `w-full text-left px-3 py-${isMobile ? '2' : '1.5'} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+      header.innerHTML = `
+        <div class="flex items-center">
+          <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
+          <span>Uncategorized</span>
+        </div>
+        <span class="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded font-normal">${uncategorized.length}</span>
+      `;
+      header.onclick = (e) => {
+        e.preventDefault();
+        toggleYearSection('uncategorized', container);
+      };
+
+      section.appendChild(header);
+
+      // Lists container
+      const listsContainer = document.createElement('ul');
+      listsContainer.className = `year-lists pl-4 ${isExpanded ? '' : 'hidden'}`;
+
+      uncategorized.forEach(({ name: listName }) => {
+        const li = createListButton(listName, isMobile, container);
+        listsContainer.appendChild(li);
+      });
+
+      section.appendChild(listsContainer);
+      container.appendChild(section);
+    }
+  };
+
+  // Helper to create a list button
+  const createListButton = (listName, isMobile, _container) => {
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <button class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 text-gray-300 ${currentList === listName ? 'bg-gray-800' : ''} flex items-center">
+        <i class="fas fa-list mr-2 flex-shrink-0"></i>
+        <span class="truncate">${listName}</span>
+      </button>
+    `;
+
+    const button = li.querySelector('button');
+
+    if (!isMobile) {
+      // Desktop: keep right-click
+      button.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Hide any open context menus first
+        hideAllContextMenus();
+
+        currentContextList = listName;
+
+        const contextMenu = document.getElementById('contextMenu');
+        if (!contextMenu) return;
+
+        // Update the playlist option text based on user's music service
+        const updatePlaylistText =
+          document.getElementById('updatePlaylistText');
+        if (updatePlaylistText) {
+          const musicService = window.currentUser?.musicService;
+          const hasSpotify = window.currentUser?.spotifyAuth;
+          const hasTidal = window.currentUser?.tidalAuth;
+
+          if (musicService === 'spotify' && hasSpotify) {
+            updatePlaylistText.textContent = 'Send to Spotify';
+          } else if (musicService === 'tidal' && hasTidal) {
+            updatePlaylistText.textContent = 'Send to Tidal';
+          } else if (hasSpotify && !hasTidal) {
+            updatePlaylistText.textContent = 'Send to Spotify';
+          } else if (hasTidal && !hasSpotify) {
+            updatePlaylistText.textContent = 'Send to Tidal';
+          } else {
+            updatePlaylistText.textContent = 'Send to Music Service';
+          }
+        }
+
+        // Position the menu at cursor (using batched style operations)
+        positionContextMenu(contextMenu, e.clientX, e.clientY);
+      });
+    } else {
+      // Mobile: long press
+      let pressTimer;
+      button.addEventListener(
+        'touchstart',
+        (_e) => {
+          pressTimer = setTimeout(() => {
+            showMobileListMenu(listName);
+          }, 500);
+        },
+        { passive: true }
+      );
+      button.addEventListener('touchend', () => clearTimeout(pressTimer), {
+        passive: true,
+      });
+    }
+
+    button.onclick = () => {
+      selectList(listName);
+      if (isMobile) toggleMobileLists();
+    };
+
+    return li;
   };
 
   createListItems(nav);
@@ -2196,15 +2659,17 @@ async function selectList(listName) {
     // Fetch list data from server (server caches for 5min)
     if (listName) {
       try {
-        let data = lists[listName];
+        // Use helper to check if data is loaded
+        let data = getListData(listName);
 
-        // OPTIMIZATION: Only fetch if data is missing or is an empty placeholder
+        // OPTIMIZATION: Only fetch if data is missing or not loaded
         // This avoids duplicate fetches when loadLists() already loaded the data
-        const needsFetch = !data || (Array.isArray(data) && data.length === 0);
+        const needsFetch = !isListDataLoaded(listName);
 
         if (needsFetch) {
           data = await apiCall(`/api/lists/${encodeURIComponent(listName)}`);
-          lists[listName] = data;
+          // Use helper to store data (preserves metadata)
+          setListData(listName, data);
         }
 
         // Display the fetched data with images (single render)
@@ -2276,8 +2741,10 @@ function _editMobileAlbum(_index) {
 }
 
 function _removeAlbum(index) {
-  lists[currentList].splice(index, 1);
-  saveList(currentList, lists[currentList]);
+  const albums = getListData(currentList);
+  if (!albums) return;
+  albums.splice(index, 1);
+  saveList(currentList, albums);
   selectList(currentList);
   showToast('Album removed');
 }
@@ -2290,7 +2757,9 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
   }
 
   // Get current genre from the live data
-  const currentGenre = lists[currentList][albumIndex][genreField] || '';
+  const albumsForGenre = getListData(currentList);
+  if (!albumsForGenre || !albumsForGenre[albumIndex]) return;
+  const currentGenre = albumsForGenre[albumIndex][genreField] || '';
 
   // Create input with datalist
   const input = document.createElement('input');
@@ -2395,18 +2864,20 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
     }
 
     // Update the data
-    lists[currentList][albumIndex][genreField] = newGenre;
+    const albumsToUpdate = getListData(currentList);
+    if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
+    albumsToUpdate[albumIndex][genreField] = newGenre;
 
     // Close the dropdown immediately for better UX
     restoreDisplay(newGenre);
 
     try {
-      await saveList(currentList, lists[currentList]);
+      await saveList(currentList, albumsToUpdate);
       showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
     } catch (_error) {
       showToast('Error saving genre', 'error');
       // Revert on error
-      lists[currentList][albumIndex][genreField] = currentGenre;
+      albumsToUpdate[albumIndex][genreField] = currentGenre;
       restoreDisplay(currentGenre);
     }
   };
@@ -2447,9 +2918,12 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
 
 // Make comment editable
 function makeCommentEditable(commentDiv, albumIndex) {
+  const albumsForComment = getListData(currentList);
+  if (!albumsForComment || !albumsForComment[albumIndex]) return;
+
   const currentComment =
-    lists[currentList][albumIndex].comments ||
-    lists[currentList][albumIndex].comment ||
+    albumsForComment[albumIndex].comments ||
+    albumsForComment[albumIndex].comment ||
     '';
 
   // Create textarea
@@ -2467,12 +2941,15 @@ function makeCommentEditable(commentDiv, albumIndex) {
 
   // Save on blur or enter
   const saveComment = async () => {
+    const albumsToUpdate = getListData(currentList);
+    if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
+
     const newComment = textarea.value.trim();
-    lists[currentList][albumIndex].comments = newComment;
-    lists[currentList][albumIndex].comment = newComment;
+    albumsToUpdate[albumIndex].comments = newComment;
+    albumsToUpdate[albumIndex].comment = newComment;
 
     try {
-      await saveList(currentList, lists[currentList]);
+      await saveList(currentList, albumsToUpdate);
 
       // Update display without re-rendering everything
       let displayComment = newComment;
@@ -2626,12 +3103,14 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   // Re-attach click handler
   trackCell.onclick = async () => {
     const currentIndex = parseInt(row.dataset.index);
-    const album = lists[currentList][currentIndex];
+    const albumsForTrack = getListData(currentList);
+    const album = albumsForTrack && albumsForTrack[currentIndex];
+    if (!album) return;
     if (!album.tracks || album.tracks.length === 0) {
       showToast('Fetching tracks...', 'info');
       try {
         await fetchTracksForAlbum(album);
-        await saveList(currentList, lists[currentList]);
+        await saveList(currentList, albumsForTrack);
       } catch (_err) {
         showToast('Error fetching tracks', 'error');
         return;
@@ -2668,7 +3147,8 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
       return numA && numB ? numA - numB : 0;
     });
 
-    const currentAlbum = lists[currentList][albumIndex];
+    const albumsForMenu = getListData(currentList);
+    const currentAlbum = albumsForMenu && albumsForMenu[albumIndex];
     const hasNoSelection = !currentAlbum || !currentAlbum.track_pick;
 
     let menuHTML = `
@@ -2709,7 +3189,8 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         e.stopPropagation();
         const trackValue = option.dataset.trackValue;
 
-        const freshAlbum = lists[currentList][albumIndex];
+        const albumsForSelection = getListData(currentList);
+        const freshAlbum = albumsForSelection && albumsForSelection[albumIndex];
         if (!freshAlbum) {
           showToast('Album not found - list may have been updated', 'error');
           menu.remove();
@@ -2731,7 +3212,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         );
 
         try {
-          await saveList(currentList, lists[currentList]);
+          await saveList(currentList, albumsForSelection);
         } catch (_error) {
           freshAlbum.track_pick = previousValue;
           updateTrackCellDisplay(albumIndex, previousValue, freshAlbum.tracks);
@@ -2956,12 +3437,14 @@ function attachDesktopEventHandlers(row, index) {
   if (trackCell) {
     trackCell.onclick = async () => {
       const currentIndex = parseInt(row.dataset.index);
-      const album = lists[currentList][currentIndex];
+      const albumsForTrack = getListData(currentList);
+      const album = albumsForTrack && albumsForTrack[currentIndex];
+      if (!album) return;
       if (!album.tracks || album.tracks.length === 0) {
         showToast('Fetching tracks...', 'info');
         try {
           await fetchTracksForAlbum(album);
-          await saveList(currentList, lists[currentList]);
+          await saveList(currentList, albumsForTrack);
         } catch (_err) {
           showToast('Error fetching tracks', 'error');
           return;
@@ -3002,8 +3485,9 @@ function attachDesktopEventHandlers(row, index) {
   };
 
   // Attach link preview
-  const album = lists[currentList][index];
-  const comment = album.comments || album.comment || '';
+  const albumsForPreview = getListData(currentList);
+  const album = albumsForPreview && albumsForPreview[index];
+  const comment = album ? album.comments || album.comment || '' : '';
   attachLinkPreview(commentCell, comment);
 
   // Add tooltip only if comment is truncated
@@ -3040,7 +3524,8 @@ function attachDesktopEventHandlers(row, index) {
     const currentIndex = parseInt(row.dataset.index);
 
     // Verify album still exists at this index
-    if (lists[currentList] && lists[currentList][currentIndex]) {
+    const albumsForDblClick = getListData(currentList);
+    if (albumsForDblClick && albumsForDblClick[currentIndex]) {
       showMobileEditForm(currentIndex);
     } else {
       showToast('Album not found', 'error');
@@ -3052,9 +3537,14 @@ function attachDesktopEventHandlers(row, index) {
     e.preventDefault();
     e.stopPropagation();
 
+    // Hide any open context menus first
+    hideAllContextMenus();
+
     // Get current index from DOM (updated after drag-drop) instead of closure
     const currentIndex = parseInt(row.dataset.index);
-    const album = lists[currentList][currentIndex];
+    const albumsForContext = getListData(currentList);
+    const album = albumsForContext && albumsForContext[currentIndex];
+    if (!album) return;
     const albumId =
       `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
@@ -3192,8 +3682,9 @@ function createMobileAlbumCard(data, index) {
 // Shared event handlers for mobile cards
 function attachMobileEventHandlers(card, index) {
   // Attach link preview to content area
-  const album = lists[currentList][index];
-  const comment = album.comments || album.comment || '';
+  const albumsForMobile = getListData(currentList);
+  const album = albumsForMobile && albumsForMobile[index];
+  const comment = album ? album.comments || album.comment || '' : '';
   const contentDiv = card.querySelector('.flex-1.min-w-0');
   if (contentDiv) attachLinkPreview(contentDiv, comment);
 
@@ -3850,7 +4341,11 @@ function initializeUnifiedSorting(container, isMobile) {
       if (oldIndex !== newIndex) {
         try {
           // Update the data
-          const list = lists[currentList];
+          const list = getListData(currentList);
+          if (!list) {
+            console.error('List data not found');
+            return;
+          }
           const [movedItem] = list.splice(oldIndex, 1);
           list.splice(newIndex, 0, movedItem);
 
@@ -3895,17 +4390,22 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   }
 
   // Validate index
+  const albumsForSheet = getListData(currentList);
   if (
     isNaN(index) ||
     index < 0 ||
-    !lists[currentList] ||
-    index >= lists[currentList].length
+    !albumsForSheet ||
+    index >= albumsForSheet.length
   ) {
     console.error('Invalid album index:', index);
     return;
   }
 
-  const album = lists[currentList][index];
+  const album = albumsForSheet[index];
+  if (!album) {
+    console.error('Album not found at index:', index);
+    return;
+  }
 
   // Create a unique identifier for this album to prevent stale index issues
   const albumId =
@@ -4013,8 +4513,11 @@ async function moveAlbumToList(index, albumId, targetList) {
     throw new Error('Invalid source or target list');
   }
 
-  // Verify album is still at expected index
-  let album = lists[currentList][index];
+  // Get source list data using helper
+  const sourceAlbums = getListData(currentList);
+  if (!sourceAlbums) throw new Error('Source list data not loaded');
+
+  let album = sourceAlbums[index];
   let indexToMove = index;
 
   if (album && albumId) {
@@ -4038,7 +4541,8 @@ async function moveAlbumToList(index, albumId, targetList) {
   const albumToMove = { ...album };
 
   // Check for duplicate in target list
-  if (isAlbumInList(albumToMove, lists[targetList])) {
+  const targetAlbums = getListData(targetList);
+  if (isAlbumInList(albumToMove, targetAlbums || [])) {
     showToast(
       `"${albumToMove.album}" already exists in "${targetList}"`,
       'error'
@@ -4047,16 +4551,22 @@ async function moveAlbumToList(index, albumId, targetList) {
   }
 
   // Remove from source list
-  lists[currentList].splice(indexToMove, 1);
+  sourceAlbums.splice(indexToMove, 1);
 
-  // Add to target list
-  lists[targetList].push(albumToMove);
+  // Add to target list (may need to load it first)
+  let targetData = targetAlbums;
+  if (!targetData) {
+    // Target list data not loaded, fetch it first
+    targetData = await apiCall(`/api/lists/${encodeURIComponent(targetList)}`);
+    setListData(targetList, targetData);
+  }
+  targetData.push(albumToMove);
 
   try {
     // Save both lists to the server
     await Promise.all([
-      saveList(currentList, lists[currentList]),
-      saveList(targetList, lists[targetList]),
+      saveList(currentList, sourceAlbums),
+      saveList(targetList, targetData),
     ]);
 
     // Update the current view
@@ -4067,8 +4577,8 @@ async function moveAlbumToList(index, albumId, targetList) {
     console.error('Error saving lists after move:', error);
 
     // Rollback: add back to source, remove from target
-    lists[currentList].splice(indexToMove, 0, albumToMove);
-    lists[targetList].pop();
+    sourceAlbums.splice(indexToMove, 0, albumToMove);
+    targetData.pop();
 
     throw error;
   }
@@ -4109,17 +4619,18 @@ function showMoveConfirmation(albumId, targetList) {
 // Show mobile sheet to select target list for moving album
 window.showMobileMoveToListSheet = function (index, albumId) {
   // Validate index
+  const albumsForMove = getListData(currentList);
   if (
     isNaN(index) ||
     index < 0 ||
-    !lists[currentList] ||
-    index >= lists[currentList].length
+    !albumsForMove ||
+    index >= albumsForMove.length
   ) {
     console.error('Invalid album index:', index);
     return;
   }
 
-  const album = lists[currentList][index];
+  const album = albumsForMove[index];
 
   // Get all list names except the current one
   const listNames = Object.keys(lists).filter((name) => name !== currentList);
@@ -4212,10 +4723,11 @@ window.showMobileMoveToListSheet = function (index, albumId) {
 
 // Helper function to find album by identity instead of index
 function findAlbumByIdentity(albumId) {
-  if (!currentList || !lists[currentList]) return null;
+  const albums = getListData(currentList);
+  if (!currentList || !albums) return null;
 
-  for (let i = 0; i < lists[currentList].length; i++) {
-    const album = lists[currentList][i];
+  for (let i = 0; i < albums.length; i++) {
+    const album = albums[i];
     const currentId =
       `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
     if (currentId === albumId) {
@@ -4261,17 +4773,22 @@ window.removeAlbumSafe = function (albumId) {
 // Mobile edit form (basic implementation)
 window.showMobileEditForm = function (index) {
   // Validate inputs
-  if (!currentList || !lists[currentList]) {
+  const albumsForEdit = getListData(currentList);
+  if (!currentList || !albumsForEdit) {
     showToast('No list selected', 'error');
     return;
   }
 
-  if (isNaN(index) || index < 0 || index >= lists[currentList].length) {
+  if (isNaN(index) || index < 0 || index >= albumsForEdit.length) {
     showToast('Invalid album selected', 'error');
     return;
   }
 
-  const album = lists[currentList][index];
+  const album = albumsForEdit[index];
+  if (!album) {
+    showToast('Album not found', 'error');
+    return;
+  }
   const originalReleaseDate = album.release_date || '';
   const inputReleaseDate = originalReleaseDate
     ? normalizeDateForInput(originalReleaseDate) ||
@@ -4593,7 +5110,12 @@ window.showMobileEditForm = function (index) {
     }
 
     // Update the album in the list
-    lists[currentList][index] = updatedAlbum;
+    const albumsToSave = getListData(currentList);
+    if (!albumsToSave) {
+      showToast('Error: List data not found', 'error');
+      return;
+    }
+    albumsToSave[index] = updatedAlbum;
 
     // Close the modal immediately for better UX
     editModal.remove();
@@ -4603,21 +5125,21 @@ window.showMobileEditForm = function (index) {
     document.body.scrollTop = 0;
 
     // Force refresh the display to show changes immediately
-    displayAlbums(lists[currentList]);
+    displayAlbums(albumsToSave);
 
     // Save to server in the background
     try {
-      await saveList(currentList, lists[currentList]);
+      await saveList(currentList, albumsToSave);
       showToast('Album updated successfully');
     } catch (error) {
       console.error('Error saving album:', error);
       showToast('Error saving changes', 'error');
 
       // Revert changes on error
-      lists[currentList][index] = album;
+      albumsToSave[index] = album;
 
       // Refresh display to show reverted state
-      displayAlbums(lists[currentList]);
+      displayAlbums(albumsToSave);
     }
   };
 

@@ -406,16 +406,16 @@ const importConflictModalComponent = () => `
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-    <button id="downloadListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+    <button id="downloadListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-download mr-2 w-4 text-center"></i>Download List
     </button>
-    <button id="renameListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-edit mr-2 w-4 text-center"></i>Rename List
+    <button id="renameListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>
-    <button id="updatePlaylistOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+    <button id="updatePlaylistOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-paper-plane mr-2 w-4 text-center"></i><span id="updatePlaylistText">Send to Music Service</span>
     </button>
-    <button id="deleteListOption" class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
+    <button id="deleteListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
     </button>
   </div>
@@ -452,18 +452,36 @@ const createListModalComponent = () => `
       </div>
       
       <!-- Modal Content -->
-      <div class="p-6">
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListName">
-          List Name
-        </label>
-        <input 
-          type="text" 
-          id="newListName" 
-          placeholder="Enter list name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-          maxlength="50"
-        >
-        <p class="text-xs text-gray-500 mt-2">Give your list a unique name</p>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListName">
+            List Name <span class="text-red-500">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="newListName" 
+            placeholder="Enter list name..." 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            maxlength="50"
+          >
+          <p class="text-xs text-gray-500 mt-2">Give your list a unique name</p>
+        </div>
+        
+        <div>
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListYear">
+            Year <span class="text-red-500">*</span>
+          </label>
+          <input 
+            type="number" 
+            id="newListYear" 
+            placeholder="e.g. 2025" 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            min="1000"
+            max="9999"
+          >
+          <p class="text-xs text-gray-500 mt-2">Year this list represents (e.g. "Best of 2024")</p>
+          <p id="createYearError" class="text-xs text-red-500 mt-1 hidden"></p>
+        </div>
       </div>
       
       <!-- Modal Footer -->
@@ -485,29 +503,47 @@ const createListModalComponent = () => `
   </div>
 `;
 
-// Component: Rename List Modal
+// Component: Edit List Details Modal (formerly Rename List Modal)
 const renameListModalComponent = () => `
   <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
-        <h3 class="text-2xl font-bold text-white">Rename List</h3>
-        <p class="text-sm text-gray-400 mt-1">Current name: <span id="currentListName" class="text-gray-300"></span></p>
+        <h3 class="text-2xl font-bold text-white">Edit List Details</h3>
+        <p class="text-sm text-gray-400 mt-1">Editing: <span id="currentListName" class="text-gray-300"></span></p>
       </div>
       
       <!-- Modal Content -->
-      <div class="p-6">
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListNameInput">
-          New List Name
-        </label>
-        <input 
-          type="text" 
-          id="newListNameInput" 
-          placeholder="Enter new name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-          maxlength="50"
-        >
-        <p class="text-xs text-gray-500 mt-2">Enter a new unique name for this list</p>
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListNameInput">
+            List Name
+          </label>
+          <input 
+            type="text" 
+            id="newListNameInput" 
+            placeholder="Enter new name..." 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            maxlength="50"
+          >
+          <p class="text-xs text-gray-500 mt-2">Enter a new unique name for this list</p>
+        </div>
+        
+        <div>
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="editListYear">
+            Year
+          </label>
+          <input 
+            type="number" 
+            id="editListYear" 
+            placeholder="e.g. 2025 (optional)" 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            min="1000"
+            max="9999"
+          >
+          <p class="text-xs text-gray-500 mt-2">Year this list represents (leave empty to remove)</p>
+          <p id="editYearError" class="text-xs text-red-500 mt-1 hidden"></p>
+        </div>
       </div>
       
       <!-- Modal Footer -->
@@ -522,7 +558,7 @@ const renameListModalComponent = () => `
           id="confirmRenameBtn" 
           class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
         >
-          Rename List
+          Save Changes
         </button>
       </div>
     </div>
@@ -1249,7 +1285,7 @@ const spotifyTemplate = (user) => `
                 
                 <button onclick="openRenameModal('\${listName}'); this.closest('.fixed').remove();" 
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-                  <i class="fas fa-edit mr-3 text-gray-400"></i>Rename List
+                  <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
                 </button>
                 
                 <button onclick="currentContextList='\${listName}'; showConfirmation('Delete List', 'Are you sure you want to delete the list \\'' + '\${listName}' + '\\'?', 'This action cannot be undone.', 'Delete', () => document.getElementById('deleteListOption').click()); this.closest('.fixed').remove();" 
