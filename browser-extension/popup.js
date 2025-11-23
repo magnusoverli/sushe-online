@@ -1,19 +1,19 @@
 // Popup script for SuShe Online extension
+// Uses shared auth-state.js and shared-utils.js (loaded via popup.html)
 
-let SUSHE_API_BASE = null; // No default - user must configure
-let AUTH_TOKEN = null;
+// Access shared modules from globalThis
+const { fetchWithTimeout } = globalThis.SharedUtils;
+const { getAuthState } = globalThis.AuthState;
 
 document.addEventListener('DOMContentLoaded', async () => {
-  // Load API URL and auth token from storage
-  const settings = await chrome.storage.local.get(['apiUrl', 'authToken']);
-  if (settings.apiUrl) {
-    SUSHE_API_BASE = settings.apiUrl;
-  }
-  if (settings.authToken) {
-    AUTH_TOKEN = settings.authToken;
-  }
+  // Load state and update UI
+  await loadLists();
 
-  loadLists();
+  // Also trigger a background refresh of context menu lists
+  // This keeps lists fresh when user interacts with the extension
+  chrome.runtime.sendMessage({ action: 'refreshLists' }).catch(() => {
+    // Ignore errors - background script might not be ready
+  });
 
   document.getElementById('refreshBtn').addEventListener('click', refreshLists);
   document.getElementById('optionsBtn').addEventListener('click', openOptions);
@@ -23,47 +23,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 // Listen for storage changes to auto-refresh when auth token changes
 chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes.authToken) {
-    AUTH_TOKEN = changes.authToken?.newValue || null;
-    console.log('Auth token changed, reloading lists');
-    loadLists();
+  if (areaName === 'local') {
+    if (changes.authToken || changes.tokenExpiresAt) {
+      console.log('Auth state changed, reloading lists');
+      loadLists();
+    }
   }
 });
-
-// Get authorization headers for API requests
-function getAuthHeaders() {
-  const headers = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-
-  if (AUTH_TOKEN) {
-    headers['Authorization'] = `Bearer ${AUTH_TOKEN}`;
-  }
-
-  return headers;
-}
-
-// Fetch with timeout wrapper
-async function fetchWithTimeout(url, options = {}, timeout = 30000) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
-    return response;
-  } catch (error) {
-    clearTimeout(timeoutId);
-    if (error.name === 'AbortError') {
-      throw new Error(`Request timed out after ${timeout / 1000} seconds`);
-    }
-    throw error;
-  }
-}
 
 async function loadLists() {
   const statusEl = document.getElementById('status');
@@ -72,19 +38,39 @@ async function loadLists() {
   const loginBtn = document.getElementById('loginBtn');
   const logoutBtn = document.getElementById('logoutBtn');
 
-  // Show/hide buttons based on auth state
-  if (AUTH_TOKEN) {
+  // Get auth state from shared module (always reads from storage)
+  const authState = await getAuthState();
+
+  // Show/hide buttons based on auth state (fixes Issue #5 - consistent validation)
+  if (authState.isValid) {
     loginBtn.style.display = 'none';
     logoutBtn.style.display = 'block';
   } else {
     loginBtn.style.display = 'block';
     logoutBtn.style.display = 'none';
+
+    // If token existed but is expired, show appropriate message
+    if (authState.token && authState.isExpired) {
+      statusEl.innerHTML =
+        '<div class="status error">Session expired. Please login again.</div>';
+      listsEl.style.display = 'none';
+      return;
+    }
   }
 
   // Check if URL is configured
-  if (!SUSHE_API_BASE) {
+  if (!authState.apiUrl) {
     statusEl.innerHTML =
-      '<div class="status error">⚠️ Not configured. Click Options to set your SuShe Online URL.</div>';
+      '<div class="status error">Not configured. Click Settings to set your SuShe Online URL.</div>';
+    listsEl.style.display = 'none';
+    return;
+  }
+
+  // Check if authenticated
+  if (!authState.isValid) {
+    statusEl.innerHTML =
+      '<div class="status error">Not logged in. Click Login to authenticate.</div>';
+    listsEl.style.display = 'none';
     return;
   }
 
@@ -93,14 +79,27 @@ async function loadLists() {
   try {
     // Use metadata API for faster loading (no album data needed)
     const response = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists`,
-      { headers: getAuthHeaders() },
+      `${authState.apiUrl}/api/lists`,
+      {
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${authState.token}`,
+        },
+      },
       10000 // 10 second timeout
     );
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Not logged in to SuShe Online');
+        // Token is invalid - trigger centralized logout
+        await chrome.runtime.sendMessage({ action: 'logout' });
+        statusEl.innerHTML =
+          '<div class="status error">Session expired. Please login again.</div>';
+        loginBtn.style.display = 'block';
+        logoutBtn.style.display = 'none';
+        listsEl.style.display = 'none';
+        return;
       }
       throw new Error(`API returned ${response.status}`);
     }
@@ -111,6 +110,7 @@ async function loadLists() {
     if (listNames.length === 0) {
       statusEl.innerHTML =
         '<div class="status error">No lists found. Create a list in SuShe Online first!</div>';
+      listsEl.style.display = 'none';
       return;
     }
 
@@ -126,10 +126,10 @@ async function loadLists() {
     });
 
     listsEl.style.display = 'block';
-    statusEl.innerHTML = `<div class="status success">✓ ${listNames.length} list(s) loaded</div>`;
+    statusEl.innerHTML = `<div class="status success">${listNames.length} list(s) loaded</div>`;
   } catch (error) {
     console.error('Failed to load lists:', error);
-    statusEl.innerHTML = `<div class="status error">⚠️ ${error.message}</div>`;
+    statusEl.innerHTML = `<div class="status error">${error.message}</div>`;
     listsEl.style.display = 'none';
   }
 }
@@ -152,21 +152,22 @@ function openOptions() {
   chrome.runtime.openOptionsPage();
 }
 
-function openLogin() {
-  if (!SUSHE_API_BASE) {
-    alert('Please configure your SuShe Online URL in Options first.');
+async function openLogin() {
+  const authState = await getAuthState();
+
+  if (!authState.apiUrl) {
+    alert('Please configure your SuShe Online URL in Settings first.');
     openOptions();
     return;
   }
   // Open login page
-  chrome.tabs.create({ url: `${SUSHE_API_BASE}/extension/auth` });
+  chrome.tabs.create({ url: `${authState.apiUrl}/extension/auth` });
 }
 
 async function logout() {
-  // Clear token from storage
-  await chrome.storage.local.remove(['authToken', 'tokenExpiresAt']);
-  AUTH_TOKEN = null;
+  // Use centralized logout in background script (fixes Issue #6)
+  await chrome.runtime.sendMessage({ action: 'logout' });
 
-  // Reload the popup to show logged out state
-  loadLists();
+  // UI will update via storage.onChanged listener, but also refresh immediately
+  await loadLists();
 }

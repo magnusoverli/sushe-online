@@ -23,6 +23,8 @@ echo "  ✓ manifest.json"
 echo "  ✓ background.js"
 echo "  ✓ content-script.js"
 echo "  ✓ auth-listener.js"
+echo "  ✓ auth-state.js"
+echo "  ✓ shared-utils.js"
 echo "  ✓ options.html"
 echo "  ✓ options.js"
 echo "  ✓ popup.html"
@@ -36,6 +38,8 @@ zip -q "$OUTPUT_FILE" \
     background.js \
     content-script.js \
     auth-listener.js \
+    auth-state.js \
+    shared-utils.js \
     options.html \
     options.js \
     popup.html \
