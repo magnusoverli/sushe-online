@@ -158,23 +158,46 @@ if (chrome.contextMenus.onShown) {
       const now = Date.now();
       const SHORT_CACHE = 30 * 1000; // 30 seconds
 
-      if (now - listsLastFetched > SHORT_CACHE) {
-        log('Context menu shown, refreshing lists...');
+      // FIX: Read from persistent storage instead of in-memory variable
+      // Service workers can restart at any time, losing in-memory state
+      const { listsLastFetched: lastFetched = 0 } =
+        await chrome.storage.local.get('listsLastFetched');
+
+      if (now - lastFetched > SHORT_CACHE) {
+        console.log(
+          '[onShown] Refreshing lists (last fetched',
+          Math.round((now - lastFetched) / 1000),
+          'seconds ago)...'
+        );
         try {
           // Fetch and wait for completion
+          // Note: fetchUserLists() calls updateContextMenuWithLists() which
+          // rebuilds the entire menu structure, so no refresh() call needed
           await fetchUserLists(true);
-          // Refresh the menu to show updated lists
-          if (chrome.contextMenus.refresh) {
-            chrome.contextMenus.refresh();
-          }
+          console.log('[onShown] Lists refreshed successfully');
         } catch (err) {
-          console.warn('List refresh on menu show failed:', err.message);
+          console.error('[onShown] List refresh failed:', err.message);
+          // Don't fail completely - the menu will show cached lists or error state
+          // fetchUserLists() already handles showing error menus
         }
+      } else {
+        console.log(
+          '[onShown] Using cached lists (fetched',
+          Math.round((now - lastFetched) / 1000),
+          'seconds ago)'
+        );
       }
     }
   });
+
+  // Store feature support flag for UI to display
+  chrome.storage.local.set({ autoRefreshSupported: true });
 } else {
-  log('chrome.contextMenus.onShown not supported in this browser');
+  console.warn(
+    '[Extension] chrome.contextMenus.onShown not supported - automatic refresh disabled'
+  );
+  // Store this information for UI to potentially display a notice
+  chrome.storage.local.set({ autoRefreshSupported: false });
 }
 
 // Listen for storage changes to update token and invalidate cache
