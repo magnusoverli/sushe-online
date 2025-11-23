@@ -1035,27 +1035,13 @@ const spotifyTemplate = (user) => `
   <div class="app-layout">
     <!-- Unified Header -->
     <header class="bg-gray-900 border-b border-gray-800 z-50">
-      <div class="relative flex items-center justify-between py-3 lg:py-4 px-3 lg:px-6">
+      <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-6">
         <!-- Mobile menu button / Desktop logo -->
         <div class="flex items-center gap-2 lg:gap-8">
           <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
             <i class="fas fa-bars text-lg"></i>
           </button>
           <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
-        </div>
-        
-        <!-- Current list name (mobile only) -->
-        <div class="mobile-only flex items-center gap-2 min-w-0 flex-1 mx-2">
-          <span id="headerListName" class="text-base font-medium truncate ${user.lastSelectedList ? '' : 'hidden'}" style="color: var(--accent-color);">
-            ${user.lastSelectedList || ''}
-          </span>
-        </div>
-        
-        <!-- Current list name (desktop - centered) -->
-        <div class="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-          <span id="headerListNameDesktop" class="text-xl font-semibold truncate max-w-md ${user.lastSelectedList ? '' : 'hidden'}" style="color: var(--accent-color);">
-            ${user.lastSelectedList || ''}
-          </span>
         </div>
         
         <!-- User menu -->
@@ -1253,20 +1239,6 @@ const spotifyTemplate = (user) => `
       const originalSelectList = window.selectList;
       window.selectList = async function(listName) {
         await originalSelectList(listName);
-        
-        // Update mobile header
-        const headerListName = document.getElementById('headerListName');
-        if (headerListName) {
-          headerListName.textContent = listName || '';
-          headerListName.classList.toggle('hidden', !listName);
-        }
-        
-        // Update desktop header (centered)
-        const headerListNameDesktop = document.getElementById('headerListNameDesktop');
-        if (headerListNameDesktop) {
-          headerListNameDesktop.textContent = listName || '';
-          headerListNameDesktop.classList.toggle('hidden', !listName);
-        }
         
         // Show/hide FAB
         const fab = document.getElementById('addAlbumFAB');
