@@ -172,3 +172,4 @@ docker-compose.dev.yml
 # Browser extension test directory (unpacked from zip for local testing)
 browser-extension/test-install/
 *.dump
+opencodetmp/*
