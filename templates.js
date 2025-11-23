@@ -38,78 +38,47 @@ const loginSnippetFn = ejs.compile(
 );
 
 // Shared header component
-const headerComponent = (
-  user,
-  activeSection = 'home',
-  currentListName = ''
-) => `
-  <header class="sticky top-0 bg-gray-900 border-b border-gray-800 z-50">
-    <!-- Desktop Header -->
-    <div class="hidden lg:flex items-center justify-between py-4 px-6">
-      <div class="flex items-center gap-8">
-        <a href="/" class="text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
-        ${
-          activeSection !== 'home'
-            ? `
-        <nav class="flex gap-6">
-          <a href="/" class="text-gray-300 hover:text-white transition duration-200">
-            <i class="fas fa-home mr-2"></i>Home
-          </a>
-        </nav>
-        `
-            : ''
-        }
-      </div>
-      
-      <div class="flex items-center gap-6">
-        <span class="text-sm text-gray-400">${user?.email}</span>
-        <a href="/logout" class="text-gray-400 hover:text-white transition duration-200" title="Logout">
-          <i class="fas fa-sign-out-alt text-lg"></i>
-        </a>
-        <a href="/settings" class="text-gray-400 hover:text-white transition duration-200" title="Settings">
-          <i class="fas fa-cog text-lg"></i>
-        </a>
-      </div>
-    </div>
-    
-    <!-- Mobile Header -->
-    <div class="lg:hidden flex items-center justify-between p-3 gap-2">
-      <div class="flex items-center gap-2 min-w-0">
+const headerComponent = (user, activeSection = 'home') => `
+  <header class="bg-gray-900 border-b border-gray-800 z-50">
+    <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-0">
+      <!-- Mobile menu button / Desktop logo -->
+      <div class="flex items-center gap-2 lg:w-64 lg:justify-center lg:gap-0">
         ${
           activeSection === 'home'
             ? `
-          <button onclick="toggleMobileLists()" class="p-2 -m-2 text-gray-400 active:text-white">
-            <i class="fas fa-bars text-lg"></i>
-          </button>
+        <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
+          <i class="fas fa-bars text-lg"></i>
+        </button>
         `
             : `
-          <a href="/" class="p-2 -m-2 text-gray-400 active:text-white">
-            <i class="fas fa-arrow-left text-lg"></i>
-          </a>
+        <a href="/" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
+          <i class="fas fa-arrow-left text-lg"></i>
+        </a>
         `
         }
-        <a href="/" class="text-xl font-bold text-red-600 flex-shrink-0 ml-2">SuShe</a>
-        ${
-          currentListName && activeSection === 'home'
-            ? `
-          <span class="text-gray-600 flex-shrink-0">/</span>
-          <span class="text-sm text-yellow-500 font-medium truncate">${currentListName}</span>
-        `
-            : ''
-        }
+        <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
       </div>
       
-      <div class="flex items-center gap-1 flex-shrink-0">
-        ${
-          activeSection !== 'settings'
-            ? `
-          <a href="/settings" class="p-2 text-gray-400 active:text-white" title="Settings">
-            <i class="fas fa-cog text-lg"></i>
-          </a>
-        `
-            : ''
-        }
-        <a href="/logout" class="p-2 text-gray-400 active:text-white" title="Logout">
+      ${
+        activeSection !== 'home'
+          ? `
+      <!-- Home link (desktop only, when not on home) -->
+      <nav class="hidden lg:flex gap-6">
+        <a href="/" class="text-gray-300 hover:text-white transition duration-200">
+          <i class="fas fa-home mr-2"></i>Home
+        </a>
+      </nav>
+      `
+          : ''
+      }
+      
+      <!-- User menu -->
+      <div class="flex items-center gap-2 lg:gap-6">
+        <span class="hidden lg:inline text-sm text-gray-400">${user?.email}</span>
+        <a href="/settings" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
+          <i class="fas fa-cog text-lg"></i>
+        </a>
+        <a href="/logout" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
@@ -1035,9 +1004,9 @@ const spotifyTemplate = (user) => `
   <div class="app-layout">
     <!-- Unified Header -->
     <header class="bg-gray-900 border-b border-gray-800 z-50">
-      <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-6">
+      <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-0">
         <!-- Mobile menu button / Desktop logo -->
-        <div class="flex items-center gap-2 lg:gap-8">
+        <div class="flex items-center gap-2 lg:w-64 lg:justify-center lg:gap-0">
           <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
             <i class="fas fa-bars text-lg"></i>
           </button>
@@ -1062,7 +1031,7 @@ const spotifyTemplate = (user) => `
     <!-- Sidebar (responsive) -->
     <aside id="sidebar" class="sidebar bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300">
       <!-- Sidebar Toggle Button -->
-      <div class="flex items-center justify-between p-4 border-b border-gray-800">
+      <div class="flex items-center justify-between p-4">
         <h2 class="sidebar-title text-lg font-bold text-white transition-opacity duration-300">Lists</h2>
         <button 
           id="sidebarToggle" 
@@ -1075,7 +1044,6 @@ const spotifyTemplate = (user) => `
       
       <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
         <div class="flex-1">
-          <h3 class="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">Your Lists</h3>
           <ul id="listNav" class="space-y-1">
             <!-- Lists will be populated here -->
           </ul>
