@@ -314,9 +314,9 @@ document.addEventListener('click', hideAllContextMenus);
 // Hide context menus when right-clicking elsewhere (before new menu opens)
 document.addEventListener('contextmenu', hideAllContextMenus);
 
-// Prevent default context menu on right-click in list nav
+// Prevent default context menu on right-click in list nav (only for list buttons, not year headers)
 document.addEventListener('contextmenu', (e) => {
-  const listButton = e.target.closest('#listNav button');
+  const listButton = e.target.closest('[data-list-name]');
   if (listButton) {
     e.preventDefault();
   }
@@ -2434,6 +2434,7 @@ function updateListNav() {
         e.preventDefault();
         toggleYearSection(year, container);
       };
+      header.oncontextmenu = (e) => e.preventDefault();
 
       section.appendChild(header);
 
@@ -2472,6 +2473,7 @@ function updateListNav() {
         e.preventDefault();
         toggleYearSection('uncategorized', container);
       };
+      header.oncontextmenu = (e) => e.preventDefault();
 
       section.appendChild(header);
 
@@ -2493,7 +2495,7 @@ function updateListNav() {
   const createListButton = (listName, isMobile, _container) => {
     const li = document.createElement('li');
     li.innerHTML = `
-      <button class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 text-gray-300 ${currentList === listName ? 'bg-gray-800' : ''} flex items-center">
+      <button data-list-name="${listName}" class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 text-gray-300 ${currentList === listName ? 'bg-gray-800' : ''} flex items-center">
         <i class="fas fa-list mr-2 flex-shrink-0"></i>
         <span class="truncate">${listName}</span>
       </button>

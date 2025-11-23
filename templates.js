@@ -1324,13 +1324,13 @@ const spotifyTemplate = (user) => `
         }
       };
       
-      // Handle right-click on desktop list items
+      // Handle right-click on desktop list items (only for list buttons, not year headers)
       if (window.innerWidth >= 1024) {
         document.addEventListener('contextmenu', (e) => {
-          const listButton = e.target.closest('#listNav button');
+          const listButton = e.target.closest('[data-list-name]');
           if (listButton) {
             e.preventDefault();
-            const listName = listButton.textContent.trim();
+            const listName = listButton.dataset.listName;
             currentContextList = listName;
             
             const contextMenu = document.getElementById('contextMenu');
