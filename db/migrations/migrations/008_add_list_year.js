@@ -11,11 +11,20 @@ async function up(pool) {
   `);
 
   // Add check constraint for valid year range (1000-9999)
-  await pool.query(`
-    ALTER TABLE lists 
-    ADD CONSTRAINT IF NOT EXISTS lists_year_range 
-    CHECK (year IS NULL OR (year >= 1000 AND year <= 9999))
+  // PostgreSQL doesn't support IF NOT EXISTS for constraints, so we check manually
+  const constraintExists = await pool.query(`
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'lists_year_range' 
+    AND conrelid = 'lists'::regclass
   `);
+
+  if (constraintExists.rows.length === 0) {
+    await pool.query(`
+      ALTER TABLE lists 
+      ADD CONSTRAINT lists_year_range 
+      CHECK (year IS NULL OR (year >= 1000 AND year <= 9999))
+    `);
+  }
 
   // Index on year for efficient filtering/grouping
   await pool.query(`
