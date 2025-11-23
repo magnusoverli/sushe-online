@@ -190,6 +190,7 @@ module.exports = (app, deps) => {
     invalidTokenTemplate,
     resetPasswordTemplate,
   } = require('../templates');
+  const { validateYear } = require('../validators');
   const {
     ensureAuthAPI,
     users,
@@ -413,6 +414,7 @@ module.exports = (app, deps) => {
             const count = await listItemsAsync.count({ listId: list._id });
             listsObj[list.name] = {
               name: list.name,
+              year: list.year || null,
               count: count,
               updatedAt: list.updatedAt,
               createdAt: list.createdAt,
@@ -552,16 +554,29 @@ module.exports = (app, deps) => {
   // Create or update a list
   app.post('/api/lists/:name', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
-    const { data } = req.body;
+    const { data, year } = req.body;
 
     if (!data || !Array.isArray(data)) {
       return res.status(400).json({ error: 'Invalid list data' });
+    }
+
+    // Validate year if provided
+    const yearValidation = validateYear(year);
+    if (!yearValidation.valid) {
+      return res.status(400).json({ error: yearValidation.error });
     }
 
     let client;
     try {
       // Check if list exists
       const existingList = await lists.findOne({ userId: req.user._id, name });
+
+      // For new lists, year is required
+      if (!existingList && yearValidation.value === null) {
+        return res
+          .status(400)
+          .json({ error: 'Year is required for new lists' });
+      }
 
       const timestamp = new Date();
       client = await pool.connect();
@@ -570,21 +585,30 @@ module.exports = (app, deps) => {
         await client.query('BEGIN');
         let listId = existingList ? existingList._id : null;
         if (existingList) {
-          await client.query('UPDATE lists SET updated_at=$1 WHERE _id=$2', [
-            timestamp,
-            listId,
-          ]);
+          // Update existing list - only update year if provided
+          if (yearValidation.value !== null) {
+            await client.query(
+              'UPDATE lists SET updated_at=$1, year=$2 WHERE _id=$3',
+              [timestamp, yearValidation.value, listId]
+            );
+          } else {
+            await client.query('UPDATE lists SET updated_at=$1 WHERE _id=$2', [
+              timestamp,
+              listId,
+            ]);
+          }
           await client.query('DELETE FROM list_items WHERE list_id=$1', [
             listId,
           ]);
         } else {
-          // Create new list
+          // Create new list with year (required)
           const resList = await client.query(
-            'INSERT INTO lists (_id, user_id, name, created_at, updated_at) VALUES ($1, $2, $3, $4, $5) RETURNING _id',
+            'INSERT INTO lists (_id, user_id, name, year, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING _id',
             [
               crypto.randomBytes(12).toString('hex'),
               req.user._id,
               name,
+              yearValidation.value,
               timestamp,
               timestamp,
             ]
@@ -711,6 +735,113 @@ module.exports = (app, deps) => {
       if (client) {
         client.release();
       }
+      return res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // Update list metadata (name and/or year)
+  app.patch('/api/lists/:name', ensureAuthAPI, async (req, res) => {
+    const { name } = req.params;
+    const { newName, year } = req.body;
+
+    // At least one field must be provided
+    if (newName === undefined && year === undefined) {
+      return res.status(400).json({ error: 'No fields to update' });
+    }
+
+    // Validate year if provided
+    if (year !== undefined) {
+      const yearValidation = validateYear(year);
+      if (!yearValidation.valid) {
+        return res.status(400).json({ error: yearValidation.error });
+      }
+    }
+
+    try {
+      // Check if list exists
+      const existingList = await listsAsync.findOne({
+        userId: req.user._id,
+        name,
+      });
+      if (!existingList) {
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      // If renaming, check for conflicts
+      if (newName && newName !== name) {
+        const conflictingList = await listsAsync.findOne({
+          userId: req.user._id,
+          name: newName,
+        });
+        if (conflictingList) {
+          return res
+            .status(409)
+            .json({ error: 'A list with that name already exists' });
+        }
+      }
+
+      // Build dynamic update
+      const updates = [];
+      const values = [];
+      let paramIndex = 1;
+
+      if (newName && newName !== name) {
+        updates.push(`name = $${paramIndex++}`);
+        values.push(newName);
+      }
+
+      if (year !== undefined) {
+        const yearValidation = validateYear(year);
+        updates.push(`year = $${paramIndex++}`);
+        values.push(yearValidation.value);
+      }
+
+      updates.push(`updated_at = $${paramIndex++}`);
+      values.push(new Date());
+
+      values.push(existingList._id);
+
+      await pool.query(
+        `UPDATE lists SET ${updates.join(', ')} WHERE _id = $${paramIndex}`,
+        values
+      );
+
+      // Update lastSelectedList if this list was renamed
+      if (newName && newName !== name && req.user.lastSelectedList === name) {
+        users.update(
+          { _id: req.user._id },
+          { $set: { lastSelectedList: newName } },
+          {},
+          (updateErr) => {
+            if (updateErr) {
+              logger.error('Error updating last selected list:', updateErr);
+            }
+          }
+        );
+      }
+
+      // Invalidate caches
+      responseCache.invalidate(
+        `GET:/api/lists/${encodeURIComponent(name)}:${req.user._id}`
+      );
+      if (newName && newName !== name) {
+        responseCache.invalidate(
+          `GET:/api/lists/${encodeURIComponent(newName)}:${req.user._id}`
+        );
+      }
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+      // Return updated metadata
+      const yearValidation =
+        year !== undefined ? validateYear(year) : { value: existingList.year };
+      res.json({
+        success: true,
+        name: newName || name,
+        year: yearValidation.value,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.error('Error updating list metadata:', err);
       return res.status(500).json({ error: 'Database error' });
     }
   });
