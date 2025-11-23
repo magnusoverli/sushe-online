@@ -1002,29 +1002,7 @@ const spotifyTemplate = (user) => `
 </head>
 <body class="bg-black text-gray-200">
   <div class="app-layout">
-    <!-- Unified Header -->
-    <header class="bg-gray-900 border-b border-gray-800 z-50">
-      <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-0">
-        <!-- Mobile menu button / Desktop logo -->
-        <div class="flex items-center gap-2 lg:w-64 lg:justify-center lg:gap-0">
-          <button onclick="toggleMobileMenu()" class="lg:hidden p-2 -m-2 text-gray-400 active:text-white touch-target">
-            <i class="fas fa-bars text-lg"></i>
-          </button>
-          <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
-        </div>
-        
-        <!-- User menu -->
-        <div class="flex items-center gap-2 lg:gap-6">
-          <span class="hidden lg:inline text-sm text-gray-400">${user?.email}</span>
-          <a href="/settings" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
-            <i class="fas fa-cog text-lg"></i>
-          </a>
-          <a href="/logout" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
-            <i class="fas fa-sign-out-alt text-lg"></i>
-          </a>
-        </div>
-      </div>
-    </header>
+    ${headerComponent(user, 'home')}
     
     <!-- Main Content Area -->
     <div class="main-content">
