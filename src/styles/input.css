@@ -221,3 +221,40 @@
 .comment-text[data-comment]:not([data-comment='']):hover::after {
   opacity: 1;
 }
+
+/* Sidebar scrollbar - hidden by default, visible on hover */
+@media (min-width: 769px) {
+  #sidebar nav {
+    /* Firefox */
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  #sidebar nav:hover {
+    /* Firefox - visible on hover */
+    scrollbar-color: #4b5563 transparent;
+  }
+
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  #sidebar nav::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #sidebar nav::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  #sidebar nav::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+  }
+
+  #sidebar nav:hover::-webkit-scrollbar-thumb {
+    background-color: #4b5563;
+  }
+
+  #sidebar nav::-webkit-scrollbar-thumb:hover {
+    background-color: #6b7280;
+  }
+}
