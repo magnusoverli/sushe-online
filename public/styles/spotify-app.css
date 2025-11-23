@@ -556,6 +556,34 @@ input[list]::-webkit-list-button {
   flex-shrink: 0;
 }
 
+/* Sidebar list button styling - background with visual gap */
+.sidebar-list-btn {
+  position: relative;
+  isolation: isolate; /* Creates stacking context so z-index:-1 works */
+}
+
+.sidebar-list-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.sidebar-list-btn:hover::before {
+  background-color: #1f2937; /* gray-800 */
+}
+
+.sidebar-list-btn.active::before {
+  background-color: #1f2937; /* gray-800 */
+}
+
 /* Simplified SortableJS visual feedback styles */
 .sortable-ghost {
   opacity: 0.5;

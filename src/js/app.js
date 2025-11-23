@@ -2498,7 +2498,7 @@ function updateListNav() {
   const createListButton = (listName, isMobile, _container) => {
     const li = document.createElement('li');
     li.innerHTML = `
-      <button data-list-name="${listName}" class="w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm hover:bg-gray-800 transition duration-200 text-gray-300 ${currentList === listName ? 'bg-gray-800' : ''} flex items-center">
+      <button data-list-name="${listName}" class="sidebar-list-btn w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
         <i class="fas fa-list mr-2 flex-shrink-0"></i>
         <span class="truncate">${listName}</span>
       </button>
