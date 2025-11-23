@@ -2,7 +2,6 @@
 // Uses shared auth-state.js and shared-utils.js (loaded via popup.html)
 
 // Access shared modules from globalThis
-const { fetchWithTimeout } = globalThis.SharedUtils;
 const { getAuthState } = globalThis.AuthState;
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -120,7 +119,7 @@ async function loadLists() {
     statusEl.innerHTML = `<div class="status success">${response.count} list(s) loaded</div>`;
   } catch (error) {
     console.error('[Popup] Failed to load lists:', error);
-    
+
     // Handle specific error cases
     if (error.message && error.message.includes('401')) {
       // Token is invalid - trigger centralized logout
@@ -132,7 +131,7 @@ async function loadLists() {
       listsEl.style.display = 'none';
       return;
     }
-    
+
     statusEl.innerHTML = `<div class="status error">${error.message}</div>`;
     listsEl.style.display = 'none';
   }

@@ -1243,12 +1243,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'getLists') {
     (async () => {
       try {
-        console.log('[getLists] Request received, forceRefresh:', message.forceRefresh);
-        
+        console.log(
+          '[getLists] Request received, forceRefresh:',
+          message.forceRefresh
+        );
+
         // Fetch lists (and update context menu as a side effect)
         // forceRefresh bypasses cache to get fresh data
         await fetchUserLists(message.forceRefresh || false);
-        
+
         // Return the lists data that's now cached in background
         sendResponse({
           success: true,
@@ -1256,7 +1259,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           flatLists: userLists,
           count: userLists.length,
         });
-        
+
         console.log('[getLists] Returned', userLists.length, 'lists to popup');
       } catch (error) {
         console.error('[getLists] Error:', error);
@@ -1272,11 +1275,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         console.log('[RYM Page Load] Refreshing lists for context menu...');
-        
+
         // Always force refresh - server has 5-minute cache to prevent DB hammering
         // This gives us the best UX (always fresh) with minimal server impact
         await fetchUserLists(true);
-        
+
         console.log('[RYM Page Load] Context menu refreshed successfully');
         sendResponse({ success: true });
       } catch (error) {
