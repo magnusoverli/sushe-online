@@ -104,3 +104,18 @@ function cleanName(name) {
 
   return name;
 }
+
+// Notify background when RYM page loads to trigger list refresh
+// This ensures context menu is always fresh when browsing RateYourMusic
+// Small delay to batch rapid navigation and avoid hammering on quick page loads
+setTimeout(() => {
+  chrome.runtime
+    .sendMessage({ action: 'rymPageLoaded' })
+    .then(() => {
+      console.log('[Content Script] Notified background of RYM page load');
+    })
+    .catch(() => {
+      // Ignore errors - background might not be ready yet
+      // This is normal during extension startup
+    });
+}, 500); // 500ms delay to batch rapid page loads

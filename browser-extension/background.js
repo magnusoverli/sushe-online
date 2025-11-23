@@ -1238,6 +1238,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  // Get lists from background (single source of truth for popup)
+  // This ensures popup and context menu always show the same data
+  if (message.action === 'getLists') {
+    (async () => {
+      try {
+        console.log('[getLists] Request received, forceRefresh:', message.forceRefresh);
+        
+        // Fetch lists (and update context menu as a side effect)
+        // forceRefresh bypasses cache to get fresh data
+        await fetchUserLists(message.forceRefresh || false);
+        
+        // Return the lists data that's now cached in background
+        sendResponse({
+          success: true,
+          lists: userListsByYear,
+          flatLists: userLists,
+          count: userLists.length,
+        });
+        
+        console.log('[getLists] Returned', userLists.length, 'lists to popup');
+      } catch (error) {
+        console.error('[getLists] Error:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async response
+  }
+
+  // RYM page loaded - refresh lists to keep context menu fresh
+  // This ensures the menu is always up-to-date when browsing RateYourMusic
+  if (message.action === 'rymPageLoaded') {
+    (async () => {
+      try {
+        console.log('[RYM Page Load] Refreshing lists for context menu...');
+        
+        // Always force refresh - server has 5-minute cache to prevent DB hammering
+        // This gives us the best UX (always fresh) with minimal server impact
+        await fetchUserLists(true);
+        
+        console.log('[RYM Page Load] Context menu refreshed successfully');
+        sendResponse({ success: true });
+      } catch (error) {
+        console.error('[RYM Page Load] Error refreshing lists:', error);
+        sendResponse({ success: false, error: error.message });
+      }
+    })();
+    return true; // Keep channel open for async response
+  }
+
   // Return false for unknown actions to avoid channel errors
   return false;
 });

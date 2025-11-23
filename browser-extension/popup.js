@@ -7,14 +7,11 @@ const { getAuthState } = globalThis.AuthState;
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Load state and update UI
+  // NOTE: loadLists() now uses background as single source of truth
+  // This automatically refreshes both popup AND context menu with forceRefresh: true
   await loadLists();
 
-  // Also trigger a background refresh of context menu lists
-  // This keeps lists fresh when user interacts with the extension
-  chrome.runtime.sendMessage({ action: 'refreshLists' }).catch(() => {
-    // Ignore errors - background script might not be ready
-  });
-
+  // Set up event listeners
   document.getElementById('refreshBtn').addEventListener('click', refreshLists);
   document.getElementById('optionsBtn').addEventListener('click', openOptions);
   document.getElementById('loginBtn').addEventListener('click', openLogin);
@@ -77,58 +74,65 @@ async function loadLists() {
   statusEl.innerHTML = '<div class="status info">Loading your lists...</div>';
 
   try {
-    // Use metadata API for faster loading (no album data needed)
-    const response = await fetchWithTimeout(
-      `${authState.apiUrl}/api/lists`,
-      {
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authState.token}`,
-        },
-      },
-      10000 // 10 second timeout
-    );
+    // Get lists from background (single source of truth)
+    // This ensures popup and context menu always show the same data
+    // forceRefresh: true ensures we get fresh data when opening popup
+    console.log('[Popup] Requesting lists from background...');
+    const response = await chrome.runtime.sendMessage({
+      action: 'getLists',
+      forceRefresh: true,
+    });
 
-    if (!response.ok) {
-      if (response.status === 401) {
-        // Token is invalid - trigger centralized logout
-        await chrome.runtime.sendMessage({ action: 'logout' });
-        statusEl.innerHTML =
-          '<div class="status error">Session expired. Please login again.</div>';
-        loginBtn.style.display = 'block';
-        logoutBtn.style.display = 'none';
-        listsEl.style.display = 'none';
-        return;
-      }
-      throw new Error(`API returned ${response.status}`);
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to get lists from background');
     }
 
-    const listsData = await response.json();
-    const listNames = Object.keys(listsData);
+    console.log('[Popup] Received', response.count, 'lists from background');
 
-    if (listNames.length === 0) {
+    if (response.count === 0) {
       statusEl.innerHTML =
         '<div class="status error">No lists found. Create a list in SuShe Online first!</div>';
       listsEl.style.display = 'none';
       return;
     }
 
-    // Display lists with metadata
+    // Display lists with metadata (using background's cached data)
     listItemsEl.innerHTML = '';
-    listNames.forEach((name) => {
-      // Use metadata count instead of array length
-      const count = listsData[name].count;
-      const item = document.createElement('div');
-      item.className = 'list-item';
-      item.textContent = `${name} (${count} albums)`;
-      listItemsEl.appendChild(item);
+
+    // Get years sorted: numeric years descending, then 'Uncategorized' at the end
+    const years = Object.keys(response.lists).sort((a, b) => {
+      if (a === 'Uncategorized') return 1;
+      if (b === 'Uncategorized') return -1;
+      return parseInt(b) - parseInt(a);
+    });
+
+    years.forEach((year) => {
+      const lists = response.lists[year];
+      lists.forEach((list) => {
+        const item = document.createElement('div');
+        item.className = 'list-item';
+        item.textContent = `${list.name} (${list.count} albums)`;
+        listItemsEl.appendChild(item);
+      });
     });
 
     listsEl.style.display = 'block';
-    statusEl.innerHTML = `<div class="status success">${listNames.length} list(s) loaded</div>`;
+    statusEl.innerHTML = `<div class="status success">${response.count} list(s) loaded</div>`;
   } catch (error) {
-    console.error('Failed to load lists:', error);
+    console.error('[Popup] Failed to load lists:', error);
+    
+    // Handle specific error cases
+    if (error.message && error.message.includes('401')) {
+      // Token is invalid - trigger centralized logout
+      await chrome.runtime.sendMessage({ action: 'logout' });
+      statusEl.innerHTML =
+        '<div class="status error">Session expired. Please login again.</div>';
+      loginBtn.style.display = 'block';
+      logoutBtn.style.display = 'none';
+      listsEl.style.display = 'none';
+      return;
+    }
+    
     statusEl.innerHTML = `<div class="status error">${error.message}</div>`;
     listsEl.style.display = 'none';
   }
