@@ -1,6 +1,7 @@
 // Import static data at build time
 import genresText from '../data/genres.txt?raw';
 import countriesText from '../data/countries.txt?raw';
+import { getAlbumKey, isAlbumInList } from './modules/utils.js';
 
 // Lazy loading module cache
 let musicServicesModule = null;
@@ -805,16 +806,11 @@ function initializeImportConflictHandling() {
       const existingList = lists[pendingImportFilename] || [];
 
       // Merge the lists (avoiding duplicates based on artist + album)
-      const existingKeys = new Set(
-        existingList.map((album) =>
-          `${album.artist}::${album.album}`.toLowerCase()
-        )
-      );
+      const existingKeys = new Set(existingList.map(getAlbumKey));
 
-      const newAlbums = pendingImportData.filter((album) => {
-        const key = `${album.artist}::${album.album}`.toLowerCase();
-        return !existingKeys.has(key);
-      });
+      const newAlbums = pendingImportData.filter(
+        (album) => !existingKeys.has(getAlbumKey(album))
+      );
 
       const mergedList = [...existingList, ...newAlbums];
 
@@ -4042,15 +4038,7 @@ async function moveAlbumToList(index, albumId, targetList) {
   const albumToMove = { ...album };
 
   // Check for duplicate in target list
-  const albumKey =
-    `${albumToMove.artist}::${albumToMove.album}::${albumToMove.release_date || ''}`.toLowerCase();
-  const isDuplicate = lists[targetList].some((existing) => {
-    const existingKey =
-      `${existing.artist}::${existing.album}::${existing.release_date || ''}`.toLowerCase();
-    return existingKey === albumKey;
-  });
-
-  if (isDuplicate) {
+  if (isAlbumInList(albumToMove, lists[targetList])) {
     showToast(
       `"${albumToMove.album}" already exists in "${targetList}"`,
       'error'

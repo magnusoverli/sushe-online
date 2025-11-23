@@ -1,4 +1,6 @@
 // MusicBrainz API integration
+import { isAlbumInList } from './modules/utils.js';
+
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
 const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
@@ -1269,6 +1271,13 @@ async function handleManualSubmit(e) {
 
 async function finishManualAdd(album) {
   try {
+    // Check for duplicate before adding
+    if (isAlbumInList(album, window.lists[window.currentList])) {
+      closeAddAlbumModal();
+      showToast(`"${album.album}" is already in this list`, 'error');
+      return;
+    }
+
     // Add to current list
     window.lists[window.currentList].push(album);
 
@@ -2206,6 +2215,13 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   try {
+    // Check for duplicate before adding
+    if (isAlbumInList(album, window.lists[window.currentList])) {
+      closeAddAlbumModal();
+      showToast(`"${album.album}" is already in this list`, 'error');
+      return;
+    }
+
     window.lists[window.currentList].push(album);
 
     if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
