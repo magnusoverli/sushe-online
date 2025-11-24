@@ -2738,7 +2738,10 @@ function updateListNav() {
         'touchstart',
         (_e) => {
           pressTimer = setTimeout(() => {
-            showMobileListMenu(listName);
+            // Use the global showListMenu from templates.js
+            if (window.showListMenu) {
+              window.showListMenu(listName);
+            }
           }, 500);
         },
         { passive: true }

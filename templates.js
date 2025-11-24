@@ -855,6 +855,7 @@ const spotifyTemplate = (user) => `
       --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
       --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.2)};
       --accent-subtle-strong: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.3)};
+      --sidebar-transition-duration: 200ms;
     }
     
     /* Apply accent color to text and borders only, not buttons */
@@ -1044,32 +1045,20 @@ const spotifyTemplate = (user) => `
     </div>
     
     <!-- Mobile Menu Drawer -->
-    <div id="mobileMenu" class="mobile-only fixed inset-0 z-50 hidden">
+    <div id="mobileMenu" class="mobile-only fixed inset-0 z-50 pointer-events-none" style="visibility: hidden;">
       <!-- Backdrop -->
-      <div class="absolute inset-0 bg-black bg-opacity-50" onclick="toggleMobileMenu()"></div>
+      <div id="mobileMenuBackdrop" class="absolute inset-0 bg-black opacity-0 transition-opacity" style="transition-duration: var(--sidebar-transition-duration);" onclick="toggleMobileMenu()"></div>
       
       <!-- Drawer -->
-      <div class="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-900 border-r border-gray-800 overflow-hidden flex flex-col">
+      <div id="mobileMenuDrawer" class="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-900 border-r border-gray-800 overflow-hidden flex flex-col transition-transform" style="transition-duration: var(--sidebar-transition-duration); transform: translateX(-100%);">
         <!-- Header -->
         <div class="p-4 border-b border-gray-800">
           <div class="flex justify-between items-center">
-            <h2 class="text-xl font-bold text-white">Your Lists</h2>
+            <h2 class="text-xl font-bold text-white">Lists</h2>
             <button onclick="toggleMobileMenu()" class="p-2 -m-2 text-gray-400 hover:text-white">
               <i class="fas fa-times text-xl"></i>
             </button>
           </div>
-        </div>
-        
-        <!-- Quick Actions -->
-        <div class="p-4 border-b border-gray-800 space-y-2">
-          <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 text-left">
-            <i class="fas fa-file-import mr-2"></i>Import List
-          </button>
-          <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 text-left">
-            <i class="fas fa-plus mr-2"></i>Create New List
-          </button>
         </div>
         
         <!-- Lists -->
@@ -1080,7 +1069,16 @@ const spotifyTemplate = (user) => `
         </div>
         
         <!-- Footer Actions -->
-        <div class="p-4 border-t border-gray-800 safe-area-bottom"></div>
+        <div class="p-4 border-t border-gray-800 space-y-2" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));">
+          <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 flex items-center">
+            <i class="fas fa-plus mr-2"></i>Create List
+          </button>
+          <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 flex items-center">
+            <i class="fas fa-file-import mr-2"></i>Import List
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -1088,8 +1086,8 @@ const spotifyTemplate = (user) => `
   <!-- Floating Action Button -->
   <button
     id="addAlbumFAB"
-    class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transition-all duration-200 transform hover:scale-110 active:scale-95 z-[9999]"
-    style="display: none; touch-action: manipulation; pointer-events: auto;"
+    class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transform hover:scale-110 active:scale-95 z-[9999]"
+    style="display: none; touch-action: manipulation; pointer-events: auto; transition: opacity var(--sidebar-transition-duration), transform 200ms;"
   >
     <i class="fas fa-plus text-xl"></i>
   </button>
@@ -1125,7 +1123,41 @@ const spotifyTemplate = (user) => `
     // Mobile menu toggle
     function toggleMobileMenu() {
       const menu = document.getElementById('mobileMenu');
-      menu.classList.toggle('hidden');
+      const backdrop = document.getElementById('mobileMenuBackdrop');
+      const drawer = document.getElementById('mobileMenuDrawer');
+      const fab = document.getElementById('addAlbumFAB');
+      const isOpen = menu.dataset.open === 'true';
+      
+      if (isOpen) {
+        // Closing
+        menu.dataset.open = 'false';
+        backdrop.style.opacity = '0';
+        drawer.style.transform = 'translateX(-100%)';
+        if (fab) {
+          fab.style.opacity = '1';
+          fab.style.pointerEvents = 'auto';
+        }
+        // Hide after transition completes
+        setTimeout(() => {
+          if (menu.dataset.open === 'false') {
+            menu.style.visibility = 'hidden';
+            menu.classList.add('pointer-events-none');
+          }
+        }, 200); // Match --sidebar-transition-duration
+      } else {
+        // Opening
+        menu.dataset.open = 'true';
+        menu.style.visibility = 'visible';
+        menu.classList.remove('pointer-events-none');
+        // Trigger reflow to ensure transition runs
+        void drawer.offsetWidth;
+        backdrop.style.opacity = '0.5';
+        drawer.style.transform = 'translateX(0)';
+        if (fab) {
+          fab.style.opacity = '0';
+          fab.style.pointerEvents = 'none';
+        }
+      }
     }
 
     // Backwards compatibility for old toggle handler
@@ -1135,42 +1167,6 @@ const spotifyTemplate = (user) => `
     
     // Initialize the app
     document.addEventListener('DOMContentLoaded', () => {
-      // Update the list navigation to include mobile
-      const originalUpdateListNav = window.updateListNav;
-      window.updateListNav = function() {
-        if (originalUpdateListNav) originalUpdateListNav();
-        
-        // Update mobile navigation
-        const mobileNav = document.getElementById('mobileListNav');
-        if (mobileNav) {
-          mobileNav.innerHTML = '';
-          
-          Object.keys(lists).forEach(listName => {
-            const li = document.createElement('li');
-            const isActive = currentList === listName;
-            
-            li.innerHTML = \`
-              <div class="flex items-center group">
-                <button 
-                  onclick="selectList('\${listName}'); toggleMobileMenu();"
-                  class="flex-1 text-left px-3 py-3 rounded text-sm hover:bg-gray-800 transition duration-200 \${isActive ? 'bg-gray-800 text-red-500' : 'text-gray-300'}"
-                >
-                  \${listName}
-                </button>
-                <button
-                  onclick="event.stopPropagation(); showListMenu('\${listName}');"
-                  class="p-3 text-gray-400 hover:text-white opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
-                >
-                  <i class="fas fa-ellipsis-v"></i>
-                </button>
-              </div>
-            \`;
-            
-            mobileNav.appendChild(li);
-          });
-        }
-      };
-      
       // Override selectList to handle responsive behavior
       const originalSelectList = window.selectList;
       window.selectList = async function(listName) {
@@ -1188,6 +1184,33 @@ const spotifyTemplate = (user) => `
         const isMobile = window.innerWidth < 1024;
         
         if (isMobile) {
+          // Get metadata for this list
+          const meta = window.getListMetadata ? window.getListMetadata(listName) : null;
+          const hasYear = meta?.year;
+          const isOfficial = meta?.isOfficial || false;
+          
+          // Determine music service text
+          const musicService = window.currentUser?.musicService;
+          const hasSpotify = window.currentUser?.spotifyAuth;
+          const hasTidal = window.currentUser?.tidalAuth;
+          let musicServiceText = 'Send to Music Service';
+          if (musicService === 'spotify' && hasSpotify) {
+            musicServiceText = 'Send to Spotify';
+          } else if (musicService === 'tidal' && hasTidal) {
+            musicServiceText = 'Send to Tidal';
+          } else if (hasSpotify && !hasTidal) {
+            musicServiceText = 'Send to Spotify';
+          } else if (hasTidal && !hasSpotify) {
+            musicServiceText = 'Send to Tidal';
+          }
+          
+          // Build official button HTML
+          const officialButtonHtml = hasYear ? \`
+                <button onclick="toggleOfficialStatus('\${listName}'); this.closest('.fixed').remove();" 
+                        class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  <i class="fas \${isOfficial ? 'fa-star-half-alt' : 'fa-star'} mr-3 text-yellow-500"></i>\${isOfficial ? 'Remove Official' : 'Set as Official'}
+                </button>\` : '';
+          
           // Mobile action sheet
           const actionSheet = document.createElement('div');
           actionSheet.className = 'fixed inset-0 z-[60]';
@@ -1208,16 +1231,12 @@ const spotifyTemplate = (user) => `
                   <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
                 </button>
                 
-                \${(() => {
-                  const meta = window.getListMetadata && window.getListMetadata('\${listName}');
-                  if (!meta?.year) return '';
-                  const isOfficial = meta?.isOfficial || false;
-                  return \`
-                <button onclick="toggleOfficialStatus('\${listName}'); this.closest('.fixed').remove();" 
+                \${officialButtonHtml}
+                
+                <button onclick="currentContextList='\${listName}'; document.getElementById('updatePlaylistOption').click(); this.closest('.fixed').remove();" 
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-                  <i class="fas \${isOfficial ? 'fa-star-half-alt' : 'fa-star'} mr-3 text-yellow-500"></i>\${isOfficial ? 'Remove Official' : 'Set as Official'}
-                </button>\`;
-                })()}
+                  <i class="fas fa-paper-plane mr-3 text-gray-400"></i>\${musicServiceText}
+                </button>
                 
                 <button onclick="currentContextList='\${listName}'; showConfirmation('Delete List', 'Are you sure you want to delete the list \\'' + '\${listName}' + '\\'?', 'This action cannot be undone.', 'Delete', () => document.getElementById('deleteListOption').click()); this.closest('.fixed').remove();" 
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
