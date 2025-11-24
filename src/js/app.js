@@ -2441,11 +2441,11 @@ function updateListNavActiveState(activeListName) {
 
       const isActive = listName === activeListName;
 
-      // Update only background color, keep text color consistent
+      // Toggle active class - background is handled by ::before pseudo-element in CSS
       if (isActive) {
-        button.classList.add('bg-gray-800');
+        button.classList.add('active');
       } else {
-        button.classList.remove('bg-gray-800');
+        button.classList.remove('active');
       }
     });
   };
@@ -2546,7 +2546,7 @@ function updateListNav() {
           <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
           <span>${year}</span>
         </div>
-        <span class="text-xs text-gray-500 bg-gray-800 px-1 py-px rounded font-normal">${yearLists.length}</span>
+        <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${yearLists.length}</span>
       `;
       header.onclick = (e) => {
         e.preventDefault();
@@ -2585,7 +2585,7 @@ function updateListNav() {
           <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
           <span>Uncategorized</span>
         </div>
-        <span class="text-xs text-gray-500 bg-gray-800 px-1 py-px rounded font-normal">${uncategorized.length}</span>
+        <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${uncategorized.length}</span>
       `;
       header.onclick = (e) => {
         e.preventDefault();
