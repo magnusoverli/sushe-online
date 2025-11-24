@@ -3816,7 +3816,7 @@ function createMobileAlbumCard(data, index) {
       </div>
       
       <!-- Main content -->
-      <div class="flex-1 min-w-0 py-1 pr-3 flex flex-col justify-center">
+      <div class="flex-1 min-w-0 py-1 pr-3 flex flex-col justify-center h-[102px]">
         <div>
           <h3 class="font-semibold text-white text-base leading-tight truncate">${data.albumName}</h3>
           <p class="text-sm text-gray-400 truncate mt-0.5">${data.artist}</p>
