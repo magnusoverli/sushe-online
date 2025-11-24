@@ -3568,7 +3568,7 @@ function createDesktopAlbumRow(data, index) {
   row.dataset.index = index;
 
   row.innerHTML = `
-    <div class="flex items-center justify-center text-gray-400 font-medium position-display" data-position-element="true">${data.position}</div>
+    <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
     <div class="flex items-center">
       <div class="album-cover-container">
         ${

@@ -5,7 +5,7 @@
   /* Default grid for desktop screens - Track column at the end */
   /* Position column is fixed at 5px, album image at 80px, rest are flexible */
   --album-grid-columns: 5px 80px 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
-  --cover-art-size: 64px;
+  --cover-art-size: 80px;
 }
 
 /* Prevent overscroll on mobile */
@@ -84,17 +84,37 @@
   margin-left: -0.35rem; /* Reduce gap between album image and album name */
 }
 
-/* Ensure the date text stays with album name */
+/* Album name column - use relative positioning for date placement */
+@media (min-width: 1024px) {
+  .album-row > div:nth-child(3) {
+    position: relative;
+  }
+
+  /* Album name - centered on cover, slightly larger font */
+  .album-row > div:nth-child(3) > div:first-child {
+    font-size: 0.95rem;
+    width: 100%;
+  }
+
+  /* Release date - positioned below album name, not affecting centering */
+  .album-row > div:nth-child(3) > div.release-date-display {
+    position: absolute;
+    top: calc(50% + 1rem);
+    left: 0;
+  }
+}
+
+/* Ensure the date text stays with album name (mobile fallback) */
 .album-row > div:nth-child(3) > div {
   width: 100%;
 }
 
 /* Cover art container */
 .album-cover-container {
-  width: 100%;
-  max-width: var(--cover-art-size);
+  width: var(--cover-art-size);
+  min-width: var(--cover-art-size);
   height: var(--cover-art-size);
-  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
 }
 
 /* Cover art styling */
