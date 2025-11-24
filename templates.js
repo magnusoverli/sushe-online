@@ -40,7 +40,7 @@ const loginSnippetFn = ejs.compile(
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
   <header class="bg-gray-900 border-b border-gray-800 z-50">
-    <div class="flex items-center justify-between py-3 lg:py-4 px-3 lg:px-0">
+    <div class="flex items-center justify-between py-[2px] lg:py-4 px-3 lg:px-0">
       <!-- Mobile menu button / Desktop logo -->
       <div class="flex items-center gap-2 lg:w-64 lg:justify-center lg:gap-0">
         ${

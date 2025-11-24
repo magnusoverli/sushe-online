@@ -3776,7 +3776,7 @@ function createMobileAlbumCard(data, index) {
       <!-- Left section: Position number, Album cover, and Release date -->
       <div class="flex-shrink-0 flex items-stretch h-full">
         <!-- Position number -->
-        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display w-5" data-position-element="true">
+        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display w-[17px]" data-position-element="true">
           ${data.position}
         </div>
 
@@ -3816,48 +3816,35 @@ function createMobileAlbumCard(data, index) {
       </div>
       
       <!-- Main content -->
-      <div class="flex-1 min-w-0 py-1 pr-3 flex flex-col justify-center h-[102px]">
-        <div>
-          <h3 class="font-semibold text-white text-base leading-tight truncate">${data.albumName}</h3>
-          <p class="text-sm text-gray-400 truncate mt-0.5">${data.artist}</p>
-            
-            <!-- Country row -->
-            ${
-              data.country
-                ? `
-              <div class="text-xs text-gray-500 mt-1">
-                ${data.country}
-              </div>
-            `
-                : ''
-            }
-            
-            <!-- Genres row (if any) -->
-            ${
-              data.genre1 || data.genre2
-                ? `
-              <div class="text-xs text-gray-500 truncate mt-1">
-                ${data.genre1}${data.genre2 ? ` / ${data.genre2}` : ''}
-              </div>
-            `
-                : ''
-            }
-            
-            <!-- Track selection (if any) -->
-            ${
-              data.trackPick && data.trackPickDisplay !== 'Select Track'
-                ? `
-              <div class="text-xs text-blue-400 truncate mt-1">
-                <i class="fas fa-music mr-1"></i>${data.trackPickDisplay}
-              </div>
-            `
-                : ''
-            }
+      <div class="flex-1 min-w-0 pt-[3px] pb-0.5 pr-3 pl-[10px] flex flex-col h-[102px]">
+        <!-- Line 1: Album name (always present) -->
+        <div class="h-5 flex items-center">
+          <h3 class="font-semibold text-white text-base leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
+        </div>
+        
+        <!-- Line 2: Artist (always present) -->
+        <div class="h-5 flex items-center mt-0.5">
+          <p class="text-sm text-gray-400 truncate"><i class="fas fa-user fa-xs mr-1"></i>${data.artist}</p>
+        </div>
+        
+        <!-- Line 3: Country (may be empty) -->
+        <div class="h-4 flex items-center mt-1">
+          ${data.country ? `<span class="text-xs text-gray-400"><i class="fas fa-globe fa-xs mr-1"></i>${data.country}</span>` : ''}
+        </div>
+        
+        <!-- Line 4: Genres (may be empty) -->
+        <div class="h-4 flex items-center mt-1">
+          ${data.genre1 || data.genre2 ? `<span class="text-xs text-gray-400 truncate"><i class="fas fa-guitar fa-xs mr-1"></i>${data.genre1}${data.genre2 ? ` / ${data.genre2}` : ''}</span>` : ''}
+        </div>
+        
+        <!-- Line 5: Track selection (may be empty) -->
+        <div class="h-4 flex items-center mt-1">
+          ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? `<span class="text-xs text-blue-400 truncate"><i class="fas fa-music fa-xs mr-1"></i>${data.trackPickDisplay}</span>` : ''}
         </div>
       </div>
 
       <!-- Actions on the right -->
-      <div class="flex items-center justify-center flex-shrink-0 w-[25px] border-l border-gray-800/50">
+      <div class="flex items-center justify-center flex-shrink-0 w-[20px] border-l border-gray-800/50">
         <button data-album-menu-btn
                 class="p-2 text-gray-400 active:text-gray-200 no-drag">
           <i class="fas fa-ellipsis-v"></i>
