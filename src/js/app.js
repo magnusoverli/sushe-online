@@ -5341,6 +5341,7 @@ window.showMobileEditForm = function (index) {
 
     // Force refresh the display to show changes immediately
     displayAlbums(albumsToSave);
+    fetchAndApplyCovers(albumsToSave);
 
     // Save to server in the background
     try {
@@ -5355,6 +5356,7 @@ window.showMobileEditForm = function (index) {
 
       // Refresh display to show reverted state
       displayAlbums(albumsToSave);
+      fetchAndApplyCovers(albumsToSave);
     }
   };
 
