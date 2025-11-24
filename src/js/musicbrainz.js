@@ -1271,15 +1271,23 @@ async function handleManualSubmit(e) {
 
 async function finishManualAdd(album) {
   try {
+    // Get current list data
+    const currentListData = window.getListData(window.currentList);
+    if (!currentListData) {
+      showToast('No list selected', 'error');
+      return;
+    }
+
     // Check for duplicate before adding
-    if (isAlbumInList(album, window.lists[window.currentList])) {
+    if (isAlbumInList(album, currentListData)) {
       closeAddAlbumModal();
       showToast(`"${album.album}" is already in this list`, 'error');
       return;
     }
 
     // Add to current list
-    window.lists[window.currentList].push(album);
+    currentListData.push(album);
+    window.setListData(window.currentList, currentListData);
 
     if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
       try {
@@ -1290,7 +1298,7 @@ async function finishManualAdd(album) {
     }
 
     // Save to server
-    await window.saveList(window.currentList, window.lists[window.currentList]);
+    await window.saveList(window.currentList, currentListData);
 
     // Refresh the list view
     window.selectList(window.currentList);
@@ -1303,7 +1311,11 @@ async function finishManualAdd(album) {
     showToast('Error adding album to list', 'error');
 
     // Remove from list on error
-    window.lists[window.currentList].pop();
+    const currentListData = window.getListData(window.currentList);
+    if (currentListData) {
+      currentListData.pop();
+      window.setListData(window.currentList, currentListData);
+    }
   }
 }
 
@@ -2215,14 +2227,22 @@ async function addAlbumToList(releaseGroup) {
 
 async function addAlbumToCurrentList(album) {
   try {
+    // Get current list data
+    const currentListData = window.getListData(window.currentList);
+    if (!currentListData) {
+      showToast('No list selected', 'error');
+      return;
+    }
+
     // Check for duplicate before adding
-    if (isAlbumInList(album, window.lists[window.currentList])) {
+    if (isAlbumInList(album, currentListData)) {
       closeAddAlbumModal();
       showToast(`"${album.album}" is already in this list`, 'error');
       return;
     }
 
-    window.lists[window.currentList].push(album);
+    currentListData.push(album);
+    window.setListData(window.currentList, currentListData);
 
     if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
       try {
@@ -2232,7 +2252,7 @@ async function addAlbumToCurrentList(album) {
       }
     }
 
-    await window.saveList(window.currentList, window.lists[window.currentList]);
+    await window.saveList(window.currentList, currentListData);
 
     window.selectList(window.currentList);
 
@@ -2242,7 +2262,11 @@ async function addAlbumToCurrentList(album) {
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    window.lists[window.currentList].pop();
+    const currentListData = window.getListData(window.currentList);
+    if (currentListData) {
+      currentListData.pop();
+      window.setListData(window.currentList, currentListData);
+    }
   }
 }
 

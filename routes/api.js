@@ -1281,7 +1281,14 @@ module.exports = (app, deps) => {
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('MusicBrainz proxy error:', error);
+        logger.error('MusicBrainz proxy error:', {
+          message: error.message,
+          stack: error.stack,
+          endpoint: req.query.endpoint,
+          url: req.query.endpoint
+            ? `https://musicbrainz.org/ws/2/${req.query.endpoint}`
+            : 'unknown',
+        });
         res.status(500).json({ error: 'Failed to fetch from MusicBrainz API' });
       }
     }

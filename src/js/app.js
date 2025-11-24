@@ -503,6 +503,46 @@ async function showServicePicker(hasSpotify, hasTidal) {
   return musicServicesModule.showServicePicker(hasSpotify, hasTidal);
 }
 
+// Extract year from a release date string (various formats)
+function extractYearFromDate(dateStr) {
+  if (!dateStr) return null;
+
+  // Year only (e.g., "2024")
+  if (/^\d{4}$/.test(dateStr)) {
+    return parseInt(dateStr, 10);
+  }
+
+  // ISO format: YYYY-MM-DD or YYYY-MM
+  if (/^\d{4}-/.test(dateStr)) {
+    return parseInt(dateStr.substring(0, 4), 10);
+  }
+
+  // MM/DD/YYYY or DD/MM/YYYY format
+  const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (slashMatch) {
+    return parseInt(slashMatch[3], 10);
+  }
+
+  // MM/YYYY format (month/year)
+  const monthYearMatch = dateStr.match(/(\d{1,2})\/(\d{4})/);
+  if (monthYearMatch) {
+    return parseInt(monthYearMatch[2], 10);
+  }
+
+  return null;
+}
+
+// Check if release date year matches list year
+function isYearMismatch(releaseDate, listYear) {
+  if (!listYear) return false; // No list year set, no mismatch possible
+  if (!releaseDate) return false; // No release date, no mismatch
+
+  const releaseYear = extractYearFromDate(releaseDate);
+  if (!releaseYear) return false; // Couldn't parse year
+
+  return releaseYear !== listYear;
+}
+
 // Standardize date formats for release dates
 function formatReleaseDate(dateStr) {
   if (!dateStr) return '';
@@ -3411,7 +3451,18 @@ function processAlbumData(album, index) {
   const albumId = album.album_id || '';
   const albumName = album.album || 'Unknown Album';
   const artist = album.artist || 'Unknown Artist';
-  const releaseDate = formatReleaseDate(album.release_date || '');
+  const rawReleaseDate = album.release_date || '';
+  const releaseDate = formatReleaseDate(rawReleaseDate);
+
+  // Check for year mismatch with current list
+  const listMeta = getListMetadata(currentList);
+  const listYear = listMeta?.year || null;
+  const yearMismatch = isYearMismatch(rawReleaseDate, listYear);
+  const releaseYear = extractYearFromDate(rawReleaseDate);
+  const yearMismatchTooltip = yearMismatch
+    ? `Release year (${releaseYear}) doesn't match list year (${listYear})`
+    : '';
+
   const country = album.country || '';
   const countryDisplay = country || 'Country';
   const countryClass = country ? 'text-gray-300' : 'text-gray-800 italic';
@@ -3475,6 +3526,8 @@ function processAlbumData(album, index) {
     albumName,
     artist,
     releaseDate,
+    yearMismatch,
+    yearMismatchTooltip,
     country,
     countryDisplay,
     countryClass,
@@ -3549,7 +3602,7 @@ function createDesktopAlbumRow(data, index) {
     </div>
     <div class="flex flex-col justify-center">
       <div class="font-semibold text-gray-100 truncate">${data.albumName}</div>
-      <div class="text-xs text-gray-400 mt-0.5">${data.releaseDate}</div>
+      <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-400 px-1.5 py-0.5 rounded inline-block cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
     </div>
     <div class="flex items-center">
       <span class="text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
@@ -3751,7 +3804,7 @@ function createMobileAlbumCard(data, index) {
             }
           </div>
           <!-- Release date below image -->
-          <div class="text-xs text-gray-500 mt-1 whitespace-nowrap">
+          <div class="text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-500 px-1.5 py-0.5 rounded' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
             ${data.releaseDate}
           </div>
         </div>
@@ -3996,14 +4049,30 @@ function updateAlbumFields(albums, isMobile) {
         const albumNameDiv = row.querySelector('.font-semibold.text-gray-100');
         if (albumNameDiv) albumNameDiv.textContent = data.albumName;
 
-        const releaseDateDiv = row.querySelector('.text-xs.text-gray-400');
-        if (releaseDateDiv) releaseDateDiv.textContent = data.releaseDate;
+        const releaseDateDiv = row.querySelector('.release-date-display');
+        if (releaseDateDiv) {
+          releaseDateDiv.textContent = data.releaseDate;
+          releaseDateDiv.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-400 px-1.5 py-0.5 rounded inline-block cursor-help' : 'text-gray-400'}`;
+          if (data.yearMismatch) {
+            releaseDateDiv.title = data.yearMismatchTooltip;
+          } else {
+            releaseDateDiv.removeAttribute('title');
+          }
+        }
       } else {
         const albumNameEl = row.querySelector('.font-semibold.text-white');
         if (albumNameEl) albumNameEl.textContent = data.albumName;
 
-        const releaseDateEl = row.querySelector('.text-xs.text-gray-500.mt-1');
-        if (releaseDateEl) releaseDateEl.textContent = data.releaseDate;
+        const releaseDateEl = row.querySelector('.release-date-display');
+        if (releaseDateEl) {
+          releaseDateEl.textContent = data.releaseDate;
+          releaseDateEl.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-500 px-1.5 py-0.5 rounded' : 'text-gray-500'}`;
+          if (data.yearMismatch) {
+            releaseDateEl.title = data.yearMismatchTooltip;
+          } else {
+            releaseDateEl.removeAttribute('title');
+          }
+        }
       }
 
       // Update country
