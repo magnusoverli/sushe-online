@@ -3776,12 +3776,12 @@ function createMobileAlbumCard(data, index) {
       <!-- Left section: Position number, Album cover, and Release date -->
       <div class="flex-shrink-0 flex items-stretch h-full">
         <!-- Position number -->
-        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display pl-1.5" data-position-element="true">
+        <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display w-5" data-position-element="true">
           ${data.position}
         </div>
 
         <!-- Album cover with release date below -->
-        <div class="flex flex-col items-center pl-1.5 pt-1 self-stretch">
+        <div class="flex flex-col items-center pl-1 pt-2 self-stretch">
           <div class="flex-shrink-0">
             ${
               data.albumId
@@ -3808,7 +3808,7 @@ function createMobileAlbumCard(data, index) {
           </div>
           <!-- Release date centered in remaining space below image -->
           <div class="flex-1 flex items-center">
-            <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-500 px-1.5 py-0.5 rounded' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
+            <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/35 text-gray-400 px-1.5 rounded' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
               ${data.releaseDate}
             </div>
           </div>
@@ -3853,19 +3853,11 @@ function createMobileAlbumCard(data, index) {
             `
                 : ''
             }
-            
-            ${
-              data.comment
-                ? `
-              <p class="text-xs text-gray-400 italic mt-1 line-clamp-1">${data.comment}</p>
-            `
-                : ''
-            }
         </div>
       </div>
 
       <!-- Actions on the right -->
-      <div class="flex items-center justify-center flex-shrink-0 w-8 border-l border-gray-800/50">
+      <div class="flex items-center justify-center flex-shrink-0 w-[25px] border-l border-gray-800/50">
         <button data-album-menu-btn
                 class="p-2 text-gray-400 active:text-gray-200 no-drag">
           <i class="fas fa-ellipsis-v"></i>
