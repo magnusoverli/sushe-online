@@ -374,6 +374,9 @@ const contextMenusComponent = () => `
     <button id="renameListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>
+    <button id="toggleOfficialOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-star mr-2 w-4 text-center"></i><span id="toggleOfficialText">Set as Official</span>
+    </button>
     <button id="updatePlaylistOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-paper-plane mr-2 w-4 text-center"></i><span id="updatePlaylistText">Send to Music Service</span>
     </button>
@@ -1204,6 +1207,17 @@ const spotifyTemplate = (user) => `
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
                   <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
                 </button>
+                
+                \${(() => {
+                  const meta = window.getListMetadata && window.getListMetadata('\${listName}');
+                  if (!meta?.year) return '';
+                  const isOfficial = meta?.isOfficial || false;
+                  return \`
+                <button onclick="toggleOfficialStatus('\${listName}'); this.closest('.fixed').remove();" 
+                        class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  <i class="fas \${isOfficial ? 'fa-star-half-alt' : 'fa-star'} mr-3 text-yellow-500"></i>\${isOfficial ? 'Remove Official' : 'Set as Official'}
+                </button>\`;
+                })()}
                 
                 <button onclick="currentContextList='\${listName}'; showConfirmation('Delete List', 'Are you sure you want to delete the list \\'' + '\${listName}' + '\\'?', 'This action cannot be undone.', 'Delete', () => document.getElementById('deleteListOption').click()); this.closest('.fixed').remove();" 
                         class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">

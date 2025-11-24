@@ -93,6 +93,7 @@ function setListData(listName, albums) {
     lists[listName] = {
       name: listName,
       year: null,
+      isOfficial: false,
       count: albums ? albums.length : 0,
       _data: albums || [],
       updatedAt: new Date().toISOString(),
@@ -106,6 +107,7 @@ function setListData(listName, albums) {
     lists[listName] = {
       name: listName,
       year: null,
+      isOfficial: false,
       count: albums ? albums.length : 0,
       _data: albums || [],
       updatedAt: new Date().toISOString(),
@@ -135,6 +137,7 @@ function getListMetadata(listName) {
     return {
       name: listName,
       year: null,
+      isOfficial: false,
       count: listEntry.length,
       _data: listEntry,
       updatedAt: null,
@@ -160,6 +163,7 @@ function updateListMetadata(listName, updates) {
     lists[listName] = {
       name: listName,
       year: null,
+      isOfficial: false,
       count: listEntry.length,
       _data: listEntry,
       updatedAt: new Date().toISOString(),
@@ -191,12 +195,67 @@ function isListDataLoaded(listName) {
   );
 }
 
+/**
+ * Toggle official status for a list
+ * @param {string} listName - The name of the list
+ */
+async function toggleOfficialStatus(listName) {
+  const meta = getListMetadata(listName);
+  if (!meta) return;
+
+  // Check if list has a year assigned
+  if (!meta.year) {
+    showToast('List must have a year to be marked as official', 'error');
+    return;
+  }
+
+  const newOfficialStatus = !meta.isOfficial;
+
+  try {
+    const response = await apiCall(
+      `/api/lists/${encodeURIComponent(listName)}/official`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ isOfficial: newOfficialStatus }),
+      }
+    );
+
+    // Update local metadata
+    updateListMetadata(listName, { isOfficial: newOfficialStatus });
+
+    // If another list lost its official status, update it too
+    if (response.previousOfficialList) {
+      updateListMetadata(response.previousOfficialList, { isOfficial: false });
+    }
+
+    // Refresh sidebar to show updated star icons
+    updateListNav();
+
+    // Show appropriate message
+    if (newOfficialStatus) {
+      if (response.previousOfficialList) {
+        showToast(
+          `"${listName}" is now your official ${meta.year} list (replaced "${response.previousOfficialList}")`
+        );
+      } else {
+        showToast(`"${listName}" is now your official ${meta.year} list`);
+      }
+    } else {
+      showToast(`"${listName}" is no longer marked as official`);
+    }
+  } catch (error) {
+    console.error('Error toggling official status:', error);
+    showToast('Error updating official status', 'error');
+  }
+}
+
 // Expose helpers to window for other modules
 window.getListData = getListData;
 window.setListData = setListData;
 window.getListMetadata = getListMetadata;
 window.updateListMetadata = updateListMetadata;
 window.isListDataLoaded = isListDataLoaded;
+window.toggleOfficialStatus = toggleOfficialStatus;
 
 // Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
 // Positions a menu element and adjusts if it would overflow the viewport
@@ -1360,13 +1419,14 @@ async function loadLists() {
     const fetchedLists = await metadataPromise;
 
     // Initialize lists object with metadata objects (not arrays)
-    // Structure: { name, year, count, _data, updatedAt, createdAt }
+    // Structure: { name, year, isOfficial, count, _data, updatedAt, createdAt }
     lists = {};
     Object.keys(fetchedLists).forEach((name) => {
       const meta = fetchedLists[name];
       lists[name] = {
         name: meta.name || name,
         year: meta.year || null,
+        isOfficial: meta.isOfficial || false,
         count: meta.count || 0,
         _data: null, // Data not loaded yet (lazy load)
         updatedAt: meta.updatedAt || null,
@@ -1531,6 +1591,7 @@ function initializeContextMenu() {
   const contextMenu = document.getElementById('contextMenu');
   const downloadOption = document.getElementById('downloadListOption');
   const renameOption = document.getElementById('renameListOption');
+  const toggleOfficialOption = document.getElementById('toggleOfficialOption');
   const updatePlaylistOption = document.getElementById('updatePlaylistOption');
   const deleteOption = document.getElementById('deleteListOption');
 
@@ -1539,7 +1600,8 @@ function initializeContextMenu() {
     !deleteOption ||
     !renameOption ||
     !downloadOption ||
-    !updatePlaylistOption
+    !updatePlaylistOption ||
+    !toggleOfficialOption
   )
     return;
 
@@ -1581,6 +1643,68 @@ function initializeContextMenu() {
     if (!currentContextList) return;
 
     openRenameModal(currentContextList);
+  };
+
+  // Handle toggle official option click
+  toggleOfficialOption.onclick = async () => {
+    contextMenu.classList.add('hidden');
+
+    if (!currentContextList) return;
+
+    const meta = getListMetadata(currentContextList);
+    if (!meta) return;
+
+    // Check if list has a year assigned
+    if (!meta.year) {
+      showToast('List must have a year to be marked as official', 'error');
+      currentContextList = null;
+      return;
+    }
+
+    const newOfficialStatus = !meta.isOfficial;
+
+    try {
+      const response = await apiCall(
+        `/api/lists/${encodeURIComponent(currentContextList)}/official`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ isOfficial: newOfficialStatus }),
+        }
+      );
+
+      // Update local metadata
+      updateListMetadata(currentContextList, { isOfficial: newOfficialStatus });
+
+      // If another list lost its official status, update it too
+      if (response.previousOfficialList) {
+        updateListMetadata(response.previousOfficialList, {
+          isOfficial: false,
+        });
+      }
+
+      // Refresh sidebar to show updated star icons
+      updateListNav();
+
+      // Show appropriate message
+      if (newOfficialStatus) {
+        if (response.previousOfficialList) {
+          showToast(
+            `"${currentContextList}" is now your official ${meta.year} list (replaced "${response.previousOfficialList}")`
+          );
+        } else {
+          showToast(
+            `"${currentContextList}" is now your official ${meta.year} list`
+          );
+        }
+      } else {
+        showToast(`"${currentContextList}" is no longer marked as official`);
+      }
+    } catch (error) {
+      console.error('Error toggling official status:', error);
+      showToast('Error updating official status', 'error');
+    }
+
+    currentContextList = null;
   };
 
   // Handle update playlist option click
@@ -2422,7 +2546,7 @@ function updateListNav() {
           <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
           <span>${year}</span>
         </div>
-        <span class="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded font-normal">${yearLists.length}</span>
+        <span class="text-xs text-gray-500 bg-gray-800 px-1 py-px rounded font-normal">${yearLists.length}</span>
       `;
       header.onclick = (e) => {
         e.preventDefault();
@@ -2461,7 +2585,7 @@ function updateListNav() {
           <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
           <span>Uncategorized</span>
         </div>
-        <span class="text-xs text-gray-500 bg-gray-800 px-1.5 py-0.5 rounded font-normal">${uncategorized.length}</span>
+        <span class="text-xs text-gray-500 bg-gray-800 px-1 py-px rounded font-normal">${uncategorized.length}</span>
       `;
       header.onclick = (e) => {
         e.preventDefault();
@@ -2487,11 +2611,14 @@ function updateListNav() {
 
   // Helper to create a list button
   const createListButton = (listName, isMobile, _container) => {
+    const meta = getListMetadata(listName);
+    const isOfficial = meta?.isOfficial || false;
     const li = document.createElement('li');
     li.innerHTML = `
       <button data-list-name="${listName}" class="sidebar-list-btn w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
         <i class="fas fa-list mr-2 flex-shrink-0"></i>
-        <span class="truncate">${listName}</span>
+        <span class="truncate flex-1">${listName}</span>
+        ${isOfficial ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>' : ''}
       </button>
     `;
 
@@ -2529,6 +2656,35 @@ function updateListNav() {
             updatePlaylistText.textContent = 'Send to Tidal';
           } else {
             updatePlaylistText.textContent = 'Send to Music Service';
+          }
+        }
+
+        // Update the toggle official option text based on current status
+        const toggleOfficialText =
+          document.getElementById('toggleOfficialText');
+        const toggleOfficialOption = document.getElementById(
+          'toggleOfficialOption'
+        );
+        if (toggleOfficialText && toggleOfficialOption) {
+          const meta = getListMetadata(listName);
+          if (meta?.isOfficial) {
+            toggleOfficialText.textContent = 'Remove Official';
+            toggleOfficialOption.querySelector('i').classList.remove('fa-star');
+            toggleOfficialOption
+              .querySelector('i')
+              .classList.add('fa-star-half-alt');
+          } else {
+            toggleOfficialText.textContent = 'Set as Official';
+            toggleOfficialOption
+              .querySelector('i')
+              .classList.remove('fa-star-half-alt');
+            toggleOfficialOption.querySelector('i').classList.add('fa-star');
+          }
+          // Hide option if list has no year (can't be official)
+          if (!meta?.year) {
+            toggleOfficialOption.classList.add('hidden');
+          } else {
+            toggleOfficialOption.classList.remove('hidden');
           }
         }
 

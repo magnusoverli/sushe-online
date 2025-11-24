@@ -210,6 +210,8 @@ if (process.env.DATABASE_URL) {
     userId: 'user_id',
     name: 'name',
     data: 'data',
+    year: 'year',
+    isOfficial: 'is_official',
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };

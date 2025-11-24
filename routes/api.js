@@ -415,6 +415,7 @@ module.exports = (app, deps) => {
             listsObj[list.name] = {
               name: list.name,
               year: list.year || null,
+              isOfficial: list.isOfficial || false,
               count: count,
               updatedAt: list.updatedAt,
               createdAt: list.createdAt,
@@ -842,6 +843,79 @@ module.exports = (app, deps) => {
       });
     } catch (err) {
       logger.error('Error updating list metadata:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // Toggle official status for a list
+  app.post('/api/lists/:name/official', ensureAuthAPI, async (req, res) => {
+    const { name } = req.params;
+    const { isOfficial } = req.body;
+
+    // isOfficial must be a boolean
+    if (typeof isOfficial !== 'boolean') {
+      return res.status(400).json({ error: 'isOfficial must be a boolean' });
+    }
+
+    try {
+      // Check if list exists
+      const existingList = await listsAsync.findOne({
+        userId: req.user._id,
+        name,
+      });
+
+      if (!existingList) {
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      // A list must have a year to be marked as official
+      if (isOfficial && !existingList.year) {
+        return res.status(400).json({
+          error: 'Cannot mark as official: list must have a year assigned',
+        });
+      }
+
+      let previousOfficialList = null;
+
+      // If setting as official, first remove official status from any other list for this year
+      if (isOfficial) {
+        const currentOfficial = await listsAsync.findOne({
+          userId: req.user._id,
+          year: existingList.year,
+          isOfficial: true,
+        });
+
+        if (currentOfficial && currentOfficial._id !== existingList._id) {
+          previousOfficialList = currentOfficial.name;
+          await pool.query(
+            'UPDATE lists SET is_official = FALSE, updated_at = $1 WHERE _id = $2',
+            [new Date(), currentOfficial._id]
+          );
+        }
+      }
+
+      // Update the list's official status
+      await pool.query(
+        'UPDATE lists SET is_official = $1, updated_at = $2 WHERE _id = $3',
+        [isOfficial, new Date(), existingList._id]
+      );
+
+      // Invalidate caches
+      responseCache.invalidate(
+        `GET:/api/lists/${encodeURIComponent(name)}:${req.user._id}`
+      );
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+      res.json({
+        success: true,
+        name: name,
+        year: existingList.year,
+        isOfficial: isOfficial,
+        previousOfficialList: previousOfficialList,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      logger.error('Error updating official status:', err);
       return res.status(500).json({ error: 'Database error' });
     }
   });
