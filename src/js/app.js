@@ -3764,24 +3764,24 @@ function attachDesktopEventHandlers(row, index) {
 // Create mobile album card (preserves exact current design)
 function createMobileAlbumCard(data, index) {
   const cardWrapper = document.createElement('div');
-  cardWrapper.className = 'album-card-wrapper';
+  cardWrapper.className = 'album-card-wrapper h-[110px]';
 
   const card = document.createElement('div');
   card.className =
-    'album-card album-row bg-gray-900 touch-manipulation transition-all relative overflow-hidden';
+    'album-card album-row bg-gray-900 touch-manipulation transition-all relative overflow-hidden h-[110px]';
   card.dataset.index = index;
 
   card.innerHTML = `
-    <div class="flex items-center h-full">
+    <div class="flex items-stretch h-full">
       <!-- Left section: Position number, Album cover, and Release date -->
-      <div class="flex-shrink-0 flex items-center">
+      <div class="flex-shrink-0 flex items-stretch h-full">
         <!-- Position number -->
         <div class="flex items-center justify-center text-gray-500 font-medium text-sm position-display pl-1.5" data-position-element="true">
           ${data.position}
         </div>
 
         <!-- Album cover with release date below -->
-        <div class="flex flex-col items-center pl-1.5 py-1">
+        <div class="flex flex-col items-center pl-1.5 pt-1 self-stretch">
           <div class="flex-shrink-0">
             ${
               data.albumId
@@ -3806,19 +3806,20 @@ function createMobileAlbumCard(data, index) {
             `
             }
           </div>
-          <!-- Release date below image -->
-          <div class="text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-500 px-1.5 py-0.5 rounded' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
-            ${data.releaseDate}
+          <!-- Release date centered in remaining space below image -->
+          <div class="flex-1 flex items-center">
+            <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-500 px-1.5 py-0.5 rounded' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
+              ${data.releaseDate}
+            </div>
           </div>
         </div>
       </div>
       
       <!-- Main content -->
-      <div class="flex-1 min-w-0 py-3 pr-3">
-        <div class="flex items-start gap-2">
-          <div class="flex-1 min-w-0">
-            <h3 class="font-semibold text-white text-base leading-tight truncate">${data.albumName}</h3>
-            <p class="text-sm text-gray-400 truncate mt-0.5">${data.artist}</p>
+      <div class="flex-1 min-w-0 py-1 pr-3 flex flex-col justify-center">
+        <div>
+          <h3 class="font-semibold text-white text-base leading-tight truncate">${data.albumName}</h3>
+          <p class="text-sm text-gray-400 truncate mt-0.5">${data.artist}</p>
             
             <!-- Country row -->
             ${
@@ -3860,7 +3861,6 @@ function createMobileAlbumCard(data, index) {
             `
                 : ''
             }
-          </div>
         </div>
       </div>
 
