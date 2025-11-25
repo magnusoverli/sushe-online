@@ -197,7 +197,6 @@ body {
     rgba(17, 24, 39, 0.4) 100%
   );
   user-select: none;
-  border-left: 4px solid transparent;
 }
 
 /* Reduced vertical padding for desktop */

@@ -450,10 +450,11 @@ const corsOptions = {
     }
 
     // Allow private network IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    // Also allow CGNAT range (100.64-127.x.x) used by Tailscale and other VPNs
     // This allows direct IP access for admin operations bypassing Cloudflare
     const ipMatch = origin.match(
       // eslint-disable-next-line security/detect-unsafe-regex
-      /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/
+      /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.\d{1,3}\.\d{1,3})(:\d+)?$/
     );
     if (ipMatch) {
       return callback(null, true);

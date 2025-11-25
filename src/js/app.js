@@ -3781,7 +3781,7 @@ function createMobileAlbumCard(data, index) {
         </div>
 
         <!-- Album cover with release date below -->
-        <div class="flex flex-col items-center pl-1 pt-2 self-stretch">
+        <div class="flex flex-col items-center pl-[2px] pt-2 self-stretch">
           <div class="flex-shrink-0">
             ${
               data.albumId
