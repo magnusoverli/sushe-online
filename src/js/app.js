@@ -3605,7 +3605,7 @@ function createDesktopAlbumRow(data, index) {
     </div>
     <div class="flex flex-col justify-center">
       <div class="font-semibold text-gray-100 truncate">${data.albumName}</div>
-      <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-400 px-1.5 py-0.5 rounded inline-block cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
+      <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
     </div>
     <div class="flex items-center">
       <span class="text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
@@ -3774,7 +3774,7 @@ function createMobileAlbumCard(data, index) {
   card.innerHTML = `
     <!-- Position badge (upper right, above action column) -->
     <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
-         style="box-shadow: 0 0 ${data.position <= 3 ? '8px' : '5px'} ${data.position === 1 ? 'rgba(255,215,0,0.9)' : data.position === 2 ? 'rgba(192,192,192,0.9)' : data.position === 3 ? 'rgba(205,127,50,0.9)' : 'rgba(255,255,255,0.35)'};"
+         style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${data.position <= 3 ? '8px' : '5px'} ${data.position === 1 ? 'rgba(255,215,0,1.0)' : data.position === 2 ? 'rgba(192,192,192,1.0)' : data.position === 3 ? 'rgba(205,127,50,1.0)' : 'rgba(255,255,255,0.25)'};"
          data-position-element="true">
       <span style="margin-top: 1px;">${data.position}</span>
     </div>
@@ -3809,7 +3809,7 @@ function createMobileAlbumCard(data, index) {
           </div>
           <!-- Release date centered in remaining space below image -->
           <div class="flex-1 flex items-center">
-            <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/35 text-gray-400 px-1.5 rounded' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
+            <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
               ${data.releaseDate}
             </div>
           </div>
@@ -4034,7 +4034,9 @@ function updateAlbumFields(albums, isMobile) {
           artistSpan.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
         }
       } else {
-        const artistSpan = row.querySelector('[data-field="artist-mobile-text"]');
+        const artistSpan = row.querySelector(
+          '[data-field="artist-mobile-text"]'
+        );
         if (artistSpan) {
           artistSpan.textContent = data.artist;
         }
@@ -4048,7 +4050,7 @@ function updateAlbumFields(albums, isMobile) {
         const releaseDateDiv = row.querySelector('.release-date-display');
         if (releaseDateDiv) {
           releaseDateDiv.textContent = data.releaseDate;
-          releaseDateDiv.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-400 px-1.5 py-0.5 rounded inline-block cursor-help' : 'text-gray-400'}`;
+          releaseDateDiv.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}`;
           if (data.yearMismatch) {
             releaseDateDiv.title = data.yearMismatchTooltip;
           } else {
@@ -4062,7 +4064,7 @@ function updateAlbumFields(albums, isMobile) {
         const releaseDateEl = row.querySelector('.release-date-display');
         if (releaseDateEl) {
           releaseDateEl.textContent = data.releaseDate;
-          releaseDateEl.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'bg-red-900/25 text-gray-500 px-1.5 py-0.5 rounded' : 'text-gray-500'}`;
+          releaseDateEl.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
           if (data.yearMismatch) {
             releaseDateEl.title = data.yearMismatchTooltip;
           } else {
@@ -4138,12 +4140,16 @@ function updateAlbumFields(albums, isMobile) {
           }
         }
       } else {
-        const countryMobile = row.querySelector('[data-field="country-mobile-text"]');
+        const countryMobile = row.querySelector(
+          '[data-field="country-mobile-text"]'
+        );
         if (countryMobile) {
           countryMobile.textContent = data.country || '';
         }
 
-        const genreMobile = row.querySelector('[data-field="genre-mobile-text"]');
+        const genreMobile = row.querySelector(
+          '[data-field="genre-mobile-text"]'
+        );
         if (genreMobile) {
           const genreDisplay =
             data.genre1 && data.genre2
@@ -4152,7 +4158,9 @@ function updateAlbumFields(albums, isMobile) {
           genreMobile.textContent = genreDisplay;
         }
 
-        const trackMobile = row.querySelector('[data-field="track-mobile-text"]');
+        const trackMobile = row.querySelector(
+          '[data-field="track-mobile-text"]'
+        );
         if (trackMobile) {
           const trackDisplay =
             data.trackPick && data.trackPickDisplay !== 'Select Track'
@@ -4491,13 +4499,13 @@ function updatePositionNumbers(container, isMobile) {
 
         // Update glow effect (box-shadow)
         if (position === 1) {
-          positionEl.style.boxShadow = '0 0 8px rgba(255,215,0,0.9)';
+          positionEl.style.boxShadow = '0 0 8px rgba(255,215,0,1.0)';
         } else if (position === 2) {
-          positionEl.style.boxShadow = '0 0 8px rgba(192,192,192,0.9)';
+          positionEl.style.boxShadow = '0 0 8px rgba(192,192,192,1.0)';
         } else if (position === 3) {
-          positionEl.style.boxShadow = '0 0 8px rgba(205,127,50,0.9)';
+          positionEl.style.boxShadow = '0 0 8px rgba(205,127,50,1.0)';
         } else {
-          positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.35)';
+          positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.25)';
         }
       }
     }
