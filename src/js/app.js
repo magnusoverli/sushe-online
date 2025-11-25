@@ -4464,6 +4464,11 @@ function updatePositionNumbers(container, isMobile) {
       }
     }
     row.dataset.index = i;
+    // Also update inner album-card for mobile (wrapper -> card structure)
+    const innerCard = row.querySelector('.album-card');
+    if (innerCard) {
+      innerCard.dataset.index = i;
+    }
   }
 }
 
@@ -4619,10 +4624,22 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     const card = indexOrElement.closest('.album-card');
     if (!card) return;
     index = parseInt(card.dataset.index);
+    console.log(
+      '[DEBUG] showMobileAlbumMenu: card.dataset.index =',
+      card.dataset.index,
+      'parsed index =',
+      index
+    );
   }
 
   // Validate index
   const albumsForSheet = getListData(currentList);
+  console.log(
+    '[DEBUG] showMobileAlbumMenu: data array length =',
+    albumsForSheet?.length,
+    'first 3 albums:',
+    albumsForSheet?.slice(0, 3).map((a) => a.album)
+  );
   if (
     isNaN(index) ||
     index < 0 ||
@@ -4634,6 +4651,14 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   }
 
   const album = albumsForSheet[index];
+  console.log(
+    '[DEBUG] showMobileAlbumMenu: selected album at index',
+    index,
+    '=',
+    album.album,
+    'by',
+    album.artist
+  );
   if (!album) {
     console.error('Album not found at index:', index);
     return;
