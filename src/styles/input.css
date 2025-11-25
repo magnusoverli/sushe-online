@@ -171,8 +171,8 @@
 .album-row {
   transition: none;
   /* Add border styling (removed from Tailwind classes to avoid drag conflicts) */
-  border-top: 0.25px solid rgba(255, 255, 255, 0.2); /* white with 20% opacity */
-  border-bottom: 0.25px solid rgba(255, 255, 255, 0.2); /* white with 20% opacity */
+  border-top: 1px solid rgba(255, 255, 255, 0.25); /* white with 25% opacity */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25); /* white with 25% opacity */
 }
 .album-card {
   transition: box-shadow 0.2s ease;
