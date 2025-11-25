@@ -3773,8 +3773,8 @@ function createMobileAlbumCard(data, index) {
 
   card.innerHTML = `
     <!-- Position badge (upper right, above action column) -->
-    <div class="absolute top-[6px] right-1 w-[16px] h-[16px] flex items-center justify-center border border-gray-500 text-gray-400 text-[9px] font-medium rounded-full position-badge" 
-         style="box-shadow: 0 0 6px rgba(255,255,255,0.45);"
+    <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
+         style="box-shadow: 0 0 ${data.position <= 3 ? '8px' : '5px'} ${data.position === 1 ? 'rgba(255,215,0,0.9)' : data.position === 2 ? 'rgba(192,192,192,0.9)' : data.position === 3 ? 'rgba(205,127,50,0.9)' : 'rgba(255,255,255,0.35)'};"
          data-position-element="true">
       <span style="margin-top: 1px;">${data.position}</span>
     </div>
@@ -4409,6 +4409,7 @@ function updatePositionNumbers(container, isMobile) {
   // Direct execution for immediate position updates
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
+    const position = i + 1;
 
     // Use cached position element or find and cache it
     let positionEl = positionElementCache.get(row);
@@ -4427,7 +4428,40 @@ function updatePositionNumbers(container, isMobile) {
     }
 
     if (positionEl) {
-      positionEl.textContent = i + 1;
+      // Update position number text (find span inside badge or use element directly)
+      const textEl = positionEl.querySelector('span') || positionEl;
+      textEl.textContent = position;
+
+      // Update badge styling for position badges (top 3 get special colors)
+      if (positionEl.classList.contains('position-badge')) {
+        // Update border color
+        positionEl.classList.remove(
+          'border-yellow-500',
+          'border-gray-400',
+          'border-amber-700',
+          'border-gray-500'
+        );
+        if (position === 1) {
+          positionEl.classList.add('border-yellow-500');
+        } else if (position === 2) {
+          positionEl.classList.add('border-gray-400');
+        } else if (position === 3) {
+          positionEl.classList.add('border-amber-700');
+        } else {
+          positionEl.classList.add('border-gray-500');
+        }
+
+        // Update glow effect (box-shadow)
+        if (position === 1) {
+          positionEl.style.boxShadow = '0 0 8px rgba(255,215,0,0.9)';
+        } else if (position === 2) {
+          positionEl.style.boxShadow = '0 0 8px rgba(192,192,192,0.9)';
+        } else if (position === 3) {
+          positionEl.style.boxShadow = '0 0 8px rgba(205,127,50,0.9)';
+        } else {
+          positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.35)';
+        }
+      }
     }
     row.dataset.index = i;
   }

@@ -39,7 +39,7 @@ const loginSnippetFn = ejs.compile(
 
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
-  <header class="bg-gray-900 border-b border-gray-800 z-50">
+  <header class="bg-gray-900 z-50">
     <div class="flex items-center justify-between py-[2px] lg:py-4 px-3 lg:px-0">
       <!-- Mobile menu button / Desktop logo -->
       <div class="flex items-center gap-2 lg:w-64 lg:justify-center lg:gap-0">
@@ -60,12 +60,12 @@ const headerComponent = (user, activeSection = 'home') => `
       </div>
       
       <!-- User menu -->
-      <div class="flex items-center gap-2 lg:gap-6 pr-3 lg:pr-6">
+      <div class="flex items-center gap-3 lg:gap-4 pr-1 lg:pr-2">
         <span class="hidden lg:inline text-sm text-gray-400">${user?.username || user?.email}</span>
-        <a href="/settings" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
+        <a href="/settings" class="p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
           <i class="fas fa-cog text-lg"></i>
         </a>
-        <a href="/logout" class="p-2 lg:p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
+        <a href="/logout" class="p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
@@ -904,12 +904,14 @@ const spotifyTemplate = (user) => `
     .sidebar {
       width: 0;
       overflow: hidden;
+      border-right: none; /* Hide border on mobile */
     }
     
     @media (min-width: 1024px) {
       .sidebar {
         width: 16rem;
         overflow: visible;
+        border-right: 1px solid #1f2937; /* Restore border on desktop */
       }
     }
     
@@ -986,7 +988,7 @@ const spotifyTemplate = (user) => `
     }
   </style>
 </head>
-<body class="bg-black text-gray-200">
+<body class="bg-gray-900 text-gray-200">
   <div class="app-layout">
     ${headerComponent(user, 'home')}
     

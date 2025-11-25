@@ -179,7 +179,15 @@ body {
 /* Enhanced album row styles */
 #albumContainer {
   position: relative;
-  background-color: #000;
+  background-color: #111827; /* gray-900 - matches header */
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+/* Ensure album list content fills the container */
+#albumContainer > div {
+  flex: 1;
 }
 
 .album-row {
