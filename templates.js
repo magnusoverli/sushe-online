@@ -874,7 +874,7 @@ const spotifyTemplate = (user) => `
       display: grid;
       grid-template-rows: auto 1fr;
       height: 100vh;
-      height: calc(var(--vh, 1vh) * 100);
+      height: 100dvh;
     }
     
     .main-content {
