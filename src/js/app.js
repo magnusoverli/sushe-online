@@ -3824,7 +3824,7 @@ function createMobileAlbumCard(data, index) {
         
         <!-- Line 2: Artist (always present) -->
         <div class="h-5 flex items-center mt-0.5">
-          <p class="text-sm text-gray-400 truncate"><i class="fas fa-user fa-xs mr-1"></i>${data.artist}</p>
+          <p class="text-xs text-gray-400 truncate"><i class="fas fa-user fa-xs mr-1"></i>${data.artist}</p>
         </div>
         
         <!-- Line 3: Country (may be empty) -->
@@ -3839,7 +3839,7 @@ function createMobileAlbumCard(data, index) {
         
         <!-- Line 5: Track selection (may be empty) -->
         <div class="h-4 flex items-center mt-1">
-          ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? `<span class="text-xs text-blue-400 truncate"><i class="fas fa-music fa-xs mr-1"></i>${data.trackPickDisplay}</span>` : ''}
+          ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? `<span class="text-xs text-green-400 truncate"><i class="fas fa-music fa-xs mr-1"></i>${data.trackPickDisplay}</span>` : ''}
         </div>
       </div>
 
