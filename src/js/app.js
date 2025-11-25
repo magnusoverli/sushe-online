@@ -3834,7 +3834,7 @@ function createMobileAlbumCard(data, index) {
         
         <!-- Line 4: Genres (may be empty) -->
         <div class="h-4 flex items-center mt-1">
-          ${data.genre1 || data.genre2 ? `<span class="text-xs text-gray-400 truncate"><i class="fas fa-guitar fa-xs mr-1"></i>${data.genre1}${data.genre2 ? ` / ${data.genre2}` : ''}</span>` : ''}
+          ${data.genre1 || data.genre2 ? `<span class="text-xs text-gray-400 truncate"><i class="fas fa-guitar fa-xs mr-1"></i>${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2}</span>` : ''}
         </div>
         
         <!-- Line 5: Track selection (may be empty) -->
