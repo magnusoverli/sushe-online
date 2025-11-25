@@ -3825,22 +3825,34 @@ function createMobileAlbumCard(data, index) {
         
         <!-- Line 2: Artist (always present) -->
         <div class="h-4 flex items-center">
-          <p class="text-[13px] text-gray-500 truncate"><i class="fas fa-user fa-xs mr-[7px]"></i>${data.artist}</p>
+          <p class="text-[13px] text-gray-500 truncate">
+            <i class="fas fa-user fa-xs mr-[7px]"></i>
+            <span data-field="artist-mobile-text">${data.artist}</span>
+          </p>
         </div>
         
         <!-- Line 3: Country (may be empty) -->
         <div class="h-4 flex items-center mt-[3px]">
-          <span class="text-[13px] text-gray-500"><i class="fas fa-globe fa-xs mr-[7px]"></i>${data.country || ''}</span>
+          <span class="text-[13px] text-gray-500">
+            <i class="fas fa-globe fa-xs mr-[7px]"></i>
+            <span data-field="country-mobile-text">${data.country || ''}</span>
+          </span>
         </div>
         
         <!-- Line 4: Genres (may be empty) -->
         <div class="h-4 flex items-center mt-[3px]">
-          <span class="text-[13px] text-gray-500 truncate"><i class="fas fa-music fa-xs mr-[7px]"></i>${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || ''}</span>
+          <span class="text-[13px] text-gray-500 truncate">
+            <i class="fas fa-music fa-xs mr-[7px]"></i>
+            <span data-field="genre-mobile-text">${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || ''}</span>
+          </span>
         </div>
         
         <!-- Line 5: Track selection (may be empty) -->
         <div class="h-4 flex items-center mt-[3px]">
-          <span class="text-[13px] text-green-400 truncate"><i class="fas fa-play fa-xs mr-[7px]"></i>${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
+          <span class="text-[13px] text-green-400 truncate">
+            <i class="fas fa-play fa-xs mr-[7px]"></i>
+            <span data-field="track-mobile-text">${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
+          </span>
         </div>
       </div>
 
@@ -4015,16 +4027,17 @@ function updateAlbumFields(albums, isMobile) {
       }
 
       // Update artist
-      const artistSpan = isMobile
-        ? row.querySelector(
-            '.font-semibold.text-white + .text-sm.text-gray-400'
-          )
-        : row.querySelectorAll('.flex.items-center > span')[0];
-      if (artistSpan) {
-        artistSpan.textContent = data.artist;
-        artistSpan.className = isMobile
-          ? 'text-sm text-gray-400 truncate'
-          : `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
+      if (!isMobile) {
+        const artistSpan = row.querySelectorAll('.flex.items-center > span')[0];
+        if (artistSpan) {
+          artistSpan.textContent = data.artist;
+          artistSpan.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
+        }
+      } else {
+        const artistSpan = row.querySelector('[data-field="artist-mobile-text"]');
+        if (artistSpan) {
+          artistSpan.textContent = data.artist;
+        }
       }
 
       // Update album name and release date
@@ -4058,69 +4071,94 @@ function updateAlbumFields(albums, isMobile) {
         }
       }
 
-      // Update country
-      const countryCell =
-        row.querySelector('.country-cell') ||
-        row.querySelector('[data-field="country"]');
-      if (countryCell) {
-        const countrySpan = countryCell.querySelector('span');
-        if (countrySpan) {
-          countrySpan.textContent = data.countryDisplay;
-          countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
-        }
-      }
-
-      // Update genre 1
-      const genre1Cell =
-        row.querySelector('.genre-1-cell') ||
-        row.querySelector('[data-field="genre1"]');
-      if (genre1Cell) {
-        const genre1Span = genre1Cell.querySelector('span');
-        if (genre1Span) {
-          genre1Span.textContent = data.genre1Display;
-          genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
-        }
-      }
-
-      // Update genre 2
-      const genre2Cell =
-        row.querySelector('.genre-2-cell') ||
-        row.querySelector('[data-field="genre2"]');
-      if (genre2Cell) {
-        const genre2Span = genre2Cell.querySelector('span');
-        if (genre2Span) {
-          genre2Span.textContent = data.genre2Display;
-          genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
-        }
-      }
-
-      // Update comment
-      const commentCell =
-        row.querySelector('.comment-cell') ||
-        row.querySelector('[data-field="comment"]');
-      if (commentCell) {
-        const commentSpan = commentCell.querySelector('span');
-        if (commentSpan) {
-          commentSpan.textContent = data.comment || 'Comment';
-          commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
-
-          // Update tooltip
-          if (data.comment) {
-            commentSpan.setAttribute('data-comment', data.comment);
-          } else {
-            commentSpan.removeAttribute('data-comment');
+      if (!isMobile) {
+        // Update country
+        const countryCell =
+          row.querySelector('.country-cell') ||
+          row.querySelector('[data-field="country"]');
+        if (countryCell) {
+          const countrySpan = countryCell.querySelector('span');
+          if (countrySpan) {
+            countrySpan.textContent = data.countryDisplay;
+            countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
           }
         }
-      }
 
-      // Update track pick
-      const trackCell = row.querySelector('.track-cell');
-      if (trackCell) {
-        const trackSpan = trackCell.querySelector('span');
-        if (trackSpan) {
-          trackSpan.textContent = data.trackPickDisplay;
-          trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
-          trackSpan.title = data.trackPick || 'Click to select track';
+        // Update genre 1
+        const genre1Cell =
+          row.querySelector('.genre-1-cell') ||
+          row.querySelector('[data-field="genre1"]');
+        if (genre1Cell) {
+          const genre1Span = genre1Cell.querySelector('span');
+          if (genre1Span) {
+            genre1Span.textContent = data.genre1Display;
+            genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
+          }
+        }
+
+        // Update genre 2
+        const genre2Cell =
+          row.querySelector('.genre-2-cell') ||
+          row.querySelector('[data-field="genre2"]');
+        if (genre2Cell) {
+          const genre2Span = genre2Cell.querySelector('span');
+          if (genre2Span) {
+            genre2Span.textContent = data.genre2Display;
+            genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
+          }
+        }
+
+        // Update comment
+        const commentCell =
+          row.querySelector('.comment-cell') ||
+          row.querySelector('[data-field="comment"]');
+        if (commentCell) {
+          const commentSpan = commentCell.querySelector('span');
+          if (commentSpan) {
+            commentSpan.textContent = data.comment || 'Comment';
+            commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
+
+            // Update tooltip
+            if (data.comment) {
+              commentSpan.setAttribute('data-comment', data.comment);
+            } else {
+              commentSpan.removeAttribute('data-comment');
+            }
+          }
+        }
+
+        // Update track pick
+        const trackCell = row.querySelector('.track-cell');
+        if (trackCell) {
+          const trackSpan = trackCell.querySelector('span');
+          if (trackSpan) {
+            trackSpan.textContent = data.trackPickDisplay;
+            trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
+            trackSpan.title = data.trackPick || 'Click to select track';
+          }
+        }
+      } else {
+        const countryMobile = row.querySelector('[data-field="country-mobile-text"]');
+        if (countryMobile) {
+          countryMobile.textContent = data.country || '';
+        }
+
+        const genreMobile = row.querySelector('[data-field="genre-mobile-text"]');
+        if (genreMobile) {
+          const genreDisplay =
+            data.genre1 && data.genre2
+              ? `${data.genre1} / ${data.genre2}`
+              : data.genre1 || data.genre2 || '';
+          genreMobile.textContent = genreDisplay;
+        }
+
+        const trackMobile = row.querySelector('[data-field="track-mobile-text"]');
+        if (trackMobile) {
+          const trackDisplay =
+            data.trackPick && data.trackPickDisplay !== 'Select Track'
+              ? data.trackPickDisplay
+              : '';
+          trackMobile.textContent = trackDisplay;
         }
       }
     });
