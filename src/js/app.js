@@ -3772,7 +3772,7 @@ function createMobileAlbumCard(data, index) {
   card.dataset.index = index;
 
   card.innerHTML = `
-    <div class="flex items-stretch h-full">
+    <div class="flex items-stretch h-full px-3">
       <!-- Left section: Position number, Album cover, and Release date -->
       <div class="flex-shrink-0 flex items-stretch h-full">
         <!-- Position number -->
@@ -3816,7 +3816,7 @@ function createMobileAlbumCard(data, index) {
       </div>
       
       <!-- Main content -->
-      <div class="flex-1 min-w-0 pt-[3px] pb-0.5 pr-3 pl-[10px] flex flex-col h-[102px]">
+      <div class="flex-1 min-w-0 pt-[3px] pb-0.5 pl-[10px] flex flex-col h-[102px]">
         <!-- Line 1: Album name (always present) -->
         <div class="h-5 flex items-center">
           <h3 class="font-semibold text-white text-base leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
