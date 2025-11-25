@@ -26,11 +26,6 @@
     user-select: none;
     -webkit-touch-callout: none;
   }
-
-  /* Bottom padding for fixed nav */
-  .main-content {
-    padding-bottom: 4rem;
-  }
 }
 
 /* Define the album grid class */
@@ -183,8 +178,6 @@ body {
 
 /* Enhanced album row styles */
 #albumContainer {
-  min-height: 100vh;
-  min-height: calc(var(--vh, 1vh) * 100);
   position: relative;
   background-color: #000;
 }

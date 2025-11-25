@@ -954,11 +954,6 @@ const spotifyTemplate = (user) => `
         min-height: calc(100vh - env(safe-area-inset-top, 0px));
         min-height: calc(100dvh - env(safe-area-inset-top, 0px));
       }
-      
-      /* Fix for iPhone home indicator area */
-      main {
-        padding-bottom: env(safe-area-inset-bottom, 0px);
-      }
     }
     
     /* Sortable enhancements */

@@ -4255,7 +4255,7 @@ function displayAlbums(albums, options = {}) {
   } else {
     // Mobile: Card layout
     albumContainer = document.createElement('div');
-    albumContainer.className = 'mobile-album-list pb-20'; // Space for bottom nav
+    albumContainer.className = 'mobile-album-list'; // Padding handled by #albumContainer CSS
 
     // Create album cards - use DocumentFragment for batch DOM operations
     // This prevents progressive rendering and ensures all images appear simultaneously
