@@ -1332,6 +1332,44 @@ module.exports = (app, deps) => {
     }
   );
 
+  // Proxy for iTunes Search API (album artwork)
+  // Public API, no key required, ~20 req/min rate limit
+  app.get(
+    '/api/proxy/itunes',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { term, limit = 10 } = req.query;
+        if (!term) {
+          return res.status(400).json({
+            error: 'Query parameter term is required',
+          });
+        }
+
+        const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&country=us&limit=${limit}`;
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'SuSheOnline/1.0',
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `iTunes API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('iTunes proxy error:', error);
+        res.status(500).json({ error: 'Failed to fetch from iTunes API' });
+      }
+    }
+  );
+
   // Image proxy endpoint for fetching external cover art
   app.get(
     '/api/proxy/image',
