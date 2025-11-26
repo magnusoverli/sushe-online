@@ -186,6 +186,12 @@
   transition: box-shadow 0.2s ease;
 }
 
+/* Album cover with blurred glow border effect */
+.album-cover-blur {
+  box-shadow: 0 0 7px 3px rgba(255, 255, 255, 0.2);
+  border-radius: 6px !important;
+}
+
 /* Desktop-specific: subtle color change only when chosen, no transforms */
 @media (min-width: 1024px) {
   .sortable-chosen.album-row {

@@ -3787,18 +3787,22 @@ function createMobileAlbumCard(data, index) {
             ${
               data.albumId
                 ? `
-              <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-                  alt="${data.albumName}"
-                  class="w-20 h-20 rounded-lg object-cover shadow-md"
-                  data-album-id="${data.albumId}"
-                  decoding="async">
+              <div class="w-20 h-20 flex items-center justify-center">
+                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                    alt="${data.albumName}"
+                    class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
+                    data-album-id="${data.albumId}"
+                    decoding="async">
+              </div>
             `
                 : data.coverImage
                   ? `
-              <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
-                  alt="${data.albumName}"
-                  class="w-20 h-20 rounded-lg object-cover shadow-md"
-                  decoding="async">
+              <div class="w-20 h-20 flex items-center justify-center">
+                <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
+                    alt="${data.albumName}"
+                    class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
+                    decoding="async">
+              </div>
             `
                   : `
               <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
@@ -3850,7 +3854,7 @@ function createMobileAlbumCard(data, index) {
         <!-- Line 5: Track selection (may be empty) -->
         <div class="h-4 flex items-center mt-[3px]">
           <span class="text-[13px] text-green-400 truncate">
-            <i class="fas fa-play fa-xs mr-[7px]"></i>
+            <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
             <span data-field="track-mobile-text">${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
           </span>
         </div>
