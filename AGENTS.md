@@ -27,7 +27,7 @@ This includes:
 
 - **Build**: `npm run build` (builds CSS + JS)
 - **Dev**: `npm run dev` (watch mode with nodemon)
-- **Test**: `npm test` (runs core tests - ~40 essential tests, 30 seconds)
+- **Test**: `npm test` (runs core tests - ~187 tests, ~30 seconds)
 - **E2E Tests**: `npm run test:e2e` (runs end-to-end browser tests)
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
@@ -106,13 +106,92 @@ npm run test:coverage
 
 ```
 test/
-├── security-middleware.test.js  # Security features (17 tests)
-├── session-management.test.js   # Session handling (12 tests)
-├── auth-utils.test.js          # Auth utilities (6 tests)
+├── auth-utils.test.js          # Auth utilities (26 tests)
 ├── basic.test.js               # Smoke tests (5 tests)
+├── color-utils.test.js         # Color utilities (16 tests)
+├── error-handler.test.js       # Error handling (32 tests)
+├── logger.test.js              # Logging (25 tests)
+├── response-cache.test.js      # Response caching (12 tests)
+├── security-middleware.test.js # Security features (17 tests)
+├── session-management.test.js  # Session handling (12 tests)
+├── spotify-auth.test.js        # Spotify auth (24 tests)
+├── validators.test.js          # Input validation (20 tests)
 └── e2e/
     └── basic.spec.js           # End-to-end workflows
 ```
+
+### Writing Testable Code (Dependency Injection Pattern)
+
+Modules should use **dependency injection** to allow tests to mock external dependencies without creating duplicate files.
+
+#### Pattern for Modules
+
+```javascript
+// utils/example.js
+function createExample(deps = {}) {
+  // Inject dependencies with defaults for production use
+  const logger = deps.logger || require('./logger');
+  const db = deps.db || require('../db');
+  
+  function doSomething() {
+    logger.info('Doing something');
+    return db.query('SELECT * FROM things');
+  }
+  
+  return { doSomething };
+}
+
+// Create default instance for app to use unchanged
+const defaultInstance = createExample();
+
+// Export both factory (for tests) and default functions (for app)
+module.exports = { createExample, ...defaultInstance };
+```
+
+#### Pattern for Tests
+
+```javascript
+// test/example.test.js
+const { describe, it, mock } = require('node:test');
+const assert = require('node:assert');
+const { createExample } = require('../utils/example.js');
+
+describe('example', () => {
+  it('should log and query database', async () => {
+    // Create mocks
+    const mockLogger = { info: mock.fn(), error: mock.fn() };
+    const mockDb = { query: mock.fn(() => Promise.resolve([{ id: 1 }])) };
+    
+    // Inject mocks via factory
+    const { doSomething } = createExample({ 
+      logger: mockLogger, 
+      db: mockDb 
+    });
+    
+    const result = await doSomething();
+    
+    assert.strictEqual(mockLogger.info.mock.calls.length, 1);
+    assert.strictEqual(mockDb.query.mock.calls.length, 1);
+    assert.deepStrictEqual(result, [{ id: 1 }]);
+  });
+});
+```
+
+#### Existing Modules Using This Pattern
+
+| Module | Factory Function | Injectable Dependencies |
+|--------|------------------|------------------------|
+| `utils/spotify-auth.js` | `createSpotifyAuth(deps)` | `fetch` |
+| `utils/logger.js` | `Logger` class | `console`, `fs` |
+| `middleware/response-cache.js` | `ResponseCache` class | None (self-contained) |
+| `middleware/error-handler.js` | `createErrorHandler(logger)` | `logger` |
+
+#### Benefits
+
+- **No duplicate files**: Tests import from the same file as production code
+- **Full control**: Tests can inject mocks for any dependency
+- **Zero app changes**: Default exports work exactly as before
+- **Isolated tests**: Each test gets fresh mocks, no shared state
 
 ### CI/CD Integration
 
