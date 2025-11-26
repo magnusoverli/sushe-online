@@ -2150,6 +2150,94 @@ function playAlbum(index) {
   });
 }
 
+// Play the selected track on the connected music service
+function playTrack(index) {
+  const albums = getListData(currentList);
+  const album = albums && albums[index];
+  if (!album) return;
+
+  const trackPick = album.track_pick;
+  if (!trackPick) {
+    showToast('No track selected', 'error');
+    return;
+  }
+
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+  const preferred = window.currentUser?.musicService;
+
+  const chooseService = () => {
+    if (preferred === 'spotify' && hasSpotify) {
+      return Promise.resolve('spotify');
+    }
+    if (preferred === 'tidal' && hasTidal) {
+      return Promise.resolve('tidal');
+    }
+    if (hasSpotify && hasTidal) {
+      return showServicePicker(true, true);
+    } else if (hasSpotify) {
+      return Promise.resolve('spotify');
+    } else if (hasTidal) {
+      return Promise.resolve('tidal');
+    } else {
+      showToast('No music service connected', 'error');
+      return Promise.resolve(null);
+    }
+  };
+
+  chooseService().then((service) => {
+    hideConfirmation();
+    if (!service) return;
+
+    const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}&track=${encodeURIComponent(trackPick)}`;
+    const endpoint =
+      service === 'spotify' ? '/api/spotify/track' : '/api/tidal/track';
+
+    fetch(`${endpoint}?${query}`, { credentials: 'include' })
+      .then(async (r) => {
+        let data;
+        try {
+          data = await r.json();
+        } catch (_) {
+          throw new Error('Invalid response');
+        }
+
+        if (!r.ok) {
+          throw new Error(data.error || 'Request failed');
+        }
+        return data;
+      })
+      .then((data) => {
+        if (data.id) {
+          if (service === 'spotify') {
+            window.location.href = `spotify:track:${data.id}`;
+          } else {
+            window.location.href = `tidal://track/${data.id}`;
+          }
+        } else if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Track not found on ' + service, 'error');
+        }
+      })
+      .catch((err) => {
+        console.error('Play track error:', err);
+        showToast(err.message || 'Failed to open track', 'error');
+      });
+  });
+}
+window.playTrack = playTrack;
+
+// Safe wrapper for play track that uses album identity
+window.playTrackSafe = function (albumId) {
+  const result = findAlbumByIdentity(albumId);
+  if (!result) {
+    showToast('Album not found - it may have been moved or removed', 'error');
+    return;
+  }
+  playTrack(result.index);
+};
+
 // Create list functionality
 function initializeCreateList() {
   const createBtn = document.getElementById('createListBtn');
@@ -3851,8 +3939,9 @@ function createMobileAlbumCard(data, index) {
           </span>
         </div>
         
-        <!-- Line 5: Track selection (may be empty) -->
-        <div class="h-4 flex items-center mt-[3px]">
+        <!-- Line 5: Track selection (clickable to play) -->
+        <div class="h-4 flex items-center mt-[3px] ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'cursor-pointer active:opacity-70' : ''}" 
+             data-track-play-btn="${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'true' : ''}">
           <span class="text-[13px] text-green-400 truncate">
             <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
             <span data-field="track-mobile-text">${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
@@ -3910,6 +3999,40 @@ function attachMobileEventHandlers(card, index) {
       e.stopPropagation();
       e.preventDefault();
       window.showMobileAlbumMenu(menuBtn);
+    });
+  }
+
+  // Attach track play button handler (only if track is selected)
+  const trackPlayBtn = card.querySelector('[data-track-play-btn="true"]');
+  if (trackPlayBtn) {
+    // Prevent SortableJS from capturing touch events
+    trackPlayBtn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    trackPlayBtn.addEventListener(
+      'touchend',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    trackPlayBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      // Get the album identity for safe playing
+      const albumsForTrackPlay = getListData(currentList);
+      const albumForTrackPlay = albumsForTrackPlay && albumsForTrackPlay[index];
+      if (albumForTrackPlay) {
+        const albumId =
+          `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
+        window.playTrackSafe(albumId);
+      }
     });
   }
 }
@@ -4698,9 +4821,15 @@ function initializeUnifiedSorting(container, isMobile) {
     };
 
     // Use non-passive listeners to allow preventDefault
-    sortableContainer.addEventListener('touchstart', onTouchStart, { passive: true });
-    sortableContainer.addEventListener('touchmove', onTouchMove, { passive: false });
-    sortableContainer.addEventListener('touchend', onTouchEnd, { passive: true });
+    sortableContainer.addEventListener('touchstart', onTouchStart, {
+      passive: true,
+    });
+    sortableContainer.addEventListener('touchmove', onTouchMove, {
+      passive: false,
+    });
+    sortableContainer.addEventListener('touchend', onTouchEnd, {
+      passive: true,
+    });
   }
 }
 window.displayAlbums = displayAlbums;

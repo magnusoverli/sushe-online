@@ -1574,6 +1574,242 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Search Spotify for a track and return the ID
+  app.get('/api/spotify/track', ensureAuthAPI, async (req, res) => {
+    if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
+      return res.status(401).json({
+        error: 'Not authenticated with Spotify',
+        code: 'NOT_AUTHENTICATED',
+        service: 'spotify',
+      });
+    }
+
+    if (
+      req.user.spotifyAuth.expires_at &&
+      req.user.spotifyAuth.expires_at <= Date.now() + 300000
+    ) {
+      return res.status(401).json({
+        error: 'Spotify connection expired',
+        code: 'TOKEN_EXPIRED',
+        service: 'spotify',
+      });
+    }
+
+    const { artist, album, track } = req.query;
+    if (!artist || !album || !track) {
+      return res
+        .status(400)
+        .json({ error: 'artist, album, and track are required' });
+    }
+    logger.info('Spotify track search:', artist, '-', album, '-', track);
+
+    const headers = {
+      Authorization: `Bearer ${req.user.spotifyAuth.access_token}`,
+    };
+
+    try {
+      // First, find the album
+      const albumQuery = `album:${album} artist:${artist}`;
+      const albumResp = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(albumQuery)}&type=album&limit=1`,
+        { headers }
+      );
+      if (!albumResp.ok) {
+        throw new Error(`Spotify API error ${albumResp.status}`);
+      }
+      const albumData = await albumResp.json();
+      if (!albumData.albums || !albumData.albums.items.length) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+      const spotifyAlbumId = albumData.albums.items[0].id;
+
+      // Get album tracks
+      const tracksResp = await fetch(
+        `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks?limit=50`,
+        { headers }
+      );
+      if (!tracksResp.ok) {
+        throw new Error(`Spotify API error ${tracksResp.status}`);
+      }
+      const tracksData = await tracksResp.json();
+      const tracks = tracksData.items;
+
+      // Try to match by track number first
+      const trackNum = parseInt(track);
+      if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
+        const matchedTrack = tracks[trackNum - 1];
+        logger.info('Spotify track matched by number:', matchedTrack.id);
+        return res.json({ id: matchedTrack.id });
+      }
+
+      // Extract track name from format like "3. Track Name"
+      const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
+      const searchName = trackNameMatch ? trackNameMatch[1] : track;
+
+      // Try to match by track name
+      const matchingTrack = tracks.find(
+        (t) =>
+          t.name.toLowerCase() === searchName.toLowerCase() ||
+          t.name.toLowerCase().includes(searchName.toLowerCase()) ||
+          searchName.toLowerCase().includes(t.name.toLowerCase())
+      );
+      if (matchingTrack) {
+        logger.info('Spotify track matched by name:', matchingTrack.id);
+        return res.json({ id: matchingTrack.id });
+      }
+
+      // Fallback: general track search
+      const fallbackQuery = `track:${searchName} album:${album} artist:${artist}`;
+      const fallbackResp = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=1`,
+        { headers }
+      );
+      if (fallbackResp.ok) {
+        const fallbackData = await fallbackResp.json();
+        if (fallbackData.tracks.items.length > 0) {
+          logger.info(
+            'Spotify track matched by fallback search:',
+            fallbackData.tracks.items[0].id
+          );
+          return res.json({ id: fallbackData.tracks.items[0].id });
+        }
+      }
+
+      return res.status(404).json({ error: 'Track not found' });
+    } catch (err) {
+      logger.error('Spotify track search error:', err);
+      res.status(500).json({ error: 'Failed to search Spotify' });
+    }
+  });
+
+  // Search Tidal for a track and return the ID
+  app.get('/api/tidal/track', ensureAuthAPI, async (req, res) => {
+    if (
+      !req.user.tidalAuth ||
+      !req.user.tidalAuth.access_token ||
+      (req.user.tidalAuth.expires_at &&
+        req.user.tidalAuth.expires_at <= Date.now())
+    ) {
+      return res.status(401).json({
+        error: 'Not authenticated with Tidal',
+        code: 'NOT_AUTHENTICATED',
+        service: 'tidal',
+      });
+    }
+
+    const { artist, album, track } = req.query;
+    if (!artist || !album || !track) {
+      return res
+        .status(400)
+        .json({ error: 'artist, album, and track are required' });
+    }
+    logger.info('Tidal track search:', artist, '-', album, '-', track);
+
+    const headers = {
+      Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+      Accept: 'application/vnd.api+json',
+      'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
+    };
+
+    try {
+      const countryCode = req.user.tidalCountry || 'US';
+
+      // First, find the album
+      const albumQuery = `${album} ${artist}`;
+      const searchPath = encodeURIComponent(albumQuery).replace(/'/g, '%27');
+      const albumResp = await fetch(
+        `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?countryCode=${countryCode}`,
+        { headers }
+      );
+      if (!albumResp.ok) {
+        throw new Error(`Tidal API error ${albumResp.status}`);
+      }
+      const albumData = await albumResp.json();
+      const tidalAlbumId = albumData?.data?.[0]?.id;
+      if (!tidalAlbumId) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+
+      // Get album tracks
+      const tracksResp = await fetch(
+        `https://openapi.tidal.com/v2/albums/${tidalAlbumId}/relationships/items?countryCode=${countryCode}`,
+        { headers }
+      );
+      if (!tracksResp.ok) {
+        throw new Error(`Tidal API error ${tracksResp.status}`);
+      }
+      const tracksData = await tracksResp.json();
+      const tracks = tracksData.data || [];
+
+      // Try to match by track number first
+      const trackNum = parseInt(track);
+      if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
+        const matchedTrack = tracks[trackNum - 1];
+        logger.info('Tidal track matched by number:', matchedTrack.id);
+        return res.json({ id: matchedTrack.id });
+      }
+
+      // Extract track name from format like "3. Track Name"
+      const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
+      const searchName = trackNameMatch ? trackNameMatch[1] : track;
+
+      // For name matching, we need track details - fetch them
+      // Tidal's items endpoint returns track IDs, need to get names
+      const trackDetailsPromises = tracks.slice(0, 20).map(async (t) => {
+        try {
+          const detailResp = await fetch(
+            `https://openapi.tidal.com/v2/tracks/${t.id}?countryCode=${countryCode}`,
+            { headers }
+          );
+          if (detailResp.ok) {
+            const detail = await detailResp.json();
+            return { id: t.id, name: detail.data?.attributes?.title || '' };
+          }
+        } catch {
+          // Ignore individual track fetch errors
+        }
+        return { id: t.id, name: '' };
+      });
+
+      const trackDetails = await Promise.all(trackDetailsPromises);
+      const matchingTrack = trackDetails.find(
+        (t) =>
+          t.name &&
+          (t.name.toLowerCase() === searchName.toLowerCase() ||
+            t.name.toLowerCase().includes(searchName.toLowerCase()) ||
+            searchName.toLowerCase().includes(t.name.toLowerCase()))
+      );
+      if (matchingTrack) {
+        logger.info('Tidal track matched by name:', matchingTrack.id);
+        return res.json({ id: matchingTrack.id });
+      }
+
+      // Fallback: direct track search
+      const trackSearchPath = encodeURIComponent(
+        `${searchName} ${artist}`
+      ).replace(/'/g, '%27');
+      const fallbackResp = await fetch(
+        `https://openapi.tidal.com/v2/searchResults/${trackSearchPath}/relationships/tracks?countryCode=${countryCode}&limit=1`,
+        { headers }
+      );
+      if (fallbackResp.ok) {
+        const fallbackData = await fallbackResp.json();
+        if (fallbackData.data && fallbackData.data.length > 0) {
+          logger.info(
+            'Tidal track matched by fallback search:',
+            fallbackData.data[0].id
+          );
+          return res.json({ id: fallbackData.data[0].id });
+        }
+      }
+
+      return res.status(404).json({ error: 'Track not found' });
+    } catch (err) {
+      logger.error('Tidal track search error:', err);
+      res.status(500).json({ error: 'Failed to search Tidal' });
+    }
+  });
+
   // Fetch metadata for link previews
   app.get(
     '/api/unfurl',
