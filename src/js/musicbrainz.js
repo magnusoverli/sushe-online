@@ -3,7 +3,6 @@ import { isAlbumInList } from './modules/utils.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
-const DEEZER_PROXY = '/api/proxy/deezer'; // Using our proxy
 
 // Rate limiting is now handled on the backend, but we'll keep a small delay for the UI
 let lastRequestTime = 0;
@@ -11,47 +10,142 @@ const MIN_REQUEST_INTERVAL = 100; // Small delay for UI responsiveness
 
 let searchMode = 'artist';
 
-// Cache for searches to avoid duplicate requests
-const deezerCache = new Map();
-
 // Cache for artist images to avoid duplicate requests (keyed by artist ID)
 const artistImageCache = new Map();
 
-// Concurrent request limits for Deezer
-const DEEZER_BATCH_SIZE = 15;
+// =============================================================================
+// COVER ART PROVIDER SYSTEM
+// All providers are queried in PARALLEL. First successful result wins,
+// and remaining requests are automatically aborted via AbortSignal.
+//
+// To add a new provider:
+// 1. Create a search function: async (artistName, albumTitle, releaseGroupId, signal) => url | null
+//    - signal is an AbortSignal - pass it to fetch() to support cancellation
+// 2. Add to coverArtProviders array with name and search function
+// 3. Optionally add CDN to warmupConnections() for preconnect
+// =============================================================================
 
-// Queue for managing concurrent requests
-class RequestQueue {
-  constructor(batchSize) {
-    this.batchSize = batchSize;
-    this.running = 0;
-    this.queue = [];
-  }
+// Cache for cover art searches (keyed by releaseGroupId or "artistName::albumTitle")
+const coverArtCache = new Map();
 
-  async add(fn) {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject });
-      this.process();
-    });
-  }
-
-  async process() {
-    while (this.running < this.batchSize && this.queue.length > 0) {
-      const { fn, resolve, reject } = this.queue.shift();
-      this.running++;
-
-      fn()
-        .then(resolve)
-        .catch(reject)
-        .finally(() => {
-          this.running--;
-          this.process();
-        });
+// Cover art providers - queried in parallel, first success wins
+// Each provider: { name, search: async (artistName, albumTitle, releaseGroupId, signal) => url | null }
+// 
+// Provider types:
+// - "knownUrl": Returns predictable URL immediately (no validation fetch)
+// - "search": Needs to search/fetch to find the URL
+const coverArtProviders = [
+  // Cover Art Archive - uses MusicBrainz release group ID
+  // URL pattern is predictable, so no validation needed - just return it
+  {
+    name: 'CoverArtArchive',
+    type: 'knownUrl', // No HEAD request needed - URL is predictable
+    search: async (_artistName, _albumTitle, releaseGroupId, _signal) => {
+      if (!releaseGroupId) return null;
+      return `https://coverartarchive.org/release-group/${releaseGroupId}/front-250`;
     }
+  },
+  // Add more providers here. Example for a search-based provider:
+  // {
+  //   name: 'MyProvider',
+  //   type: 'search', // Needs to fetch to find the URL
+  //   search: async (artistName, albumTitle, releaseGroupId, signal) => {
+  //     const response = await fetch('/api/proxy/myprovider?q=...', { signal });
+  //     const data = await response.json();
+  //     return data.imageUrl || null;
+  //   }
+  // }
+];
+
+// Query all providers in parallel, use first successful result, abort the rest
+async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
+  const cacheKey = releaseGroupId || `${artistName}::${albumTitle}`.toLowerCase();
+
+  if (coverArtCache.has(cacheKey)) {
+    return coverArtCache.get(cacheKey);
+  }
+
+  if (coverArtProviders.length === 0) {
+    coverArtCache.set(cacheKey, null);
+    return null;
+  }
+
+  // AbortController to cancel remaining requests once one succeeds
+  const controller = new AbortController();
+
+  // Wrap each provider in a promise that resolves with { name, url } or null
+  const providerPromises = coverArtProviders.map(async (provider) => {
+    try {
+      const url = await provider.search(artistName, albumTitle, releaseGroupId, controller.signal);
+      
+      if (url) {
+        console.log(`📊 [COVER] ✅ ${provider.name} found cover for "${albumTitle}"`);
+        return { name: provider.name, url };
+      }
+      return null;
+    } catch (error) {
+      // AbortError is expected when cancelled - don't log it
+      if (error.name !== 'AbortError') {
+        console.warn(`📊 [COVER] ${provider.name} error for "${albumTitle}":`, error.message);
+      }
+      return null;
+    }
+  });
+
+  try {
+    // Race all providers - first non-null result wins
+    const result = await Promise.any(
+      providerPromises.map(p => p.then(r => {
+        if (r?.url) return r;
+        throw new Error('No result'); // Make Promise.any skip null results
+      }))
+    );
+
+    // Got a result - abort all other pending requests
+    controller.abort();
+    coverArtCache.set(cacheKey, result.url);
+    return result.url;
+
+  } catch (_error) {
+    // All providers failed or returned null (AggregateError from Promise.any)
+    coverArtCache.set(cacheKey, null);
+    return null;
   }
 }
 
-const deezerQueue = new RequestQueue(DEEZER_BATCH_SIZE);
+// Load cover art for an album element - called when albums are rendered
+async function loadAlbumCover(imgElement, artistName, albumTitle, releaseGroupId, index) {
+  try {
+    const coverUrl = await searchCoverArt(artistName, albumTitle, releaseGroupId);
+    
+    if (coverUrl && imgElement && imgElement.parentElement) {
+      // Set up load/error handlers before setting src
+      imgElement.onload = () => {
+        // Store the cover URL for later use
+        if (window.currentReleaseGroups && window.currentReleaseGroups[index]) {
+          window.currentReleaseGroups[index].coverArt = coverUrl;
+        }
+        // Remove loading state
+        imgElement.parentElement?.classList.remove('animate-pulse');
+      };
+      
+      imgElement.onerror = () => {
+        // Image failed to load (404, network error, etc.)
+        console.warn(`📊 [COVER] Image failed to load for "${albumTitle}"`);
+        showCoverPlaceholder(imgElement);
+      };
+      
+      // Start loading the image
+      imgElement.src = coverUrl;
+    } else {
+      // No cover URL found, show placeholder
+      showCoverPlaceholder(imgElement);
+    }
+  } catch (error) {
+    console.warn(`📊 [COVER] Failed to load cover for "${albumTitle}":`, error.message);
+    showCoverPlaceholder(imgElement);
+  }
+}
 
 // Modal management
 let currentArtist = null;
@@ -66,7 +160,9 @@ let currentPreloadController = null;
 // Browser Connection Optimization
 function warmupConnections() {
   const cdns = [
-    'https://e-cdns-images.dzcdn.net', // Deezer CDN
+    'https://coverartarchive.org', // Cover Art Archive (redirector)
+    'https://archive.org', // Actual image host after CAA redirect
+    // Add new cover art provider CDNs here for preconnect optimization
   ];
 
   cdns.forEach((origin) => {
@@ -233,189 +329,13 @@ async function getArtistReleaseGroups(artistId) {
   return releaseGroups;
 }
 
-// Search Deezer for album artwork (via proxy)
-async function searchDeezerArtwork(artistName, albumName) {
-  const cacheKey = `${artistName}::${albumName}`.toLowerCase();
-
-  if (deezerCache.has(cacheKey)) {
-    return deezerCache.get(cacheKey);
-  }
-
-  return deezerQueue.add(async () => {
-    try {
-      const searchQuery = `${artistName} ${albumName}`
-        .replace(/[^\w\s]/g, ' ')
-        .trim();
-      const url = `${DEEZER_PROXY}?q=${encodeURIComponent(searchQuery)}`;
-
-      const response = await fetch(url, {
-        credentials: 'same-origin', // Include cookies for authentication
-      });
-
-      if (!response.ok) {
-        throw new Error('Deezer proxy request failed');
-      }
-
-      const data = await response.json();
-
-      if (data.data && data.data.length > 0) {
-        const normalizedAlbumName = albumName
-          .toLowerCase()
-          .replace(/[^\w\s]/g, '');
-        const normalizedArtistName = artistName
-          .toLowerCase()
-          .replace(/[^\w\s]/g, '');
-
-        let bestMatch = data.data.find((album) => {
-          const albumTitle = (album.title || '')
-            .toLowerCase()
-            .replace(/[^\w\s]/g, '');
-          const albumArtist = (album.artist?.name || '')
-            .toLowerCase()
-            .replace(/[^\w\s]/g, '');
-          return (
-            albumTitle === normalizedAlbumName &&
-            albumArtist === normalizedArtistName
-          );
-        });
-
-        if (!bestMatch) {
-          bestMatch = data.data.find((album) => {
-            const albumTitle = (album.title || '')
-              .toLowerCase()
-              .replace(/[^\w\s]/g, '');
-            return (
-              albumTitle.includes(normalizedAlbumName) ||
-              normalizedAlbumName.includes(albumTitle)
-            );
-          });
-        }
-
-        if (!bestMatch) {
-          bestMatch = data.data[0];
-        }
-
-        if (bestMatch) {
-          // Try different cover sizes in order of preference
-          const coverUrl =
-            bestMatch.cover_xl ||
-            bestMatch.cover_big ||
-            bestMatch.cover_medium ||
-            bestMatch.cover_small;
-
-          if (coverUrl) {
-            deezerCache.set(cacheKey, coverUrl);
-            return coverUrl;
-          }
-        }
-      }
-
-      // Don't log here - let getCoverArt handle it after trying MusicBrainz
-      deezerCache.set(cacheKey, null);
-      return null;
-    } catch (_error) {
-      deezerCache.set(cacheKey, null);
-      return null;
-    }
-  });
-}
-
-// Get cover art from MusicBrainz Cover Art Archive
-async function getMusicBrainzCoverArt(releaseGroupId) {
-  if (!releaseGroupId) return null;
-
-  try {
-    const url = `https://coverartarchive.org/release-group/${releaseGroupId}`;
-    const response = await fetch(url);
-
-    if (!response.ok) {
-      return null; // No cover art available
-    }
-
-    const data = await response.json();
-
-    // Find the front cover
-    const frontCover = data.images?.find((img) => img.front);
-    if (!frontCover) return null;
-
-    // Use smaller thumbnails for search results (displayed at 64-80px)
-    // 250px is plenty for display quality and loads 13x faster than 1200px
-    return (
-      frontCover.thumbnails?.['250'] ||
-      frontCover.thumbnails?.small ||
-      frontCover.thumbnails?.['500'] ||
-      frontCover.thumbnails?.large ||
-      frontCover.image
-    );
-  } catch (_error) {
-    return null;
-  }
-}
-
-// Get cover art from Deezer with MusicBrainz fallback
-async function getCoverArt(releaseGroupId, artistName, albumTitle) {
-  if (!artistName || !albumTitle) {
-    console.warn(
-      `Missing artist or album name for "${releaseGroupId}" - cannot fetch cover art`
-    );
-    return null;
-  }
-
-  try {
-    // Try both sources in parallel for faster results
-    const promises = [];
-
-    // Deezer with 3 second timeout
-    const deezerPromise = Promise.race([
-      searchDeezerArtwork(artistName, albumTitle),
-      new Promise((resolve) => setTimeout(() => resolve(null), 3000)),
-    ]);
-    promises.push(deezerPromise);
-
-    // MusicBrainz Cover Art Archive (if we have release group ID)
-    if (releaseGroupId) {
-      promises.push(getMusicBrainzCoverArt(releaseGroupId));
-    }
-
-    // Use whichever responds first with a valid result
-    const results = await Promise.allSettled(promises);
-
-    // Check Deezer result first (prefer it for consistency)
-    const deezerResult = results[0];
-    if (deezerResult.status === 'fulfilled' && deezerResult.value) {
-      return deezerResult.value;
-    }
-
-    // Check MusicBrainz result
-    if (results[1]) {
-      const mbResult = results[1];
-      if (mbResult.status === 'fulfilled' && mbResult.value) {
-        console.debug(
-          `Using MusicBrainz cover art for "${albumTitle}" by ${artistName}`
-        );
-        return mbResult.value;
-      }
-    }
-
-    // Only log warning if both sources failed
-    console.warn(
-      `No cover art found for "${albumTitle}" by ${artistName} - album will use placeholder`
-    );
-
-    return null;
-  } catch (error) {
-    console.error(`Error fetching cover art for "${albumTitle}":`, error);
-    return null;
-  }
-}
-
 // Convert date to year format
 function formatReleaseDate(date) {
   if (!date) return '';
   return date.split('-')[0];
 }
 
-// Optimization 1: Preload on hover
+// Preload on hover - metadata only (covers load via provider system when albums render)
 async function preloadArtistAlbums(artist) {
   if (preloadCache.has(artist.id)) {
     return preloadCache.get(artist.id);
@@ -432,15 +352,6 @@ async function preloadArtistAlbums(artist) {
 
     if (!currentPreloadController.signal.aborted) {
       preloadCache.set(artist.id, releaseGroups);
-
-      // Preload first 6 album covers
-      releaseGroups.slice(0, 6).forEach(async (rg) => {
-        const coverArt = await getCoverArt(rg.id, artist.name, rg.title);
-        if (coverArt) {
-          const img = new Image();
-          img.src = coverArt;
-        }
-      });
     }
 
     return releaseGroups;
@@ -450,45 +361,24 @@ async function preloadArtistAlbums(artist) {
   }
 }
 
-// Optimization 2: Intersection Observer with background loading
+// Intersection Observer (kept for potential future use)
 let imageObserver = null;
-// Background loading removed - images now load directly via CAA redirect URLs
 
-// OPTIMIZATION: Fallback to Deezer only when Cover Art Archive fails (called from onerror)
-// This is exposed globally so inline onerror handlers can use it
-window.loadDeezerFallback = async (
-  imgElement,
-  index,
-  artistName,
-  albumTitle
-) => {
-  if (!artistName || !albumTitle) return;
-
-  try {
-    const coverArt = await searchDeezerArtwork(artistName, albumTitle);
-    if (coverArt && imgElement && imgElement.parentElement) {
-      // Store the cover URL for later use
-      if (window.currentReleaseGroups && window.currentReleaseGroups[index]) {
-        window.currentReleaseGroups[index].coverArt = coverArt;
-      }
-      imgElement.src = coverArt;
-    }
-  } catch (_error) {
-    // Deezer also failed, show placeholder
-    if (imgElement && imgElement.parentElement) {
-      const isMobile = window.innerWidth < 1024;
-      imgElement.parentElement.innerHTML = `
-        <div class="w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
-        </div>
-      `;
-    }
+// Show placeholder when no cover art is available
+function showCoverPlaceholder(imgElement) {
+  if (imgElement && imgElement.parentElement) {
+    imgElement.parentElement.classList.remove('animate-pulse');
+    imgElement.parentElement.innerHTML = `
+      <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+          <polyline points="21 15 16 10 5 21"></polyline>
+        </svg>
+      </div>
+    `;
   }
-};
+}
 
 function setupIntersectionObserver(_releaseGroups, _artistName) {
   // Clean up existing observer
@@ -498,16 +388,16 @@ function setupIntersectionObserver(_releaseGroups, _artistName) {
 
   // OPTIMIZATION: No longer need to track loaded albums or make API calls
   // Images load directly via Cover Art Archive redirect URLs
-  // The browser handles loading natively with onerror fallback to Deezer
+  // The browser handles loading natively with onerror fallback to registered providers
 
   // OPTIMIZATION: IntersectionObserver is now minimal
-  // Images load directly via CAA redirect URLs with native lazy loading
+  // Images load directly via CAA redirect URLs
   // The observer is kept for potential future use but doesn't trigger API calls
   imageObserver = new IntersectionObserver(
     (_entries, _observer) => {
       // No-op: Images load directly via CAA redirect URLs in the img src
       // Browser's native lazy loading handles everything
-      // onerror handlers trigger Deezer fallback if CAA fails
+      // onerror handlers trigger fallback providers if CAA fails
     },
     {
       rootMargin: '100px',
@@ -608,6 +498,8 @@ async function displayDirectAlbumResults(releaseGroups) {
     albumEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
 
+    const index = releaseGroups.indexOf(rg);
+
     albumEl.innerHTML = `
       ${
         isFreshRelease || isNewRelease
@@ -627,14 +519,14 @@ async function displayDirectAlbumResults(releaseGroups) {
       `
           : ''
       }
-      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md">
-        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center animate-pulse">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
-        </div>
+      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
+        <img data-artist="${artistDisplay.replace(/"/g, '&quot;')}"
+            data-album="${rg.title.replace(/"/g, '&quot;')}"
+            data-release-group-id="${rg.id}"
+            data-index="${index}"
+            alt="${rg.title.replace(/"/g, '&quot;')}"
+            class="w-20 h-20 object-cover rounded-lg"
+            src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
@@ -650,6 +542,13 @@ async function displayDirectAlbumResults(releaseGroups) {
     // Click handler
     albumEl.onclick = async () => {
       const coverContainer = albumEl.querySelector('.album-cover-container');
+      const existingImg = coverContainer.querySelector('img');
+
+      // Capture the cover URL if image successfully loaded
+      if (existingImg && existingImg.src && !existingImg.src.startsWith('data:') && !rg.coverArt) {
+        rg.coverArt = existingImg.src;
+      }
+
       coverContainer.innerHTML = `
         <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
@@ -665,54 +564,16 @@ async function displayDirectAlbumResults(releaseGroups) {
         country: combinedCountries,
       };
 
-      // Load cover art if not already loaded
-      if (!rg.coverArt) {
-        try {
-          const coverArt = await getCoverArt(
-            rg.id,
-            currentArtist.name,
-            rg.title
-          );
-          if (coverArt) {
-            rg.coverArt = coverArt;
-          }
-        } catch (_error) {
-          // Error loading cover - will try again later
-        }
-      }
-
       addAlbumToList(rg);
     };
 
     modalElements.albumList.appendChild(albumEl);
 
-    // Start lazy loading covers
-    requestAnimationFrame(() => {
-      getCoverArt(rg.id, artistDisplay, rg.title).then((coverArt) => {
-        if (coverArt && !currentLoadingController?.signal.aborted) {
-          rg.coverArt = coverArt;
-          const coverContainer = albumEl.querySelector(
-            '.album-cover-container'
-          );
-          if (coverContainer) {
-            coverContainer.innerHTML = `
-              <img src="${coverArt}" 
-                  alt="${rg.title}" 
-                  class="w-20 h-20 object-cover rounded-lg" 
-                  loading="lazy" 
-                  crossorigin="anonymous"
-                  onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center\\'>\\
-                    <svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'>\\
-                      <rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect>\\
-                      <circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle>\\
-                      <polyline points=\\'21 15 16 10 5 21\\'></polyline>\\
-                    </svg>\\
-                  </div>';">
-            `;
-          }
-        }
-      });
-    });
+    // Trigger cover loading via provider system
+    const img = albumEl.querySelector('img');
+    if (img) {
+      loadAlbumCover(img, artistDisplay, rg.title, rg.id, index);
+    }
   }
 }
 
@@ -1893,15 +1754,6 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
     albumEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
 
-    // OPTIMIZATION: Use Cover Art Archive direct redirect URL
-    // No API call needed - browser fetches the image directly
-    // Falls back to Deezer search only on 404
-    const caaCoverUrl = `https://coverartarchive.org/release-group/${rg.id}/front-250`;
-    const escapedTitle = rg.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-    const escapedArtist = currentArtist.name
-      .replace(/'/g, "\\'")
-      .replace(/"/g, '&quot;');
-
     albumEl.innerHTML = `
       ${
         isFreshRelease || isNewRelease
@@ -1921,14 +1773,14 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       `
           : ''
       }
-      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700">
-        <img src="${caaCoverUrl}"
-            alt="${escapedTitle}"
+      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
+        <img data-artist="${currentArtist.name.replace(/"/g, '&quot;')}"
+            data-album="${rg.title.replace(/"/g, '&quot;')}"
+            data-release-group-id="${rg.id}"
+            data-index="${index}"
+            alt="${rg.title.replace(/"/g, '&quot;')}"
             class="w-20 h-20 object-cover rounded-lg"
-            loading="lazy"
-            crossorigin="anonymous"
-            onload="this.parentElement.classList.remove('bg-gray-700'); if(window.currentReleaseGroups && window.currentReleaseGroups[${index}]) window.currentReleaseGroups[${index}].coverArt = this.src;"
-            onerror="this.onerror=null; window.loadDeezerFallback(this, ${index}, '${escapedArtist}', '${escapedTitle}');">
+            src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
@@ -1937,30 +1789,9 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       </div>
     `;
 
-    // Click handler - cover is already loaded via CAA/Deezer, just add the album
+    // Click handler
     albumEl.onclick = async () => {
-      // Show loading state
       const coverContainer = albumEl.querySelector('.album-cover-container');
-      const existingImg = coverContainer.querySelector('img');
-
-      // Capture the cover URL if image successfully loaded
-      if (
-        existingImg &&
-        existingImg.src &&
-        !existingImg.src.includes('coverartarchive.org') &&
-        !rg.coverArt
-      ) {
-        // Deezer fallback already loaded, use that URL
-        rg.coverArt = existingImg.src;
-      } else if (
-        existingImg &&
-        existingImg.complete &&
-        existingImg.naturalWidth > 0 &&
-        !rg.coverArt
-      ) {
-        // CAA image successfully loaded
-        rg.coverArt = existingImg.src;
-      }
 
       coverContainer.innerHTML = `
         <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
@@ -1973,6 +1804,12 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 
     modalElements.albumList.appendChild(albumEl);
 
+    // Trigger cover loading via provider system
+    const img = albumEl.querySelector('img');
+    if (img) {
+      loadAlbumCover(img, currentArtist.name, rg.title, rg.id, index);
+    }
+
     // Observe for future reference (currently no-op, but kept for potential future use)
     observer.observe(albumEl);
   });
@@ -1980,8 +1817,7 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   // Store reference to current release groups
   window.currentReleaseGroups = releaseGroups;
 
-  // OPTIMIZATION: No need to manually trigger loading - browser handles it natively
-  // via the img src with loading="lazy" attribute
+  // Images are loaded via the parallel cover art provider system
 }
 
 async function addAlbumToList(releaseGroup) {
@@ -2042,25 +1878,7 @@ async function addAlbumToList(releaseGroup) {
     }
   }
 
-  // If still no cover, try fetching it directly
-  if (!coverArtUrl) {
-    showToast('Fetching album cover...', 'info');
-    try {
-      coverArtUrl = await getCoverArt(
-        releaseGroup.id,
-        currentArtist.name,
-        releaseGroup.title
-      );
-      if (coverArtUrl) {
-        // Store it for future use
-        releaseGroup.coverArt = coverArtUrl;
-      }
-    } catch (_error) {
-      // Error fetching cover art - will proceed without
-    }
-  }
-
-  // Process cover art if found
+  // Process cover art if found (already loaded via provider system)
   if (coverArtUrl) {
     try {
       // Use the image proxy endpoint to fetch external images
@@ -2265,6 +2083,8 @@ document.addEventListener('DOMContentLoaded', () => {
     /\/(login|register|forgot)/
   );
   if (!isAuthPage) {
+    // Warm up CDN connections early for faster first-image load
+    warmupConnections();
     initializeAddAlbumFeature();
   }
 });
