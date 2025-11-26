@@ -927,9 +927,6 @@ async function displayDirectAlbumResults(releaseGroups) {
 
   modalElements.albumList.className = 'space-y-3';
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
   const currentYear = new Date().getFullYear().toString();
 
   for (const rg of releaseGroups) {
@@ -946,8 +943,6 @@ async function displayDirectAlbumResults(releaseGroups) {
 
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
-    const isFreshRelease =
-      rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
     const isNewRelease =
       rg['first-release-date'] &&
       rg['first-release-date'].startsWith(currentYear);
@@ -959,19 +954,10 @@ async function displayDirectAlbumResults(releaseGroups) {
 
     albumEl.innerHTML = `
       ${
-        isFreshRelease || isNewRelease
+        isNewRelease
           ? `
         <div class="absolute top-2 right-2 flex gap-1 z-10">
-          ${
-            isFreshRelease
-              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">FRESH</span>`
-              : ''
-          }
-          ${
-            isNewRelease
-              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>`
-              : ''
-          }
+          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>
         </div>
       `
           : ''
@@ -1971,9 +1957,6 @@ function _displayAlbumResultsWithLazyLoading(releaseGroups) {
   // Desktop now uses the same list-style layout as mobile
   modalElements.albumList.className = 'space-y-3'; // Changed from grid to vertical list
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
   const currentYear = new Date().getFullYear().toString();
 
   // Set up intersection observer
@@ -1986,8 +1969,6 @@ function _displayAlbumResultsWithLazyLoading(releaseGroups) {
 
     const releaseDate = formatReleaseDate(rg['first-release-date']);
     const albumType = rg['primary-type'];
-    const isFreshRelease =
-      rg['first-release-date'] && rg['first-release-date'] >= thirtyDaysAgoStr;
     const isNewRelease =
       rg['first-release-date'] &&
       rg['first-release-date'].startsWith(currentYear);
@@ -1998,19 +1979,10 @@ function _displayAlbumResultsWithLazyLoading(releaseGroups) {
 
     albumEl.innerHTML = `
       ${
-        isFreshRelease || isNewRelease
+        isNewRelease
           ? `
         <div class="absolute top-2 right-2 flex gap-1 z-10">
-          ${
-            isFreshRelease
-              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">FRESH</span>`
-              : ''
-          }
-          ${
-            isNewRelease
-              ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>`
-              : ''
-          }
+          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>
         </div>
       `
           : ''
@@ -2083,9 +2055,6 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
   modalElements.albumList.className = 'space-y-3';
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
   const currentYear = new Date().getFullYear().toString();
 
   normalizedAlbums.forEach((album, index) => {
@@ -2095,9 +2064,6 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
     const releaseDate = formatReleaseDate(album['first-release-date']);
     const albumType = album['primary-type'];
-    const isFreshRelease =
-      album['first-release-date'] &&
-      album['first-release-date'] >= thirtyDaysAgoStr;
     const isNewRelease =
       album['first-release-date'] &&
       album['first-release-date'].startsWith(currentYear);
@@ -2122,11 +2088,10 @@ function displayAlbumResultsWithProvider(albums, providerName) {
 
     albumEl.innerHTML = `
       ${
-        isFreshRelease || isNewRelease
+        isNewRelease
           ? `
         <div class="absolute top-2 right-2 flex gap-1 z-10">
-          ${isFreshRelease ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">FRESH</span>` : ''}
-          ${isNewRelease ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>` : ''}
+          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>
         </div>
       `
           : ''
