@@ -56,8 +56,13 @@
     /* Visual styling on wrapper itself */
     opacity: 0.9;
     box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
-    border: 2px solid var(--accent-color);
+    border-top: 1px solid #4ade80; /* green-400 */
+    border-bottom: 1px solid #4ade80;
+    border-left: none;
+    border-right: none;
     background-color: var(--accent-subtle) !important;
+    /* Zoom effect */
+    transform: scale(1.05);
   }
 
   /* Remove any conflicting styling from inner element during drag */
@@ -65,27 +70,24 @@
   .sortable-fallback .album-row {
     border: none !important;
     box-shadow: none !important;
-    transform: none !important;
   }
 
   /* Touch feedback for mobile */
   @media (max-width: 768px) {
     .album-card,
     .album-row {
-      @apply touch-manipulation;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
-      cursor: grab;
     }
 
-    /* Prevent scrolling on chosen wrapper */
+    /* Only disable touch-action when actually dragging (chosen state) */
     .sortable-chosen.album-card-wrapper {
       touch-action: none !important;
     }
 
     /* Visual feedback for touch-and-hold on entire card */
-    /* Apply fallback element appearance immediately when drag is enabled (at 350ms) */
+    /* Apply fallback element appearance immediately when drag is enabled (at 300ms) */
     /* Target the wrapper (mobile) and the row itself (desktop) */
     /* Keep same appearance when dragging starts - no visual change from chosen to dragging */
     .sortable-chosen.album-card-wrapper .album-card,
@@ -98,7 +100,10 @@
       z-index: 100000;
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Explicit border - use shorthand to fully override any existing borders */
-      border: 2px solid var(--accent-color) !important;
+      border-top: 1px solid #4ade80 !important;
+      border-bottom: 1px solid #4ade80 !important;
+      border-left: none !important;
+      border-right: none !important;
       /* Prevent any touch scrolling during drag */
       touch-action: none !important;
     }
@@ -113,7 +118,10 @@
       z-index: 100000;
       box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
       /* Explicit border - use shorthand to fully override any existing borders */
-      border: 2px solid var(--accent-color) !important;
+      border-top: 1px solid #4ade80 !important;
+      border-bottom: 1px solid #4ade80 !important;
+      border-left: none !important;
+      border-right: none !important;
       /* Prevent any touch scrolling during drag */
       touch-action: none !important;
     }

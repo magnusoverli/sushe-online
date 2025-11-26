@@ -3768,7 +3768,7 @@ function createMobileAlbumCard(data, index) {
 
   const card = document.createElement('div');
   card.className =
-    'album-card album-row bg-gray-900 touch-manipulation transition-all relative overflow-hidden h-[110px]';
+    'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[110px]';
   card.dataset.index = index;
 
   card.innerHTML = `
@@ -4578,9 +4578,9 @@ function initializeUnifiedSorting(container, isMobile) {
 
     // Touch-and-hold configuration for mobile
     ...(isMobile && {
-      delay: 350, // 350ms touch-and-hold delay
+      delay: 300, // 300ms touch-and-hold delay
       delayOnTouchOnly: true,
-      touchStartThreshold: 3, // Reduced from 10 to detect drag sooner
+      touchStartThreshold: 10, // Allow 10px movement before cancelling drag
       forceFallback: true,
       fallbackTolerance: 5,
     }),
@@ -4660,6 +4660,44 @@ function initializeUnifiedSorting(container, isMobile) {
 
   // Store reference for cleanup
   container._sortable = sortable;
+
+  // Mobile: Allow scroll initially, then block it after a delay.
+  // - 0-200ms: Scroll is ALLOWED (user can start scrolling naturally)
+  // - 200ms+: Scroll is BLOCKED (user committed to holding for drag)
+  // - 300ms: SortableJS starts the drag
+  if (isMobile) {
+    const SCROLL_GRACE_PERIOD = 200; // ms - allow scroll during this initial period
+    let touchState = null;
+
+    const onTouchStart = (e) => {
+      const wrapper = e.target.closest('.album-card-wrapper');
+      if (!wrapper || e.target.closest('button, .no-drag')) return;
+
+      touchState = {
+        startTime: Date.now(),
+      };
+    };
+
+    const onTouchMove = (e) => {
+      if (!touchState) return;
+
+      const elapsed = Date.now() - touchState.startTime;
+
+      // Allow scroll during grace period, block after
+      if (elapsed >= SCROLL_GRACE_PERIOD) {
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = () => {
+      touchState = null;
+    };
+
+    // Use non-passive listeners to allow preventDefault
+    sortableContainer.addEventListener('touchstart', onTouchStart, { passive: true });
+    sortableContainer.addEventListener('touchmove', onTouchMove, { passive: false });
+    sortableContainer.addEventListener('touchend', onTouchEnd, { passive: true });
+  }
 }
 window.displayAlbums = displayAlbums;
 
