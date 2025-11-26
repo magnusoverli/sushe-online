@@ -191,5 +191,3 @@ export function showServicePicker(hasSpotify, hasTidal) {
     document.addEventListener('keydown', escHandler);
   });
 }
-
-window.updatePlaylist = updatePlaylist;

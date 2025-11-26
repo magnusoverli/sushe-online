@@ -43,7 +43,6 @@ class PgDatastore {
     this.inverseMap = Object.fromEntries(
       Object.entries(fieldMap).map(([k, v]) => [v, k])
     );
-    this.preparedStatements = new Map();
     this.cache = new Map();
     this.cacheTimeout = 60000; // 1 minute cache for static data
   }
@@ -101,10 +100,6 @@ class PgDatastore {
         query: text,
         params: this._sanitizeParams(params),
       });
-    }
-
-    if (!this.preparedStatements.has(name)) {
-      this.preparedStatements.set(name, { text, name });
     }
 
     return this.pool.query({ name, text }, params);

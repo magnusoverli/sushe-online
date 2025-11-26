@@ -13,8 +13,6 @@ let currentList = '';
 let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null;
-const _genres = [];
-const _countries = [];
 
 // Process static data at module load time
 const availableGenres = genresText
@@ -293,52 +291,6 @@ function positionContextMenu(menu, x, y) {
 
 // Track loading performance optimization variables
 let trackAbortController = null;
-
-// Context menu variables
-
-// Position-based points mapping (unused but kept for reference)
-const _POSITION_POINTS = {
-  1: 60,
-  2: 54,
-  3: 50,
-  4: 46,
-  5: 43,
-  6: 40,
-  7: 38,
-  8: 36,
-  9: 34,
-  10: 32,
-  11: 30,
-  12: 29,
-  13: 28,
-  14: 27,
-  15: 26,
-  16: 25,
-  17: 24,
-  18: 23,
-  19: 22,
-  20: 21,
-  21: 20,
-  22: 19,
-  23: 18,
-  24: 17,
-  25: 16,
-  26: 15,
-  27: 14,
-  28: 13,
-  29: 12,
-  30: 11,
-  31: 10,
-  32: 9,
-  33: 8,
-  34: 7,
-  35: 6,
-  36: 5,
-  37: 4,
-  38: 3,
-  39: 2,
-  40: 1,
-};
 
 // Hide all context menus helper
 function hideAllContextMenus() {
@@ -659,99 +611,6 @@ async function updatePlaylist(listName, listData = null) {
   return musicServicesModule.updatePlaylist(listName, data);
 }
 window.updatePlaylist = updatePlaylist;
-
-// Show playlist validation modal before creating playlist
-async function _showPlaylistValidationModal(listName, validation) {
-  return new Promise((resolve) => {
-    const modal = document.createElement('div');
-    modal.className =
-      'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
-    modal.innerHTML = `
-      <div class="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold text-white mb-4">Create Playlist "${listName}"</h3>
-        
-        <div class="space-y-3 mb-6">
-          <div class="flex items-center text-green-400">
-            <i class="fas fa-check mr-2"></i>
-            <span>${validation.totalAlbums} albums in list</span>
-          </div>
-          
-          ${
-            validation.albumsWithTracks > 0
-              ? `
-            <div class="flex items-center text-green-400">
-              <i class="fas fa-music mr-2"></i>
-              <span>${validation.albumsWithTracks} albums with selected tracks</span>
-            </div>
-          `
-              : ''
-          }
-          
-          ${
-            validation.albumsWithoutTracks > 0
-              ? `
-            <div class="flex items-center text-yellow-400">
-              <i class="fas fa-exclamation-triangle mr-2"></i>
-              <span>${validation.albumsWithoutTracks} albums will be skipped (no selected tracks)</span>
-            </div>
-          `
-              : ''
-          }
-          
-          <div class="flex items-center text-blue-400">
-            <i class="fas fa-list mr-2"></i>
-            <span>Estimated ${validation.estimatedTracks} tracks</span>
-          </div>
-        </div>
-
-        ${
-          validation.warnings.length > 0
-            ? `
-          <div class="bg-yellow-900 border border-yellow-600 rounded p-3 mb-4">
-            <h4 class="text-yellow-400 font-medium mb-2">Warnings:</h4>
-            <ul class="text-yellow-300 text-sm space-y-1">
-              ${validation.warnings.map((w) => `<li>• ${w}</li>`).join('')}
-            </ul>
-          </div>
-        `
-            : ''
-        }
-
-        <div class="flex space-x-3">
-          <button id="cancelPlaylist" class="flex-1 px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors">
-            Cancel
-          </button>
-          <button id="proceedPlaylist" class="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors" ${!validation.canProceed ? 'disabled' : ''}>
-            ${validation.canProceed ? 'Create Playlist' : 'Cannot Proceed'}
-          </button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const cancelBtn = modal.querySelector('#cancelPlaylist');
-    const proceedBtn = modal.querySelector('#proceedPlaylist');
-
-    cancelBtn.onclick = () => {
-      document.body.removeChild(modal);
-      resolve(false);
-    };
-
-    proceedBtn.onclick = () => {
-      document.body.removeChild(modal);
-      resolve(true);
-    };
-
-    // Close on backdrop click
-    modal.onclick = (e) => {
-      if (e.target === modal) {
-        document.body.removeChild(modal);
-        resolve(false);
-      }
-    };
-  });
-}
 
 // Show progress modal during playlist creation
 function showPlaylistProgressModal(listName) {

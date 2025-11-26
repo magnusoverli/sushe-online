@@ -204,8 +204,6 @@ const cacheConfigs = {
 };
 
 module.exports = {
-  ResponseCache,
   responseCache,
-  createCacheMiddleware,
   cacheConfigs,
 };

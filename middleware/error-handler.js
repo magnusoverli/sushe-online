@@ -169,8 +169,6 @@ const notFoundHandler = (req, res, next) => {
 };
 
 module.exports = {
-  AppError,
-  ErrorTypes,
   errorHandler,
   notFoundHandler,
 };

@@ -213,7 +213,5 @@
     getAuthHeaders,
     handleUnauthorized,
     loadFullState,
-    isTokenExpired,
-    AUTH_STORAGE_KEYS,
   };
 })();

@@ -1329,5 +1329,4 @@ module.exports = {
   formatDate,
   formatDateTime,
   asset,
-  assetVersion,
 };

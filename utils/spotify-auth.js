@@ -182,41 +182,6 @@ async function ensureValidSpotifyToken(user, usersDb) {
   }
 }
 
-/**
- * Express middleware factory to ensure valid Spotify token before API calls
- * Automatically refreshes token if needed and updates user object
- *
- * @param {Object} usersDb - Users database interface
- * @returns {Function} Express middleware
- */
-function createSpotifyAuthMiddleware(usersDb) {
-  return async (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        code: 'NOT_AUTHENTICATED',
-      });
-    }
-
-    const result = await ensureValidSpotifyToken(req.user, usersDb);
-
-    if (!result.success) {
-      return res.status(401).json({
-        error: result.message,
-        code: result.error,
-        service: 'spotify',
-      });
-    }
-
-    // Attach the valid spotifyAuth to request for handlers to use
-    req.spotifyAuth = result.spotifyAuth;
-    next();
-  };
-}
-
 module.exports = {
-  refreshSpotifyToken,
-  spotifyTokenNeedsRefresh,
   ensureValidSpotifyToken,
-  createSpotifyAuthMiddleware,
 };
