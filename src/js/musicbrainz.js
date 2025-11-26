@@ -495,126 +495,14 @@ let currentLoadingController = null;
 
 // =============================================================================
 // ALBUM PROVIDER SYSTEM
-// Parallel racing for album lists - first provider to return wins
-// iTunes/Deezer include cover URLs, MusicBrainz needs separate cover fetch
+// Album metadata provider - MusicBrainz only for authoritative, high-quality data
+// Cover images are fetched separately via coverArtProviders (CoverArtArchive, iTunes)
 // =============================================================================
 
+// MusicBrainz provides release group IDs, proper album types, and accurate dates
+// Images are fetched separately via coverArtProviders (CoverArtArchive, iTunes)
 const albumProviders = [
-  // iTunes - fast, includes cover URLs
-  {
-    name: 'iTunes',
-    search: async (artistName, _artistId, signal) => {
-      const url = `/api/proxy/itunes?term=${encodeURIComponent(artistName)}&limit=50`;
-      const response = await fetch(url, { signal, credentials: 'same-origin' });
-      if (!response.ok) return null;
-
-      const data = await response.json();
-      if (!data.results || data.results.length === 0) return null;
-
-      // Filter to albums from this artist
-      const albums = data.results
-        .filter((item) => {
-          const similarity = stringSimilarity(
-            artistName,
-            item.artistName || ''
-          );
-          return similarity >= 0.7;
-        })
-        .filter((item) => {
-          // Filter to albums/EPs only
-          const type = (item.collectionType || '').toLowerCase();
-          return type === 'album' || type === 'ep';
-        })
-        .map((item) => ({
-          title:
-            item.collectionName?.replace(/\s*\(.*?\)\s*$/g, '').trim() ||
-            item.collectionName,
-          releaseDate: item.releaseDate?.split('T')[0] || '',
-          type: item.collectionType === 'Album' ? 'Album' : 'EP',
-          coverUrl: item.artworkUrl100?.replace(
-            /\/\d+x\d+bb\./,
-            `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
-          ),
-          artistName: item.artistName,
-          source: 'iTunes',
-        }));
-
-      if (albums.length === 0) return null;
-
-      // Sort by release date descending
-      albums.sort((a, b) =>
-        (b.releaseDate || '').localeCompare(a.releaseDate || '')
-      );
-
-      return albums;
-    },
-  },
-
-  // Deezer - fast, includes cover URLs
-  {
-    name: 'Deezer',
-    search: async (artistName, _artistId, signal) => {
-      // First find the artist
-      const artistUrl = `/api/proxy/deezer/artist?q=${encodeURIComponent(artistName)}`;
-      const artistResponse = await fetch(artistUrl, {
-        signal,
-        credentials: 'same-origin',
-      });
-      if (!artistResponse.ok) return null;
-
-      const artistData = await artistResponse.json();
-      if (!artistData.data || artistData.data.length === 0) return null;
-
-      // Find best matching artist
-      let bestArtist = null;
-      let bestScore = 0;
-      for (const artist of artistData.data) {
-        const score = stringSimilarity(artistName, artist.name || '');
-        if (score > bestScore) {
-          bestScore = score;
-          bestArtist = artist;
-        }
-      }
-
-      if (!bestArtist || bestScore < 0.7) return null;
-
-      // Get artist's albums
-      const albumsUrl = `/api/proxy/deezer/artist/${bestArtist.id}/albums`;
-      const albumsResponse = await fetch(albumsUrl, {
-        signal,
-        credentials: 'same-origin',
-      });
-      if (!albumsResponse.ok) return null;
-
-      const albumsData = await albumsResponse.json();
-      if (!albumsData.data || albumsData.data.length === 0) return null;
-
-      const albums = albumsData.data
-        .filter((item) => {
-          const type = (item.record_type || '').toLowerCase();
-          return type === 'album' || type === 'ep';
-        })
-        .map((item) => ({
-          title: item.title,
-          releaseDate: item.release_date || '',
-          type: item.record_type === 'album' ? 'Album' : 'EP',
-          coverUrl: item.cover_xl || item.cover_big || item.cover_medium,
-          artistName: bestArtist.name,
-          source: 'Deezer',
-        }));
-
-      if (albums.length === 0) return null;
-
-      // Sort by release date descending
-      albums.sort((a, b) =>
-        (b.releaseDate || '').localeCompare(a.releaseDate || '')
-      );
-
-      return albums;
-    },
-  },
-
-  // MusicBrainz - authoritative but slower, no cover URLs
+  // MusicBrainz - authoritative source with proper release group IDs, types, and dates
   {
     name: 'MusicBrainz',
     search: async (artistName, artistId, signal) => {
@@ -1890,7 +1778,7 @@ async function selectArtist(artist) {
       return;
     }
 
-    // Display albums - some may have coverUrl already (iTunes/Deezer)
+    // Display albums - covers will be fetched via coverArtProviders
     displayAlbumResultsWithProvider(result.albums, result.name);
   } catch (error) {
     if (error.name === 'AbortError') {
