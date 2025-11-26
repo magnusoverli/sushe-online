@@ -452,181 +452,68 @@ async function preloadArtistAlbums(artist) {
 
 // Optimization 2: Intersection Observer with background loading
 let imageObserver = null;
-let isBackgroundLoading = false;
+// Background loading removed - images now load directly via CAA redirect URLs
 
-function setupIntersectionObserver(releaseGroups, artistName) {
+// OPTIMIZATION: Fallback to Deezer only when Cover Art Archive fails (called from onerror)
+// This is exposed globally so inline onerror handlers can use it
+window.loadDeezerFallback = async (
+  imgElement,
+  index,
+  artistName,
+  albumTitle
+) => {
+  if (!artistName || !albumTitle) return;
+
+  try {
+    const coverArt = await searchDeezerArtwork(artistName, albumTitle);
+    if (coverArt && imgElement && imgElement.parentElement) {
+      // Store the cover URL for later use
+      if (window.currentReleaseGroups && window.currentReleaseGroups[index]) {
+        window.currentReleaseGroups[index].coverArt = coverArt;
+      }
+      imgElement.src = coverArt;
+    }
+  } catch (_error) {
+    // Deezer also failed, show placeholder
+    if (imgElement && imgElement.parentElement) {
+      const isMobile = window.innerWidth < 1024;
+      imgElement.parentElement.innerHTML = `
+        <div class="w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <circle cx="8.5" cy="8.5" r="1.5"></circle>
+            <polyline points="21 15 16 10 5 21"></polyline>
+          </svg>
+        </div>
+      `;
+    }
+  }
+};
+
+function setupIntersectionObserver(_releaseGroups, _artistName) {
   // Clean up existing observer
   if (imageObserver) {
     imageObserver.disconnect();
   }
 
-  // Track which albums have been loaded
-  const loadedAlbums = new Set();
-  const loadingAlbums = new Set();
+  // OPTIMIZATION: No longer need to track loaded albums or make API calls
+  // Images load directly via Cover Art Archive redirect URLs
+  // The browser handles loading natively with onerror fallback to Deezer
 
-  // Function to load a specific album's cover
-  const loadAlbumCover = async (index) => {
-    if (loadedAlbums.has(index) || loadingAlbums.has(index)) {
-      return;
-    }
-
-    loadingAlbums.add(index);
-
-    const albumEl = modalElements.albumList.querySelector(
-      `[data-album-index="${index}"]`
-    );
-    if (!albumEl) return;
-
-    const coverContainer = albumEl.querySelector('.album-cover-container');
-    if (!coverContainer || coverContainer.dataset.loaded === 'true') return;
-
-    try {
-      const coverArt = await getCoverArt(
-        releaseGroups[index].id,
-        artistName,
-        releaseGroups[index].title
-      );
-
-      if (coverArt && !currentLoadingController?.signal.aborted) {
-        // Store the cover URL immediately
-        releaseGroups[index].coverArt = coverArt;
-
-        // Then update the DOM
-        const isMobile = window.innerWidth < 1024;
-        coverContainer.innerHTML = `
-          <img src="${coverArt}" 
-              alt="${releaseGroups[index].title}" 
-              class="w-16 h-16 object-cover ${isMobile ? 'rounded' : 'rounded-full'}" 
-              loading="lazy" 
-              crossorigin="anonymous"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'w-16 h-16 bg-gray-700 ${isMobile ? 'rounded' : 'rounded-full'} flex items-center justify-center animate-pulse\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'1\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'; delete window.currentReleaseGroups[${index}].coverArt;">
-        `;
-        coverContainer.dataset.loaded = 'true';
-      }
-
-      loadedAlbums.add(index);
-      loadingAlbums.delete(index);
-    } catch (_error) {
-      // Error loading cover - mark as loaded to avoid retry
-      loadedAlbums.add(index);
-      loadingAlbums.delete(index);
-    }
-  };
-
-  // Function to start background loading of remaining images
-  const startBackgroundLoading = async () => {
-    if (isBackgroundLoading || currentLoadingController?.signal.aborted) return;
-
-    isBackgroundLoading = true;
-
-    // Get all unloaded albums
-    const unloadedIndexes = [];
-    for (let i = 0; i < releaseGroups.length; i++) {
-      if (!loadedAlbums.has(i) && !loadingAlbums.has(i)) {
-        unloadedIndexes.push(i);
-      }
-    }
-
-    // Load ALL remaining albums in parallel (let the queue manage concurrency)
-    // This is much faster than sequential batches
-    if (unloadedIndexes.length > 0) {
-      const allPromises = unloadedIndexes.map((index) => loadAlbumCover(index));
-
-      // Wait for all to complete (the RequestQueue will handle rate limiting)
-      await Promise.allSettled(allPromises);
-    }
-
-    isBackgroundLoading = false;
-  };
-
-  // Track visible images loaded
-  let visibleImagesLoaded = 0;
-  let totalVisibleImages = 0;
-
-  // Collect intersecting albums for parallel loading
-  const pendingLoads = new Set();
-  let loadTimer = null;
-
+  // OPTIMIZATION: IntersectionObserver is now minimal
+  // Images load directly via CAA redirect URLs with native lazy loading
+  // The observer is kept for potential future use but doesn't trigger API calls
   imageObserver = new IntersectionObserver(
-    (entries, observer) => {
-      // Collect all newly visible albums
-      const newlyVisible = [];
-
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          const albumEl = entry.target;
-          const index = parseInt(albumEl.dataset.albumIndex);
-
-          if (!loadedAlbums.has(index) && !loadingAlbums.has(index)) {
-            newlyVisible.push(index);
-            pendingLoads.add(index);
-            totalVisibleImages++;
-          }
-
-          // Stop observing this element
-          observer.unobserve(albumEl);
-        }
-      });
-
-      // Clear existing timer
-      if (loadTimer) clearTimeout(loadTimer);
-
-      // Batch load all pending items with a small debounce
-      loadTimer = setTimeout(() => {
-        if (pendingLoads.size > 0) {
-          // Load all pending albums in parallel
-          const toLoad = Array.from(pendingLoads);
-          pendingLoads.clear();
-
-          Promise.all(toLoad.map((index) => loadAlbumCover(index))).then(() => {
-            visibleImagesLoaded += toLoad.length;
-
-            // Check if we should start background loading
-            if (
-              visibleImagesLoaded >= totalVisibleImages &&
-              visibleImagesLoaded > 0
-            ) {
-              // Start loading remaining images immediately for better performance
-              startBackgroundLoading();
-            }
-          });
-        }
-      }, 50); // Small debounce to batch multiple intersection events
+    (_entries, _observer) => {
+      // No-op: Images load directly via CAA redirect URLs in the img src
+      // Browser's native lazy loading handles everything
+      // onerror handlers trigger Deezer fallback if CAA fails
     },
     {
-      rootMargin: '100px', // Start loading 100px before entering viewport
+      rootMargin: '100px',
       threshold: 0.01,
     }
   );
-
-  // Also start loading immediately for visible albums and background loading
-  setTimeout(() => {
-    // Force check for visible albums that might not have triggered intersection
-    const visibleAlbums = Array.from(
-      modalElements.albumList.querySelectorAll('[data-album-index]')
-    ).filter((el) => {
-      const rect = el.getBoundingClientRect();
-      return rect.top < window.innerHeight + 100 && rect.bottom > -100; // Include near-visible
-    });
-
-    // Get indexes of visible albums not yet loading
-    const albumIndexes = visibleAlbums
-      .map((el) => parseInt(el.dataset.albumIndex))
-      .filter((index) => !loadedAlbums.has(index) && !loadingAlbums.has(index));
-
-    if (albumIndexes.length > 0) {
-      // Load all visible albums in parallel
-      Promise.all(albumIndexes.map((index) => loadAlbumCover(index))).then(
-        () => {
-          // After visible albums are loaded, start background loading
-          startBackgroundLoading();
-        }
-      );
-    } else if (visibleImagesLoaded > 0) {
-      // If some images already loaded via intersection, start background
-      startBackgroundLoading();
-    }
-  }, 100); // Even faster initial check
 
   return imageObserver;
 }
@@ -692,8 +579,6 @@ async function displayDirectAlbumResults(releaseGroups) {
   window.currentReleaseGroups = releaseGroups;
 
   modalElements.albumList.className = 'space-y-3';
-
-  isBackgroundLoading = false;
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -1328,9 +1213,6 @@ function closeAddAlbumModal() {
     currentPreloadController.abort();
     currentPreloadController = null;
   }
-
-  // Stop background loading
-  isBackgroundLoading = false;
 
   // Disconnect observer
   if (imageObserver) {
@@ -1986,9 +1868,6 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
   // Desktop now uses the same list-style layout as mobile
   modalElements.albumList.className = 'space-y-3'; // Changed from grid to vertical list
 
-  // Reset background loading state
-  isBackgroundLoading = false;
-
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
@@ -2014,6 +1893,15 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
     albumEl.className =
       'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
 
+    // OPTIMIZATION: Use Cover Art Archive direct redirect URL
+    // No API call needed - browser fetches the image directly
+    // Falls back to Deezer search only on 404
+    const caaCoverUrl = `https://coverartarchive.org/release-group/${rg.id}/front-250`;
+    const escapedTitle = rg.title.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const escapedArtist = currentArtist.name
+      .replace(/'/g, "\\'")
+      .replace(/"/g, '&quot;');
+
     albumEl.innerHTML = `
       ${
         isFreshRelease || isNewRelease
@@ -2033,14 +1921,14 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       `
           : ''
       }
-      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md">
-        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center animate-pulse">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600">
-            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-            <circle cx="8.5" cy="8.5" r="1.5"></circle>
-            <polyline points="21 15 16 10 5 21"></polyline>
-          </svg>
-        </div>
+      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700">
+        <img src="${caaCoverUrl}"
+            alt="${escapedTitle}"
+            class="w-20 h-20 object-cover rounded-lg"
+            loading="lazy"
+            crossorigin="anonymous"
+            onload="this.parentElement.classList.remove('bg-gray-700'); if(window.currentReleaseGroups && window.currentReleaseGroups[${index}]) window.currentReleaseGroups[${index}].coverArt = this.src;"
+            onerror="this.onerror=null; window.loadDeezerFallback(this, ${index}, '${escapedArtist}', '${escapedTitle}');">
       </div>
       <div class="flex-1 min-w-0">
         <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
@@ -2049,72 +1937,51 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
       </div>
     `;
 
-    // Click handler
+    // Click handler - cover is already loaded via CAA/Deezer, just add the album
     albumEl.onclick = async () => {
       // Show loading state
       const coverContainer = albumEl.querySelector('.album-cover-container');
+      const existingImg = coverContainer.querySelector('img');
+
+      // Capture the cover URL if image successfully loaded
+      if (
+        existingImg &&
+        existingImg.src &&
+        !existingImg.src.includes('coverartarchive.org') &&
+        !rg.coverArt
+      ) {
+        // Deezer fallback already loaded, use that URL
+        rg.coverArt = existingImg.src;
+      } else if (
+        existingImg &&
+        existingImg.complete &&
+        existingImg.naturalWidth > 0 &&
+        !rg.coverArt
+      ) {
+        // CAA image successfully loaded
+        rg.coverArt = existingImg.src;
+      }
+
       coverContainer.innerHTML = `
         <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
           <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
         </div>
       `;
 
-      // Check if cover is already loaded in DOM but not in data
-      const imgEl = albumEl.querySelector('.album-cover-container img');
-      if (
-        imgEl &&
-        imgEl.src &&
-        !imgEl.src.includes('data:image/svg') &&
-        !rg.coverArt
-      ) {
-        rg.coverArt = imgEl.src;
-      }
-
-      // If still no cover, try to load it before adding
-      if (!rg.coverArt) {
-        try {
-          const coverArt = await getCoverArt(
-            rg.id,
-            currentArtist.name,
-            rg.title
-          );
-          if (coverArt) {
-            rg.coverArt = coverArt;
-          }
-        } catch (_error) {
-          // Error loading cover - will try again later
-        }
-      }
-
       addAlbumToList(rg);
     };
 
     modalElements.albumList.appendChild(albumEl);
 
-    // Start observing this element for lazy loading
+    // Observe for future reference (currently no-op, but kept for potential future use)
     observer.observe(albumEl);
   });
 
   // Store reference to current release groups
   window.currentReleaseGroups = releaseGroups;
 
-  // Also immediately check for visible albums
-  requestAnimationFrame(() => {
-    const visibleAlbums = Array.from(
-      modalElements.albumList.querySelectorAll('[data-album-index]')
-    ).filter((el) => {
-      const rect = el.getBoundingClientRect();
-      return rect.top < window.innerHeight && rect.bottom > 0;
-    });
-
-    // Trigger intersection observer for visible albums
-    visibleAlbums.forEach((el) => {
-      if (observer) {
-        observer.unobserve(el);
-        observer.observe(el);
-      }
-    });
-  });
+  // OPTIMIZATION: No need to manually trigger loading - browser handles it natively
+  // via the img src with loading="lazy" attribute
 }
 
 async function addAlbumToList(releaseGroup) {
