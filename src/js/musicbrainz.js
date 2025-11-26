@@ -13,6 +13,219 @@ let searchMode = 'artist';
 // Cache for artist images to avoid duplicate requests (keyed by artist ID)
 const artistImageCache = new Map();
 
+// Global abort controller for artist image searches - aborted when user selects an artist
+let artistImageAbortController = null;
+
+// =============================================================================
+// ARTIST IMAGE PROVIDER SYSTEM
+// Same architecture as album covers - parallel racing with verified loads
+// =============================================================================
+
+const artistImageProviders = [
+  // Deezer - fast, good commercial coverage
+  {
+    name: 'Deezer',
+    search: async (artistName, _artistId, signal) => {
+      const searchQuery = artistName.replace(/[^\w\s]/g, ' ').trim();
+      const url = `/api/proxy/deezer/artist?q=${encodeURIComponent(searchQuery)}`;
+
+      const response = await fetch(url, { signal, credentials: 'same-origin' });
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (!data.data || data.data.length === 0) return null;
+
+      // Find best match
+      const searchNameLower = artistName.toLowerCase();
+      let bestMatch = data.data.find(
+        (a) => a.name.toLowerCase() === searchNameLower
+      );
+
+      if (!bestMatch) {
+        // Fuzzy match using stringSimilarity
+        const candidates = data.data.map((a) => ({
+          artist: a,
+          score: stringSimilarity(artistName, a.name),
+        }));
+        candidates.sort((a, b) => b.score - a.score);
+        if (candidates[0]?.score >= 0.7) {
+          bestMatch = candidates[0].artist;
+        }
+      }
+
+      if (!bestMatch) return null;
+
+      const imageUrl =
+        bestMatch.picture_xl ||
+        bestMatch.picture_big ||
+        bestMatch.picture_medium;
+      if (!imageUrl) return null;
+
+      // Verify image loads
+      await verifyImageLoads(imageUrl, signal);
+      return imageUrl;
+    },
+  },
+
+  // iTunes/Apple Music - good coverage, high quality images
+  {
+    name: 'iTunes',
+    search: async (artistName, _artistId, signal) => {
+      const searchTerm = artistName.replace(/[^\w\s]/g, ' ').trim();
+      const url = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}&limit=10`;
+
+      const response = await fetch(url, { signal, credentials: 'same-origin' });
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (!data.results || data.results.length === 0) return null;
+
+      // iTunes album search returns artist info - find best artist match
+      let bestMatch = null;
+      let bestScore = 0;
+
+      for (const album of data.results) {
+        if (!album.artistName || !album.artworkUrl100) continue;
+
+        const score = stringSimilarity(artistName, album.artistName);
+        if (score > bestScore) {
+          bestScore = score;
+          bestMatch = album;
+        }
+      }
+
+      if (!bestMatch || bestScore < 0.7) return null;
+
+      // Use album artwork as artist image (common practice when no dedicated artist image)
+      // Convert to larger size
+      const imageUrl = bestMatch.artworkUrl100.replace(
+        /\/\d+x\d+bb\./,
+        `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
+      );
+
+      await verifyImageLoads(imageUrl, signal);
+      return imageUrl;
+    },
+  },
+
+  // Wikidata via MusicBrainz - slower but good for notable artists
+  {
+    name: 'Wikidata',
+    search: async (artistName, artistId, signal) => {
+      if (!artistId) return null;
+
+      // Get Wikidata ID from MusicBrainz
+      const endpoint = `artist/${artistId}?inc=url-rels&fmt=json`;
+      const mbData = await rateLimitedFetch(endpoint, 'low', signal);
+
+      if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+      if (!mbData.relations) return null;
+
+      const wikidataRel = mbData.relations.find(
+        (r) => r.type === 'wikidata' && r.url?.resource
+      );
+      if (!wikidataRel) return null;
+
+      const wikidataId = wikidataRel.url.resource.split('/').pop();
+
+      // Get image from Wikidata
+      const wikidataUrl = `${WIKIDATA_PROXY}?entity=${encodeURIComponent(wikidataId)}&property=P18`;
+      const wdResponse = await fetch(wikidataUrl, {
+        signal,
+        credentials: 'same-origin',
+      });
+
+      if (!wdResponse.ok) return null;
+
+      const wdData = await wdResponse.json();
+      if (!wdData.claims?.P18?.[0]?.mainsnak?.datavalue?.value) return null;
+
+      const filename = wdData.claims.P18[0].mainsnak.datavalue.value;
+      const encodedFilename = encodeURIComponent(filename.replace(/ /g, '_'));
+      const imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodedFilename}?width=500`;
+
+      // Verify image loads
+      await verifyImageLoads(imageUrl, signal);
+      return imageUrl;
+    },
+  },
+];
+
+// Race all artist image providers - first verified load wins
+async function searchArtistImageRacing(
+  artistName,
+  artistId,
+  externalSignal = null
+) {
+  // If already aborted externally, bail immediately
+  if (externalSignal?.aborted) {
+    return null;
+  }
+
+  const cacheKey = artistId || artistName.toLowerCase();
+
+  if (artistImageCache.has(cacheKey)) {
+    return artistImageCache.get(cacheKey);
+  }
+
+  if (artistImageProviders.length === 0) {
+    artistImageCache.set(cacheKey, null);
+    return null;
+  }
+
+  const controller = new AbortController();
+
+  // Link external signal to our controller - abort providers if parent aborts
+  if (externalSignal) {
+    externalSignal.addEventListener('abort', () => controller.abort(), {
+      once: true,
+    });
+  }
+
+  const providerPromises = artistImageProviders.map(async (provider) => {
+    try {
+      const url = await provider.search(
+        artistName,
+        artistId,
+        controller.signal
+      );
+      if (url) {
+        console.log(
+          `📊 [ARTIST] ✅ ${provider.name} loaded image for "${artistName}"`
+        );
+        return { name: provider.name, url };
+      }
+      return null;
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        // Silent fail for individual providers
+      }
+      return null;
+    }
+  });
+
+  try {
+    const result = await Promise.any(
+      providerPromises.map((p) =>
+        p.then((r) => {
+          if (r?.url) return r;
+          throw new Error('No result');
+        })
+      )
+    );
+
+    controller.abort();
+    artistImageCache.set(cacheKey, result.url);
+    return result.url;
+  } catch (_error) {
+    // Don't cache if aborted - might succeed on retry
+    if (!externalSignal?.aborted) {
+      artistImageCache.set(cacheKey, null);
+    }
+    return null;
+  }
+}
+
 // =============================================================================
 // COVER ART PROVIDER SYSTEM
 // All providers are queried in PARALLEL. First successful result wins,
@@ -290,6 +503,8 @@ function warmupConnections() {
     'https://coverartarchive.org', // Cover Art Archive (redirector)
     'https://archive.org', // Actual image host after CAA redirect
     'https://is1-ssl.mzstatic.com', // Apple/iTunes image CDN
+    'https://e-cdns-images.dzcdn.net', // Deezer artist images CDN
+    'https://commons.wikimedia.org', // Wikidata artist images
   ];
 
   cdns.forEach((origin) => {
@@ -306,22 +521,46 @@ function warmupConnections() {
 
 // Fetch via MusicBrainz proxy (rate limiting handled on backend)
 // priority: 'high' (user searches), 'normal' (displayed data), 'low' (background images)
-async function rateLimitedFetch(endpoint, priority = 'normal') {
+async function rateLimitedFetch(endpoint, priority = 'normal', signal = null) {
+  // Check if already aborted
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
   const now = Date.now();
   const timeSinceLastRequest = now - lastRequestTime;
 
   // Small UI delay to prevent overwhelming the interface
   if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
-    await new Promise((resolve) =>
-      setTimeout(resolve, MIN_REQUEST_INTERVAL - timeSinceLastRequest)
-    );
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        resolve,
+        MIN_REQUEST_INTERVAL - timeSinceLastRequest
+      );
+      if (signal) {
+        signal.addEventListener(
+          'abort',
+          () => {
+            clearTimeout(timeout);
+            reject(new DOMException('Aborted', 'AbortError'));
+          },
+          { once: true }
+        );
+      }
+    });
+  }
+
+  // Check again after delay
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
   }
 
   lastRequestTime = Date.now();
 
   const url = `${MUSICBRAINZ_PROXY}?endpoint=${encodeURIComponent(endpoint)}&priority=${priority}`;
   const response = await fetch(url, {
-    credentials: 'same-origin', // Include cookies for authentication
+    credentials: 'same-origin',
+    signal: signal,
   });
 
   if (!response.ok) {
@@ -1289,226 +1528,15 @@ function showAlbumResults() {
   modalElements.albumResults.classList.remove('hidden');
 }
 
-function calculateLevenshteinDistance(str1, str2) {
-  const len1 = str1.length;
-  const len2 = str2.length;
-  const matrix = Array(len1 + 1)
-    .fill(null)
-    .map(() => Array(len2 + 1).fill(0));
-
-  for (let i = 0; i <= len1; i++) matrix[i][0] = i;
-  for (let j = 0; j <= len2; j++) matrix[0][j] = j;
-
-  for (let i = 1; i <= len1; i++) {
-    for (let j = 1; j <= len2; j++) {
-      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
-      );
-    }
-  }
-
-  return matrix[len1][len2];
-}
-
-function calculateSimilarity(str1, str2) {
-  const distance = calculateLevenshteinDistance(
-    str1.toLowerCase(),
-    str2.toLowerCase()
-  );
-  const maxLength = Math.max(str1.length, str2.length);
-  return maxLength === 0 ? 1 : 1 - distance / maxLength;
-}
-
-async function getWikidataImageFromMusicBrainz(artistId, artistName) {
-  try {
-    const endpoint = `artist/${artistId}?inc=url-rels&fmt=json`;
-    // LOW priority: background image fetching, not critical
-    const data = await rateLimitedFetch(endpoint, 'low');
-
-    if (!data.relations) {
-      return null;
-    }
-
-    const wikidataRel = data.relations.find(
-      (rel) => rel.type === 'wikidata' && rel.url && rel.url.resource
-    );
-
-    if (!wikidataRel) {
-      console.debug(`No Wikidata link found for "${artistName}" (${artistId})`);
-      return null;
-    }
-
-    const wikidataId = wikidataRel.url.resource.split('/').pop();
-    console.debug(`Found Wikidata ID for "${artistName}": ${wikidataId}`);
-
-    // Use Wikidata proxy
-    const wikidataUrl = `${WIKIDATA_PROXY}?entity=${encodeURIComponent(wikidataId)}&property=P18`;
-    const wikidataResponse = await fetch(wikidataUrl, {
-      credentials: 'same-origin',
-    });
-
-    if (!wikidataResponse.ok) {
-      return null;
-    }
-
-    const wikidataData = await wikidataResponse.json();
-
-    if (
-      wikidataData.claims &&
-      wikidataData.claims.P18 &&
-      wikidataData.claims.P18[0]
-    ) {
-      const imageFilename = wikidataData.claims.P18[0].mainsnak.datavalue.value;
-      const encodedFilename = encodeURIComponent(
-        imageFilename.replace(/ /g, '_')
-      );
-      const imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encodedFilename}?width=500`;
-
-      console.debug(
-        `Found Wikidata image for "${artistName}": ${imageFilename}`
-      );
-      return imageUrl;
-    }
-
-    return null;
-  } catch (error) {
-    console.error(`Error fetching Wikidata image for "${artistName}":`, error);
-    return null;
-  }
-}
-
-async function searchDeezerArtistImage(artistName, disambiguation = null) {
-  try {
-    const searchQuery = artistName.replace(/[^\w\s]/g, ' ').trim();
-    const url = `/api/proxy/deezer/artist?q=${encodeURIComponent(searchQuery)}`;
-
-    const response = await fetch(url, {
-      credentials: 'same-origin',
-    });
-
-    if (!response.ok) {
-      console.warn(
-        `Deezer artist image fetch failed for "${artistName}": ${response.status}`
-      );
-      return null;
-    }
-
-    const data = await response.json();
-
-    if (data.data && data.data.length > 0) {
-      const searchNameLower = artistName.toLowerCase();
-      const SIMILARITY_THRESHOLD = 0.7;
-
-      const bestMatch = data.data.find(
-        (artist) => artist.name.toLowerCase() === searchNameLower
-      );
-
-      if (bestMatch) {
-        console.debug(
-          `Exact Deezer match found for "${artistName}"${disambiguation ? ` (${disambiguation})` : ''}: ${bestMatch.name}`
-        );
-
-        const imageUrl =
-          bestMatch.picture_xl ||
-          bestMatch.picture_big ||
-          bestMatch.picture_medium;
-        return imageUrl || null;
-      }
-
-      const candidates = data.data.map((deezerArtist) => ({
-        artist: deezerArtist,
-        similarity: calculateSimilarity(artistName, deezerArtist.name),
-      }));
-
-      candidates.sort((a, b) => b.similarity - a.similarity);
-
-      const topCandidate = candidates[0];
-
-      if (topCandidate.similarity >= SIMILARITY_THRESHOLD) {
-        console.debug(
-          `Similar Deezer match found for "${artistName}"${disambiguation ? ` (${disambiguation})` : ''}: ${topCandidate.artist.name} (similarity: ${topCandidate.similarity.toFixed(2)})`
-        );
-
-        const imageUrl =
-          topCandidate.artist.picture_xl ||
-          topCandidate.artist.picture_big ||
-          topCandidate.artist.picture_medium;
-        return imageUrl || null;
-      } else {
-        console.warn(
-          `No good Deezer match found for "${artistName}"${disambiguation ? ` (${disambiguation})` : ''}. Best candidate: ${topCandidate.artist.name} (similarity: ${topCandidate.similarity.toFixed(2)}, threshold: ${SIMILARITY_THRESHOLD})`
-        );
-      }
-    }
-
-    return null;
-  } catch (error) {
-    console.error(
-      `Error fetching Deezer artist image for "${artistName}":`,
-      error
-    );
-    return null;
-  }
-}
-
-async function searchArtistImage(
-  artistName,
-  disambiguation = null,
-  artistId = null
-) {
-  try {
-    if (artistId && artistImageCache.has(artistId)) {
-      const cached = artistImageCache.get(artistId);
-      console.debug(`Using cached image for "${artistName}" (${artistId})`);
-      return cached;
-    }
-
-    let imageUrl = null;
-
-    // Try Deezer FIRST (fast, no rate limiting)
-    console.debug(`Trying Deezer for "${artistName}"`);
-    imageUrl = await searchDeezerArtistImage(artistName, disambiguation);
-
-    if (imageUrl) {
-      console.debug(`✓ Using Deezer image for "${artistName}"`);
-      if (artistId) {
-        artistImageCache.set(artistId, imageUrl);
-      }
-      return imageUrl;
-    }
-
-    // Fallback to Wikidata only if Deezer fails (slower but higher quality)
-    if (artistId) {
-      console.debug(
-        `Deezer failed, trying MusicBrainz/Wikidata for "${artistName}" (${artistId})`
-      );
-      imageUrl = await getWikidataImageFromMusicBrainz(artistId, artistName);
-
-      if (imageUrl) {
-        console.debug(`✓ Using Wikidata image for "${artistName}"`);
-        artistImageCache.set(artistId, imageUrl);
-        return imageUrl;
-      }
-    }
-
-    if (artistId) {
-      artistImageCache.set(artistId, null);
-    }
-    return null;
-  } catch (error) {
-    console.error('Error fetching artist image:', error);
-    if (artistId) {
-      artistImageCache.set(artistId, null);
-    }
-    return null;
-  }
-}
-
 // Display artist results with lazy-loaded images
 async function displayArtistResults(artists) {
+  // Abort any previous artist image searches
+  if (artistImageAbortController) {
+    artistImageAbortController.abort();
+  }
+  artistImageAbortController = new AbortController();
+  const imageSignal = artistImageAbortController.signal;
+
   modalElements.artistList.innerHTML = '';
 
   // Desktop now uses the same list-style layout as mobile
@@ -1595,12 +1623,12 @@ async function displayArtistResults(artists) {
 
     modalElements.artistList.appendChild(artistEl);
 
-    // Lazy-load artist image in the background
+    // Lazy-load artist image using parallel provider racing
     const searchName =
       displayName.original && !displayName.warning
         ? displayName.primary
         : artist.name;
-    searchArtistImage(searchName, artist.disambiguation, artist.id)
+    searchArtistImageRacing(searchName, artist.id, imageSignal)
       .then((imageUrl) => {
         if (imageUrl) {
           const imageContainer = artistEl.querySelector(
@@ -1641,6 +1669,12 @@ async function displayArtistResults(artists) {
 }
 
 async function selectArtist(artist) {
+  // Abort any ongoing artist image searches - user has made their selection
+  if (artistImageAbortController) {
+    artistImageAbortController.abort();
+    artistImageAbortController = null;
+  }
+
   // Use the enhanced artist with display name
   currentArtist = artist._displayName
     ? {
