@@ -111,6 +111,7 @@ async function cleanupExpiredTokens(pool) {
 module.exports = {
   isTokenValid,
   isTokenUsable,
+  canTokenBeRefreshed,
   generateExtensionToken,
   validateExtensionToken,
   cleanupExpiredTokens,

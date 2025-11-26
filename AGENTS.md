@@ -65,52 +65,42 @@ This includes:
 
 ## Quality Assurance
 
-### Test Suite Overview (~40 Essential Tests)
+### Test Suite Overview
 
 We focus on testing what matters: security, authentication, and critical paths.
 
-**Philosophy**: We deploy with Docker. If it builds and security tests pass, ship it.
-
 #### Core Tests (`npm test`)
 
-- **Security Middleware** (17 tests): CSRF, XSS prevention, rate limiting, security headers
-- **Session Management** (12 tests): Authentication flows, session persistence, security
-- **Auth Utilities** (6 tests): Password hashing, token validation, auth helpers
-- **Basic Smoke Tests** (5 tests): Server initialization, core routes, database connectivity
+- **Security Middleware**: CSRF, XSS prevention, rate limiting, security headers
+- **Session Management**: Authentication flows, session persistence, security
+- **Auth Utilities**: Password hashing, token validation, auth helpers
+- **Basic Smoke Tests**: Server initialization, core routes, database connectivity
 
 #### End-to-End Tests (`npm run test:e2e`)
 
 - **Critical User Journeys**: Registration, login/logout, basic operations, security validation
 
-### What We Don't Test
-
-- **Mock-heavy integrations**: External APIs tested manually in staging
-- **Admin operations**: Low-risk features verified manually
-- **Utility functions**: Simple helpers don't need test overhead
-- **Detailed route testing**: Docker + manual testing catches issues
-
 ### Running Tests
 
 ```bash
-# Before committing (30 seconds)
+# Before committing
 npm test
 
 # End-to-end browser tests
 npm run test:e2e
 
 # Individual test file
-node --test test/security-middleware.test.js
+node --test test/filename.test.js
 
-# Coverage report (optional)
+# Coverage report
 npm run test:coverage
 ```
 
 ### Test Quality Standards
 
 - **Security first**: All security tests must pass before deployment
+- **Aim for good coverage**: Increase test coverage where practical
 - **Manual testing**: Always verify UI/UX changes in browser
-- **Trust Docker**: Container deployment ensures consistency
-- **Quality over coverage**: 40 focused tests > 100 mocked tests
 
 ### Test File Structure
 
