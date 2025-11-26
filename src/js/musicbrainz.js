@@ -493,9 +493,237 @@ let modal = null;
 let modalElements = {};
 let currentLoadingController = null;
 
-// Preload cache for hovering
-const preloadCache = new Map();
-let currentPreloadController = null;
+// =============================================================================
+// ALBUM PROVIDER SYSTEM
+// Parallel racing for album lists - first provider to return wins
+// iTunes/Deezer include cover URLs, MusicBrainz needs separate cover fetch
+// =============================================================================
+
+const albumProviders = [
+  // iTunes - fast, includes cover URLs
+  {
+    name: 'iTunes',
+    search: async (artistName, _artistId, signal) => {
+      const url = `/api/proxy/itunes?term=${encodeURIComponent(artistName)}&limit=50`;
+      const response = await fetch(url, { signal, credentials: 'same-origin' });
+      if (!response.ok) return null;
+
+      const data = await response.json();
+      if (!data.results || data.results.length === 0) return null;
+
+      // Filter to albums from this artist
+      const albums = data.results
+        .filter((item) => {
+          const similarity = stringSimilarity(
+            artistName,
+            item.artistName || ''
+          );
+          return similarity >= 0.7;
+        })
+        .filter((item) => {
+          // Filter to albums/EPs only
+          const type = (item.collectionType || '').toLowerCase();
+          return type === 'album' || type === 'ep';
+        })
+        .map((item) => ({
+          title:
+            item.collectionName?.replace(/\s*\(.*?\)\s*$/g, '').trim() ||
+            item.collectionName,
+          releaseDate: item.releaseDate?.split('T')[0] || '',
+          type: item.collectionType === 'Album' ? 'Album' : 'EP',
+          coverUrl: item.artworkUrl100?.replace(
+            /\/\d+x\d+bb\./,
+            `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
+          ),
+          artistName: item.artistName,
+          source: 'iTunes',
+        }));
+
+      if (albums.length === 0) return null;
+
+      // Sort by release date descending
+      albums.sort((a, b) =>
+        (b.releaseDate || '').localeCompare(a.releaseDate || '')
+      );
+
+      return albums;
+    },
+  },
+
+  // Deezer - fast, includes cover URLs
+  {
+    name: 'Deezer',
+    search: async (artistName, _artistId, signal) => {
+      // First find the artist
+      const artistUrl = `/api/proxy/deezer/artist?q=${encodeURIComponent(artistName)}`;
+      const artistResponse = await fetch(artistUrl, {
+        signal,
+        credentials: 'same-origin',
+      });
+      if (!artistResponse.ok) return null;
+
+      const artistData = await artistResponse.json();
+      if (!artistData.data || artistData.data.length === 0) return null;
+
+      // Find best matching artist
+      let bestArtist = null;
+      let bestScore = 0;
+      for (const artist of artistData.data) {
+        const score = stringSimilarity(artistName, artist.name || '');
+        if (score > bestScore) {
+          bestScore = score;
+          bestArtist = artist;
+        }
+      }
+
+      if (!bestArtist || bestScore < 0.7) return null;
+
+      // Get artist's albums
+      const albumsUrl = `/api/proxy/deezer/artist/${bestArtist.id}/albums`;
+      const albumsResponse = await fetch(albumsUrl, {
+        signal,
+        credentials: 'same-origin',
+      });
+      if (!albumsResponse.ok) return null;
+
+      const albumsData = await albumsResponse.json();
+      if (!albumsData.data || albumsData.data.length === 0) return null;
+
+      const albums = albumsData.data
+        .filter((item) => {
+          const type = (item.record_type || '').toLowerCase();
+          return type === 'album' || type === 'ep';
+        })
+        .map((item) => ({
+          title: item.title,
+          releaseDate: item.release_date || '',
+          type: item.record_type === 'album' ? 'Album' : 'EP',
+          coverUrl: item.cover_xl || item.cover_big || item.cover_medium,
+          artistName: bestArtist.name,
+          source: 'Deezer',
+        }));
+
+      if (albums.length === 0) return null;
+
+      // Sort by release date descending
+      albums.sort((a, b) =>
+        (b.releaseDate || '').localeCompare(a.releaseDate || '')
+      );
+
+      return albums;
+    },
+  },
+
+  // MusicBrainz - authoritative but slower, no cover URLs
+  {
+    name: 'MusicBrainz',
+    search: async (artistName, artistId, signal) => {
+      if (!artistId) return null;
+
+      const endpoint = `release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
+      const data = await rateLimitedFetch(endpoint, 'high', signal);
+
+      let releaseGroups = data['release-groups'] || [];
+
+      const today = new Date();
+      const todayStr = today.toISOString().split('T')[0];
+
+      releaseGroups = releaseGroups.filter((rg) => {
+        const primaryType = rg['primary-type'];
+        const secondaryTypes = rg['secondary-types'] || [];
+        const releaseDate = rg['first-release-date'];
+
+        const isValidType =
+          (primaryType === 'Album' || primaryType === 'EP') &&
+          secondaryTypes.length === 0;
+
+        if (!releaseDate) return false;
+
+        let comparableDate = releaseDate;
+        if (releaseDate.length === 4) {
+          comparableDate = `${releaseDate}-12-31`;
+        } else if (releaseDate.length === 7) {
+          const [year, month] = releaseDate.split('-');
+          const lastDay = new Date(
+            parseInt(year),
+            parseInt(month),
+            0
+          ).getDate();
+          comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
+        }
+
+        return isValidType && comparableDate <= todayStr;
+      });
+
+      if (releaseGroups.length === 0) return null;
+
+      const albums = releaseGroups.map((rg) => ({
+        title: rg.title,
+        releaseDate: rg['first-release-date'] || '',
+        type: rg['primary-type'],
+        releaseGroupId: rg.id,
+        artistName: artistName,
+        source: 'MusicBrainz',
+        // No coverUrl - will be fetched separately via cover art providers
+      }));
+
+      // Sort by release date descending
+      albums.sort((a, b) =>
+        (b.releaseDate || '').localeCompare(a.releaseDate || '')
+      );
+
+      return albums;
+    },
+  },
+];
+
+// Race all album providers - first valid album list wins
+async function searchArtistAlbumsRacing(artistName, artistId) {
+  const controller = new AbortController();
+
+  const providerPromises = albumProviders.map(async (provider) => {
+    try {
+      const albums = await provider.search(
+        artistName,
+        artistId,
+        controller.signal
+      );
+      if (albums && albums.length > 0) {
+        console.log(
+          `📊 [ALBUMS] ✅ ${provider.name} returned ${albums.length} albums for "${artistName}"`
+        );
+        return { name: provider.name, albums };
+      }
+      return null;
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        console.warn(
+          `📊 [ALBUMS] ${provider.name} failed for "${artistName}":`,
+          error.message
+        );
+      }
+      return null;
+    }
+  });
+
+  try {
+    const result = await Promise.any(
+      providerPromises.map((p) =>
+        p.then((r) => {
+          if (r?.albums) return r;
+          throw new Error('No result');
+        })
+      )
+    );
+
+    // Got a winner - abort other providers
+    controller.abort();
+    return result;
+  } catch (_error) {
+    // All providers failed
+    return null;
+  }
+}
 
 // Browser Connection Optimization
 function warmupConnections() {
@@ -646,7 +874,8 @@ function prioritizeSearchResults(artists, searchQuery) {
 }
 
 // Get release groups - ONLY pure Albums and EPs (no secondary types)
-async function getArtistReleaseGroups(artistId) {
+// Legacy function - kept for reference, now using albumProviders system
+async function _getArtistReleaseGroups(artistId) {
   const endpoint = `release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
   // HIGH priority: user clicked on artist, wants to see albums
   const data = await rateLimitedFetch(endpoint, 'high');
@@ -699,32 +928,6 @@ async function getArtistReleaseGroups(artistId) {
 function formatReleaseDate(date) {
   if (!date) return '';
   return date.split('-')[0];
-}
-
-// Preload on hover - metadata only (covers load via provider system when albums render)
-async function preloadArtistAlbums(artist) {
-  if (preloadCache.has(artist.id)) {
-    return preloadCache.get(artist.id);
-  }
-
-  if (currentPreloadController) {
-    currentPreloadController.abort();
-  }
-
-  currentPreloadController = new AbortController();
-
-  try {
-    const releaseGroups = await getArtistReleaseGroups(artist.id);
-
-    if (!currentPreloadController.signal.aborted) {
-      preloadCache.set(artist.id, releaseGroups);
-    }
-
-    return releaseGroups;
-  } catch (_error) {
-    // Silently handle AbortError
-    return null;
-  }
 }
 
 // Intersection Observer (kept for potential future use)
@@ -1441,10 +1644,6 @@ function closeAddAlbumModal() {
     currentLoadingController.abort();
     currentLoadingController = null;
   }
-  if (currentPreloadController) {
-    currentPreloadController.abort();
-    currentPreloadController = null;
-  }
 
   // Disconnect observer
   if (imageObserver) {
@@ -1607,18 +1806,6 @@ async function displayArtistResults(artists) {
       _displayName: displayName,
     };
 
-    // Optimization 1: Preload on hover
-    let preloadTimeout;
-    artistEl.addEventListener('mouseenter', () => {
-      preloadTimeout = setTimeout(() => {
-        preloadArtistAlbums(artist);
-      }, 300);
-    });
-
-    artistEl.addEventListener('mouseleave', () => {
-      clearTimeout(preloadTimeout);
-    });
-
     artistEl.onclick = () => selectArtist(enhancedArtist);
 
     modalElements.artistList.appendChild(artistEl);
@@ -1689,22 +1876,22 @@ async function selectArtist(artist) {
   currentLoadingController = new AbortController();
 
   try {
-    // Use original ID for API calls
-    let releaseGroups = preloadCache.get(artist.id);
+    // Race all album providers - first to return wins
+    const result = await searchArtistAlbumsRacing(
+      currentArtist.name,
+      artist.id
+    );
 
-    if (!releaseGroups) {
-      releaseGroups = await getArtistReleaseGroups(artist.id);
-    }
-
-    if (releaseGroups.length === 0) {
-      showToast('No pure albums or EPs found for this artist', 'error');
+    if (!result || result.albums.length === 0) {
+      showToast('No albums or EPs found for this artist', 'error');
       showAlbumResults();
       modalElements.albumList.innerHTML =
-        '<p class="col-span-full text-center text-gray-500">No standard albums or EPs found.</p>';
+        '<p class="col-span-full text-center text-gray-500">No albums or EPs found.</p>';
       return;
     }
 
-    displayAlbumResultsWithLazyLoading(releaseGroups);
+    // Display albums - some may have coverUrl already (iTunes/Deezer)
+    displayAlbumResultsWithProvider(result.albums, result.name);
   } catch (error) {
     if (error.name === 'AbortError') {
       // Album loading cancelled - expected behavior
@@ -1885,7 +2072,8 @@ async function searchAlbums(query) {
   return releaseGroups;
 }
 
-function displayAlbumResultsWithLazyLoading(releaseGroups) {
+// Legacy function - kept for reference, now using displayAlbumResultsWithProvider
+function _displayAlbumResultsWithLazyLoading(releaseGroups) {
   showAlbumResults();
   modalElements.albumList.innerHTML = '';
 
@@ -1985,6 +2173,125 @@ function displayAlbumResultsWithLazyLoading(releaseGroups) {
 
   // Images are loaded via the parallel cover art provider system
 }
+
+// Display albums from provider system - handles albums with/without coverUrl
+function displayAlbumResultsWithProvider(albums, providerName) {
+  showAlbumResults();
+  modalElements.albumList.innerHTML = '';
+
+  // Convert to format compatible with addAlbumToList
+  const normalizedAlbums = albums.map((album, index) => ({
+    id: album.releaseGroupId || `${providerName}-${index}`,
+    title: album.title,
+    'first-release-date': album.releaseDate,
+    'primary-type': album.type,
+    coverArt: album.coverUrl || null,
+    _source: album.source,
+    _artistName: album.artistName,
+  }));
+
+  // Store globally for addAlbumToList
+  window.currentReleaseGroups = normalizedAlbums;
+
+  modalElements.albumList.className = 'space-y-3';
+
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+  const currentYear = new Date().getFullYear().toString();
+
+  normalizedAlbums.forEach((album, index) => {
+    const albumEl = document.createElement('div');
+    albumEl.dataset.albumIndex = index;
+    albumEl.dataset.albumId = album.id;
+
+    const releaseDate = formatReleaseDate(album['first-release-date']);
+    const albumType = album['primary-type'];
+    const isFreshRelease =
+      album['first-release-date'] &&
+      album['first-release-date'] >= thirtyDaysAgoStr;
+    const isNewRelease =
+      album['first-release-date'] &&
+      album['first-release-date'].startsWith(currentYear);
+
+    albumEl.className =
+      'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
+
+    // If we have a coverUrl from the provider, show it directly
+    const hasCover = !!album.coverArt;
+    const coverHtml = hasCover
+      ? `<img src="${album.coverArt}" 
+             alt="${album.title.replace(/"/g, '&quot;')}"
+             class="w-20 h-20 object-cover rounded-lg"
+             onerror="this.onerror=null; this.parentElement.classList.add('animate-pulse'); window.loadAlbumCoverFallback && window.loadAlbumCoverFallback(this, '${currentArtist.name.replace(/'/g, "\\'")}', '${album.title.replace(/'/g, "\\'")}', '${album.id}', ${index})">`
+      : `<img data-artist="${currentArtist.name.replace(/"/g, '&quot;')}"
+             data-album="${album.title.replace(/"/g, '&quot;')}"
+             data-release-group-id="${album.id}"
+             data-index="${index}"
+             alt="${album.title.replace(/"/g, '&quot;')}"
+             class="w-20 h-20 object-cover rounded-lg"
+             src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">`;
+
+    albumEl.innerHTML = `
+      ${
+        isFreshRelease || isNewRelease
+          ? `
+        <div class="absolute top-2 right-2 flex gap-1 z-10">
+          ${isFreshRelease ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">FRESH</span>` : ''}
+          ${isNewRelease ? `<span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>` : ''}
+        </div>
+      `
+          : ''
+      }
+      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md ${hasCover ? '' : 'bg-gray-700 animate-pulse'}">
+        ${coverHtml}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="font-semibold text-white truncate text-lg" title="${album.title}">${album.title}</div>
+        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
+        <div class="text-xs text-gray-500 mt-1">${currentArtist.name}</div>
+      </div>
+    `;
+
+    // Click handler
+    albumEl.onclick = async () => {
+      const coverContainer = albumEl.querySelector('.album-cover-container');
+
+      coverContainer.innerHTML = `
+        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+        </div>
+      `;
+
+      addAlbumToList(album);
+    };
+
+    modalElements.albumList.appendChild(albumEl);
+
+    // If no cover from provider, use cover art provider system
+    if (!hasCover) {
+      const img = albumEl.querySelector('img');
+      if (img) {
+        loadAlbumCover(img, currentArtist.name, album.title, album.id, index);
+      }
+    }
+  });
+
+  console.log(
+    `📊 [ALBUMS] Displayed ${albums.length} albums from ${providerName}`
+  );
+}
+
+// Fallback cover loader for when provider cover fails
+window.loadAlbumCoverFallback = function (
+  imgElement,
+  artistName,
+  albumTitle,
+  albumId,
+  index
+) {
+  loadAlbumCover(imgElement, artistName, albumTitle, albumId, index);
+};
 
 async function addAlbumToList(releaseGroup) {
   // Show initial loading message

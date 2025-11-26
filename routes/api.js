@@ -1240,6 +1240,38 @@ module.exports = (app, deps) => {
     }
   );
 
+  // Deezer artist albums proxy - get all albums for an artist
+  app.get(
+    '/api/proxy/deezer/artist/:artistId/albums',
+    ensureAuthAPI,
+    cacheConfigs.public,
+    async (req, res) => {
+      try {
+        const { artistId } = req.params;
+        if (!artistId) {
+          return res.status(400).json({ error: 'Artist ID is required' });
+        }
+
+        const url = `https://api.deezer.com/artist/${artistId}/albums?limit=100`;
+        const response = await fetch(url);
+
+        if (!response.ok) {
+          throw new Error(
+            `Deezer API responded with status ${response.status}`
+          );
+        }
+
+        const data = await response.json();
+        res.json(data);
+      } catch (error) {
+        logger.error('Deezer artist albums proxy error:', error);
+        res
+          .status(500)
+          .json({ error: 'Failed to fetch artist albums from Deezer' });
+      }
+    }
+  );
+
   // Proxy for MusicBrainz API to avoid CORS issues and handle rate limiting
   app.get(
     '/api/proxy/musicbrainz',
