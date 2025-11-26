@@ -183,6 +183,7 @@ module.exports = (app, deps) => {
     forgotPasswordRateLimit,
     resetPasswordRateLimit,
   } = require('../middleware/rate-limit');
+  const { ensureValidSpotifyToken } = require('../utils/spotify-auth');
   const { URLSearchParams } = require('url');
   const {
     htmlTemplate,
@@ -1418,30 +1419,18 @@ module.exports = (app, deps) => {
 
   // Search Spotify for an album and return the ID
   app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
-    // Check if user has Spotify authentication
-    if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
-      logger.warn('Spotify API request without authentication');
+    // Ensure valid Spotify token (auto-refresh if needed)
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Spotify auth check failed:', tokenResult.error);
       return res.status(401).json({
-        error:
-          'Not authenticated with Spotify. Please connect your account in Settings.',
-        code: 'NOT_AUTHENTICATED',
+        error: tokenResult.message,
+        code: tokenResult.error,
         service: 'spotify',
       });
     }
 
-    // Check if token is expired (with 5 min buffer for better UX)
-    if (
-      req.user.spotifyAuth.expires_at &&
-      req.user.spotifyAuth.expires_at <= Date.now() + 300000
-    ) {
-      logger.warn('Spotify token expired or expiring soon');
-      return res.status(401).json({
-        error:
-          'Your Spotify connection has expired. Please reconnect in Settings.',
-        code: 'TOKEN_EXPIRED',
-        service: 'spotify',
-      });
-    }
+    const spotifyAuth = tokenResult.spotifyAuth;
 
     const { artist, album } = req.query;
     if (!artist || !album) {
@@ -1454,7 +1443,7 @@ module.exports = (app, deps) => {
       const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
       const resp = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${req.user.spotifyAuth.access_token}`,
+          Authorization: `Bearer ${spotifyAuth.access_token}`,
         },
       });
       if (!resp.ok) {
@@ -1576,24 +1565,18 @@ module.exports = (app, deps) => {
 
   // Search Spotify for a track and return the ID
   app.get('/api/spotify/track', ensureAuthAPI, async (req, res) => {
-    if (!req.user.spotifyAuth || !req.user.spotifyAuth.access_token) {
+    // Ensure valid Spotify token (auto-refresh if needed)
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Spotify auth check failed:', tokenResult.error);
       return res.status(401).json({
-        error: 'Not authenticated with Spotify',
-        code: 'NOT_AUTHENTICATED',
+        error: tokenResult.message,
+        code: tokenResult.error,
         service: 'spotify',
       });
     }
 
-    if (
-      req.user.spotifyAuth.expires_at &&
-      req.user.spotifyAuth.expires_at <= Date.now() + 300000
-    ) {
-      return res.status(401).json({
-        error: 'Spotify connection expired',
-        code: 'TOKEN_EXPIRED',
-        service: 'spotify',
-      });
-    }
+    const spotifyAuth = tokenResult.spotifyAuth;
 
     const { artist, album, track } = req.query;
     if (!artist || !album || !track) {
@@ -1604,7 +1587,7 @@ module.exports = (app, deps) => {
     logger.info('Spotify track search:', artist, '-', album, '-', track);
 
     const headers = {
-      Authorization: `Bearer ${req.user.spotifyAuth.access_token}`,
+      Authorization: `Bearer ${spotifyAuth.access_token}`,
     };
 
     try {
@@ -2148,28 +2131,43 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Check authentication for the target service
-      const authField =
-        targetService === 'spotify' ? 'spotifyAuth' : 'tidalAuth';
-      const auth = req.user[authField];
+      let auth;
 
-      // Check if user has authentication for the service
-      if (!auth || !auth.access_token) {
-        return res.status(401).json({
-          error: `Not authenticated with ${targetService}. Please connect your ${targetService} account in Settings.`,
-          code: 'NOT_AUTHENTICATED',
-          service: targetService,
-        });
-      }
+      // Handle authentication differently for each service
+      if (targetService === 'spotify') {
+        // For Spotify, use automatic token refresh
+        const tokenResult = await ensureValidSpotifyToken(req.user, users);
+        if (!tokenResult.success) {
+          logger.warn('Spotify auth check failed:', tokenResult.error);
+          return res.status(401).json({
+            error: tokenResult.message,
+            code: tokenResult.error,
+            service: 'spotify',
+          });
+        }
+        auth = tokenResult.spotifyAuth;
+      } else {
+        // For Tidal, no refresh token support (offline_access not available)
+        auth = req.user.tidalAuth;
 
-      // Check if token is expired (with 5 min buffer for better UX)
-      if (auth.expires_at && auth.expires_at <= Date.now() + 300000) {
-        logger.warn(`${targetService} token expired or expiring soon`);
-        return res.status(401).json({
-          error: `Your ${targetService} connection has expired. Please reconnect in Settings.`,
-          code: 'TOKEN_EXPIRED',
-          service: targetService,
-        });
+        if (!auth || !auth.access_token) {
+          return res.status(401).json({
+            error: `Not authenticated with Tidal. Please connect your Tidal account in Settings.`,
+            code: 'NOT_AUTHENTICATED',
+            service: 'tidal',
+          });
+        }
+
+        // Check if Tidal token is expired
+        if (auth.expires_at && auth.expires_at <= Date.now() + 300000) {
+          logger.warn('Tidal token expired or expiring soon');
+          return res.status(401).json({
+            error:
+              'Your Tidal connection has expired. Please reconnect in Settings.',
+            code: 'TOKEN_EXPIRED',
+            service: 'tidal',
+          });
+        }
       }
 
       // Check if playlist exists (for confirmation dialog)

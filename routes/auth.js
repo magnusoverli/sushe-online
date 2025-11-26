@@ -13,6 +13,7 @@ module.exports = (app, deps) => {
     spotifyTemplate,
     settingsTemplate,
     isTokenValid,
+    isTokenUsable,
     csrfProtection,
     ensureAuth,
     ensureAuthAPI,
@@ -273,7 +274,9 @@ module.exports = (app, deps) => {
   // Unified Settings Page
   app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
     try {
-      const spotifyValid = isTokenValid(req.user.spotifyAuth);
+      // For Spotify, use isTokenUsable since we can auto-refresh expired tokens
+      const spotifyValid = isTokenUsable(req.user.spotifyAuth);
+      // For Tidal, no refresh token support, so use isTokenValid
       const tidalValid = isTokenValid(req.user.tidalAuth);
 
       const sanitized = sanitizeUser(req.user);

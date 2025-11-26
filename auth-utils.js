@@ -9,6 +9,27 @@ function isTokenValid(token) {
   return true;
 }
 
+/**
+ * Check if a token can be refreshed (has a refresh token)
+ * Used for UI display - even if access token is expired, we can recover
+ */
+function canTokenBeRefreshed(token) {
+  if (!token) return false;
+  return !!token.refresh_token;
+}
+
+/**
+ * Check if token is usable (valid or can be refreshed)
+ * This is for UI purposes - shows "Connected" if we can auto-refresh
+ */
+function isTokenUsable(token) {
+  if (!token) return false;
+  // Token is valid if not expired
+  if (isTokenValid(token)) return true;
+  // Token is usable if it can be refreshed
+  return canTokenBeRefreshed(token);
+}
+
 // Generate a cryptographically secure random token
 function generateExtensionToken() {
   // 32 bytes = 256 bits of entropy, base64url encoded
@@ -89,6 +110,8 @@ async function cleanupExpiredTokens(pool) {
 
 module.exports = {
   isTokenValid,
+  canTokenBeRefreshed,
+  isTokenUsable,
   generateExtensionToken,
   isValidExtensionToken,
   validateExtensionToken,

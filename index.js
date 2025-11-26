@@ -92,7 +92,7 @@ const {
 
 // Import the new settings template
 const { settingsTemplate } = require('./settings-template');
-const { isTokenValid } = require('./auth-utils');
+const { isTokenValid, isTokenUsable } = require('./auth-utils');
 // Databases are initialized in ./db using PostgreSQL
 const {
   users,
@@ -776,6 +776,7 @@ const deps = {
   spotifyTemplate,
   settingsTemplate,
   isTokenValid,
+  isTokenUsable,
   csrfProtection,
   ensureAuth,
   ensureAuthAPI,
