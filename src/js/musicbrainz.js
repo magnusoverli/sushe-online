@@ -761,65 +761,11 @@ function prioritizeSearchResults(artists, searchQuery) {
     .sort((a, b) => b._searchScore - a._searchScore);
 }
 
-// Get release groups - ONLY pure Albums and EPs (no secondary types)
-// Legacy function - kept for reference, now using albumProviders system
-async function _getArtistReleaseGroups(artistId) {
-  const endpoint = `release-group?artist=${artistId}&type=album|ep&fmt=json&limit=100`;
-  // HIGH priority: user clicked on artist, wants to see albums
-  const data = await rateLimitedFetch(endpoint, 'high');
-
-  let releaseGroups = data['release-groups'] || [];
-
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-
-  releaseGroups = releaseGroups.filter((rg) => {
-    const primaryType = rg['primary-type'];
-    const secondaryTypes = rg['secondary-types'] || [];
-    const releaseDate = rg['first-release-date'];
-
-    const isValidType =
-      (primaryType === 'Album' || primaryType === 'EP') &&
-      secondaryTypes.length === 0;
-
-    // Exclude releases without a release date
-    if (!releaseDate) {
-      return false;
-    }
-
-    let hasBeenReleased = true;
-    let comparableDate = releaseDate;
-
-    if (releaseDate.length === 4) {
-      comparableDate = `${releaseDate}-12-31`;
-    } else if (releaseDate.length === 7) {
-      const [year, month] = releaseDate.split('-');
-      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-      comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
-    }
-
-    hasBeenReleased = comparableDate <= todayStr;
-
-    return isValidType && hasBeenReleased;
-  });
-
-  releaseGroups.sort((a, b) => {
-    const dateA = a['first-release-date'] || '0000';
-    const dateB = b['first-release-date'] || '0000';
-    return dateB.localeCompare(dateA);
-  });
-
-  return releaseGroups;
-}
-
 // Convert date to year format
 function formatReleaseDate(date) {
   if (!date) return '';
   return date.split('-')[0];
 }
-
-// Intersection Observer (kept for potential future use)
-let imageObserver = null;
 
 // Show placeholder when no cover art is available
 function showCoverPlaceholder(imgElement) {
@@ -835,34 +781,6 @@ function showCoverPlaceholder(imgElement) {
       </div>
     `;
   }
-}
-
-function setupIntersectionObserver(_releaseGroups, _artistName) {
-  // Clean up existing observer
-  if (imageObserver) {
-    imageObserver.disconnect();
-  }
-
-  // OPTIMIZATION: No longer need to track loaded albums or make API calls
-  // Images load directly via Cover Art Archive redirect URLs
-  // The browser handles loading natively with onerror fallback to registered providers
-
-  // OPTIMIZATION: IntersectionObserver is now minimal
-  // Images load directly via CAA redirect URLs
-  // The observer is kept for potential future use but doesn't trigger API calls
-  imageObserver = new IntersectionObserver(
-    (_entries, _observer) => {
-      // No-op: Images load directly via CAA redirect URLs in the img src
-      // Browser's native lazy loading handles everything
-      // onerror handlers trigger fallback providers if CAA fails
-    },
-    {
-      rootMargin: '100px',
-      threshold: 0.01,
-    }
-  );
-
-  return imageObserver;
 }
 
 async function performSearch() {
@@ -1519,12 +1437,6 @@ function closeAddAlbumModal() {
     currentLoadingController = null;
   }
 
-  // Disconnect observer
-  if (imageObserver) {
-    imageObserver.disconnect();
-    imageObserver = null;
-  }
-
   modal.classList.add('hidden');
   resetModalState();
 
@@ -1944,94 +1856,6 @@ async function searchAlbums(query) {
   });
 
   return releaseGroups;
-}
-
-// Legacy function - kept for reference, now using displayAlbumResultsWithProvider
-function _displayAlbumResultsWithLazyLoading(releaseGroups) {
-  showAlbumResults();
-  modalElements.albumList.innerHTML = '';
-
-  // Store releaseGroups globally for access in addAlbumToList
-  window.currentReleaseGroups = releaseGroups;
-
-  // Desktop now uses the same list-style layout as mobile
-  modalElements.albumList.className = 'space-y-3'; // Changed from grid to vertical list
-
-  const currentYear = new Date().getFullYear().toString();
-
-  // Set up intersection observer
-  const observer = setupIntersectionObserver(releaseGroups, currentArtist.name);
-
-  releaseGroups.forEach((rg, index) => {
-    const albumEl = document.createElement('div');
-    albumEl.dataset.albumIndex = index;
-    albumEl.dataset.albumId = rg.id;
-
-    const releaseDate = formatReleaseDate(rg['first-release-date']);
-    const albumType = rg['primary-type'];
-    const isNewRelease =
-      rg['first-release-date'] &&
-      rg['first-release-date'].startsWith(currentYear);
-
-    // Use horizontal card layout like mobile
-    albumEl.className =
-      'p-4 bg-gray-800 rounded-lg hover:bg-gray-700 cursor-pointer transition-all hover:shadow-lg flex items-center gap-4 relative';
-
-    albumEl.innerHTML = `
-      ${
-        isNewRelease
-          ? `
-        <div class="absolute top-2 right-2 flex gap-1 z-10">
-          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>
-        </div>
-      `
-          : ''
-      }
-      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
-        <img data-artist="${currentArtist.name.replace(/"/g, '&quot;')}"
-            data-album="${rg.title.replace(/"/g, '&quot;')}"
-            data-release-group-id="${rg.id}"
-            data-index="${index}"
-            alt="${rg.title.replace(/"/g, '&quot;')}"
-            class="w-20 h-20 object-cover rounded-lg"
-            src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7">
-      </div>
-      <div class="flex-1 min-w-0">
-        <div class="font-semibold text-white truncate text-lg" title="${rg.title}">${rg.title}</div>
-        <div class="text-sm text-gray-400 mt-1">${releaseDate} • ${albumType}</div>
-        <div class="text-xs text-gray-500 mt-1">${currentArtist.name}</div>
-      </div>
-    `;
-
-    // Click handler
-    albumEl.onclick = async () => {
-      const coverContainer = albumEl.querySelector('.album-cover-container');
-
-      coverContainer.innerHTML = `
-        <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
-          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-        </div>
-      `;
-
-      addAlbumToList(rg);
-    };
-
-    modalElements.albumList.appendChild(albumEl);
-
-    // Trigger cover loading via provider system
-    const img = albumEl.querySelector('img');
-    if (img) {
-      loadAlbumCover(img, currentArtist.name, rg.title, rg.id, index);
-    }
-
-    // Observe for future reference (currently no-op, but kept for potential future use)
-    observer.observe(albumEl);
-  });
-
-  // Store reference to current release groups
-  window.currentReleaseGroups = releaseGroups;
-
-  // Images are loaded via the parallel cover art provider system
 }
 
 // Display albums from provider system - handles albums with/without coverUrl
