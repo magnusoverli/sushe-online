@@ -37,7 +37,7 @@ function normalizeForMatch(str) {
   return str
     .toLowerCase()
     .replace(/[^\w\s]/g, '') // Remove special characters
-    .replace(/\s+/g, ' ')    // Normalize whitespace
+    .replace(/\s+/g, ' ') // Normalize whitespace
     .trim();
 }
 
@@ -45,18 +45,18 @@ function normalizeForMatch(str) {
 function stringSimilarity(str1, str2) {
   const s1 = normalizeForMatch(str1);
   const s2 = normalizeForMatch(str2);
-  
+
   if (s1 === s2) return 1;
   if (s1.length === 0 || s2.length === 0) return 0;
-  
+
   // Check if one contains the other
   if (s1.includes(s2) || s2.includes(s1)) return 0.9;
-  
+
   // Simple word overlap scoring
   const words1 = s1.split(' ');
   const words2 = s2.split(' ');
-  const commonWords = words1.filter(w => words2.includes(w));
-  
+  const commonWords = words1.filter((w) => words2.includes(w));
+
   return commonWords.length / Math.max(words1.length, words2.length);
 }
 
@@ -65,14 +65,14 @@ function stringSimilarity(str1, str2) {
 async function verifyImageLoads(url, signal) {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    
+
     // Handle abort signal
     const abortHandler = () => {
       img.src = ''; // Cancel the load
       reject(new DOMException('Aborted', 'AbortError'));
     };
     signal?.addEventListener('abort', abortHandler);
-    
+
     img.onload = () => {
       signal?.removeEventListener('abort', abortHandler);
       // Check for valid image (not a placeholder)
@@ -82,12 +82,12 @@ async function verifyImageLoads(url, signal) {
         reject(new Error('Invalid image dimensions'));
       }
     };
-    
+
     img.onerror = () => {
       signal?.removeEventListener('abort', abortHandler);
       reject(new Error('Image failed to load'));
     };
-    
+
     img.src = url;
   });
 }
@@ -104,55 +104,61 @@ const coverArtProviders = [
       // Actually load the image to verify it exists
       await verifyImageLoads(url, signal);
       return url;
-    }
+    },
   },
-  
+
   // iTunes/Apple Music - search-based provider with fuzzy matching
   {
     name: 'iTunes',
     search: async (artistName, albumTitle, _releaseGroupId, signal) => {
       if (!artistName || !albumTitle) return null;
-      
+
       try {
         const searchTerm = `${artistName} ${albumTitle}`;
         const apiUrl = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}&limit=10`;
-        
+
         const response = await fetch(apiUrl, {
           signal,
           credentials: 'same-origin',
         });
-        
+
         if (!response.ok) return null;
-        
+
         const data = await response.json();
-        
+
         if (!data.results || data.results.length === 0) return null;
-        
+
         // Find best matching album using fuzzy matching
         let bestMatch = null;
         let bestScore = 0;
-        
+
         for (const album of data.results) {
           if (!album.artworkUrl100) continue;
-          
-          const artistScore = stringSimilarity(artistName, album.artistName || '');
-          const albumScore = stringSimilarity(albumTitle, album.collectionName || '');
-          const combinedScore = (artistScore * 0.4) + (albumScore * 0.6);
-          
+
+          const artistScore = stringSimilarity(
+            artistName,
+            album.artistName || ''
+          );
+          const albumScore = stringSimilarity(
+            albumTitle,
+            album.collectionName || ''
+          );
+          const combinedScore = artistScore * 0.4 + albumScore * 0.6;
+
           if (combinedScore > bestScore) {
             bestScore = combinedScore;
             bestMatch = album;
           }
         }
-        
+
         if (!bestMatch || bestScore < 0.5) return null;
-        
+
         // Convert artwork URL to desired size
         const artworkUrl = bestMatch.artworkUrl100.replace(
           /\/\d+x\d+bb\./,
           `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
         );
-        
+
         // Actually load the image to verify it works
         await verifyImageLoads(artworkUrl, signal);
         return artworkUrl;
@@ -160,14 +166,15 @@ const coverArtProviders = [
         if (error.name === 'AbortError') throw error;
         return null;
       }
-    }
+    },
   },
 ];
 
 // Query all providers in parallel, first to successfully LOAD an image wins
 // Other providers are aborted once we have a winner
 async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
-  const cacheKey = releaseGroupId || `${artistName}::${albumTitle}`.toLowerCase();
+  const cacheKey =
+    releaseGroupId || `${artistName}::${albumTitle}`.toLowerCase();
 
   if (coverArtCache.has(cacheKey)) {
     return coverArtCache.get(cacheKey);
@@ -184,10 +191,17 @@ async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
   // Each provider races to actually LOAD an image (not just return a URL)
   const providerPromises = coverArtProviders.map(async (provider) => {
     try {
-      const url = await provider.search(artistName, albumTitle, releaseGroupId, controller.signal);
-      
+      const url = await provider.search(
+        artistName,
+        albumTitle,
+        releaseGroupId,
+        controller.signal
+      );
+
       if (url) {
-        console.log(`📊 [COVER] ✅ ${provider.name} loaded cover for "${albumTitle}"`);
+        console.log(
+          `📊 [COVER] ✅ ${provider.name} loaded cover for "${albumTitle}"`
+        );
         return { name: provider.name, url };
       }
       return null;
@@ -203,17 +217,18 @@ async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
   try {
     // Race all providers - first successful image load wins
     const result = await Promise.any(
-      providerPromises.map(p => p.then(r => {
-        if (r?.url) return r;
-        throw new Error('No result');
-      }))
+      providerPromises.map((p) =>
+        p.then((r) => {
+          if (r?.url) return r;
+          throw new Error('No result');
+        })
+      )
     );
 
     // Got a winner - abort all other providers
     controller.abort();
     coverArtCache.set(cacheKey, result.url);
     return result.url;
-
   } catch (_error) {
     // All providers failed
     coverArtCache.set(cacheKey, null);
@@ -223,11 +238,21 @@ async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
 
 // Load cover art for an album element - called when albums are rendered
 // The provider system already verifies images load, so we just set the src
-async function loadAlbumCover(imgElement, artistName, albumTitle, releaseGroupId, index) {
+async function loadAlbumCover(
+  imgElement,
+  artistName,
+  albumTitle,
+  releaseGroupId,
+  index
+) {
   try {
     // searchCoverArt races all providers and returns first VERIFIED image URL
-    const coverUrl = await searchCoverArt(artistName, albumTitle, releaseGroupId);
-    
+    const coverUrl = await searchCoverArt(
+      artistName,
+      albumTitle,
+      releaseGroupId
+    );
+
     if (coverUrl && imgElement && imgElement.parentElement) {
       // Store the cover URL for later use
       if (window.currentReleaseGroups && window.currentReleaseGroups[index]) {
@@ -241,7 +266,10 @@ async function loadAlbumCover(imgElement, artistName, albumTitle, releaseGroupId
       showCoverPlaceholder(imgElement);
     }
   } catch (error) {
-    console.warn(`📊 [COVER] Failed to load cover for "${albumTitle}":`, error.message);
+    console.warn(
+      `📊 [COVER] Failed to load cover for "${albumTitle}":`,
+      error.message
+    );
     showCoverPlaceholder(imgElement);
   }
 }
@@ -644,7 +672,12 @@ async function displayDirectAlbumResults(releaseGroups) {
       const existingImg = coverContainer.querySelector('img');
 
       // Capture the cover URL if image successfully loaded
-      if (existingImg && existingImg.src && !existingImg.src.startsWith('data:') && !rg.coverArt) {
+      if (
+        existingImg &&
+        existingImg.src &&
+        !existingImg.src.startsWith('data:') &&
+        !rg.coverArt
+      ) {
         rg.coverArt = existingImg.src;
       }
 

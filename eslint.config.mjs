@@ -83,6 +83,7 @@ export default [
         setInterval: 'readonly',
         requestAnimationFrame: 'readonly',
         AbortController: 'readonly',
+        DOMException: 'readonly',
         Image: 'readonly',
         showToast: 'readonly',
         IntersectionObserver: 'readonly',
