@@ -85,6 +85,7 @@ class ResponseCache {
   shutdown() {
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
+      this.cleanupTimer = undefined;
     }
     this.clear();
   }
@@ -203,7 +204,9 @@ const cacheConfigs = {
   }),
 };
 
+// Export class for testing, plus default instances for app usage
 module.exports = {
+  ResponseCache,
   responseCache,
   cacheConfigs,
 };

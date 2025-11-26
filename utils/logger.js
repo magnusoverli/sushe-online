@@ -13,7 +13,7 @@ const LogLevelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
 
 class Logger {
   constructor(options = {}) {
-    this.level = options.level || LogLevels.INFO;
+    this.level = options.level ?? LogLevels.INFO;
     this.logDir = options.logDir || './logs';
     this.enableConsole = options.enableConsole !== false;
     this.enableFile = options.enableFile !== false;
@@ -21,8 +21,8 @@ class Logger {
     // Async file writing queue
     this.writeQueue = [];
     this.isWriting = false;
-    this.batchSize = 50; // Write logs in batches for better performance
-    this.flushInterval = 1000; // Flush every 1 second
+    this.batchSize = options.batchSize || 50;
+    this.flushInterval = options.flushInterval || 1000;
 
     // Ensure log directory exists
     if (this.enableFile && !fs.existsSync(this.logDir)) {
@@ -118,6 +118,7 @@ class Logger {
   async shutdown() {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
+      this.flushTimer = undefined;
     }
 
     // Flush any remaining logs
@@ -219,4 +220,8 @@ const logger = new Logger({
   enableFile: process.env.NODE_ENV === 'production',
 });
 
+// Export both the class for testing and the default instance for app usage
 module.exports = logger;
+module.exports.Logger = Logger;
+module.exports.LogLevels = LogLevels;
+module.exports.LogLevelNames = LogLevelNames;

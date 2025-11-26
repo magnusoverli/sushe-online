@@ -6,7 +6,7 @@ const {
   AppError,
   createErrorHandler,
   notFoundHandler,
-} = require('../middleware/error-handler-testable.js');
+} = require('../middleware/error-handler.js');
 
 // Mock logger
 const createMockLogger = () => ({

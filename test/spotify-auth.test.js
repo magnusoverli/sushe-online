@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { createSpotifyAuth } = require('../utils/spotify-auth-testable.js');
+const { createSpotifyAuth } = require('../utils/spotify-auth.js');
 
 // Mock logger
 const createMockLogger = () => ({

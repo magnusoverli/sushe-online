@@ -10,9 +10,7 @@ const assert = require('node:assert');
 
 test('ResponseCache should initialize with default options', async () => {
   // Dynamically import to get fresh instance behavior
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   assert.strictEqual(cache.defaultTTL, 60000);
@@ -23,9 +21,7 @@ test('ResponseCache should initialize with default options', async () => {
 });
 
 test('ResponseCache should accept custom options', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache({
     defaultTTL: 30000,
     maxSize: 500,
@@ -40,9 +36,7 @@ test('ResponseCache should accept custom options', async () => {
 });
 
 test('ResponseCache.set and get should work correctly', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   cache.set('test-key', { foo: 'bar' });
@@ -57,9 +51,7 @@ test('ResponseCache.set and get should work correctly', async () => {
 });
 
 test('ResponseCache.get should return null for non-existent key', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   const result = cache.get('non-existent');
@@ -69,9 +61,7 @@ test('ResponseCache.get should return null for non-existent key', async () => {
 });
 
 test('ResponseCache.get should return null and delete expired entries', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   // Set with very short TTL
@@ -87,9 +77,7 @@ test('ResponseCache.get should return null and delete expired entries', async ()
 });
 
 test('ResponseCache.set should use custom TTL', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache({ defaultTTL: 60000 });
 
   const before = Date.now();
@@ -103,9 +91,7 @@ test('ResponseCache.set should use custom TTL', async () => {
 });
 
 test('ResponseCache.invalidate should remove matching entries', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   cache.set('user:123:lists', { lists: [] });
@@ -122,9 +108,7 @@ test('ResponseCache.invalidate should remove matching entries', async () => {
 });
 
 test('ResponseCache.clear should remove all entries', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   cache.set('key1', { data: 1 });
@@ -141,9 +125,7 @@ test('ResponseCache.clear should remove all entries', async () => {
 });
 
 test('ResponseCache.generateKey should create unique keys per user', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   const req1 = {
@@ -170,9 +152,7 @@ test('ResponseCache.generateKey should create unique keys per user', async () =>
 });
 
 test('ResponseCache.cleanup should remove expired entries', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache({ cleanupInterval: 999999 }); // Disable auto cleanup
 
   // Add entries with very short TTL
@@ -193,9 +173,7 @@ test('ResponseCache.cleanup should remove expired entries', async () => {
 });
 
 test('ResponseCache.cleanup should enforce maxSize by removing oldest entries', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache({ maxSize: 3, cleanupInterval: 999999 });
 
   // Add entries with slight delays to ensure different createdAt times
@@ -223,9 +201,7 @@ test('ResponseCache.cleanup should enforce maxSize by removing oldest entries', 
 });
 
 test('ResponseCache.shutdown should clear timer and cache', async () => {
-  const { ResponseCache } = await import(
-    '../middleware/response-cache-testable.js'
-  );
+  const { ResponseCache } = await import('../middleware/response-cache.js');
   const cache = new ResponseCache();
 
   cache.set('key', { data: 'test' });

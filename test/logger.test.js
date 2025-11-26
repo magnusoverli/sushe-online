@@ -10,7 +10,7 @@ const { EventEmitter } = require('events');
 // =============================================================================
 
 test('Logger should initialize with default options', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableFile: false, enableConsole: false });
 
   assert.strictEqual(logger.level, LogLevels.INFO);
@@ -23,7 +23,7 @@ test('Logger should initialize with default options', async () => {
 });
 
 test('Logger should accept custom options', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({
     level: LogLevels.DEBUG,
     enableConsole: false,
@@ -40,7 +40,7 @@ test('Logger should accept custom options', async () => {
 });
 
 test('Logger should create log directory if enableFile is true', async () => {
-  const { Logger } = await import('../utils/logger-testable.js');
+  const { Logger } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -56,7 +56,7 @@ test('Logger should create log directory if enableFile is true', async () => {
 });
 
 test('Logger.formatMessage should return valid JSON', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableFile: false, enableConsole: false });
 
   const formatted = logger.formatMessage(LogLevels.INFO, 'Test message', {
@@ -73,7 +73,7 @@ test('Logger.formatMessage should return valid JSON', async () => {
 });
 
 test('Logger.formatMessage should handle all log levels', async () => {
-  const { Logger, LogLevelNames } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevelNames } = await import('../utils/logger.js');
   const logger = new Logger({ enableFile: false, enableConsole: false });
 
   for (let level = 0; level < LogLevelNames.length; level++) {
@@ -86,7 +86,7 @@ test('Logger.formatMessage should handle all log levels', async () => {
 });
 
 test('Logger.writeToFile should add to queue when enabled', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -106,7 +106,7 @@ test('Logger.writeToFile should add to queue when enabled', async () => {
 });
 
 test('Logger.writeToFile should not queue when enableFile is false', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableFile: false, enableConsole: false });
 
   logger.writeToFile(LogLevels.INFO, '{"test": "message"}');
@@ -117,7 +117,7 @@ test('Logger.writeToFile should not queue when enableFile is false', async () =>
 });
 
 test('Logger.writeToFile should trigger flush when queue reaches batchSize', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -144,7 +144,7 @@ test('Logger.writeToFile should trigger flush when queue reaches batchSize', asy
 });
 
 test('Logger.flushWriteQueue should write to file', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -171,7 +171,7 @@ test('Logger.flushWriteQueue should write to file', async () => {
 });
 
 test('Logger.flushWriteQueue should do nothing if already writing', async () => {
-  const { Logger } = await import('../utils/logger-testable.js');
+  const { Logger } = await import('../utils/logger.js');
   const logger = new Logger({ enableFile: false, enableConsole: false });
 
   logger.isWriting = true;
@@ -187,7 +187,7 @@ test('Logger.flushWriteQueue should do nothing if already writing', async () => 
 });
 
 test('Logger.flushWriteQueue should do nothing if queue is empty', async () => {
-  const { Logger } = await import('../utils/logger-testable.js');
+  const { Logger } = await import('../utils/logger.js');
   const logger = new Logger({ enableFile: false, enableConsole: false });
 
   // Should not throw
@@ -197,7 +197,7 @@ test('Logger.flushWriteQueue should do nothing if queue is empty', async () => {
 });
 
 test('Logger.flushWriteQueue should handle file write errors gracefully', async () => {
-  const { Logger } = await import('../utils/logger-testable.js');
+  const { Logger } = await import('../utils/logger.js');
   const logger = new Logger({
     enableConsole: false,
     enableFile: true,
@@ -218,7 +218,7 @@ test('Logger.flushWriteQueue should handle file write errors gracefully', async 
 });
 
 test('Logger.flushWriteQueue should process remaining items after write', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -245,7 +245,7 @@ test('Logger.flushWriteQueue should process remaining items after write', async 
 });
 
 test('Logger.shutdown should clear timer and flush queue', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -264,7 +264,7 @@ test('Logger.shutdown should clear timer and flush queue', async () => {
 });
 
 test('Logger.writeToConsole should not output when disabled', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableConsole: false, enableFile: false });
 
   // Should not throw
@@ -274,7 +274,7 @@ test('Logger.writeToConsole should not output when disabled', async () => {
 });
 
 test('Logger.writeToConsole should handle object messages', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableConsole: true, enableFile: false });
 
   // Mock console.log to capture output
@@ -295,7 +295,7 @@ test('Logger.writeToConsole should handle object messages', async () => {
 });
 
 test('Logger.writeToConsole should handle string messages', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableConsole: true, enableFile: false });
 
   const logs = [];
@@ -315,7 +315,7 @@ test('Logger.writeToConsole should handle string messages', async () => {
 });
 
 test('Logger.writeToConsole should output meta when present', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({ enableConsole: true, enableFile: false });
 
   const logs = [];
@@ -336,7 +336,7 @@ test('Logger.writeToConsole should output meta when present', async () => {
 });
 
 test('Logger.log should respect log level', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const logger = new Logger({
     level: LogLevels.WARN,
     enableConsole: false,
@@ -361,7 +361,7 @@ test('Logger.log should respect log level', async () => {
 });
 
 test('Logger convenience methods should work', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -383,7 +383,7 @@ test('Logger convenience methods should work', async () => {
 });
 
 test('Logger.requestLogger should log successful requests as info', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -425,7 +425,7 @@ test('Logger.requestLogger should log successful requests as info', async () => 
 });
 
 test('Logger.requestLogger should log error requests as warn', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -461,7 +461,7 @@ test('Logger.requestLogger should log error requests as warn', async () => {
 });
 
 test('Logger should handle level 0 (ERROR)', async () => {
-  const { Logger } = await import('../utils/logger-testable.js');
+  const { Logger } = await import('../utils/logger.js');
   const logger = new Logger({
     level: 0,
     enableConsole: false,
@@ -474,7 +474,7 @@ test('Logger should handle level 0 (ERROR)', async () => {
 });
 
 test('Logger periodic flush timer should trigger flushWriteQueue', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
@@ -499,7 +499,7 @@ test('Logger periodic flush timer should trigger flushWriteQueue', async () => {
 });
 
 test('Logger flushWriteQueue should handle items added during write', async () => {
-  const { Logger, LogLevels } = await import('../utils/logger-testable.js');
+  const { Logger, LogLevels } = await import('../utils/logger.js');
   const tempDir = path.join(os.tmpdir(), `logger-test-${Date.now()}`);
 
   const logger = new Logger({
