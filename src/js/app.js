@@ -4294,6 +4294,49 @@ function updateAlbumFields(albums, isMobile) {
               ? data.trackPickDisplay
               : '';
           trackMobile.textContent = trackDisplay;
+
+          // Update the track play button state and re-attach handler
+          const trackPlayBtn = trackMobile.closest('[data-track-play-btn]');
+          if (trackPlayBtn) {
+            const hasTrack =
+              data.trackPick && data.trackPickDisplay !== 'Select Track';
+            trackPlayBtn.setAttribute(
+              'data-track-play-btn',
+              hasTrack ? 'true' : ''
+            );
+
+            if (hasTrack) {
+              trackPlayBtn.classList.add('cursor-pointer', 'active:opacity-70');
+              // Re-attach click handler (remove old one first to avoid duplicates)
+              const newBtn = trackPlayBtn.cloneNode(true);
+              trackPlayBtn.parentNode.replaceChild(newBtn, trackPlayBtn);
+
+              newBtn.addEventListener(
+                'touchstart',
+                (e) => e.stopPropagation(),
+                { passive: true }
+              );
+              newBtn.addEventListener('touchend', (e) => e.stopPropagation(), {
+                passive: true,
+              });
+              newBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const albumsForPlay = getListData(currentList);
+                const albumForPlay = albumsForPlay && albumsForPlay[index];
+                if (albumForPlay) {
+                  const albumId =
+                    `${albumForPlay.artist}::${albumForPlay.album}::${albumForPlay.release_date || ''}`.toLowerCase();
+                  window.playTrackSafe(albumId);
+                }
+              });
+            } else {
+              trackPlayBtn.classList.remove(
+                'cursor-pointer',
+                'active:opacity-70'
+              );
+            }
+          }
         }
       }
     });
