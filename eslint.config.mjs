@@ -82,6 +82,7 @@ export default [
         clearInterval: 'readonly',
         setInterval: 'readonly',
         requestAnimationFrame: 'readonly',
+        cancelAnimationFrame: 'readonly',
         AbortController: 'readonly',
         DOMException: 'readonly',
         Image: 'readonly',

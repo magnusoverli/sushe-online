@@ -532,3 +532,65 @@
     transform: rotate(360deg);
   }
 }
+
+/* Track change animation */
+.track-change-animation {
+  animation: trackFadeIn 0.3s ease-out;
+}
+
+.art-change-animation {
+  animation: artPulse 0.3s ease-out;
+}
+
+@keyframes trackFadeIn {
+  0% {
+    opacity: 0.5;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes artPulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.95);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Button loading state */
+#miniplayerPlayPause.opacity-50,
+#miniplayerPrev.opacity-50,
+#miniplayerNext.opacity-50 {
+  cursor: wait;
+}
+
+/* Smooth progress bar - GPU accelerated */
+#miniplayerProgressFill {
+  will-change: width;
+  transition: none; /* Disable CSS transition, using RAF */
+}
+
+/* Progress bar during seeking */
+.miniplayer-progress.seeking #miniplayerProgressFill {
+  transition: none;
+}
+
+/* Active control feedback */
+#miniplayerPlayPause:active:not(.opacity-50) {
+  transform: scale(0.9);
+}
+
+#miniplayerPrev:active:not(.opacity-50),
+#miniplayerNext:active:not(.opacity-50) {
+  transform: scale(0.85);
+}

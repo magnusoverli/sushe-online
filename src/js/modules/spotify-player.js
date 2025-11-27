@@ -1,25 +1,32 @@
 /**
- * Spotify Miniplayer - API-Only Mode
+ * Spotify Miniplayer - API-Only Mode (Enhanced UX)
  * Controls playback on Spotify Connect devices via Web API
- * (No local browser playback - requires Extended Quota Mode)
+ * Features: Smooth animations, adaptive polling, optimistic UI
  */
 
 import { showToast } from './utils.js';
 
 // ============ MODULE STATE ============
 let currentPlayback = null;
+let previousTrackId = null;
 let pollInterval = null;
-let progressInterval = null;
+let animationFrameId = null;
 let lastVolume = 50;
 let isSeeking = false;
 let lastPollTime = 0;
 let lastPosition = 0;
+let consecutiveErrors = 0;
+let isPollingPaused = false;
+const pendingActions = new Set();
 
 // Polling configuration
-const POLL_INTERVAL_PLAYING = 1500; // 1.5s when playing
+const POLL_INTERVAL_PLAYING = 2000; // 2s when playing (slightly longer, we interpolate)
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
-const POLL_INTERVAL_IDLE = 3000; // 3s when no playback
-const PROGRESS_UPDATE_INTERVAL = 100; // 100ms for smooth progress bar
+const POLL_INTERVAL_IDLE = 4000; // 4s when no playback
+const POLL_INTERVAL_NEAR_END = 500; // 500ms when track is about to end
+const NEAR_END_THRESHOLD = 5000; // 5 seconds from end
+const MAX_CONSECUTIVE_ERRORS = 5;
+const BASE_BACKOFF_MS = 1000;
 
 // DOM Elements (cached on init)
 let elements = {};
@@ -54,161 +61,168 @@ function getDeviceIcon(type) {
   return icons[type] || icons.Unknown;
 }
 
+/**
+ * Calculate backoff time based on consecutive errors
+ */
+function getBackoffTime() {
+  return Math.min(BASE_BACKOFF_MS * Math.pow(2, consecutiveErrors), 30000);
+}
+
 // ============ API FUNCTIONS ============
+
+/**
+ * Wrapper for API calls with loading state and error handling
+ */
+async function apiCall(url, options = {}, actionName = null) {
+  if (actionName) {
+    pendingActions.add(actionName);
+    updateButtonLoadingState(actionName, true);
+  }
+
+  try {
+    const response = await fetch(url, {
+      credentials: 'same-origin',
+      ...options,
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error ${response.status}`);
+    }
+
+    // Reset error count on success
+    consecutiveErrors = 0;
+
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return await response.json();
+    }
+    return { success: true };
+  } catch (err) {
+    consecutiveErrors++;
+    console.error(`API call failed (${url}):`, err);
+    return null;
+  } finally {
+    if (actionName) {
+      pendingActions.delete(actionName);
+      updateButtonLoadingState(actionName, false);
+    }
+  }
+}
+
+/**
+ * Update button loading state
+ */
+function updateButtonLoadingState(actionName, isLoading) {
+  const buttonMap = {
+    play: elements.playPauseBtn,
+    pause: elements.playPauseBtn,
+    next: elements.nextBtn,
+    previous: elements.prevBtn,
+  };
+
+  const btn = buttonMap[actionName];
+  if (!btn) return;
+
+  if (isLoading) {
+    btn.classList.add('opacity-50', 'pointer-events-none');
+  } else {
+    btn.classList.remove('opacity-50', 'pointer-events-none');
+  }
+}
 
 /**
  * Get current playback state from Spotify API
  */
 async function apiGetPlaybackState() {
-  try {
-    const response = await fetch('/api/spotify/playback', {
-      credentials: 'same-origin',
-    });
-    if (!response.ok) {
-      throw new Error(`API error ${response.status}`);
-    }
-    return await response.json();
-  } catch (err) {
-    console.error('Failed to get playback state:', err);
-    return null;
-  }
+  return apiCall('/api/spotify/playback');
 }
 
 /**
  * Get available devices from Spotify API
  */
 async function apiGetDevices() {
-  try {
-    const response = await fetch('/api/spotify/devices', {
-      credentials: 'same-origin',
-    });
-    if (!response.ok) {
-      throw new Error(`API error ${response.status}`);
-    }
-    const data = await response.json();
-    return data.devices || [];
-  } catch (err) {
-    console.error('Failed to get devices:', err);
-    return [];
-  }
+  const data = await apiCall('/api/spotify/devices');
+  return data?.devices || [];
 }
 
 /**
  * Pause playback via API
  */
 async function apiPause() {
-  try {
-    const response = await fetch('/api/spotify/pause', {
-      method: 'PUT',
-      credentials: 'same-origin',
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to pause:', err);
-    return false;
-  }
+  const result = await apiCall(
+    '/api/spotify/pause',
+    { method: 'PUT' },
+    'pause'
+  );
+  return result !== null;
 }
 
 /**
  * Resume playback via API
  */
 async function apiResume() {
-  try {
-    const response = await fetch('/api/spotify/resume', {
-      method: 'PUT',
-      credentials: 'same-origin',
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to resume:', err);
-    return false;
-  }
+  const result = await apiCall(
+    '/api/spotify/resume',
+    { method: 'PUT' },
+    'play'
+  );
+  return result !== null;
 }
 
 /**
  * Skip to next track via API
  */
 async function apiNext() {
-  try {
-    const response = await fetch('/api/spotify/next', {
-      method: 'POST',
-      credentials: 'same-origin',
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to skip next:', err);
-    return false;
-  }
+  const result = await apiCall('/api/spotify/next', { method: 'POST' }, 'next');
+  return result !== null;
 }
 
 /**
  * Skip to previous track via API
  */
 async function apiPrevious() {
-  try {
-    const response = await fetch('/api/spotify/previous', {
-      method: 'POST',
-      credentials: 'same-origin',
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to skip previous:', err);
-    return false;
-  }
+  const result = await apiCall(
+    '/api/spotify/previous',
+    { method: 'POST' },
+    'previous'
+  );
+  return result !== null;
 }
 
 /**
  * Seek to position via API
  */
 async function apiSeek(positionMs) {
-  try {
-    const response = await fetch('/api/spotify/seek', {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ position_ms: positionMs }),
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to seek:', err);
-    return false;
-  }
+  const result = await apiCall('/api/spotify/seek', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ position_ms: positionMs }),
+  });
+  return result !== null;
 }
 
 /**
  * Set volume via API
  */
 async function apiSetVolume(percent) {
-  try {
-    const response = await fetch('/api/spotify/volume', {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ volume_percent: percent }),
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to set volume:', err);
-    return false;
-  }
+  const result = await apiCall('/api/spotify/volume', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ volume_percent: percent }),
+  });
+  return result !== null;
 }
 
 /**
  * Transfer playback to a device via API
  */
 async function apiTransferPlayback(deviceId, play = false) {
-  try {
-    const response = await fetch('/api/spotify/transfer', {
-      method: 'PUT',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ device_id: deviceId, play }),
-    });
-    return response.ok;
-  } catch (err) {
-    console.error('Failed to transfer playback:', err);
-    return false;
-  }
+  const result = await apiCall('/api/spotify/transfer', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_id: deviceId, play }),
+  });
+  return result !== null;
 }
 
 // ============ DOM CACHING ============
@@ -277,13 +291,16 @@ function showState(state) {
 }
 
 /**
- * Update the progress bar UI
+ * Update the progress bar UI (called from animation frame)
  */
 function updateProgress(position, duration) {
   if (!elements.progressFill || !duration) return;
 
   const percent = Math.min((position / duration) * 100, 100);
+
+  // Use transform for GPU-accelerated animation
   elements.progressFill.style.width = `${percent}%`;
+
   if (elements.progressHandle) {
     elements.progressHandle.style.left = `${percent}%`;
   }
@@ -324,9 +341,9 @@ function updateVolumeIcon(volume) {
 }
 
 /**
- * Update track info display
+ * Update track info display with optional animation
  */
-function updateTrackInfo(track) {
+function updateTrackInfo(track, animate = false) {
   if (!track) {
     if (elements.track) elements.track.textContent = 'No track';
     if (elements.artist) elements.artist.textContent = '—';
@@ -334,7 +351,17 @@ function updateTrackInfo(track) {
       elements.artImg.classList.add('hidden');
       elements.artImg.src = '';
     }
+    previousTrackId = null;
     return;
+  }
+
+  const trackId = track.id || `${track.name}-${track.artists?.[0]?.name}`;
+  const isNewTrack = previousTrackId && previousTrackId !== trackId;
+  previousTrackId = trackId;
+
+  // Apply animation class if this is a track change
+  if (animate && isNewTrack) {
+    animateTrackChange();
   }
 
   if (elements.track) {
@@ -351,10 +378,43 @@ function updateTrackInfo(track) {
   const albumImage =
     track.album?.images?.[0]?.url || track.album?.images?.[1]?.url;
   if (albumImage && elements.artImg) {
-    elements.artImg.src = albumImage;
-    elements.artImg.classList.remove('hidden');
+    // Preload new image before showing
+    if (elements.artImg.src !== albumImage) {
+      const img = new Image();
+      img.onload = () => {
+        if (elements.artImg) {
+          elements.artImg.src = albumImage;
+          elements.artImg.classList.remove('hidden');
+        }
+      };
+      img.src = albumImage;
+    } else {
+      elements.artImg.classList.remove('hidden');
+    }
   } else if (elements.artImg) {
     elements.artImg.classList.add('hidden');
+  }
+}
+
+/**
+ * Animate track change with fade effect
+ */
+function animateTrackChange() {
+  const trackInfo = elements.track?.parentElement;
+  const artContainer = elements.art;
+
+  if (trackInfo) {
+    trackInfo.classList.add('track-change-animation');
+    setTimeout(() => {
+      trackInfo.classList.remove('track-change-animation');
+    }, 300);
+  }
+
+  if (artContainer) {
+    artContainer.classList.add('art-change-animation');
+    setTimeout(() => {
+      artContainer.classList.remove('art-change-animation');
+    }, 300);
   }
 }
 
@@ -428,8 +488,8 @@ function renderDeviceList(devices) {
 
       if (success) {
         showToast(`Playing on ${deviceName}`, 'success');
-        // Refresh playback state after a short delay
-        setTimeout(pollPlaybackState, 500);
+        // Immediate poll to update state
+        scheduleImmediatePoll();
       } else {
         showToast('Failed to transfer playback', 'error');
         showState(currentPlayback ? 'active' : 'inactive');
@@ -476,58 +536,116 @@ function hideDeviceDropdown() {
   elements.deviceDropdown?.classList.add('hidden');
 }
 
-// ============ PROGRESS INTERPOLATION ============
+// ============ PROGRESS ANIMATION (requestAnimationFrame) ============
 
 /**
  * Get interpolated position between polls
  */
 function getInterpolatedPosition() {
   if (!currentPlayback?.is_playing) return lastPosition;
+
   const elapsed = Date.now() - lastPollTime;
-  return Math.min(
-    lastPosition + elapsed,
-    currentPlayback.item?.duration_ms || 0
-  );
+  const interpolated = lastPosition + elapsed;
+  const duration = currentPlayback.item?.duration_ms || 0;
+
+  // Clamp to duration
+  return Math.min(interpolated, duration);
 }
 
 /**
- * Start progress interpolation (runs while playing)
+ * Check if we're near the end of the track
  */
-function startProgressInterpolation() {
-  stopProgressInterpolation();
+function isNearTrackEnd() {
+  if (!currentPlayback?.is_playing) return false;
 
-  progressInterval = setInterval(() => {
-    if (isSeeking) return;
+  const duration = currentPlayback.item?.duration_ms || 0;
+  const position = getInterpolatedPosition();
 
-    const position = getInterpolatedPosition();
-    const duration =
-      currentPlayback?.item?.duration_ms || currentPlayback?.duration || 0;
-    updateProgress(position, duration);
-  }, PROGRESS_UPDATE_INTERVAL);
+  return duration > 0 && duration - position < NEAR_END_THRESHOLD;
 }
 
 /**
- * Stop progress interpolation
+ * Animation frame loop for smooth progress updates
  */
-function stopProgressInterpolation() {
-  if (progressInterval) {
-    clearInterval(progressInterval);
-    progressInterval = null;
+function animationLoop() {
+  if (!currentPlayback?.is_playing || isSeeking) {
+    animationFrameId = null;
+    return;
+  }
+
+  const position = getInterpolatedPosition();
+  const duration = currentPlayback.item?.duration_ms || 0;
+
+  updateProgress(position, duration);
+
+  // Check for track end (auto-advance detection)
+  if (position >= duration && duration > 0) {
+    // Track has ended, poll immediately for next track
+    scheduleImmediatePoll();
+    animationFrameId = null;
+    return;
+  }
+
+  // Continue animation
+  animationFrameId = requestAnimationFrame(animationLoop);
+}
+
+/**
+ * Start the animation loop
+ */
+function startProgressAnimation() {
+  if (animationFrameId) return; // Already running
+  animationFrameId = requestAnimationFrame(animationLoop);
+}
+
+/**
+ * Stop the animation loop
+ */
+function stopProgressAnimation() {
+  if (animationFrameId) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
   }
 }
 
-// ============ API POLLING ============
+// ============ ADAPTIVE POLLING ============
 
 /**
  * Get appropriate polling interval based on current state
  */
 function getPollingInterval() {
+  // If we have errors, apply backoff
+  if (consecutiveErrors > 0) {
+    return getBackoffTime();
+  }
+
   if (!currentPlayback) {
     return POLL_INTERVAL_IDLE;
   }
-  return currentPlayback.is_playing
-    ? POLL_INTERVAL_PLAYING
-    : POLL_INTERVAL_PAUSED;
+
+  if (!currentPlayback.is_playing) {
+    return POLL_INTERVAL_PAUSED;
+  }
+
+  // Poll faster when near track end to catch auto-advance
+  if (isNearTrackEnd()) {
+    return POLL_INTERVAL_NEAR_END;
+  }
+
+  return POLL_INTERVAL_PLAYING;
+}
+
+/**
+ * Schedule an immediate poll (cancels pending poll)
+ */
+function scheduleImmediatePoll() {
+  stopPolling();
+  pollPlaybackState().then(() => {
+    // Resume normal polling after immediate poll
+    if (!isPollingPaused) {
+      startPolling();
+    }
+  });
 }
 
 /**
@@ -536,27 +654,40 @@ function getPollingInterval() {
 async function pollPlaybackState() {
   const state = await apiGetPlaybackState();
 
+  // Handle too many errors
+  if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+    console.warn(
+      `Spotify polling: ${consecutiveErrors} consecutive errors, backing off`
+    );
+  }
+
   if (!state || (!state.device && !state.is_playing)) {
     // No active playback
-    if (currentPlayback) {
+    const hadPlayback = !!currentPlayback;
+    currentPlayback = null;
+    previousTrackId = null;
+    showState('inactive');
+    stopProgressAnimation();
+
+    if (hadPlayback) {
       restartPollingWithNewInterval();
     }
-    currentPlayback = null;
-    showState('inactive');
-    stopProgressInterpolation();
     return;
   }
 
-  // Detect state change
+  // Detect state changes
   const hadPlayback = !!currentPlayback;
   const wasPlaying = currentPlayback?.is_playing;
+  const oldTrackId = currentPlayback?.item?.id;
+  const newTrackId = state.item?.id;
+  const isTrackChange = oldTrackId && newTrackId && oldTrackId !== newTrackId;
 
   // Update state
   currentPlayback = state;
   lastPollTime = Date.now();
   lastPosition = state.progress_ms || 0;
 
-  // Log when playback is detected
+  // Log significant events
   if (!hadPlayback && state) {
     console.log(
       'Playback detected on:',
@@ -564,16 +695,15 @@ async function pollPlaybackState() {
       '- Track:',
       state.item?.name
     );
-    restartPollingWithNewInterval();
-  } else if (wasPlaying !== state.is_playing) {
-    restartPollingWithNewInterval();
+  } else if (isTrackChange) {
+    console.log('Track changed to:', state.item?.name);
   }
 
   // Show active state
   showState('active');
 
-  // Update UI
-  updateTrackInfo(state.item);
+  // Update UI (animate if track changed)
+  updateTrackInfo(state.item, isTrackChange);
   updateProgress(state.progress_ms, state.item?.duration_ms);
   updatePlayPauseIcon(state.is_playing);
   updateDeviceName(state.device);
@@ -587,11 +717,16 @@ async function pollPlaybackState() {
     lastVolume = state.device.volume_percent;
   }
 
-  // Manage progress interpolation
+  // Manage progress animation
   if (state.is_playing) {
-    startProgressInterpolation();
+    startProgressAnimation();
   } else {
-    stopProgressInterpolation();
+    stopProgressAnimation();
+  }
+
+  // Adjust polling interval if state changed
+  if (wasPlaying !== state.is_playing || !hadPlayback) {
+    restartPollingWithNewInterval();
   }
 }
 
@@ -599,6 +734,7 @@ async function pollPlaybackState() {
  * Start polling for playback state
  */
 function startPolling() {
+  if (isPollingPaused) return;
   stopPolling();
 
   // Immediate poll
@@ -612,10 +748,9 @@ function startPolling() {
  * Restart polling with updated interval
  */
 function restartPollingWithNewInterval() {
-  if (pollInterval) {
-    stopPolling();
-    pollInterval = setInterval(pollPlaybackState, getPollingInterval());
-  }
+  if (isPollingPaused || !pollInterval) return;
+  stopPolling();
+  pollInterval = setInterval(pollPlaybackState, getPollingInterval());
 }
 
 /**
@@ -634,21 +769,41 @@ function stopPolling() {
  * Handle play/pause action
  */
 async function handlePlayPause() {
+  if (pendingActions.has('play') || pendingActions.has('pause')) return;
+
   const isPlaying = currentPlayback?.is_playing;
 
   // Optimistic UI update
   updatePlayPauseIcon(!isPlaying);
+  if (currentPlayback) {
+    currentPlayback.is_playing = !isPlaying;
+  }
+
+  // Start/stop animation based on new state
+  if (!isPlaying) {
+    lastPollTime = Date.now();
+    startProgressAnimation();
+  } else {
+    stopProgressAnimation();
+  }
 
   const success = isPlaying ? await apiPause() : await apiResume();
+
   if (!success) {
     // Revert on failure
     updatePlayPauseIcon(isPlaying);
+    if (currentPlayback) {
+      currentPlayback.is_playing = isPlaying;
+    }
+    if (isPlaying) {
+      startProgressAnimation();
+    } else {
+      stopProgressAnimation();
+    }
     showToast('Playback control failed', 'error');
   } else {
-    // Update local state
-    if (currentPlayback) {
-      currentPlayback.is_playing = !isPlaying;
-    }
+    // Poll immediately to sync state
+    scheduleImmediatePoll();
   }
 }
 
@@ -656,9 +811,17 @@ async function handlePlayPause() {
  * Handle next track action
  */
 async function handleNext() {
+  if (pendingActions.has('next')) return;
+
   const success = await apiNext();
   if (success) {
-    setTimeout(pollPlaybackState, 300);
+    // Reset progress immediately for responsive feel
+    lastPosition = 0;
+    lastPollTime = Date.now();
+    updateProgress(0, currentPlayback?.item?.duration_ms || 0);
+
+    // Poll immediately for new track info
+    scheduleImmediatePoll();
   } else {
     showToast('Failed to skip track', 'error');
   }
@@ -668,9 +831,17 @@ async function handleNext() {
  * Handle previous track action
  */
 async function handlePrevious() {
+  if (pendingActions.has('previous')) return;
+
   const success = await apiPrevious();
   if (success) {
-    setTimeout(pollPlaybackState, 300);
+    // Reset progress immediately for responsive feel
+    lastPosition = 0;
+    lastPollTime = Date.now();
+    updateProgress(0, currentPlayback?.item?.duration_ms || 0);
+
+    // Poll immediately for track info
+    scheduleImmediatePoll();
   } else {
     showToast('Failed to skip track', 'error');
   }
@@ -684,10 +855,7 @@ async function handleSeek(positionMs) {
   // Optimistic UI update
   lastPosition = positionMs;
   lastPollTime = Date.now();
-  updateProgress(
-    positionMs,
-    currentPlayback?.item?.duration_ms || currentPlayback?.duration || 0
-  );
+  updateProgress(positionMs, currentPlayback?.item?.duration_ms || 0);
 
   // Debounce the actual seek
   if (seekTimeout) {
@@ -695,8 +863,13 @@ async function handleSeek(positionMs) {
   }
 
   seekTimeout = setTimeout(async () => {
-    await apiSeek(positionMs);
+    const success = await apiSeek(positionMs);
     seekTimeout = null;
+
+    if (success) {
+      // Brief poll to confirm position
+      setTimeout(() => scheduleImmediatePoll(), 200);
+    }
   }, 150);
 }
 
@@ -752,41 +925,8 @@ function setupControls() {
   // Next track
   elements.nextBtn?.addEventListener('click', handleNext);
 
-  // Progress bar seeking
-  elements.progress?.addEventListener('mousedown', (e) => {
-    isSeeking = true;
-    updateSeekPosition(e);
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (isSeeking) updateSeekPosition(e);
-  });
-
-  document.addEventListener('mouseup', (e) => {
-    if (isSeeking) {
-      updateSeekPosition(e, true);
-      isSeeking = false;
-    }
-  });
-
-  function updateSeekPosition(e, commit = false) {
-    if (!elements.progress) return;
-
-    const rect = elements.progress.getBoundingClientRect();
-    const percent = Math.max(
-      0,
-      Math.min(1, (e.clientX - rect.left) / rect.width)
-    );
-    const duration =
-      currentPlayback?.item?.duration_ms || currentPlayback?.duration || 0;
-    const position = Math.floor(percent * duration);
-
-    updateProgress(position, duration);
-
-    if (commit) {
-      handleSeek(position);
-    }
-  }
+  // Progress bar seeking (mouse)
+  setupProgressBarEvents();
 
   // Volume control
   elements.volumeSlider?.addEventListener('input', (e) => {
@@ -826,6 +966,132 @@ function setupControls() {
       volumeSliderContainer.style.width = '0';
     });
   }
+
+  // Keyboard shortcuts
+  setupKeyboardShortcuts();
+}
+
+/**
+ * Set up progress bar mouse/touch events
+ */
+function setupProgressBarEvents() {
+  if (!elements.progress) return;
+
+  function updateSeekPosition(e, commit = false) {
+    const rect = elements.progress.getBoundingClientRect();
+    let clientX;
+
+    // Handle both mouse and touch events
+    if (e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+    } else if (e.changedTouches && e.changedTouches.length > 0) {
+      clientX = e.changedTouches[0].clientX;
+    } else {
+      clientX = e.clientX;
+    }
+
+    const percent = Math.max(
+      0,
+      Math.min(1, (clientX - rect.left) / rect.width)
+    );
+    const duration = currentPlayback?.item?.duration_ms || 0;
+    const position = Math.floor(percent * duration);
+
+    updateProgress(position, duration);
+
+    if (commit) {
+      handleSeek(position);
+    }
+  }
+
+  // Mouse events
+  elements.progress.addEventListener('mousedown', (e) => {
+    isSeeking = true;
+    stopProgressAnimation();
+    updateSeekPosition(e);
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (isSeeking) updateSeekPosition(e);
+  });
+
+  document.addEventListener('mouseup', (e) => {
+    if (isSeeking) {
+      updateSeekPosition(e, true);
+      isSeeking = false;
+      if (currentPlayback?.is_playing) {
+        startProgressAnimation();
+      }
+    }
+  });
+
+  // Touch events for laptop touchscreens
+  elements.progress.addEventListener(
+    'touchstart',
+    (e) => {
+      isSeeking = true;
+      stopProgressAnimation();
+      updateSeekPosition(e);
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    'touchmove',
+    (e) => {
+      if (isSeeking) updateSeekPosition(e);
+    },
+    { passive: true }
+  );
+
+  document.addEventListener('touchend', (e) => {
+    if (isSeeking) {
+      updateSeekPosition(e, true);
+      isSeeking = false;
+      if (currentPlayback?.is_playing) {
+        startProgressAnimation();
+      }
+    }
+  });
+}
+
+/**
+ * Set up keyboard shortcuts for media control
+ */
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Only handle if miniplayer is active and no input is focused
+    if (!currentPlayback) return;
+    if (
+      document.activeElement?.tagName === 'INPUT' ||
+      document.activeElement?.tagName === 'TEXTAREA' ||
+      document.activeElement?.isContentEditable
+    ) {
+      return;
+    }
+
+    switch (e.code) {
+      case 'Space':
+        // Only if not in a form context
+        if (e.target === document.body) {
+          e.preventDefault();
+          handlePlayPause();
+        }
+        break;
+      case 'ArrowLeft':
+        if (e.shiftKey) {
+          e.preventDefault();
+          handlePrevious();
+        }
+        break;
+      case 'ArrowRight':
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleNext();
+        }
+        break;
+    }
+  });
 }
 
 // ============ VISIBILITY HANDLING ============
@@ -835,11 +1101,13 @@ function setupControls() {
  */
 function handleVisibilityChange() {
   if (document.hidden) {
-    // Tab hidden - stop polling to save resources
+    // Tab hidden - pause polling to save resources
+    isPollingPaused = true;
     stopPolling();
-    stopProgressInterpolation();
+    stopProgressAnimation();
   } else {
     // Tab visible - resume polling
+    isPollingPaused = false;
     startPolling();
   }
 }
@@ -878,7 +1146,7 @@ export function initMiniplayer() {
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // Start polling for playback state immediately
-  console.log('Spotify miniplayer: Starting API polling mode');
+  console.log('Spotify miniplayer: Starting enhanced API polling mode');
   startPolling();
 }
 
@@ -887,7 +1155,10 @@ export function initMiniplayer() {
  */
 export function destroyMiniplayer() {
   stopPolling();
-  stopProgressInterpolation();
+  stopProgressAnimation();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   currentPlayback = null;
+  previousTrackId = null;
+  consecutiveErrors = 0;
+  isPollingPaused = false;
 }
