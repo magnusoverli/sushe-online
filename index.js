@@ -108,34 +108,19 @@ const {
   pool,
 } = require('./db');
 
-function sanitizeUser(user) {
-  if (!user) return null;
-  const { _id, email, username, accentColor, lastSelectedList, role } = user;
-  return {
-    _id,
-    email,
-    username,
-    accentColor,
-    timeFormat: user.timeFormat || '24h',
-    dateFormat: user.dateFormat || 'MM/DD/YYYY',
-    lastSelectedList,
-    role,
-    spotifyAuth: !!user.spotifyAuth,
-    tidalAuth: !!user.tidalAuth,
-    musicService: user.musicService || null,
-  };
-}
+// Import auth middleware utilities
+const {
+  sanitizeUser,
+  recordActivity: recordActivityBase,
+  ensureAuth,
+  createEnsureAuthAPI,
+  ensureAdmin,
+  createRateLimitAdminRequest,
+} = require('./middleware/auth');
 
+// Wrapper to use with the users datastore from this module
 function recordActivity(req) {
-  if (req.user) {
-    const timestamp = new Date();
-    req.user.lastActivity = timestamp;
-    users.update(
-      { _id: req.user._id },
-      { $set: { lastActivity: timestamp } },
-      () => {}
-    );
-  }
+  recordActivityBase(req, users);
 }
 
 // Admin code variables
@@ -683,84 +668,25 @@ app.use((req, res, next) => {
 
 // ============ MIDDLEWARE FUNCTIONS ============
 
-// Middleware to protect routes
-function ensureAuth(req, res, next) {
-  if (req.user || (req.isAuthenticated && req.isAuthenticated())) {
-    return next();
-  }
-  res.redirect('/login');
-}
+// ensureAuth is imported from middleware/auth.js
 
-// API middleware to ensure authentication (supports both session and bearer token)
-async function ensureAuthAPI(req, res, next) {
-  // First check if authenticated via session
-  if (req.isAuthenticated()) {
-    recordActivity(req);
-    return next();
-  }
+// Create API auth middleware with dependencies
+const { validateExtensionToken } = require('./auth-utils');
+const ensureAuthAPI = createEnsureAuthAPI({
+  usersAsync,
+  pool,
+  validateExtensionToken,
+  recordActivity: recordActivityBase,
+  logger,
+});
 
-  // Check for bearer token
-  const authHeader = req.get('Authorization');
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.substring(7);
-    const { validateExtensionToken } = require('./auth-utils');
+// ensureAdmin is imported from middleware/auth.js
 
-    try {
-      const userId = await validateExtensionToken(token, pool);
-
-      if (userId) {
-        // Load user and attach to request
-        const user = await usersAsync.findOne({ _id: userId });
-        if (user) {
-          req.user = user;
-          // Mark this as token-based auth for logging
-          req.authMethod = 'token';
-          return next();
-        }
-      }
-    } catch (error) {
-      logger.error('Token validation error in middleware:', error);
-    }
-  }
-
-  res.status(401).json({ error: 'Unauthorized' });
-}
-
-// Middleware to ensure admin
-function ensureAdmin(req, res, next) {
-  if (req.user && req.user.role === 'admin') {
-    return next();
-  }
-  res.status(403).send('Access denied');
-}
-
-// Rate limiting middleware for admin requests
-function rateLimitAdminRequest(req, res, next) {
-  const userKey = req.user._id;
-  const attempts = adminCodeAttempts.get(userKey) || {
-    count: 0,
-    firstAttempt: Date.now(),
-  };
-
-  // Reset if more than 30 minutes since first attempt
-  if (Date.now() - attempts.firstAttempt > 30 * 60 * 1000) {
-    attempts.count = 0;
-    attempts.firstAttempt = Date.now();
-  }
-
-  // Block if too many attempts
-  if (attempts.count >= 5) {
-    logger.warn('User blocked from admin requests', {
-      email: req.user.email,
-      reason: 'too many attempts',
-    });
-    req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
-    return res.redirect('/settings');
-  }
-
-  req.adminAttempts = attempts;
-  next();
-}
+// Create rate limiting middleware for admin requests
+const rateLimitAdminRequest = createRateLimitAdminRequest({
+  adminCodeAttempts,
+  logger,
+});
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');

@@ -2,176 +2,24 @@
 const fetch = globalThis.fetch || require('node-fetch');
 const sharp = require('sharp');
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// Import queue utilities
+const {
+  MusicBrainzQueue,
+  RequestQueue,
+  createMbFetch,
+} = require('../utils/request-queue');
 
-// Smart MusicBrainz request queue with priority and batching
-class MusicBrainzQueue {
-  constructor() {
-    this.queue = [];
-    this.processing = false;
-    this.lastRequestTime = 0;
-    this.minInterval = 1000; // 1 req/second as per MusicBrainz policy
-  }
-
-  async add(url, options, priority = 'normal') {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ url, options, priority, resolve, reject });
-      // Sort by priority: high > normal > low
-      this.queue.sort((a, b) => {
-        const priorityMap = { high: 3, normal: 2, low: 1 };
-        return priorityMap[b.priority] - priorityMap[a.priority];
-      });
-      this.process();
-    });
-  }
-
-  async process() {
-    if (this.processing || this.queue.length === 0) return;
-
-    this.processing = true;
-
-    while (this.queue.length > 0) {
-      const now = Date.now();
-      const timeSinceLastRequest = now - this.lastRequestTime;
-
-      // Wait if we need to respect rate limit
-      if (timeSinceLastRequest < this.minInterval) {
-        await wait(this.minInterval - timeSinceLastRequest);
-      }
-
-      const { url, options, resolve, reject } = this.queue.shift();
-      this.lastRequestTime = Date.now();
-
-      try {
-        const response = await fetch(url, options);
-        resolve(response);
-      } catch (error) {
-        reject(error);
-      }
-    }
-
-    this.processing = false;
-  }
-}
-
-const mbQueue = new MusicBrainzQueue();
-
-function mbFetch(url, options, priority = 'normal') {
-  return mbQueue.add(url, options, priority);
-}
-
-// Image proxy request queue to prevent overwhelming the server
-class RequestQueue {
-  constructor(maxConcurrent = 10) {
-    this.maxConcurrent = maxConcurrent;
-    this.running = 0;
-    this.queue = [];
-  }
-
-  async add(fn) {
-    return new Promise((resolve, reject) => {
-      this.queue.push({ fn, resolve, reject });
-      this.process();
-    });
-  }
-
-  async process() {
-    while (this.running < this.maxConcurrent && this.queue.length > 0) {
-      const { fn, resolve, reject } = this.queue.shift();
-      this.running++;
-
-      fn()
-        .then(resolve)
-        .catch(reject)
-        .finally(() => {
-          this.running--;
-          this.process();
-        });
-    }
-  }
-}
-
+// Create queue instances
+const mbQueue = new MusicBrainzQueue({ fetch });
+const mbFetch = createMbFetch(mbQueue);
 const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
 
-/**
- * Deduplication helpers: Compare list_item values with albums table
- * Return NULL if values match (save storage), return value if different (custom override)
- */
-
-// Cache for album data during batch operations
-const albumCache = new Map();
-
-async function getAlbumData(albumId, pool) {
-  if (!albumId) return null;
-
-  if (albumCache.has(albumId)) {
-    return albumCache.get(albumId);
-  }
-
-  const result = await pool.query(
-    'SELECT artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format FROM albums WHERE album_id = $1',
-    [albumId]
-  );
-
-  const albumData = result.rows[0] || null;
-  albumCache.set(albumId, albumData);
-  return albumData;
-}
-
-function clearAlbumCache() {
-  albumCache.clear();
-}
-
-/**
- * Compare list_item value with albums table value
- * Returns NULL if they match (to save storage), or the value if different (custom override)
- */
-async function getStorableValue(listItemValue, albumId, field, pool) {
-  // No album reference or no value - store as-is
-  if (!albumId || listItemValue === null || listItemValue === undefined) {
-    return listItemValue || null;
-  }
-
-  // Fetch album data
-  const albumData = await getAlbumData(albumId, pool);
-  if (!albumData) {
-    // No matching album in database - store the value
-    return listItemValue || null;
-  }
-
-  // Compare values: if identical, return NULL (save space)
-  // Handle both null/undefined and empty string as "no value"
-  const albumValue = albumData[field];
-  const normalizedListValue = listItemValue === '' ? null : listItemValue;
-  const normalizedAlbumValue = albumValue === '' ? null : albumValue;
-
-  if (normalizedListValue === normalizedAlbumValue) {
-    return null; // Duplicate - don't store
-  }
-
-  return listItemValue; // Different - store custom value
-}
-
-/**
- * Special handler for tracks field (JSONB - needs deep comparison)
- */
-async function getStorableTracksValue(listItemTracks, albumId, pool) {
-  if (!albumId || !listItemTracks) {
-    // JSONB columns need JSON string, not raw array
-    return listItemTracks ? JSON.stringify(listItemTracks) : null;
-  }
-
-  const albumData = await getAlbumData(albumId, pool);
-  if (!albumData || !albumData.tracks) {
-    return JSON.stringify(listItemTracks);
-  }
-
-  // Deep comparison for JSONB
-  const tracksEqual =
-    JSON.stringify(listItemTracks) === JSON.stringify(albumData.tracks);
-  // Return JSON string for JSONB column, or null if duplicate
-  return tracksEqual ? null : JSON.stringify(listItemTracks);
-}
+// Import deduplication helpers
+const {
+  clearAlbumCache,
+  getStorableValue,
+  getStorableTracksValue,
+} = require('../utils/deduplication');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
