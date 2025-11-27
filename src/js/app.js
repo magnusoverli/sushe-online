@@ -2022,6 +2022,54 @@ async function playAlbumOnSpotifyDevice(deviceId) {
   }
 }
 
+// Play album on a specific Spotify Connect device (mobile version using albumId)
+async function playAlbumOnDeviceMobile(albumId, deviceId) {
+  const result = findAlbumByIdentity(albumId);
+  if (!result) {
+    showToast('Album not found', 'error');
+    return;
+  }
+
+  const album = result.album;
+  showToast('Starting playback...', 'info');
+
+  try {
+    // First, search for the album on Spotify to get the ID
+    const searchQuery = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
+    const searchResp = await fetch(`/api/spotify/album?${searchQuery}`, {
+      credentials: 'include',
+    });
+    const searchData = await searchResp.json();
+
+    if (!searchResp.ok || !searchData.id) {
+      showToast(searchData.error || 'Album not found on Spotify', 'error');
+      return;
+    }
+
+    // Now play the album on the device
+    const playResp = await fetch('/api/spotify/play', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        albumId: searchData.id,
+        deviceId: deviceId,
+      }),
+    });
+
+    const playData = await playResp.json();
+
+    if (playResp.ok && playData.success) {
+      showToast(`Now playing "${album.album}"`, 'success');
+    } else {
+      showToast(playData.error || 'Failed to start playback', 'error');
+    }
+  } catch (err) {
+    console.error('Spotify Connect playback error:', err);
+    showToast('Failed to start playback', 'error');
+  }
+}
+
 // Play the selected album on the connected music service
 function playAlbum(index) {
   const albums = getListData(currentList);
@@ -4859,6 +4907,10 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     fab.style.display = 'none';
   }
 
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+  const hasAnyService = hasSpotify || hasTidal;
+
   const actionSheet = document.createElement('div');
   actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
   actionSheet.innerHTML = `
@@ -4874,10 +4926,44 @@ window.showMobileAlbumMenu = function (indexOrElement) {
           <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
         </button>
 
-        <button data-action="play"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
-        </button>
+        <!-- Expandable Play Section -->
+        <div class="play-section">
+          <button data-action="play-toggle"
+                  class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded ${!hasAnyService ? 'opacity-50' : ''}">
+            <span>
+              <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
+            </span>
+            ${hasSpotify ? '<i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-chevron></i>' : ''}
+          </button>
+          
+          <!-- Expandable device list (hidden by default) -->
+          <div data-play-options class="hidden overflow-hidden transition-all duration-200 ease-out" style="max-height: 0;">
+            <div class="ml-4 border-l-2 border-gray-700 pl-4 py-1">
+              <!-- Open in app option -->
+              <button data-action="open-app"
+                      class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                <i class="fas fa-external-link-alt mr-3 text-green-500 text-sm"></i>
+                <span class="text-sm">Open in ${hasSpotify ? 'Spotify' : 'Tidal'}</span>
+              </button>
+              
+              ${
+                hasSpotify
+                  ? `
+              <!-- Spotify Connect devices section -->
+              <div class="mt-1 pt-1 border-t border-gray-800">
+                <div class="px-3 py-1.5 text-xs text-gray-500 uppercase tracking-wide">Spotify Connect</div>
+                <div data-device-list>
+                  <div class="px-3 py-2 text-sm text-gray-400">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading devices...
+                  </div>
+                </div>
+              </div>
+              `
+                  : ''
+              }
+            </div>
+          </div>
+        </div>
 
         <button data-action="move"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
@@ -4901,10 +4987,19 @@ window.showMobileAlbumMenu = function (indexOrElement) {
   // Attach event listeners to buttons
   const backdrop = actionSheet.querySelector('[data-backdrop]');
   const editBtn = actionSheet.querySelector('[data-action="edit"]');
-  const playBtn = actionSheet.querySelector('[data-action="play"]');
+  const playToggleBtn = actionSheet.querySelector(
+    '[data-action="play-toggle"]'
+  );
+  const playOptions = actionSheet.querySelector('[data-play-options]');
+  const chevron = actionSheet.querySelector('[data-chevron]');
+  const openAppBtn = actionSheet.querySelector('[data-action="open-app"]');
+  const deviceList = actionSheet.querySelector('[data-device-list]');
   const moveBtn = actionSheet.querySelector('[data-action="move"]');
   const removeBtn = actionSheet.querySelector('[data-action="remove"]');
   const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+
+  let isPlayExpanded = false;
+  let devicesLoaded = false;
 
   const closeSheet = () => {
     actionSheet.remove();
@@ -4912,6 +5007,104 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     const fabElement = document.getElementById('addAlbumFAB');
     if (fabElement && currentList) {
       fabElement.style.display = 'flex';
+    }
+  };
+
+  // Toggle play options expansion
+  const togglePlayOptions = async () => {
+    if (!hasAnyService) {
+      showToast('No music service connected', 'error');
+      return;
+    }
+
+    // If no Spotify (only Tidal), just play directly
+    if (!hasSpotify) {
+      closeSheet();
+      window.playAlbumSafe(albumId);
+      return;
+    }
+
+    isPlayExpanded = !isPlayExpanded;
+
+    if (isPlayExpanded) {
+      playOptions.classList.remove('hidden');
+      // Trigger reflow for animation
+      void playOptions.offsetHeight;
+      playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
+      if (chevron) chevron.style.transform = 'rotate(180deg)';
+
+      // Load devices if not already loaded
+      if (!devicesLoaded && hasSpotify) {
+        await loadMobileDevices();
+      }
+    } else {
+      playOptions.style.maxHeight = '0';
+      if (chevron) chevron.style.transform = 'rotate(0deg)';
+      setTimeout(() => {
+        if (!isPlayExpanded) playOptions.classList.add('hidden');
+      }, 200);
+    }
+  };
+
+  // Load Spotify devices for mobile
+  const loadMobileDevices = async () => {
+    try {
+      const response = await fetch('/api/spotify/devices', {
+        credentials: 'include',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.devices && data.devices.length > 0) {
+        const deviceItems = data.devices
+          .map((device) => {
+            const icon = getDeviceIcon(device.type);
+            const activeClass = device.is_active
+              ? 'text-green-500'
+              : 'text-gray-400';
+            const activeBadge = device.is_active
+              ? '<span class="ml-auto text-xs text-green-500">(active)</span>'
+              : '';
+            return `
+              <button data-action="play-device" data-device-id="${device.id}"
+                      class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                <i class="${icon} mr-3 ${activeClass} text-sm"></i>
+                <span class="text-sm truncate">${device.name}</span>
+                ${activeBadge}
+              </button>
+            `;
+          })
+          .join('');
+        deviceList.innerHTML = deviceItems;
+
+        // Attach device click handlers
+        deviceList
+          .querySelectorAll('[data-action="play-device"]')
+          .forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const deviceId = btn.dataset.deviceId;
+              closeSheet();
+              playAlbumOnDeviceMobile(albumId, deviceId);
+            });
+          });
+
+        // Update max-height for animation
+        playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
+      } else {
+        deviceList.innerHTML = `
+          <div class="px-3 py-2 text-sm text-gray-500">No devices found</div>
+          <div class="px-3 py-1 text-xs text-gray-600">Open Spotify on a device</div>
+        `;
+        playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
+      }
+      devicesLoaded = true;
+    } catch (err) {
+      console.error('Failed to load devices:', err);
+      deviceList.innerHTML = `
+        <div class="px-3 py-2 text-sm text-red-400">Failed to load devices</div>
+      `;
+      playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
     }
   };
 
@@ -4925,12 +5118,20 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     window.showMobileEditFormSafe(albumId);
   });
 
-  playBtn.addEventListener('click', (e) => {
+  playToggleBtn.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    closeSheet();
-    window.playAlbumSafe(albumId);
+    togglePlayOptions();
   });
+
+  if (openAppBtn) {
+    openAppBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSheet();
+      window.playAlbumSafe(albumId);
+    });
+  }
 
   moveBtn.addEventListener('click', (e) => {
     e.preventDefault();
