@@ -93,7 +93,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 - Chrome extension for [RateYourMusic.com](https://rateyourmusic.com)
 - Right-click any album → Add to your lists
 - Automatic metadata lookup
-- [Get the extension →](browser-extension/)
+- [Get the extension →](https://chromewebstore.google.com/detail/sushe-online-rateyourmusi/dnldndgncdhofafboeafamicpdkbdamk)
 
 </td>
 <td width="50%">
@@ -331,7 +331,7 @@ CSP allows connections to: Spotify, Tidal, Deezer, MusicBrainz, Google Fonts, Wi
 ## 📦 Browser Extension
 
 <p>
-  <a href="browser-extension/"><img src="https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Extension" /></a>
+  <a href="https://chromewebstore.google.com/detail/sushe-online-rateyourmusi/dnldndgncdhofafboeafamicpdkbdamk"><img src="https://img.shields.io/badge/Chrome_Web_Store-Get_Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Web Store" /></a>
 </p>
 
 The **SuShe Online Chrome Extension** supercharges your music discovery by letting you add albums directly from [RateYourMusic.com](https://rateyourmusic.com) with a single right-click.
@@ -348,7 +348,7 @@ The **SuShe Online Chrome Extension** supercharges your music discovery by letti
 
 | Method | Link |
 |--------|------|
-| **Chrome Web Store** | Coming soon |
+| **Chrome Web Store** | [Install from Chrome Web Store](https://chromewebstore.google.com/detail/sushe-online-rateyourmusi/dnldndgncdhofafboeafamicpdkbdamk) |
 | **Manual Install** | [browser-extension/README.md](browser-extension/README.md) |
 
 > 💡 **Tip:** After installing, configure your SuShe Online instance URL in the extension options, then browse RateYourMusic and right-click any album to add it!
