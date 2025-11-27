@@ -40,6 +40,27 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="screenshots/desktop_screenshot.png" alt="Desktop View" width="100%" />
+</p>
+
+<p align="center">
+  <em>Dark aesthetic with Spotify-inspired design — manage your album collection with rich metadata</em>
+</p>
+
+<details>
+<summary><strong>📱 Mobile View</strong></summary>
+
+<p align="center">
+  <img src="screenshots/mobile_nosidebar_screenshot.png" alt="Mobile View" width="350" />
+</p>
+
+</details>
+
+---
+
 ## ✨ Features
 
 <table>
@@ -309,19 +330,28 @@ CSP allows connections to: Spotify, Tidal, Deezer, MusicBrainz, Google Fonts, Wi
 
 ## 📦 Browser Extension
 
-The **SuShe Online Chrome Extension** adds albums from RateYourMusic.com with one click.
+<p>
+  <a href="browser-extension/"><img src="https://img.shields.io/badge/Chrome-Extension-4285F4?style=for-the-badge&logo=googlechrome&logoColor=white" alt="Chrome Extension" /></a>
+</p>
+
+The **SuShe Online Chrome Extension** supercharges your music discovery by letting you add albums directly from [RateYourMusic.com](https://rateyourmusic.com) with a single right-click.
 
 ### Features
 
-- Right-click context menu on RateYourMusic albums
-- Add directly to any of your lists
-- Automatic metadata lookup
-- Cover art and release date included
+- 🖱️ Right-click context menu on any RateYourMusic album page
+- 📋 Add directly to any of your SuShe lists
+- 🔍 Automatic MusicBrainz metadata lookup
+- 🖼️ Cover art and release date included automatically
+- 🚫 Duplicate detection prevents adding the same album twice
 
 ### Installation
 
-- **Chrome Web Store**: Coming soon
-- **Manual**: See [browser-extension/README.md](browser-extension/README.md)
+| Method | Link |
+|--------|------|
+| **Chrome Web Store** | Coming soon |
+| **Manual Install** | [browser-extension/README.md](browser-extension/README.md) |
+
+> 💡 **Tip:** After installing, configure your SuShe Online instance URL in the extension options, then browse RateYourMusic and right-click any album to add it!
 
 ---
 
@@ -389,8 +419,6 @@ Contributions are welcome!
 ## 📄 License
 
 This project is open source. Feel free to use, modify, and distribute.
-
----
 
 ---
 
