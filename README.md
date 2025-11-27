@@ -11,6 +11,16 @@
 <p align="center">
   <a href="https://github.com/magnusoverli/sushe-online/actions/workflows/docker-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/magnusoverli/sushe-online/docker-build.yml?branch=main&style=for-the-badge&logo=github-actions&logoColor=white&label=CI" alt="CI Status" /></a>
   <a href="https://github.com/magnusoverli/sushe-online/pkgs/container/sushe-online"><img src="https://img.shields.io/badge/ghcr.io-container-blue?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" /></a>
+  <img src="https://img.shields.io/badge/node-24+-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
+  <img src="https://img.shields.io/badge/license-MIT-green?style=for-the-badge" alt="License" />
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/code_style-prettier-ff69b4?style=for-the-badge&logo=prettier&logoColor=white" alt="Prettier" />
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=for-the-badge" alt="PRs Welcome" />
+  <a href="https://github.com/magnusoverli/sushe-online/commits/main"><img src="https://img.shields.io/github/last-commit/magnusoverli/sushe-online?style=for-the-badge&logo=github" alt="Last Commit" /></a>
+  <a href="https://github.com/magnusoverli/sushe-online/stargazers"><img src="https://img.shields.io/github/stars/magnusoverli/sushe-online?style=for-the-badge&logo=github" alt="Stars" /></a>
+  <a href="https://github.com/magnusoverli/sushe-online/issues"><img src="https://img.shields.io/github/issues/magnusoverli/sushe-online?style=for-the-badge&logo=github" alt="Issues" /></a>
 </p>
 
 <p align="center">
