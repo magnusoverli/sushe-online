@@ -1184,15 +1184,28 @@ const spotifyTemplate = (user) => `
   ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
   
+  <script>
+    // Global state - must be set before bundle.js loads
+    window.currentUser = ${JSON.stringify(user)};
+    window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
+    
+    // Spotify SDK ready flag - SDK may load before our module
+    window.spotifySDKReady = false;
+    window.onSpotifyWebPlaybackSDKReady = function() {
+      window.spotifySDKReady = true;
+      // If our module has registered a callback, call it
+      if (window.onSpotifyPlayerReady) {
+        window.onSpotifyPlayerReady();
+      }
+    };
+  </script>
+  
   <!-- Spotify Web Playback SDK (loaded only if user has Spotify connected) -->
   ${user?.spotifyAuth ? '<script src="https://sdk.scdn.co/spotify-player.js"></script>' : ''}
   
   <script type="module" src="${asset('/js/bundle.js')}"></script>
 
   <script>
-    // Global state
-    window.currentUser = ${JSON.stringify(user)};
-    window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
 
     function updateViewportHeight() {
       const vh = window.innerHeight * 0.01;

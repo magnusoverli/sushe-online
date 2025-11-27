@@ -418,10 +418,13 @@ export function initMiniplayer() {
   setupControls();
 
   // Wait for SDK to load, then initialize
-  if (window.Spotify) {
+  // The SDK callback is defined in the HTML before the SDK loads
+  if (window.Spotify && window.spotifySDKReady) {
+    // SDK already loaded and ready
     initializePlayer();
   } else {
-    window.onSpotifyWebPlaybackSDKReady = () => {
+    // Register our callback for when SDK becomes ready
+    window.onSpotifyPlayerReady = () => {
       initializePlayer();
     };
   }
