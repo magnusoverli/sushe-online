@@ -390,11 +390,13 @@ const contextMenusComponent = () => `
     <button id="editAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>
-    <button id="playAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <i class="fas fa-play mr-2 w-4 text-center"></i>Play Album...
+    <button id="playAlbumOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-play mr-2 w-4 text-center"></i>Play Album</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
     </button>
-    <button id="moveAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <i class="fas fa-arrow-right mr-2 w-4 text-center"></i>Move to List...
+    <button id="moveAlbumOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-arrow-right mr-2 w-4 text-center"></i>Move to List</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
     </button>
     <button id="removeAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-times mr-2 w-4 text-center"></i>Remove from List
