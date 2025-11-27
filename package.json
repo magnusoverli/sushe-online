@@ -10,7 +10,7 @@
     "build:js": "vite build",
     "watch:css": "postcss src/styles/input.css -o public/styles/output.css --watch",
     "watch:js": "vite build --watch",
-    "test": "npm run lint && c8 node --test test/security-middleware.test.js test/session-management.test.js test/auth-utils.test.js test/validators.test.js test/color-utils.test.js test/logger.test.js test/error-handler.test.js test/spotify-auth.test.js test/retry-wrapper.test.js test/templates.test.js test/basic.test.js",
+    "test": "npm run lint && c8 node --test test/security-middleware.test.js test/session-management.test.js test/auth-utils.test.js test/validators.test.js test/color-utils.test.js test/logger.test.js test/error-handler.test.js test/spotify-auth.test.js test/retry-wrapper.test.js test/templates.test.js test/basic.test.js test/rate-limit.test.js test/response-cache.test.js test/forgot-email.test.js",
     "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov node --test",
     "test:watch": "node --test --watch",
     "test:e2e": "playwright test",
@@ -35,7 +35,6 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
-    "chokidar": "^4.0.3",
     "compression": "^1.7.4",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
@@ -51,9 +50,7 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pg": "^8.11.3",
-    "session-file-store": "^1.5.0",
-    "sharp": "^0.33.5",
-    "sortablejs": "^1.15.6"
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
@@ -70,6 +67,7 @@
     "postcss": "^8.5.3",
     "postcss-cli": "^11.0.1",
     "prettier": "^3.6.2",
+    "session-file-store": "^1.5.0",
     "supertest": "^7.1.3",
     "tailwindcss": "^3.4.17",
     "vite": "^7.0.0"
