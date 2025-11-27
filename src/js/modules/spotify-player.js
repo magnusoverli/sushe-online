@@ -11,7 +11,7 @@ let currentPlayback = null;
 let previousTrackId = null;
 let pollInterval = null;
 let animationFrameId = null;
-let lastVolume = 50;
+let volumeBeforeMute = 50; // Tracks volume before muting for restore
 let isSeeking = false;
 let lastPollTime = 0;
 let lastPosition = 0;
@@ -714,7 +714,10 @@ async function pollPlaybackState() {
       elements.volumeSlider.value = state.device.volume_percent;
     }
     updateVolumeIcon(state.device.volume_percent);
-    lastVolume = state.device.volume_percent;
+    // Only update volumeBeforeMute if volume is > 0 (not muted)
+    if (state.device.volume_percent > 0) {
+      volumeBeforeMute = state.device.volume_percent;
+    }
   }
 
   // Manage progress animation
@@ -880,7 +883,8 @@ let volumeTimeout = null;
 async function handleVolumeChange(percent) {
   // Optimistic UI update
   updateVolumeIcon(percent);
-  if (percent > 0) lastVolume = percent;
+  // Track non-zero volume for mute/unmute restore
+  if (percent > 0) volumeBeforeMute = percent;
 
   // Debounce the actual volume change
   if (volumeTimeout) {
@@ -900,13 +904,15 @@ async function handleMuteToggle() {
   const currentVolume = parseInt(elements.volumeSlider?.value || 50);
 
   if (currentVolume > 0) {
-    lastVolume = currentVolume;
+    // Muting - save current volume before muting
+    volumeBeforeMute = currentVolume;
     if (elements.volumeSlider) elements.volumeSlider.value = 0;
     handleVolumeChange(0);
   } else {
-    const newVolume = lastVolume || 50;
-    if (elements.volumeSlider) elements.volumeSlider.value = newVolume;
-    handleVolumeChange(newVolume);
+    // Unmuting - restore to volume before mute
+    const restoreVolume = volumeBeforeMute || 50;
+    if (elements.volumeSlider) elements.volumeSlider.value = restoreVolume;
+    handleVolumeChange(restoreVolume);
   }
 }
 
@@ -951,21 +957,6 @@ function setupControls() {
       hideDeviceDropdown();
     }
   });
-
-  // Volume slider show/hide on hover
-  const volumeGroup = document.querySelector('.miniplayer-volume-group');
-  const volumeSliderContainer = document.querySelector(
-    '.miniplayer-volume-slider'
-  );
-
-  if (volumeGroup && volumeSliderContainer) {
-    volumeGroup.addEventListener('mouseenter', () => {
-      volumeSliderContainer.style.width = '80px';
-    });
-    volumeGroup.addEventListener('mouseleave', () => {
-      volumeSliderContainer.style.width = '0';
-    });
-  }
 
   // Keyboard shortcuts
   setupKeyboardShortcuts();

@@ -1097,14 +1097,12 @@ const spotifyTemplate = (user) => `
             <!-- Volume & Device Controls (grouped together) -->
             <div class="flex items-center gap-2">
               <!-- Volume Control -->
-              <div class="flex items-center gap-1 miniplayer-volume-group">
+              <div class="flex items-center gap-1">
                 <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
                   <i class="fas fa-volume-up text-xs"></i>
                 </button>
-                <div class="miniplayer-volume-slider w-0 overflow-hidden transition-all duration-200">
-                  <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                    class="w-20 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
-                </div>
+                <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
+                  class="w-16 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
               </div>
               
               <!-- Device Picker -->

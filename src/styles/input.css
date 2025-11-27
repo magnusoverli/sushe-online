@@ -355,11 +355,6 @@
   cursor: pointer;
 }
 
-/* Volume slider show/hide animation */
-.miniplayer-volume-slider {
-  transition: width 0.2s ease;
-}
-
 /* Play/pause button */
 #miniplayerPlayPause {
   transition:
