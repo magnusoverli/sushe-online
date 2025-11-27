@@ -36,7 +36,7 @@
 
 SuShe Online is a web application for music enthusiasts who want to create, organize, and manage their album lists. Discover albums, track your collection, create playlists, and sync them to Spotify or Tidal.
 
-**Built with:** Node.js 24 • Express 5 • PostgreSQL 16 • Tailwind CSS
+**Built with:** Node.js 24 • Express 5 • PostgreSQL 18 • Tailwind CSS
 
 ---
 
@@ -116,7 +116,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 ### Prerequisites
 
 - **Docker & Docker Compose** (recommended)
-- OR Node.js 22+ and PostgreSQL 16+
+- OR Node.js 22+ and PostgreSQL 18+
 
 ### Deploy with Docker
 
