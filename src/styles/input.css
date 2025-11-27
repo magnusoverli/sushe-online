@@ -278,16 +278,42 @@
 
 /* Miniplayer container - desktop only */
 .spotify-miniplayer {
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(17, 24, 39, 0.2) 100%
+  );
 }
 
-/* Progress bar hover state */
-#miniplayerProgress:hover #miniplayerProgressFill {
-  background-color: #1db954; /* Spotify green */
+/* Progress bar styling */
+.miniplayer-progress {
+  position: relative;
+  transition: height 0.15s ease;
 }
 
-#miniplayerProgress:hover #miniplayerProgressHandle {
+.miniplayer-progress:hover {
+  height: 6px;
+}
+
+#miniplayerProgressFill {
+  transition: width 0.1s linear;
+  background: linear-gradient(90deg, #1db954 0%, #1ed760 100%);
+}
+
+.miniplayer-progress:hover #miniplayerProgressFill {
+  background: linear-gradient(90deg, #1ed760 0%, #22d369 100%);
+}
+
+#miniplayerProgressHandle {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.miniplayer-progress:hover #miniplayerProgressHandle {
   opacity: 1;
+  transform: translateY(-50%) scale(1.1);
 }
 
 /* Volume slider styling */
@@ -297,6 +323,11 @@
   background: #374151;
   border-radius: 9999px;
   height: 4px;
+  transition: height 0.15s ease;
+}
+
+#miniplayerVolume:hover {
+  height: 6px;
 }
 
 #miniplayerVolume::-webkit-slider-thumb {
@@ -307,7 +338,8 @@
   background: #fff;
   border-radius: 50%;
   cursor: pointer;
-  transition: transform 0.1s ease;
+  transition: transform 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 #miniplayerVolume::-webkit-slider-thumb:hover {
@@ -323,22 +355,57 @@
   cursor: pointer;
 }
 
-/* Play/pause button hover effect */
+/* Volume slider show/hide animation */
+.miniplayer-volume-slider {
+  transition: width 0.2s ease;
+}
+
+/* Play/pause button */
+#miniplayerPlayPause {
+  transition:
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
 #miniplayerPlayPause:hover {
   background-color: #1db954;
+  transform: scale(1.05);
+}
+
+#miniplayerPlayPause:active {
+  transform: scale(0.95);
 }
 
 /* Smooth transitions for miniplayer states */
 #miniplayerNotConnected,
 #miniplayerPremiumRequired,
 #miniplayerInactive,
-#miniplayerActive {
-  transition: opacity 0.2s ease;
+#miniplayerActive,
+#miniplayerLoading {
+  animation: fadeIn 0.2s ease;
 }
 
-/* Album art placeholder styling */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Album art styling */
 #miniplayerArt {
   background: linear-gradient(135deg, #1f2937, #374151);
+  transition: transform 0.2s ease;
+}
+
+#miniplayerArt:hover {
+  transform: scale(1.02);
+}
+
+#miniplayerArt img {
+  transition: opacity 0.2s ease;
 }
 
 /* Track info truncation */
@@ -349,20 +416,95 @@
   white-space: nowrap;
 }
 
+#miniplayerTrack {
+  transition: color 0.15s ease;
+}
+
 /* Control button hover states */
+#miniplayerPrev,
+#miniplayerNext,
+#miniplayerMute,
+#miniplayerDeviceBtn {
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
 #miniplayerPrev:hover,
 #miniplayerNext:hover,
-#miniplayerMute:hover {
+#miniplayerMute:hover,
+#miniplayerDeviceBtn:hover {
   color: #fff;
   transform: scale(1.1);
 }
 
-#miniplayerPrev,
-#miniplayerNext,
-#miniplayerMute {
-  transition:
-    color 0.15s ease,
-    transform 0.15s ease;
+#miniplayerPrev:active,
+#miniplayerNext:active {
+  transform: scale(0.9);
+}
+
+/* Device dropdown styling */
+#miniplayerDeviceDropdown {
+  animation: slideUp 0.15s ease;
+  backdrop-filter: blur(8px);
+  background: rgba(31, 41, 55, 0.95);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#miniplayerDeviceList {
+  scrollbar-width: thin;
+  scrollbar-color: #4b5563 transparent;
+}
+
+#miniplayerDeviceList::-webkit-scrollbar {
+  width: 4px;
+}
+
+#miniplayerDeviceList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#miniplayerDeviceList::-webkit-scrollbar-thumb {
+  background-color: #4b5563;
+  border-radius: 2px;
+}
+
+/* Device item styling */
+.device-item {
+  transition: background-color 0.15s ease;
+}
+
+.device-item:hover {
+  background-color: rgba(55, 65, 81, 0.8);
+}
+
+.device-item.active {
+  background-color: rgba(34, 197, 94, 0.1);
+}
+
+/* Current device indicator animation */
+#miniplayerCurrentDevice i {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
 }
 
 /* Hide miniplayer on mobile */
@@ -375,4 +517,18 @@
 /* Collapsed sidebar - hide miniplayer content */
 #sidebar.collapsed .spotify-miniplayer {
   display: none;
+}
+
+/* Loading spinner */
+#miniplayerLoading i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }

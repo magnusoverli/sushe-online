@@ -1665,6 +1665,316 @@ module.exports = (app, deps) => {
     }
   });
 
+  // ============ SPOTIFY PLAYBACK CONTROL ENDPOINTS ============
+
+  // Get current playback state
+  app.get('/api/spotify/playback', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player', {
+        headers: {
+          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+        },
+      });
+
+      if (resp.status === 204) {
+        // No active playback
+        return res.json({ is_playing: false, device: null, item: null });
+      }
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        logger.error('Spotify playback state error:', resp.status, errorText);
+        throw new Error(`Spotify API error ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      res.json(data);
+    } catch (err) {
+      logger.error('Spotify playback state error:', err);
+      res.status(500).json({ error: 'Failed to get playback state' });
+    }
+  });
+
+  // Pause playback
+  app.put('/api/spotify/pause', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player/pause', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+        },
+      });
+
+      if (resp.ok || resp.status === 204) {
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify pause error:', err);
+      res
+        .status(500)
+        .json({ error: err.message || 'Failed to pause playback' });
+    }
+  });
+
+  // Resume playback
+  app.put('/api/spotify/resume', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player/play', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+        },
+      });
+
+      if (resp.ok || resp.status === 204) {
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify resume error:', err);
+      res
+        .status(500)
+        .json({ error: err.message || 'Failed to resume playback' });
+    }
+  });
+
+  // Skip to previous track
+  app.post('/api/spotify/previous', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    try {
+      const resp = await fetch(
+        'https://api.spotify.com/v1/me/player/previous',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+          },
+        }
+      );
+
+      if (resp.ok || resp.status === 204) {
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify previous track error:', err);
+      res
+        .status(500)
+        .json({ error: err.message || 'Failed to skip to previous' });
+    }
+  });
+
+  // Skip to next track
+  app.post('/api/spotify/next', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player/next', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+        },
+      });
+
+      if (resp.ok || resp.status === 204) {
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify next track error:', err);
+      res.status(500).json({ error: err.message || 'Failed to skip to next' });
+    }
+  });
+
+  // Seek to position
+  app.put('/api/spotify/seek', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    const { position_ms } = req.body;
+    if (position_ms === undefined || isNaN(parseInt(position_ms))) {
+      return res.status(400).json({ error: 'position_ms is required' });
+    }
+
+    try {
+      const resp = await fetch(
+        `https://api.spotify.com/v1/me/player/seek?position_ms=${parseInt(position_ms)}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+          },
+        }
+      );
+
+      if (resp.ok || resp.status === 204) {
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify seek error:', err);
+      res.status(500).json({ error: err.message || 'Failed to seek' });
+    }
+  });
+
+  // Set volume
+  app.put('/api/spotify/volume', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    const { volume_percent } = req.body;
+    if (volume_percent === undefined || isNaN(parseInt(volume_percent))) {
+      return res.status(400).json({ error: 'volume_percent is required' });
+    }
+
+    const vol = Math.max(0, Math.min(100, parseInt(volume_percent)));
+
+    try {
+      const resp = await fetch(
+        `https://api.spotify.com/v1/me/player/volume?volume_percent=${vol}`,
+        {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+          },
+        }
+      );
+
+      if (resp.ok || resp.status === 204) {
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify volume error:', err);
+      res.status(500).json({ error: err.message || 'Failed to set volume' });
+    }
+  });
+
+  // Transfer playback to a device
+  app.put('/api/spotify/transfer', ensureAuthAPI, async (req, res) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    const { device_id, play } = req.body;
+    if (!device_id) {
+      return res.status(400).json({ error: 'device_id is required' });
+    }
+
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player', {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          device_ids: [device_id],
+          play: play === true,
+        }),
+      });
+
+      if (resp.ok || resp.status === 204) {
+        logger.info('Spotify playback transferred to device:', device_id);
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify transfer error:', err);
+      res
+        .status(500)
+        .json({ error: err.message || 'Failed to transfer playback' });
+    }
+  });
+
   // Search Tidal for an album and return the ID
   app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     if (

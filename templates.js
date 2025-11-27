@@ -1048,19 +1048,17 @@ const spotifyTemplate = (user) => `
           <p class="text-xs text-gray-500">Premium required for playback</p>
         </div>
         
-        <!-- Inactive State (connected but not playing here) -->
+        <!-- Inactive State (connected but not playing) -->
         <div id="miniplayerInactive" class="text-center py-2 hidden">
-          <p class="text-xs text-gray-500 mb-2">Ready to play</p>
-          <button id="miniplayerActivate" class="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-full transition-colors">
-            <i class="fab fa-spotify mr-1"></i>Play on SuShe
-          </button>
+          <p class="text-xs text-gray-500 mb-2">No active playback</p>
+          <p class="text-[10px] text-gray-600">Start playing on any device</p>
         </div>
         
         <!-- Active Player State -->
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
           <div class="flex items-center gap-3 mb-3">
-            <div id="miniplayerArt" class="w-12 h-12 bg-gray-800 rounded flex-shrink-0 overflow-hidden">
+            <div id="miniplayerArt" class="w-14 h-14 bg-gray-800 rounded flex-shrink-0 overflow-hidden shadow-lg">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
             <div class="flex-1 min-w-0">
@@ -1070,10 +1068,10 @@ const spotifyTemplate = (user) => `
           </div>
           
           <!-- Progress Bar -->
-          <div class="mb-2">
-            <div id="miniplayerProgress" class="h-1 bg-gray-700 rounded-full cursor-pointer group relative">
-              <div id="miniplayerProgressFill" class="h-full bg-green-500 rounded-full transition-all duration-100" style="width: 0%"></div>
-              <div id="miniplayerProgressHandle" class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style="left: 0%"></div>
+          <div class="mb-3">
+            <div id="miniplayerProgress" class="miniplayer-progress h-1 bg-gray-700 rounded-full cursor-pointer group relative">
+              <div id="miniplayerProgressFill" class="h-full bg-green-500 rounded-full" style="width: 0%"></div>
+              <div id="miniplayerProgressHandle" class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 shadow-md" style="left: 0%"></div>
             </div>
             <div class="flex justify-between text-[10px] text-gray-500 mt-1">
               <span id="miniplayerTimeElapsed">0:00</span>
@@ -1081,9 +1079,10 @@ const spotifyTemplate = (user) => `
             </div>
           </div>
           
-          <!-- Controls -->
+          <!-- Controls Row -->
           <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
+            <!-- Playback Controls -->
+            <div class="flex items-center gap-1">
               <button id="miniplayerPrev" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
                 <i class="fas fa-step-backward text-sm"></i>
               </button>
@@ -1095,17 +1094,50 @@ const spotifyTemplate = (user) => `
               </button>
             </div>
             
-            <!-- Volume -->
-            <div class="flex items-center gap-2 group/vol">
+            <!-- Volume Control -->
+            <div class="flex items-center gap-1 miniplayer-volume-group">
               <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
-                <i class="fas fa-volume-up text-sm"></i>
+                <i class="fas fa-volume-up text-xs"></i>
               </button>
-              <div class="w-16 hidden group-hover/vol:block">
+              <div class="miniplayer-volume-slider w-0 overflow-hidden transition-all duration-200">
                 <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                  class="w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer accent-green-500">
+                  class="w-16 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+              </div>
+            </div>
+            
+            <!-- Device Picker -->
+            <div class="relative">
+              <button id="miniplayerDeviceBtn" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Devices">
+                <i class="fas fa-desktop text-xs"></i>
+              </button>
+              
+              <!-- Device Dropdown -->
+              <div id="miniplayerDeviceDropdown" class="hidden absolute bottom-full right-0 mb-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                <div class="p-2 border-b border-gray-700">
+                  <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Connect to a device</span>
+                </div>
+                <div id="miniplayerDeviceList" class="max-h-48 overflow-y-auto py-1">
+                  <!-- Device items populated dynamically -->
+                  <div class="text-center py-4 text-gray-500 text-xs">
+                    <i class="fas fa-spinner fa-spin mr-1"></i> Loading devices...
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+          
+          <!-- Current Device Indicator -->
+          <div id="miniplayerCurrentDevice" class="mt-2 text-center">
+            <span class="text-[10px] text-gray-500">
+              <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
+              <span id="miniplayerDeviceName">SuShe Online</span>
+            </span>
+          </div>
+        </div>
+        
+        <!-- Loading State -->
+        <div id="miniplayerLoading" class="hidden text-center py-3">
+          <i class="fas fa-spinner fa-spin text-gray-400"></i>
         </div>
       </div>
     </aside>
