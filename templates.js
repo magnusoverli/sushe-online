@@ -1094,21 +1094,26 @@ const spotifyTemplate = (user) => `
               </button>
             </div>
             
-            <!-- Volume & Device Controls (grouped together) -->
-            <div class="flex items-center gap-2">
-              <!-- Volume Control -->
-              <div class="flex items-center gap-1">
-                <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
-                  <i class="fas fa-volume-up text-xs"></i>
-                </button>
-                <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                  class="w-24 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
-              </div>
-              
-              <!-- Device Picker -->
-              <div class="relative">
-              <button id="miniplayerDeviceBtn" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Devices">
-                <i class="fas fa-desktop text-xs"></i>
+            <!-- Volume Control -->
+            <div class="flex items-center gap-1">
+              <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
+                <i class="fas fa-volume-up text-xs"></i>
+              </button>
+              <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
+                class="w-28 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+            </div>
+          </div>
+          
+          <!-- Current Device Indicator with Device Picker -->
+          <div id="miniplayerCurrentDevice" class="mt-2 flex items-center justify-center gap-2">
+            <span class="text-[10px] text-gray-500">
+              <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
+              <span id="miniplayerDeviceName">Listening on...</span>
+            </span>
+            <!-- Device Picker -->
+            <div class="relative">
+              <button id="miniplayerDeviceBtn" class="p-1 text-green-500 hover:text-green-400 transition-colors" title="Change device">
+                <i class="fas fa-exchange-alt text-xs"></i>
               </button>
               
               <!-- Device Dropdown -->
@@ -1124,15 +1129,6 @@ const spotifyTemplate = (user) => `
                 </div>
               </div>
             </div>
-            </div>
-          </div>
-          
-          <!-- Current Device Indicator -->
-          <div id="miniplayerCurrentDevice" class="mt-2 text-center">
-            <span class="text-[10px] text-gray-500">
-              <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
-              <span id="miniplayerDeviceName">Listening on...</span>
-            </span>
           </div>
         </div>
         
