@@ -294,13 +294,16 @@ const musicServicesSection = (user, spotifyValid, tidalValid) =>
                 ? spotifyValid
                   ? `
                   <span class="text-green-500 text-sm">Connected</span>
+                  <a href="/auth/spotify?force=true" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200" title="Re-login to update permissions">
+                    Reauthorize
+                  </a>
                   <a href="/auth/spotify/disconnect" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
                     Disconnect
                   </a>
                 `
                   : `
                   <span class="text-yellow-500 text-sm">Reconnect required</span>
-                  <a href="/auth/spotify" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm transition duration-200">
+                  <a href="/auth/spotify?force=true" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm transition duration-200">
                     Reconnect
                   </a>
                 `

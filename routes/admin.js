@@ -85,6 +85,12 @@ module.exports = (app, deps) => {
         'user-read-email playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public user-read-playback-state user-modify-playback-state streaming',
       state,
     });
+
+    // Force re-consent if requested (needed when scopes change)
+    if (req.query.force === 'true') {
+      params.set('show_dialog', 'true');
+    }
+
     res.redirect(`https://accounts.spotify.com/authorize?${params.toString()}`);
   });
 
