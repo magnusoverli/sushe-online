@@ -218,7 +218,7 @@ function setupControls() {
     if (!deviceId) return;
 
     try {
-      const token = window.currentUser?.spotifyAuth?.access_token;
+      const token = await fetchSpotifyToken();
       if (!token) return;
 
       const response = await fetch('https://api.spotify.com/v1/me/player', {
@@ -319,10 +319,31 @@ function setupControls() {
 }
 
 /**
+ * Fetch Spotify access token from API
+ */
+async function fetchSpotifyToken() {
+  try {
+    const response = await fetch('/api/spotify/token', {
+      credentials: 'same-origin',
+    });
+    if (!response.ok) {
+      console.error('Failed to fetch Spotify token:', response.status);
+      return null;
+    }
+    const data = await response.json();
+    return data.access_token;
+  } catch (err) {
+    console.error('Error fetching Spotify token:', err);
+    return null;
+  }
+}
+
+/**
  * Initialize the Spotify Web Playback SDK
  */
-function initializePlayer() {
-  const token = window.currentUser?.spotifyAuth?.access_token;
+async function initializePlayer() {
+  // Fetch token from API
+  const token = await fetchSpotifyToken();
   if (!token) {
     console.log('Spotify miniplayer: No access token available');
     showState('not-connected');
@@ -332,10 +353,10 @@ function initializePlayer() {
   // Create the player instance
   player = new window.Spotify.Player({
     name: 'SuShe Online',
-    getOAuthToken: (cb) => {
-      // Always get the latest token
-      const currentToken = window.currentUser?.spotifyAuth?.access_token;
-      cb(currentToken);
+    getOAuthToken: async (cb) => {
+      // Fetch fresh token from API
+      const freshToken = await fetchSpotifyToken();
+      cb(freshToken);
     },
     volume: 0.5,
   });

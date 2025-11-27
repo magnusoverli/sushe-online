@@ -1532,6 +1532,22 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Get Spotify access token for Web Playback SDK
+  app.get('/api/spotify/token', ensureAuthAPI, async (req, res) => {
+    // Ensure valid Spotify token (auto-refresh if needed)
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Spotify token request failed:', tokenResult.error);
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    res.json({ access_token: tokenResult.spotifyAuth.access_token });
+  });
+
   // Get available Spotify Connect devices
   app.get('/api/spotify/devices', ensureAuthAPI, async (req, res) => {
     // Ensure valid Spotify token (auto-refresh if needed)
