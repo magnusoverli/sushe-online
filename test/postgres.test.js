@@ -807,6 +807,88 @@ describe('PgDatastore', () => {
       assert.strictEqual(result[0].country, '');
       assert.strictEqual(result[0].coverImage, '');
     });
+
+    it('should handle all null values to cover || operator branches', async () => {
+      const mockRows = [
+        {
+          _id: 'item1',
+          list_id: 'list123',
+          position: 1,
+          track_pick: null,
+          comments: null,
+          album_id: null, // Test null album_id
+          artist: null, // Test null artist (line 328)
+          album: null, // Test null album (line 329)
+          release_date: null,
+          country: null,
+          genre_1: null,
+          genre_2: null,
+          tracks: null,
+          cover_image: null,
+          cover_image_format: null,
+        },
+      ];
+      mockPool.query = mock.fn(() =>
+        Promise.resolve({ rows: mockRows, rowCount: 1 })
+      );
+
+      const result = await datastore.findWithAlbumData('list123');
+
+      // All || operators should use the fallback values
+      assert.strictEqual(result[0].artist, ''); // Line 328: row.artist || ''
+      assert.strictEqual(result[0].album, ''); // Line 329: row.album || ''
+      assert.strictEqual(result[0].albumId, ''); // Line 330: row.album_id || ''
+      assert.strictEqual(result[0].releaseDate, '');
+      assert.strictEqual(result[0].country, '');
+      assert.strictEqual(result[0].genre1, '');
+      assert.strictEqual(result[0].genre2, '');
+      assert.strictEqual(result[0].trackPick, '');
+      assert.strictEqual(result[0].comments, '');
+      assert.strictEqual(result[0].coverImage, '');
+      assert.strictEqual(result[0].coverImageFormat, '');
+      assert.strictEqual(result[0].tracks, null); // tracks uses || null
+    });
+
+    it('should handle non-null values to cover truthy branches', async () => {
+      const mockRows = [
+        {
+          _id: 'item1',
+          list_id: 'list123',
+          position: 1,
+          track_pick: 'Track 1',
+          comments: 'Great album',
+          album_id: 'album123',
+          artist: 'The Beatles', // Non-null artist
+          album: 'Abbey Road', // Non-null album
+          release_date: '1969-09-26',
+          country: 'UK',
+          genre_1: 'Rock',
+          genre_2: 'Pop',
+          tracks: 17,
+          cover_image: 'cover.jpg',
+          cover_image_format: 'jpg',
+        },
+      ];
+      mockPool.query = mock.fn(() =>
+        Promise.resolve({ rows: mockRows, rowCount: 1 })
+      );
+
+      const result = await datastore.findWithAlbumData('list123');
+
+      // All || operators should use the actual values
+      assert.strictEqual(result[0].artist, 'The Beatles');
+      assert.strictEqual(result[0].album, 'Abbey Road');
+      assert.strictEqual(result[0].albumId, 'album123');
+      assert.strictEqual(result[0].releaseDate, '1969-09-26');
+      assert.strictEqual(result[0].country, 'UK');
+      assert.strictEqual(result[0].genre1, 'Rock');
+      assert.strictEqual(result[0].genre2, 'Pop');
+      assert.strictEqual(result[0].trackPick, 'Track 1');
+      assert.strictEqual(result[0].comments, 'Great album');
+      assert.strictEqual(result[0].coverImage, 'cover.jpg');
+      assert.strictEqual(result[0].coverImageFormat, 'jpg');
+      assert.strictEqual(result[0].tracks, 17);
+    });
   });
 
   describe('_buildWhere edge cases', () => {
