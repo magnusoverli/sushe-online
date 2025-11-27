@@ -1095,7 +1095,7 @@ const spotifyTemplate = (user) => `
             </div>
             
             <!-- Volume Control -->
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-1 mr-1">
               <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
                 <i class="fas fa-volume-up text-xs"></i>
               </button>
@@ -1106,12 +1106,14 @@ const spotifyTemplate = (user) => `
           
           <!-- Current Device Indicator with Device Picker -->
           <div id="miniplayerCurrentDevice" class="mt-2 flex items-center justify-between">
+            <!-- Spacer to balance the device button for centering -->
+            <div class="w-6"></div>
             <span class="text-[10px] text-gray-500">
               <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
               <span id="miniplayerDeviceName">Listening on...</span>
             </span>
             <!-- Device Picker -->
-            <div class="relative">
+            <div class="relative w-6 flex justify-end">
               <button id="miniplayerDeviceBtn" class="p-1 text-green-500 hover:text-green-400 transition-colors" title="Change device">
                 <i class="fas fa-desktop text-xs"></i>
               </button>
