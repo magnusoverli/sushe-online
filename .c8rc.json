@@ -10,6 +10,10 @@
     "src/js/**",
     "browser-extension/**",
     "scripts/**",
+    "routes/**",
+    "index.js",
+    "forgot_email.js",
+    "settings-template.js",
     "vite.config.js",
     "postcss.config.js",
     "tailwind.config.js",
@@ -17,5 +21,6 @@
     "playwright.config.js"
   ],
   "reporter": ["text", "html", "lcov"],
-  "check-coverage": false
+  "check-coverage": false,
+  "exclude-after-remap": false
 }

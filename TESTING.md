@@ -64,15 +64,15 @@ Critical user journeys in real browser:
 - Security header validation
 - Responsive design checks
 
-## What We Don't Test
+## What We Don't Unit Test
 
-We consciously skip testing these areas:
+We consciously skip unit testing these areas (tested via E2E/integration instead):
 
+- **Routes** (`routes/`, `index.js`): Heavy mocks don't reflect Docker reality - E2E tests cover these
 - **Mock-heavy integrations**: External APIs (Spotify, Tidal, Deezer) are tested manually in staging
 - **Admin operations**: Low-risk, admin-only features verified through manual testing
-- **Route mocking**: Heavy mocks don't reflect Docker reality - integration testing is better
-- **Utility functions**: Simple helpers don't warrant test overhead
-- **Logging**: If logging breaks, you'll notice in production logs
+- **Main server file**: Application wiring is tested by running the app in Docker
+- **Simple helpers**: Trivial utilities don't warrant test overhead
 
 ## Testing Philosophy
 
