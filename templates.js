@@ -1058,7 +1058,7 @@ const spotifyTemplate = (user) => `
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
           <div class="flex items-center gap-3 mb-3">
-            <div id="miniplayerArt" class="w-16 h-16 bg-gray-800 rounded flex-shrink-0 overflow-hidden">
+            <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded flex-shrink-0 overflow-hidden">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
             <div class="flex-1 min-w-0">
@@ -1095,7 +1095,7 @@ const spotifyTemplate = (user) => `
             </div>
             
             <!-- Volume Control -->
-            <div class="flex items-center gap-1 mr-1">
+            <div class="flex items-center gap-1 mr-2">
               <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
                 <i class="fas fa-volume-up text-xs"></i>
               </button>
