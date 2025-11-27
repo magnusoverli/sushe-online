@@ -12,7 +12,6 @@ const { PgDatastore } = require('../db/postgres');
 const DATABASE_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!DATABASE_URL) {
-  // eslint-disable-next-line no-console
   console.log('Skipping database tests - no DATABASE_URL configured');
   process.exit(0);
 }

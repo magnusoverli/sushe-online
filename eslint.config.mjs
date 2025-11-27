@@ -124,6 +124,9 @@ export default [
         afterEach: 'readonly',
       },
     },
+    rules: {
+      'no-console': 'off', // Tests often need to mock/test console output
+    },
   },
   {
     files: ['public/service-worker.js'],

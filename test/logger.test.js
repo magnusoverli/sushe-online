@@ -265,12 +265,11 @@ test('Logger.writeToConsole should handle object messages', async () => {
   // Mock console.log to capture output
   const logs = [];
   const originalLog = console.log;
-  // eslint-disable-next-line no-console
+
   console.log = (...args) => logs.push(args);
 
   logger.writeToConsole(LogLevels.INFO, { key: 'value' });
 
-  // eslint-disable-next-line no-console
   console.log = originalLog;
 
   assert.ok(logs.length > 0);
@@ -285,12 +284,11 @@ test('Logger.writeToConsole should handle string messages', async () => {
 
   const logs = [];
   const originalLog = console.log;
-  // eslint-disable-next-line no-console
+
   console.log = (...args) => logs.push(args);
 
   logger.writeToConsole(LogLevels.INFO, 'Simple string');
 
-  // eslint-disable-next-line no-console
   console.log = originalLog;
 
   assert.ok(logs.length > 0);
@@ -305,12 +303,11 @@ test('Logger.writeToConsole should output meta when present', async () => {
 
   const logs = [];
   const originalLog = console.log;
-  // eslint-disable-next-line no-console
+
   console.log = (...args) => logs.push(args);
 
   logger.writeToConsole(LogLevels.INFO, 'Message', { extra: 'data' });
 
-  // eslint-disable-next-line no-console
   console.log = originalLog;
 
   // Should have 2 console.log calls: message and meta
@@ -330,14 +327,13 @@ test('Logger.log should respect log level', async () => {
 
   const logs = [];
   const originalLog = console.log;
-  // eslint-disable-next-line no-console
+
   console.log = (...args) => logs.push(args);
 
   // These should be filtered out (INFO and DEBUG are below WARN)
   logger.log(LogLevels.INFO, 'Should not appear');
   logger.log(LogLevels.DEBUG, 'Should not appear');
 
-  // eslint-disable-next-line no-console
   console.log = originalLog;
 
   assert.strictEqual(logs.length, 0);
