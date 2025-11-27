@@ -630,7 +630,7 @@ async function updatePlaylist(listName, listData = null) {
     musicServicesModule = await import('./modules/music-services.js');
   }
   // If listData not provided, get it from global lists
-  const data = listData !== null ? listData : lists[listName] || [];
+  const data = listData !== null ? listData : getListData(listName) || [];
   return musicServicesModule.updatePlaylist(listName, data);
 }
 window.updatePlaylist = updatePlaylist;
@@ -715,8 +715,8 @@ function initializeImportConflictHandling() {
     conflictModal.classList.add('hidden');
 
     try {
-      // Get existing list
-      const existingList = lists[pendingImportFilename] || [];
+      // Get existing list data using helper function
+      const existingList = getListData(pendingImportFilename) || [];
 
       // Merge the lists (avoiding duplicates based on artist + album)
       const existingKeys = new Set(existingList.map(getAlbumKey));
@@ -1417,7 +1417,7 @@ function initializeContextMenu() {
 
     try {
       // Pass both list name and list data for track validation
-      const listData = lists[currentContextList] || [];
+      const listData = getListData(currentContextList) || [];
       await updatePlaylist(currentContextList, listData);
     } catch (err) {
       console.error('Update playlist failed', err);
@@ -5915,7 +5915,18 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const names = JSON.parse(cachedLists);
       names.forEach((name) => {
-        if (!lists[name]) lists[name] = [];
+        if (!lists[name]) {
+          // Initialize with metadata object structure (data loaded later)
+          lists[name] = {
+            name: name,
+            year: null,
+            isOfficial: false,
+            count: 0,
+            _data: null,
+            updatedAt: null,
+            createdAt: null,
+          };
+        }
       });
       updateListNav();
     } catch (err) {
