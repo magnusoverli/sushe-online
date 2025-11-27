@@ -1130,7 +1130,7 @@ const spotifyTemplate = (user) => `
           <div id="miniplayerCurrentDevice" class="mt-2 text-center">
             <span class="text-[10px] text-gray-500">
               <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
-              <span id="miniplayerDeviceName">SuShe Online</span>
+              <span id="miniplayerDeviceName">Listening on...</span>
             </span>
           </div>
         </div>
@@ -1221,19 +1221,7 @@ const spotifyTemplate = (user) => `
     window.currentUser = ${JSON.stringify(user)};
     window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
     
-    // Spotify SDK ready flag - SDK may load before our module
-    window.spotifySDKReady = false;
-    window.onSpotifyWebPlaybackSDKReady = function() {
-      window.spotifySDKReady = true;
-      // If our module has registered a callback, call it
-      if (window.onSpotifyPlayerReady) {
-        window.onSpotifyPlayerReady();
-      }
-    };
   </script>
-  
-  <!-- Spotify Web Playback SDK (loaded only if user has Spotify connected) -->
-  ${user?.spotifyAuth ? '<script src="https://sdk.scdn.co/spotify-player.js"></script>' : ''}
   
   <script type="module" src="${asset('/js/bundle.js')}"></script>
 

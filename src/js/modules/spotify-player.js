@@ -1,21 +1,16 @@
 /**
- * Spotify Hybrid Miniplayer
- * Supports both Web Playback SDK (when browser is active device)
- * and Web API polling (when other devices are active)
+ * Spotify Miniplayer - API-Only Mode
+ * Controls playback on Spotify Connect devices via Web API
+ * (No local browser playback - requires Extended Quota Mode)
  */
 
 import { showToast } from './utils.js';
 
 // ============ MODULE STATE ============
-let player = null;
-let sdkDeviceId = null;
-let mode = 'inactive'; // 'inactive' | 'sdk' | 'api'
-let _activeDevice = null; // Currently unused but tracked for future enhancements
 let currentPlayback = null;
 let pollInterval = null;
 let progressInterval = null;
-let isReady = false;
-let lastVolume = 0.5;
+let lastVolume = 50;
 let isSeeking = false;
 let lastPollTime = 0;
 let lastPosition = 0;
@@ -23,7 +18,7 @@ let lastPosition = 0;
 // Polling configuration
 const POLL_INTERVAL_PLAYING = 1500; // 1.5s when playing
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
-const POLL_INTERVAL_IDLE = 3000; // 3s when no playback (to detect new playback)
+const POLL_INTERVAL_IDLE = 3000; // 3s when no playback
 const PROGRESS_UPDATE_INTERVAL = 100; // 100ms for smooth progress bar
 
 // DOM Elements (cached on init)
@@ -60,38 +55,6 @@ function getDeviceIcon(type) {
 }
 
 // ============ API FUNCTIONS ============
-
-/**
- * Fetch Spotify access token from our API
- */
-async function fetchSpotifyToken() {
-  try {
-    const response = await fetch('/api/spotify/token', {
-      credentials: 'same-origin',
-    });
-    if (!response.ok) {
-      console.error('Failed to fetch Spotify token:', response.status);
-      const errorText = await response.text();
-      console.error('Token error response:', errorText);
-      return null;
-    }
-    const data = await response.json();
-    // Debug: log token info (first/last 4 chars only for security)
-    if (data.access_token) {
-      const token = data.access_token;
-      console.log(
-        'Spotify token fetched:',
-        token.substring(0, 4) + '...' + token.substring(token.length - 4),
-        'length:',
-        token.length
-      );
-    }
-    return data.access_token;
-  } catch (err) {
-    console.error('Error fetching Spotify token:', err);
-    return null;
-  }
-}
 
 /**
  * Get current playback state from Spotify API
@@ -257,7 +220,6 @@ function cacheElements() {
   elements = {
     container: document.getElementById('spotifyMiniplayer'),
     notConnected: document.getElementById('miniplayerNotConnected'),
-    premiumRequired: document.getElementById('miniplayerPremiumRequired'),
     inactive: document.getElementById('miniplayerInactive'),
     active: document.getElementById('miniplayerActive'),
     loading: document.getElementById('miniplayerLoading'),
@@ -293,7 +255,6 @@ function showState(state) {
 
   // Hide all states
   elements.notConnected?.classList.add('hidden');
-  elements.premiumRequired?.classList.add('hidden');
   elements.inactive?.classList.add('hidden');
   elements.active?.classList.add('hidden');
   elements.loading?.classList.add('hidden');
@@ -302,9 +263,6 @@ function showState(state) {
   switch (state) {
     case 'not-connected':
       elements.notConnected?.classList.remove('hidden');
-      break;
-    case 'premium-required':
-      elements.premiumRequired?.classList.remove('hidden');
       break;
     case 'inactive':
       elements.inactive?.classList.remove('hidden');
@@ -407,10 +365,8 @@ function updateDeviceName(device) {
   if (!elements.deviceName) return;
   if (device) {
     elements.deviceName.textContent = device.name || 'Unknown Device';
-    _activeDevice = device;
   } else {
     elements.deviceName.textContent = 'No device';
-    _activeDevice = null;
   }
 }
 
@@ -422,16 +378,22 @@ function updateDeviceName(device) {
 function renderDeviceList(devices) {
   if (!elements.deviceList) return;
 
-  if (!devices || devices.length === 0) {
+  // Filter out any "SuShe Online" devices (legacy SDK devices)
+  const filteredDevices = devices.filter(
+    (d) => !d.name?.includes('SuShe Online')
+  );
+
+  if (!filteredDevices || filteredDevices.length === 0) {
     elements.deviceList.innerHTML = `
       <div class="text-center py-4 text-gray-500 text-xs">
-        No devices found
+        No devices found.<br>
+        <span class="text-gray-600">Open Spotify on a device to see it here.</span>
       </div>
     `;
     return;
   }
 
-  elements.deviceList.innerHTML = devices
+  elements.deviceList.innerHTML = filteredDevices
     .map(
       (device) => `
       <button 
@@ -470,9 +432,7 @@ function renderDeviceList(devices) {
         setTimeout(pollPlaybackState, 500);
       } else {
         showToast('Failed to transfer playback', 'error');
-        showState(
-          mode === 'sdk' ? 'active' : currentPlayback ? 'active' : 'inactive'
-        );
+        showState(currentPlayback ? 'active' : 'inactive');
       }
     });
   });
@@ -539,11 +499,7 @@ function startProgressInterpolation() {
   progressInterval = setInterval(() => {
     if (isSeeking) return;
 
-    const position =
-      mode === 'sdk' && currentPlayback
-        ? currentPlayback.position
-        : getInterpolatedPosition();
-
+    const position = getInterpolatedPosition();
     const duration =
       currentPlayback?.item?.duration_ms || currentPlayback?.duration || 0;
     updateProgress(position, duration);
@@ -563,31 +519,42 @@ function stopProgressInterpolation() {
 // ============ API POLLING ============
 
 /**
+ * Get appropriate polling interval based on current state
+ */
+function getPollingInterval() {
+  if (!currentPlayback) {
+    return POLL_INTERVAL_IDLE;
+  }
+  return currentPlayback.is_playing
+    ? POLL_INTERVAL_PLAYING
+    : POLL_INTERVAL_PAUSED;
+}
+
+/**
  * Poll Spotify API for playback state
  */
 async function pollPlaybackState() {
   const state = await apiGetPlaybackState();
 
   if (!state || (!state.device && !state.is_playing)) {
-    // No active playback - keep polling but show inactive state
+    // No active playback
     if (currentPlayback) {
-      console.log('Playback stopped or transferred away');
-      restartPollingWithNewInterval(); // Adjust to idle polling rate
+      restartPollingWithNewInterval();
     }
     currentPlayback = null;
-    _activeDevice = null;
     showState('inactive');
     stopProgressInterpolation();
-    // Don't stop polling - we want to detect when playback starts
     return;
   }
 
-  // Detect state change for logging
-  const wasPlaying = currentPlayback?.is_playing;
+  // Detect state change
   const hadPlayback = !!currentPlayback;
+  const wasPlaying = currentPlayback?.is_playing;
 
   // Update state
   currentPlayback = state;
+  lastPollTime = Date.now();
+  lastPosition = state.progress_ms || 0;
 
   // Log when playback is detected
   if (!hadPlayback && state) {
@@ -597,25 +564,12 @@ async function pollPlaybackState() {
       '- Track:',
       state.item?.name
     );
-    restartPollingWithNewInterval(); // Adjust to active polling rate
+    restartPollingWithNewInterval();
   } else if (wasPlaying !== state.is_playing) {
-    restartPollingWithNewInterval(); // Adjust polling rate based on play/pause
-  }
-  lastPollTime = Date.now();
-  lastPosition = state.progress_ms || 0;
-
-  // Check if this browser's SDK is the active device
-  if (sdkDeviceId && state.device?.id === sdkDeviceId) {
-    // SDK is active, let SDK events handle updates
-    if (mode !== 'sdk') {
-      mode = 'sdk';
-      stopPolling();
-    }
-    return;
+    restartPollingWithNewInterval();
   }
 
-  // API mode - another device is active
-  mode = 'api';
+  // Show active state
   showState('active');
 
   // Update UI
@@ -630,6 +584,7 @@ async function pollPlaybackState() {
       elements.volumeSlider.value = state.device.volume_percent;
     }
     updateVolumeIcon(state.device.volume_percent);
+    lastVolume = state.device.volume_percent;
   }
 
   // Manage progress interpolation
@@ -641,18 +596,6 @@ async function pollPlaybackState() {
 }
 
 /**
- * Get appropriate polling interval based on current state
- */
-function getPollingInterval() {
-  if (!currentPlayback) {
-    return POLL_INTERVAL_IDLE; // No playback, check periodically
-  }
-  return currentPlayback.is_playing
-    ? POLL_INTERVAL_PLAYING
-    : POLL_INTERVAL_PAUSED;
-}
-
-/**
  * Start polling for playback state
  */
 function startPolling() {
@@ -661,12 +604,12 @@ function startPolling() {
   // Immediate poll
   pollPlaybackState();
 
-  // Set up interval - will be adjusted dynamically
+  // Set up interval
   pollInterval = setInterval(pollPlaybackState, getPollingInterval());
 }
 
 /**
- * Restart polling with updated interval (call when playback state changes)
+ * Restart polling with updated interval
  */
 function restartPollingWithNewInterval() {
   if (pollInterval) {
@@ -685,30 +628,26 @@ function stopPolling() {
   }
 }
 
-// ============ HYBRID CONTROL HANDLERS ============
+// ============ CONTROL HANDLERS ============
 
 /**
  * Handle play/pause action
  */
 async function handlePlayPause() {
-  if (mode === 'sdk' && player) {
-    player.togglePlay();
+  const isPlaying = currentPlayback?.is_playing;
+
+  // Optimistic UI update
+  updatePlayPauseIcon(!isPlaying);
+
+  const success = isPlaying ? await apiPause() : await apiResume();
+  if (!success) {
+    // Revert on failure
+    updatePlayPauseIcon(isPlaying);
+    showToast('Playback control failed', 'error');
   } else {
-    const isPlaying = currentPlayback?.is_playing;
-
-    // Optimistic UI update
-    updatePlayPauseIcon(!isPlaying);
-
-    const success = isPlaying ? await apiPause() : await apiResume();
-    if (!success) {
-      // Revert on failure
-      updatePlayPauseIcon(isPlaying);
-      showToast('Playback control failed', 'error');
-    } else {
-      // Update local state
-      if (currentPlayback) {
-        currentPlayback.is_playing = !isPlaying;
-      }
+    // Update local state
+    if (currentPlayback) {
+      currentPlayback.is_playing = !isPlaying;
     }
   }
 }
@@ -717,16 +656,11 @@ async function handlePlayPause() {
  * Handle next track action
  */
 async function handleNext() {
-  if (mode === 'sdk' && player) {
-    player.nextTrack();
+  const success = await apiNext();
+  if (success) {
+    setTimeout(pollPlaybackState, 300);
   } else {
-    const success = await apiNext();
-    if (success) {
-      // Poll for updated state after a short delay
-      setTimeout(pollPlaybackState, 300);
-    } else {
-      showToast('Failed to skip track', 'error');
-    }
+    showToast('Failed to skip track', 'error');
   }
 }
 
@@ -734,15 +668,11 @@ async function handleNext() {
  * Handle previous track action
  */
 async function handlePrevious() {
-  if (mode === 'sdk' && player) {
-    player.previousTrack();
+  const success = await apiPrevious();
+  if (success) {
+    setTimeout(pollPlaybackState, 300);
   } else {
-    const success = await apiPrevious();
-    if (success) {
-      setTimeout(pollPlaybackState, 300);
-    } else {
-      showToast('Failed to skip track', 'error');
-    }
+    showToast('Failed to skip track', 'error');
   }
 }
 
@@ -765,11 +695,7 @@ async function handleSeek(positionMs) {
   }
 
   seekTimeout = setTimeout(async () => {
-    if (mode === 'sdk' && player) {
-      player.seek(positionMs);
-    } else {
-      await apiSeek(positionMs);
-    }
+    await apiSeek(positionMs);
     seekTimeout = null;
   }, 150);
 }
@@ -781,7 +707,7 @@ let volumeTimeout = null;
 async function handleVolumeChange(percent) {
   // Optimistic UI update
   updateVolumeIcon(percent);
-  if (percent > 0) lastVolume = percent / 100;
+  if (percent > 0) lastVolume = percent;
 
   // Debounce the actual volume change
   if (volumeTimeout) {
@@ -789,11 +715,7 @@ async function handleVolumeChange(percent) {
   }
 
   volumeTimeout = setTimeout(async () => {
-    if (mode === 'sdk' && player) {
-      player.setVolume(percent / 100);
-    } else {
-      await apiSetVolume(percent);
-    }
+    await apiSetVolume(percent);
     volumeTimeout = null;
   }, 100);
 }
@@ -805,11 +727,11 @@ async function handleMuteToggle() {
   const currentVolume = parseInt(elements.volumeSlider?.value || 50);
 
   if (currentVolume > 0) {
-    lastVolume = currentVolume / 100;
+    lastVolume = currentVolume;
     if (elements.volumeSlider) elements.volumeSlider.value = 0;
     handleVolumeChange(0);
   } else {
-    const newVolume = Math.round(lastVolume * 100);
+    const newVolume = lastVolume || 50;
     if (elements.volumeSlider) elements.volumeSlider.value = newVolume;
     handleVolumeChange(newVolume);
   }
@@ -906,165 +828,6 @@ function setupControls() {
   }
 }
 
-// ============ SDK EVENT HANDLERS ============
-
-/**
- * Handle player state changes from SDK
- */
-function handleSDKStateChange(state) {
-  console.log('SDK state change:', state ? 'has state' : 'null state');
-
-  if (!state) {
-    // Playback transferred away from this device
-    console.log('Playback transferred away, switching to API mode');
-    if (mode === 'sdk') {
-      mode = 'api';
-      startPolling();
-    }
-    return;
-  }
-
-  // SDK is now the active device
-  console.log(
-    'SDK state:',
-    state.paused ? 'paused' : 'playing',
-    '- Track:',
-    state.track_window?.current_track?.name,
-    '- Position:',
-    state.position
-  );
-
-  mode = 'sdk';
-  stopPolling();
-  showState('active');
-
-  // Convert SDK state to our format
-  currentPlayback = {
-    is_playing: !state.paused,
-    progress_ms: state.position,
-    item: {
-      name: state.track_window?.current_track?.name,
-      duration_ms: state.duration,
-      artists: state.track_window?.current_track?.artists,
-      album: state.track_window?.current_track?.album,
-    },
-    device: {
-      id: sdkDeviceId,
-      name: 'SuShe Online',
-      type: 'Computer',
-    },
-  };
-
-  lastPollTime = Date.now();
-  lastPosition = state.position;
-
-  // Update UI
-  updateTrackInfo(currentPlayback.item);
-  updateProgress(state.position, state.duration);
-  updatePlayPauseIcon(!state.paused);
-  updateDeviceName(currentPlayback.device);
-
-  // Manage progress interpolation
-  if (!state.paused) {
-    startProgressInterpolation();
-  } else {
-    stopProgressInterpolation();
-  }
-}
-
-// ============ SDK INITIALIZATION ============
-
-/**
- * Initialize the Spotify Web Playback SDK
- */
-async function initializePlayer() {
-  const token = await fetchSpotifyToken();
-  if (!token) {
-    console.log('Spotify miniplayer: No access token available');
-    showState('not-connected');
-    return;
-  }
-
-  // Create the player instance
-  player = new window.Spotify.Player({
-    name: 'SuShe Online',
-    getOAuthToken: async (cb) => {
-      const freshToken = await fetchSpotifyToken();
-      cb(freshToken);
-    },
-    volume: 0.5,
-  });
-
-  // Error handling
-  player.addListener('initialization_error', ({ message }) => {
-    console.error('Spotify init error:', message);
-    // Fall back to API mode
-    showState('inactive');
-    startPolling();
-  });
-
-  player.addListener('authentication_error', ({ message }) => {
-    console.error('Spotify auth error:', message);
-    if (!message.includes('Invalid token scopes')) {
-      showState('not-connected');
-    }
-  });
-
-  player.addListener('account_error', ({ message }) => {
-    console.error('Spotify account error:', message);
-    showState('premium-required');
-  });
-
-  player.addListener('playback_error', ({ message }) => {
-    console.error('Spotify playback error:', message);
-    // DRM errors often show as generic "Playback error"
-    if (message === 'Playback error') {
-      console.warn(
-        'This may be a DRM/Widevine issue. Check if your Spotify account is added to the app in Developer Dashboard.'
-      );
-    }
-  });
-
-  // Ready
-  player.addListener('ready', ({ device_id }) => {
-    console.log('Spotify player ready, device ID:', device_id);
-    console.log(
-      'SDK ready - you can now transfer playback to this device or start playing'
-    );
-    sdkDeviceId = device_id;
-    isReady = true;
-
-    // Start polling to check for active playback on other devices
-    startPolling();
-  });
-
-  // Autoplay was blocked (browser policy)
-  player.addListener('autoplay_failed', () => {
-    console.warn(
-      'Spotify autoplay failed - user interaction required to start playback'
-    );
-  });
-
-  // Not ready
-  player.addListener('not_ready', ({ device_id }) => {
-    console.log('Spotify player not ready:', device_id);
-    isReady = false;
-  });
-
-  // State changes
-  player.addListener('player_state_changed', handleSDKStateChange);
-
-  // Connect
-  player.connect().then((success) => {
-    if (success) {
-      console.log('Spotify player connected successfully');
-    } else {
-      console.error('Spotify player failed to connect');
-      showState('not-connected');
-    }
-  });
-}
-
 // ============ VISIBILITY HANDLING ============
 
 /**
@@ -1075,12 +838,9 @@ function handleVisibilityChange() {
     // Tab hidden - stop polling to save resources
     stopPolling();
     stopProgressInterpolation();
-  } else if (mode === 'api') {
-    // Tab visible and in API mode - resume polling
+  } else {
+    // Tab visible - resume polling
     startPolling();
-  } else if (mode === 'sdk' && currentPlayback?.is_playing) {
-    // Tab visible and SDK mode - resume progress interpolation
-    startProgressInterpolation();
   }
 }
 
@@ -1117,14 +877,9 @@ export function initMiniplayer() {
   // Set up visibility change handler
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
-  // Wait for SDK to load, then initialize
-  if (window.Spotify && window.spotifySDKReady) {
-    initializePlayer();
-  } else {
-    window.onSpotifyPlayerReady = () => {
-      initializePlayer();
-    };
-  }
+  // Start polling for playback state immediately
+  console.log('Spotify miniplayer: Starting API polling mode');
+  startPolling();
 }
 
 /**
@@ -1134,42 +889,5 @@ export function destroyMiniplayer() {
   stopPolling();
   stopProgressInterpolation();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
-
-  if (player) {
-    player.disconnect();
-    player = null;
-  }
-
-  sdkDeviceId = null;
   currentPlayback = null;
-  mode = 'inactive';
-  isReady = false;
-}
-
-/**
- * Get the player instance
- */
-export function getPlayer() {
-  return player;
-}
-
-/**
- * Get the SDK device ID
- */
-export function getDeviceId() {
-  return sdkDeviceId;
-}
-
-/**
- * Check if player is ready
- */
-export function isPlayerReady() {
-  return isReady;
-}
-
-/**
- * Get current playback mode
- */
-export function getPlaybackMode() {
-  return mode;
 }
