@@ -102,6 +102,88 @@ npm run test:coverage
 - **Aim for good coverage**: Increase test coverage where practical
 - **Manual testing**: Always verify UI/UX changes in browser
 
+### Writing Tests for New Code
+
+**When introducing new code, ALWAYS write corresponding tests.**
+
+#### What Requires Tests
+
+- **New utilities/helpers**: Any new function in `utils/`, `validators.js`, `auth-utils.js`, etc.
+- **New middleware**: Request handlers, error handlers, security features
+- **New API endpoints**: Routes that handle user data or business logic
+- **Bug fixes**: Add a test that would have caught the bug before fixing it
+- **Security features**: Authentication, authorization, input validation, sanitization
+
+#### What May Skip Tests
+
+- **Trivial changes**: Typo fixes, comment updates, formatting
+- **View templates**: EJS files (test the data they receive, not the HTML)
+- **Build scripts**: One-off utility scripts in `scripts/`
+- **Configuration**: Package.json, docker-compose, etc.
+
+#### Test-Writing Workflow
+
+1. **Design for testability**: Use dependency injection pattern (see below)
+2. **Write the test first** (or immediately after): Don't wait until "later"
+3. **Follow existing patterns**: Look at similar tests in `test/` for structure
+4. **Test the behavior**: Focus on inputs/outputs and edge cases, not implementation
+5. **Run tests locally**: `npm test` before committing
+6. **Verify coverage**: Use `npm run test:coverage` to ensure critical paths are covered
+
+#### Example: Adding a New Utility
+
+```javascript
+// ✅ GOOD: Write the utility with dependency injection
+// utils/email-sender.js
+function createEmailSender(deps = {}) {
+  const logger = deps.logger || require('./logger');
+  const fetch = deps.fetch || require('node-fetch');
+
+  async function sendEmail(to, subject, body) {
+    logger.info(`Sending email to ${to}`);
+    // ... implementation
+    return { success: true };
+  }
+
+  return { sendEmail };
+}
+
+const defaultInstance = createEmailSender();
+module.exports = { createEmailSender, ...defaultInstance };
+```
+
+```javascript
+// ✅ GOOD: Write the test immediately
+// test/email-sender.test.js
+const { describe, it, mock } = require('node:test');
+const assert = require('node:assert');
+const { createEmailSender } = require('../utils/email-sender.js');
+
+describe('email-sender', () => {
+  it('should send email with correct parameters', async () => {
+    const mockLogger = { info: mock.fn(), error: mock.fn() };
+    const mockFetch = mock.fn(() => Promise.resolve({ ok: true }));
+    
+    const { sendEmail } = createEmailSender({
+      logger: mockLogger,
+      fetch: mockFetch,
+    });
+
+    const result = await sendEmail('test@example.com', 'Hello', 'World');
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(mockLogger.info.mock.calls.length, 1);
+  });
+});
+```
+
+#### Why This Matters
+
+- **Prevents regressions**: Tests catch breaking changes before deployment
+- **Documents behavior**: Tests show how code is meant to be used
+- **Enables refactoring**: Confident changes when tests pass
+- **Maintains quality**: Keeps codebase reliable and maintainable
+
 ### Test File Structure
 
 ```
