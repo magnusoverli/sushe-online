@@ -237,4 +237,523 @@ describe('templates utilities', () => {
       delete require.cache[require.resolve('../templates.js')];
     });
   });
+
+  describe('htmlTemplate', () => {
+    it('should wrap content in layout', () => {
+      const content = '<div>Test Content</div>';
+      const result = templates.htmlTemplate(content);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('Test Content'));
+      assert.ok(result.includes('<!DOCTYPE html>'));
+      assert.ok(result.includes('<html'));
+      assert.ok(result.includes('</html>'));
+    });
+
+    it('should use custom title', () => {
+      const result = templates.htmlTemplate('<div>Content</div>', 'Custom Title');
+
+      assert.ok(result.includes('Custom Title'));
+    });
+
+    it('should use default title when not provided', () => {
+      const result = templates.htmlTemplate('<div>Content</div>');
+
+      assert.ok(result.includes('SuShe Auth'));
+    });
+
+    it('should pass user data to layout', () => {
+      const user = { username: 'testuser', email: 'test@example.com' };
+      const result = templates.htmlTemplate('<div>Content</div>', 'Title', user);
+
+      // The template should have user context available
+      assert.ok(typeof result === 'string');
+      assert.ok(result.length > 0);
+    });
+
+    it('should include asset helper functions', () => {
+      const result = templates.htmlTemplate('<div>Content</div>');
+
+      // Should have versioned assets
+      assert.ok(result.includes('?v='));
+    });
+  });
+
+  describe('registerTemplate', () => {
+    let mockReq;
+    let mockFlash;
+
+    before(() => {
+      mockReq = {
+        csrfToken: () => 'test-csrf-token-123',
+      };
+      mockFlash = { error: [], info: [] };
+    });
+
+    it('should render registration form', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('Join SuShe Online'));
+      assert.ok(result.includes('form'));
+      assert.ok(result.includes('method="post"'));
+      assert.ok(result.includes('action="/register"'));
+    });
+
+    it('should include CSRF token', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('_csrf'));
+      assert.ok(result.includes('test-csrf-token-123'));
+    });
+
+    it('should include email field', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="email"'));
+      assert.ok(result.includes('type="email"'));
+      assert.ok(result.includes('Email Address'));
+    });
+
+    it('should include username field', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="username"'));
+      assert.ok(result.includes('type="text"'));
+      assert.ok(result.includes('Username'));
+    });
+
+    it('should include password field', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="password"'));
+      assert.ok(result.includes('type="password"'));
+      assert.ok(result.includes('Password'));
+    });
+
+    it('should include confirm password field', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="confirmPassword"'));
+      assert.ok(result.includes('Confirm Password'));
+    });
+
+    it('should include submit button', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('type="submit"'));
+      assert.ok(result.includes('Create Account'));
+    });
+
+    it('should display error flash message', () => {
+      const flashWithError = { error: ['Registration failed'], info: [] };
+      const result = templates.registerTemplate(mockReq, flashWithError);
+
+      assert.ok(result.includes('Registration failed'));
+      assert.ok(result.includes('text-red-500'));
+    });
+
+    it('should not display error when flash is empty', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      // Should not have error message paragraph when no error
+      assert.ok(!result.includes('flash-message'));
+    });
+
+    it('should include link to login', () => {
+      const result = templates.registerTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('href="/login"'));
+      assert.ok(result.includes('Return to login'));
+    });
+  });
+
+  describe('loginTemplate', () => {
+    let mockReq;
+    let mockFlash;
+
+    before(() => {
+      mockReq = {
+        csrfToken: () => 'test-csrf-token-456',
+        session: {
+          attemptedEmail: null,
+        },
+      };
+      mockFlash = { error: [], info: [] };
+    });
+
+    it('should render login form', () => {
+      const result = templates.loginTemplate(mockReq, mockFlash);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('form'));
+      assert.ok(result.includes('action="/login"'));
+    });
+
+    it('should include CSRF token', () => {
+      const result = templates.loginTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('test-csrf-token-456'));
+    });
+
+    it('should include email field', () => {
+      const result = templates.loginTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="email"'));
+      assert.ok(result.includes('type="email"'));
+    });
+
+    it('should include password field', () => {
+      const result = templates.loginTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="password"'));
+      assert.ok(result.includes('type="password"'));
+    });
+
+    it('should pre-fill attemptedEmail from session', () => {
+      const reqWithEmail = {
+        csrfToken: () => 'csrf',
+        session: { attemptedEmail: 'test@example.com' },
+      };
+      const result = templates.loginTemplate(reqWithEmail, mockFlash);
+
+      assert.ok(result.includes('test@example.com'));
+    });
+
+    it('should handle missing attemptedEmail in session', () => {
+      const result = templates.loginTemplate(mockReq, mockFlash);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('Email'));
+    });
+  });
+
+  describe('forgotPasswordTemplate', () => {
+    let mockReq;
+    let mockFlash;
+
+    before(() => {
+      mockReq = {
+        csrfToken: () => 'test-csrf-token-789',
+      };
+      mockFlash = { error: [], info: [] };
+    });
+
+    it('should render forgot password form', () => {
+      const result = templates.forgotPasswordTemplate(mockReq, mockFlash);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('Forgot password'));
+      assert.ok(result.includes('form'));
+      assert.ok(result.includes('action="/forgot"'));
+    });
+
+    it('should include CSRF token', () => {
+      const result = templates.forgotPasswordTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('_csrf'));
+      assert.ok(result.includes('test-csrf-token-789'));
+    });
+
+    it('should include email field', () => {
+      const result = templates.forgotPasswordTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('name="email"'));
+      assert.ok(result.includes('type="email"'));
+      assert.ok(result.includes('Email Address'));
+    });
+
+    it('should include submit button', () => {
+      const result = templates.forgotPasswordTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('type="submit"'));
+      assert.ok(result.includes('Reset password'));
+    });
+
+    it('should display info flash message', () => {
+      const flashWithInfo = {
+        error: [],
+        info: ['Password reset email sent'],
+      };
+      const result = templates.forgotPasswordTemplate(mockReq, flashWithInfo);
+
+      assert.ok(result.includes('Password reset email sent'));
+      assert.ok(result.includes('text-blue-400'));
+    });
+
+    it('should display error flash message', () => {
+      const flashWithError = { error: ['Email not found'], info: [] };
+      const result = templates.forgotPasswordTemplate(mockReq, flashWithError);
+
+      assert.ok(result.includes('Email not found'));
+      assert.ok(result.includes('text-red-500'));
+    });
+
+    it('should include link back to login', () => {
+      const result = templates.forgotPasswordTemplate(mockReq, mockFlash);
+
+      assert.ok(result.includes('href="/login"'));
+      assert.ok(result.includes('Return to login'));
+    });
+  });
+
+  describe('resetPasswordTemplate', () => {
+    it('should render reset password form with token', () => {
+      const token = 'reset-token-abc123';
+      const result = templates.resetPasswordTemplate(token, 'csrf-token');
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('Reset Your Password'));
+      assert.ok(result.includes('form'));
+      assert.ok(result.includes(`action="/reset/${token}"`));
+    });
+
+    it('should include CSRF token', () => {
+      const result = templates.resetPasswordTemplate('token', 'csrf-123');
+
+      assert.ok(result.includes('_csrf'));
+      assert.ok(result.includes('csrf-123'));
+    });
+
+    it('should include password field', () => {
+      const result = templates.resetPasswordTemplate('token', 'csrf');
+
+      assert.ok(result.includes('name="password"'));
+      assert.ok(result.includes('type="password"'));
+      assert.ok(result.includes('New Password'));
+    });
+
+    it('should include submit button', () => {
+      const result = templates.resetPasswordTemplate('token', 'csrf');
+
+      assert.ok(result.includes('type="submit"'));
+      assert.ok(result.includes('Reset Password'));
+    });
+
+    it('should work without CSRF token', () => {
+      const result = templates.resetPasswordTemplate('token');
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('Reset Your Password'));
+    });
+  });
+
+  describe('invalidTokenTemplate', () => {
+    it('should render invalid token message', () => {
+      const result = templates.invalidTokenTemplate();
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('expired or is invalid'));
+      assert.ok(result.includes('text-red-500'));
+    });
+
+    it('should include link to request new reset link', () => {
+      const result = templates.invalidTokenTemplate();
+
+      assert.ok(result.includes('href="/forgot"'));
+      assert.ok(result.includes('Request a new reset link'));
+    });
+  });
+
+  describe('spotifyTemplate', () => {
+    it('should render full Spotify app page', () => {
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+        accentColor: '#dc2626',
+      };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('<!DOCTYPE html>'));
+      assert.ok(result.includes('SuShe Online'));
+    });
+
+    it('should include user data in window object', () => {
+      const user = {
+        username: 'testuser',
+        email: 'test@example.com',
+      };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('window.currentUser'));
+      assert.ok(result.includes('testuser'));
+    });
+
+    it('should use user accent color', () => {
+      const user = {
+        username: 'test',
+        accentColor: '#ff0000',
+      };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('#ff0000'));
+      assert.ok(result.includes('--accent-color'));
+    });
+
+    it('should use default accent color when not provided', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('#dc2626')); // Default red color
+    });
+
+    it('should include sidebar', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('sidebar'));
+      assert.ok(result.includes('Lists'));
+    });
+
+    it('should include create list button', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('createListBtn'));
+      assert.ok(result.includes('Create List'));
+    });
+
+    it('should include import button', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('importBtn'));
+      assert.ok(result.includes('Import List'));
+    });
+
+    it('should include add album FAB', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('addAlbumFAB'));
+      assert.ok(result.includes('fa-plus'));
+    });
+
+    it('should include mobile menu', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('mobileMenu'));
+      assert.ok(result.includes('mobileMenuDrawer'));
+    });
+
+    it('should include all modals', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('createListModal'));
+      assert.ok(result.includes('renameListModal'));
+      assert.ok(result.includes('addAlbumModal'));
+      assert.ok(result.includes('confirmationModal'));
+    });
+
+    it('should include lastSelectedList in window object', () => {
+      const user = {
+        username: 'test',
+        lastSelectedList: 'My Favorite Albums',
+      };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('window.lastSelectedList'));
+      assert.ok(result.includes('My Favorite Albums'));
+    });
+
+    it('should handle null lastSelectedList', () => {
+      const user = { username: 'test', lastSelectedList: null };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('window.lastSelectedList'));
+      assert.ok(result.includes('null'));
+    });
+
+    it('should include bundle.js script', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('/js/bundle.js'));
+      assert.ok(result.includes('type="module"'));
+    });
+
+    it('should include CSS files', () => {
+      const user = { username: 'test' };
+      const result = templates.spotifyTemplate(user);
+
+      assert.ok(result.includes('/styles/output.css'));
+      assert.ok(result.includes('/styles/spotify-app.css'));
+    });
+  });
+
+  describe('headerComponent', () => {
+    it('should render header with user info', () => {
+      const user = { username: 'testuser', email: 'test@example.com' };
+      const result = templates.headerComponent(user);
+
+      assert.ok(typeof result === 'string');
+      assert.ok(result.includes('<header'));
+      assert.ok(result.includes('testuser'));
+    });
+
+    it('should include SuShe logo link', () => {
+      const user = { username: 'test' };
+      const result = templates.headerComponent(user);
+
+      assert.ok(result.includes('SuShe'));
+      assert.ok(result.includes('href="/"'));
+    });
+
+    it('should include settings link', () => {
+      const user = { username: 'test' };
+      const result = templates.headerComponent(user);
+
+      assert.ok(result.includes('href="/settings"'));
+      assert.ok(result.includes('fa-cog'));
+    });
+
+    it('should include logout link', () => {
+      const user = { username: 'test' };
+      const result = templates.headerComponent(user);
+
+      assert.ok(result.includes('href="/logout"'));
+      assert.ok(result.includes('fa-sign-out-alt'));
+    });
+
+    it('should show username when provided', () => {
+      const user = { username: 'john_doe' };
+      const result = templates.headerComponent(user);
+
+      assert.ok(result.includes('john_doe'));
+    });
+
+    it('should show email when username not provided', () => {
+      const user = { email: 'test@example.com' };
+      const result = templates.headerComponent(user);
+
+      assert.ok(result.includes('test@example.com'));
+    });
+
+    it('should render mobile menu button for home section', () => {
+      const user = { username: 'test' };
+      const result = templates.headerComponent(user, 'home');
+
+      assert.ok(result.includes('toggleMobileMenu'));
+      assert.ok(result.includes('fa-bars'));
+    });
+
+    it('should render back arrow for non-home sections', () => {
+      const user = { username: 'test' };
+      const result = templates.headerComponent(user, 'settings');
+
+      assert.ok(result.includes('fa-arrow-left'));
+      assert.ok(!result.includes('toggleMobileMenu'));
+    });
+
+    it('should default to home section', () => {
+      const user = { username: 'test' };
+      const result = templates.headerComponent(user);
+
+      // Default is 'home', so should have mobile menu toggle
+      assert.ok(result.includes('toggleMobileMenu'));
+    });
+  });
 });
