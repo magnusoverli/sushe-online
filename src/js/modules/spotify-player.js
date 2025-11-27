@@ -23,6 +23,7 @@ let lastPosition = 0;
 // Polling configuration
 const POLL_INTERVAL_PLAYING = 1500; // 1.5s when playing
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
+const POLL_INTERVAL_IDLE = 3000; // 3s when no playback (to detect new playback)
 const PROGRESS_UPDATE_INTERVAL = 100; // 100ms for smooth progress bar
 
 // DOM Elements (cached on init)
@@ -568,17 +569,38 @@ async function pollPlaybackState() {
   const state = await apiGetPlaybackState();
 
   if (!state || (!state.device && !state.is_playing)) {
-    // No active playback
+    // No active playback - keep polling but show inactive state
+    if (currentPlayback) {
+      console.log('Playback stopped or transferred away');
+      restartPollingWithNewInterval(); // Adjust to idle polling rate
+    }
     currentPlayback = null;
     _activeDevice = null;
     showState('inactive');
     stopProgressInterpolation();
-    stopPolling();
+    // Don't stop polling - we want to detect when playback starts
     return;
   }
 
+  // Detect state change for logging
+  const wasPlaying = currentPlayback?.is_playing;
+  const hadPlayback = !!currentPlayback;
+
   // Update state
   currentPlayback = state;
+
+  // Log when playback is detected
+  if (!hadPlayback && state) {
+    console.log(
+      'Playback detected on:',
+      state.device?.name,
+      '- Track:',
+      state.item?.name
+    );
+    restartPollingWithNewInterval(); // Adjust to active polling rate
+  } else if (wasPlaying !== state.is_playing) {
+    restartPollingWithNewInterval(); // Adjust polling rate based on play/pause
+  }
   lastPollTime = Date.now();
   lastPosition = state.progress_ms || 0;
 
@@ -619,6 +641,16 @@ async function pollPlaybackState() {
 }
 
 /**
+ * Get appropriate polling interval based on current state
+ */
+function getPollingInterval() {
+  if (!currentPlayback) {
+    return POLL_INTERVAL_IDLE; // No playback, check periodically
+  }
+  return currentPlayback.is_playing ? POLL_INTERVAL_PLAYING : POLL_INTERVAL_PAUSED;
+}
+
+/**
  * Start polling for playback state
  */
 function startPolling() {
@@ -627,12 +659,18 @@ function startPolling() {
   // Immediate poll
   pollPlaybackState();
 
-  // Set up interval based on playback state
-  const interval = currentPlayback?.is_playing
-    ? POLL_INTERVAL_PLAYING
-    : POLL_INTERVAL_PAUSED;
+  // Set up interval - will be adjusted dynamically
+  pollInterval = setInterval(pollPlaybackState, getPollingInterval());
+}
 
-  pollInterval = setInterval(pollPlaybackState, interval);
+/**
+ * Restart polling with updated interval (call when playback state changes)
+ */
+function restartPollingWithNewInterval() {
+  if (pollInterval) {
+    stopPolling();
+    pollInterval = setInterval(pollPlaybackState, getPollingInterval());
+  }
 }
 
 /**
@@ -872,8 +910,11 @@ function setupControls() {
  * Handle player state changes from SDK
  */
 function handleSDKStateChange(state) {
+  console.log('SDK state change:', state ? 'has state' : 'null state');
+
   if (!state) {
     // Playback transferred away from this device
+    console.log('Playback transferred away, switching to API mode');
     if (mode === 'sdk') {
       mode = 'api';
       startPolling();
@@ -882,6 +923,15 @@ function handleSDKStateChange(state) {
   }
 
   // SDK is now the active device
+  console.log(
+    'SDK state:',
+    state.paused ? 'paused' : 'playing',
+    '- Track:',
+    state.track_window?.current_track?.name,
+    '- Position:',
+    state.position
+  );
+
   mode = 'sdk';
   stopPolling();
   showState('active');
@@ -964,8 +1014,12 @@ async function initializePlayer() {
   });
 
   player.addListener('playback_error', ({ message }) => {
-    if (message !== 'Playback error') {
-      console.error('Spotify playback error:', message);
+    console.error('Spotify playback error:', message);
+    // DRM errors often show as generic "Playback error"
+    if (message === 'Playback error') {
+      console.warn(
+        'This may be a DRM/Widevine issue. Check if your Spotify account is added to the app in Developer Dashboard.'
+      );
     }
   });
 
