@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const express = require('express');
+const request = require('supertest');
 
 // Mock logger to avoid file operations
 const mockLogger = {
@@ -17,6 +19,7 @@ require.cache[require.resolve('../utils/logger')] = {
 const {
   ResponseCache,
   responseCache,
+  cacheConfigs,
 } = require('../middleware/response-cache');
 
 // CRITICAL: Stop the global cache's interval timer immediately to prevent hanging
@@ -372,6 +375,347 @@ test.describe('ResponseCache Class', () => {
       assert.ok(entry.createdAt <= after);
       assert.ok(entry.expiresAt > entry.createdAt);
       assert.ok(entry.expiresAt <= after + 5000);
+    });
+  });
+});
+
+test.describe('Cache Middleware', () => {
+  // Clear the global cache before each test
+  test.beforeEach(() => {
+    responseCache.clear();
+  });
+
+  test.describe('cacheConfigs.static', () => {
+    test('should cache GET requests for authenticated users on /api/ paths', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/data',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/data';
+          next();
+        },
+        cacheConfigs.static,
+        (req, res) => {
+          callCount++;
+          res.json({ data: 'test', count: callCount });
+        }
+      );
+
+      // First request - cache miss
+      const res1 = await request(app).get('/api/data');
+      assert.strictEqual(res1.status, 200);
+      assert.strictEqual(res1.body.count, 1);
+      assert.strictEqual(res1.headers['x-cache'], 'MISS');
+
+      // Second request - cache hit
+      const res2 = await request(app).get('/api/data');
+      assert.strictEqual(res2.status, 200);
+      assert.strictEqual(res2.body.count, 1); // Same count = cached
+      assert.strictEqual(res2.headers['x-cache'], 'HIT');
+    });
+
+    test('should not cache requests for unauthenticated users', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/data',
+        (req, res, next) => {
+          // No user set - unauthenticated
+          req.path = '/api/data';
+          next();
+        },
+        cacheConfigs.static,
+        (req, res) => {
+          callCount++;
+          res.json({ data: 'test', count: callCount });
+        }
+      );
+
+      // Both requests should hit handler (no caching)
+      await request(app).get('/api/data');
+      const res2 = await request(app).get('/api/data');
+      assert.strictEqual(res2.body.count, 2);
+    });
+
+    test('should not cache non-API paths', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/other/path',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/other/path';
+          next();
+        },
+        cacheConfigs.static,
+        (req, res) => {
+          callCount++;
+          res.json({ data: 'test', count: callCount });
+        }
+      );
+
+      await request(app).get('/other/path');
+      const res2 = await request(app).get('/other/path');
+      assert.strictEqual(res2.body.count, 2); // Not cached
+    });
+  });
+
+  test.describe('cacheConfigs.userSpecific', () => {
+    test('should cache GET requests for /api/lists paths', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/lists',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/lists';
+          next();
+        },
+        cacheConfigs.userSpecific,
+        (req, res) => {
+          callCount++;
+          res.json({ lists: ['a', 'b'], count: callCount });
+        }
+      );
+
+      const res1 = await request(app).get('/api/lists');
+      assert.strictEqual(res1.body.count, 1);
+      assert.strictEqual(res1.headers['x-cache'], 'MISS');
+
+      const res2 = await request(app).get('/api/lists');
+      assert.strictEqual(res2.body.count, 1); // Cached
+      assert.strictEqual(res2.headers['x-cache'], 'HIT');
+    });
+
+    test('should not cache non-lists API paths', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/users',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/users';
+          next();
+        },
+        cacheConfigs.userSpecific,
+        (req, res) => {
+          callCount++;
+          res.json({ count: callCount });
+        }
+      );
+
+      await request(app).get('/api/users');
+      const res2 = await request(app).get('/api/users');
+      assert.strictEqual(res2.body.count, 2); // Not cached
+    });
+  });
+
+  test.describe('cacheConfigs.public', () => {
+    test('should cache /api/proxy/ requests with public key', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/proxy/test',
+        (req, res, next) => {
+          req.path = '/api/proxy/test';
+          next();
+        },
+        cacheConfigs.public,
+        (req, res) => {
+          callCount++;
+          res.json({ data: 'proxied', count: callCount });
+        }
+      );
+
+      const res1 = await request(app).get('/api/proxy/test');
+      assert.strictEqual(res1.body.count, 1);
+
+      const res2 = await request(app).get('/api/proxy/test');
+      assert.strictEqual(res2.body.count, 1); // Cached
+    });
+
+    test('should cache /api/unfurl requests', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/unfurl',
+        (req, res, next) => {
+          req.path = '/api/unfurl';
+          next();
+        },
+        cacheConfigs.public,
+        (req, res) => {
+          callCount++;
+          res.json({ unfurled: true, count: callCount });
+        }
+      );
+
+      await request(app).get('/api/unfurl');
+      const res2 = await request(app).get('/api/unfurl');
+      assert.strictEqual(res2.body.count, 1); // Cached
+    });
+  });
+
+  test.describe('cacheConfigs.images', () => {
+    test('should cache /api/proxy/image requests by URL', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/proxy/image',
+        (req, res, next) => {
+          req.path = '/api/proxy/image';
+          next();
+        },
+        cacheConfigs.images,
+        (req, res) => {
+          callCount++;
+          res.json({ image: 'data', count: callCount });
+        }
+      );
+
+      const res1 = await request(app).get(
+        '/api/proxy/image?url=http://example.com/img.jpg'
+      );
+      assert.strictEqual(res1.body.count, 1);
+
+      const res2 = await request(app).get(
+        '/api/proxy/image?url=http://example.com/img.jpg'
+      );
+      assert.strictEqual(res2.body.count, 1); // Cached by URL
+    });
+
+    test('should cache different URLs separately', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/proxy/image',
+        (req, res, next) => {
+          req.path = '/api/proxy/image';
+          next();
+        },
+        cacheConfigs.images,
+        (req, res) => {
+          callCount++;
+          res.json({ url: req.query.url, count: callCount });
+        }
+      );
+
+      await request(app).get('/api/proxy/image?url=http://example.com/a.jpg');
+      await request(app).get('/api/proxy/image?url=http://example.com/b.jpg');
+
+      // Both should have been called (different URLs)
+      assert.strictEqual(callCount, 2);
+    });
+
+    test('should not cache non-image paths', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/other',
+        (req, res, next) => {
+          req.path = '/api/other';
+          next();
+        },
+        cacheConfigs.images,
+        (req, res) => {
+          callCount++;
+          res.json({ count: callCount });
+        }
+      );
+
+      await request(app).get('/api/other');
+      await request(app).get('/api/other');
+      assert.strictEqual(callCount, 2); // Not cached
+    });
+  });
+
+  test.describe('Middleware behavior', () => {
+    test('should skip caching for non-GET requests', async () => {
+      const app = express();
+      app.use(express.json());
+      let callCount = 0;
+
+      app.post(
+        '/api/data',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/data';
+          next();
+        },
+        cacheConfigs.static,
+        (req, res) => {
+          callCount++;
+          res.json({ count: callCount });
+        }
+      );
+
+      await request(app).post('/api/data').send({});
+      await request(app).post('/api/data').send({});
+      assert.strictEqual(callCount, 2); // POST not cached
+    });
+
+    test('should only cache successful responses (2xx)', async () => {
+      const app = express();
+      let callCount = 0;
+
+      app.get(
+        '/api/data',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/data';
+          next();
+        },
+        cacheConfigs.static,
+        (req, res) => {
+          callCount++;
+          if (callCount === 1) {
+            res.status(500).json({ error: 'Server error' });
+          } else {
+            res.json({ data: 'success', count: callCount });
+          }
+        }
+      );
+
+      // First request fails
+      const res1 = await request(app).get('/api/data');
+      assert.strictEqual(res1.status, 500);
+
+      // Second request succeeds (handler called again)
+      const res2 = await request(app).get('/api/data');
+      assert.strictEqual(res2.status, 200);
+      assert.strictEqual(res2.body.count, 2);
+    });
+
+    test('should set X-Cache-Key header', async () => {
+      const app = express();
+
+      app.get(
+        '/api/data',
+        (req, res, next) => {
+          req.user = { _id: 'user1' };
+          req.path = '/api/data';
+          next();
+        },
+        cacheConfigs.static,
+        (req, res) => {
+          res.json({ data: 'test' });
+        }
+      );
+
+      const res = await request(app).get('/api/data');
+      assert.ok(res.headers['x-cache-key']);
     });
   });
 });
