@@ -70,9 +70,21 @@ async function fetchSpotifyToken() {
     });
     if (!response.ok) {
       console.error('Failed to fetch Spotify token:', response.status);
+      const errorText = await response.text();
+      console.error('Token error response:', errorText);
       return null;
     }
     const data = await response.json();
+    // Debug: log token info (first/last 4 chars only for security)
+    if (data.access_token) {
+      const token = data.access_token;
+      console.log(
+        'Spotify token fetched:',
+        token.substring(0, 4) + '...' + token.substring(token.length - 4),
+        'length:',
+        token.length
+      );
+    }
     return data.access_token;
   } catch (err) {
     console.error('Error fetching Spotify token:', err);
@@ -960,11 +972,21 @@ async function initializePlayer() {
   // Ready
   player.addListener('ready', ({ device_id }) => {
     console.log('Spotify player ready, device ID:', device_id);
+    console.log(
+      'SDK ready - you can now transfer playback to this device or start playing'
+    );
     sdkDeviceId = device_id;
     isReady = true;
 
     // Start polling to check for active playback on other devices
     startPolling();
+  });
+
+  // Autoplay was blocked (browser policy)
+  player.addListener('autoplay_failed', () => {
+    console.warn(
+      'Spotify autoplay failed - user interaction required to start playback'
+    );
   });
 
   // Not ready
