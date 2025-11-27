@@ -1,58 +1,84 @@
-# 🤘 SuShe Online
+<p align="center">
+  <img src="public/og-image.png" alt="SuShe Online" width="600" />
+</p>
 
-**Your personal music collection manager with a dark aesthetic.**
+<h1 align="center">🤘 SuShe Online</h1>
 
-SuShe Online is a web application for creating, organizing, and managing your album lists. Discover albums, track your collection, create playlists, and sync them to Spotify or Tidal. Built for music enthusiasts who want to catalog their journey through music.
+<p align="center">
+  <strong>A personal music collection manager with a dark aesthetic</strong>
+</p>
 
-[![Live Demo](https://img.shields.io/badge/demo-sushe.overli.dev-red)](https://sushe.overli.dev)
+<p align="center">
+  <a href="https://sushe.overli.dev"><img src="https://img.shields.io/badge/demo-sushe.overli.dev-ff4444?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo" /></a>
+  <a href="https://github.com/magnusoverli/sushe-online/actions/workflows/docker-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/magnusoverli/sushe-online/docker-build.yml?branch=main&style=for-the-badge&logo=github-actions&logoColor=white&label=CI" alt="CI Status" /></a>
+  <a href="https://github.com/magnusoverli/sushe-online/pkgs/container/sushe-online"><img src="https://img.shields.io/badge/ghcr.io-container-blue?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" /></a>
+</p>
+
+<p align="center">
+  <a href="#-features">Features</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-self-hosting">Self-Hosting</a> •
+  <a href="#-development">Development</a> •
+  <a href="#-browser-extension">Extension</a>
+</p>
+
+---
+
+## 📖 About
+
+SuShe Online is a web application for music enthusiasts who want to create, organize, and manage their album lists. Discover albums, track your collection, create playlists, and sync them to Spotify or Tidal.
+
+**Built with:** Node.js 24 • Express 5 • PostgreSQL 16 • Tailwind CSS
 
 ---
 
 ## ✨ Features
 
-### 🎵 Music Collection Management
+<table>
+<tr>
+<td width="50%">
 
-- **Create unlimited lists** - Organize albums by year, genre, mood, or any way you like
-- **Rich album metadata** - Automatically fetch cover art, release dates, and artist info from MusicBrainz and Deezer
-- **Drag & drop** - Reorder albums with intuitive drag-and-drop interface
-- **Track selection** - Pick your favorite tracks from each album for playlist creation
-- **Comments & ratings** - Add personal notes and genres to each album
-- **Duplicate detection** - Prevents adding the same album twice
+### 🎵 Collection Management
+- Create unlimited lists by year, genre, mood, or any theme
+- Rich metadata from MusicBrainz and Deezer (cover art, release dates, artists)
+- Drag & drop reordering
+- Track selection for playlist creation
+- Personal notes, ratings, and genre tags
+- Duplicate detection
 
-### 🎧 Music Service Integration
+</td>
+<td width="50%">
 
-- **Spotify & Tidal sync** - Create and update playlists directly in your music streaming service
-- **Smart track matching** - Automatically finds tracks across services
-- **Real-time progress** - See playlists being built track-by-track
-- **Service selection** - Choose your preferred platform or switch per-playlist
+### 🎧 Streaming Integration
+- Sync playlists to **Spotify** and **Tidal**
+- Smart track matching across services
+- Real-time progress tracking
+- Choose your preferred platform per-playlist
+
+</td>
+</tr>
+<tr>
+<td width="50%">
 
 ### 🔌 Browser Extension
+- Chrome extension for [RateYourMusic.com](https://rateyourmusic.com)
+- Right-click any album → Add to your lists
+- Automatic metadata lookup
+- [Get the extension →](browser-extension/)
 
-- **Chrome extension** - Add albums from RateYourMusic.com with one right-click
-- **Seamless integration** - Albums added via extension include full metadata
-- **Context menu** - Right-click any album on RateYourMusic to add it to your lists
-- **[Get the extension →](browser-extension/)**
-
-### 🎨 Personalization
-
-- **Custom themes** - Choose your accent color
-- **Dark mode** - Spotify-inspired interface with a metal aesthetic
-- **Responsive design** - Works on desktop, tablet, and mobile
-
-### 👥 Multi-User & Social
-
-- **User accounts** - Secure registration and login
-- **Password reset** - Email-based password recovery
-- **Shared metadata** - Album details added by one user benefit everyone
-- **Admin dashboard** - Site statistics, user management, and backups
+</td>
+<td width="50%">
 
 ### 🔒 Security & Performance
+- Production-grade: rate limiting, CSRF, CSP headers
+- PostgreSQL with connection pooling
+- Session management with Passport.js
+- Gzip compression
+- Docker-ready deployment
 
-- **Production-grade security** - Rate limiting, CSRF protection, CSP headers
-- **PostgreSQL database** - Reliable persistent storage
-- **Session management** - Secure authentication with Passport.js
-- **Gzip compression** - Fast page loads and API responses
-- **Docker ready** - Easy deployment with included Docker configuration
+</td>
+</tr>
+</table>
 
 ---
 
@@ -60,22 +86,24 @@ SuShe Online is a web application for creating, organizing, and managing your al
 
 ### For Users
 
-**Visit the live instance:** [sushe.overli.dev](https://sushe.overli.dev)
+**Visit the live instance:** **[sushe.overli.dev](https://sushe.overli.dev)**
 
-1. **Create an account** - Quick registration, no email verification needed
-2. **Create your first list** - Click "New List" and give it a name
-3. **Add albums** - Search by artist or album name to add from MusicBrainz
-4. **Install the browser extension** - Add albums directly from RateYourMusic (optional)
-5. **Connect a music service** - Link Spotify or Tidal to create playlists (optional)
+1. Create an account (quick registration, no email verification)
+2. Create your first list
+3. Search and add albums from MusicBrainz
+4. Optionally install the [browser extension](browser-extension/) for RateYourMusic
+5. Connect Spotify or Tidal to create playlists
 
-### For Self-Hosting
+---
 
-**Requirements:**
+## 🏠 Self-Hosting
 
-- Docker & Docker Compose (recommended)
-- OR Node.js 22+ and PostgreSQL 16
+### Prerequisites
 
-**Quick Deploy with Docker:**
+- **Docker & Docker Compose** (recommended)
+- OR Node.js 22+ and PostgreSQL 16+
+
+### Deploy with Docker
 
 ```bash
 # Clone the repository
@@ -84,35 +112,48 @@ cd sushe-online
 
 # Create environment file
 cp .env.example .env
-# Edit .env with your settings (SESSION_SECRET, etc.)
+# Edit .env with your settings
 
 # Start the application
-docker compose up --build
+docker compose up --build -d
 
-# Visit http://localhost:3000
+# View logs
+docker compose logs -f app
 ```
 
-The app will be available at `http://localhost:3000`. The admin code appears in the console logs.
+Access at `http://localhost:3000`. Admin code appears in the console logs.
+
+### Update Your Deployment
+
+```bash
+# Quick update (pulls latest image)
+./update.sh
+
+# Or manually
+docker compose pull app
+docker compose up -d app
+```
 
 ---
 
-## 🛠️ Configuration
+## ⚙️ Configuration
 
-### Essential Environment Variables
+### Essential Variables
 
 ```bash
 # Required
 SESSION_SECRET=your-secret-key-here
 DATABASE_URL=postgresql://user:pass@localhost/sushe
 
-# Optional but recommended
-SENDGRID_API_KEY=your-sendgrid-key  # For password reset emails
-BASE_URL=https://your-domain.com    # For email links
+# Optional
+SENDGRID_API_KEY=your-key      # Password reset emails
+BASE_URL=https://your-domain   # Email links
 ```
 
-### Music Service Integration (Optional)
+### Streaming Services (Optional)
 
-**Spotify:**
+<details>
+<summary><strong>Spotify Configuration</strong></summary>
 
 ```bash
 SPOTIFY_CLIENT_ID=your-client-id
@@ -120,244 +161,134 @@ SPOTIFY_CLIENT_SECRET=your-client-secret
 SPOTIFY_REDIRECT_URI=https://your-domain.com/auth/spotify/callback
 ```
 
-**Tidal:**
+</details>
+
+<details>
+<summary><strong>Tidal Configuration</strong></summary>
 
 ```bash
 TIDAL_CLIENT_ID=your-client-id
 TIDAL_REDIRECT_URI=https://your-domain.com/auth/tidal/callback
 ```
 
+</details>
+
 ### Security & Rate Limiting
 
 Rate limiting is **enabled by default** with production-ready settings:
 
-```bash
-RATE_LIMIT_LOGIN_MAX=5          # Max login attempts per 15 min
-RATE_LIMIT_REGISTER_MAX=3       # Max registrations per hour
-RATE_LIMIT_API_MAX=100          # Max API calls per 15 min
-DISABLE_RATE_LIMITING=false     # Set to true only for development
-```
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RATE_LIMIT_LOGIN_MAX` | `5` | Login attempts per 15 min |
+| `RATE_LIMIT_REGISTER_MAX` | `3` | Registrations per hour |
+| `RATE_LIMIT_API_MAX` | `100` | API calls per 15 min |
+| `DISABLE_RATE_LIMITING` | `false` | Disable for dev only |
+| `ENABLE_HSTS` | `false` | Enable when behind HTTPS |
 
-Security headers (CSP, HSTS, etc.) are automatically configured. For HTTPS deployments:
+<details>
+<summary><strong>📋 Complete Environment Variables Reference</strong></summary>
 
-```bash
-ENABLE_HSTS=true                # Enable HSTS when behind SSL
-NODE_ENV=production             # Enables additional security features
-```
+### Core Settings
 
-See the [Environment Variables](#environment-variables-reference) section below for complete configuration options.
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Server port |
+| `SESSION_SECRET` | **Required** | Session encryption key |
+| `DATABASE_URL` | **Required** | PostgreSQL connection string |
+| `DATA_DIR` | `./data` | Session file storage |
+| `BASE_URL` | `http://localhost:3000` | Base URL for emails |
+| `LOG_SQL` | `false` | Log all SQL queries |
 
----
+### Rate Limiting
 
-## 🎸 Usage Guide
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RATE_LIMIT_LOGIN_MAX` | `5` | Login attempts per 15 min |
+| `RATE_LIMIT_REGISTER_MAX` | `3` | Registrations per hour |
+| `RATE_LIMIT_FORGOT_MAX` | `3` | Password reset requests/hour |
+| `RATE_LIMIT_RESET_MAX` | `5` | Password resets per hour |
+| `RATE_LIMIT_SETTINGS_MAX` | `10` | Settings changes per hour |
+| `RATE_LIMIT_API_MAX` | `100` | API calls per 15 min |
 
-### Creating Lists
+### Database Tools
 
-1. Click "**New List**" button
-2. Enter a name (e.g., "2025 Favorites", "Black Metal Classics")
-3. Start adding albums!
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PG_DUMP` | `pg_dump` | Path to pg_dump |
+| `PG_RESTORE` | `pg_restore` | Path to pg_restore |
 
-### Adding Albums
-
-**Method 1: Search & Add**
-
-1. Type artist or album name in the search box
-2. Select from MusicBrainz results
-3. Album is added with cover art, release date, and metadata
-
-**Method 2: Browser Extension (Chrome)**
-
-1. Install the [SuShe Online Chrome extension](browser-extension/)
-2. Browse RateYourMusic.com
-3. Right-click any album → "Add to SuShe Online" → Select list
-
-### Editing Albums
-
-- Click an album to expand details
-- Add/edit genres, comments, and metadata
-- Select favorite tracks for playlist creation
-- Drag the handle to reorder albums
-
-### Creating Playlists
-
-1. **Connect a music service** (Settings → Connect Spotify/Tidal)
-2. **Select tracks** from albums in your list (click album → check tracks)
-3. **Right-click the list** → "Update Playlist"
-4. **Choose service** (if no default set)
-5. **Watch progress** as playlist is created
-6. **Done!** Playlist appears in your Spotify/Tidal account
-
-### Admin Features
-
-Access admin mode by clicking the 🤘 icon and entering the code from server logs:
-
-- **View statistics** - Users, albums, lists, activity
-- **Manage users** - View accounts, activity, delete if needed
-- **Create backups** - Download database dumps
-- **Restore backups** - Upload and restore previous backups
-- **Monitor system** - Session info, cache stats
+</details>
 
 ---
 
 ## 🧑‍💻 Development
 
-### Local Development Setup
+### Local Setup
 
 ```bash
 # Install dependencies
 npm install
 
-# Start development server (with auto-reload and CSS/JS watch)
+# Start development server (auto-reload + CSS/JS watch)
 npm run dev
 
-# Build CSS and JS manually
+# Build CSS and JS
 npm run build
-
-# Run tests
-npm test
-
-# Run end-to-end tests
-npm run test:e2e
-
-# Code quality
-npm run lint
-npm run format
 ```
 
-### Development Tools
+### Commands
 
-- **Auto-reload** - Server restarts on code changes (via nodemon)
-- **CSS/JS watch** - Assets rebuild automatically
-- **Hot module replacement** - Fast development iterations
-- **Test suite** - Security, auth, and core functionality tests
-- **Playwright E2E** - Browser-based integration tests
-- **ESLint & Prettier** - Code quality and formatting
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Development server with hot reload |
+| `npm run build` | Build CSS and JS for production |
+| `npm test` | Run test suite (~600 tests) |
+| `npm run test:e2e` | End-to-end browser tests |
+| `npm run test:coverage` | Test coverage report |
+| `npm run lint` | Check code quality |
+| `npm run format` | Format code with Prettier |
 
 ### Project Structure
 
 ```
 sushe-online/
-├── routes/           # Express route handlers
-│   ├── auth.js       # Authentication (login, register, password reset)
-│   ├── api.js        # REST API endpoints
-│   └── admin.js      # Admin dashboard
-├── db/               # Database layer
-│   ├── postgres.js   # PostgreSQL client
-│   └── migrations/   # Database schema migrations
-├── middleware/       # Express middleware
-│   ├── rate-limit.js # Rate limiting
-│   └── error-handler.js
-├── views/            # EJS templates
-├── src/              # Frontend source
-│   ├── js/           # JavaScript (bundled with Rollup)
-│   └── styles/       # Tailwind CSS
-├── public/           # Static assets (built)
-├── browser-extension/ # Chrome extension for RateYourMusic
-└── test/             # Test suite
+├── routes/              # Express route handlers
+│   ├── auth.js          # Authentication (login, register, password reset)
+│   ├── api.js           # REST API endpoints
+│   └── admin.js         # Admin dashboard
+├── db/                  # Database layer
+│   ├── postgres.js      # PostgreSQL client
+│   └── migrations/      # Schema migrations
+├── middleware/          # Express middleware
+│   ├── auth.js          # Authentication middleware
+│   ├── rate-limit.js    # Rate limiting
+│   └── error-handler.js # Error handling
+├── views/               # EJS templates
+├── src/                 # Frontend source
+│   ├── js/              # JavaScript (Vite bundled)
+│   └── styles/          # Tailwind CSS
+├── public/              # Static assets (built)
+├── browser-extension/   # Chrome extension
+└── test/                # Test suite (600+ tests)
 ```
 
-### Running Tests
+### Testing
 
 ```bash
-# Core tests (~40 tests, 30 seconds)
+# Full test suite (includes linting)
 npm test
 
 # End-to-end browser tests
 npm run test:e2e
 
-# Test with coverage report
+# Coverage report
 npm run test:coverage
 
 # Watch mode
 npm run test:watch
 ```
 
-Tests cover security middleware, session management, authentication, and critical paths.
-
----
-
-## 🐳 Docker Deployment
-
-### Docker Compose (Recommended)
-
-The included `docker-compose.yml` sets up the app and PostgreSQL database:
-
-```bash
-# Build and start
-docker compose up --build
-
-# Run in background
-docker compose up -d
-
-# View logs
-docker compose logs -f app
-
-# Stop
-docker compose down
-```
-
-### Environment Variables in Docker
-
-Create a `.env` file in the project root:
-
-```bash
-SESSION_SECRET=your-secret-here
-SENDGRID_API_KEY=your-key-here
-BASE_URL=https://your-domain.com
-SPOTIFY_CLIENT_ID=your-client-id
-SPOTIFY_CLIENT_SECRET=your-client-secret
-SPOTIFY_REDIRECT_URI=https://your-domain.com/auth/spotify/callback
-```
-
-Docker Compose automatically loads this file.
-
-### Updating Your Deployment
-
-The Docker image is automatically built and published to GitHub Container Registry on every push to `main`. To update your deployment:
-
-**Quick Update:**
-
-```bash
-./update.sh
-```
-
-**Manual Update:**
-
-```bash
-# Pull latest image
-docker compose pull app
-
-# Recreate app container with new image
-docker compose up -d app
-
-# View logs
-docker compose logs -f app
-```
-
-**Automated Updates (optional):**
-
-Use [Watchtower](https://containrrr.github.io/watchtower/) to automatically update:
-
-```bash
-docker run -d \
-  --name watchtower \
-  -v /var/run/docker.sock:/var/run/docker.sock \
-  containrrr/watchtower \
-  sushe-online \
-  --cleanup \
-  --interval 3600  # Check every hour
-```
-
-### Production Deployment
-
-1. **Use a reverse proxy** (nginx, Caddy, Traefik) for SSL termination
-2. **Set `ENABLE_HSTS=true`** when behind HTTPS
-3. **Configure `BASE_URL`** to your domain
-4. **Set strong `SESSION_SECRET`**
-5. **Configure email** (SENDGRID_API_KEY) for password resets
-6. **Regular backups** - Use admin dashboard or pg_dump
-7. **Monitor logs** - Check Docker logs or application logs
-8. **Keep updated** - Run `./update.sh` or use Watchtower
+Tests cover security middleware, authentication, session management, input validation, and critical paths. See [TESTING.md](TESTING.md) for details.
 
 ---
 
@@ -365,58 +296,69 @@ docker run -d \
 
 SuShe Online implements production-grade security:
 
-- ✅ **Rate limiting** - Prevents brute force attacks on auth endpoints
-- ✅ **CSRF protection** - Protects against cross-site request forgery
-- ✅ **XSS prevention** - Content Security Policy headers
-- ✅ **SQL injection protection** - Parameterized queries
-- ✅ **Secure sessions** - HTTPOnly cookies with encryption
-- ✅ **Password hashing** - bcrypt with proper salting
-- ✅ **Security headers** - HSTS, CSP, X-Frame-Options, etc.
-- ✅ **Input validation** - Server-side validation on all inputs
+| Feature | Implementation |
+|---------|----------------|
+| **Rate Limiting** | Prevents brute force attacks |
+| **CSRF Protection** | Cross-site request forgery prevention |
+| **XSS Prevention** | Content Security Policy headers |
+| **SQL Injection** | Parameterized queries |
+| **Secure Sessions** | HTTPOnly cookies with encryption |
+| **Password Hashing** | bcrypt with proper salting |
+| **Security Headers** | HSTS, CSP, X-Frame-Options |
+| **Input Validation** | Server-side validation on all inputs |
 
-### Whitelisted External Services
+### Whitelisted Services
 
-The Content Security Policy allows connections to:
-
-- **Music services**: Spotify, Tidal, Deezer, MusicBrainz
-- **Assets**: Google Fonts, Wikimedia Commons
-- **APIs**: RestCountries
-
-All security features work out-of-the-box with no configuration required.
+CSP allows connections to: Spotify, Tidal, Deezer, MusicBrainz, Google Fonts, Wikimedia Commons, RestCountries API.
 
 ---
 
 ## 📦 Browser Extension
 
-The **SuShe Online Chrome Extension** lets you add albums from RateYourMusic.com with one click.
+The **SuShe Online Chrome Extension** adds albums from RateYourMusic.com with one click.
 
 ### Features
 
 - Right-click context menu on RateYourMusic albums
-- Add albums directly to any of your SuShe Online lists
-- Automatic MusicBrainz metadata lookup
+- Add directly to any of your lists
+- Automatic metadata lookup
 - Cover art and release date included
-- Duplicate detection
 
 ### Installation
 
-- **Chrome Web Store**: Coming soon! (submitted for review)
-- **Manual install**: See [browser-extension/README.md](browser-extension/README.md)
+- **Chrome Web Store**: Coming soon
+- **Manual**: See [browser-extension/README.md](browser-extension/README.md)
 
-### Usage
+---
 
-1. Install the extension
-2. Configure your SuShe Online URL (extension options)
-3. Browse RateYourMusic.com
-4. Right-click any album → "Add to SuShe Online" → Select list
+## 🐳 Docker Deployment
+
+### Production Checklist
+
+1. **Use a reverse proxy** (nginx, Caddy, Traefik) for SSL
+2. **Set `ENABLE_HSTS=true`** when behind HTTPS
+3. **Configure `BASE_URL`** to your domain
+4. **Set strong `SESSION_SECRET`**
+5. **Configure email** for password resets
+6. **Regular backups** via admin dashboard or pg_dump
+
+### Automatic Updates
+
+Use [Watchtower](https://containrrr.github.io/watchtower/) for automatic updates:
+
+```bash
+docker run -d \
+  --name watchtower \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  containrrr/watchtower sushe-online \
+  --cleanup --interval 3600
+```
 
 ---
 
 ## 🤝 Contributing
 
-Contributions are welcome! This is a personal project, but improvements are appreciated.
-
-### How to Contribute
+Contributions are welcome!
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -427,74 +369,26 @@ Contributions are welcome! This is a personal project, but improvements are appr
 
 ### Code Style
 
-- Use Prettier for formatting (`npm run format`)
+- Format with Prettier (`npm run format`)
 - Follow ESLint rules (`npm run lint`)
 - Write tests for new features
 - Keep the dark aesthetic 🤘
 
 ---
 
-## 📝 Environment Variables Reference
+## 🛠 Tech Stack
 
-<details>
-<summary><strong>Click to expand complete configuration reference</strong></summary>
+<p>
+  <img src="https://img.shields.io/badge/Node.js-339933?style=flat-square&logo=node.js&logoColor=white" />
+  <img src="https://img.shields.io/badge/Express-000000?style=flat-square&logo=express&logoColor=white" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=flat-square&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/Tailwind-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" />
+  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" />
+  <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white" />
+</p>
 
-### Core Settings
-
-| Variable         | Default                 | Description                     |
-| ---------------- | ----------------------- | ------------------------------- |
-| `PORT`           | `3000`                  | Server port                     |
-| `SESSION_SECRET` | Required                | Session encryption key          |
-| `DATABASE_URL`   | Required                | PostgreSQL connection string    |
-| `DATA_DIR`       | `./data`                | Session file storage directory  |
-| `BASE_URL`       | `http://localhost:3000` | Base URL for emails and links   |
-| `LOG_SQL`        | `false`                 | Log all SQL queries (debugging) |
-
-### Email (Password Reset)
-
-| Variable           | Default  | Description                 |
-| ------------------ | -------- | --------------------------- |
-| `SENDGRID_API_KEY` | Optional | SendGrid API key for emails |
-
-### Music Services
-
-| Variable                | Required | Description             |
-| ----------------------- | -------- | ----------------------- |
-| `SPOTIFY_CLIENT_ID`     | Optional | Spotify OAuth client ID |
-| `SPOTIFY_CLIENT_SECRET` | Optional | Spotify OAuth secret    |
-| `SPOTIFY_REDIRECT_URI`  | Optional | OAuth callback URL      |
-| `TIDAL_CLIENT_ID`       | Optional | Tidal OAuth client ID   |
-| `TIDAL_REDIRECT_URI`    | Optional | OAuth callback URL      |
-
-### Security & Rate Limiting
-
-| Variable                  | Default       | Description                       |
-| ------------------------- | ------------- | --------------------------------- |
-| `DISABLE_RATE_LIMITING`   | `false`       | Disable rate limiting (dev only)  |
-| `RATE_LIMIT_LOGIN_MAX`    | `5`           | Max login attempts per 15 min     |
-| `RATE_LIMIT_REGISTER_MAX` | `3`           | Max registrations per hour        |
-| `RATE_LIMIT_FORGOT_MAX`   | `3`           | Max password reset requests/hour  |
-| `RATE_LIMIT_RESET_MAX`    | `5`           | Max password resets per hour      |
-| `RATE_LIMIT_SETTINGS_MAX` | `10`          | Max settings changes per hour     |
-| `RATE_LIMIT_API_MAX`      | `100`         | Max API calls per 15 min          |
-| `ENABLE_HSTS`             | `false`       | Enable HSTS (production w/ HTTPS) |
-| `CSP_REPORT_ONLY`         | `false`       | CSP report-only mode              |
-| `NODE_ENV`                | `development` | Node environment                  |
-
-### Performance & Caching
-
-| Variable        | Default   | Description                             |
-| --------------- | --------- | --------------------------------------- |
-| `ASSET_VERSION` | timestamp | Cache-busting version for static assets |
-
-### Database Tools
-
-| Variable     | Default      | Description                |
-| ------------ | ------------ | -------------------------- |
-| `PG_DUMP`    | `pg_dump`    | Path to pg_dump utility    |
-| `PG_RESTORE` | `pg_restore` | Path to pg_restore utility |
-
-</details>
+**Data Sources:** MusicBrainz • Deezer • Spotify API • Tidal API
 
 ---
 
@@ -504,28 +398,17 @@ This project is open source. Feel free to use, modify, and distribute.
 
 ---
 
-## 🎸 Credits
-
-Built with:
-
-- **Node.js** & **Express** - Backend framework
-- **PostgreSQL** - Database
-- **Tailwind CSS** - Styling
-- **MusicBrainz** - Music metadata
-- **Deezer** - Album cover art
-- **Passport.js** - Authentication
-- **Spotify & Tidal APIs** - Playlist integration
-
-Made with ❤️ for music lovers who want to catalog their musical journey.
-
----
-
 ## 🔗 Links
 
-- **Live Demo**: [sushe.overli.dev](https://sushe.overli.dev)
-- **GitHub**: [magnusoverli/sushe-online](https://github.com/magnusoverli/sushe-online)
-- **Browser Extension**: [Chrome Web Store](https://chrome.google.com/webstore) (coming soon!)
+<p>
+  <a href="https://sushe.overli.dev"><img src="https://img.shields.io/badge/Live_Demo-sushe.overli.dev-ff4444?style=for-the-badge" /></a>
+  <a href="https://github.com/magnusoverli/sushe-online"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github" /></a>
+</p>
 
 ---
 
-**Happy cataloging! 🤘**
+<p align="center">
+  Made with ❤️ for music lovers who want to catalog their musical journey
+  <br />
+  <strong>🤘 Happy cataloging!</strong>
+</p>
