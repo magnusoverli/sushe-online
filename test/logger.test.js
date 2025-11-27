@@ -198,14 +198,16 @@ test('Logger.flushWriteQueue should do nothing if queue is empty', async () => {
 
 test('Logger.flushWriteQueue should handle file write errors gracefully', async () => {
   const { Logger } = await import('../utils/logger.js');
+  // Create logger with file disabled to avoid directory creation issues
   const logger = new Logger({
     enableConsole: false,
-    enableFile: true,
-    logDir: '/nonexistent/path/that/should/fail',
+    enableFile: false,
     flushInterval: 999999,
   });
 
-  // Manually add to queue (bypassing directory creation)
+  // Manually enable file writing and add invalid path to queue
+  // This bypasses the constructor's directory creation
+  logger.enableFile = true;
   logger.writeQueue.push({
     filepath: '/nonexistent/path/that/should/fail/test.log',
     logLine: 'test\n',
