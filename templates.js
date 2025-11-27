@@ -1100,7 +1100,7 @@ const spotifyTemplate = (user) => `
                 <i class="fas fa-volume-up text-xs"></i>
               </button>
               <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                class="w-28 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+                class="w-20 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
             </div>
           </div>
           
