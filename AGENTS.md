@@ -27,7 +27,7 @@ This includes:
 
 - **Build**: `npm run build` (builds CSS + JS)
 - **Dev**: `npm run dev` (watch mode with nodemon)
-- **Test**: `npm test` (runs core tests - ~227 tests, ~30 seconds)
+- **Test**: `npm test` (runs core tests - ~215 tests, ~30 seconds)
 - **E2E Tests**: `npm run test:e2e` (runs end-to-end browser tests)
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
@@ -111,7 +111,6 @@ test/
 ├── color-utils.test.js         # Color utilities (16 tests)
 ├── error-handler.test.js       # Error handling (32 tests)
 ├── logger.test.js              # Logging (24 tests)
-├── response-cache.test.js      # Response caching (12 tests)
 ├── retry-wrapper.test.js       # DB health check (11 tests)
 ├── security-middleware.test.js # Security features (17 tests)
 ├── session-management.test.js  # Session handling (12 tests)
