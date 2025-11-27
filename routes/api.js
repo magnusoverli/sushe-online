@@ -1532,6 +1532,123 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Get available Spotify Connect devices
+  app.get('/api/spotify/devices', ensureAuthAPI, async (req, res) => {
+    // Ensure valid Spotify token (auto-refresh if needed)
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Spotify auth check failed:', tokenResult.error);
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    const spotifyAuth = tokenResult.spotifyAuth;
+
+    try {
+      const resp = await fetch('https://api.spotify.com/v1/me/player/devices', {
+        headers: {
+          Authorization: `Bearer ${spotifyAuth.access_token}`,
+        },
+      });
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        logger.error('Spotify devices API error:', resp.status, errorText);
+        throw new Error(`Spotify API error ${resp.status}`);
+      }
+
+      const data = await resp.json();
+      // Filter out restricted devices (can't accept commands)
+      const usableDevices = (data.devices || []).filter(
+        (d) => !d.is_restricted && d.id
+      );
+
+      logger.info(
+        'Spotify devices found:',
+        usableDevices.map((d) => d.name)
+      );
+      res.json({ devices: usableDevices });
+    } catch (err) {
+      logger.error('Spotify devices error:', err);
+      res.status(500).json({ error: 'Failed to get Spotify devices' });
+    }
+  });
+
+  // Play an album on a specific Spotify Connect device
+  app.put('/api/spotify/play', ensureAuthAPI, async (req, res) => {
+    // Ensure valid Spotify token (auto-refresh if needed)
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Spotify auth check failed:', tokenResult.error);
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+
+    const spotifyAuth = tokenResult.spotifyAuth;
+    const { albumId, deviceId } = req.body;
+
+    if (!albumId) {
+      return res.status(400).json({ error: 'albumId is required' });
+    }
+
+    try {
+      const url = deviceId
+        ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`
+        : 'https://api.spotify.com/v1/me/player/play';
+
+      const resp = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${spotifyAuth.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          context_uri: `spotify:album:${albumId}`,
+        }),
+      });
+
+      // 204 = success, 202 = accepted (device may need to wake up)
+      if (resp.status === 204 || resp.status === 202) {
+        logger.info(
+          'Spotify playback started on device:',
+          deviceId || 'active'
+        );
+        return res.json({ success: true });
+      }
+
+      // Handle specific errors
+      if (resp.status === 404) {
+        return res.status(404).json({
+          error:
+            'No active device found. Please open Spotify on a device first.',
+        });
+      }
+
+      if (resp.status === 403) {
+        return res.status(403).json({
+          error: 'Spotify Premium is required for playback control.',
+        });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      logger.error('Spotify play API error:', resp.status, errorData);
+      throw new Error(
+        errorData.error?.message || `Spotify API error ${resp.status}`
+      );
+    } catch (err) {
+      logger.error('Spotify play error:', err);
+      res
+        .status(500)
+        .json({ error: err.message || 'Failed to start playback' });
+    }
+  });
+
   // Search Tidal for an album and return the ID
   app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
     if (

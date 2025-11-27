@@ -317,6 +317,11 @@ function hideAllContextMenus() {
   if (albumMoveSubmenu) {
     albumMoveSubmenu.classList.add('hidden');
   }
+
+  const playAlbumSubmenu = document.getElementById('playAlbumSubmenu');
+  if (playAlbumSubmenu) {
+    playAlbumSubmenu.classList.add('hidden');
+  }
 }
 
 // Hide context menus when clicking elsewhere
@@ -1508,31 +1513,32 @@ function initializeAlbumContextMenu() {
     }
   };
 
-  // Handle play option click
-  playOption.onclick = () => {
-    contextMenu.classList.add('hidden');
-    if (currentContextAlbum === null) return;
+  // Handle play option - show submenu with devices (for Spotify) or direct play (for Tidal/local)
+  let playHideTimeout;
 
-    // Verify the album is still at the expected index, fallback to identity search
-    const albumsForPlay = getListData(currentList);
-    const expectedAlbum = albumsForPlay && albumsForPlay[currentContextAlbum];
-    if (expectedAlbum && currentContextAlbumId) {
-      const expectedId =
-        `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
-      if (expectedId === currentContextAlbumId) {
-        // Index is still valid
-        playAlbum(currentContextAlbum);
-        return;
-      }
-    }
+  playOption.addEventListener('mouseenter', () => {
+    if (playHideTimeout) clearTimeout(playHideTimeout);
+    showPlayAlbumSubmenu();
+  });
 
-    // Index is stale, search by identity
-    if (currentContextAlbumId) {
-      playAlbumSafe(currentContextAlbumId);
-    } else {
-      showToast('Album not found - it may have been moved or removed', 'error');
+  playOption.addEventListener('mouseleave', (e) => {
+    const submenu = document.getElementById('playAlbumSubmenu');
+    const toSubmenu =
+      submenu &&
+      (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
+
+    if (!toSubmenu) {
+      playHideTimeout = setTimeout(() => {
+        if (submenu) submenu.classList.add('hidden');
+      }, 200);
     }
-  };
+  });
+
+  playOption.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    showPlayAlbumSubmenu();
+  });
 
   // Handle remove option click
   removeOption.onclick = async () => {
@@ -1686,18 +1692,20 @@ function showMoveToListSubmenu() {
   submenu.classList.remove('hidden');
 }
 
-// Hide submenu when mouse leaves the context menu area
+// Hide submenus when mouse leaves the context menu area
 function hideSubmenuOnLeave() {
   const contextMenu = document.getElementById('albumContextMenu');
-  const submenu = document.getElementById('albumMoveSubmenu');
+  const moveSubmenu = document.getElementById('albumMoveSubmenu');
+  const playSubmenu = document.getElementById('playAlbumSubmenu');
 
-  if (!contextMenu || !submenu) return;
+  if (!contextMenu) return;
 
   let submenuTimeout;
 
-  const hideSubmenu = () => {
+  const hideSubmenus = () => {
     submenuTimeout = setTimeout(() => {
-      submenu.classList.add('hidden');
+      if (moveSubmenu) moveSubmenu.classList.add('hidden');
+      if (playSubmenu) playSubmenu.classList.add('hidden');
     }, 200);
   };
 
@@ -1706,16 +1714,262 @@ function hideSubmenuOnLeave() {
   };
 
   contextMenu.addEventListener('mouseleave', (e) => {
-    // Check if moving to submenu
-    const toSubmenu =
-      e.relatedTarget === submenu || submenu.contains(e.relatedTarget);
-    if (!toSubmenu) {
-      hideSubmenu();
+    // Check if moving to either submenu
+    const toMoveSubmenu =
+      moveSubmenu &&
+      (e.relatedTarget === moveSubmenu ||
+        moveSubmenu.contains(e.relatedTarget));
+    const toPlaySubmenu =
+      playSubmenu &&
+      (e.relatedTarget === playSubmenu ||
+        playSubmenu.contains(e.relatedTarget));
+
+    if (!toMoveSubmenu && !toPlaySubmenu) {
+      hideSubmenus();
     }
   });
 
-  submenu.addEventListener('mouseenter', cancelHide);
-  submenu.addEventListener('mouseleave', hideSubmenu);
+  if (moveSubmenu) {
+    moveSubmenu.addEventListener('mouseenter', cancelHide);
+    moveSubmenu.addEventListener('mouseleave', hideSubmenus);
+  }
+
+  if (playSubmenu) {
+    playSubmenu.addEventListener('mouseenter', cancelHide);
+    playSubmenu.addEventListener('mouseleave', hideSubmenus);
+  }
+}
+
+// Show the play album submenu with device options
+async function showPlayAlbumSubmenu() {
+  const submenu = document.getElementById('playAlbumSubmenu');
+  const playOption = document.getElementById('playAlbumOption');
+
+  if (!submenu || !playOption) return;
+
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+
+  // Build menu items
+  let menuItems = [];
+
+  // Always add "Open in app" option first (current behavior)
+  if (hasSpotify || hasTidal) {
+    menuItems.push(`
+      <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-play-action="open-app">
+        <i class="fas fa-external-link-alt mr-2 w-4 text-center text-green-500"></i>Open in app
+      </button>
+    `);
+  }
+
+  // If Spotify is connected, fetch available devices
+  if (hasSpotify) {
+    menuItems.push(`
+      <div class="border-t border-gray-700 my-1"></div>
+      <div class="px-4 py-1 text-xs text-gray-500 uppercase tracking-wide">Spotify Connect</div>
+    `);
+
+    // Show loading state
+    submenu.innerHTML =
+      menuItems.join('') +
+      '<div class="px-4 py-2 text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading devices...</div>';
+    positionPlaySubmenu();
+    submenu.classList.remove('hidden');
+
+    try {
+      const response = await fetch('/api/spotify/devices', {
+        credentials: 'include',
+      });
+      const data = await response.json();
+
+      if (response.ok && data.devices && data.devices.length > 0) {
+        const deviceItems = data.devices.map((device) => {
+          const icon = getDeviceIcon(device.type);
+          const activeClass = device.is_active ? 'text-green-500' : '';
+          const activeBadge = device.is_active
+            ? '<span class="ml-2 text-xs text-green-500">(active)</span>'
+            : '';
+          return `
+            <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-play-action="spotify-device" data-device-id="${device.id}">
+              <i class="${icon} mr-2 w-4 text-center ${activeClass}"></i>${device.name}${activeBadge}
+            </button>
+          `;
+        });
+        menuItems = menuItems.concat(deviceItems);
+      } else {
+        menuItems.push(`
+          <div class="px-4 py-2 text-sm text-gray-500">No devices available</div>
+          <div class="px-4 py-1 text-xs text-gray-600">Open Spotify on a device</div>
+        `);
+      }
+    } catch (err) {
+      console.error('Failed to fetch Spotify devices:', err);
+      menuItems.push(`
+        <div class="px-4 py-2 text-sm text-red-400">Failed to load devices</div>
+      `);
+    }
+  }
+
+  // If no services connected
+  if (!hasSpotify && !hasTidal) {
+    menuItems.push(`
+      <div class="px-4 py-2 text-sm text-gray-500">No music service connected</div>
+    `);
+  }
+
+  submenu.innerHTML = menuItems.join('');
+
+  // Add click handlers
+  submenu.querySelectorAll('[data-play-action]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const action = btn.dataset.playAction;
+      const deviceId = btn.dataset.deviceId;
+
+      // Hide menus
+      document.getElementById('albumContextMenu')?.classList.add('hidden');
+      submenu.classList.add('hidden');
+
+      if (action === 'open-app') {
+        // Use existing playAlbum function (opens in app)
+        triggerPlayAlbum();
+      } else if (action === 'spotify-device') {
+        // Play on specific Spotify Connect device
+        playAlbumOnSpotifyDevice(deviceId);
+      }
+    });
+  });
+
+  positionPlaySubmenu();
+  submenu.classList.remove('hidden');
+}
+
+// Position the play submenu next to the play option
+function positionPlaySubmenu() {
+  const submenu = document.getElementById('playAlbumSubmenu');
+  const playOption = document.getElementById('playAlbumOption');
+  const contextMenu = document.getElementById('albumContextMenu');
+
+  if (!submenu || !playOption || !contextMenu) return;
+
+  const playRect = playOption.getBoundingClientRect();
+  const menuRect = contextMenu.getBoundingClientRect();
+
+  submenu.style.left = `${menuRect.right}px`;
+  submenu.style.top = `${playRect.top}px`;
+}
+
+// Get appropriate icon for device type
+function getDeviceIcon(type) {
+  const icons = {
+    computer: 'fas fa-laptop',
+    smartphone: 'fas fa-mobile-alt',
+    speaker: 'fas fa-volume-up',
+    tv: 'fas fa-tv',
+    avr: 'fas fa-broadcast-tower',
+    stb: 'fas fa-satellite-dish',
+    audiodongle: 'fas fa-headphones',
+    gameconsole: 'fas fa-gamepad',
+    castvideo: 'fas fa-chromecast',
+    castaudio: 'fas fa-podcast',
+    automobile: 'fas fa-car',
+    tablet: 'fas fa-tablet-alt',
+  };
+  return icons[type?.toLowerCase()] || 'fas fa-music';
+}
+
+// Trigger the existing play album flow (open in app)
+function triggerPlayAlbum() {
+  if (currentContextAlbum === null) return;
+
+  const albumsForPlay = getListData(currentList);
+  const expectedAlbum = albumsForPlay && albumsForPlay[currentContextAlbum];
+  if (expectedAlbum && currentContextAlbumId) {
+    const expectedId =
+      `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
+    if (expectedId === currentContextAlbumId) {
+      playAlbum(currentContextAlbum);
+      return;
+    }
+  }
+
+  if (currentContextAlbumId) {
+    playAlbumSafe(currentContextAlbumId);
+  } else {
+    showToast('Album not found - it may have been moved or removed', 'error');
+  }
+}
+
+// Play album on a specific Spotify Connect device
+async function playAlbumOnSpotifyDevice(deviceId) {
+  if (currentContextAlbum === null && !currentContextAlbumId) {
+    showToast('No album selected', 'error');
+    return;
+  }
+
+  // Get the album data
+  const albumsForPlay = getListData(currentList);
+  let album = albumsForPlay && albumsForPlay[currentContextAlbum];
+
+  // Verify album identity
+  if (album && currentContextAlbumId) {
+    const expectedId =
+      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+    if (expectedId !== currentContextAlbumId) {
+      const result = findAlbumByIdentity(currentContextAlbumId);
+      if (result) {
+        album = result.album;
+      } else {
+        showToast('Album not found', 'error');
+        return;
+      }
+    }
+  }
+
+  if (!album) {
+    showToast('Album not found', 'error');
+    return;
+  }
+
+  showToast('Starting playback...', 'info');
+
+  try {
+    // First, search for the album on Spotify to get the ID
+    const searchQuery = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
+    const searchResp = await fetch(`/api/spotify/album?${searchQuery}`, {
+      credentials: 'include',
+    });
+    const searchData = await searchResp.json();
+
+    if (!searchResp.ok || !searchData.id) {
+      showToast(searchData.error || 'Album not found on Spotify', 'error');
+      return;
+    }
+
+    // Now play the album on the device
+    const playResp = await fetch('/api/spotify/play', {
+      method: 'PUT',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        albumId: searchData.id,
+        deviceId: deviceId,
+      }),
+    });
+
+    const playData = await playResp.json();
+
+    if (playResp.ok && playData.success) {
+      showToast(`Now playing "${album.album}"`, 'success');
+    } else {
+      showToast(playData.error || 'Failed to start playback', 'error');
+    }
+  } catch (err) {
+    console.error('Spotify Connect playback error:', err);
+    showToast('Failed to start playback', 'error');
+  }
 }
 
 // Play the selected album on the connected music service
