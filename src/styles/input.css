@@ -271,3 +271,108 @@
     background-color: #6b7280;
   }
 }
+
+/* ============================================
+   Spotify Miniplayer Styles
+   ============================================ */
+
+/* Miniplayer container - desktop only */
+.spotify-miniplayer {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.3), transparent);
+}
+
+/* Progress bar hover state */
+#miniplayerProgress:hover #miniplayerProgressFill {
+  background-color: #1db954; /* Spotify green */
+}
+
+#miniplayerProgress:hover #miniplayerProgressHandle {
+  opacity: 1;
+}
+
+/* Volume slider styling */
+#miniplayerVolume {
+  -webkit-appearance: none;
+  appearance: none;
+  background: #374151;
+  border-radius: 9999px;
+  height: 4px;
+}
+
+#miniplayerVolume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+
+#miniplayerVolume::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+#miniplayerVolume::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+/* Play/pause button hover effect */
+#miniplayerPlayPause:hover {
+  background-color: #1db954;
+}
+
+/* Smooth transitions for miniplayer states */
+#miniplayerNotConnected,
+#miniplayerPremiumRequired,
+#miniplayerInactive,
+#miniplayerActive {
+  transition: opacity 0.2s ease;
+}
+
+/* Album art placeholder styling */
+#miniplayerArt {
+  background: linear-gradient(135deg, #1f2937, #374151);
+}
+
+/* Track info truncation */
+#miniplayerTrack,
+#miniplayerArtist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Control button hover states */
+#miniplayerPrev:hover,
+#miniplayerNext:hover,
+#miniplayerMute:hover {
+  color: #fff;
+  transform: scale(1.1);
+}
+
+#miniplayerPrev,
+#miniplayerNext,
+#miniplayerMute {
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+/* Hide miniplayer on mobile */
+@media (max-width: 1023px) {
+  .spotify-miniplayer {
+    display: none !important;
+  }
+}
+
+/* Collapsed sidebar - hide miniplayer content */
+#sidebar.collapsed .spotify-miniplayer {
+  display: none;
+}

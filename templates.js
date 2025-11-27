@@ -1015,14 +1015,14 @@ const spotifyTemplate = (user) => `
         </button>
       </div>
       
-      <nav class="flex-1 overflow-y-auto p-4 flex flex-col">
-        <div class="flex-1">
+      <nav class="flex-1 overflow-y-auto p-4 flex flex-col min-h-0">
+        <div class="flex-1 overflow-y-auto">
           <ul id="listNav" class="space-y-1">
             <!-- Lists will be populated here -->
           </ul>
         </div>
         
-        <div class="mt-6 pt-6 border-t border-gray-800">
+        <div class="mt-4 pt-4 border-t border-gray-800 flex-shrink-0">
           <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 flex items-center">
             <i class="fas fa-plus mr-2"></i><span>Create List</span>
           </button>
@@ -1032,6 +1032,82 @@ const spotifyTemplate = (user) => `
           <input type="file" id="fileInput" accept=".json" style="display: none;">
         </div>
       </nav>
+      
+      <!-- Spotify Miniplayer (Desktop only) -->
+      <div id="spotifyMiniplayer" class="spotify-miniplayer flex-shrink-0 border-t border-gray-800 p-3 hidden">
+        <!-- Not Connected State -->
+        <div id="miniplayerNotConnected" class="text-center py-2">
+          <p class="text-xs text-gray-500 mb-2">Spotify not connected</p>
+          <a href="/settings" class="text-xs text-green-500 hover:text-green-400 transition-colors">
+            <i class="fab fa-spotify mr-1"></i>Connect Spotify
+          </a>
+        </div>
+        
+        <!-- Premium Required State -->
+        <div id="miniplayerPremiumRequired" class="text-center py-2 hidden">
+          <p class="text-xs text-gray-500">Premium required for playback</p>
+        </div>
+        
+        <!-- Inactive State (connected but not playing here) -->
+        <div id="miniplayerInactive" class="text-center py-2 hidden">
+          <p class="text-xs text-gray-500 mb-2">Ready to play</p>
+          <button id="miniplayerActivate" class="text-xs bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-full transition-colors">
+            <i class="fab fa-spotify mr-1"></i>Play on SuShe
+          </button>
+        </div>
+        
+        <!-- Active Player State -->
+        <div id="miniplayerActive" class="hidden">
+          <!-- Track Info -->
+          <div class="flex items-center gap-3 mb-3">
+            <div id="miniplayerArt" class="w-12 h-12 bg-gray-800 rounded flex-shrink-0 overflow-hidden">
+              <img src="" alt="" class="w-full h-full object-cover hidden">
+            </div>
+            <div class="flex-1 min-w-0">
+              <p id="miniplayerTrack" class="text-sm font-medium text-white truncate">No track</p>
+              <p id="miniplayerArtist" class="text-xs text-gray-400 truncate">—</p>
+            </div>
+          </div>
+          
+          <!-- Progress Bar -->
+          <div class="mb-2">
+            <div id="miniplayerProgress" class="h-1 bg-gray-700 rounded-full cursor-pointer group relative">
+              <div id="miniplayerProgressFill" class="h-full bg-green-500 rounded-full transition-all duration-100" style="width: 0%"></div>
+              <div id="miniplayerProgressHandle" class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style="left: 0%"></div>
+            </div>
+            <div class="flex justify-between text-[10px] text-gray-500 mt-1">
+              <span id="miniplayerTimeElapsed">0:00</span>
+              <span id="miniplayerTimeTotal">0:00</span>
+            </div>
+          </div>
+          
+          <!-- Controls -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <button id="miniplayerPrev" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
+                <i class="fas fa-step-backward text-sm"></i>
+              </button>
+              <button id="miniplayerPlayPause" class="p-2 bg-white text-gray-900 rounded-full hover:scale-105 transition-transform" title="Play/Pause">
+                <i class="fas fa-play text-sm"></i>
+              </button>
+              <button id="miniplayerNext" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Next">
+                <i class="fas fa-step-forward text-sm"></i>
+              </button>
+            </div>
+            
+            <!-- Volume -->
+            <div class="flex items-center gap-2 group/vol">
+              <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
+                <i class="fas fa-volume-up text-sm"></i>
+              </button>
+              <div class="w-16 hidden group-hover/vol:block">
+                <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
+                  class="w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer accent-green-500">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </aside>
       
       <!-- Album Display Area -->
@@ -1107,6 +1183,9 @@ const spotifyTemplate = (user) => `
   ${importConflictModalComponent()}
   ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
+  
+  <!-- Spotify Web Playback SDK (loaded only if user has Spotify connected) -->
+  ${user?.spotifyAuth ? '<script src="https://sdk.scdn.co/spotify-player.js"></script>' : ''}
   
   <script type="module" src="${asset('/js/bundle.js')}"></script>
 
