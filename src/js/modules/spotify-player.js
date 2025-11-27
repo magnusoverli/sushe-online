@@ -647,7 +647,9 @@ function getPollingInterval() {
   if (!currentPlayback) {
     return POLL_INTERVAL_IDLE; // No playback, check periodically
   }
-  return currentPlayback.is_playing ? POLL_INTERVAL_PLAYING : POLL_INTERVAL_PAUSED;
+  return currentPlayback.is_playing
+    ? POLL_INTERVAL_PLAYING
+    : POLL_INTERVAL_PAUSED;
 }
 
 /**
