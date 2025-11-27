@@ -575,15 +575,12 @@ test('Logger flushWriteQueue should handle Promise.all failures', async () => {
     flushInterval: 999999,
   });
 
-  // Save original flushWriteQueue
-  const originalFlush = logger.flushWriteQueue.bind(logger);
-
   // Mock flushWriteQueue to throw during Promise.all
   logger.flushWriteQueue = async function () {
     if (this.isWriting || this.writeQueue.length === 0) return;
 
     this.isWriting = true;
-    const items = this.writeQueue.splice(0);
+    this.writeQueue.splice(0); // Clear queue
 
     // Mock console.error to capture error output
     const errors = [];
@@ -595,7 +592,6 @@ test('Logger flushWriteQueue should handle Promise.all failures', async () => {
       await Promise.all([Promise.reject(new Error('Forced failure'))]);
     } catch (err) {
       // This should trigger lines 105-106
-      // eslint-disable-next-line no-console
       console.error('Batch log write failed:', err);
     } finally {
       this.isWriting = false;
