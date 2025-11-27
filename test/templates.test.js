@@ -251,7 +251,10 @@ describe('templates utilities', () => {
     });
 
     it('should use custom title', () => {
-      const result = templates.htmlTemplate('<div>Content</div>', 'Custom Title');
+      const result = templates.htmlTemplate(
+        '<div>Content</div>',
+        'Custom Title'
+      );
 
       assert.ok(result.includes('Custom Title'));
     });
@@ -264,7 +267,11 @@ describe('templates utilities', () => {
 
     it('should pass user data to layout', () => {
       const user = { username: 'testuser', email: 'test@example.com' };
-      const result = templates.htmlTemplate('<div>Content</div>', 'Title', user);
+      const result = templates.htmlTemplate(
+        '<div>Content</div>',
+        'Title',
+        user
+      );
 
       // The template should have user context available
       assert.ok(typeof result === 'string');

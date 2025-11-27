@@ -163,7 +163,7 @@ describe('email-sender', () => {
   it('should send email with correct parameters', async () => {
     const mockLogger = { info: mock.fn(), error: mock.fn() };
     const mockFetch = mock.fn(() => Promise.resolve({ ok: true }));
-    
+
     const { sendEmail } = createEmailSender({
       logger: mockLogger,
       fetch: mockFetch,

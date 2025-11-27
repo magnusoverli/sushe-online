@@ -115,10 +115,9 @@ describe('PgDatastore', () => {
     it('should return non-array params as-is', () => {
       assert.strictEqual(datastore._sanitizeParams(null), null);
       assert.strictEqual(datastore._sanitizeParams(undefined), undefined);
-      assert.deepStrictEqual(
-        datastore._sanitizeParams({ foo: 'bar' }),
-        { foo: 'bar' }
-      );
+      assert.deepStrictEqual(datastore._sanitizeParams({ foo: 'bar' }), {
+        foo: 'bar',
+      });
     });
 
     it('should sanitize base64 strings longer than 100 chars', () => {
@@ -315,7 +314,9 @@ describe('PgDatastore', () => {
     });
 
     it('should return null when no rows found', async () => {
-      mockPool.query = mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 }));
+      mockPool.query = mock.fn(() =>
+        Promise.resolve({ rows: [], rowCount: 0 })
+      );
 
       const result = await datastore.findOne({ userId: 'nonexistent' });
 
@@ -355,7 +356,9 @@ describe('PgDatastore', () => {
     });
 
     it('should return empty array when no rows found', async () => {
-      mockPool.query = mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 }));
+      mockPool.query = mock.fn(() =>
+        Promise.resolve({ rows: [], rowCount: 0 })
+      );
 
       const result = await datastore.find({ userId: 'nonexistent' });
 
@@ -763,7 +766,9 @@ describe('PgDatastore', () => {
     });
 
     it('should handle empty results', async () => {
-      mockPool.query = mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 }));
+      mockPool.query = mock.fn(() =>
+        Promise.resolve({ rows: [], rowCount: 0 })
+      );
 
       const result = await datastore.findWithAlbumData('nonexistent');
 
@@ -978,7 +983,10 @@ describe('warmConnections', () => {
     await warmConnections(mockPool);
 
     assert.strictEqual(mockPool.query.mock.calls.length, 3);
-    assert.strictEqual(mockPool.query.mock.calls[0].arguments[0], 'SELECT 1 as warmup');
+    assert.strictEqual(
+      mockPool.query.mock.calls[0].arguments[0],
+      'SELECT 1 as warmup'
+    );
   });
 
   it('should default to 5 connections when pool.options.min not set', async () => {
@@ -1036,4 +1044,3 @@ describe('warmConnections', () => {
     assert.strictEqual(mockPool.query.mock.calls.length, 5);
   });
 });
-
