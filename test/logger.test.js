@@ -182,6 +182,8 @@ test('Logger.flushWriteQueue should do nothing if already writing', async () => 
   // Queue should be unchanged
   assert.strictEqual(logger.writeQueue.length, 1);
 
+  // Clean up without triggering flush (clear queue first)
+  logger.writeQueue = [];
   logger.isWriting = false;
   await logger.shutdown();
 });
@@ -214,7 +216,11 @@ test('Logger.flushWriteQueue should handle file write errors gracefully', async 
   });
 
   // Should not throw, but handle error internally
+  // The error is logged to console which is expected behavior
   await logger.flushWriteQueue();
+
+  // Queue should be cleared after attempted write (even on error)
+  assert.strictEqual(logger.writeQueue.length, 0);
 
   await logger.shutdown();
 });
