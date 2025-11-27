@@ -9,15 +9,13 @@
 </p>
 
 <p align="center">
-  <a href="https://sushe.overli.dev"><img src="https://img.shields.io/badge/demo-sushe.overli.dev-ff4444?style=for-the-badge&logo=vercel&logoColor=white" alt="Live Demo" /></a>
   <a href="https://github.com/magnusoverli/sushe-online/actions/workflows/docker-build.yml"><img src="https://img.shields.io/github/actions/workflow/status/magnusoverli/sushe-online/docker-build.yml?branch=main&style=for-the-badge&logo=github-actions&logoColor=white&label=CI" alt="CI Status" /></a>
   <a href="https://github.com/magnusoverli/sushe-online/pkgs/container/sushe-online"><img src="https://img.shields.io/badge/ghcr.io-container-blue?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" /></a>
 </p>
 
 <p align="center">
   <a href="#-features">Features</a> •
-  <a href="#-quick-start">Quick Start</a> •
-  <a href="#-self-hosting">Self-Hosting</a> •
+  <a href="#-getting-started">Getting Started</a> •
   <a href="#-development">Development</a> •
   <a href="#-browser-extension">Extension</a>
 </p>
@@ -82,21 +80,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 
 ---
 
-## 🚀 Quick Start
-
-### For Users
-
-**Visit the live instance:** **[sushe.overli.dev](https://sushe.overli.dev)**
-
-1. Create an account (quick registration, no email verification)
-2. Create your first list
-3. Search and add albums from MusicBrainz
-4. Optionally install the [browser extension](browser-extension/) for RateYourMusic
-5. Connect Spotify or Tidal to create playlists
-
----
-
-## 🏠 Self-Hosting
+## 🚀 Getting Started
 
 ### Prerequisites
 
@@ -397,13 +381,6 @@ Contributions are welcome!
 This project is open source. Feel free to use, modify, and distribute.
 
 ---
-
-## 🔗 Links
-
-<p>
-  <a href="https://sushe.overli.dev"><img src="https://img.shields.io/badge/Live_Demo-sushe.overli.dev-ff4444?style=for-the-badge" /></a>
-  <a href="https://github.com/magnusoverli/sushe-online"><img src="https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github" /></a>
-</p>
 
 ---
 
