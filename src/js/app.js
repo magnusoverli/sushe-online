@@ -1651,8 +1651,16 @@ function initializeAlbumContextMenu() {
 function showMoveToListSubmenu() {
   const submenu = document.getElementById('albumMoveSubmenu');
   const moveOption = document.getElementById('moveAlbumOption');
+  const playSubmenu = document.getElementById('playAlbumSubmenu');
+  const playOption = document.getElementById('playAlbumOption');
 
   if (!submenu || !moveOption) return;
+
+  // Hide the other submenu first
+  if (playSubmenu) {
+    playSubmenu.classList.add('hidden');
+    playOption?.classList.remove('bg-gray-700', 'text-white');
+  }
 
   // Highlight the parent menu item
   moveOption.classList.add('bg-gray-700', 'text-white');
@@ -1762,8 +1770,16 @@ function hideSubmenuOnLeave() {
 async function showPlayAlbumSubmenu() {
   const submenu = document.getElementById('playAlbumSubmenu');
   const playOption = document.getElementById('playAlbumOption');
+  const moveSubmenu = document.getElementById('albumMoveSubmenu');
+  const moveOption = document.getElementById('moveAlbumOption');
 
   if (!submenu || !playOption) return;
+
+  // Hide the other submenu first
+  if (moveSubmenu) {
+    moveSubmenu.classList.add('hidden');
+    moveOption?.classList.remove('bg-gray-700', 'text-white');
+  }
 
   // Highlight the parent menu item
   playOption.classList.add('bg-gray-700', 'text-white');
