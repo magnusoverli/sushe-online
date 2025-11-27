@@ -258,6 +258,12 @@ window.toggleOfficialStatus = toggleOfficialStatus;
 // Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
 // Positions a menu element and adjusts if it would overflow the viewport
 function positionContextMenu(menu, x, y) {
+  // Hide FAB when context menu is shown to avoid overlap on mobile
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab) {
+    fab.style.display = 'none';
+  }
+
   // Initial position
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
@@ -328,6 +334,12 @@ function hideAllContextMenus() {
   const playOption = document.getElementById('playAlbumOption');
   moveOption?.classList.remove('bg-gray-700', 'text-white');
   playOption?.classList.remove('bg-gray-700', 'text-white');
+
+  // Restore FAB visibility if a list is selected
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab && currentList) {
+    fab.style.display = 'flex';
+  }
 }
 
 // Hide context menus when clicking elsewhere
@@ -4841,6 +4853,12 @@ window.showMobileAlbumMenu = function (indexOrElement) {
     existingSheet.remove();
   }
 
+  // Hide FAB when mobile action sheet is shown to avoid overlap
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab) {
+    fab.style.display = 'none';
+  }
+
   const actionSheet = document.createElement('div');
   actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
   actionSheet.innerHTML = `
@@ -4890,6 +4908,11 @@ window.showMobileAlbumMenu = function (indexOrElement) {
 
   const closeSheet = () => {
     actionSheet.remove();
+    // Restore FAB visibility if a list is selected
+    const fabElement = document.getElementById('addAlbumFAB');
+    if (fabElement && currentList) {
+      fabElement.style.display = 'flex';
+    }
   };
 
   backdrop.addEventListener('click', closeSheet);
