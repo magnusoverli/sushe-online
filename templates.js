@@ -42,7 +42,7 @@ const headerComponent = (user, activeSection = 'home') => `
   <header class="bg-gray-900 z-50">
     <div class="flex items-center justify-between py-[2px] lg:py-4 px-3 lg:px-0">
       <!-- Mobile menu button / Desktop logo -->
-      <div class="flex items-center gap-2 lg:w-64 lg:justify-center lg:gap-0">
+      <div class="flex items-center gap-2 lg:w-72 lg:justify-center lg:gap-0">
         ${
           activeSection === 'home'
             ? `
@@ -892,7 +892,7 @@ const spotifyTemplate = (user) => `
     
     @media (min-width: 1024px) {
       .main-content {
-        grid-template-columns: 16rem 1fr; /* Desktop: 256px sidebar */
+        grid-template-columns: 18rem 1fr; /* Desktop: 288px sidebar */
       }
     }
     
@@ -916,7 +916,7 @@ const spotifyTemplate = (user) => `
     
     @media (min-width: 1024px) {
       .sidebar {
-        width: 16rem;
+        width: 18rem;
         overflow: visible;
         border-right: 1px solid #1f2937; /* Restore border on desktop */
       }
