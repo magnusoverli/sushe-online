@@ -1086,7 +1086,7 @@ const spotifyTemplate = (user) => `
               <button id="miniplayerPrev" class="px-2 py-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
                 <i class="fas fa-step-backward text-sm"></i>
               </button>
-              <button id="miniplayerPlayPause" class="px-2.5 py-2 bg-white text-gray-900 rounded-full hover:scale-105 transition-transform" title="Play/Pause">
+              <button id="miniplayerPlayPause" class="px-3.5 py-2 bg-white text-gray-900 rounded-full hover:scale-105 transition-transform" title="Play/Pause">
                 <i class="fas fa-play text-sm"></i>
               </button>
               <button id="miniplayerNext" class="px-2 py-1.5 text-gray-400 hover:text-white transition-colors" title="Next">
