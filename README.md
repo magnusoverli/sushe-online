@@ -116,7 +116,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 ### Prerequisites
 
 - **Docker & Docker Compose** (recommended)
-- OR Node.js 22+ and PostgreSQL 18+
+- OR Node.js 24+ and PostgreSQL 18+
 
 ### Deploy with Docker
 
