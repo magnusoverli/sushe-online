@@ -1058,7 +1058,7 @@ const spotifyTemplate = (user) => `
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
           <div class="flex items-center gap-3 mb-3">
-            <div id="miniplayerArt" class="w-14 h-14 bg-gray-800 rounded flex-shrink-0 overflow-hidden shadow-lg">
+            <div id="miniplayerArt" class="w-16 h-16 bg-gray-800 rounded flex-shrink-0 overflow-hidden">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
             <div class="flex-1 min-w-0">
@@ -1082,7 +1082,7 @@ const spotifyTemplate = (user) => `
           <!-- Controls Row -->
           <div class="flex items-center justify-between">
             <!-- Playback Controls -->
-            <div class="flex items-center gap-1">
+            <div class="flex items-center gap-2">
               <button id="miniplayerPrev" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
                 <i class="fas fa-step-backward text-sm"></i>
               </button>
@@ -1101,7 +1101,7 @@ const spotifyTemplate = (user) => `
               </button>
               <div class="miniplayer-volume-slider w-0 overflow-hidden transition-all duration-200">
                 <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                  class="w-16 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+                  class="w-20 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
               </div>
             </div>
             

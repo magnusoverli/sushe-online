@@ -960,7 +960,7 @@ function setupControls() {
 
   if (volumeGroup && volumeSliderContainer) {
     volumeGroup.addEventListener('mouseenter', () => {
-      volumeSliderContainer.style.width = '64px';
+      volumeSliderContainer.style.width = '80px';
     });
     volumeGroup.addEventListener('mouseleave', () => {
       volumeSliderContainer.style.width = '0';
