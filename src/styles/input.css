@@ -487,8 +487,8 @@
   background-color: rgba(34, 197, 94, 0.1);
 }
 
-/* Current device indicator animation */
-#miniplayerCurrentDevice i {
+/* Current device indicator animation - only the broadcast tower icon */
+#miniplayerCurrentDevice > span > i.fa-broadcast-tower {
   animation: pulse 2s ease-in-out infinite;
 }
 
