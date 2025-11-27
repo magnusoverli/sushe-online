@@ -1082,31 +1082,33 @@ const spotifyTemplate = (user) => `
           <!-- Controls Row -->
           <div class="flex items-center justify-between">
             <!-- Playback Controls -->
-            <div class="flex items-center gap-2">
-              <button id="miniplayerPrev" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
+            <div class="flex items-center gap-3">
+              <button id="miniplayerPrev" class="px-2 py-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
                 <i class="fas fa-step-backward text-sm"></i>
               </button>
-              <button id="miniplayerPlayPause" class="p-2 bg-white text-gray-900 rounded-full hover:scale-105 transition-transform" title="Play/Pause">
+              <button id="miniplayerPlayPause" class="px-2.5 py-2 bg-white text-gray-900 rounded-full hover:scale-105 transition-transform" title="Play/Pause">
                 <i class="fas fa-play text-sm"></i>
               </button>
-              <button id="miniplayerNext" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Next">
+              <button id="miniplayerNext" class="px-2 py-1.5 text-gray-400 hover:text-white transition-colors" title="Next">
                 <i class="fas fa-step-forward text-sm"></i>
               </button>
             </div>
             
-            <!-- Volume Control -->
-            <div class="flex items-center gap-1 miniplayer-volume-group">
-              <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
-                <i class="fas fa-volume-up text-xs"></i>
-              </button>
-              <div class="miniplayer-volume-slider w-0 overflow-hidden transition-all duration-200">
-                <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                  class="w-20 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+            <!-- Volume & Device Controls (grouped together) -->
+            <div class="flex items-center gap-2">
+              <!-- Volume Control -->
+              <div class="flex items-center gap-1 miniplayer-volume-group">
+                <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
+                  <i class="fas fa-volume-up text-xs"></i>
+                </button>
+                <div class="miniplayer-volume-slider w-0 overflow-hidden transition-all duration-200">
+                  <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
+                    class="w-20 h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+                </div>
               </div>
-            </div>
-            
-            <!-- Device Picker -->
-            <div class="relative">
+              
+              <!-- Device Picker -->
+              <div class="relative">
               <button id="miniplayerDeviceBtn" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Devices">
                 <i class="fas fa-desktop text-xs"></i>
               </button>
@@ -1123,6 +1125,7 @@ const spotifyTemplate = (user) => `
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
           
