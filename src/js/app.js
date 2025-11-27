@@ -322,6 +322,12 @@ function hideAllContextMenus() {
   if (playAlbumSubmenu) {
     playAlbumSubmenu.classList.add('hidden');
   }
+
+  // Remove highlights from submenu parent options
+  const moveOption = document.getElementById('moveAlbumOption');
+  const playOption = document.getElementById('playAlbumOption');
+  moveOption?.classList.remove('bg-gray-700', 'text-white');
+  playOption?.classList.remove('bg-gray-700', 'text-white');
 }
 
 // Hide context menus when clicking elsewhere
@@ -1648,6 +1654,9 @@ function showMoveToListSubmenu() {
 
   if (!submenu || !moveOption) return;
 
+  // Highlight the parent menu item
+  moveOption.classList.add('bg-gray-700', 'text-white');
+
   // Get all list names except the current one
   const listNames = Object.keys(lists).filter((name) => name !== currentList);
 
@@ -1672,9 +1681,10 @@ function showMoveToListSubmenu() {
         e.stopPropagation();
         const targetList = btn.dataset.targetList;
 
-        // Hide both menus
+        // Hide both menus and remove highlight
         document.getElementById('albumContextMenu')?.classList.add('hidden');
         submenu.classList.add('hidden');
+        moveOption?.classList.remove('bg-gray-700', 'text-white');
 
         // Show confirmation modal
         showMoveConfirmation(currentContextAlbumId, targetList);
@@ -1697,6 +1707,8 @@ function hideSubmenuOnLeave() {
   const contextMenu = document.getElementById('albumContextMenu');
   const moveSubmenu = document.getElementById('albumMoveSubmenu');
   const playSubmenu = document.getElementById('playAlbumSubmenu');
+  const moveOption = document.getElementById('moveAlbumOption');
+  const playOption = document.getElementById('playAlbumOption');
 
   if (!contextMenu) return;
 
@@ -1704,8 +1716,14 @@ function hideSubmenuOnLeave() {
 
   const hideSubmenus = () => {
     submenuTimeout = setTimeout(() => {
-      if (moveSubmenu) moveSubmenu.classList.add('hidden');
-      if (playSubmenu) playSubmenu.classList.add('hidden');
+      if (moveSubmenu) {
+        moveSubmenu.classList.add('hidden');
+        moveOption?.classList.remove('bg-gray-700', 'text-white');
+      }
+      if (playSubmenu) {
+        playSubmenu.classList.add('hidden');
+        playOption?.classList.remove('bg-gray-700', 'text-white');
+      }
     }, 200);
   };
 
@@ -1746,6 +1764,9 @@ async function showPlayAlbumSubmenu() {
   const playOption = document.getElementById('playAlbumOption');
 
   if (!submenu || !playOption) return;
+
+  // Highlight the parent menu item
+  playOption.classList.add('bg-gray-700', 'text-white');
 
   const hasSpotify = window.currentUser?.spotifyAuth;
   const hasTidal = window.currentUser?.tidalAuth;
@@ -1828,9 +1849,10 @@ async function showPlayAlbumSubmenu() {
       const action = btn.dataset.playAction;
       const deviceId = btn.dataset.deviceId;
 
-      // Hide menus
+      // Hide menus and remove highlight
       document.getElementById('albumContextMenu')?.classList.add('hidden');
       submenu.classList.add('hidden');
+      playOption?.classList.remove('bg-gray-700', 'text-white');
 
       if (action === 'open-app') {
         // Use existing playAlbum function (opens in app)
