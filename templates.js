@@ -1105,7 +1105,7 @@ const spotifyTemplate = (user) => `
           </div>
           
           <!-- Current Device Indicator with Device Picker -->
-          <div id="miniplayerCurrentDevice" class="mt-2 flex items-center justify-center gap-2">
+          <div id="miniplayerCurrentDevice" class="mt-2 flex items-center justify-between">
             <span class="text-[10px] text-gray-500">
               <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
               <span id="miniplayerDeviceName">Listening on...</span>
@@ -1113,7 +1113,7 @@ const spotifyTemplate = (user) => `
             <!-- Device Picker -->
             <div class="relative">
               <button id="miniplayerDeviceBtn" class="p-1 text-green-500 hover:text-green-400 transition-colors" title="Change device">
-                <i class="fas fa-exchange-alt text-xs"></i>
+                <i class="fas fa-desktop text-xs"></i>
               </button>
               
               <!-- Device Dropdown -->
