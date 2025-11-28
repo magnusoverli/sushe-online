@@ -112,9 +112,10 @@ describe('retry-wrapper', () => {
       const result = await healthCheck(mockPool);
 
       assert.strictEqual(result.status, 'healthy');
+      // Allow small margin for timer imprecision (timers can fire slightly early in some environments)
       assert.ok(
-        result.responseTime >= 50,
-        `Expected responseTime >= 50, got ${result.responseTime}`
+        result.responseTime >= 45,
+        `Expected responseTime >= 45, got ${result.responseTime}`
       );
       assert.ok(
         result.responseTime < 200,
