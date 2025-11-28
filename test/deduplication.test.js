@@ -7,6 +7,7 @@ const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const { createDeduplicationHelpers } = require('../utils/deduplication.js');
 
+// eslint-disable-next-line max-lines-per-function -- Test suite with many test cases
 describe('deduplication helpers', () => {
   let mockPool;
   let helpers;

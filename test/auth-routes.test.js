@@ -24,27 +24,10 @@ require.cache[require.resolve('../utils/logger')] = {
 };
 
 /**
- * Create a test Express app with auth routes
+ * Helper: Create flash middleware for testing
  */
-function createTestApp(options = {}) {
-  const app = express();
-
-  // Basic middleware
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
-
-  // Session middleware (in-memory for tests)
-  app.use(
-    session({
-      secret: 'test-secret',
-      resave: false,
-      saveUninitialized: true,
-      cookie: { secure: false },
-    })
-  );
-
-  // Custom flash middleware
-  app.use((req, res, next) => {
+function createFlashMiddleware() {
+  return (req, res, next) => {
     if (!req.session.flash) {
       req.session.flash = {};
     }
@@ -65,11 +48,15 @@ function createTestApp(options = {}) {
     };
 
     next();
-  });
+  };
+}
 
-  // CSRF Protection
+/**
+ * Helper: Create CSRF protection middleware for testing
+ */
+function createCsrfProtection() {
   const csrfTokens = new csrf();
-  const csrfProtection = (req, res, next) => {
+  return (req, res, next) => {
     if (!req.session.csrfSecret) {
       req.session.csrfSecret = csrfTokens.secretSync();
     }
@@ -88,15 +75,17 @@ function createTestApp(options = {}) {
     }
     next();
   };
+}
 
-  // Mock passport
-  const mockPassport = {
+/**
+ * Helper: Create mock passport for testing
+ */
+function createMockPassport(users) {
+  return {
     authenticate: (strategy, callback) => {
       return (req, _res, _next) => {
         const { email, password } = req.body;
-
-        // Find user in mock database
-        const user = options.users?.find((u) => u.email === email);
+        const user = users?.find((u) => u.email === email);
 
         if (!user) {
           return callback(null, false, {
@@ -104,7 +93,6 @@ function createTestApp(options = {}) {
           });
         }
 
-        // Check password (in tests, compare directly)
         if (user.password !== password && user.hash !== password) {
           return callback(null, false, {
             message: 'Invalid email or password',
@@ -115,9 +103,13 @@ function createTestApp(options = {}) {
       };
     },
   };
+}
 
-  // Mock isAuthenticated
-  app.use((req, res, next) => {
+/**
+ * Helper: Create authentication middleware for testing
+ */
+function createAuthMiddleware(users) {
+  return (req, res, next) => {
     req.isAuthenticated = () => !!req.session.userId;
     req.logIn = (user, callback) => {
       req.session.userId = user._id;
@@ -129,13 +121,17 @@ function createTestApp(options = {}) {
       delete req.user;
       callback();
     };
-    if (req.session.userId && options.users) {
-      req.user = options.users.find((u) => u._id === req.session.userId);
+    if (req.session.userId && users) {
+      req.user = users.find((u) => u._id === req.session.userId);
     }
     next();
-  });
+  };
+}
 
-  // Mock bcrypt
+/**
+ * Helper: Create mock datastores for testing
+ */
+function createMockDatastores(options) {
   const mockBcrypt = {
     hash: mock.fn((password) => Promise.resolve(`hashed_${password}`)),
     compare: mock.fn((password, hash) =>
@@ -143,7 +139,6 @@ function createTestApp(options = {}) {
     ),
   };
 
-  // Mock users datastore
   const mockUsersAsync = {
     findOne: mock.fn(async (query) => {
       if (!options.users) return null;
@@ -174,7 +169,19 @@ function createTestApp(options = {}) {
     }),
   };
 
-  // Validators
+  return { mockBcrypt, mockUsersAsync, mockUsers };
+}
+
+/**
+ * Helper: Create route dependencies for testing
+ */
+function createRouteDependencies(
+  csrfProtection,
+  mockPassport,
+  mockBcrypt,
+  mockUsers,
+  mockUsersAsync
+) {
   const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const isValidUsername = (username) => {
     if (!username) return false;
@@ -184,7 +191,6 @@ function createTestApp(options = {}) {
   const isValidPassword = (password) =>
     typeof password === 'string' && password.length >= 8;
 
-  // Mock templates
   const htmlTemplate = (content, title) =>
     `<!DOCTYPE html><html><head><title>${title}</title></head><body>${content}</body></html>`;
   const registerTemplate = (req) =>
@@ -193,10 +199,7 @@ function createTestApp(options = {}) {
     `<form method="post" action="/login"><input type="hidden" name="_csrf" value="${req.csrfToken()}" /><input name="email"/><input name="password"/><button type="submit">Login</button></form>`;
   const spotifyTemplate = () => '<div>Home Page</div>';
 
-  // Rate limit middleware (no-op for tests)
   const noopRateLimit = (req, res, next) => next();
-
-  // ensureAuth middleware
   const ensureAuth = (req, res, next) => {
     if (req.user || req.isAuthenticated()) {
       return next();
@@ -204,8 +207,7 @@ function createTestApp(options = {}) {
     res.redirect('/login');
   };
 
-  // Dependencies for auth routes
-  const deps = {
+  return {
     htmlTemplate,
     registerTemplate,
     loginTemplate,
@@ -237,116 +239,168 @@ function createTestApp(options = {}) {
     isTokenUsable: () => false,
     settingsTemplate: () => '<div>Settings</div>',
   };
+}
+
+/**
+ * Create a test Express app with auth routes
+ */
+function createTestApp(options = {}) {
+  const app = express();
+
+  // Basic middleware
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
+
+  // Session middleware (in-memory for tests)
+  app.use(
+    session({
+      secret: 'test-secret',
+      resave: false,
+      saveUninitialized: true,
+      cookie: { secure: false },
+    })
+  );
+
+  // Add flash middleware
+  app.use(createFlashMiddleware());
+
+  const csrfProtection = createCsrfProtection();
+  const mockPassport = createMockPassport(options.users);
+
+  // Mock isAuthenticated middleware
+  app.use(createAuthMiddleware(options.users));
+
+  const { mockBcrypt, mockUsersAsync, mockUsers } =
+    createMockDatastores(options);
+  const deps = createRouteDependencies(
+    csrfProtection,
+    mockPassport,
+    mockBcrypt,
+    mockUsers,
+    mockUsersAsync
+  );
 
   // Mount registration routes
-  app.get('/register', csrfProtection, (req, res) => {
-    res.send(htmlTemplate(registerTemplate(req), 'Register'));
+  app.get('/register', deps.csrfProtection, (req, res) => {
+    res.send(deps.htmlTemplate(deps.registerTemplate(req), 'Register'));
   });
 
-  app.post('/register', noopRateLimit, csrfProtection, async (req, res) => {
-    try {
-      const { email, username, password, confirmPassword } = req.body;
+  app.post(
+    '/register',
+    deps.rateLimitAdminRequest,
+    deps.csrfProtection,
+    async (req, res) => {
+      try {
+        const { email, username, password, confirmPassword } = req.body;
 
-      if (!email || !username || !password || !confirmPassword) {
-        req.flash('error', 'All fields are required');
-        return res.redirect('/register');
+        if (!email || !username || !password || !confirmPassword) {
+          req.flash('error', 'All fields are required');
+          return res.redirect('/register');
+        }
+
+        if (password !== confirmPassword) {
+          req.flash('error', 'Passwords do not match');
+          return res.redirect('/register');
+        }
+
+        if (!deps.isValidEmail(email)) {
+          req.flash('error', 'Please enter a valid email address');
+          return res.redirect('/register');
+        }
+
+        if (!deps.isValidUsername(username)) {
+          req.flash(
+            'error',
+            'Username can only contain letters, numbers, and underscores and must be 3-30 characters'
+          );
+          return res.redirect('/register');
+        }
+
+        if (!deps.isValidPassword(password)) {
+          req.flash('error', 'Password must be at least 8 characters');
+          return res.redirect('/register');
+        }
+
+        const existingEmailUser = await deps.usersAsync.findOne({ email });
+        if (existingEmailUser) {
+          req.flash('error', 'Email already registered');
+          return res.redirect('/register');
+        }
+
+        const existingUsernameUser = await deps.usersAsync.findOne({
+          username,
+        });
+        if (existingUsernameUser) {
+          req.flash('error', 'Username already taken');
+          return res.redirect('/register');
+        }
+
+        const hash = await deps.bcrypt.hash(password, 12);
+        await deps.usersAsync.insert({
+          email,
+          username,
+          hash,
+          createdAt: new Date(),
+        });
+
+        req.flash('success', 'Registration successful! Please login.');
+        res.redirect('/login');
+      } catch (_error) {
+        req.flash('error', 'Registration error. Please try again.');
+        res.redirect('/register');
       }
-
-      if (password !== confirmPassword) {
-        req.flash('error', 'Passwords do not match');
-        return res.redirect('/register');
-      }
-
-      if (!isValidEmail(email)) {
-        req.flash('error', 'Please enter a valid email address');
-        return res.redirect('/register');
-      }
-
-      if (!isValidUsername(username)) {
-        req.flash(
-          'error',
-          'Username can only contain letters, numbers, and underscores and must be 3-30 characters'
-        );
-        return res.redirect('/register');
-      }
-
-      if (!isValidPassword(password)) {
-        req.flash('error', 'Password must be at least 8 characters');
-        return res.redirect('/register');
-      }
-
-      const existingEmailUser = await mockUsersAsync.findOne({ email });
-      if (existingEmailUser) {
-        req.flash('error', 'Email already registered');
-        return res.redirect('/register');
-      }
-
-      const existingUsernameUser = await mockUsersAsync.findOne({ username });
-      if (existingUsernameUser) {
-        req.flash('error', 'Username already taken');
-        return res.redirect('/register');
-      }
-
-      const hash = await mockBcrypt.hash(password, 12);
-      await mockUsersAsync.insert({
-        email,
-        username,
-        hash,
-        createdAt: new Date(),
-      });
-
-      req.flash('success', 'Registration successful! Please login.');
-      res.redirect('/login');
-    } catch (_error) {
-      req.flash('error', 'Registration error. Please try again.');
-      res.redirect('/register');
     }
-  });
+  );
 
   // Mount login routes
-  app.get('/login', csrfProtection, (req, res) => {
+  app.get('/login', deps.csrfProtection, (req, res) => {
     if (req.isAuthenticated()) {
       return res.redirect('/');
     }
-    res.send(htmlTemplate(loginTemplate(req), 'Login'));
+    res.send(deps.htmlTemplate(deps.loginTemplate(req), 'Login'));
   });
 
-  app.post('/login', noopRateLimit, csrfProtection, async (req, res) => {
-    try {
-      const { email, password } = req.body;
+  app.post(
+    '/login',
+    deps.rateLimitAdminRequest,
+    deps.csrfProtection,
+    async (req, res) => {
+      try {
+        const { email, password } = req.body;
 
-      const user = await mockUsersAsync.findOne({ email });
+        const user = await deps.usersAsync.findOne({ email });
 
-      if (!user) {
-        req.flash('error', 'Invalid email or password');
-        return res.redirect('/login');
-      }
-
-      const passwordMatch = await mockBcrypt.compare(password, user.hash);
-      if (!passwordMatch) {
-        req.flash('error', 'Invalid email or password');
-        return res.redirect('/login');
-      }
-
-      req.logIn(user, (err) => {
-        if (err) {
-          req.flash('error', 'Login error');
+        if (!user) {
+          req.flash('error', 'Invalid email or password');
           return res.redirect('/login');
         }
 
-        // Check for extension auth redirect
-        if (req.session.extensionAuth) {
-          delete req.session.extensionAuth;
-          return res.redirect('/extension/auth');
+        const passwordMatch = await deps.bcrypt.compare(password, user.hash);
+        if (!passwordMatch) {
+          req.flash('error', 'Invalid email or password');
+          return res.redirect('/login');
         }
 
-        res.redirect('/');
-      });
-    } catch (_error) {
-      req.flash('error', 'An error occurred during login');
-      res.redirect('/login');
+        req.logIn(user, (err) => {
+          if (err) {
+            req.flash('error', 'Login error');
+            return res.redirect('/login');
+          }
+
+          // Check for extension auth redirect
+          if (req.session.extensionAuth) {
+            delete req.session.extensionAuth;
+            return res.redirect('/extension/auth');
+          }
+
+          res.redirect('/');
+        });
+      } catch (_error) {
+        req.flash('error', 'An error occurred during login');
+        res.redirect('/login');
+      }
     }
-  });
+  );
 
   // Logout route
   app.get('/logout', (req, res) => {
@@ -354,13 +408,13 @@ function createTestApp(options = {}) {
   });
 
   // Protected home route
-  app.get('/', ensureAuth, (req, res) => {
-    res.send(htmlTemplate(spotifyTemplate(), 'Home'));
+  app.get('/', deps.ensureAuth, (req, res) => {
+    res.send(deps.htmlTemplate(deps.spotifyTemplate(), 'Home'));
   });
 
   // Extension auth route (for testing redirect)
-  app.get('/extension/auth', ensureAuth, (req, res) => {
-    res.send(htmlTemplate('<div>Extension Auth</div>', 'Extension Auth'));
+  app.get('/extension/auth', deps.ensureAuth, (req, res) => {
+    res.send(deps.htmlTemplate('<div>Extension Auth</div>', 'Extension Auth'));
   });
 
   // Error handler for CSRF errors
@@ -371,7 +425,12 @@ function createTestApp(options = {}) {
     next(err);
   });
 
-  return { app, deps, mockUsersAsync, mockBcrypt };
+  return {
+    app,
+    deps,
+    mockUsersAsync: deps.usersAsync,
+    mockBcrypt: deps.bcrypt,
+  };
 }
 
 // =============================================================================

@@ -16,6 +16,7 @@ require.cache[require.resolve('../utils/logger')] = {
   exports: mockLogger,
 };
 
+// eslint-disable-next-line max-lines-per-function -- Test suite with many test cases
 test.describe('Rate Limiting Middleware', () => {
   test.afterEach(() => {
     // Clean up environment variables
