@@ -958,16 +958,18 @@ const spotifyTemplate = (user) => `
     
     /* Additional iPhone-specific fixes */
     @media (max-width: 1023px) {
-      /* Header safe area - prevent header from going behind status bar/notch */
-      header {
+      /* Push entire app below status bar/notch on iOS */
+      body {
         padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
         padding-top: env(safe-area-inset-top); /* iOS 11.2+ */
+        padding-bottom: constant(safe-area-inset-bottom); /* iOS 11.0-11.2 */
+        padding-bottom: env(safe-area-inset-bottom); /* iOS 11.2+ */
       }
       
       /* Ensure proper viewport handling on iPhone */
-      .main-content {
-        min-height: calc(100vh - env(safe-area-inset-top, 0px));
-        min-height: calc(100dvh - env(safe-area-inset-top, 0px));
+      .app-layout {
+        height: calc(100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+        height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
       }
     }
     

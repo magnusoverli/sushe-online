@@ -602,13 +602,12 @@ const settingsTemplate = (req, options) => {
     
     /* Mobile scrolling behavior - consistent with main page */
     @media (max-width: 1023px) {
-      /* Header safe area - prevent header from going behind status bar/notch */
-      header {
+      /* Push entire app below status bar/notch on iOS */
+      body {
         padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
         padding-top: env(safe-area-inset-top); /* iOS 11.2+ */
-      }
-      
-      body {
+        padding-bottom: constant(safe-area-inset-bottom); /* iOS 11.0-11.2 */
+        padding-bottom: env(safe-area-inset-bottom); /* iOS 11.2+ */
         overscroll-behavior: none;
       }
     }
