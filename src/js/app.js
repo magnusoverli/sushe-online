@@ -2817,9 +2817,9 @@ function updateListNav() {
         'touchstart',
         (_e) => {
           pressTimer = setTimeout(() => {
-            // Use the global showListMenu from templates.js
-            if (window.showListMenu) {
-              window.showListMenu(listName);
+            // Use the mobile list menu from app.js
+            if (window.showMobileListMenu) {
+              window.showMobileListMenu(listName);
             }
           }, 500);
         },
@@ -5364,6 +5364,199 @@ window.showMobileMoveToListSheet = function (index, albumId) {
       closeSheet();
       showMoveConfirmation(albumId, targetList);
     });
+  });
+};
+
+// Show mobile action sheet for list context menu
+window.showMobileListMenu = function (listName) {
+  // Get metadata for this list
+  const meta = getListMetadata(listName);
+  const hasYear = meta?.year;
+  const isOfficial = meta?.isOfficial || false;
+
+  // Determine music service text
+  const musicService = window.currentUser?.musicService;
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+  let musicServiceText = 'Send to Music Service';
+  if (musicService === 'spotify' && hasSpotify) {
+    musicServiceText = 'Send to Spotify';
+  } else if (musicService === 'tidal' && hasTidal) {
+    musicServiceText = 'Send to Tidal';
+  } else if (hasSpotify && !hasTidal) {
+    musicServiceText = 'Send to Spotify';
+  } else if (hasTidal && !hasSpotify) {
+    musicServiceText = 'Send to Tidal';
+  }
+
+  // Remove any existing action sheets first
+  const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
+  if (existingSheet) {
+    existingSheet.remove();
+  }
+
+  // Hide FAB when mobile action sheet is shown
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab) {
+    fab.style.display = 'none';
+  }
+
+  const actionSheet = document.createElement('div');
+  actionSheet.className = 'fixed inset-0 z-[60]';
+  actionSheet.innerHTML = `
+    <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+      <div class="p-4">
+        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+        <h3 class="font-semibold text-white mb-4">${listName}</h3>
+        
+        <button data-action="download"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-download mr-3 text-gray-400"></i>Download List
+        </button>
+        
+        <button data-action="edit"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
+        </button>
+        
+        ${
+          hasYear
+            ? `
+        <button data-action="toggle-official"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas ${isOfficial ? 'fa-star-half-alt' : 'fa-star'} mr-3 text-yellow-500"></i>${isOfficial ? 'Remove Official' : 'Set as Official'}
+        </button>
+        `
+            : ''
+        }
+        
+        <button data-action="send-to-service"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+          <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${musicServiceText}
+        </button>
+        
+        <button data-action="delete"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+          <i class="fas fa-trash mr-3"></i>Delete List
+        </button>
+        
+        <button data-action="cancel"
+                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(actionSheet);
+
+  // Attach event listeners
+  const backdrop = actionSheet.querySelector('[data-backdrop]');
+  const downloadBtn = actionSheet.querySelector('[data-action="download"]');
+  const editBtn = actionSheet.querySelector('[data-action="edit"]');
+  const toggleOfficialBtn = actionSheet.querySelector(
+    '[data-action="toggle-official"]'
+  );
+  const sendToServiceBtn = actionSheet.querySelector(
+    '[data-action="send-to-service"]'
+  );
+  const deleteBtn = actionSheet.querySelector('[data-action="delete"]');
+  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+
+  const closeSheet = () => {
+    actionSheet.remove();
+    // Restore FAB visibility if a list is selected
+    const fabElement = document.getElementById('addAlbumFAB');
+    if (fabElement && currentList) {
+      fabElement.style.display = 'flex';
+    }
+  };
+
+  backdrop.addEventListener('click', closeSheet);
+  cancelBtn.addEventListener('click', closeSheet);
+
+  downloadBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSheet();
+    downloadListAsJSON(listName);
+  });
+
+  editBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSheet();
+    openRenameModal(listName);
+  });
+
+  if (toggleOfficialBtn) {
+    toggleOfficialBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSheet();
+      toggleOfficialStatus(listName);
+    });
+  }
+
+  sendToServiceBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSheet();
+    try {
+      const listData = getListData(listName) || [];
+      await updatePlaylist(listName, listData);
+    } catch (err) {
+      console.error('Update playlist failed', err);
+    }
+  });
+
+  deleteBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    closeSheet();
+
+    const confirmed = await showConfirmation(
+      'Delete List',
+      `Are you sure you want to delete the list "${listName}"?`,
+      'This action cannot be undone.',
+      'Delete'
+    );
+
+    if (confirmed) {
+      try {
+        await apiCall(`/api/lists/${encodeURIComponent(listName)}`, {
+          method: 'DELETE',
+        });
+
+        delete lists[listName];
+
+        if (currentList === listName) {
+          const remainingLists = Object.keys(lists);
+          if (remainingLists.length > 0) {
+            selectList(remainingLists[0]);
+          } else {
+            currentList = null;
+            window.currentList = currentList;
+
+            const headerAddAlbumBtn =
+              document.getElementById('headerAddAlbumBtn');
+            if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
+
+            document.getElementById('albumContainer').innerHTML = `
+              <div class="text-center text-gray-500 mt-20">
+                <p class="text-xl mb-2">No list selected</p>
+                <p class="text-sm">Create or import a list to get started</p>
+              </div>
+            `;
+          }
+        }
+
+        updateListNav();
+        showToast(`List "${listName}" deleted`);
+      } catch (_error) {
+        showToast('Error deleting list', 'error');
+      }
+    }
   });
 };
 
