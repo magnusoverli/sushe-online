@@ -1283,6 +1283,7 @@ const spotifyTemplate = (user) => `
       const backdrop = document.getElementById('mobileMenuBackdrop');
       const drawer = document.getElementById('mobileMenuDrawer');
       const fab = document.getElementById('addAlbumFAB');
+      const nowPlaying = document.getElementById('mobileNowPlaying');
       const isOpen = menu.dataset.open === 'true';
       
       if (isOpen) {
@@ -1293,6 +1294,10 @@ const spotifyTemplate = (user) => `
         if (fab) {
           fab.style.opacity = '1';
           fab.style.pointerEvents = 'auto';
+        }
+        if (nowPlaying) {
+          nowPlaying.style.opacity = '';
+          nowPlaying.style.pointerEvents = '';
         }
         // Hide after transition completes
         setTimeout(() => {
@@ -1313,6 +1318,10 @@ const spotifyTemplate = (user) => `
         if (fab) {
           fab.style.opacity = '0';
           fab.style.pointerEvents = 'none';
+        }
+        if (nowPlaying) {
+          nowPlaying.style.opacity = '0';
+          nowPlaying.style.pointerEvents = 'none';
         }
       }
     }
