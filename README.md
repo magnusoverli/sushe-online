@@ -68,6 +68,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 <td width="50%">
 
 ### 🎵 Collection Management
+
 - Create unlimited lists by year, genre, mood, or any theme
 - Rich metadata from MusicBrainz and Deezer (cover art, release dates, artists)
 - Drag & drop reordering
@@ -79,6 +80,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 <td width="50%">
 
 ### 🎧 Streaming Integration
+
 - Sync playlists to **Spotify** and **Tidal**
 - Smart track matching across services
 - Real-time progress tracking
@@ -90,6 +92,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 <td width="50%">
 
 ### 🔌 Browser Extension
+
 - Chrome extension for [RateYourMusic.com](https://rateyourmusic.com)
 - Right-click any album → Add to your lists
 - Automatic metadata lookup
@@ -99,6 +102,7 @@ SuShe Online is a web application for music enthusiasts who want to create, orga
 <td width="50%">
 
 ### 🔒 Security & Performance
+
 - Production-grade: rate limiting, CSRF, CSP headers
 - PostgreSQL with connection pooling
 - Session management with Passport.js
@@ -192,44 +196,44 @@ TIDAL_REDIRECT_URI=https://your-domain.com/auth/tidal/callback
 
 Rate limiting is **enabled by default** with production-ready settings:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_LOGIN_MAX` | `5` | Login attempts per 15 min |
-| `RATE_LIMIT_REGISTER_MAX` | `3` | Registrations per hour |
-| `RATE_LIMIT_API_MAX` | `100` | API calls per 15 min |
-| `DISABLE_RATE_LIMITING` | `false` | Disable for dev only |
-| `ENABLE_HSTS` | `false` | Enable when behind HTTPS |
+| Variable                  | Default | Description               |
+| ------------------------- | ------- | ------------------------- |
+| `RATE_LIMIT_LOGIN_MAX`    | `5`     | Login attempts per 15 min |
+| `RATE_LIMIT_REGISTER_MAX` | `3`     | Registrations per hour    |
+| `RATE_LIMIT_API_MAX`      | `100`   | API calls per 15 min      |
+| `DISABLE_RATE_LIMITING`   | `false` | Disable for dev only      |
+| `ENABLE_HSTS`             | `false` | Enable when behind HTTPS  |
 
 <details>
 <summary><strong>📋 Complete Environment Variables Reference</strong></summary>
 
 ### Core Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3000` | Server port |
-| `SESSION_SECRET` | **Required** | Session encryption key |
-| `DATABASE_URL` | **Required** | PostgreSQL connection string |
-| `DATA_DIR` | `./data` | Session file storage |
-| `BASE_URL` | `http://localhost:3000` | Base URL for emails |
-| `LOG_SQL` | `false` | Log all SQL queries |
+| Variable         | Default                 | Description                  |
+| ---------------- | ----------------------- | ---------------------------- |
+| `PORT`           | `3000`                  | Server port                  |
+| `SESSION_SECRET` | **Required**            | Session encryption key       |
+| `DATABASE_URL`   | **Required**            | PostgreSQL connection string |
+| `DATA_DIR`       | `./data`                | Session file storage         |
+| `BASE_URL`       | `http://localhost:3000` | Base URL for emails          |
+| `LOG_SQL`        | `false`                 | Log all SQL queries          |
 
 ### Rate Limiting
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_LOGIN_MAX` | `5` | Login attempts per 15 min |
-| `RATE_LIMIT_REGISTER_MAX` | `3` | Registrations per hour |
-| `RATE_LIMIT_FORGOT_MAX` | `3` | Password reset requests/hour |
-| `RATE_LIMIT_RESET_MAX` | `5` | Password resets per hour |
-| `RATE_LIMIT_SETTINGS_MAX` | `10` | Settings changes per hour |
-| `RATE_LIMIT_API_MAX` | `100` | API calls per 15 min |
+| Variable                  | Default | Description                  |
+| ------------------------- | ------- | ---------------------------- |
+| `RATE_LIMIT_LOGIN_MAX`    | `5`     | Login attempts per 15 min    |
+| `RATE_LIMIT_REGISTER_MAX` | `3`     | Registrations per hour       |
+| `RATE_LIMIT_FORGOT_MAX`   | `3`     | Password reset requests/hour |
+| `RATE_LIMIT_RESET_MAX`    | `5`     | Password resets per hour     |
+| `RATE_LIMIT_SETTINGS_MAX` | `10`    | Settings changes per hour    |
+| `RATE_LIMIT_API_MAX`      | `100`   | API calls per 15 min         |
 
 ### Database Tools
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PG_DUMP` | `pg_dump` | Path to pg_dump |
+| Variable     | Default      | Description        |
+| ------------ | ------------ | ------------------ |
+| `PG_DUMP`    | `pg_dump`    | Path to pg_dump    |
 | `PG_RESTORE` | `pg_restore` | Path to pg_restore |
 
 </details>
@@ -253,15 +257,15 @@ npm run build
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Development server with hot reload |
-| `npm run build` | Build CSS and JS for production |
-| `npm test` | Run test suite (~600 tests) |
-| `npm run test:e2e` | End-to-end browser tests |
-| `npm run test:coverage` | Test coverage report |
-| `npm run lint` | Check code quality |
-| `npm run format` | Format code with Prettier |
+| Command                 | Description                        |
+| ----------------------- | ---------------------------------- |
+| `npm run dev`           | Development server with hot reload |
+| `npm run build`         | Build CSS and JS for production    |
+| `npm test`              | Run test suite (~600 tests)        |
+| `npm run test:e2e`      | End-to-end browser tests           |
+| `npm run test:coverage` | Test coverage report               |
+| `npm run lint`          | Check code quality                 |
+| `npm run format`        | Format code with Prettier          |
 
 ### Project Structure
 
@@ -311,16 +315,16 @@ Tests cover security middleware, authentication, session management, input valid
 
 SuShe Online implements production-grade security:
 
-| Feature | Implementation |
-|---------|----------------|
-| **Rate Limiting** | Prevents brute force attacks |
-| **CSRF Protection** | Cross-site request forgery prevention |
-| **XSS Prevention** | Content Security Policy headers |
-| **SQL Injection** | Parameterized queries |
-| **Secure Sessions** | HTTPOnly cookies with encryption |
-| **Password Hashing** | bcrypt with proper salting |
-| **Security Headers** | HSTS, CSP, X-Frame-Options |
-| **Input Validation** | Server-side validation on all inputs |
+| Feature              | Implementation                        |
+| -------------------- | ------------------------------------- |
+| **Rate Limiting**    | Prevents brute force attacks          |
+| **CSRF Protection**  | Cross-site request forgery prevention |
+| **XSS Prevention**   | Content Security Policy headers       |
+| **SQL Injection**    | Parameterized queries                 |
+| **Secure Sessions**  | HTTPOnly cookies with encryption      |
+| **Password Hashing** | bcrypt with proper salting            |
+| **Security Headers** | HSTS, CSP, X-Frame-Options            |
+| **Input Validation** | Server-side validation on all inputs  |
 
 ### Whitelisted Services
 
@@ -346,10 +350,10 @@ The **SuShe Online Chrome Extension** supercharges your music discovery by letti
 
 ### Installation
 
-| Method | Link |
-|--------|------|
+| Method               | Link                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | **Chrome Web Store** | [Install from Chrome Web Store](https://chromewebstore.google.com/detail/sushe-online-rateyourmusi/dnldndgncdhofafboeafamicpdkbdamk) |
-| **Manual Install** | [browser-extension/README.md](browser-extension/README.md) |
+| **Manual Install**   | [browser-extension/README.md](browser-extension/README.md)                                                                           |
 
 > 💡 **Tip:** After installing, configure your SuShe Online instance URL in the extension options, then browse RateYourMusic and right-click any album to add it!
 
