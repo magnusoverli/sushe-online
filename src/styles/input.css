@@ -214,6 +214,8 @@
   box-shadow: none !important;
   /* Create stacking context so ::before with z-index:-1 stays visible */
   isolation: isolate;
+  /* Ensure pseudo-element isn't clipped */
+  overflow: visible !important;
 }
 
 /* The animated snaking border effect */
@@ -221,19 +223,21 @@
 .now-playing.album-cover-blur::before {
   content: '';
   position: absolute;
-  inset: -3px;
-  border-radius: 8px;
+  inset: -4px;
+  border-radius: 10px;
   background: conic-gradient(
     from var(--now-playing-angle),
     #1db954 0%,
-    rgba(29, 185, 84, 0.3) 15%,
-    transparent 30%,
-    transparent 70%,
-    rgba(29, 185, 84, 0.3) 85%,
+    #1db954 10%,
+    rgba(29, 185, 84, 0.5) 20%,
+    transparent 35%,
+    transparent 65%,
+    rgba(29, 185, 84, 0.5) 80%,
+    #1db954 90%,
     #1db954 100%
   );
-  filter: blur(4px);
-  opacity: 0.85;
+  filter: blur(6px);
+  opacity: 1;
   z-index: -1;
   animation: now-playing-rotate 3s linear infinite;
 }
