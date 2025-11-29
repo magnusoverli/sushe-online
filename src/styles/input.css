@@ -287,8 +287,7 @@
 
 .mobile-now-playing {
   position: fixed;
-  /* Position above the safe area instead of padding inside it */
-  bottom: env(safe-area-inset-bottom, 0px);
+  bottom: 0;
   left: 0;
   right: 0;
   background: linear-gradient(to bottom, #282828, #1a1a1a);
@@ -298,9 +297,9 @@
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  /* Safe area handling for left/right only */
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   opacity: 0;
   pointer-events: none;
 }
@@ -336,7 +335,7 @@
 /* Clickable content area (opens Spotify) - optimized spacing */
 .mobile-now-playing-content {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   flex: 1;
   min-width: 0;
   text-decoration: none;
@@ -367,15 +366,14 @@
   object-fit: cover;
 }
 
-/* Track info - optimized to fill vertical space */
+/* Track info - vertically centered */
 .mobile-now-playing-info {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  align-self: stretch;
-  padding: 2px 0;
+  justify-content: center;
+  gap: 2px;
 }
 
 .mobile-now-playing-track {
@@ -399,12 +397,11 @@
   line-height: 1.3;
 }
 
-/* Device indicator - positioned at bottom */
+/* Device indicator */
 .mobile-now-playing-device {
   font-size: 11px;
   color: #1db954;
   margin: 0;
-  margin-top: auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
