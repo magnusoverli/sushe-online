@@ -2881,15 +2881,33 @@ function updateListNav() {
     const meta = getListMetadata(listName);
     const isOfficial = meta?.isOfficial || false;
     const li = document.createElement('li');
-    li.innerHTML = `
-      <button data-list-name="${listName}" class="sidebar-list-btn w-full text-left px-3 py-${isMobile ? '3' : '2'} rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
-        <i class="fas fa-list mr-2 flex-shrink-0"></i>
-        <span class="truncate flex-1">${listName}</span>
-        ${isOfficial ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>' : ''}
-      </button>
-    `;
+    
+    if (isMobile) {
+      // Mobile: use flex container with separate menu button
+      li.className = 'flex items-center';
+      li.innerHTML = `
+        <button data-list-name="${listName}" class="sidebar-list-btn flex-1 text-left px-3 py-3 rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
+          <i class="fas fa-list mr-2 flex-shrink-0"></i>
+          <span class="truncate flex-1">${listName}</span>
+          ${isOfficial ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>' : ''}
+        </button>
+        <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag flex-shrink-0" aria-label="List options">
+          <i class="fas fa-ellipsis-v"></i>
+        </button>
+      `;
+    } else {
+      // Desktop: single button with right-click
+      li.innerHTML = `
+        <button data-list-name="${listName}" class="sidebar-list-btn w-full text-left px-3 py-2 rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
+          <i class="fas fa-list mr-2 flex-shrink-0"></i>
+          <span class="truncate flex-1">${listName}</span>
+          ${isOfficial ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>' : ''}
+        </button>
+      `;
+    }
 
-    const button = li.querySelector('button');
+    const button = li.querySelector('[data-list-name]');
+    const menuButton = li.querySelector('[data-list-menu-btn]');
 
     if (!isMobile) {
       // Desktop: keep right-click
@@ -2959,23 +2977,33 @@ function updateListNav() {
         positionContextMenu(contextMenu, e.clientX, e.clientY);
       });
     } else {
-      // Mobile: long press
-      let pressTimer;
-      button.addEventListener(
-        'touchstart',
-        (_e) => {
-          pressTimer = setTimeout(() => {
-            // Use the mobile list menu from app.js
-            if (window.showMobileListMenu) {
-              window.showMobileListMenu(listName);
-            }
-          }, 500);
-        },
-        { passive: true }
-      );
-      button.addEventListener('touchend', () => clearTimeout(pressTimer), {
-        passive: true,
-      });
+      // Mobile: attach click handler to three-dot menu button
+      if (menuButton) {
+        // Prevent touch events from bubbling to parent (similar to album menu button)
+        menuButton.addEventListener(
+          'touchstart',
+          (e) => {
+            e.stopPropagation();
+          },
+          { passive: true }
+        );
+
+        menuButton.addEventListener(
+          'touchend',
+          (e) => {
+            e.stopPropagation();
+          },
+          { passive: true }
+        );
+
+        menuButton.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          if (window.showMobileListMenu) {
+            window.showMobileListMenu(listName);
+          }
+        });
+      }
     }
 
     button.onclick = () => {
