@@ -1216,10 +1216,29 @@ const spotifyTemplate = (user) => `
   <button
     id="addAlbumFAB"
     class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transform hover:scale-110 active:scale-95 z-[9999]"
-    style="display: none; touch-action: manipulation; pointer-events: auto; transition: opacity var(--sidebar-transition-duration), transform 200ms;"
+    style="display: none; touch-action: manipulation; pointer-events: auto; transition: opacity var(--sidebar-transition-duration), transform 200ms, bottom 300ms ease;"
   >
     <i class="fas fa-plus text-xl"></i>
   </button>
+  
+  <!-- Mobile Floating Now Playing Bar -->
+  <div id="mobileNowPlaying" class="mobile-now-playing">
+    <a href="spotify:" class="mobile-now-playing-content">
+      <div id="mobileNowPlayingArt" class="mobile-now-playing-art">
+        <svg class="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </div>
+      <div class="mobile-now-playing-info">
+        <p id="mobileNowPlayingTrack" class="mobile-now-playing-track">Not Playing</p>
+        <p id="mobileNowPlayingArtist" class="mobile-now-playing-artist">—</p>
+      </div>
+    </a>
+    <button id="mobileNowPlayingPlay" class="mobile-now-playing-play" aria-label="Play/Pause">
+      <i class="fas fa-play"></i>
+    </button>
+  </div>
   
   <!-- Toast container -->
   <div id="toast" class="toast"></div>

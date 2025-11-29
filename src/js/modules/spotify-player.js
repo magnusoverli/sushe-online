@@ -34,6 +34,9 @@ const BASE_BACKOFF_MS = 1000;
 // DOM Elements (cached on init)
 let elements = {};
 
+// Mobile now-playing bar elements
+let mobileElements = {};
+
 // ============ UTILITY FUNCTIONS ============
 
 /**
@@ -286,6 +289,105 @@ function cacheElements() {
     currentDevice: document.getElementById('miniplayerCurrentDevice'),
     deviceName: document.getElementById('miniplayerDeviceName'),
   };
+}
+
+// ============ MOBILE NOW-PLAYING BAR ============
+
+/**
+ * Cache mobile now-playing bar elements
+ */
+function cacheMobileElements() {
+  mobileElements = {
+    bar: document.getElementById('mobileNowPlaying'),
+    art: document.getElementById('mobileNowPlayingArt'),
+    track: document.getElementById('mobileNowPlayingTrack'),
+    artist: document.getElementById('mobileNowPlayingArtist'),
+    playBtn: document.getElementById('mobileNowPlayingPlay'),
+  };
+}
+
+/**
+ * Update mobile now-playing bar with current state
+ */
+function updateMobileBar(state) {
+  if (!mobileElements.bar) return;
+
+  if (state?.item) {
+    // Show the bar
+    mobileElements.bar.classList.add('visible');
+    document.body.classList.add('now-playing-bar-visible');
+
+    // Update track info
+    if (mobileElements.track) {
+      mobileElements.track.textContent = state.item.name || 'Unknown';
+    }
+
+    if (mobileElements.artist) {
+      const artists =
+        state.item.artists?.map((a) => a.name).join(', ') || 'Unknown Artist';
+      mobileElements.artist.textContent = artists;
+    }
+
+    // Update album art
+    const albumImage =
+      state.item.album?.images?.[1]?.url || state.item.album?.images?.[0]?.url;
+    if (albumImage && mobileElements.art) {
+      let img = mobileElements.art.querySelector('img');
+      if (!img) {
+        // Replace placeholder with img
+        mobileElements.art.innerHTML = '<img src="" alt="" />';
+        img = mobileElements.art.querySelector('img');
+      }
+      if (img && img.src !== albumImage) {
+        img.src = albumImage;
+        img.alt = state.item.album?.name || '';
+      }
+    }
+
+    // Update play/pause icon
+    if (mobileElements.playBtn) {
+      const icon = mobileElements.playBtn.querySelector('i');
+      if (icon) {
+        icon.className = state.is_playing ? 'fas fa-pause' : 'fas fa-play';
+      }
+    }
+  } else {
+    // Hide the bar
+    mobileElements.bar.classList.remove('visible');
+    document.body.classList.remove('now-playing-bar-visible');
+  }
+}
+
+/**
+ * Set up mobile bar event handlers
+ */
+function setupMobileBarControls() {
+  if (!mobileElements.playBtn) return;
+
+  mobileElements.playBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const isPlaying = currentPlayback?.is_playing;
+
+    // Optimistic UI update
+    const icon = mobileElements.playBtn.querySelector('i');
+    if (icon) {
+      icon.className = isPlaying ? 'fas fa-play' : 'fas fa-pause';
+    }
+
+    const success = isPlaying ? await apiPause() : await apiResume();
+
+    if (!success) {
+      // Revert on failure
+      if (icon) {
+        icon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
+      }
+      showToast('Playback control failed', 'error');
+    } else {
+      scheduleImmediatePoll();
+    }
+  });
 }
 
 // ============ UI STATE MANAGEMENT ============
@@ -704,6 +806,9 @@ async function pollPlaybackState() {
     // Emit playback stopped event
     emitPlaybackChange(null);
 
+    // Update mobile bar (hide it)
+    updateMobileBar(null);
+
     if (!isHeadlessMode) {
       showState('inactive');
       stopProgressAnimation();
@@ -742,7 +847,10 @@ async function pollPlaybackState() {
     console.log('Track changed to:', state.item?.name);
   }
 
-  // Skip UI updates in headless mode (mobile)
+  // Update mobile bar (works in headless mode too)
+  updateMobileBar(state);
+
+  // Skip desktop UI updates in headless mode (mobile)
   if (!isHeadlessMode) {
     // Show active state
     showState('active');
@@ -1211,7 +1319,7 @@ export function getCurrentPlayback() {
 
 /**
  * Initialize headless playback tracking (for mobile)
- * Polls Spotify API without updating UI, emits events for now-playing feature
+ * Polls Spotify API without updating desktop UI, but updates mobile now-playing bar
  */
 export function initPlaybackTracking() {
   // Check if user has Spotify connected
@@ -1221,11 +1329,15 @@ export function initPlaybackTracking() {
 
   isHeadlessMode = true;
 
+  // Cache and set up mobile now-playing bar
+  cacheMobileElements();
+  setupMobileBarControls();
+
   // Set up visibility change handler
   document.addEventListener('visibilitychange', handleVisibilityChange);
 
   // Start polling for playback state
-  console.log('Spotify playback tracking: Starting headless polling mode');
+  console.log('Spotify playback tracking: Starting mobile polling mode');
   startPolling();
 }
 
@@ -1235,10 +1347,16 @@ export function initPlaybackTracking() {
 export function destroyPlaybackTracking() {
   stopPolling();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
+  // Hide mobile bar
+  if (mobileElements.bar) {
+    mobileElements.bar.classList.remove('visible');
+    document.body.classList.remove('now-playing-bar-visible');
+  }
   currentPlayback = null;
   previousTrackId = null;
   previousAlbumId = null;
   consecutiveErrors = 0;
   isPollingPaused = false;
   isHeadlessMode = false;
+  mobileElements = {};
 }
