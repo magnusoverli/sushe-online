@@ -9,6 +9,7 @@ import { showToast } from './utils.js';
 // ============ MODULE STATE ============
 let currentPlayback = null;
 let previousTrackId = null;
+let previousAlbumId = null; // Track album changes for now-playing feature
 let pollInterval = null;
 let animationFrameId = null;
 let volumeBeforeMute = 50; // Tracks volume before muting for restore
@@ -17,6 +18,7 @@ let lastPollTime = 0;
 let lastPosition = 0;
 let consecutiveErrors = 0;
 let isPollingPaused = false;
+let isHeadlessMode = false; // True when running without UI (mobile)
 const pendingActions = new Set();
 
 // Polling configuration
@@ -24,6 +26,7 @@ const POLL_INTERVAL_PLAYING = 2000; // 2s when playing (slightly longer, we inte
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
 const POLL_INTERVAL_IDLE = 4000; // 4s when no playback
 const POLL_INTERVAL_NEAR_END = 500; // 500ms when track is about to end
+const POLL_INTERVAL_MOBILE = 8000; // 8s for mobile (battery-conscious)
 const NEAR_END_THRESHOLD = 5000; // 5 seconds from end
 const MAX_CONSECUTIVE_ERRORS = 5;
 const BASE_BACKOFF_MS = 1000;
@@ -66,6 +69,32 @@ function getDeviceIcon(type) {
  */
 function getBackoffTime() {
   return Math.min(BASE_BACKOFF_MS * Math.pow(2, consecutiveErrors), 30000);
+}
+
+/**
+ * Emit playback change event for now-playing feature
+ * Called when album changes or playback stops
+ */
+function emitPlaybackChange(state) {
+  const newAlbumId = state?.item?.album?.id || null;
+  const albumChanged = newAlbumId !== previousAlbumId;
+  const playbackStopped = previousAlbumId && !state;
+
+  // Only emit if album changed or playback stopped
+  if (albumChanged || playbackStopped) {
+    previousAlbumId = newAlbumId;
+
+    window.dispatchEvent(
+      new CustomEvent('spotify-playback-change', {
+        detail: {
+          albumName: state?.item?.album?.name || null,
+          artistName: state?.item?.artists?.[0]?.name || null,
+          isPlaying: state?.is_playing || false,
+          hasPlayback: !!state,
+        },
+      })
+    );
+  }
 }
 
 // ============ API FUNCTIONS ============
@@ -619,6 +648,11 @@ function getPollingInterval() {
     return getBackoffTime();
   }
 
+  // Mobile/headless mode uses slower polling for battery
+  if (isHeadlessMode) {
+    return POLL_INTERVAL_MOBILE;
+  }
+
   if (!currentPlayback) {
     return POLL_INTERVAL_IDLE;
   }
@@ -666,8 +700,14 @@ async function pollPlaybackState() {
     const hadPlayback = !!currentPlayback;
     currentPlayback = null;
     previousTrackId = null;
-    showState('inactive');
-    stopProgressAnimation();
+
+    // Emit playback stopped event
+    emitPlaybackChange(null);
+
+    if (!isHeadlessMode) {
+      showState('inactive');
+      stopProgressAnimation();
+    }
 
     if (hadPlayback) {
       restartPollingWithNewInterval();
@@ -687,6 +727,9 @@ async function pollPlaybackState() {
   lastPollTime = Date.now();
   lastPosition = state.progress_ms || 0;
 
+  // Emit playback change event (for now-playing feature)
+  emitPlaybackChange(state);
+
   // Log significant events
   if (!hadPlayback && state) {
     console.log(
@@ -699,32 +742,35 @@ async function pollPlaybackState() {
     console.log('Track changed to:', state.item?.name);
   }
 
-  // Show active state
-  showState('active');
+  // Skip UI updates in headless mode (mobile)
+  if (!isHeadlessMode) {
+    // Show active state
+    showState('active');
 
-  // Update UI (animate if track changed)
-  updateTrackInfo(state.item, isTrackChange);
-  updateProgress(state.progress_ms, state.item?.duration_ms);
-  updatePlayPauseIcon(state.is_playing);
-  updateDeviceName(state.device);
+    // Update UI (animate if track changed)
+    updateTrackInfo(state.item, isTrackChange);
+    updateProgress(state.progress_ms, state.item?.duration_ms);
+    updatePlayPauseIcon(state.is_playing);
+    updateDeviceName(state.device);
 
-  // Update volume if available
-  if (state.device?.volume_percent !== undefined) {
-    if (elements.volumeSlider) {
-      elements.volumeSlider.value = state.device.volume_percent;
+    // Update volume if available
+    if (state.device?.volume_percent !== undefined) {
+      if (elements.volumeSlider) {
+        elements.volumeSlider.value = state.device.volume_percent;
+      }
+      updateVolumeIcon(state.device.volume_percent);
+      // Only update volumeBeforeMute if volume is > 0 (not muted)
+      if (state.device.volume_percent > 0) {
+        volumeBeforeMute = state.device.volume_percent;
+      }
     }
-    updateVolumeIcon(state.device.volume_percent);
-    // Only update volumeBeforeMute if volume is > 0 (not muted)
-    if (state.device.volume_percent > 0) {
-      volumeBeforeMute = state.device.volume_percent;
-    }
-  }
 
-  // Manage progress animation
-  if (state.is_playing) {
-    startProgressAnimation();
-  } else {
-    stopProgressAnimation();
+    // Manage progress animation
+    if (state.is_playing) {
+      startProgressAnimation();
+    } else {
+      stopProgressAnimation();
+    }
   }
 
   // Adjust polling interval if state changed
@@ -1150,6 +1196,49 @@ export function destroyMiniplayer() {
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   currentPlayback = null;
   previousTrackId = null;
+  previousAlbumId = null;
   consecutiveErrors = 0;
   isPollingPaused = false;
+  isHeadlessMode = false;
+}
+
+/**
+ * Get current playback state (for now-playing feature)
+ */
+export function getCurrentPlayback() {
+  return currentPlayback;
+}
+
+/**
+ * Initialize headless playback tracking (for mobile)
+ * Polls Spotify API without updating UI, emits events for now-playing feature
+ */
+export function initPlaybackTracking() {
+  // Check if user has Spotify connected
+  if (!window.currentUser?.spotifyAuth) {
+    return;
+  }
+
+  isHeadlessMode = true;
+
+  // Set up visibility change handler
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  // Start polling for playback state
+  console.log('Spotify playback tracking: Starting headless polling mode');
+  startPolling();
+}
+
+/**
+ * Clean up headless playback tracking
+ */
+export function destroyPlaybackTracking() {
+  stopPolling();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  currentPlayback = null;
+  previousTrackId = null;
+  previousAlbumId = null;
+  consecutiveErrors = 0;
+  isPollingPaused = false;
+  isHeadlessMode = false;
 }

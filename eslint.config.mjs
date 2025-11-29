@@ -109,6 +109,7 @@ export default [
         confirm: 'readonly',
         FileReader: 'readonly',
         FormData: 'readonly',
+        CustomEvent: 'readonly',
       },
     },
   },

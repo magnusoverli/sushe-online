@@ -190,6 +190,72 @@
   border-radius: 6px !important;
 }
 
+/* ============================================
+   Now Playing Album Border Effect
+   Animated Spotify-green snaking border for currently playing album
+   ============================================ */
+
+/* CSS custom property for animation angle */
+@property --now-playing-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* Desktop: album-cover-container needs position relative for pseudo-element */
+.album-cover-container {
+  position: relative;
+}
+
+/* Now playing state - replaces existing effects */
+.album-cover-container.now-playing,
+.album-cover-blur.now-playing {
+  /* Override existing box-shadow effects */
+  box-shadow: none !important;
+}
+
+/* The animated snaking border effect */
+.album-cover-container.now-playing::before,
+.now-playing.album-cover-blur::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 8px;
+  background: conic-gradient(
+    from var(--now-playing-angle),
+    #1db954 0%,
+    rgba(29, 185, 84, 0.3) 15%,
+    transparent 30%,
+    transparent 70%,
+    rgba(29, 185, 84, 0.3) 85%,
+    #1db954 100%
+  );
+  filter: blur(4px);
+  opacity: 0.85;
+  z-index: -1;
+  animation: now-playing-rotate 3s linear infinite;
+}
+
+/* Mobile: ensure the wrapper div can hold the pseudo-element */
+.now-playing.album-cover-blur {
+  position: relative;
+  z-index: 1;
+}
+
+/* Slightly larger glow on mobile for visibility */
+@media (max-width: 1023px) {
+  .now-playing.album-cover-blur::before {
+    inset: -4px;
+    filter: blur(5px);
+  }
+}
+
+@keyframes now-playing-rotate {
+  to {
+    --now-playing-angle: 360deg;
+  }
+}
+
 /* Desktop-specific: subtle color change only when chosen, no transforms */
 @media (min-width: 1024px) {
   .sortable-chosen.album-row {

@@ -14,6 +14,10 @@ let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null;
 
+// Now-playing feature state
+let currentNowPlayingElements = [];
+let lastKnownPlayback = null; // Cache for re-applying after list render
+
 // Process static data at module load time
 const availableGenres = genresText
   .split('\n')
@@ -254,6 +258,125 @@ window.getListMetadata = getListMetadata;
 window.updateListMetadata = updateListMetadata;
 window.isListDataLoaded = isListDataLoaded;
 window.toggleOfficialStatus = toggleOfficialStatus;
+
+// ============ NOW PLAYING ALBUM HIGHLIGHT ============
+// Shows an animated border on album covers matching the currently playing Spotify track
+
+/**
+ * Normalize a string for fuzzy matching (remove diacritics, punctuation, lowercase)
+ */
+function normalizeForMatch(str) {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric (keep spaces)
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
+/**
+ * Check if a list album matches the currently playing Spotify track
+ */
+function isAlbumMatchingPlayback(
+  listAlbum,
+  playingAlbumName,
+  playingArtistName
+) {
+  if (!listAlbum || !playingAlbumName || !playingArtistName) return false;
+
+  const albumMatch =
+    normalizeForMatch(listAlbum.album) === normalizeForMatch(playingAlbumName);
+  const artistMatch =
+    normalizeForMatch(listAlbum.artist) ===
+    normalizeForMatch(playingArtistName);
+
+  return albumMatch && artistMatch;
+}
+
+/**
+ * Find the album cover DOM element for a given album index
+ */
+function findAlbumCoverElement(index) {
+  const isMobile = window.innerWidth < 1024;
+
+  if (isMobile) {
+    // Mobile: album cards use wrapper with data-index
+    const wrapper = document.querySelector(
+      `.album-card-wrapper[data-index="${index}"]`
+    );
+    // The cover image has class album-cover-blur
+    return wrapper?.querySelector('.album-cover-blur');
+  } else {
+    // Desktop: album rows have data-index
+    const row = document.querySelector(`.album-row[data-index="${index}"]`);
+    return row?.querySelector('.album-cover-container');
+  }
+}
+
+/**
+ * Update now-playing border based on playback state
+ * Called when playback changes or when list is rendered
+ */
+function updateNowPlayingBorder(playbackDetail) {
+  // Remove existing borders from all previously marked elements
+  currentNowPlayingElements.forEach((el) => {
+    if (el) el.classList.remove('now-playing');
+  });
+  currentNowPlayingElements = [];
+
+  // Cache the playback detail for re-application after list renders
+  lastKnownPlayback = playbackDetail;
+
+  // Exit if no playback or playback stopped (not paused)
+  if (!playbackDetail || !playbackDetail.hasPlayback) {
+    return;
+  }
+
+  // Get current list albums
+  const albums = getListData(currentList);
+  if (!albums || !Array.isArray(albums)) return;
+
+  // Find matching album(s) and apply the now-playing class
+  albums.forEach((album, index) => {
+    if (
+      isAlbumMatchingPlayback(
+        album,
+        playbackDetail.albumName,
+        playbackDetail.artistName
+      )
+    ) {
+      const coverEl = findAlbumCoverElement(index);
+      if (coverEl) {
+        coverEl.classList.add('now-playing');
+        currentNowPlayingElements.push(coverEl);
+      }
+    }
+  });
+}
+
+/**
+ * Re-apply now-playing border after list render
+ * Called from displayAlbums after DOM is updated
+ */
+function reapplyNowPlayingBorder() {
+  if (lastKnownPlayback) {
+    // Small delay to ensure DOM is fully rendered
+    requestAnimationFrame(() => {
+      updateNowPlayingBorder(lastKnownPlayback);
+    });
+  }
+}
+
+// Listen for playback changes from Spotify player module
+window.addEventListener('spotify-playback-change', (e) => {
+  updateNowPlayingBorder(e.detail);
+});
+
+// Expose for manual triggering if needed
+window.updateNowPlayingBorder = updateNowPlayingBorder;
+window.reapplyNowPlayingBorder = reapplyNowPlayingBorder;
 
 // Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
 // Positions a menu element and adjusts if it would overflow the viewport
@@ -4376,6 +4499,9 @@ function displayAlbums(albums, options = {}) {
           prePopulatePositionCache(albumContainer, isMobile);
         }
 
+        // Re-apply now-playing border after incremental update
+        reapplyNowPlayingBorder();
+
         return; // Done - skip full rebuild
       }
       // If failed, fall through to full rebuild
@@ -4473,6 +4599,9 @@ function displayAlbums(albums, options = {}) {
   requestAnimationFrame(() => {
     lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
   });
+
+  // Re-apply now-playing border after list render
+  reapplyNowPlayingBorder();
 }
 
 // Batch fetch and apply album covers - reduces N HTTP requests to 1
