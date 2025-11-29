@@ -2881,7 +2881,7 @@ function updateListNav() {
     const meta = getListMetadata(listName);
     const isOfficial = meta?.isOfficial || false;
     const li = document.createElement('li');
-    
+
     if (isMobile) {
       // Mobile: use flex container with separate menu button
       li.className = 'flex items-center';
