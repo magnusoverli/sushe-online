@@ -252,10 +252,25 @@
 @media (max-width: 1023px) {
   .mobile-album-cover.now-playing::before {
     /* Account for 75x75 image centered in 80x80 container (2.5px padding) */
-    /* Use -0.5px so border is 3px from image edge, matching desktop */
+    /* Position border 3px from image edge, matching desktop visual */
     inset: -0.5px;
     border-radius: 10px;
-    filter: blur(2.5px);
+    /* No blur - use gradient softness instead to avoid outer halo artifact */
+    filter: none;
+    /* Softer gradient for mobile without blur */
+    background: conic-gradient(
+      from var(--now-playing-angle),
+      #1ed760 0%,
+      #1ed760 25%,
+      rgba(30, 215, 96, 0.7) 32%,
+      rgba(30, 215, 96, 0.3) 40%,
+      transparent 47%,
+      transparent 53%,
+      rgba(30, 215, 96, 0.3) 60%,
+      rgba(30, 215, 96, 0.7) 68%,
+      #1ed760 75%,
+      #1ed760 100%
+    );
   }
 }
 
@@ -273,17 +288,16 @@
 .mobile-now-playing {
   display: none;
   position: fixed;
-  bottom: env(safe-area-inset-bottom, 0px);
+  bottom: 0;
   left: 0;
   right: 0;
-  height: 64px;
-  background: linear-gradient(to right, #282828, #1a1a1a);
+  background: linear-gradient(to bottom, #282828, #1a1a1a);
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 9998;
   transform: translateY(100%);
   transition: transform 0.3s ease;
-  align-items: center;
-  padding: 0 12px;
+  flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .mobile-now-playing.visible {
@@ -296,6 +310,29 @@
   .mobile-now-playing {
     display: none !important;
   }
+}
+
+/* Progress bar at top of mobile bar */
+.mobile-now-playing-progress {
+  width: 100%;
+  height: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.mobile-now-playing-progress-fill {
+  height: 100%;
+  background: #1db954;
+  width: 0%;
+  transition: width 0.1s linear;
+}
+
+/* Main content row */
+.mobile-now-playing-main {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  min-height: 56px;
 }
 
 /* Clickable content area (opens Spotify) */
@@ -311,16 +348,16 @@
 
 /* Album art container */
 .mobile-now-playing-art {
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
   border-radius: 4px;
   background: #333;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 12px;
+  margin-right: 10px;
 }
 
 .mobile-now-playing-art img {
@@ -333,33 +370,53 @@
 .mobile-now-playing-info {
   flex: 1;
   min-width: 0;
-  padding-right: 12px;
+  padding-right: 10px;
 }
 
 .mobile-now-playing-track {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #fff;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
 }
 
 .mobile-now-playing-artist {
-  font-size: 12px;
+  font-size: 11px;
   color: #b3b3b3;
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
+}
+
+/* Device indicator */
+.mobile-now-playing-device {
+  font-size: 10px;
+  color: #1db954;
+  margin: 2px 0 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-now-playing-device i {
+  font-size: 8px;
 }
 
 /* Play/pause button */
 .mobile-now-playing-play {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
   border-radius: 50%;
   background: #fff;
   border: none;
@@ -377,7 +434,7 @@
 
 .mobile-now-playing-play i {
   color: #000;
-  font-size: 16px;
+  font-size: 14px;
   /* Slight offset for play icon visual balance */
   margin-left: 2px;
 }
@@ -388,7 +445,7 @@
 
 /* FAB adjustment when bar is visible */
 body.now-playing-bar-visible #addAlbumFAB {
-  bottom: calc(64px + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  bottom: calc(72px + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /* Desktop-specific: subtle color change only when chosen, no transforms */

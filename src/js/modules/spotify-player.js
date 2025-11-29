@@ -26,7 +26,7 @@ const POLL_INTERVAL_PLAYING = 2000; // 2s when playing (slightly longer, we inte
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
 const POLL_INTERVAL_IDLE = 4000; // 4s when no playback
 const POLL_INTERVAL_NEAR_END = 500; // 500ms when track is about to end
-const POLL_INTERVAL_MOBILE = 8000; // 8s for mobile (battery-conscious)
+const POLL_INTERVAL_MOBILE = 3000; // 3s for mobile (balanced responsiveness/battery)
 const NEAR_END_THRESHOLD = 5000; // 5 seconds from end
 const MAX_CONSECUTIVE_ERRORS = 5;
 const BASE_BACKOFF_MS = 1000;
@@ -302,7 +302,9 @@ function cacheMobileElements() {
     art: document.getElementById('mobileNowPlayingArt'),
     track: document.getElementById('mobileNowPlayingTrack'),
     artist: document.getElementById('mobileNowPlayingArtist'),
+    device: document.getElementById('mobileNowPlayingDevice'),
     playBtn: document.getElementById('mobileNowPlayingPlay'),
+    progressFill: document.getElementById('mobileNowPlayingProgressFill'),
   };
 }
 
@@ -328,6 +330,28 @@ function updateMobileBar(state) {
       mobileElements.artist.textContent = artists;
     }
 
+    // Update device info
+    if (mobileElements.device && state.device) {
+      const deviceSpan = mobileElements.device.querySelector('span');
+      if (deviceSpan) {
+        deviceSpan.textContent = state.device.name || 'Unknown Device';
+      }
+      // Update device icon
+      const deviceIcon = mobileElements.device.querySelector('i');
+      if (deviceIcon) {
+        deviceIcon.className = `fas ${getDeviceIcon(state.device.type)}`;
+      }
+    }
+
+    // Update progress bar
+    if (mobileElements.progressFill && state.item.duration_ms) {
+      const percent = Math.min(
+        ((state.progress_ms || 0) / state.item.duration_ms) * 100,
+        100
+      );
+      mobileElements.progressFill.style.width = `${percent}%`;
+    }
+
     // Update album art
     const albumImage =
       state.item.album?.images?.[1]?.url || state.item.album?.images?.[0]?.url;
@@ -351,10 +375,59 @@ function updateMobileBar(state) {
         icon.className = state.is_playing ? 'fas fa-pause' : 'fas fa-play';
       }
     }
+
+    // Start/continue mobile progress animation if playing
+    if (state.is_playing) {
+      startMobileProgressAnimation();
+    } else {
+      stopMobileProgressAnimation();
+    }
   } else {
     // Hide the bar
     mobileElements.bar.classList.remove('visible');
     document.body.classList.remove('now-playing-bar-visible');
+    stopMobileProgressAnimation();
+  }
+}
+
+// Mobile progress animation
+let mobileAnimationFrameId = null;
+
+/**
+ * Animation loop for smooth mobile progress updates
+ */
+function mobileProgressLoop() {
+  if (!currentPlayback?.is_playing || !mobileElements.progressFill) {
+    mobileAnimationFrameId = null;
+    return;
+  }
+
+  const position = getInterpolatedPosition();
+  const duration = currentPlayback.item?.duration_ms || 0;
+
+  if (duration > 0) {
+    const percent = Math.min((position / duration) * 100, 100);
+    mobileElements.progressFill.style.width = `${percent}%`;
+  }
+
+  mobileAnimationFrameId = requestAnimationFrame(mobileProgressLoop);
+}
+
+/**
+ * Start mobile progress animation
+ */
+function startMobileProgressAnimation() {
+  if (mobileAnimationFrameId) return;
+  mobileAnimationFrameId = requestAnimationFrame(mobileProgressLoop);
+}
+
+/**
+ * Stop mobile progress animation
+ */
+function stopMobileProgressAnimation() {
+  if (mobileAnimationFrameId) {
+    cancelAnimationFrame(mobileAnimationFrameId);
+    mobileAnimationFrameId = null;
   }
 }
 
@@ -1346,6 +1419,7 @@ export function initPlaybackTracking() {
  */
 export function destroyPlaybackTracking() {
   stopPolling();
+  stopMobileProgressAnimation();
   document.removeEventListener('visibilitychange', handleVisibilityChange);
   // Hide mobile bar
   if (mobileElements.bar) {
