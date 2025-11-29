@@ -39,7 +39,7 @@ const loginSnippetFn = ejs.compile(
 
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
-  <header class="bg-gray-900 z-50">
+  <header class="bg-gray-900 z-50 border-b border-gray-700/50">
     <div class="flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button / Desktop logo -->
       <div class="flex items-center gap-2 lg:w-72 lg:justify-center lg:gap-0">

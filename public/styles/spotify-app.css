@@ -220,7 +220,6 @@ body {
       rgba(31, 41, 55, 0.4) 0%,
       rgba(17, 24, 39, 0.4) 100%
     );
-    border-left: 4px solid transparent;
     border-bottom-color: rgba(55, 65, 81, 0.15);
     min-height: calc(var(--cover-art-size) + 0.25rem);
     /* No hover effect - headers should be static */
