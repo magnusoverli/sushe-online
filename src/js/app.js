@@ -302,12 +302,10 @@ function findAlbumCoverElement(index) {
   const isMobile = window.innerWidth < 1024;
 
   if (isMobile) {
-    // Mobile: album cards use wrapper with data-index
-    const wrapper = document.querySelector(
-      `.album-card-wrapper[data-index="${index}"]`
-    );
+    // Mobile: album-card has data-index (not the wrapper)
+    const card = document.querySelector(`.album-card[data-index="${index}"]`);
     // The cover wrapper div (not the img, since img can't have ::before)
-    return wrapper?.querySelector('.mobile-album-cover');
+    return card?.querySelector('.mobile-album-cover');
   } else {
     // Desktop: album rows have data-index
     const row = document.querySelector(`.album-row[data-index="${index}"]`);

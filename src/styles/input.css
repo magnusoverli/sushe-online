@@ -223,30 +223,31 @@
 .mobile-album-cover.now-playing::before {
   content: '';
   position: absolute;
-  inset: -4px;
-  border-radius: 10px;
+  inset: -3px;
+  border-radius: 8px;
+  /* More border coverage (70%), smaller gap (15%), brighter green */
   background: conic-gradient(
     from var(--now-playing-angle),
-    #1db954 0%,
-    #1db954 10%,
-    rgba(29, 185, 84, 0.5) 20%,
-    transparent 35%,
-    transparent 65%,
-    rgba(29, 185, 84, 0.5) 80%,
-    #1db954 90%,
-    #1db954 100%
+    #1ed760 0%,
+    #1ed760 30%,
+    rgba(30, 215, 96, 0.6) 38%,
+    transparent 45%,
+    transparent 55%,
+    rgba(30, 215, 96, 0.6) 62%,
+    #1ed760 70%,
+    #1ed760 100%
   );
-  filter: blur(6px);
+  filter: blur(3px);
   opacity: 1;
   z-index: -1;
-  animation: now-playing-rotate 3s linear infinite;
+  animation: now-playing-rotate 3.5s linear infinite;
 }
 
-/* Slightly larger glow on mobile for visibility */
+/* Mobile: slightly larger for visibility */
 @media (max-width: 1023px) {
   .mobile-album-cover.now-playing::before {
-    inset: -5px;
-    filter: blur(6px);
+    inset: -4px;
+    filter: blur(4px);
   }
 }
 
