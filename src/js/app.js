@@ -331,14 +331,25 @@ function updateNowPlayingBorder(playbackDetail) {
 
   // Exit if no playback or playback stopped (not paused)
   if (!playbackDetail || !playbackDetail.hasPlayback) {
+    console.log('[Now Playing] No playback or stopped');
     return;
   }
 
+  console.log('[Now Playing] Looking for:', {
+    album: playbackDetail.albumName,
+    artist: playbackDetail.artistName,
+    currentList,
+  });
+
   // Get current list albums
   const albums = getListData(currentList);
-  if (!albums || !Array.isArray(albums)) return;
+  if (!albums || !Array.isArray(albums)) {
+    console.log('[Now Playing] No albums in current list');
+    return;
+  }
 
   // Find matching album(s) and apply the now-playing class
+  let matchCount = 0;
   albums.forEach((album, index) => {
     if (
       isAlbumMatchingPlayback(
@@ -347,13 +358,19 @@ function updateNowPlayingBorder(playbackDetail) {
         playbackDetail.artistName
       )
     ) {
+      matchCount++;
       const coverEl = findAlbumCoverElement(index);
+      console.log('[Now Playing] Match found at index', index, '- element:', coverEl);
       if (coverEl) {
         coverEl.classList.add('now-playing');
         currentNowPlayingElements.push(coverEl);
       }
     }
   });
+
+  if (matchCount === 0) {
+    console.log('[Now Playing] No matches in', albums.length, 'albums. Sample album:', albums[0]);
+  }
 }
 
 /**

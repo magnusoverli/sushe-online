@@ -212,6 +212,8 @@
 .album-cover-blur.now-playing {
   /* Override existing box-shadow effects */
   box-shadow: none !important;
+  /* Create stacking context so ::before with z-index:-1 stays visible */
+  isolation: isolate;
 }
 
 /* The animated snaking border effect */
