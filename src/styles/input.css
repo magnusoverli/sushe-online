@@ -209,7 +209,7 @@
 
 /* Now playing state - replaces existing effects */
 .album-cover-container.now-playing,
-.album-cover-blur.now-playing {
+.mobile-album-cover.now-playing {
   /* Override existing box-shadow effects */
   box-shadow: none !important;
   /* Create stacking context so ::before with z-index:-1 stays visible */
@@ -220,7 +220,7 @@
 
 /* The animated snaking border effect */
 .album-cover-container.now-playing::before,
-.now-playing.album-cover-blur::before {
+.mobile-album-cover.now-playing::before {
   content: '';
   position: absolute;
   inset: -4px;
@@ -242,17 +242,11 @@
   animation: now-playing-rotate 3s linear infinite;
 }
 
-/* Mobile: ensure the wrapper div can hold the pseudo-element */
-.now-playing.album-cover-blur {
-  position: relative;
-  z-index: 1;
-}
-
 /* Slightly larger glow on mobile for visibility */
 @media (max-width: 1023px) {
-  .now-playing.album-cover-blur::before {
-    inset: -4px;
-    filter: blur(5px);
+  .mobile-album-cover.now-playing::before {
+    inset: -5px;
+    filter: blur(6px);
   }
 }
 

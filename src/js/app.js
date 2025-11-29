@@ -306,8 +306,8 @@ function findAlbumCoverElement(index) {
     const wrapper = document.querySelector(
       `.album-card-wrapper[data-index="${index}"]`
     );
-    // The cover image has class album-cover-blur
-    return wrapper?.querySelector('.album-cover-blur');
+    // The cover wrapper div (not the img, since img can't have ::before)
+    return wrapper?.querySelector('.mobile-album-cover');
   } else {
     // Desktop: album rows have data-index
     const row = document.querySelector(`.album-row[data-index="${index}"]`);
@@ -4001,7 +4001,7 @@ function createMobileAlbumCard(data, index) {
             ${
               data.albumId
                 ? `
-              <div class="w-20 h-20 flex items-center justify-center">
+              <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
                 <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
                     alt="${data.albumName}"
                     class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
@@ -4011,7 +4011,7 @@ function createMobileAlbumCard(data, index) {
             `
                 : data.coverImage
                   ? `
-              <div class="w-20 h-20 flex items-center justify-center">
+              <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
                 <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
                     alt="${data.albumName}"
                     class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
@@ -4019,7 +4019,7 @@ function createMobileAlbumCard(data, index) {
               </div>
             `
                   : `
-              <div class="w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center">
+              <div class="mobile-album-cover w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center relative">
                 <i class="fas fa-compact-disc text-xl text-gray-600"></i>
               </div>
             `
