@@ -360,7 +360,12 @@ function updateNowPlayingBorder(playbackDetail) {
     ) {
       matchCount++;
       const coverEl = findAlbumCoverElement(index);
-      console.log('[Now Playing] Match found at index', index, '- element:', coverEl);
+      console.log(
+        '[Now Playing] Match found at index',
+        index,
+        '- element:',
+        coverEl
+      );
       if (coverEl) {
         coverEl.classList.add('now-playing');
         currentNowPlayingElements.push(coverEl);
@@ -369,7 +374,12 @@ function updateNowPlayingBorder(playbackDetail) {
   });
 
   if (matchCount === 0) {
-    console.log('[Now Playing] No matches in', albums.length, 'albums. Sample album:', albums[0]);
+    console.log(
+      '[Now Playing] No matches in',
+      albums.length,
+      'albums. Sample album:',
+      albums[0]
+    );
   }
 }
 
