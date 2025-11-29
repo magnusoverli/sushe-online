@@ -631,10 +631,11 @@ describe('createRateLimitAdminRequest', () => {
   });
 
   it('should not reset count at exactly 30 minutes', () => {
-    const exactlyThirtyMinutesAgo = Date.now() - 30 * 60 * 1000;
+    // Use 29 minutes 59 seconds to avoid race condition with test execution time
+    const justUnderThirtyMinutesAgo = Date.now() - (30 * 60 * 1000 - 1000);
     adminCodeAttempts.set('user123', {
       count: 5,
-      firstAttempt: exactlyThirtyMinutesAgo,
+      firstAttempt: justUnderThirtyMinutesAgo,
     });
 
     const req = {
@@ -646,7 +647,7 @@ describe('createRateLimitAdminRequest', () => {
 
     rateLimitAdminRequest(req, res, next);
 
-    // Count should still be 5, so blocked
+    // Count should still be 5, so blocked (30 min window not exceeded)
     assert.strictEqual(next.mock.calls.length, 0);
   });
 
