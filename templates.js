@@ -1228,27 +1228,22 @@ const spotifyTemplate = (user) => `
       <div id="mobileNowPlayingProgressFill" class="mobile-now-playing-progress-fill"></div>
     </div>
     <!-- Main content -->
-    <div class="mobile-now-playing-main">
-      <a href="spotify:" class="mobile-now-playing-content">
-        <div id="mobileNowPlayingArt" class="mobile-now-playing-art">
-          <svg class="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"></circle>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-        </div>
-        <div class="mobile-now-playing-info">
-          <p id="mobileNowPlayingTrack" class="mobile-now-playing-track">Not Playing</p>
-          <p id="mobileNowPlayingArtist" class="mobile-now-playing-artist">—</p>
-          <p id="mobileNowPlayingDevice" class="mobile-now-playing-device">
-            <i class="fas fa-broadcast-tower"></i>
-            <span>—</span>
-          </p>
-        </div>
-      </a>
-      <button id="mobileNowPlayingPlay" class="mobile-now-playing-play" aria-label="Play/Pause">
-        <i class="fas fa-play"></i>
-      </button>
-    </div>
+    <a href="spotify:" class="mobile-now-playing-content">
+      <div id="mobileNowPlayingArt" class="mobile-now-playing-art">
+        <svg class="w-6 h-6 text-gray-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </div>
+      <div class="mobile-now-playing-info">
+        <p id="mobileNowPlayingTrack" class="mobile-now-playing-track">Not Playing</p>
+        <p id="mobileNowPlayingArtist" class="mobile-now-playing-artist">—</p>
+        <p id="mobileNowPlayingDevice" class="mobile-now-playing-device">
+          <i class="fas fa-broadcast-tower"></i>
+          <span>—</span>
+        </p>
+      </div>
+    </a>
   </div>
   
   <!-- Toast container -->

@@ -286,7 +286,6 @@
    ============================================ */
 
 .mobile-now-playing {
-  display: none;
   position: fixed;
   bottom: 0;
   left: 0;
@@ -295,13 +294,16 @@
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   z-index: 9998;
   transform: translateY(100%);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  opacity: 0;
+  pointer-events: none;
 }
 
 .mobile-now-playing.visible {
-  display: flex;
+  opacity: 1;
+  pointer-events: auto;
   transform: translateY(0);
 }
 
@@ -315,7 +317,7 @@
 /* Progress bar at top of mobile bar */
 .mobile-now-playing-progress {
   width: 100%;
-  height: 2px;
+  height: 3px;
   background: rgba(255, 255, 255, 0.1);
   position: relative;
 }
@@ -327,15 +329,7 @@
   transition: width 0.1s linear;
 }
 
-/* Main content row */
-.mobile-now-playing-main {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  min-height: 56px;
-}
-
-/* Clickable content area (opens Spotify) */
+/* Clickable content area (opens Spotify) - now uses full height */
 .mobile-now-playing-content {
   display: flex;
   align-items: center;
@@ -344,20 +338,22 @@
   text-decoration: none;
   color: inherit;
   -webkit-tap-highlight-color: transparent;
+  padding: 12px 16px;
+  min-height: 72px;
 }
 
-/* Album art container */
+/* Album art container - larger to use more vertical space */
 .mobile-now-playing-art {
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  border-radius: 4px;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 6px;
   background: #333;
   overflow: hidden;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 10px;
+  margin-right: 12px;
 }
 
 .mobile-now-playing-art img {
@@ -370,11 +366,14 @@
 .mobile-now-playing-info {
   flex: 1;
   min-width: 0;
-  padding-right: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
 }
 
 .mobile-now-playing-track {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 500;
   color: #fff;
   margin: 0;
@@ -385,7 +384,7 @@
 }
 
 .mobile-now-playing-artist {
-  font-size: 11px;
+  font-size: 13px;
   color: #b3b3b3;
   margin: 0;
   overflow: hidden;
@@ -396,9 +395,9 @@
 
 /* Device indicator */
 .mobile-now-playing-device {
-  font-size: 10px;
+  font-size: 11px;
   color: #1db954;
-  margin: 2px 0 0 0;
+  margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -409,43 +408,12 @@
 }
 
 .mobile-now-playing-device i {
-  font-size: 8px;
-}
-
-/* Play/pause button */
-.mobile-now-playing-play {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  border-radius: 50%;
-  background: #fff;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform 0.1s ease;
-}
-
-.mobile-now-playing-play:active {
-  transform: scale(0.95);
-}
-
-.mobile-now-playing-play i {
-  color: #000;
-  font-size: 14px;
-  /* Slight offset for play icon visual balance */
-  margin-left: 2px;
-}
-
-.mobile-now-playing-play i.fa-pause {
-  margin-left: 0;
+  font-size: 9px;
 }
 
 /* FAB adjustment when bar is visible */
 body.now-playing-bar-visible #addAlbumFAB {
-  bottom: calc(72px + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
+  bottom: calc(88px + 1.5rem + env(safe-area-inset-bottom, 0px)) !important;
 }
 
 /* Desktop-specific: subtle color change only when chosen, no transforms */

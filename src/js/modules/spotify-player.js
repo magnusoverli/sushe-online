@@ -303,7 +303,6 @@ function cacheMobileElements() {
     track: document.getElementById('mobileNowPlayingTrack'),
     artist: document.getElementById('mobileNowPlayingArtist'),
     device: document.getElementById('mobileNowPlayingDevice'),
-    playBtn: document.getElementById('mobileNowPlayingPlay'),
     progressFill: document.getElementById('mobileNowPlayingProgressFill'),
   };
 }
@@ -314,7 +313,8 @@ function cacheMobileElements() {
 function updateMobileBar(state) {
   if (!mobileElements.bar) return;
 
-  if (state?.item) {
+  // Only show bar when actually playing (not paused/stopped)
+  if (state?.item && state.is_playing) {
     // Show the bar
     mobileElements.bar.classList.add('visible');
     document.body.classList.add('now-playing-bar-visible');
@@ -368,22 +368,10 @@ function updateMobileBar(state) {
       }
     }
 
-    // Update play/pause icon
-    if (mobileElements.playBtn) {
-      const icon = mobileElements.playBtn.querySelector('i');
-      if (icon) {
-        icon.className = state.is_playing ? 'fas fa-pause' : 'fas fa-play';
-      }
-    }
-
-    // Start/continue mobile progress animation if playing
-    if (state.is_playing) {
-      startMobileProgressAnimation();
-    } else {
-      stopMobileProgressAnimation();
-    }
+    // Start/continue mobile progress animation
+    startMobileProgressAnimation();
   } else {
-    // Hide the bar
+    // Hide the bar when paused/stopped
     mobileElements.bar.classList.remove('visible');
     document.body.classList.remove('now-playing-bar-visible');
     stopMobileProgressAnimation();
@@ -429,38 +417,6 @@ function stopMobileProgressAnimation() {
     cancelAnimationFrame(mobileAnimationFrameId);
     mobileAnimationFrameId = null;
   }
-}
-
-/**
- * Set up mobile bar event handlers
- */
-function setupMobileBarControls() {
-  if (!mobileElements.playBtn) return;
-
-  mobileElements.playBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const isPlaying = currentPlayback?.is_playing;
-
-    // Optimistic UI update
-    const icon = mobileElements.playBtn.querySelector('i');
-    if (icon) {
-      icon.className = isPlaying ? 'fas fa-play' : 'fas fa-pause';
-    }
-
-    const success = isPlaying ? await apiPause() : await apiResume();
-
-    if (!success) {
-      // Revert on failure
-      if (icon) {
-        icon.className = isPlaying ? 'fas fa-pause' : 'fas fa-play';
-      }
-      showToast('Playback control failed', 'error');
-    } else {
-      scheduleImmediatePoll();
-    }
-  });
 }
 
 // ============ UI STATE MANAGEMENT ============
@@ -1402,9 +1358,8 @@ export function initPlaybackTracking() {
 
   isHeadlessMode = true;
 
-  // Cache and set up mobile now-playing bar
+  // Cache mobile now-playing bar elements
   cacheMobileElements();
-  setupMobileBarControls();
 
   // Set up visibility change handler
   document.addEventListener('visibilitychange', handleVisibilityChange);
