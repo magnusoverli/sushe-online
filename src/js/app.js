@@ -2772,6 +2772,78 @@ function toggleYearSection(year, container) {
   }
 }
 
+// Generate HTML for year section header (shared between desktop and mobile)
+function createYearHeaderHTML(year, count, isExpanded) {
+  const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
+  return `
+    <div class="flex items-center">
+      <i class="fas ${chevronClass} mr-2 text-xs year-chevron"></i>
+      <span>${year}</span>
+    </div>
+    <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${count}</span>
+  `;
+}
+
+// Generate HTML for list button (shared between desktop and mobile)
+function createListButtonHTML(listName, isActive, isOfficial, isMobile) {
+  const paddingClass = isMobile ? 'py-3' : 'py-2';
+  const widthClass = isMobile ? 'flex-1' : 'w-full';
+  const activeClass = isActive ? 'active' : '';
+  const officialBadge = isOfficial
+    ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>'
+    : '';
+
+  const buttonHTML = `
+    <button data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
+      <i class="fas fa-list mr-2 flex-shrink-0"></i>
+      <span class="truncate flex-1">${listName}</span>
+      ${officialBadge}
+    </button>
+  `;
+
+  if (isMobile) {
+    return `
+      ${buttonHTML}
+      <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag flex-shrink-0" aria-label="List options">
+        <i class="fas fa-ellipsis-v"></i>
+      </button>
+    `;
+  }
+
+  return buttonHTML;
+}
+
+// Get configuration for list context menu (shared between desktop and mobile)
+function getListMenuConfig(listName) {
+  const meta = getListMetadata(listName);
+  const hasYear = !!meta?.year;
+  const isOfficial = meta?.isOfficial || false;
+
+  // Determine music service text
+  const musicService = window.currentUser?.musicService;
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+
+  let musicServiceText = 'Send to Music Service';
+  if (musicService === 'spotify' && hasSpotify) {
+    musicServiceText = 'Send to Spotify';
+  } else if (musicService === 'tidal' && hasTidal) {
+    musicServiceText = 'Send to Tidal';
+  } else if (hasSpotify && !hasTidal) {
+    musicServiceText = 'Send to Spotify';
+  } else if (hasTidal && !hasSpotify) {
+    musicServiceText = 'Send to Tidal';
+  }
+
+  return {
+    hasYear,
+    isOfficial,
+    musicServiceText,
+    officialToggleText: isOfficial ? 'Remove Official' : 'Set as Official',
+    officialIconClass: isOfficial ? 'fa-star-half-alt' : 'fa-star',
+  };
+}
+
 // Update sidebar navigation with year tree view
 function updateListNav() {
   const nav = document.getElementById('listNav');
@@ -2817,14 +2889,13 @@ function updateListNav() {
 
       // Year header
       const header = document.createElement('button');
-      header.className = `w-full text-left px-3 py-${isMobile ? '2' : '1.5'} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
-      header.innerHTML = `
-        <div class="flex items-center">
-          <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
-          <span>${year}</span>
-        </div>
-        <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${yearLists.length}</span>
-      `;
+      const paddingClass = isMobile ? 'py-2' : 'py-1.5';
+      header.className = `w-full text-left px-3 ${paddingClass} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+      header.innerHTML = createYearHeaderHTML(
+        year,
+        yearLists.length,
+        isExpanded
+      );
       header.onclick = (e) => {
         e.preventDefault();
         toggleYearSection(year, container);
@@ -2856,14 +2927,13 @@ function updateListNav() {
 
       // Header for uncategorized
       const header = document.createElement('button');
-      header.className = `w-full text-left px-3 py-${isMobile ? '2' : '1.5'} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
-      header.innerHTML = `
-        <div class="flex items-center">
-          <i class="fas ${isExpanded ? 'fa-chevron-down' : 'fa-chevron-right'} mr-2 text-xs year-chevron"></i>
-          <span>Uncategorized</span>
-        </div>
-        <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${uncategorized.length}</span>
-      `;
+      const paddingClass = isMobile ? 'py-2' : 'py-1.5';
+      header.className = `w-full text-left px-3 ${paddingClass} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+      header.innerHTML = createYearHeaderHTML(
+        'Uncategorized',
+        uncategorized.length,
+        isExpanded
+      );
       header.onclick = (e) => {
         e.preventDefault();
         toggleYearSection('uncategorized', container);
@@ -2890,31 +2960,18 @@ function updateListNav() {
   const createListButton = (listName, isMobile, _container) => {
     const meta = getListMetadata(listName);
     const isOfficial = meta?.isOfficial || false;
+    const isActive = currentList === listName;
     const li = document.createElement('li');
 
     if (isMobile) {
-      // Mobile: use flex container with separate menu button
       li.className = 'flex items-center';
-      li.innerHTML = `
-        <button data-list-name="${listName}" class="sidebar-list-btn flex-1 text-left px-3 py-3 rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
-          <i class="fas fa-list mr-2 flex-shrink-0"></i>
-          <span class="truncate flex-1">${listName}</span>
-          ${isOfficial ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>' : ''}
-        </button>
-        <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag flex-shrink-0" aria-label="List options">
-          <i class="fas fa-ellipsis-v"></i>
-        </button>
-      `;
-    } else {
-      // Desktop: single button with right-click
-      li.innerHTML = `
-        <button data-list-name="${listName}" class="sidebar-list-btn w-full text-left px-3 py-2 rounded text-sm transition duration-200 text-gray-300 ${currentList === listName ? 'active' : ''} flex items-center">
-          <i class="fas fa-list mr-2 flex-shrink-0"></i>
-          <span class="truncate flex-1">${listName}</span>
-          ${isOfficial ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>' : ''}
-        </button>
-      `;
     }
+    li.innerHTML = createListButtonHTML(
+      listName,
+      isActive,
+      isOfficial,
+      isMobile
+    );
 
     const button = li.querySelector('[data-list-name]');
     const menuButton = li.querySelector('[data-list-menu-btn]');
@@ -2933,25 +2990,14 @@ function updateListNav() {
         const contextMenu = document.getElementById('contextMenu');
         if (!contextMenu) return;
 
+        // Get shared menu configuration
+        const menuConfig = getListMenuConfig(listName);
+
         // Update the playlist option text based on user's music service
         const updatePlaylistText =
           document.getElementById('updatePlaylistText');
         if (updatePlaylistText) {
-          const musicService = window.currentUser?.musicService;
-          const hasSpotify = window.currentUser?.spotifyAuth;
-          const hasTidal = window.currentUser?.tidalAuth;
-
-          if (musicService === 'spotify' && hasSpotify) {
-            updatePlaylistText.textContent = 'Send to Spotify';
-          } else if (musicService === 'tidal' && hasTidal) {
-            updatePlaylistText.textContent = 'Send to Tidal';
-          } else if (hasSpotify && !hasTidal) {
-            updatePlaylistText.textContent = 'Send to Spotify';
-          } else if (hasTidal && !hasSpotify) {
-            updatePlaylistText.textContent = 'Send to Tidal';
-          } else {
-            updatePlaylistText.textContent = 'Send to Music Service';
-          }
+          updatePlaylistText.textContent = menuConfig.musicServiceText;
         }
 
         // Update the toggle official option text based on current status
@@ -2961,22 +3007,13 @@ function updateListNav() {
           'toggleOfficialOption'
         );
         if (toggleOfficialText && toggleOfficialOption) {
-          const meta = getListMetadata(listName);
-          if (meta?.isOfficial) {
-            toggleOfficialText.textContent = 'Remove Official';
-            toggleOfficialOption.querySelector('i').classList.remove('fa-star');
-            toggleOfficialOption
-              .querySelector('i')
-              .classList.add('fa-star-half-alt');
-          } else {
-            toggleOfficialText.textContent = 'Set as Official';
-            toggleOfficialOption
-              .querySelector('i')
-              .classList.remove('fa-star-half-alt');
-            toggleOfficialOption.querySelector('i').classList.add('fa-star');
-          }
+          toggleOfficialText.textContent = menuConfig.officialToggleText;
+          const icon = toggleOfficialOption.querySelector('i');
+          icon.classList.remove('fa-star', 'fa-star-half-alt');
+          icon.classList.add(menuConfig.officialIconClass);
+
           // Hide option if list has no year (can't be official)
-          if (!meta?.year) {
+          if (!menuConfig.hasYear) {
             toggleOfficialOption.classList.add('hidden');
           } else {
             toggleOfficialOption.classList.remove('hidden');
@@ -5565,25 +5602,8 @@ window.showMobileMoveToListSheet = function (index, albumId) {
 
 // Show mobile action sheet for list context menu
 window.showMobileListMenu = function (listName) {
-  // Get metadata for this list
-  const meta = getListMetadata(listName);
-  const hasYear = meta?.year;
-  const isOfficial = meta?.isOfficial || false;
-
-  // Determine music service text
-  const musicService = window.currentUser?.musicService;
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-  let musicServiceText = 'Send to Music Service';
-  if (musicService === 'spotify' && hasSpotify) {
-    musicServiceText = 'Send to Spotify';
-  } else if (musicService === 'tidal' && hasTidal) {
-    musicServiceText = 'Send to Tidal';
-  } else if (hasSpotify && !hasTidal) {
-    musicServiceText = 'Send to Spotify';
-  } else if (hasTidal && !hasSpotify) {
-    musicServiceText = 'Send to Tidal';
-  }
+  // Get shared menu configuration
+  const menuConfig = getListMenuConfig(listName);
 
   // Remove any existing action sheets first
   const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
@@ -5617,11 +5637,11 @@ window.showMobileListMenu = function (listName) {
         </button>
         
         ${
-          hasYear
+          menuConfig.hasYear
             ? `
         <button data-action="toggle-official"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas ${isOfficial ? 'fa-star-half-alt' : 'fa-star'} mr-3 text-yellow-500"></i>${isOfficial ? 'Remove Official' : 'Set as Official'}
+          <i class="fas ${menuConfig.officialIconClass} mr-3 text-yellow-500"></i>${menuConfig.officialToggleText}
         </button>
         `
             : ''
@@ -5629,7 +5649,7 @@ window.showMobileListMenu = function (listName) {
         
         <button data-action="send-to-service"
                 class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${musicServiceText}
+          <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${menuConfig.musicServiceText}
         </button>
         
         <button data-action="delete"
