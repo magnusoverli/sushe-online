@@ -40,7 +40,7 @@ const loginSnippetFn = ejs.compile(
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
   <header class="bg-gray-900 z-50">
-    <div class="flex items-center justify-between py-[2px] lg:py-4 px-3 lg:px-0">
+    <div class="flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button / Desktop logo -->
       <div class="flex items-center gap-2 lg:w-72 lg:justify-center lg:gap-0">
         ${
@@ -60,12 +60,12 @@ const headerComponent = (user, activeSection = 'home') => `
       </div>
       
       <!-- User menu -->
-      <div class="flex items-center gap-3 lg:gap-4 pr-1 lg:pr-2">
-        <span class="hidden lg:inline text-sm text-gray-400">${user?.username || user?.email}</span>
-        <a href="/settings" class="p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings">
+      <div class="flex items-center pr-1 lg:pr-2">
+        <span class="text-xs lg:text-sm text-gray-400 truncate max-w-[120px] lg:max-w-none">${user?.username || user?.email}</span>
+        <a href="/settings" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-6 lg:ml-8" title="Settings">
           <i class="fas fa-cog text-lg"></i>
         </a>
-        <a href="/logout" class="p-0 text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
+        <a href="/logout" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-5" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
