@@ -1356,6 +1356,12 @@ async function saveList(name, data, year = undefined) {
     if (year !== undefined) {
       updateListMetadata(name, { year: year });
     }
+
+    // Refresh mobile bar visibility if this is the current list
+    // (albums may have been added/removed, affecting whether current track is in list)
+    if (name === currentList && window.refreshMobileBarVisibility) {
+      window.refreshMobileBarVisibility();
+    }
   } catch (error) {
     showToast('Error saving list', 'error');
     throw error;
@@ -1605,6 +1611,10 @@ function initializeContextMenu() {
             // No lists remain - show empty state
             currentList = null;
             window.currentList = currentList;
+            // Refresh mobile bar visibility when list is cleared
+            if (window.refreshMobileBarVisibility) {
+              window.refreshMobileBarVisibility();
+            }
 
             const headerAddAlbumBtn =
               document.getElementById('headerAddAlbumBtn');
@@ -3130,6 +3140,10 @@ async function selectList(listName) {
           fetchAndApplyCovers(data).catch((err) => {
             console.warn('Background cover fetch failed:', err);
           });
+          // Refresh mobile bar visibility when list changes
+          if (window.refreshMobileBarVisibility) {
+            window.refreshMobileBarVisibility();
+          }
         }
       } catch (err) {
         console.warn('Failed to fetch list data:', err);
@@ -5719,6 +5733,10 @@ window.showMobileListMenu = function (listName) {
           } else {
             currentList = null;
             window.currentList = currentList;
+            // Refresh mobile bar visibility when list is cleared
+            if (window.refreshMobileBarVisibility) {
+              window.refreshMobileBarVisibility();
+            }
 
             const headerAddAlbumBtn =
               document.getElementById('headerAddAlbumBtn');

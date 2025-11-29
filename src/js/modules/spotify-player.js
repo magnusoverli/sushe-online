@@ -51,6 +51,81 @@ function formatTime(ms) {
 }
 
 /**
+ * Normalize string for matching (same logic as app.js)
+ */
+function normalizeForMatch(str) {
+  if (!str) return '';
+  return str
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric (keep spaces)
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+}
+
+/**
+ * Check if a list album matches the currently playing Spotify track
+ */
+function isAlbumMatchingPlayback(
+  listAlbum,
+  playingAlbumName,
+  playingArtistName
+) {
+  if (!listAlbum || !playingAlbumName || !playingArtistName) return false;
+
+  const albumMatch =
+    normalizeForMatch(listAlbum.album) === normalizeForMatch(playingAlbumName);
+  const artistMatch =
+    normalizeForMatch(listAlbum.artist) ===
+    normalizeForMatch(playingArtistName);
+
+  return albumMatch && artistMatch;
+}
+
+/**
+ * Check if the currently playing track's album is in the current list
+ */
+function isCurrentTrackInCurrentList(playbackState) {
+  // No playback = not in list
+  if (!playbackState?.item?.album || !playbackState?.item?.artists) {
+    return false;
+  }
+
+  // No current list = not in list
+  const currentList = window.currentList;
+  if (!currentList) {
+    return false;
+  }
+
+  // Get list data
+  const getListData = window.getListData;
+  if (!getListData) {
+    return false;
+  }
+
+  const albums = getListData(currentList);
+  if (!albums || !Array.isArray(albums) || albums.length === 0) {
+    return false;
+  }
+
+  // Extract album and artist names from playback state
+  const playingAlbumName = playbackState.item.album.name;
+  const playingArtistName = playbackState.item.artists
+    ?.map((a) => a.name)
+    .join(', ');
+
+  if (!playingAlbumName || !playingArtistName) {
+    return false;
+  }
+
+  // Check if any album in the list matches
+  return albums.some((album) =>
+    isAlbumMatchingPlayback(album, playingAlbumName, playingArtistName)
+  );
+}
+
+/**
  * Get device icon based on type
  */
 function getDeviceIcon(type) {
@@ -313,8 +388,14 @@ function cacheMobileElements() {
 function updateMobileBar(state) {
   if (!mobileElements.bar) return;
 
-  // Only show bar when actually playing (not paused/stopped)
-  if (state?.item && state.is_playing) {
+  // Check if we should show the bar:
+  // 1. Must be playing (not paused/stopped)
+  // 2. Must have track info
+  // 3. Track's album must be in the current list
+  const shouldShow =
+    state?.item && state.is_playing && isCurrentTrackInCurrentList(state);
+
+  if (shouldShow) {
     // Show the bar
     mobileElements.bar.classList.add('visible');
     document.body.classList.add('now-playing-bar-visible');
@@ -371,7 +452,7 @@ function updateMobileBar(state) {
     // Start/continue mobile progress animation
     startMobileProgressAnimation();
   } else {
-    // Hide the bar when paused/stopped
+    // Hide the bar when paused/stopped or track not in current list
     mobileElements.bar.classList.remove('visible');
     document.body.classList.remove('now-playing-bar-visible');
     stopMobileProgressAnimation();
@@ -1368,6 +1449,23 @@ export function initPlaybackTracking() {
   console.log('Spotify playback tracking: Starting mobile polling mode');
   startPolling();
 }
+
+/**
+ * Refresh mobile bar visibility based on current playback and list state
+ * Call this when the list changes or albums are added/removed
+ */
+export function refreshMobileBarVisibility() {
+  // Re-check current playback state against current list
+  if (currentPlayback) {
+    updateMobileBar(currentPlayback);
+  } else {
+    // No playback, ensure bar is hidden
+    updateMobileBar(null);
+  }
+}
+
+// Make available globally for app.js to call
+window.refreshMobileBarVisibility = refreshMobileBarVisibility;
 
 /**
  * Clean up headless playback tracking
