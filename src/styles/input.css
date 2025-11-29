@@ -287,7 +287,8 @@
 
 .mobile-now-playing {
   position: fixed;
-  bottom: 0;
+  /* Position above the safe area instead of padding inside it */
+  bottom: env(safe-area-inset-bottom, 0px);
   left: 0;
   right: 0;
   background: linear-gradient(to bottom, #282828, #1a1a1a);
@@ -297,19 +298,11 @@
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
-  /* Safe area handling: works in both browser and standalone mode */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  /* Safe area handling for left/right only */
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
   opacity: 0;
   pointer-events: none;
-}
-
-/* Ensure safe areas are respected in standalone mode */
-.standalone-mode .mobile-now-playing {
-  /* In standalone mode, safe-area-inset-bottom should still work,
-     but we ensure it's applied correctly */
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 0px);
 }
 
 .mobile-now-playing.visible {
