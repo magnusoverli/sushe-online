@@ -72,6 +72,10 @@ function getAlbumDisplayModule() {
       playTrackSafe: (albumId) => window.playTrackSafe(albumId),
       reapplyNowPlayingBorder,
       initializeUnifiedSorting,
+      setContextAlbum: (index, albumId) => {
+        currentContextAlbum = index;
+        currentContextAlbumId = albumId;
+      },
     });
   }
   return albumDisplayModule;

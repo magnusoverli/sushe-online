@@ -45,6 +45,7 @@ let playcountFetchInProgress = false;
  * @param {Function} deps.playTrackSafe - Play track safely by album ID
  * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
  * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
+ * @param {Function} deps.setContextAlbum - Set context album index and ID for menus
  * @returns {Object} Album display module API
  */
 export function createAlbumDisplay(deps = {}) {
@@ -66,6 +67,7 @@ export function createAlbumDisplay(deps = {}) {
     playTrackSafe,
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
+    setContextAlbum,
   } = deps;
 
   /**
@@ -435,9 +437,10 @@ export function createAlbumDisplay(deps = {}) {
       const albumId =
         `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
-      // Set context album state via window (will be refactored later)
-      window.currentContextAlbum = currentIndex;
-      window.currentContextAlbumId = albumId;
+      // Set context album state via injected function
+      if (setContextAlbum) {
+        setContextAlbum(currentIndex, albumId);
+      }
 
       const contextMenu = document.getElementById('albumContextMenu');
       if (!contextMenu) return;
