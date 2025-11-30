@@ -1,6 +1,9 @@
 # ----- Build stage -----
 FROM node:24-slim AS builder
 
+# Cache-busting arg - changes with each build to ensure fresh source code
+ARG CACHE_BUST=1
+
 # Update npm to specific version
 RUN npm install -g npm@11.6.1 --no-fund
 
@@ -11,6 +14,8 @@ COPY package*.json ./
 RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Copy the rest of the source and build assets
+# The CACHE_BUST arg ensures this layer is never cached
+RUN echo "Cache bust: ${CACHE_BUST}"
 COPY . .
 RUN npm run build
 

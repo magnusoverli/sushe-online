@@ -63,5 +63,7 @@ jobs:
           context: .
           push: true
           no-cache: true
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
