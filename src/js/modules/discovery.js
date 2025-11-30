@@ -348,8 +348,10 @@ async function loadSimilarArtistImages(artists, signal) {
   for (const artist of artists) {
     if (signal?.aborted) return;
 
+    // Escape special characters for use in CSS selector
+    const escapedName = artist.name.replace(/["\\]/g, '\\$&');
     const container = discoveryModal?.querySelector(
-      `.artist-image-container[data-artist="${CSS.escape(artist.name)}"]`
+      `.artist-image-container[data-artist="${escapedName}"]`
     );
     if (!container) continue;
 
