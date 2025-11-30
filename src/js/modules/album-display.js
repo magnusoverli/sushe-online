@@ -1367,22 +1367,9 @@ export function createAlbumDisplay(deps = {}) {
       // Update DOM elements
       updatePlaycountElements(playcounts);
 
-      // If background refresh is happening, poll for updates
+      // If background refresh is happening, poll for updates until complete
       if (refreshing > 0) {
-        // Poll after a delay to get refreshed data
-        setTimeout(async () => {
-          try {
-            const refreshedResponse = await apiCall(
-              `/api/lastfm/list-playcounts/${listId}`
-            );
-            if (refreshedResponse.playcounts) {
-              Object.assign(playcountCache, refreshedResponse.playcounts);
-              updatePlaycountElements(refreshedResponse.playcounts);
-            }
-          } catch (err) {
-            console.warn('Failed to fetch refreshed playcounts:', err);
-          }
-        }, 5000); // Wait 5 seconds for background refresh
+        pollForRefreshedPlaycounts(listId, refreshing);
       }
     } catch (err) {
       // Silently fail - playcounts are not critical
@@ -1419,6 +1406,74 @@ export function createAlbumDisplay(deps = {}) {
         mobileEl.classList.remove('hidden');
       }
     }
+  }
+
+  /**
+   * Poll for refreshed playcounts until all data is loaded
+   * @param {string} listId - List ID
+   * @param {number} expectedCount - Number of albums being refreshed
+   */
+  async function pollForRefreshedPlaycounts(listId, expectedCount) {
+    // Calculate expected time: ~5 albums per batch, ~1.1s per batch
+    const estimatedBatches = Math.ceil(expectedCount / 5);
+    const estimatedTimeMs = estimatedBatches * 1100 + 2000; // Add 2s buffer
+
+    // Poll interval and max attempts
+    const POLL_INTERVAL = 3000; // Poll every 3 seconds
+    const MAX_POLLS = Math.max(
+      5,
+      Math.ceil(estimatedTimeMs / POLL_INTERVAL) + 2
+    );
+
+    let pollCount = 0;
+    let lastMissingCount = expectedCount;
+
+    const poll = async () => {
+      pollCount++;
+
+      try {
+        const response = await apiCall(`/api/lastfm/list-playcounts/${listId}`);
+
+        if (response.playcounts) {
+          Object.assign(playcountCache, response.playcounts);
+          updatePlaycountElements(response.playcounts);
+
+          // Count how many are still null/missing
+          const missingCount = Object.values(response.playcounts).filter(
+            (v) => v === null
+          ).length;
+
+          // If all loaded or no progress being made, stop polling
+          if (missingCount === 0) {
+            console.log('All playcounts loaded');
+            return;
+          }
+
+          // If still making progress and under max polls, continue
+          if (pollCount < MAX_POLLS && missingCount < lastMissingCount) {
+            lastMissingCount = missingCount;
+            setTimeout(poll, POLL_INTERVAL);
+          } else if (
+            pollCount < MAX_POLLS &&
+            missingCount === lastMissingCount
+          ) {
+            // No progress - maybe API rate limited, try a couple more times
+            if (pollCount < MAX_POLLS - 2) {
+              setTimeout(poll, POLL_INTERVAL * 2); // Slower poll
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Playcount poll failed:', err);
+        // Retry if under max
+        if (pollCount < MAX_POLLS) {
+          setTimeout(poll, POLL_INTERVAL);
+        }
+      }
+    };
+
+    // Start polling after initial delay
+    setTimeout(poll, POLL_INTERVAL);
   }
 
   // Return public API
