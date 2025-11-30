@@ -4,6 +4,7 @@ import {
   initMiniplayer,
   initPlaybackTracking,
 } from './modules/spotify-player.js';
+import { initDiscovery } from './modules/discovery.js';
 
 /**
  * Detect if app is running in standalone/PWA mode
@@ -54,6 +55,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       // Desktop: full miniplayer UI + polling
       initMiniplayer();
+    }
+
+    // Initialize discovery module (Last.fm recommendations)
+    // Only if user has Last.fm connected
+    if (window.currentUser?.lastfmUsername) {
+      initDiscovery();
     }
   }, 100);
 });

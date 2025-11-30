@@ -1202,6 +1202,55 @@ function initializeAlbumContextMenu() {
       showMoveToListSubmenu();
     });
   }
+
+  // Handle Last.fm discovery options
+  const similarOption = document.getElementById('similarArtistsOption');
+  const recsOption = document.getElementById('recommendationsOption');
+
+  if (similarOption) {
+    similarOption.onclick = () => {
+      contextMenu.classList.add('hidden');
+
+      // Get the artist name from the currently selected album
+      const albumsData = getListData(currentList);
+      let album = albumsData && albumsData[currentContextAlbum];
+
+      if (album && currentContextAlbumId) {
+        const expectedId =
+          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+        if (expectedId !== currentContextAlbumId) {
+          const result = findAlbumByIdentity(currentContextAlbumId);
+          if (result) album = result.album;
+        }
+      }
+
+      if (album && album.artist) {
+        // Import and call showDiscoveryModal dynamically
+        import('./modules/discovery.js').then(({ showDiscoveryModal }) => {
+          showDiscoveryModal('similar', { artist: album.artist });
+        });
+      } else {
+        showToast('Could not find album artist', 'error');
+      }
+
+      currentContextAlbum = null;
+      currentContextAlbumId = null;
+    };
+  }
+
+  if (recsOption) {
+    recsOption.onclick = () => {
+      contextMenu.classList.add('hidden');
+
+      // Import and call showDiscoveryModal dynamically
+      import('./modules/discovery.js').then(({ showDiscoveryModal }) => {
+        showDiscoveryModal('recommendations');
+      });
+
+      currentContextAlbum = null;
+      currentContextAlbumId = null;
+    };
+  }
 }
 
 // Show the move to list submenu for desktop
@@ -2621,6 +2670,125 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeCreateList();
       initializeRenameList();
       initializeImportConflictHandling();
+
+      // Handle discovery module's album add requests
+      window.addEventListener('discovery-add-album', async (e) => {
+        const { artist, album, listName } = e.detail;
+        if (!artist || !album || !listName) {
+          showToast('Missing album information', 'error');
+          return;
+        }
+
+        try {
+          // Search MusicBrainz for the album
+          showToast(`Searching for "${album}" by ${artist}...`, 'info');
+
+          const searchQuery = encodeURIComponent(`${artist} ${album}`);
+          const mbResponse = await fetch(
+            `/api/proxy/musicbrainz?endpoint=release-group/?query=${searchQuery}&type=album&limit=5&fmt=json`,
+            { credentials: 'include' }
+          );
+
+          if (!mbResponse.ok) {
+            throw new Error('MusicBrainz search failed');
+          }
+
+          const mbData = await mbResponse.json();
+          const releaseGroups = mbData['release-groups'] || [];
+
+          if (releaseGroups.length === 0) {
+            showToast(
+              `Could not find "${album}" on MusicBrainz. Try adding manually.`,
+              'error'
+            );
+            return;
+          }
+
+          // Find best match (exact or closest)
+          const normalizeStr = (s) =>
+            s?.toLowerCase().replace(/[^a-z0-9]/g, '') || '';
+          const targetArtist = normalizeStr(artist);
+          const targetAlbum = normalizeStr(album);
+
+          let bestMatch = releaseGroups[0];
+          for (const rg of releaseGroups) {
+            const rgArtist = normalizeStr(
+              rg['artist-credit']?.[0]?.name ||
+                rg['artist-credit']?.[0]?.artist?.name
+            );
+            const rgAlbum = normalizeStr(rg.title);
+            if (rgArtist === targetArtist && rgAlbum === targetAlbum) {
+              bestMatch = rg;
+              break;
+            }
+          }
+
+          // Build album object
+          const artistName =
+            bestMatch['artist-credit']?.[0]?.name ||
+            bestMatch['artist-credit']?.[0]?.artist?.name ||
+            artist;
+          const albumTitle = bestMatch.title || album;
+          const releaseDate = bestMatch['first-release-date'] || '';
+
+          const newAlbum = {
+            artist: artistName,
+            album: albumTitle,
+            album_id: bestMatch.id,
+            release_date: releaseDate,
+            country: '',
+            genre_1: '',
+            genre_2: '',
+          };
+
+          // Get the target list data
+          let targetListData = getListData(listName);
+          if (!targetListData) {
+            // Fetch the list data if not cached
+            targetListData = await apiCall(
+              `/api/lists/${encodeURIComponent(listName)}`
+            );
+          }
+
+          if (!targetListData) {
+            targetListData = [];
+          }
+
+          // Check for duplicates
+          const isDuplicate = targetListData.some(
+            (a) =>
+              a.artist?.toLowerCase() === artistName.toLowerCase() &&
+              a.album?.toLowerCase() === albumTitle.toLowerCase()
+          );
+
+          if (isDuplicate) {
+            showToast(
+              `"${albumTitle}" already exists in "${listName}"`,
+              'error'
+            );
+            return;
+          }
+
+          // Add to list
+          targetListData.push(newAlbum);
+          await saveList(listName, targetListData);
+
+          // Refresh if viewing the same list
+          if (currentList === listName) {
+            selectList(listName);
+          }
+
+          // Refresh discovery module's user lists cache
+          import('./modules/discovery.js').then(({ refreshUserLists }) => {
+            refreshUserLists();
+          });
+
+          showToast(`Added "${albumTitle}" to "${listName}"`);
+        } catch (err) {
+          console.error('Error adding album from discovery:', err);
+          showToast('Failed to add album. Try adding manually.', 'error');
+        }
+      });
 
       // Note: Last list selection is now handled in loadLists() for faster display
 
