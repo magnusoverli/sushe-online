@@ -7,6 +7,12 @@
  * @module album-display
  */
 
+import {
+  formatReleaseDate,
+  isYearMismatch,
+  extractYearFromDate,
+} from './date-utils.js';
+
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
 
@@ -24,9 +30,6 @@ let positionElementCache = new WeakMap();
  * @param {Function} deps.saveList - Save list to server
  * @param {Function} deps.showToast - Show toast notification
  * @param {Function} deps.apiCall - Make API call
- * @param {Function} deps.formatReleaseDate - Format release date for display
- * @param {Function} deps.isYearMismatch - Check if release year mismatches list year
- * @param {Function} deps.extractYearFromDate - Extract year from date string
  * @param {Function} deps.fetchTracksForAlbum - Fetch tracks for an album
  * @param {Function} deps.makeCountryEditable - Make country cell editable
  * @param {Function} deps.makeGenreEditable - Make genre cell editable
@@ -48,9 +51,6 @@ export function createAlbumDisplay(deps = {}) {
     saveList,
     showToast,
     apiCall,
-    formatReleaseDate,
-    isYearMismatch,
-    extractYearFromDate,
     fetchTracksForAlbum,
     makeCountryEditable,
     makeGenreEditable,

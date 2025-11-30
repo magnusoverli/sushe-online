@@ -1,5 +1,5 @@
 import { showToast, apiCall } from './utils.js';
-import { showConfirmation } from '../app.js';
+import { showConfirmation } from './ui-utils.js';
 
 export async function updatePlaylist(listName, listData = []) {
   try {

@@ -7,6 +7,8 @@
  * @module mobile-ui
  */
 
+import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
+
 /**
  * Factory function to create the mobile UI module with injected dependencies
  *
@@ -33,8 +35,6 @@
  * @param {Function} deps.toggleOfficialStatus - Toggle official status
  * @param {Function} deps.getDeviceIcon - Get icon for device type
  * @param {Function} deps.getListMenuConfig - Get list menu configuration
- * @param {Function} deps.normalizeDateForInput - Normalize date for input field
- * @param {Function} deps.formatDateForStorage - Format date for storage
  * @param {Function} deps.getAvailableCountries - Get available countries list
  * @param {Function} deps.getAvailableGenres - Get available genres list
  * @param {Function} deps.setCurrentContextAlbum - Set current context album index
@@ -65,8 +65,6 @@ export function createMobileUI(deps = {}) {
     toggleOfficialStatus,
     getDeviceIcon,
     getListMenuConfig,
-    normalizeDateForInput,
-    formatDateForStorage,
     getAvailableCountries,
     getAvailableGenres,
     setCurrentContextAlbum,

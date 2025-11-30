@@ -1,11 +1,24 @@
 // Import static data at build time
 import genresText from '../data/genres.txt?raw';
 import countriesText from '../data/countries.txt?raw';
-import { getAlbumKey } from './modules/utils.js';
 import { createAlbumDisplay } from './modules/album-display.js';
 import { createContextMenus } from './modules/context-menus.js';
 import { createMobileUI } from './modules/mobile-ui.js';
 import { createListNav } from './modules/list-nav.js';
+import { createEditableFields } from './modules/editable-fields.js';
+import { createSorting } from './modules/sorting.js';
+import { createImportConflictHandler } from './modules/import-export.js';
+// Date utilities are imported directly by modules that need them
+import { createNowPlaying } from './modules/now-playing.js';
+import {
+  positionContextMenu,
+  showToast,
+  showConfirmation,
+  hideConfirmation,
+} from './modules/ui-utils.js';
+
+// Re-export UI utilities for backward compatibility
+export { showToast, showConfirmation };
 
 // Lazy loading module cache
 let musicServicesModule = null;
@@ -23,6 +36,18 @@ let mobileUIModule = null;
 // List navigation module instance (initialized lazily when first needed)
 let listNavModule = null;
 
+// Editable fields module instance (initialized lazily when first needed)
+let editableFieldsModule = null;
+
+// Sorting module instance (initialized lazily when first needed)
+let sortingModule = null;
+
+// Import conflict handler module instance (initialized lazily when first needed)
+let importConflictModule = null;
+
+// Now playing module instance (initialized lazily when first needed)
+let nowPlayingModule = null;
+
 /**
  * Get or initialize the album display module
  * Uses lazy initialization to avoid dependency ordering issues
@@ -36,9 +61,6 @@ function getAlbumDisplayModule() {
       saveList,
       showToast,
       apiCall,
-      formatReleaseDate,
-      isYearMismatch,
-      extractYearFromDate,
       fetchTracksForAlbum,
       makeCountryEditable,
       makeGenreEditable,
@@ -92,6 +114,7 @@ function getContextMenusModule() {
       updatePlaylist,
       openRenameModal,
       updateListNav,
+      updateListMetadata,
       showMobileEditForm,
       playAlbum,
       playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
@@ -106,6 +129,14 @@ function getContextMenusModule() {
         if ('albumId' in state) currentContextAlbumId = state.albumId;
         if ('list' in state) currentContextList = state.list;
       },
+      setCurrentList: (listName) => {
+        currentList = listName;
+      },
+      refreshMobileBarVisibility: () => {
+        if (window.refreshMobileBarVisibility) {
+          window.refreshMobileBarVisibility();
+        }
+      },
       toggleOfficialStatus,
     });
   }
@@ -119,6 +150,10 @@ function getListMenuConfig(listName) {
 
 function getDeviceIcon(type) {
   return getContextMenusModule().getDeviceIcon(type);
+}
+
+function initializeContextMenu() {
+  return getContextMenusModule().initializeContextMenu();
 }
 
 /**
@@ -150,8 +185,6 @@ function getMobileUIModule() {
       toggleOfficialStatus,
       getDeviceIcon,
       getListMenuConfig,
-      normalizeDateForInput,
-      formatDateForStorage,
       getAvailableCountries: () => availableCountries,
       getAvailableGenres: () => availableGenres,
       setCurrentContextAlbum: (idx) => {
@@ -244,16 +277,121 @@ function updateListNavActiveState(activeListName) {
 // Expose updateListNav to window for access from other modules
 window.updateListNav = updateListNav;
 
+/**
+ * Get or initialize the editable fields module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getEditableFieldsModule() {
+  if (!editableFieldsModule) {
+    editableFieldsModule = createEditableFields({
+      getListData,
+      getCurrentList: () => currentList,
+      saveList,
+      showToast,
+      getAvailableCountries: () => availableCountries,
+      getAvailableGenres: () => availableGenres,
+      isTextTruncated,
+    });
+  }
+  return editableFieldsModule;
+}
+
+// Wrapper functions for editable fields module
+function makeCountryEditable(countryDiv, albumIndex) {
+  return getEditableFieldsModule().makeCountryEditable(countryDiv, albumIndex);
+}
+
+function makeGenreEditable(genreDiv, albumIndex, genreField) {
+  return getEditableFieldsModule().makeGenreEditable(
+    genreDiv,
+    albumIndex,
+    genreField
+  );
+}
+
+function makeCommentEditable(commentDiv, albumIndex) {
+  return getEditableFieldsModule().makeCommentEditable(commentDiv, albumIndex);
+}
+
+/**
+ * Get or initialize the sorting module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getSortingModule() {
+  if (!sortingModule) {
+    sortingModule = createSorting({
+      getListData,
+      getCurrentList: () => currentList,
+      debouncedSaveList,
+      updatePositionNumbers,
+      showToast,
+    });
+  }
+  return sortingModule;
+}
+
+// Wrapper function for sorting module
+function initializeUnifiedSorting(container, isMobile) {
+  return getSortingModule().initializeUnifiedSorting(container, isMobile);
+}
+
+/**
+ * Get or initialize the import conflict handler module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getImportConflictModule() {
+  if (!importConflictModule) {
+    importConflictModule = createImportConflictHandler({
+      getListData,
+      getLists: () => lists,
+      saveList,
+      selectList,
+      updateListNav,
+      getPendingImport: () => ({
+        data: pendingImportData,
+        filename: pendingImportFilename,
+      }),
+      setPendingImport: (data, filename) => {
+        pendingImportData = data;
+        pendingImportFilename = filename;
+      },
+    });
+  }
+  return importConflictModule;
+}
+
+// Wrapper function for import conflict handling
+function initializeImportConflictHandling() {
+  return getImportConflictModule().initializeImportConflictHandling();
+}
+
+/**
+ * Get or initialize the now-playing module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getNowPlayingModule() {
+  if (!nowPlayingModule) {
+    nowPlayingModule = createNowPlaying({
+      getListData,
+      getCurrentList: () => currentList,
+    });
+    // Initialize event listeners
+    nowPlayingModule.initialize();
+  }
+  return nowPlayingModule;
+}
+
+// Wrapper function for now-playing module (reapplyNowPlayingBorder is passed to album-display)
+function reapplyNowPlayingBorder() {
+  return getNowPlayingModule().reapplyNowPlayingBorder();
+}
+
 // Global variables
 let lists = {};
 let currentList = '';
 let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null;
-
-// Now-playing feature state
-let currentNowPlayingElements = [];
-let lastKnownPlayback = null; // Cache for re-applying after list render
 
 // Process static data at module load time
 const availableGenres = genresText
@@ -289,7 +427,6 @@ window.availableCountries = availableCountries;
 
 let pendingImportData = null;
 let pendingImportFilename = null;
-let confirmationCallback = null;
 
 // ============ LIST DATA ACCESS HELPERS ============
 // These helpers provide a clean abstraction for accessing list data
@@ -496,190 +633,6 @@ window.updateListMetadata = updateListMetadata;
 window.isListDataLoaded = isListDataLoaded;
 window.toggleOfficialStatus = toggleOfficialStatus;
 
-// ============ NOW PLAYING ALBUM HIGHLIGHT ============
-// Shows an animated border on album covers matching the currently playing Spotify track
-
-/**
- * Normalize a string for fuzzy matching (remove diacritics, punctuation, lowercase)
- */
-function normalizeForMatch(str) {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-    .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric (keep spaces)
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
-}
-
-/**
- * Check if a list album matches the currently playing Spotify track
- */
-function isAlbumMatchingPlayback(
-  listAlbum,
-  playingAlbumName,
-  playingArtistName
-) {
-  if (!listAlbum || !playingAlbumName || !playingArtistName) return false;
-
-  const albumMatch =
-    normalizeForMatch(listAlbum.album) === normalizeForMatch(playingAlbumName);
-  const artistMatch =
-    normalizeForMatch(listAlbum.artist) ===
-    normalizeForMatch(playingArtistName);
-
-  return albumMatch && artistMatch;
-}
-
-/**
- * Find the album cover DOM element for a given album index
- */
-function findAlbumCoverElement(index) {
-  const isMobile = window.innerWidth < 1024;
-
-  if (isMobile) {
-    // Mobile: album-card has data-index (not the wrapper)
-    const card = document.querySelector(`.album-card[data-index="${index}"]`);
-    // The cover wrapper div (not the img, since img can't have ::before)
-    return card?.querySelector('.mobile-album-cover');
-  } else {
-    // Desktop: album rows have data-index
-    const row = document.querySelector(`.album-row[data-index="${index}"]`);
-    return row?.querySelector('.album-cover-container');
-  }
-}
-
-/**
- * Update now-playing border based on playback state
- * Called when playback changes or when list is rendered
- */
-function updateNowPlayingBorder(playbackDetail) {
-  // Remove existing borders from all previously marked elements
-  currentNowPlayingElements.forEach((el) => {
-    if (el) el.classList.remove('now-playing');
-  });
-  currentNowPlayingElements = [];
-
-  // Cache the playback detail for re-application after list renders
-  lastKnownPlayback = playbackDetail;
-
-  // Exit if no playback or playback stopped (not paused)
-  if (!playbackDetail || !playbackDetail.hasPlayback) {
-    console.log('[Now Playing] No playback or stopped');
-    return;
-  }
-
-  console.log('[Now Playing] Looking for:', {
-    album: playbackDetail.albumName,
-    artist: playbackDetail.artistName,
-    currentList,
-  });
-
-  // Get current list albums
-  const albums = getListData(currentList);
-  if (!albums || !Array.isArray(albums)) {
-    console.log('[Now Playing] No albums in current list');
-    return;
-  }
-
-  // Find matching album(s) and apply the now-playing class
-  let matchCount = 0;
-  albums.forEach((album, index) => {
-    if (
-      isAlbumMatchingPlayback(
-        album,
-        playbackDetail.albumName,
-        playbackDetail.artistName
-      )
-    ) {
-      matchCount++;
-      const coverEl = findAlbumCoverElement(index);
-      console.log(
-        '[Now Playing] Match found at index',
-        index,
-        '- element:',
-        coverEl
-      );
-      if (coverEl) {
-        coverEl.classList.add('now-playing');
-        currentNowPlayingElements.push(coverEl);
-      }
-    }
-  });
-
-  if (matchCount === 0) {
-    console.log(
-      '[Now Playing] No matches in',
-      albums.length,
-      'albums. Sample album:',
-      albums[0]
-    );
-  }
-}
-
-/**
- * Re-apply now-playing border after list render
- * Called from displayAlbums after DOM is updated
- */
-function reapplyNowPlayingBorder() {
-  if (lastKnownPlayback) {
-    // Small delay to ensure DOM is fully rendered
-    requestAnimationFrame(() => {
-      updateNowPlayingBorder(lastKnownPlayback);
-    });
-  }
-}
-
-// Listen for playback changes from Spotify player module
-window.addEventListener('spotify-playback-change', (e) => {
-  updateNowPlayingBorder(e.detail);
-});
-
-// Expose for manual triggering if needed
-window.updateNowPlayingBorder = updateNowPlayingBorder;
-window.reapplyNowPlayingBorder = reapplyNowPlayingBorder;
-
-// Performance optimization: Batch DOM style reads/writes to prevent layout thrashing
-// Positions a menu element and adjusts if it would overflow the viewport
-function positionContextMenu(menu, x, y) {
-  // Hide FAB when context menu is shown to avoid overlap on mobile
-  const fab = document.getElementById('addAlbumFAB');
-  if (fab) {
-    fab.style.display = 'none';
-  }
-
-  // Initial position
-  menu.style.left = `${x}px`;
-  menu.style.top = `${y}px`;
-  menu.classList.remove('hidden');
-
-  // Use requestAnimationFrame to batch the read phase after paint
-  requestAnimationFrame(() => {
-    // Read phase - measure menu dimensions and viewport
-    const rect = menu.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-
-    // Calculate phase - determine adjustments needed
-    let adjustedX = x;
-    let adjustedY = y;
-
-    if (rect.right > viewportWidth) {
-      adjustedX = x - rect.width;
-    }
-    if (rect.bottom > viewportHeight) {
-      adjustedY = y - rect.height;
-    }
-
-    // Write phase - apply adjustments if needed
-    if (adjustedX !== x || adjustedY !== y) {
-      menu.style.left = `${adjustedX}px`;
-      menu.style.top = `${adjustedY}px`;
-    }
-  });
-}
-
 // Track loading performance optimization variables
 let trackAbortController = null;
 
@@ -741,120 +694,6 @@ document.addEventListener('contextmenu', (e) => {
   }
 });
 
-export function showConfirmation(
-  title,
-  message,
-  subMessage,
-  confirmText = 'Confirm',
-  onConfirm = null
-) {
-  const modal = document.getElementById('confirmationModal');
-  const titleEl = document.getElementById('confirmationTitle');
-  const messageEl = document.getElementById('confirmationMessage');
-  const subMessageEl = document.getElementById('confirmationSubMessage');
-  const confirmBtn = document.getElementById('confirmationConfirmBtn');
-  const cancelBtn = document.getElementById('confirmationCancelBtn');
-
-  titleEl.textContent = title;
-  messageEl.textContent = message;
-  subMessageEl.textContent = subMessage || '';
-  confirmBtn.textContent = confirmText;
-
-  // If onConfirm is provided, use callback style
-  if (onConfirm) {
-    confirmationCallback = onConfirm;
-
-    const handleConfirm = () => {
-      modal.classList.add('hidden');
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-      if (confirmationCallback) {
-        confirmationCallback();
-        confirmationCallback = null;
-      }
-    };
-
-    const handleCancel = () => {
-      modal.classList.add('hidden');
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-      confirmationCallback = null;
-    };
-
-    const handleBackdropClick = (e) => {
-      if (e.target === modal) {
-        handleCancel();
-      }
-    };
-
-    const handleEscKey = (e) => {
-      if (e.key === 'Escape') {
-        handleCancel();
-      }
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    modal.addEventListener('click', handleBackdropClick);
-    document.addEventListener('keydown', handleEscKey);
-
-    modal.classList.remove('hidden');
-    setTimeout(() => confirmBtn.focus(), 100);
-    return;
-  }
-
-  // Otherwise return a promise for async/await style
-  return new Promise((resolve) => {
-    const handleConfirm = () => {
-      modal.classList.add('hidden');
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-      resolve(true);
-    };
-
-    const handleCancel = () => {
-      modal.classList.add('hidden');
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-      resolve(false);
-    };
-
-    const handleBackdropClick = (e) => {
-      if (e.target === modal) {
-        handleCancel();
-      }
-    };
-
-    const handleEscKey = (e) => {
-      if (e.key === 'Escape') {
-        handleCancel();
-      }
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    modal.addEventListener('click', handleBackdropClick);
-    document.addEventListener('keydown', handleEscKey);
-
-    modal.classList.remove('hidden');
-    setTimeout(() => confirmBtn.focus(), 100);
-  });
-}
-
-function hideConfirmation() {
-  const modal = document.getElementById('confirmationModal');
-  modal.classList.add('hidden');
-  confirmationCallback = null;
-}
-
 // Show modal to choose a music service
 async function showServicePicker(hasSpotify, hasTidal) {
   if (!musicServicesModule) {
@@ -862,144 +701,6 @@ async function showServicePicker(hasSpotify, hasTidal) {
   }
   return musicServicesModule.showServicePicker(hasSpotify, hasTidal);
 }
-
-// Extract year from a release date string (various formats)
-function extractYearFromDate(dateStr) {
-  if (!dateStr) return null;
-
-  // Year only (e.g., "2024")
-  if (/^\d{4}$/.test(dateStr)) {
-    return parseInt(dateStr, 10);
-  }
-
-  // ISO format: YYYY-MM-DD or YYYY-MM
-  if (/^\d{4}-/.test(dateStr)) {
-    return parseInt(dateStr.substring(0, 4), 10);
-  }
-
-  // MM/DD/YYYY or DD/MM/YYYY format
-  const slashMatch = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (slashMatch) {
-    return parseInt(slashMatch[3], 10);
-  }
-
-  // MM/YYYY format (month/year)
-  const monthYearMatch = dateStr.match(/(\d{1,2})\/(\d{4})/);
-  if (monthYearMatch) {
-    return parseInt(monthYearMatch[2], 10);
-  }
-
-  return null;
-}
-
-// Check if release date year matches list year
-function isYearMismatch(releaseDate, listYear) {
-  if (!listYear) return false; // No list year set, no mismatch possible
-  if (!releaseDate) return false; // No release date, no mismatch
-
-  const releaseYear = extractYearFromDate(releaseDate);
-  if (!releaseYear) return false; // Couldn't parse year
-
-  return releaseYear !== listYear;
-}
-
-// Standardize date formats for release dates
-function formatReleaseDate(dateStr) {
-  if (!dateStr) return '';
-
-  const userFormat = window.currentUser?.dateFormat || 'MM/DD/YYYY';
-
-  // Year only
-  if (/^\d{4}$/.test(dateStr)) {
-    return dateStr;
-  }
-
-  // Year-month
-  if (/^\d{4}-\d{2}$/.test(dateStr)) {
-    const [year, month] = dateStr.split('-');
-    return `${month}/${year}`;
-  }
-
-  const iso = normalizeDateForInput(dateStr);
-  if (!iso) return dateStr;
-
-  const [year, month, day] = iso.split('-');
-
-  if (userFormat === 'DD/MM/YYYY') {
-    return `${day}/${month}/${year}`;
-  }
-  return `${month}/${day}/${year}`;
-}
-
-// Convert various date formats to ISO YYYY-MM-DD for date input fields
-function normalizeDateForInput(dateStr) {
-  if (!dateStr) return '';
-
-  const userFormat = window.currentUser?.dateFormat;
-
-  // Year only
-  if (/^\d{4}$/.test(dateStr)) {
-    return `${dateStr}-01-01`;
-  }
-
-  // Year-month
-  if (/^\d{4}-\d{2}$/.test(dateStr)) {
-    return `${dateStr}-01`;
-  }
-
-  // ISO already
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-    return dateStr;
-  }
-
-  // Formats like DD/MM/YYYY or MM/DD/YYYY or with dashes
-  const parts = dateStr.split(/[/-]/);
-  if (
-    parts.length === 3 &&
-    /^\d{1,2}$/.test(parts[0]) &&
-    /^\d{1,2}$/.test(parts[1]) &&
-    /^\d{4}$/.test(parts[2])
-  ) {
-    const first = parseInt(parts[0], 10);
-    const second = parseInt(parts[1], 10);
-    const year = parts[2];
-    let day, month;
-    if (first > 12) {
-      day = first;
-      month = second;
-    } else if (second > 12) {
-      month = first;
-      day = second;
-    } else if (userFormat === 'DD/MM/YYYY') {
-      day = first;
-      month = second;
-    } else {
-      month = first;
-      day = second;
-    }
-    return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-  }
-
-  const d = new Date(dateStr);
-  if (!isNaN(d.getTime())) {
-    return d.toISOString().split('T')[0];
-  }
-
-  return '';
-}
-
-// Convert YYYY-MM-DD to the user's preferred format
-function formatDateForStorage(isoDate) {
-  if (!isoDate) return '';
-  const userFormat = window.currentUser?.dateFormat || 'MM/DD/YYYY';
-  const [year, month, day] = isoDate.split('-');
-  if (userFormat === 'DD/MM/YYYY') {
-    return `${day}/${month}/${year}`;
-  }
-  return `${month}/${day}/${year}`;
-}
-
-// Load available countries
 
 async function downloadListAsJSON(listName) {
   if (!importExportModule) {
@@ -1020,374 +721,7 @@ async function updatePlaylist(listName, listData = null) {
 }
 window.updatePlaylist = updatePlaylist;
 
-// Initialize import conflict handling
-function initializeImportConflictHandling() {
-  const conflictModal = document.getElementById('importConflictModal');
-  const renameModal = document.getElementById('importRenameModal');
-  const originalImportNameSpan = document.getElementById('originalImportName');
-  const importNewNameInput = document.getElementById('importNewName');
-
-  // Check if elements exist before setting handlers
-  const importOverwriteBtn = document.getElementById('importOverwriteBtn');
-  const importRenameBtn = document.getElementById('importRenameBtn');
-  const importMergeBtn = document.getElementById('importMergeBtn');
-  const importCancelBtn = document.getElementById('importCancelBtn');
-  const confirmImportRenameBtn = document.getElementById(
-    'confirmImportRenameBtn'
-  );
-  const cancelImportRenameBtn = document.getElementById(
-    'cancelImportRenameBtn'
-  );
-
-  if (
-    !importOverwriteBtn ||
-    !importRenameBtn ||
-    !importMergeBtn ||
-    !importCancelBtn
-  ) {
-    // Elements don't exist on this page, skip initialization
-    return;
-  }
-
-  // Overwrite option
-  importOverwriteBtn.onclick = async () => {
-    if (!pendingImportData || !pendingImportFilename) return;
-
-    conflictModal.classList.add('hidden');
-
-    try {
-      await saveList(pendingImportFilename, pendingImportData);
-      updateListNav();
-      selectList(pendingImportFilename);
-      showToast(
-        `Overwritten "${pendingImportFilename}" with ${pendingImportData.length} albums`
-      );
-    } catch (err) {
-      console.error('Import overwrite error:', err);
-      showToast('Error overwriting list', 'error');
-    }
-
-    pendingImportData = null;
-    pendingImportFilename = null;
-  };
-
-  // Rename option
-  importRenameBtn.onclick = () => {
-    conflictModal.classList.add('hidden');
-    originalImportNameSpan.textContent = pendingImportFilename;
-
-    // Suggest a new name
-    let suggestedName = pendingImportFilename;
-    let counter = 1;
-    while (lists[suggestedName]) {
-      suggestedName = `${pendingImportFilename} (${counter})`;
-      counter++;
-    }
-    importNewNameInput.value = suggestedName;
-
-    renameModal.classList.remove('hidden');
-
-    setTimeout(() => {
-      importNewNameInput.focus();
-      importNewNameInput.select();
-    }, 100);
-  };
-
-  // Merge option
-  importMergeBtn.onclick = async () => {
-    if (!pendingImportData || !pendingImportFilename) return;
-
-    conflictModal.classList.add('hidden');
-
-    try {
-      // Get existing list data using helper function
-      const existingList = getListData(pendingImportFilename) || [];
-
-      // Merge the lists (avoiding duplicates based on artist + album)
-      const existingKeys = new Set(existingList.map(getAlbumKey));
-
-      const newAlbums = pendingImportData.filter(
-        (album) => !existingKeys.has(getAlbumKey(album))
-      );
-
-      const mergedList = [...existingList, ...newAlbums];
-
-      await saveList(pendingImportFilename, mergedList);
-      updateListNav();
-      selectList(pendingImportFilename);
-
-      const addedCount = newAlbums.length;
-      const skippedCount = pendingImportData.length - addedCount;
-
-      if (skippedCount > 0) {
-        showToast(
-          `Added ${addedCount} new albums, skipped ${skippedCount} duplicates`
-        );
-      } else {
-        showToast(`Added ${addedCount} albums to "${pendingImportFilename}"`);
-      }
-    } catch (err) {
-      console.error('Import merge error:', err);
-      showToast('Error merging lists', 'error');
-    }
-
-    pendingImportData = null;
-    pendingImportFilename = null;
-  };
-
-  // Cancel import
-  importCancelBtn.onclick = () => {
-    conflictModal.classList.add('hidden');
-    pendingImportData = null;
-    pendingImportFilename = null;
-    showToast('Import cancelled');
-  };
-
-  // Rename modal handlers
-  if (confirmImportRenameBtn) {
-    confirmImportRenameBtn.onclick = async () => {
-      const newName = importNewNameInput.value.trim();
-
-      if (!newName) {
-        showToast('Please enter a new name', 'error');
-        return;
-      }
-
-      if (lists[newName]) {
-        showToast('A list with this name already exists', 'error');
-        return;
-      }
-
-      renameModal.classList.add('hidden');
-
-      try {
-        await saveList(newName, pendingImportData);
-        updateListNav();
-        selectList(newName);
-        showToast(
-          `Imported as "${newName}" with ${pendingImportData.length} albums`
-        );
-      } catch (err) {
-        console.error('Import with rename error:', err);
-        showToast('Error importing list', 'error');
-      }
-
-      pendingImportData = null;
-      pendingImportFilename = null;
-    };
-  }
-
-  if (cancelImportRenameBtn) {
-    cancelImportRenameBtn.onclick = () => {
-      renameModal.classList.add('hidden');
-      // Go back to conflict modal
-      document.getElementById('conflictListName').textContent =
-        pendingImportFilename;
-      conflictModal.classList.remove('hidden');
-    };
-  }
-
-  // Enter key in rename input
-  if (importNewNameInput) {
-    importNewNameInput.onkeypress = (e) => {
-      if (e.key === 'Enter' && confirmImportRenameBtn) {
-        confirmImportRenameBtn.click();
-      }
-    };
-  }
-}
-
-// Make country editable with datalist
-function makeCountryEditable(countryDiv, albumIndex) {
-  // Check if we're already editing
-  if (countryDiv.querySelector('input')) {
-    return;
-  }
-
-  // Get current country from the live data
-  const albums = getListData(currentList);
-  if (!albums || !albums[albumIndex]) return;
-  const currentCountry = albums[albumIndex].country || '';
-
-  // Create input with datalist
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className =
-    'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-gray-500';
-  input.value = currentCountry;
-  input.placeholder = 'Type to search countries...';
-  input.setAttribute('list', `country-list-${currentList}-${albumIndex}`);
-
-  // Create datalist
-  const datalist = document.createElement('datalist');
-  datalist.id = `country-list-${currentList}-${albumIndex}`;
-
-  // Add all available countries
-  availableCountries.forEach((country) => {
-    const option = document.createElement('option');
-    option.value = country;
-    datalist.appendChild(option);
-  });
-
-  // Store the original onclick handler
-  const originalOnClick = countryDiv.onclick;
-  countryDiv.onclick = null; // Temporarily remove click handler
-
-  // Replace content with input and datalist
-  countryDiv.innerHTML = '';
-  countryDiv.appendChild(input);
-  countryDiv.appendChild(datalist);
-  input.focus();
-  input.select();
-
-  // Create handleClickOutside function so we can reference it for removal
-  let handleClickOutside;
-
-  const restoreDisplay = (valueToDisplay) => {
-    // Remove the click outside listener if it exists
-    if (handleClickOutside) {
-      document.removeEventListener('click', handleClickOutside);
-      handleClickOutside = null;
-    }
-
-    // Show placeholder if empty
-    const displayValue = valueToDisplay || 'Country';
-    const displayClass = valueToDisplay
-      ? 'text-gray-300'
-      : 'text-gray-500 italic';
-
-    countryDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
-
-    // Restore the original click handler
-    countryDiv.onclick = originalOnClick;
-  };
-
-  const saveCountry = async (newCountry) => {
-    // Trim the input
-    newCountry = newCountry.trim();
-
-    // Check if value actually changed
-    if (newCountry === currentCountry) {
-      restoreDisplay(currentCountry);
-      return;
-    }
-
-    // VALIDATION: Only allow empty string or values from availableCountries
-    if (newCountry !== '') {
-      const isValid = availableCountries.some(
-        (country) => country.toLowerCase() === newCountry.toLowerCase()
-      );
-
-      if (!isValid) {
-        // Invalid country entered - revert to original
-        restoreDisplay(currentCountry);
-        return;
-      }
-
-      // Find the exact case-matched country from the list
-      const matchedCountry = availableCountries.find(
-        (country) => country.toLowerCase() === newCountry.toLowerCase()
-      );
-      newCountry = matchedCountry; // Use the properly cased version
-    }
-
-    // Update the data
-    const albumsToUpdate = getListData(currentList);
-    if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-    albumsToUpdate[albumIndex].country = newCountry;
-
-    // Close the dropdown immediately for better UX
-    restoreDisplay(newCountry);
-
-    try {
-      await saveList(currentList, albumsToUpdate);
-      showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
-    } catch (_error) {
-      showToast('Error saving country', 'error');
-      // Revert on error
-      albumsToUpdate[albumIndex].country = currentCountry;
-      restoreDisplay(currentCountry);
-    }
-  };
-
-  // Handle input change (when selecting from datalist)
-  input.addEventListener('change', (e) => {
-    saveCountry(e.target.value);
-  });
-
-  // Handle blur (when clicking away)
-  input.addEventListener('blur', () => {
-    saveCountry(input.value);
-  });
-
-  // Handle keyboard
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      saveCountry(input.value);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      restoreDisplay(currentCountry);
-    }
-  });
-
-  // Define handleClickOutside
-  handleClickOutside = (e) => {
-    if (!countryDiv.contains(e.target)) {
-      saveCountry(input.value);
-    }
-  };
-
-  // Small delay to prevent immediate trigger
-  setTimeout(() => {
-    document.addEventListener('click', handleClickOutside);
-  }, 100);
-}
-
-// Toast notification management
-let toastTimer = null;
-
-// Show toast notification with configurable duration
-export function showToast(message, type = 'success', duration = null) {
-  const toast = document.getElementById('toast');
-
-  // Clear any existing timer
-  if (toastTimer) {
-    clearTimeout(toastTimer);
-    toastTimer = null;
-  }
-
-  // Remove 'show' class immediately to reset animation
-  toast.classList.remove('show');
-
-  toast.textContent = message;
-  toast.className = 'toast ' + type;
-
-  // Show the toast
-  setTimeout(() => toast.classList.add('show'), 10);
-
-  // Determine duration based on type and content
-  if (duration === null) {
-    // Default durations
-    if (type === 'success' && message.includes('successfully')) {
-      duration = 5000; // 5 seconds for success messages
-    } else if (type === 'error') {
-      duration = 5000; // 5 seconds for errors
-    } else if (message.includes('...')) {
-      duration = 10000; // 10 seconds for "loading" messages
-    } else {
-      duration = 3000; // 3 seconds for other messages
-    }
-  }
-
-  // Set timer to hide the toast
-  toastTimer = setTimeout(() => {
-    toast.classList.remove('show');
-    toastTimer = null;
-  }, duration);
-}
-
-// Make showToast globally available immediately
+// Make showToast globally available
 window.showToast = showToast;
 
 // API helper functions
@@ -1677,206 +1011,6 @@ async function autoFetchTracksForList(name) {
   });
 
   await pLimit(5, tasks);
-}
-
-// Initialize context menu
-function initializeContextMenu() {
-  const contextMenu = document.getElementById('contextMenu');
-  const downloadOption = document.getElementById('downloadListOption');
-  const renameOption = document.getElementById('renameListOption');
-  const toggleOfficialOption = document.getElementById('toggleOfficialOption');
-  const updatePlaylistOption = document.getElementById('updatePlaylistOption');
-  const deleteOption = document.getElementById('deleteListOption');
-
-  if (
-    !contextMenu ||
-    !deleteOption ||
-    !renameOption ||
-    !downloadOption ||
-    !updatePlaylistOption ||
-    !toggleOfficialOption
-  )
-    return;
-
-  // Update the playlist option text based on user's music service
-  const updatePlaylistText = document.getElementById('updatePlaylistText');
-  if (updatePlaylistText) {
-    const musicService = window.currentUser?.musicService;
-    const hasSpotify = window.currentUser?.spotifyAuth;
-    const hasTidal = window.currentUser?.tidalAuth;
-
-    if (musicService === 'spotify' && hasSpotify) {
-      updatePlaylistText.textContent = 'Send to Spotify';
-    } else if (musicService === 'tidal' && hasTidal) {
-      updatePlaylistText.textContent = 'Send to Tidal';
-    } else if (hasSpotify && !hasTidal) {
-      updatePlaylistText.textContent = 'Send to Spotify';
-    } else if (hasTidal && !hasSpotify) {
-      updatePlaylistText.textContent = 'Send to Tidal';
-    } else {
-      updatePlaylistText.textContent = 'Send to Music Service';
-    }
-  }
-
-  // Handle download option click
-  downloadOption.onclick = () => {
-    contextMenu.classList.add('hidden');
-
-    if (!currentContextList) return;
-
-    downloadListAsJSON(currentContextList);
-
-    currentContextList = null;
-  };
-
-  // Handle rename option click
-  renameOption.onclick = () => {
-    contextMenu.classList.add('hidden');
-
-    if (!currentContextList) return;
-
-    openRenameModal(currentContextList);
-  };
-
-  // Handle toggle official option click
-  toggleOfficialOption.onclick = async () => {
-    contextMenu.classList.add('hidden');
-
-    if (!currentContextList) return;
-
-    const meta = getListMetadata(currentContextList);
-    if (!meta) return;
-
-    // Check if list has a year assigned
-    if (!meta.year) {
-      showToast('List must have a year to be marked as official', 'error');
-      currentContextList = null;
-      return;
-    }
-
-    const newOfficialStatus = !meta.isOfficial;
-
-    try {
-      const response = await apiCall(
-        `/api/lists/${encodeURIComponent(currentContextList)}/official`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ isOfficial: newOfficialStatus }),
-        }
-      );
-
-      // Update local metadata
-      updateListMetadata(currentContextList, { isOfficial: newOfficialStatus });
-
-      // If another list lost its official status, update it too
-      if (response.previousOfficialList) {
-        updateListMetadata(response.previousOfficialList, {
-          isOfficial: false,
-        });
-      }
-
-      // Refresh sidebar to show updated star icons
-      updateListNav();
-
-      // Show appropriate message
-      if (newOfficialStatus) {
-        if (response.previousOfficialList) {
-          showToast(
-            `"${currentContextList}" is now your official ${meta.year} list (replaced "${response.previousOfficialList}")`
-          );
-        } else {
-          showToast(
-            `"${currentContextList}" is now your official ${meta.year} list`
-          );
-        }
-      } else {
-        showToast(`"${currentContextList}" is no longer marked as official`);
-      }
-    } catch (error) {
-      console.error('Error toggling official status:', error);
-      showToast('Error updating official status', 'error');
-    }
-
-    currentContextList = null;
-  };
-
-  // Handle update playlist option click
-  updatePlaylistOption.onclick = async () => {
-    contextMenu.classList.add('hidden');
-
-    if (!currentContextList) return;
-
-    try {
-      // Pass both list name and list data for track validation
-      const listData = getListData(currentContextList) || [];
-      await updatePlaylist(currentContextList, listData);
-    } catch (err) {
-      console.error('Update playlist failed', err);
-    }
-
-    currentContextList = null;
-  };
-
-  // Handle delete option click
-  deleteOption.onclick = async () => {
-    contextMenu.classList.add('hidden');
-
-    if (!currentContextList) return;
-
-    // Confirm deletion using custom modal
-    const confirmed = await showConfirmation(
-      'Delete List',
-      `Are you sure you want to delete the list "${currentContextList}"?`,
-      'This action cannot be undone.',
-      'Delete'
-    );
-
-    if (confirmed) {
-      try {
-        await apiCall(`/api/lists/${encodeURIComponent(currentContextList)}`, {
-          method: 'DELETE',
-        });
-
-        delete lists[currentContextList];
-
-        if (currentList === currentContextList) {
-          const remainingLists = Object.keys(lists);
-          if (remainingLists.length > 0) {
-            // Select the first list in the sidebar
-            selectList(remainingLists[0]);
-          } else {
-            // No lists remain - show empty state
-            currentList = null;
-            window.currentList = currentList;
-            // Refresh mobile bar visibility when list is cleared
-            if (window.refreshMobileBarVisibility) {
-              window.refreshMobileBarVisibility();
-            }
-
-            const headerAddAlbumBtn =
-              document.getElementById('headerAddAlbumBtn');
-
-            if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
-
-            document.getElementById('albumContainer').innerHTML = `
-              <div class="text-center text-gray-500 mt-20">
-                <p class="text-xl mb-2">No list selected</p>
-                <p class="text-sm">Create or import a list to get started</p>
-              </div>
-            `;
-          }
-        }
-
-        updateListNav();
-
-        showToast(`List "${currentContextList}" deleted`);
-      } catch (_error) {
-        showToast('Error deleting list', 'error');
-      }
-    }
-
-    currentContextList = null;
-  };
 }
 
 function updateMobileHeader() {
@@ -3056,293 +2190,6 @@ function updateHeaderTitle(listName) {
   }
 }
 
-// Make genre editable with datalist
-function makeGenreEditable(genreDiv, albumIndex, genreField) {
-  // Check if we're already editing
-  if (genreDiv.querySelector('input')) {
-    return;
-  }
-
-  // Get current genre from the live data
-  const albumsForGenre = getListData(currentList);
-  if (!albumsForGenre || !albumsForGenre[albumIndex]) return;
-  const currentGenre = albumsForGenre[albumIndex][genreField] || '';
-
-  // Create input with datalist
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className =
-    'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-gray-500';
-  input.value = currentGenre;
-  input.placeholder = `Type to search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
-  input.setAttribute(
-    'list',
-    `genre-list-${currentList}-${albumIndex}-${genreField}`
-  );
-
-  // Create datalist
-  const datalist = document.createElement('datalist');
-  datalist.id = `genre-list-${currentList}-${albumIndex}-${genreField}`;
-
-  // Add all available genres
-  availableGenres.forEach((genre) => {
-    const option = document.createElement('option');
-    option.value = genre;
-    datalist.appendChild(option);
-  });
-
-  // Store the original onclick handler
-  const originalOnClick = genreDiv.onclick;
-  genreDiv.onclick = null; // Temporarily remove click handler
-
-  // Replace content with input and datalist
-  genreDiv.innerHTML = '';
-  genreDiv.appendChild(input);
-  genreDiv.appendChild(datalist);
-  input.focus();
-  input.select();
-
-  // Create handleClickOutside function so we can reference it for removal
-  let handleClickOutside;
-
-  const restoreDisplay = (valueToDisplay) => {
-    // Remove the click outside listener if it exists
-    if (handleClickOutside) {
-      document.removeEventListener('click', handleClickOutside);
-      handleClickOutside = null;
-    }
-
-    // Determine what to display based on value and field
-    let displayValue = valueToDisplay;
-    let displayClass;
-
-    if (genreField === 'genre_1') {
-      // For Genre 1: show placeholder if empty
-      displayValue = valueToDisplay || 'Genre 1';
-      displayClass = valueToDisplay ? 'text-gray-300' : 'text-gray-500 italic';
-    } else {
-      // For Genre 2: show placeholder if empty, but treat 'Genre 2' and '-' as empty
-      if (
-        !valueToDisplay ||
-        valueToDisplay === 'Genre 2' ||
-        valueToDisplay === '-'
-      ) {
-        displayValue = 'Genre 2';
-        displayClass = 'text-gray-500 italic';
-      } else {
-        displayValue = valueToDisplay;
-        displayClass = 'text-gray-400';
-      }
-    }
-
-    genreDiv.innerHTML = `<span class="text-sm ${displayClass} truncate cursor-pointer hover:text-gray-100">${displayValue}</span>`;
-
-    // Restore the original click handler
-    genreDiv.onclick = originalOnClick;
-  };
-
-  const saveGenre = async (newGenre) => {
-    // Trim the input
-    newGenre = newGenre.trim();
-
-    // Check if value actually changed
-    if (newGenre === currentGenre) {
-      restoreDisplay(currentGenre);
-      return;
-    }
-
-    // VALIDATION: Only allow empty string or values from availableGenres
-    if (newGenre !== '') {
-      const isValid = availableGenres.some(
-        (genre) => genre.toLowerCase() === newGenre.toLowerCase()
-      );
-
-      if (!isValid) {
-        // Invalid genre entered - revert to original
-        restoreDisplay(currentGenre);
-        return;
-      }
-
-      // Find the exact case-matched genre from the list
-      const matchedGenre = availableGenres.find(
-        (genre) => genre.toLowerCase() === newGenre.toLowerCase()
-      );
-      newGenre = matchedGenre; // Use the properly cased version
-    }
-
-    // Update the data
-    const albumsToUpdate = getListData(currentList);
-    if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-    albumsToUpdate[albumIndex][genreField] = newGenre;
-
-    // Close the dropdown immediately for better UX
-    restoreDisplay(newGenre);
-
-    try {
-      await saveList(currentList, albumsToUpdate);
-      showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
-    } catch (_error) {
-      showToast('Error saving genre', 'error');
-      // Revert on error
-      albumsToUpdate[albumIndex][genreField] = currentGenre;
-      restoreDisplay(currentGenre);
-    }
-  };
-
-  // Handle input change (when selecting from datalist)
-  input.addEventListener('change', (e) => {
-    saveGenre(e.target.value);
-  });
-
-  // Handle blur (when clicking away)
-  input.addEventListener('blur', () => {
-    saveGenre(input.value);
-  });
-
-  // Handle keyboard
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      saveGenre(input.value);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      restoreDisplay(currentGenre);
-    }
-  });
-
-  // Define handleClickOutside
-  handleClickOutside = (e) => {
-    if (!genreDiv.contains(e.target)) {
-      saveGenre(input.value);
-    }
-  };
-
-  // Small delay to prevent immediate trigger
-  setTimeout(() => {
-    document.addEventListener('click', handleClickOutside);
-  }, 100);
-}
-
-// Make comment editable
-function makeCommentEditable(commentDiv, albumIndex) {
-  const albumsForComment = getListData(currentList);
-  if (!albumsForComment || !albumsForComment[albumIndex]) return;
-
-  const currentComment =
-    albumsForComment[albumIndex].comments ||
-    albumsForComment[albumIndex].comment ||
-    '';
-
-  // Create textarea
-  const textarea = document.createElement('textarea');
-  textarea.className =
-    'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded border border-gray-700 focus:outline-none focus:border-gray-500 resize-none';
-  textarea.value = currentComment;
-  textarea.rows = 2;
-
-  // Replace div content with textarea
-  commentDiv.innerHTML = '';
-  commentDiv.appendChild(textarea);
-  textarea.focus();
-  textarea.select();
-
-  // Save on blur or enter
-  const saveComment = async () => {
-    const albumsToUpdate = getListData(currentList);
-    if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-
-    const newComment = textarea.value.trim();
-    albumsToUpdate[albumIndex].comments = newComment;
-    albumsToUpdate[albumIndex].comment = newComment;
-
-    try {
-      await saveList(currentList, albumsToUpdate);
-
-      // Update display without re-rendering everything
-      let displayComment = newComment;
-      let displayClass = 'text-gray-300';
-
-      // If comment is empty, show placeholder
-      if (!displayComment) {
-        displayComment = 'Comment';
-        displayClass = 'text-gray-500';
-      }
-
-      commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
-
-      // Re-add click handler
-      commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
-
-      // Add tooltip only if comment is truncated
-      const commentTextEl = commentDiv.querySelector('.comment-text');
-      if (commentTextEl && newComment) {
-        setTimeout(() => {
-          if (isTextTruncated(commentTextEl)) {
-            commentTextEl.setAttribute('data-comment', newComment);
-          }
-        }, 0);
-      }
-
-      if (newComment !== currentComment) {
-        showToast('Comment updated');
-      }
-    } catch (_error) {
-      showToast('Error saving comment', 'error');
-      // Revert on error - also handle placeholder for empty comments
-      let revertDisplay = currentComment;
-      let revertClass = 'text-gray-300';
-      if (!revertDisplay) {
-        revertDisplay = 'Comment';
-        revertClass = 'text-gray-500';
-      }
-      commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${revertDisplay}</span>`;
-      commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
-
-      // Add tooltip only if comment is truncated
-      const revertTextEl = commentDiv.querySelector('.comment-text');
-      if (revertTextEl && currentComment) {
-        setTimeout(() => {
-          if (isTextTruncated(revertTextEl)) {
-            revertTextEl.setAttribute('data-comment', currentComment);
-          }
-        }, 0);
-      }
-    }
-  };
-
-  textarea.addEventListener('blur', saveComment);
-  textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      textarea.blur();
-    }
-    if (e.key === 'Escape') {
-      // Cancel editing
-      let displayComment = currentComment;
-      let displayClass = 'text-gray-300';
-
-      // If comment is empty, show placeholder
-      if (!displayComment) {
-        displayComment = 'Comment';
-        displayClass = 'text-gray-500';
-      }
-
-      commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;
-      commentDiv.onclick = () => makeCommentEditable(commentDiv, albumIndex);
-
-      // Add tooltip only if comment is truncated
-      const cancelTextEl = commentDiv.querySelector('.comment-text');
-      if (cancelTextEl && currentComment) {
-        setTimeout(() => {
-          if (isTextTruncated(cancelTextEl)) {
-            cancelTextEl.setAttribute('data-comment', currentComment);
-          }
-        }, 0);
-      }
-    }
-  });
-}
-
 // Update track cell display without re-rendering entire list
 function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   const isMobile = window.innerWidth < 1024;
@@ -3587,173 +2434,6 @@ function debouncedSaveList(listName, listData, delay = 300) {
       showToast('Error saving list order', 'error');
     }
   }, delay);
-}
-
-// Custom autoscroll removed - now using SortableJS built-in autoscroll for mobile
-
-// Clear cache when list changes - use rebuildPositionCache instead
-// Unified sorting function using SortableJS for both desktop and mobile
-function initializeUnifiedSorting(container, isMobile) {
-  if (!window.Sortable) {
-    console.error('SortableJS not loaded');
-    return;
-  }
-
-  // Clean up any existing sortable instance
-  if (container._sortable) {
-    container._sortable.destroy();
-  }
-
-  // Find the sortable container
-  const sortableContainer = isMobile
-    ? container.querySelector('.mobile-album-list') || container
-    : container.querySelector('.album-rows-container') || container;
-
-  if (!sortableContainer) {
-    console.error('Sortable container not found');
-    return;
-  }
-
-  // Find the actual scrollable element (the parent with overflow-y-auto)
-  const scrollElement = isMobile
-    ? sortableContainer.closest('.overflow-y-auto')
-    : sortableContainer;
-
-  // Configure SortableJS options
-  const sortableOptions = {
-    animation: 200,
-    ghostClass: 'sortable-ghost',
-    chosenClass: 'sortable-chosen',
-    dragClass: 'sortable-drag',
-
-    // Touch-and-hold configuration for mobile
-    ...(isMobile && {
-      delay: 300, // 300ms touch-and-hold delay
-      delayOnTouchOnly: true,
-      touchStartThreshold: 10, // Allow 10px movement before cancelling drag
-      forceFallback: true,
-      fallbackTolerance: 5,
-    }),
-
-    // Filter to prevent dragging on interactive elements
-    filter: 'button, input, textarea, select, .no-drag',
-    preventOnFilter: false,
-
-    // Configure scrolling - use SortableJS built-in autoscroll for both desktop and mobile
-    scroll: scrollElement, // Scroll the correct scrollable element
-    scrollSensitivity: isMobile ? 100 : 30, // Larger zone for mobile
-    scrollSpeed: isMobile ? 25 : 15, // Faster scroll for mobile
-    bubbleScroll: false, // Disable parent container scrolling to prevent double-scroll
-
-    // Enhanced event handlers
-    onStart: function (evt) {
-      // Visual feedback
-      if (!isMobile) {
-        document.body.classList.add('desktop-dragging');
-      } else {
-        // Mobile-specific feedback
-        evt.item.classList.add('dragging-mobile');
-
-        // Haptic feedback if available
-        if (navigator.vibrate) {
-          navigator.vibrate(50);
-        }
-      }
-    },
-    onEnd: async function (evt) {
-      // Clean up visual feedback
-      if (!isMobile) {
-        document.body.classList.remove('desktop-dragging');
-      } else {
-        evt.item.classList.remove('dragging-mobile');
-      }
-
-      const oldIndex = evt.oldIndex;
-      const newIndex = evt.newIndex;
-
-      if (oldIndex !== newIndex) {
-        try {
-          // Update the data
-          const list = getListData(currentList);
-          if (!list) {
-            console.error('List data not found');
-            return;
-          }
-          const [movedItem] = list.splice(oldIndex, 1);
-          list.splice(newIndex, 0, movedItem);
-
-          // Immediate optimistic UI update
-          updatePositionNumbers(sortableContainer, isMobile);
-
-          // Debounced server save to batch rapid changes
-          debouncedSaveList(currentList, list);
-        } catch (error) {
-          console.error('Error saving reorder:', error);
-          if (window.showToast) {
-            window.showToast('Error saving changes', 'error');
-          }
-          // Revert the change on error
-          const items = Array.from(evt.to.children);
-          const itemToMove = items[newIndex];
-          if (oldIndex < items.length) {
-            evt.to.insertBefore(itemToMove, items[oldIndex]);
-          } else {
-            evt.to.appendChild(itemToMove);
-          }
-          updatePositionNumbers(sortableContainer, isMobile);
-        }
-      }
-    },
-  };
-  // Initialize SortableJS
-  const sortable = new Sortable(sortableContainer, sortableOptions);
-
-  // Store reference for cleanup
-  container._sortable = sortable;
-
-  // Mobile: Allow scroll initially, then block it after a delay.
-  // - 0-200ms: Scroll is ALLOWED (user can start scrolling naturally)
-  // - 200ms+: Scroll is BLOCKED (user committed to holding for drag)
-  // - 300ms: SortableJS starts the drag
-  if (isMobile) {
-    const SCROLL_GRACE_PERIOD = 200; // ms - allow scroll during this initial period
-    let touchState = null;
-
-    const onTouchStart = (e) => {
-      const wrapper = e.target.closest('.album-card-wrapper');
-      if (!wrapper || e.target.closest('button, .no-drag')) return;
-
-      touchState = {
-        startTime: Date.now(),
-      };
-    };
-
-    const onTouchMove = (e) => {
-      if (!touchState) return;
-
-      const elapsed = Date.now() - touchState.startTime;
-
-      // Allow scroll during grace period, block after
-      if (elapsed >= SCROLL_GRACE_PERIOD) {
-        e.preventDefault();
-      }
-    };
-
-    const onTouchEnd = () => {
-      touchState = null;
-    };
-
-    // Use non-passive listeners to allow preventDefault
-    sortableContainer.addEventListener('touchstart', onTouchStart, {
-      passive: true,
-    });
-    sortableContainer.addEventListener('touchmove', onTouchMove, {
-      passive: false,
-    });
-    sortableContainer.addEventListener('touchend', onTouchEnd, {
-      passive: true,
-    });
-  }
 }
 
 // File import handlers moved inside DOMContentLoaded

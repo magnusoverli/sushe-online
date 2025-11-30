@@ -1,6 +1,7 @@
-import { showToast as appShowToast, apiCall as appApiCall } from '../app.js';
+import { apiCall as appApiCall } from '../app.js';
+import { showToast as uiShowToast } from './ui-utils.js';
 
-export const showToast = appShowToast;
+export const showToast = uiShowToast;
 export const apiCall = appApiCall;
 
 /**

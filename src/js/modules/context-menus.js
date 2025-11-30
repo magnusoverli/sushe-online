@@ -25,13 +25,15 @@
  * @param {Function} deps.updatePlaylist - Update playlist on music service
  * @param {Function} deps.openRenameModal - Open rename modal
  * @param {Function} deps.updateListNav - Update list navigation
+ * @param {Function} deps.updateListMetadata - Update list metadata
  * @param {Function} deps.showMobileEditForm - Show mobile edit form
  * @param {Function} deps.playAlbum - Play album
  * @param {Function} deps.playAlbumSafe - Play album safely by ID
  * @param {Function} deps.loadLists - Reload lists
  * @param {Function} deps.getContextState - Get context menu state
  * @param {Function} deps.setContextState - Set context menu state
- * @param {Function} deps.toggleOfficialStatus - Toggle official status
+ * @param {Function} deps.setCurrentList - Set current list (for delete)
+ * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @returns {Object} Context menus module API
  */
 export function createContextMenus(deps = {}) {
@@ -46,18 +48,19 @@ export function createContextMenus(deps = {}) {
     showConfirmation,
     apiCall,
     findAlbumByIdentity,
-    // These dependencies are available for future use when more functions are moved here
-    downloadListAsJSON: _downloadListAsJSON,
-    updatePlaylist: _updatePlaylist,
-    openRenameModal: _openRenameModal,
-    updateListNav: _updateListNav,
+    downloadListAsJSON,
+    updatePlaylist,
+    openRenameModal,
+    updateListNav,
+    updateListMetadata,
     showMobileEditForm: _showMobileEditForm,
     playAlbum: _playAlbum,
     playAlbumSafe: _playAlbumSafe,
     loadLists: _loadLists,
     getContextState,
     setContextState,
-    toggleOfficialStatus: _toggleOfficialStatus,
+    setCurrentList,
+    refreshMobileBarVisibility,
   } = deps;
 
   // Track loading performance optimization
@@ -571,6 +574,224 @@ export function createContextMenus(deps = {}) {
     return submenu;
   }
 
+  /**
+   * Initialize list context menu (right-click menu for lists)
+   */
+  function initializeContextMenu() {
+    const lists = getLists();
+    const contextMenu = document.getElementById('contextMenu');
+    const downloadOption = document.getElementById('downloadListOption');
+    const renameOption = document.getElementById('renameListOption');
+    const toggleOfficialOption = document.getElementById(
+      'toggleOfficialOption'
+    );
+    const updatePlaylistOption = document.getElementById(
+      'updatePlaylistOption'
+    );
+    const deleteOption = document.getElementById('deleteListOption');
+
+    if (
+      !contextMenu ||
+      !deleteOption ||
+      !renameOption ||
+      !downloadOption ||
+      !updatePlaylistOption ||
+      !toggleOfficialOption
+    )
+      return;
+
+    // Update the playlist option text based on user's music service
+    const updatePlaylistText = document.getElementById('updatePlaylistText');
+    if (updatePlaylistText) {
+      const musicService = window.currentUser?.musicService;
+      const hasSpotify = window.currentUser?.spotifyAuth;
+      const hasTidal = window.currentUser?.tidalAuth;
+
+      if (musicService === 'spotify' && hasSpotify) {
+        updatePlaylistText.textContent = 'Send to Spotify';
+      } else if (musicService === 'tidal' && hasTidal) {
+        updatePlaylistText.textContent = 'Send to Tidal';
+      } else if (hasSpotify && !hasTidal) {
+        updatePlaylistText.textContent = 'Send to Spotify';
+      } else if (hasTidal && !hasSpotify) {
+        updatePlaylistText.textContent = 'Send to Tidal';
+      } else {
+        updatePlaylistText.textContent = 'Send to Music Service';
+      }
+    }
+
+    // Handle download option click
+    downloadOption.onclick = () => {
+      const { list: currentContextList } = getContextState();
+      contextMenu.classList.add('hidden');
+
+      if (!currentContextList) return;
+
+      downloadListAsJSON(currentContextList);
+
+      setContextState({ list: null });
+    };
+
+    // Handle rename option click
+    renameOption.onclick = () => {
+      const { list: currentContextList } = getContextState();
+      contextMenu.classList.add('hidden');
+
+      if (!currentContextList) return;
+
+      openRenameModal(currentContextList);
+    };
+
+    // Handle toggle official option click
+    toggleOfficialOption.onclick = async () => {
+      const { list: currentContextList } = getContextState();
+      contextMenu.classList.add('hidden');
+
+      if (!currentContextList) return;
+
+      const meta = getListMetadata(currentContextList);
+      if (!meta) return;
+
+      // Check if list has a year assigned
+      if (!meta.year) {
+        showToast('List must have a year to be marked as official', 'error');
+        setContextState({ list: null });
+        return;
+      }
+
+      const newOfficialStatus = !meta.isOfficial;
+
+      try {
+        const response = await apiCall(
+          `/api/lists/${encodeURIComponent(currentContextList)}/official`,
+          {
+            method: 'POST',
+            body: JSON.stringify({ isOfficial: newOfficialStatus }),
+          }
+        );
+
+        // Update local metadata
+        updateListMetadata(currentContextList, {
+          isOfficial: newOfficialStatus,
+        });
+
+        // If another list lost its official status, update it too
+        if (response.previousOfficialList) {
+          updateListMetadata(response.previousOfficialList, {
+            isOfficial: false,
+          });
+        }
+
+        // Refresh sidebar to show updated star icons
+        updateListNav();
+
+        // Show appropriate message
+        if (newOfficialStatus) {
+          if (response.previousOfficialList) {
+            showToast(
+              `"${currentContextList}" is now your official ${meta.year} list (replaced "${response.previousOfficialList}")`
+            );
+          } else {
+            showToast(
+              `"${currentContextList}" is now your official ${meta.year} list`
+            );
+          }
+        } else {
+          showToast(`"${currentContextList}" is no longer marked as official`);
+        }
+      } catch (error) {
+        console.error('Error toggling official status:', error);
+        showToast('Error updating official status', 'error');
+      }
+
+      setContextState({ list: null });
+    };
+
+    // Handle update playlist option click
+    updatePlaylistOption.onclick = async () => {
+      const { list: currentContextList } = getContextState();
+      contextMenu.classList.add('hidden');
+
+      if (!currentContextList) return;
+
+      try {
+        // Pass both list name and list data for track validation
+        const listData = getListData(currentContextList) || [];
+        await updatePlaylist(currentContextList, listData);
+      } catch (err) {
+        console.error('Update playlist failed', err);
+      }
+
+      setContextState({ list: null });
+    };
+
+    // Handle delete option click
+    deleteOption.onclick = async () => {
+      const { list: currentContextList } = getContextState();
+      const currentList = getCurrentList();
+      contextMenu.classList.add('hidden');
+
+      if (!currentContextList) return;
+
+      // Confirm deletion using custom modal
+      const confirmed = await showConfirmation(
+        'Delete List',
+        `Are you sure you want to delete the list "${currentContextList}"?`,
+        'This action cannot be undone.',
+        'Delete'
+      );
+
+      if (confirmed) {
+        try {
+          await apiCall(
+            `/api/lists/${encodeURIComponent(currentContextList)}`,
+            {
+              method: 'DELETE',
+            }
+          );
+
+          delete lists[currentContextList];
+
+          if (currentList === currentContextList) {
+            const remainingLists = Object.keys(lists);
+            if (remainingLists.length > 0) {
+              // Select the first list in the sidebar
+              selectList(remainingLists[0]);
+            } else {
+              // No lists remain - show empty state
+              setCurrentList(null);
+
+              // Refresh mobile bar visibility when list is cleared
+              if (refreshMobileBarVisibility) {
+                refreshMobileBarVisibility();
+              }
+
+              const headerAddAlbumBtn =
+                document.getElementById('headerAddAlbumBtn');
+
+              if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
+
+              document.getElementById('albumContainer').innerHTML = `
+                <div class="text-center text-gray-500 mt-20">
+                  <p class="text-xl mb-2">No list selected</p>
+                  <p class="text-sm">Create or import a list to get started</p>
+                </div>
+              `;
+            }
+          }
+
+          updateListNav();
+
+          showToast(`List "${currentContextList}" deleted`);
+        } catch (_error) {
+          showToast('Error deleting list', 'error');
+        }
+      }
+
+      setContextState({ list: null });
+    };
+  }
+
   // Return public API
   return {
     positionContextMenu,
@@ -583,5 +804,6 @@ export function createContextMenus(deps = {}) {
     setupSubmenuHideOnLeave,
     positionPlaySubmenu,
     showPlayAlbumSubmenu,
+    initializeContextMenu,
   };
 }
