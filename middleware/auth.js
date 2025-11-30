@@ -27,6 +27,7 @@ function sanitizeUser(user) {
     spotifyAuth: !!user.spotifyAuth,
     tidalAuth: !!user.tidalAuth,
     musicService: user.musicService || null,
+    lastfmUsername: user.lastfmUsername || null,
   };
 }
 
