@@ -204,6 +204,8 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     lastActivity: 'last_activity',
+    lastfmAuth: 'lastfm_auth',
+    lastfmUsername: 'lastfm_username',
   };
   const listsMap = {
     _id: '_id',
