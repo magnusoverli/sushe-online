@@ -1,9 +1,11 @@
 // Import static data at build time
 import genresText from '../data/genres.txt?raw';
 import countriesText from '../data/countries.txt?raw';
-import { getAlbumKey, isAlbumInList } from './modules/utils.js';
+import { getAlbumKey } from './modules/utils.js';
 import { createAlbumDisplay } from './modules/album-display.js';
 import { createContextMenus } from './modules/context-menus.js';
+import { createMobileUI } from './modules/mobile-ui.js';
+import { createListNav } from './modules/list-nav.js';
 
 // Lazy loading module cache
 let musicServicesModule = null;
@@ -14,6 +16,12 @@ let albumDisplayModule = null;
 
 // Context menus module instance (initialized lazily when first needed)
 let contextMenusModule = null;
+
+// Mobile UI module instance (initialized lazily when first needed)
+let mobileUIModule = null;
+
+// List navigation module instance (initialized lazily when first needed)
+let listNavModule = null;
 
 /**
  * Get or initialize the album display module
@@ -112,6 +120,129 @@ function getListMenuConfig(listName) {
 function getDeviceIcon(type) {
   return getContextMenusModule().getDeviceIcon(type);
 }
+
+/**
+ * Get or initialize the mobile UI module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getMobileUIModule() {
+  if (!mobileUIModule) {
+    mobileUIModule = createMobileUI({
+      getListData,
+      getListMetadata,
+      getCurrentList: () => currentList,
+      getLists: () => lists,
+      setListData,
+      saveList,
+      selectList,
+      showToast,
+      showConfirmation,
+      apiCall,
+      displayAlbums,
+      fetchAndApplyCovers,
+      updateListNav,
+      fetchTracksForAlbum,
+      playAlbum,
+      playAlbumOnDeviceMobile,
+      openRenameModal,
+      downloadListAsJSON,
+      updatePlaylist,
+      toggleOfficialStatus,
+      getDeviceIcon,
+      getListMenuConfig,
+      normalizeDateForInput,
+      formatDateForStorage,
+      getAvailableCountries: () => availableCountries,
+      getAvailableGenres: () => availableGenres,
+      setCurrentContextAlbum: (idx) => {
+        currentContextAlbum = idx;
+      },
+      refreshMobileBarVisibility: () => {
+        if (window.refreshMobileBarVisibility) {
+          window.refreshMobileBarVisibility();
+        }
+      },
+    });
+  }
+  return mobileUIModule;
+}
+
+// Wrapper functions for mobile UI module
+function showMobileAlbumMenu(indexOrElement) {
+  return getMobileUIModule().showMobileAlbumMenu(indexOrElement);
+}
+
+function showMobileMoveToListSheet(index, albumId) {
+  return getMobileUIModule().showMobileMoveToListSheet(index, albumId);
+}
+
+function showMobileListMenu(listName) {
+  return getMobileUIModule().showMobileListMenu(listName);
+}
+
+function showMobileEditForm(index) {
+  return getMobileUIModule().showMobileEditForm(index);
+}
+
+function showMobileEditFormSafe(albumId) {
+  return getMobileUIModule().showMobileEditFormSafe(albumId);
+}
+
+function playAlbumSafe(albumId) {
+  return getMobileUIModule().playAlbumSafe(albumId);
+}
+
+function removeAlbumSafe(albumId) {
+  return getMobileUIModule().removeAlbumSafe(albumId);
+}
+
+function findAlbumByIdentity(albumId) {
+  return getMobileUIModule().findAlbumByIdentity(albumId);
+}
+
+// Expose mobile UI functions to window for access from other modules
+window.showMobileAlbumMenu = showMobileAlbumMenu;
+window.showMobileMoveToListSheet = showMobileMoveToListSheet;
+window.showMobileListMenu = showMobileListMenu;
+window.showMobileEditForm = showMobileEditForm;
+window.showMobileEditFormSafe = showMobileEditFormSafe;
+window.playAlbumSafe = playAlbumSafe;
+window.removeAlbumSafe = removeAlbumSafe;
+
+/**
+ * Get or initialize the list navigation module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getListNavModule() {
+  if (!listNavModule) {
+    listNavModule = createListNav({
+      getLists: () => lists,
+      getListMetadata,
+      getCurrentList: () => currentList,
+      selectList,
+      getListMenuConfig,
+      hideAllContextMenus,
+      positionContextMenu,
+      toggleMobileLists,
+      setCurrentContextList: (listName) => {
+        currentContextList = listName;
+      },
+    });
+  }
+  return listNavModule;
+}
+
+// Wrapper functions for list navigation module
+function updateListNav() {
+  return getListNavModule().updateListNav();
+}
+
+function updateListNavActiveState(activeListName) {
+  return getListNavModule().updateListNavActiveState(activeListName);
+}
+
+// Expose updateListNav to window for access from other modules
+window.updateListNav = updateListNav;
 
 // Global variables
 let lists = {};
@@ -1971,7 +2102,10 @@ function showMoveToListSubmenu() {
         moveOption?.classList.remove('bg-gray-700', 'text-white');
 
         // Show confirmation modal
-        showMoveConfirmation(currentContextAlbumId, targetList);
+        getMobileUIModule().showMoveConfirmation(
+          currentContextAlbumId,
+          targetList
+        );
       });
     });
   }
@@ -2788,369 +2922,6 @@ function openRenameModal(listName) {
     nameInput.select();
   }, 100);
 }
-
-// Update only the active state in sidebar (optimized - no DOM rebuild)
-function updateListNavActiveState(activeListName) {
-  const nav = document.getElementById('listNav');
-  const mobileNav = document.getElementById('mobileListNav');
-
-  const updateActiveState = (container) => {
-    if (!container) return;
-
-    // Find only list buttons inside .year-lists containers (not year header buttons)
-    const buttons = container.querySelectorAll('.year-lists button');
-    buttons.forEach((button) => {
-      const listName = button.querySelector('span')?.textContent;
-      if (!listName) return;
-
-      const isActive = listName === activeListName;
-
-      // Toggle active class - background is handled by ::before pseudo-element in CSS
-      if (isActive) {
-        button.classList.add('active');
-      } else {
-        button.classList.remove('active');
-      }
-    });
-  };
-
-  updateActiveState(nav);
-  updateActiveState(mobileNav);
-}
-
-// Get expand/collapse state from localStorage
-function getYearExpandState() {
-  try {
-    const state = localStorage.getItem('yearExpandState');
-    return state ? JSON.parse(state) : {};
-  } catch (_e) {
-    return {};
-  }
-}
-
-// Save expand/collapse state to localStorage
-function saveYearExpandState(state) {
-  try {
-    localStorage.setItem('yearExpandState', JSON.stringify(state));
-  } catch (_e) {
-    // Silently fail if localStorage is full
-  }
-}
-
-// Toggle year section expand/collapse
-function toggleYearSection(year, container) {
-  const state = getYearExpandState();
-  const isExpanded = state[year] !== false; // Default to expanded
-  state[year] = !isExpanded;
-  saveYearExpandState(state);
-
-  // Update UI
-  const section = container.querySelector(`[data-year-section="${year}"]`);
-  if (section) {
-    const listsContainer = section.querySelector('.year-lists');
-    const chevron = section.querySelector('.year-chevron');
-    if (listsContainer) {
-      listsContainer.classList.toggle('hidden', isExpanded);
-    }
-    if (chevron) {
-      chevron.classList.toggle('fa-chevron-right', isExpanded);
-      chevron.classList.toggle('fa-chevron-down', !isExpanded);
-    }
-  }
-}
-
-// Generate HTML for year section header (shared between desktop and mobile)
-function createYearHeaderHTML(year, count, isExpanded) {
-  const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
-  return `
-    <div class="flex items-center">
-      <i class="fas ${chevronClass} mr-2 text-xs year-chevron"></i>
-      <span>${year}</span>
-    </div>
-    <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${count}</span>
-  `;
-}
-
-// Generate HTML for list button (shared between desktop and mobile)
-function createListButtonHTML(listName, isActive, isOfficial, isMobile) {
-  const paddingClass = isMobile ? 'py-3' : 'py-2';
-  const widthClass = isMobile ? 'flex-1' : 'w-full';
-  const activeClass = isActive ? 'active' : '';
-  const officialBadge = isOfficial
-    ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>'
-    : '';
-
-  const buttonHTML = `
-    <button data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
-      <i class="fas fa-list mr-2 flex-shrink-0"></i>
-      <span class="truncate flex-1">${listName}</span>
-      ${officialBadge}
-    </button>
-  `;
-
-  if (isMobile) {
-    return `
-      ${buttonHTML}
-      <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag flex-shrink-0" aria-label="List options">
-        <i class="fas fa-ellipsis-v"></i>
-      </button>
-    `;
-  }
-
-  return buttonHTML;
-}
-
-// Update sidebar navigation with year tree view
-function updateListNav() {
-  const nav = document.getElementById('listNav');
-  const mobileNav = document.getElementById('mobileListNav');
-
-  const createListItems = (container, isMobile = false) => {
-    container.innerHTML = '';
-
-    // Group lists by year
-    const listsByYear = {};
-    const uncategorized = [];
-
-    Object.keys(lists).forEach((listName) => {
-      const meta = getListMetadata(listName);
-      const year = meta?.year;
-
-      if (year) {
-        if (!listsByYear[year]) {
-          listsByYear[year] = [];
-        }
-        listsByYear[year].push({ name: listName, meta });
-      } else {
-        uncategorized.push({ name: listName, meta });
-      }
-    });
-
-    // Sort years descending
-    const sortedYears = Object.keys(listsByYear).sort(
-      (a, b) => parseInt(b) - parseInt(a)
-    );
-
-    // Get expand state
-    const expandState = getYearExpandState();
-
-    // Create year sections
-    sortedYears.forEach((year) => {
-      const yearLists = listsByYear[year];
-      const isExpanded = expandState[year] !== false; // Default to expanded
-
-      const section = document.createElement('div');
-      section.className = 'year-section mb-1';
-      section.setAttribute('data-year-section', year);
-
-      // Year header
-      const header = document.createElement('button');
-      const paddingClass = isMobile ? 'py-2' : 'py-1.5';
-      header.className = `w-full text-left px-3 ${paddingClass} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
-      header.innerHTML = createYearHeaderHTML(
-        year,
-        yearLists.length,
-        isExpanded
-      );
-      header.onclick = (e) => {
-        e.preventDefault();
-        toggleYearSection(year, container);
-      };
-      header.oncontextmenu = (e) => e.preventDefault();
-
-      section.appendChild(header);
-
-      // Lists container
-      const listsContainer = document.createElement('ul');
-      listsContainer.className = `year-lists pl-4 ${isExpanded ? '' : 'hidden'}`;
-
-      yearLists.forEach(({ name: listName }) => {
-        const li = createListButton(listName, isMobile, container);
-        listsContainer.appendChild(li);
-      });
-
-      section.appendChild(listsContainer);
-      container.appendChild(section);
-    });
-
-    // Add uncategorized section if there are any
-    if (uncategorized.length > 0) {
-      const section = document.createElement('div');
-      section.className = 'year-section mb-1';
-      section.setAttribute('data-year-section', 'uncategorized');
-
-      const isExpanded = expandState['uncategorized'] !== false;
-
-      // Header for uncategorized
-      const header = document.createElement('button');
-      const paddingClass = isMobile ? 'py-2' : 'py-1.5';
-      header.className = `w-full text-left px-3 ${paddingClass} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
-      header.innerHTML = createYearHeaderHTML(
-        'Uncategorized',
-        uncategorized.length,
-        isExpanded
-      );
-      header.onclick = (e) => {
-        e.preventDefault();
-        toggleYearSection('uncategorized', container);
-      };
-      header.oncontextmenu = (e) => e.preventDefault();
-
-      section.appendChild(header);
-
-      // Lists container
-      const listsContainer = document.createElement('ul');
-      listsContainer.className = `year-lists pl-4 ${isExpanded ? '' : 'hidden'}`;
-
-      uncategorized.forEach(({ name: listName }) => {
-        const li = createListButton(listName, isMobile, container);
-        listsContainer.appendChild(li);
-      });
-
-      section.appendChild(listsContainer);
-      container.appendChild(section);
-    }
-  };
-
-  // Helper to create a list button
-  const createListButton = (listName, isMobile, _container) => {
-    const meta = getListMetadata(listName);
-    const isOfficial = meta?.isOfficial || false;
-    const isActive = currentList === listName;
-    const li = document.createElement('li');
-
-    if (isMobile) {
-      li.className = 'flex items-center';
-    }
-    li.innerHTML = createListButtonHTML(
-      listName,
-      isActive,
-      isOfficial,
-      isMobile
-    );
-
-    const button = li.querySelector('[data-list-name]');
-    const menuButton = li.querySelector('[data-list-menu-btn]');
-
-    if (!isMobile) {
-      // Desktop: keep right-click
-      button.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-
-        // Hide any open context menus first
-        hideAllContextMenus();
-
-        currentContextList = listName;
-
-        const contextMenu = document.getElementById('contextMenu');
-        if (!contextMenu) return;
-
-        // Get shared menu configuration
-        const menuConfig = getListMenuConfig(listName);
-
-        // Update the playlist option text based on user's music service
-        const updatePlaylistText =
-          document.getElementById('updatePlaylistText');
-        if (updatePlaylistText) {
-          updatePlaylistText.textContent = menuConfig.musicServiceText;
-        }
-
-        // Update the toggle official option text based on current status
-        const toggleOfficialText =
-          document.getElementById('toggleOfficialText');
-        const toggleOfficialOption = document.getElementById(
-          'toggleOfficialOption'
-        );
-        if (toggleOfficialText && toggleOfficialOption) {
-          toggleOfficialText.textContent = menuConfig.officialToggleText;
-          const icon = toggleOfficialOption.querySelector('i');
-          icon.classList.remove('fa-star', 'fa-star-half-alt');
-          icon.classList.add(menuConfig.officialIconClass);
-
-          // Hide option if list has no year (can't be official)
-          if (!menuConfig.hasYear) {
-            toggleOfficialOption.classList.add('hidden');
-          } else {
-            toggleOfficialOption.classList.remove('hidden');
-          }
-        }
-
-        // Position the menu at cursor (using batched style operations)
-        positionContextMenu(contextMenu, e.clientX, e.clientY);
-      });
-    } else {
-      // Mobile: attach click handler to three-dot menu button
-      if (menuButton) {
-        // Prevent touch events from bubbling to parent (similar to album menu button)
-        menuButton.addEventListener(
-          'touchstart',
-          (e) => {
-            e.stopPropagation();
-          },
-          { passive: true }
-        );
-
-        menuButton.addEventListener(
-          'touchend',
-          (e) => {
-            e.stopPropagation();
-          },
-          { passive: true }
-        );
-
-        menuButton.addEventListener('click', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (window.showMobileListMenu) {
-            window.showMobileListMenu(listName);
-          }
-        });
-      }
-    }
-
-    button.onclick = () => {
-      selectList(listName);
-      if (isMobile) toggleMobileLists();
-    };
-
-    return li;
-  };
-
-  createListItems(nav);
-  if (mobileNav) createListItems(mobileNav, true);
-
-  // Cache list names locally for faster startup
-  try {
-    localStorage.setItem('cachedListNames', JSON.stringify(Object.keys(lists)));
-  } catch (e) {
-    // Handle quota exceeded error gracefully
-    if (e.name === 'QuotaExceededError') {
-      console.warn('LocalStorage quota exceeded, skipping cache');
-      // Attempt to free up space by removing old cache entries
-      try {
-        const keysToRemove = [];
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          // Remove old cache keys (from previous implementations)
-          if (
-            key &&
-            (key.startsWith('lists_cache') ||
-              key.startsWith('lastSelectedListData_'))
-          ) {
-            keysToRemove.push(key);
-          }
-        }
-        keysToRemove.forEach((key) => localStorage.removeItem(key));
-      } catch (cleanupErr) {
-        console.warn('Failed to cleanup localStorage:', cleanupErr);
-      }
-    } else {
-      console.warn('Failed to cache list names', e);
-    }
-  }
-}
-window.updateListNav = updateListNav;
 
 // Removed complex initializeMobileSorting function - now using unified approach
 
@@ -3984,1141 +3755,6 @@ function initializeUnifiedSorting(container, isMobile) {
     });
   }
 }
-
-// Add this function to handle mobile album actions
-window.showMobileAlbumMenu = function (indexOrElement) {
-  let index = indexOrElement;
-  if (typeof indexOrElement !== 'number') {
-    const card = indexOrElement.closest('.album-card');
-    if (!card) return;
-    index = parseInt(card.dataset.index);
-    console.log(
-      '[DEBUG] showMobileAlbumMenu: card.dataset.index =',
-      card.dataset.index,
-      'parsed index =',
-      index
-    );
-  }
-
-  // Validate index
-  const albumsForSheet = getListData(currentList);
-  console.log(
-    '[DEBUG] showMobileAlbumMenu: data array length =',
-    albumsForSheet?.length,
-    'first 3 albums:',
-    albumsForSheet?.slice(0, 3).map((a) => a.album)
-  );
-  if (
-    isNaN(index) ||
-    index < 0 ||
-    !albumsForSheet ||
-    index >= albumsForSheet.length
-  ) {
-    console.error('Invalid album index:', index);
-    return;
-  }
-
-  const album = albumsForSheet[index];
-  console.log(
-    '[DEBUG] showMobileAlbumMenu: selected album at index',
-    index,
-    '=',
-    album.album,
-    'by',
-    album.artist
-  );
-  if (!album) {
-    console.error('Album not found at index:', index);
-    return;
-  }
-
-  // Create a unique identifier for this album to prevent stale index issues
-  const albumId =
-    `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-
-  // Remove any existing action sheets first
-  const existingSheet = document.querySelector(
-    '.fixed.inset-0.z-50.lg\\:hidden'
-  );
-  if (existingSheet) {
-    existingSheet.remove();
-  }
-
-  // Hide FAB when mobile action sheet is shown to avoid overlap
-  const fab = document.getElementById('addAlbumFAB');
-  if (fab) {
-    fab.style.display = 'none';
-  }
-
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-  const hasAnyService = hasSpotify || hasTidal;
-
-  const actionSheet = document.createElement('div');
-  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
-  actionSheet.innerHTML = `
-    <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-      <div class="p-4">
-        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
-        <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
-        <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
-        
-        <button data-action="edit"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
-        </button>
-
-        <!-- Expandable Play Section -->
-        <div class="play-section">
-          <button data-action="play-toggle"
-                  class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded ${!hasAnyService ? 'opacity-50' : ''}">
-            <span>
-              <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
-            </span>
-            ${hasSpotify ? '<i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-chevron></i>' : ''}
-          </button>
-          
-          <!-- Expandable device list (hidden by default) -->
-          <div data-play-options class="hidden overflow-hidden transition-all duration-200 ease-out" style="max-height: 0;">
-            <div class="ml-4 border-l-2 border-gray-700 pl-4 py-1">
-              <!-- Open in app option -->
-              <button data-action="open-app"
-                      class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
-                <i class="fas fa-external-link-alt mr-3 text-green-500 text-sm"></i>
-                <span class="text-sm">Open in ${hasSpotify ? 'Spotify' : 'Tidal'}</span>
-              </button>
-              
-              ${
-                hasSpotify
-                  ? `
-              <!-- Spotify Connect devices section -->
-              <div class="mt-1 pt-1 border-t border-gray-800">
-                <div class="px-3 py-1.5 text-xs text-gray-500 uppercase tracking-wide">Spotify Connect</div>
-                <div data-device-list>
-                  <div class="px-3 py-2 text-sm text-gray-400">
-                    <i class="fas fa-spinner fa-spin mr-2"></i>Loading devices...
-                  </div>
-                </div>
-              </div>
-              `
-                  : ''
-              }
-            </div>
-          </div>
-        </div>
-
-        <button data-action="move"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-arrow-right mr-3 text-gray-400"></i>Move to List...
-        </button>
-
-        <button data-action="remove"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
-          <i class="fas fa-trash mr-3"></i>Remove from List
-        </button>
-        
-        <button data-action="cancel"
-                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
-          Cancel
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(actionSheet);
-
-  // Attach event listeners to buttons
-  const backdrop = actionSheet.querySelector('[data-backdrop]');
-  const editBtn = actionSheet.querySelector('[data-action="edit"]');
-  const playToggleBtn = actionSheet.querySelector(
-    '[data-action="play-toggle"]'
-  );
-  const playOptions = actionSheet.querySelector('[data-play-options]');
-  const chevron = actionSheet.querySelector('[data-chevron]');
-  const openAppBtn = actionSheet.querySelector('[data-action="open-app"]');
-  const deviceList = actionSheet.querySelector('[data-device-list]');
-  const moveBtn = actionSheet.querySelector('[data-action="move"]');
-  const removeBtn = actionSheet.querySelector('[data-action="remove"]');
-  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-  let isPlayExpanded = false;
-  let devicesLoaded = false;
-
-  const closeSheet = () => {
-    actionSheet.remove();
-    // Restore FAB visibility if a list is selected
-    const fabElement = document.getElementById('addAlbumFAB');
-    if (fabElement && currentList) {
-      fabElement.style.display = 'flex';
-    }
-  };
-
-  // Toggle play options expansion
-  const togglePlayOptions = async () => {
-    if (!hasAnyService) {
-      showToast('No music service connected', 'error');
-      return;
-    }
-
-    // If no Spotify (only Tidal), just play directly
-    if (!hasSpotify) {
-      closeSheet();
-      window.playAlbumSafe(albumId);
-      return;
-    }
-
-    isPlayExpanded = !isPlayExpanded;
-
-    if (isPlayExpanded) {
-      playOptions.classList.remove('hidden');
-      // Trigger reflow for animation
-      void playOptions.offsetHeight;
-      playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
-      if (chevron) chevron.style.transform = 'rotate(180deg)';
-
-      // Load devices if not already loaded
-      if (!devicesLoaded && hasSpotify) {
-        await loadMobileDevices();
-      }
-    } else {
-      playOptions.style.maxHeight = '0';
-      if (chevron) chevron.style.transform = 'rotate(0deg)';
-      setTimeout(() => {
-        if (!isPlayExpanded) playOptions.classList.add('hidden');
-      }, 200);
-    }
-  };
-
-  // Load Spotify devices for mobile
-  const loadMobileDevices = async () => {
-    try {
-      const response = await fetch('/api/spotify/devices', {
-        credentials: 'include',
-      });
-      const data = await response.json();
-
-      if (response.ok && data.devices && data.devices.length > 0) {
-        const deviceItems = data.devices
-          .map((device) => {
-            const icon = getDeviceIcon(device.type);
-            const activeClass = device.is_active
-              ? 'text-green-500'
-              : 'text-gray-400';
-            const activeBadge = device.is_active
-              ? '<span class="ml-auto text-xs text-green-500">(active)</span>'
-              : '';
-            return `
-              <button data-action="play-device" data-device-id="${device.id}"
-                      class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
-                <i class="${icon} mr-3 ${activeClass} text-sm"></i>
-                <span class="text-sm truncate">${device.name}</span>
-                ${activeBadge}
-              </button>
-            `;
-          })
-          .join('');
-        deviceList.innerHTML = deviceItems;
-
-        // Attach device click handlers
-        deviceList
-          .querySelectorAll('[data-action="play-device"]')
-          .forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const deviceId = btn.dataset.deviceId;
-              closeSheet();
-              playAlbumOnDeviceMobile(albumId, deviceId);
-            });
-          });
-
-        // Update max-height for animation
-        playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
-      } else {
-        deviceList.innerHTML = `
-          <div class="px-3 py-2 text-sm text-gray-500">No devices found</div>
-          <div class="px-3 py-1 text-xs text-gray-600">Open Spotify on a device</div>
-        `;
-        playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
-      }
-      devicesLoaded = true;
-    } catch (err) {
-      console.error('Failed to load devices:', err);
-      deviceList.innerHTML = `
-        <div class="px-3 py-2 text-sm text-red-400">Failed to load devices</div>
-      `;
-      playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
-    }
-  };
-
-  backdrop.addEventListener('click', closeSheet);
-  cancelBtn.addEventListener('click', closeSheet);
-
-  editBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-    window.showMobileEditFormSafe(albumId);
-  });
-
-  playToggleBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    togglePlayOptions();
-  });
-
-  if (openAppBtn) {
-    openAppBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      closeSheet();
-      window.playAlbumSafe(albumId);
-    });
-  }
-
-  moveBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-    window.showMobileMoveToListSheet(index, albumId);
-  });
-
-  removeBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-    window.removeAlbumSafe(albumId);
-  });
-};
-
-// Move album from current list to target list
-async function moveAlbumToList(index, albumId, targetList) {
-  if (
-    !currentList ||
-    !lists[currentList] ||
-    !targetList ||
-    !lists[targetList]
-  ) {
-    throw new Error('Invalid source or target list');
-  }
-
-  // Get source list data using helper
-  const sourceAlbums = getListData(currentList);
-  if (!sourceAlbums) throw new Error('Source list data not loaded');
-
-  let album = sourceAlbums[index];
-  let indexToMove = index;
-
-  if (album && albumId) {
-    const expectedId =
-      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-    if (expectedId !== albumId) {
-      // Index is stale, search by identity
-      const result = findAlbumByIdentity(albumId);
-      if (result) {
-        album = result.album;
-        indexToMove = result.index;
-      } else {
-        throw new Error('Album not found');
-      }
-    }
-  } else if (!album) {
-    throw new Error('Album not found');
-  }
-
-  // Clone the album data to preserve all metadata
-  const albumToMove = { ...album };
-
-  // Check for duplicate in target list
-  const targetAlbums = getListData(targetList);
-  if (isAlbumInList(albumToMove, targetAlbums || [])) {
-    showToast(
-      `"${albumToMove.album}" already exists in "${targetList}"`,
-      'error'
-    );
-    return;
-  }
-
-  // Remove from source list
-  sourceAlbums.splice(indexToMove, 1);
-
-  // Add to target list (may need to load it first)
-  let targetData = targetAlbums;
-  if (!targetData) {
-    // Target list data not loaded, fetch it first
-    targetData = await apiCall(`/api/lists/${encodeURIComponent(targetList)}`);
-    setListData(targetList, targetData);
-  }
-  targetData.push(albumToMove);
-
-  try {
-    // Save both lists to the server
-    await Promise.all([
-      saveList(currentList, sourceAlbums),
-      saveList(targetList, targetData),
-    ]);
-
-    // Update the current view
-    selectList(currentList);
-
-    showToast(`Moved "${album.album}" to "${targetList}"`);
-  } catch (error) {
-    console.error('Error saving lists after move:', error);
-
-    // Rollback: add back to source, remove from target
-    sourceAlbums.splice(indexToMove, 0, albumToMove);
-    targetData.pop();
-
-    throw error;
-  }
-}
-
-// Show confirmation modal for moving album to another list
-function showMoveConfirmation(albumId, targetList) {
-  if (!albumId || !targetList) {
-    console.error('Invalid albumId or targetList');
-    return;
-  }
-
-  // Find the album by identity
-  const result = findAlbumByIdentity(albumId);
-  if (!result) {
-    showToast('Album not found - it may have been moved or removed', 'error');
-    return;
-  }
-
-  const { album, index } = result;
-
-  showConfirmation(
-    'Move Album',
-    `Move "${album.album}" by ${album.artist} to "${targetList}"?`,
-    `This will remove the album from "${currentList}" and add it to "${targetList}".`,
-    'Move',
-    async () => {
-      try {
-        await moveAlbumToList(index, albumId, targetList);
-      } catch (error) {
-        console.error('Error moving album:', error);
-        showToast('Error moving album', 'error');
-      }
-    }
-  );
-}
-
-// Show mobile sheet to select target list for moving album
-window.showMobileMoveToListSheet = function (index, albumId) {
-  // Validate index
-  const albumsForMove = getListData(currentList);
-  if (
-    isNaN(index) ||
-    index < 0 ||
-    !albumsForMove ||
-    index >= albumsForMove.length
-  ) {
-    console.error('Invalid album index:', index);
-    return;
-  }
-
-  const album = albumsForMove[index];
-
-  // Get all list names except the current one
-  const listNames = Object.keys(lists).filter((name) => name !== currentList);
-
-  // Remove any existing sheets
-  const existingSheet = document.querySelector(
-    '.fixed.inset-0.z-50.lg\\:hidden'
-  );
-  if (existingSheet) {
-    existingSheet.remove();
-  }
-
-  const actionSheet = document.createElement('div');
-  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
-
-  if (listNames.length === 0) {
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
-          <h3 class="font-semibold text-white mb-1">Move to List</h3>
-          <p class="text-sm text-gray-400 mb-4">${album.album} by ${album.artist}</p>
-          
-          <div class="py-8 text-center text-gray-500">
-            No other lists available
-          </div>
-          
-          <button data-action="cancel"
-                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
-            Cancel
-          </button>
-        </div>
-      </div>
-    `;
-  } else {
-    const listButtons = listNames
-      .map(
-        (listName) => `
-        <button data-target-list="${listName}"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-list mr-3 text-gray-400"></i>${listName}
-        </button>
-      `
-      )
-      .join('');
-
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[80vh] overflow-y-auto">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
-          <h3 class="font-semibold text-white mb-1">Move to List</h3>
-          <p class="text-sm text-gray-400 mb-4 truncate">${album.album} by ${album.artist}</p>
-          
-          ${listButtons}
-          
-          <button data-action="cancel"
-                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
-            Cancel
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  document.body.appendChild(actionSheet);
-
-  const backdrop = actionSheet.querySelector('[data-backdrop]');
-  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-  const closeSheet = () => {
-    actionSheet.remove();
-  };
-
-  backdrop.addEventListener('click', closeSheet);
-  cancelBtn.addEventListener('click', closeSheet);
-
-  // Attach click handlers to list buttons
-  actionSheet.querySelectorAll('[data-target-list]').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const targetList = btn.dataset.targetList;
-      closeSheet();
-      showMoveConfirmation(albumId, targetList);
-    });
-  });
-};
-
-// Show mobile action sheet for list context menu
-window.showMobileListMenu = function (listName) {
-  // Get shared menu configuration
-  const menuConfig = getListMenuConfig(listName);
-
-  // Remove any existing action sheets first
-  const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
-  if (existingSheet) {
-    existingSheet.remove();
-  }
-
-  // Hide FAB when mobile action sheet is shown
-  const fab = document.getElementById('addAlbumFAB');
-  if (fab) {
-    fab.style.display = 'none';
-  }
-
-  const actionSheet = document.createElement('div');
-  actionSheet.className = 'fixed inset-0 z-[60]';
-  actionSheet.innerHTML = `
-    <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-      <div class="p-4">
-        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
-        <h3 class="font-semibold text-white mb-4">${listName}</h3>
-        
-        <button data-action="download"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-download mr-3 text-gray-400"></i>Download List
-        </button>
-        
-        <button data-action="edit"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
-        </button>
-        
-        ${
-          menuConfig.hasYear
-            ? `
-        <button data-action="toggle-official"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas ${menuConfig.officialIconClass} mr-3 text-yellow-500"></i>${menuConfig.officialToggleText}
-        </button>
-        `
-            : ''
-        }
-        
-        <button data-action="send-to-service"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-          <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${menuConfig.musicServiceText}
-        </button>
-        
-        <button data-action="delete"
-                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
-          <i class="fas fa-trash mr-3"></i>Delete List
-        </button>
-        
-        <button data-action="cancel"
-                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
-          Cancel
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(actionSheet);
-
-  // Attach event listeners
-  const backdrop = actionSheet.querySelector('[data-backdrop]');
-  const downloadBtn = actionSheet.querySelector('[data-action="download"]');
-  const editBtn = actionSheet.querySelector('[data-action="edit"]');
-  const toggleOfficialBtn = actionSheet.querySelector(
-    '[data-action="toggle-official"]'
-  );
-  const sendToServiceBtn = actionSheet.querySelector(
-    '[data-action="send-to-service"]'
-  );
-  const deleteBtn = actionSheet.querySelector('[data-action="delete"]');
-  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-  const closeSheet = () => {
-    actionSheet.remove();
-    // Restore FAB visibility if a list is selected
-    const fabElement = document.getElementById('addAlbumFAB');
-    if (fabElement && currentList) {
-      fabElement.style.display = 'flex';
-    }
-  };
-
-  backdrop.addEventListener('click', closeSheet);
-  cancelBtn.addEventListener('click', closeSheet);
-
-  downloadBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-    downloadListAsJSON(listName);
-  });
-
-  editBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-    openRenameModal(listName);
-  });
-
-  if (toggleOfficialBtn) {
-    toggleOfficialBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      closeSheet();
-      toggleOfficialStatus(listName);
-    });
-  }
-
-  sendToServiceBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-    try {
-      const listData = getListData(listName) || [];
-      await updatePlaylist(listName, listData);
-    } catch (err) {
-      console.error('Update playlist failed', err);
-    }
-  });
-
-  deleteBtn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    closeSheet();
-
-    const confirmed = await showConfirmation(
-      'Delete List',
-      `Are you sure you want to delete the list "${listName}"?`,
-      'This action cannot be undone.',
-      'Delete'
-    );
-
-    if (confirmed) {
-      try {
-        await apiCall(`/api/lists/${encodeURIComponent(listName)}`, {
-          method: 'DELETE',
-        });
-
-        delete lists[listName];
-
-        if (currentList === listName) {
-          const remainingLists = Object.keys(lists);
-          if (remainingLists.length > 0) {
-            selectList(remainingLists[0]);
-          } else {
-            currentList = null;
-            window.currentList = currentList;
-            // Refresh mobile bar visibility when list is cleared
-            if (window.refreshMobileBarVisibility) {
-              window.refreshMobileBarVisibility();
-            }
-
-            const headerAddAlbumBtn =
-              document.getElementById('headerAddAlbumBtn');
-            if (headerAddAlbumBtn) headerAddAlbumBtn.classList.add('hidden');
-
-            document.getElementById('albumContainer').innerHTML = `
-              <div class="text-center text-gray-500 mt-20">
-                <p class="text-xl mb-2">No list selected</p>
-                <p class="text-sm">Create or import a list to get started</p>
-              </div>
-            `;
-          }
-        }
-
-        updateListNav();
-        showToast(`List "${listName}" deleted`);
-      } catch (_error) {
-        showToast('Error deleting list', 'error');
-      }
-    }
-  });
-};
-
-// Helper function to find album by identity instead of index
-function findAlbumByIdentity(albumId) {
-  const albums = getListData(currentList);
-  if (!currentList || !albums) return null;
-
-  for (let i = 0; i < albums.length; i++) {
-    const album = albums[i];
-    const currentId =
-      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-    if (currentId === albumId) {
-      return { album, index: i };
-    }
-  }
-  return null;
-}
-
-// Safe wrapper for mobile edit form that uses album identity
-window.showMobileEditFormSafe = function (albumId) {
-  const result = findAlbumByIdentity(albumId);
-  if (!result) {
-    showToast('Album not found - it may have been moved or removed', 'error');
-    return;
-  }
-  showMobileEditForm(result.index);
-};
-
-// Safe wrapper for play album that uses album identity
-window.playAlbumSafe = function (albumId) {
-  const result = findAlbumByIdentity(albumId);
-  if (!result) {
-    showToast('Album not found - it may have been moved or removed', 'error');
-    return;
-  }
-  playAlbum(result.index);
-};
-
-// Safe wrapper for remove album that uses album identity
-window.removeAlbumSafe = function (albumId) {
-  const result = findAlbumByIdentity(albumId);
-  if (!result) {
-    showToast('Album not found - it may have been moved or removed', 'error');
-    return;
-  }
-
-  // Use the existing remove logic but with the current index
-  currentContextAlbum = result.index;
-  document.getElementById('removeAlbumOption').click();
-};
-
-// Mobile edit form (basic implementation)
-window.showMobileEditForm = function (index) {
-  // Validate inputs
-  const albumsForEdit = getListData(currentList);
-  if (!currentList || !albumsForEdit) {
-    showToast('No list selected', 'error');
-    return;
-  }
-
-  if (isNaN(index) || index < 0 || index >= albumsForEdit.length) {
-    showToast('Invalid album selected', 'error');
-    return;
-  }
-
-  const album = albumsForEdit[index];
-  if (!album) {
-    showToast('Album not found', 'error');
-    return;
-  }
-  const originalReleaseDate = album.release_date || '';
-  const inputReleaseDate = originalReleaseDate
-    ? normalizeDateForInput(originalReleaseDate) ||
-      new Date().toISOString().split('T')[0]
-    : new Date().toISOString().split('T')[0];
-
-  // Remove any existing edit modals first to prevent overlays
-  const existingModals = document.querySelectorAll(
-    '.fixed.inset-0.z-50.bg-gray-900'
-  );
-  existingModals.forEach((modal) => modal.remove());
-
-  // Create the edit modal
-  const editModal = document.createElement('div');
-  editModal.className =
-    'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl';
-  editModal.innerHTML = `
-    <!-- Header -->
-    <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
-      <button data-close-editor class="p-2 -m-2 text-gray-400 hover:text-white">
-        <i class="fas fa-times text-xl"></i>
-      </button>
-      <h3 class="text-lg font-semibold text-white flex-1 text-center px-4">Edit Album</h3>
-      <button id="mobileEditSaveBtn" class="text-red-500 font-semibold whitespace-nowrap">Save</button>
-    </div>
-    
-    <!-- Form Content -->
-    <div class="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch">
-      <form id="mobileEditForm" class="p-4 space-y-4 max-w-full">
-        <!-- Album Cover Preview -->
-        ${
-          album.cover_image
-            ? `
-          <div class="flex justify-center mb-4">
-            <img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
-                 alt="${album.album}" 
-                 class="w-32 h-32 rounded-lg object-cover shadow-md">
-          </div>
-        `
-            : ''
-        }
-        
-        <!-- Artist Name -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Artist</label>
-          <input 
-            type="text" 
-            id="editArtist" 
-            value="${album.artist || ''}"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-            placeholder="Artist name"
-          >
-        </div>
-        
-        <!-- Album Title -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Album</label>
-          <input 
-            type="text" 
-            id="editAlbum" 
-            value="${album.album || ''}"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-            placeholder="Album title"
-          >
-        </div>
-        
-        <!-- Release Date -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Release Date</label>
-          <input
-            type="date"
-            id="editReleaseDate"
-            value="${inputReleaseDate}"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-            style="display: block; width: 100%; min-height: 48px; -webkit-appearance: none;"
-          >
-          ${!album.release_date ? '<p class="text-xs text-gray-500 mt-1">No date set - defaulting to today</p>' : ''}
-        </div>
-        
-        <!-- Country - Native Select -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Country</label>
-          <div class="relative">
-            <select 
-              id="editCountry" 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
-            >
-              <option value="">Select a country...</option>
-              ${availableCountries
-                .map(
-                  (country) =>
-                    `<option value="${country}" ${country === album.country ? 'selected' : ''}>${country}</option>`
-                )
-                .join('')}
-            </select>
-            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Genre 1 - Native Select -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Primary Genre</label>
-          <div class="relative">
-            <select 
-              id="editGenre1" 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
-            >
-              <option value="">Select a genre...</option>
-              ${availableGenres
-                .map(
-                  (genre) =>
-                    `<option value="${genre}" ${genre === (album.genre_1 || album.genre) ? 'selected' : ''}>${genre}</option>`
-                )
-                .join('')}
-            </select>
-            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Genre 2 - Native Select -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Secondary Genre</label>
-          <div class="relative">
-            <select 
-              id="editGenre2" 
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
-            >
-              <option value="">None (optional)</option>
-              ${availableGenres
-                .map((genre) => {
-                  const currentGenre2 =
-                    album.genre_2 &&
-                    album.genre_2 !== 'Genre 2' &&
-                    album.genre_2 !== '-'
-                      ? album.genre_2
-                      : '';
-                  return `<option value="${genre}" ${genre === currentGenre2 ? 'selected' : ''}>${genre}</option>`;
-                })
-                .join('')}
-            </select>
-            <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </div>
-        </div>
-        
-        <!-- Comments -->
-        <div class="w-full">
-          <label class="block text-gray-400 text-sm mb-2">Comments</label>
-          <textarea
-            id="editComments"
-            rows="3"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200 resize-none"
-            placeholder="Add your notes..."
-          >${album.comments || album.comment || ''}</textarea>
-        </div>
-
-        <!-- Track Selection -->
-        <div class="w-full" id="trackPickWrapper">
-          <div class="flex items-center justify-between">
-            <label class="block text-gray-400 text-sm mb-2">Selected Track</label>
-            <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
-          </div>
-          <div id="trackPickContainer">
-          ${
-            Array.isArray(album.tracks) && album.tracks.length > 0
-              ? `
-            <ul class="space-y-2">
-              ${album.tracks
-                .map(
-                  (t, _idx) => `
-                <li>
-                  <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox" value="${t}" ${t === (album.track_pick || '') ? 'checked' : ''}>
-                    <span>${t}</span>
-                  </label>
-                </li>`
-                )
-                .join('')}
-            </ul>
-          `
-              : `
-            <input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
-                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-                   placeholder="Enter track number">
-          `
-          }
-          </div>
-        </div>
-
-        <!-- Spacer for bottom padding -->
-        <div class="h-4"></div>
-      </form>
-    </div>
-  `;
-
-  document.body.appendChild(editModal);
-
-  // Attach close button handler
-  const closeBtn = editModal.querySelector('[data-close-editor]');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      editModal.remove();
-      // Force scroll to top and trigger reflow to fix iOS keyboard issues
-      window.scrollTo(0, 0);
-      document.body.scrollTop = 0;
-    });
-  }
-
-  function setupTrackPickCheckboxes() {
-    if (!trackPickContainer) return;
-    const boxes = trackPickContainer.querySelectorAll(
-      'input.track-pick-checkbox'
-    );
-    boxes.forEach((box) => {
-      box.onchange = () => {
-        if (box.checked) {
-          boxes.forEach((other) => {
-            if (other !== box) other.checked = false;
-          });
-        }
-      };
-    });
-  }
-
-  // Fetch track list when button is clicked
-  const fetchBtn = document.getElementById('fetchTracksBtn');
-  const trackPickContainer = document.getElementById('trackPickContainer');
-  setupTrackPickCheckboxes();
-  if (fetchBtn) {
-    fetchBtn.onclick = async () => {
-      if (!album.album_id) return;
-      fetchBtn.textContent = '...';
-      fetchBtn.disabled = true;
-      try {
-        const tracks = await fetchTracksForAlbum(album);
-        album.tracks = tracks;
-        if (trackPickContainer) {
-          trackPickContainer.innerHTML =
-            tracks.length > 0
-              ? `<ul class="space-y-2">${tracks
-                  .map(
-                    (t) => `
-                <li>
-                  <label class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox" value="${t}">
-                    <span>${t}</span>
-                  </label>
-                </li>`
-                  )
-                  .join('')}</ul>`
-              : `<input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
-                   class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
-                   placeholder="Enter track number">`;
-          setupTrackPickCheckboxes();
-        }
-        showToast('Tracks loaded');
-      } catch (err) {
-        console.error('Track fetch error:', err);
-        showToast('Error fetching tracks', 'error');
-      } finally {
-        fetchBtn.textContent = 'Get';
-        fetchBtn.disabled = false;
-      }
-    };
-  }
-
-  // Handle save (rest of the code remains the same)
-  document.getElementById('mobileEditSaveBtn').onclick = async function () {
-    // Gather all the values
-    const newDateValue = document.getElementById('editReleaseDate').value;
-    const normalizedOriginal = normalizeDateForInput(originalReleaseDate);
-    const finalReleaseDate =
-      originalReleaseDate && newDateValue === normalizedOriginal
-        ? originalReleaseDate
-        : formatDateForStorage(newDateValue);
-
-    const updatedAlbum = {
-      ...album,
-      artist: document.getElementById('editArtist').value.trim(),
-      album: document.getElementById('editAlbum').value.trim(),
-      release_date: finalReleaseDate,
-      country: document.getElementById('editCountry').value,
-      genre_1: document.getElementById('editGenre1').value,
-      genre: document.getElementById('editGenre1').value, // Keep both for compatibility
-      genre_2: document.getElementById('editGenre2').value,
-      // Persist tracks that may have been fetched while editing
-      tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
-      track_pick: (() => {
-        if (Array.isArray(album.tracks) && album.tracks.length > 0) {
-          const checked = document.querySelector(
-            '#trackPickContainer input[type="checkbox"]:checked'
-          );
-          return checked ? checked.value.trim() : '';
-        }
-        const numInput = document.getElementById('editTrackPickNumber');
-        return numInput ? numInput.value.trim() : '';
-      })(),
-      comments: document.getElementById('editComments').value.trim(),
-      comment: document.getElementById('editComments').value.trim(), // Keep both for compatibility
-    };
-
-    // Validate required fields
-    if (!updatedAlbum.artist || !updatedAlbum.album) {
-      showToast('Artist and Album are required', 'error');
-      return;
-    }
-
-    // Update the album in the list
-    const albumsToSave = getListData(currentList);
-    if (!albumsToSave) {
-      showToast('Error: List data not found', 'error');
-      return;
-    }
-    albumsToSave[index] = updatedAlbum;
-
-    // Close the modal immediately for better UX
-    editModal.remove();
-
-    // Force scroll to top and trigger reflow to fix iOS keyboard issues
-    window.scrollTo(0, 0);
-    document.body.scrollTop = 0;
-
-    // Force refresh the display to show changes immediately
-    displayAlbums(albumsToSave);
-    fetchAndApplyCovers(albumsToSave);
-
-    // Save to server in the background
-    try {
-      await saveList(currentList, albumsToSave);
-      showToast('Album updated successfully');
-    } catch (error) {
-      console.error('Error saving album:', error);
-      showToast('Error saving changes', 'error');
-
-      // Revert changes on error
-      albumsToSave[index] = album;
-
-      // Refresh display to show reverted state
-      displayAlbums(albumsToSave);
-      fetchAndApplyCovers(albumsToSave);
-    }
-  };
-
-  // Focus on first input
-  setTimeout(() => {
-    document.getElementById('editArtist').focus();
-  }, 100);
-};
 
 // File import handlers moved inside DOMContentLoaded
 
