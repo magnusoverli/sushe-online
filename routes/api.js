@@ -3755,6 +3755,12 @@ module.exports = (app, deps) => {
             : missingAlbums;
 
         if (albumsToRefresh.length > 0) {
+          logger.info('Triggering background playcount refresh', {
+            albumCount: albumsToRefresh.length,
+            missingCount: missingAlbums.length,
+            staleCount: staleAlbums.length,
+            lastfmUsername: req.user.lastfmUsername,
+          });
           // Don't await - let it run in background
           refreshPlaycountsInBackground(
             userId,
@@ -3864,6 +3870,11 @@ async function refreshPlaycountsInBackground(
         );
 
         results[album.itemId] = playcount;
+        logger.debug('Fetched playcount', {
+          artist: album.artist,
+          album: album.album,
+          playcount,
+        });
       } catch (err) {
         logger.warn(
           `Failed to fetch playcount for ${album.artist} - ${album.album}:`,
@@ -3880,6 +3891,13 @@ async function refreshPlaycountsInBackground(
       await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
     }
   }
+
+  const successCount = Object.values(results).filter((v) => v !== null).length;
+  logger.info('Background playcount refresh completed', {
+    total: albums.length,
+    successful: successCount,
+    failed: albums.length - successCount,
+  });
 
   return results;
 }
