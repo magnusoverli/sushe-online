@@ -3858,12 +3858,11 @@ async function refreshPlaycountsInBackground(
 
         // Upsert into user_album_stats
         // Use LOWER() for artist/album_name to ensure case-insensitive matching
-        // This is critical because album names may have different casing between
-        // the user's list and what Last.fm returns
+        // ON CONFLICT uses the unique index on (user_id, LOWER(artist), LOWER(album_name))
         await pool.query(
           `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, lastfm_playcount, lastfm_updated_at, updated_at)
            VALUES ($1, $2, LOWER($3), LOWER($4), $5, NOW(), NOW())
-           ON CONFLICT (user_id, artist, album_name)
+           ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
            DO UPDATE SET
              album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
              lastfm_playcount = EXCLUDED.lastfm_playcount,
