@@ -262,6 +262,7 @@ module.exports = (app, deps) => {
           for (const list of userLists) {
             const count = await listItemsAsync.count({ listId: list._id });
             listsObj[list.name] = {
+              _id: list._id, // List ID - needed for playcount API
               name: list.name,
               year: list.year || null,
               isOfficial: list.isOfficial || false,
@@ -358,6 +359,7 @@ module.exports = (app, deps) => {
         // When export=true: include base64 images, rank, and points for JSON export
         // Otherwise: return image URLs for faster page loading
         const data = items.map((item, index) => ({
+          _id: item._id, // List item ID - used for playcount tracking
           artist: item.artist,
           album: item.album,
           album_id: item.albumId,
@@ -3661,4 +3663,223 @@ module.exports = (app, deps) => {
       res.status(500).json({ error: 'Failed to fetch recent tracks' });
     }
   });
+
+  // GET /api/lastfm/list-playcounts/:listId - Get cached playcounts for albums in a list
+  // Returns cached data immediately, triggers background refresh for stale entries
+  app.get(
+    '/api/lastfm/list-playcounts/:listId',
+    ensureAuthAPI,
+    async (req, res) => {
+      const { listId } = req.params;
+      const { refresh = 'false' } = req.query;
+
+      if (!req.user.lastfmUsername) {
+        return res.status(401).json({ error: 'Last.fm not connected' });
+      }
+
+      try {
+        // Verify user owns this list
+        const list = await listsAsync.findOne({ _id: listId });
+        if (!list || list.userId !== req.user._id) {
+          return res.status(404).json({ error: 'List not found' });
+        }
+
+        // Get all albums in the list
+        const listItems = await listItemsAsync.find({ listId });
+        if (listItems.length === 0) {
+          return res.json({ playcounts: {}, staleCount: 0 });
+        }
+
+        // Get cached playcounts from user_album_stats
+        const userId = req.user._id;
+        const playcounts = {};
+        const staleAlbums = [];
+        const missingAlbums = [];
+
+        // Stale threshold: 24 hours
+        const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+        // Query all stats for this user at once
+        const statsResult = await pool.query(
+          `SELECT artist, album_name, album_id, lastfm_playcount, lastfm_updated_at
+         FROM user_album_stats
+         WHERE user_id = $1`,
+          [userId]
+        );
+
+        // Build a lookup map (lowercase artist+album for matching)
+        const statsMap = new Map();
+        for (const row of statsResult.rows) {
+          const key = `${row.artist.toLowerCase()}|||${row.album_name.toLowerCase()}`;
+          statsMap.set(key, row);
+        }
+
+        // Match list items to cached stats
+        for (const item of listItems) {
+          if (!item.artist || !item.album) continue;
+
+          const key = `${item.artist.toLowerCase()}|||${item.album.toLowerCase()}`;
+          const cached = statsMap.get(key);
+
+          if (cached) {
+            playcounts[item._id] = cached.lastfm_playcount || 0;
+
+            // Check if stale
+            if (
+              !cached.lastfm_updated_at ||
+              new Date(cached.lastfm_updated_at) < staleThreshold
+            ) {
+              staleAlbums.push({
+                itemId: item._id,
+                artist: item.artist,
+                album: item.album,
+                albumId: item.albumId,
+              });
+            }
+          } else {
+            // No cached data
+            playcounts[item._id] = null;
+            missingAlbums.push({
+              itemId: item._id,
+              artist: item.artist,
+              album: item.album,
+              albumId: item.albumId,
+            });
+          }
+        }
+
+        // Trigger background refresh for stale/missing albums
+        const albumsToRefresh =
+          refresh === 'true'
+            ? [...missingAlbums, ...staleAlbums]
+            : missingAlbums;
+
+        if (albumsToRefresh.length > 0) {
+          // Don't await - let it run in background
+          refreshPlaycountsInBackground(
+            userId,
+            req.user.lastfmUsername,
+            albumsToRefresh,
+            pool,
+            logger
+          ).catch((err) => {
+            logger.error('Background playcount refresh failed:', err);
+          });
+        }
+
+        res.json({
+          playcounts,
+          staleCount: staleAlbums.length,
+          missingCount: missingAlbums.length,
+          refreshing: albumsToRefresh.length,
+        });
+      } catch (error) {
+        logger.error('Last.fm list playcounts error:', error);
+        res.status(500).json({ error: 'Failed to fetch playcounts' });
+      }
+    }
+  );
+
+  // POST /api/lastfm/refresh-playcounts - Force refresh playcounts for specific albums
+  app.post(
+    '/api/lastfm/refresh-playcounts',
+    ensureAuthAPI,
+    async (req, res) => {
+      const { albums } = req.body;
+
+      if (!req.user.lastfmUsername) {
+        return res.status(401).json({ error: 'Last.fm not connected' });
+      }
+
+      if (!albums || !Array.isArray(albums) || albums.length === 0) {
+        return res.status(400).json({ error: 'albums array is required' });
+      }
+
+      // Limit to 50 albums per request
+      const toRefresh = albums.slice(0, 50).map((a) => ({
+        itemId: a.itemId,
+        artist: a.artist,
+        album: a.album,
+        albumId: a.albumId,
+      }));
+
+      try {
+        const results = await refreshPlaycountsInBackground(
+          req.user._id,
+          req.user.lastfmUsername,
+          toRefresh,
+          pool,
+          logger
+        );
+
+        res.json({ updated: results });
+      } catch (error) {
+        logger.error('Last.fm refresh playcounts error:', error);
+        res.status(500).json({ error: 'Failed to refresh playcounts' });
+      }
+    }
+  );
 };
+
+// Background function to refresh playcounts from Last.fm API
+async function refreshPlaycountsInBackground(
+  userId,
+  lastfmUsername,
+  albums,
+  pool,
+  logger
+) {
+  const { getAlbumInfo } = require('../utils/lastfm-auth');
+  const results = {};
+
+  // Process in batches with rate limiting (~5 req/sec for Last.fm)
+  const BATCH_SIZE = 5;
+  const DELAY_MS = 1100; // Just over 1 second between batches
+
+  for (let i = 0; i < albums.length; i += BATCH_SIZE) {
+    const batch = albums.slice(i, i + BATCH_SIZE);
+
+    const batchPromises = batch.map(async (album) => {
+      try {
+        const info = await getAlbumInfo(
+          album.artist,
+          album.album,
+          lastfmUsername,
+          process.env.LASTFM_API_KEY
+        );
+
+        const playcount = parseInt(info.userplaycount || 0);
+
+        // Upsert into user_album_stats
+        await pool.query(
+          `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, lastfm_playcount, lastfm_updated_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+           ON CONFLICT (user_id, artist, album_name)
+           DO UPDATE SET
+             album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
+             lastfm_playcount = EXCLUDED.lastfm_playcount,
+             lastfm_updated_at = NOW(),
+             updated_at = NOW()`,
+          [userId, album.albumId || null, album.artist, album.album, playcount]
+        );
+
+        results[album.itemId] = playcount;
+      } catch (err) {
+        logger.warn(
+          `Failed to fetch playcount for ${album.artist} - ${album.album}:`,
+          err.message
+        );
+        results[album.itemId] = null;
+      }
+    });
+
+    await Promise.all(batchPromises);
+
+    // Rate limit delay between batches (except for last batch)
+    if (i + BATCH_SIZE < albums.length) {
+      await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+    }
+  }
+
+  return results;
+}

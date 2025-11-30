@@ -86,6 +86,17 @@ function fetchAndApplyCovers(albums) {
   return getAlbumDisplayModule().fetchAndApplyCovers(albums);
 }
 
+function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
+  return getAlbumDisplayModule().fetchAndDisplayPlaycounts(
+    listId,
+    forceRefresh
+  );
+}
+
+function clearPlaycountCache() {
+  return getAlbumDisplayModule().clearPlaycountCache();
+}
+
 function updatePositionNumbers(container, isMobile) {
   return getAlbumDisplayModule().updatePositionNumbers(container, isMobile);
 }
@@ -840,11 +851,12 @@ async function loadLists() {
     const fetchedLists = await metadataPromise;
 
     // Initialize lists object with metadata objects (not arrays)
-    // Structure: { name, year, isOfficial, count, _data, updatedAt, createdAt }
+    // Structure: { _id, name, year, isOfficial, count, _data, updatedAt, createdAt }
     lists = {};
     Object.keys(fetchedLists).forEach((name) => {
       const meta = fetchedLists[name];
       lists[name] = {
+        _id: meta._id || null, // List ID - needed for playcount API
         name: meta.name || name,
         year: meta.year || null,
         isOfficial: meta.isOfficial || false,
@@ -2077,6 +2089,9 @@ async function selectList(listName) {
     currentList = listName;
     window.currentList = currentList;
 
+    // Clear playcount cache when switching lists (playcounts are list-item specific)
+    clearPlaycountCache();
+
     // === IMMEDIATE UI UPDATES (before network call) ===
     // Update active state in sidebar immediately (optimized - no full rebuild)
     updateListNavActiveState(listName);
@@ -2138,6 +2153,13 @@ async function selectList(listName) {
           fetchAndApplyCovers(data).catch((err) => {
             console.warn('Background cover fetch failed:', err);
           });
+          // Fetch Last.fm playcounts in background (non-blocking)
+          const listMeta = getListMetadata(listName);
+          if (listMeta?._id) {
+            fetchAndDisplayPlaycounts(listMeta._id).catch((err) => {
+              console.warn('Background playcount fetch failed:', err);
+            });
+          }
           // Refresh mobile bar visibility when list changes
           if (window.refreshMobileBarVisibility) {
             window.refreshMobileBarVisibility();

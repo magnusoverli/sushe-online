@@ -21,6 +21,12 @@ let isPollingPaused = false;
 let isHeadlessMode = false; // True when running without UI (mobile)
 const pendingActions = new Set();
 
+// Last.fm scrobbling state
+let lastfmNowPlayingSent = null; // Track ID for which we sent "now playing"
+let lastfmScrobbledTrack = null; // Track ID we already scrobbled
+let trackPlayStartTime = 0; // When current track started playing
+let accumulatedPlayTime = 0; // Total play time for current track (handles pause/resume)
+
 // Polling configuration
 const POLL_INTERVAL_PLAYING = 2000; // 2s when playing (slightly longer, we interpolate)
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
@@ -173,6 +179,148 @@ function emitPlaybackChange(state) {
       })
     );
   }
+}
+
+// ============ LAST.FM SCROBBLING ============
+
+// Scrobble threshold: 4 minutes OR 50% of track, whichever is less
+const LASTFM_MIN_SCROBBLE_TIME = 4 * 60 * 1000; // 4 minutes in ms
+const LASTFM_SCROBBLE_PERCENT = 0.5; // 50%
+
+/**
+ * Send "now playing" update to Last.fm
+ */
+async function sendLastfmNowPlaying(track) {
+  if (!track?.name || !track?.artists?.[0]?.name) return;
+
+  const trackId = track.id || `${track.name}-${track.artists[0].name}`;
+
+  // Don't send duplicate now-playing updates
+  if (lastfmNowPlayingSent === trackId) return;
+
+  try {
+    const response = await fetch('/api/lastfm/now-playing', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        artist: track.artists[0].name,
+        track: track.name,
+        album: track.album?.name || '',
+        duration: Math.floor((track.duration_ms || 0) / 1000),
+      }),
+    });
+
+    if (response.ok) {
+      lastfmNowPlayingSent = trackId;
+      console.log('Last.fm now playing:', track.name);
+    }
+  } catch (err) {
+    // Silently fail - scrobbling is not critical
+    console.warn('Last.fm now-playing failed:', err);
+  }
+}
+
+/**
+ * Submit a scrobble to Last.fm
+ */
+async function submitLastfmScrobble(track, timestamp) {
+  if (!track?.name || !track?.artists?.[0]?.name) return;
+
+  const trackId = track.id || `${track.name}-${track.artists[0].name}`;
+
+  // Don't double-scrobble the same track
+  if (lastfmScrobbledTrack === trackId) return;
+
+  try {
+    const response = await fetch('/api/lastfm/scrobble', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        artist: track.artists[0].name,
+        track: track.name,
+        album: track.album?.name || '',
+        timestamp: Math.floor(timestamp / 1000), // Unix timestamp in seconds
+        duration: Math.floor((track.duration_ms || 0) / 1000),
+      }),
+    });
+
+    if (response.ok) {
+      lastfmScrobbledTrack = trackId;
+      console.log('Last.fm scrobbled:', track.name);
+    }
+  } catch (err) {
+    // Silently fail - scrobbling is not critical
+    console.warn('Last.fm scrobble failed:', err);
+  }
+}
+
+/**
+ * Check if track should be scrobbled and do so if needed
+ * Called during playback polling
+ */
+function checkAndScrobble(state, previousState) {
+  if (!state?.item || !state.is_playing) return;
+
+  const track = state.item;
+  const trackId = track.id || `${track.name}-${track.artists?.[0]?.name}`;
+  const previousTrack = previousState?.item;
+  const previousTrackIdVal =
+    previousTrack?.id ||
+    (previousTrack
+      ? `${previousTrack.name}-${previousTrack.artists?.[0]?.name}`
+      : null);
+
+  const duration = track.duration_ms || 0;
+  const position = state.progress_ms || 0;
+
+  // Track changed - reset scrobble state and send now-playing
+  if (trackId !== previousTrackIdVal) {
+    lastfmNowPlayingSent = null;
+    lastfmScrobbledTrack = null;
+    trackPlayStartTime = Date.now() - position; // Estimate when track started
+    accumulatedPlayTime = position;
+
+    // Send now-playing for new track
+    sendLastfmNowPlaying(track);
+    return;
+  }
+
+  // Calculate scrobble threshold
+  const scrobbleThreshold = Math.min(
+    LASTFM_MIN_SCROBBLE_TIME,
+    duration * LASTFM_SCROBBLE_PERCENT
+  );
+
+  // Track play time (handles pause/resume)
+  if (state.is_playing && !previousState?.is_playing) {
+    // Resumed - update start time
+    trackPlayStartTime = Date.now();
+  } else if (state.is_playing && previousState?.is_playing) {
+    // Still playing - accumulate time since last poll
+    const elapsed = Date.now() - lastPollTime;
+    accumulatedPlayTime += elapsed;
+  }
+
+  // Check if we've played enough to scrobble
+  if (
+    accumulatedPlayTime >= scrobbleThreshold &&
+    lastfmScrobbledTrack !== trackId
+  ) {
+    // Scrobble with the timestamp when we started listening
+    submitLastfmScrobble(track, trackPlayStartTime);
+  }
+}
+
+/**
+ * Reset Last.fm scrobbling state (when playback stops)
+ */
+function resetScrobbleState() {
+  lastfmNowPlayingSent = null;
+  lastfmScrobbledTrack = null;
+  trackPlayStartTime = 0;
+  accumulatedPlayTime = 0;
 }
 
 // ============ API FUNCTIONS ============
@@ -913,6 +1061,9 @@ async function pollPlaybackState() {
     currentPlayback = null;
     previousTrackId = null;
 
+    // Reset Last.fm scrobble state
+    resetScrobbleState();
+
     // Emit playback stopped event
     emitPlaybackChange(null);
 
@@ -937,10 +1088,16 @@ async function pollPlaybackState() {
   const newTrackId = state.item?.id;
   const isTrackChange = oldTrackId && newTrackId && oldTrackId !== newTrackId;
 
+  // Store previous state for scrobble comparison
+  const previousState = currentPlayback;
+
   // Update state
   currentPlayback = state;
   lastPollTime = Date.now();
   lastPosition = state.progress_ms || 0;
+
+  // Check for Last.fm scrobbling (non-blocking)
+  checkAndScrobble(state, previousState);
 
   // Emit playback change event (for now-playing feature)
   emitPlaybackChange(state);
@@ -1418,6 +1575,7 @@ export function destroyMiniplayer() {
   consecutiveErrors = 0;
   isPollingPaused = false;
   isHeadlessMode = false;
+  resetScrobbleState();
 }
 
 /**
@@ -1486,4 +1644,5 @@ export function destroyPlaybackTracking() {
   isPollingPaused = false;
   isHeadlessMode = false;
   mobileElements = {};
+  resetScrobbleState();
 }

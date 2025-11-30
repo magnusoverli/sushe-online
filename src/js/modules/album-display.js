@@ -20,6 +20,10 @@ const ENABLE_INCREMENTAL_UPDATES = true;
 let lastRenderedAlbums = null;
 let positionElementCache = new WeakMap();
 
+// Last.fm playcount cache: { listItemId: playcount }
+let playcountCache = {};
+let playcountFetchInProgress = false;
+
 /**
  * Factory function to create the album display module with injected dependencies
  *
@@ -142,6 +146,11 @@ export function createAlbumDisplay(deps = {}) {
       trackPickDisplay = 'Select Track';
     }
 
+    // Get playcount from cache (keyed by list item _id)
+    const itemId = album._id || '';
+    const playcount = playcountCache[itemId];
+    const playcountDisplay = formatPlaycount(playcount);
+
     return {
       position,
       albumId,
@@ -166,7 +175,23 @@ export function createAlbumDisplay(deps = {}) {
       trackPick,
       trackPickDisplay,
       trackPickClass,
+      itemId,
+      playcount,
+      playcountDisplay,
     };
+  }
+
+  /**
+   * Format playcount for display
+   * @param {number|null|undefined} count - Raw playcount
+   * @returns {string} Formatted playcount or empty string
+   */
+  function formatPlaycount(count) {
+    if (count === null || count === undefined) return '';
+    if (count === 0) return '0';
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
   }
 
   /**
@@ -265,7 +290,10 @@ export function createAlbumDisplay(deps = {}) {
         </div>
       </div>
       <div class="flex flex-col justify-center">
-        <div class="font-semibold text-gray-100 truncate">${data.albumName}</div>
+        <div class="flex items-center gap-2">
+          <span class="font-semibold text-gray-100 truncate">${data.albumName}</span>
+          ${data.playcountDisplay ? `<span class="text-xs text-gray-500 flex-shrink-0" data-playcount="${data.itemId}" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay}</span>` : `<span class="text-xs text-gray-500 flex-shrink-0 hidden" data-playcount="${data.itemId}"></span>`}
+        </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
       </div>
       <div class="flex items-center">
@@ -529,11 +557,12 @@ export function createAlbumDisplay(deps = {}) {
             <h3 class="font-semibold text-gray-200 text-lg leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
           </div>
           
-          <!-- Line 2: Artist (always present) -->
+          <!-- Line 2: Artist + Playcount -->
           <div class="h-4 flex items-center">
             <p class="text-[13px] text-gray-500 truncate">
               <i class="fas fa-user fa-xs mr-[7px]"></i>
               <span data-field="artist-mobile-text">${data.artist}</span>
+              ${data.playcountDisplay ? `<span class="text-gray-600 ml-2" data-playcount-mobile="${data.itemId}">· <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay}</span>` : `<span class="text-gray-600 ml-2 hidden" data-playcount-mobile="${data.itemId}"></span>`}
             </p>
           </div>
           
@@ -1296,12 +1325,107 @@ export function createAlbumDisplay(deps = {}) {
     lastRenderedAlbums = null;
   }
 
+  /**
+   * Clear the playcount cache
+   * Used when switching lists or users
+   */
+  function clearPlaycountCache() {
+    playcountCache = {};
+  }
+
+  /**
+   * Fetch and display playcounts for a list from Last.fm
+   * @param {string} listId - List ID to fetch playcounts for
+   * @param {boolean} forceRefresh - Force refresh stale data
+   */
+  async function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
+    if (!listId || playcountFetchInProgress) return;
+
+    playcountFetchInProgress = true;
+
+    try {
+      const response = await apiCall(
+        `/api/lastfm/list-playcounts/${listId}${forceRefresh ? '?refresh=true' : ''}`
+      );
+
+      if (response.error) {
+        // User might not have Last.fm connected - that's OK
+        if (response.error !== 'Last.fm not connected') {
+          console.warn('Failed to fetch playcounts:', response.error);
+        }
+        return;
+      }
+
+      const { playcounts, refreshing } = response;
+
+      // Update cache
+      Object.assign(playcountCache, playcounts);
+
+      // Update DOM elements
+      updatePlaycountElements(playcounts);
+
+      // If background refresh is happening, poll for updates
+      if (refreshing > 0) {
+        // Poll after a delay to get refreshed data
+        setTimeout(async () => {
+          try {
+            const refreshedResponse = await apiCall(
+              `/api/lastfm/list-playcounts/${listId}`
+            );
+            if (refreshedResponse.playcounts) {
+              Object.assign(playcountCache, refreshedResponse.playcounts);
+              updatePlaycountElements(refreshedResponse.playcounts);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch refreshed playcounts:', err);
+          }
+        }, 5000); // Wait 5 seconds for background refresh
+      }
+    } catch (err) {
+      // Silently fail - playcounts are not critical
+      console.warn('Playcount fetch error:', err);
+    } finally {
+      playcountFetchInProgress = false;
+    }
+  }
+
+  /**
+   * Update playcount elements in the DOM
+   * @param {Object} playcounts - Map of itemId to playcount
+   */
+  function updatePlaycountElements(playcounts) {
+    for (const [itemId, count] of Object.entries(playcounts)) {
+      if (count === null || count === undefined) continue;
+
+      const display = formatPlaycount(count);
+
+      // Update desktop elements
+      const desktopEl = document.querySelector(`[data-playcount="${itemId}"]`);
+      if (desktopEl) {
+        desktopEl.innerHTML = `<i class="fas fa-headphones text-[10px] mr-1"></i>${display}`;
+        desktopEl.title = `${count} plays on Last.fm`;
+        desktopEl.classList.remove('hidden');
+      }
+
+      // Update mobile elements
+      const mobileEl = document.querySelector(
+        `[data-playcount-mobile="${itemId}"]`
+      );
+      if (mobileEl) {
+        mobileEl.innerHTML = `· <i class="fas fa-headphones text-[10px]"></i> ${display}`;
+        mobileEl.classList.remove('hidden');
+      }
+    }
+  }
+
   // Return public API
   return {
     displayAlbums,
     fetchAndApplyCovers,
+    fetchAndDisplayPlaycounts,
     updatePositionNumbers,
     clearLastRenderedCache,
+    clearPlaycountCache,
     // Expose for testing
     processAlbumData,
     createAlbumItem,
