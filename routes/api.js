@@ -4057,11 +4057,15 @@ module.exports = (app, deps) => {
         return res.json({ artists: [], message: 'No similar artists found' });
       }
 
-      // Return just artist name and match score
+      // Return artist name, match score, and image
       const artists = similarArtists.map((similarArtist) => ({
         name: similarArtist.name,
         match: parseFloat(similarArtist.match) || 0,
         url: similarArtist.url,
+        image:
+          similarArtist.image?.find((i) => i.size === 'large')?.['#text'] ||
+          similarArtist.image?.find((i) => i.size === 'medium')?.['#text'] ||
+          null,
       }));
 
       res.json({ artists });

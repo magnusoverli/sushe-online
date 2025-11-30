@@ -331,12 +331,17 @@ function renderSimilarArtistsList(artists) {
     .map((artist) => {
       const matchPercent = Math.round(artist.match * 100);
       const rymUrl = getRymArtistUrl(artist.name);
+      const hasImage = artist.image && artist.image.trim() !== '';
 
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
-        <!-- Artist Icon -->
-        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-700 rounded-full flex-shrink-0 flex items-center justify-center">
-          <i class="fas fa-user text-gray-500"></i>
+        <!-- Artist Image -->
+        <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gray-700 rounded-full flex-shrink-0 overflow-hidden">
+          ${
+            hasImage
+              ? `<img src="${artist.image}" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center\\'><i class=\\'fas fa-user text-gray-500\\'></i></div>'">`
+              : '<div class="w-full h-full flex items-center justify-center"><i class="fas fa-user text-gray-500"></i></div>'
+          }
         </div>
         
         <!-- Info -->
