@@ -173,3 +173,6 @@ docker-compose.dev.yml
 browser-extension/test-install/
 *.dump
 opencodetmp/*
+
+# Local plans and notes (not synced to repo)
+/plans/
