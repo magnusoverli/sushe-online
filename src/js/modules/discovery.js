@@ -9,9 +9,11 @@
  */
 
 import { showToast } from './utils.js';
+import { searchArtistImageRacing } from '../musicbrainz.js';
 
 // Module state
 let discoveryModal = null;
+let similarArtistsAbortController = null;
 let _currentModalType = null; // Prefixed with _ as it's set but used for future features
 let userLists = [];
 
@@ -151,6 +153,12 @@ export function showDiscoveryModal(type, data = {}) {
  * Hide the discovery modal
  */
 export function hideDiscoveryModal() {
+  // Abort any ongoing artist image searches
+  if (similarArtistsAbortController) {
+    similarArtistsAbortController.abort();
+    similarArtistsAbortController = null;
+  }
+
   if (discoveryModal) {
     discoveryModal.classList.add('hidden');
     document.body.style.overflow = '';
@@ -218,6 +226,12 @@ function renderErrorState(message, retryAction) {
 async function fetchSimilarArtists(artistName) {
   const content = discoveryModal.querySelector('#discoveryModalContent');
 
+  // Abort any previous artist image searches
+  if (similarArtistsAbortController) {
+    similarArtistsAbortController.abort();
+  }
+  similarArtistsAbortController = new AbortController();
+
   try {
     const response = await fetch(
       `/api/lastfm/similar-artists?artist=${encodeURIComponent(artistName)}&limit=20`,
@@ -238,6 +252,9 @@ async function fetchSimilarArtists(artistName) {
     }
 
     content.innerHTML = renderSimilarArtistsList(data.artists);
+
+    // Lazy-load artist images using the racing provider system
+    loadSimilarArtistImages(data.artists, similarArtistsAbortController.signal);
   } catch (err) {
     console.error('Error fetching similar artists:', err);
     content.innerHTML = renderErrorState(
@@ -323,6 +340,44 @@ function getRymArtistUrl(artistName) {
 }
 
 /**
+ * Load artist images for similar artists using the racing provider system
+ * @param {Array} artists - Array of artist objects
+ * @param {AbortSignal} signal - Abort signal to cancel on modal close
+ */
+async function loadSimilarArtistImages(artists, signal) {
+  for (const artist of artists) {
+    if (signal?.aborted) return;
+
+    const container = discoveryModal?.querySelector(
+      `.artist-image-container[data-artist="${CSS.escape(artist.name)}"]`
+    );
+    if (!container) continue;
+
+    // Search for artist image using racing providers (Deezer, iTunes, Wikidata)
+    searchArtistImageRacing(artist.name, null, signal)
+      .then((imageUrl) => {
+        if (signal?.aborted) return;
+        if (imageUrl && container) {
+          container.classList.remove('animate-pulse');
+          container.innerHTML = `
+            <img src="${imageUrl}" alt="" class="w-full h-full object-cover" loading="lazy"
+                 onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center\\'><i class=\\'fas fa-user text-gray-500\\'></i></div>'">
+          `;
+        } else if (container) {
+          // No image found - remove pulse and show icon
+          container.classList.remove('animate-pulse');
+        }
+      })
+      .catch(() => {
+        // Error - remove pulse animation
+        if (container) {
+          container.classList.remove('animate-pulse');
+        }
+      });
+  }
+}
+
+/**
  * Render similar artists list
  * @param {Array} artists - Array of artist objects
  */
@@ -331,17 +386,13 @@ function renderSimilarArtistsList(artists) {
     .map((artist) => {
       const matchPercent = Math.round(artist.match * 100);
       const rymUrl = getRymArtistUrl(artist.name);
-      const hasImage = artist.image && artist.image.trim() !== '';
 
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
-        <!-- Artist Image -->
-        <div class="w-12 h-12 sm:w-14 sm:h-14 bg-gray-700 rounded-full flex-shrink-0 overflow-hidden">
-          ${
-            hasImage
-              ? `<img src="${artist.image}" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center\\'><i class=\\'fas fa-user text-gray-500\\'></i></div>'">`
-              : '<div class="w-full h-full flex items-center justify-center"><i class="fas fa-user text-gray-500"></i></div>'
-          }
+        <!-- Artist Image (lazy-loaded) -->
+        <div class="artist-image-container w-12 h-12 sm:w-14 sm:h-14 bg-gray-700 rounded-full flex-shrink-0 overflow-hidden animate-pulse flex items-center justify-center"
+             data-artist="${escapeHtml(artist.name)}">
+          <i class="fas fa-user text-gray-500"></i>
         </div>
         
         <!-- Info -->

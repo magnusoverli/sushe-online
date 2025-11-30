@@ -2238,3 +2238,6 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeAddAlbumFeature();
   }
 });
+
+// Export for use in other modules
+export { searchArtistImageRacing };
