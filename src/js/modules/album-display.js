@@ -1,0 +1,1310 @@
+/**
+ * Album Display Module
+ *
+ * Handles rendering and display of albums in both desktop and mobile views.
+ * Uses dependency injection for testability and decoupling from global state.
+ *
+ * @module album-display
+ */
+
+// Feature flag for incremental updates (can be disabled if issues arise)
+const ENABLE_INCREMENTAL_UPDATES = true;
+
+// Module-level state
+let lastRenderedAlbums = null;
+let positionElementCache = new WeakMap();
+
+/**
+ * Factory function to create the album display module with injected dependencies
+ *
+ * @param {Object} deps - Dependencies
+ * @param {Function} deps.getListData - Get album array for a list
+ * @param {Function} deps.getListMetadata - Get metadata for a list
+ * @param {Function} deps.getCurrentList - Get current list name
+ * @param {Function} deps.saveList - Save list to server
+ * @param {Function} deps.showToast - Show toast notification
+ * @param {Function} deps.apiCall - Make API call
+ * @param {Function} deps.formatReleaseDate - Format release date for display
+ * @param {Function} deps.isYearMismatch - Check if release year mismatches list year
+ * @param {Function} deps.extractYearFromDate - Extract year from date string
+ * @param {Function} deps.fetchTracksForAlbum - Fetch tracks for an album
+ * @param {Function} deps.makeCountryEditable - Make country cell editable
+ * @param {Function} deps.makeGenreEditable - Make genre cell editable
+ * @param {Function} deps.makeCommentEditable - Make comment cell editable
+ * @param {Function} deps.attachLinkPreview - Attach link preview to element
+ * @param {Function} deps.showTrackSelectionMenu - Show track selection menu
+ * @param {Function} deps.showMobileEditForm - Show mobile edit form
+ * @param {Function} deps.showMobileAlbumMenu - Show mobile album menu
+ * @param {Function} deps.playTrackSafe - Play track safely by album ID
+ * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
+ * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
+ * @returns {Object} Album display module API
+ */
+export function createAlbumDisplay(deps = {}) {
+  const {
+    getListData,
+    getListMetadata,
+    getCurrentList,
+    saveList,
+    showToast,
+    apiCall,
+    formatReleaseDate,
+    isYearMismatch,
+    extractYearFromDate,
+    fetchTracksForAlbum,
+    makeCountryEditable,
+    makeGenreEditable,
+    makeCommentEditable,
+    attachLinkPreview,
+    showTrackSelectionMenu,
+    showMobileEditForm,
+    showMobileAlbumMenu,
+    playTrackSafe,
+    reapplyNowPlayingBorder,
+    initializeUnifiedSorting,
+  } = deps;
+
+  /**
+   * Process album data into display-ready format
+   * @param {Object} album - Raw album data
+   * @param {number} index - Album index in list
+   * @returns {Object} Processed album data for rendering
+   */
+  function processAlbumData(album, index) {
+    const currentList = getCurrentList();
+    const position = index + 1;
+    const albumId = album.album_id || '';
+    const albumName = album.album || 'Unknown Album';
+    const artist = album.artist || 'Unknown Artist';
+    const rawReleaseDate = album.release_date || '';
+    const releaseDate = formatReleaseDate(rawReleaseDate);
+
+    // Check for year mismatch with current list
+    const listMeta = getListMetadata(currentList);
+    const listYear = listMeta?.year || null;
+    const yearMismatch = isYearMismatch(rawReleaseDate, listYear);
+    const releaseYear = extractYearFromDate(rawReleaseDate);
+    const yearMismatchTooltip = yearMismatch
+      ? `Release year (${releaseYear}) doesn't match list year (${listYear})`
+      : '';
+
+    const country = album.country || '';
+    const countryDisplay = country || 'Country';
+    const countryClass = country ? 'text-gray-300' : 'text-gray-800 italic';
+
+    const genre1 = album.genre_1 || album.genre || '';
+    const genre1Display = genre1 || 'Genre 1';
+    const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-800 italic';
+
+    let genre2 = album.genre_2 || '';
+    if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
+    const genre2Display = genre2 || 'Genre 2';
+    const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-800 italic';
+
+    let comment = album.comments || album.comment || '';
+    if (comment === 'Comment') comment = '';
+
+    // Support both URL-based images (new) and base64 (fallback/legacy)
+    const coverImageUrl = album.cover_image_url || '';
+    const coverImage = album.cover_image || '';
+    const imageFormat = album.cover_image_format || 'PNG';
+
+    // Process track pick
+    const trackPick = album.track_pick || '';
+    let trackPickDisplay = '';
+    let trackPickClass = 'text-gray-800 italic';
+
+    if (trackPick && album.tracks && Array.isArray(album.tracks)) {
+      const trackMatch = album.tracks.find((t) => t === trackPick);
+      if (trackMatch) {
+        const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
+        if (match) {
+          const trackNum = match[1];
+          const trackName = match[2] || '';
+          trackPickDisplay = trackName
+            ? `${trackNum}. ${trackName}`
+            : `Track ${trackNum}`;
+          trackPickClass = 'text-gray-300';
+        } else {
+          trackPickDisplay = trackMatch;
+          trackPickClass = 'text-gray-300';
+        }
+      } else if (trackPick.match(/^\d+$/)) {
+        trackPickDisplay = `Track ${trackPick}`;
+        trackPickClass = 'text-gray-300';
+      } else {
+        trackPickDisplay = trackPick;
+        trackPickClass = 'text-gray-300';
+      }
+    }
+
+    if (!trackPickDisplay) {
+      trackPickDisplay = 'Select Track';
+    }
+
+    return {
+      position,
+      albumId,
+      albumName,
+      artist,
+      releaseDate,
+      yearMismatch,
+      yearMismatchTooltip,
+      country,
+      countryDisplay,
+      countryClass,
+      genre1,
+      genre1Display,
+      genre1Class,
+      genre2,
+      genre2Display,
+      genre2Class,
+      comment,
+      coverImageUrl,
+      coverImage,
+      imageFormat,
+      trackPick,
+      trackPickDisplay,
+      trackPickClass,
+    };
+  }
+
+  /**
+   * Helper function to check if text is truncated
+   * @param {HTMLElement} element - Element to check
+   * @returns {boolean} True if text is truncated
+   */
+  function isTextTruncated(element) {
+    return element.scrollHeight > element.clientHeight;
+  }
+
+  /**
+   * Hide all context menus
+   */
+  function hideAllContextMenus() {
+    const currentList = getCurrentList();
+
+    const contextMenu = document.getElementById('contextMenu');
+    if (contextMenu) {
+      contextMenu.classList.add('hidden');
+    }
+
+    const albumContextMenu = document.getElementById('albumContextMenu');
+    if (albumContextMenu) {
+      albumContextMenu.classList.add('hidden');
+    }
+
+    const albumMoveSubmenu = document.getElementById('albumMoveSubmenu');
+    if (albumMoveSubmenu) {
+      albumMoveSubmenu.classList.add('hidden');
+    }
+
+    const playAlbumSubmenu = document.getElementById('playAlbumSubmenu');
+    if (playAlbumSubmenu) {
+      playAlbumSubmenu.classList.add('hidden');
+    }
+
+    // Remove highlights from submenu parent options
+    const moveOption = document.getElementById('moveAlbumOption');
+    const playOption = document.getElementById('playAlbumOption');
+    moveOption?.classList.remove('bg-gray-700', 'text-white');
+    playOption?.classList.remove('bg-gray-700', 'text-white');
+
+    // Restore FAB visibility if a list is selected
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab && currentList) {
+      fab.style.display = 'flex';
+    }
+  }
+
+  /**
+   * Create desktop album row
+   * @param {Object} data - Processed album data
+   * @param {number} index - Album index
+   * @returns {HTMLElement} Row element
+   */
+  function createDesktopAlbumRow(data, index) {
+    const row = document.createElement('div');
+    row.className = 'album-row album-grid gap-4 py-2';
+    row.dataset.index = index;
+
+    row.innerHTML = `
+      <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
+      <div class="flex items-center">
+        <div class="album-cover-container">
+          ${
+            data.albumId
+              ? `
+            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+                alt="${data.albumName}" 
+                class="album-cover rounded shadow-lg"
+                data-album-id="${data.albumId}"
+                decoding="async"
+                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+            >
+          `
+              : data.coverImage
+                ? `
+            <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
+                alt="${data.albumName}" 
+                class="album-cover rounded shadow-lg"
+                decoding="async"
+                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+            >
+          `
+                : `
+            <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+            </div>
+          `
+          }
+        </div>
+      </div>
+      <div class="flex flex-col justify-center">
+        <div class="font-semibold text-gray-100 truncate">${data.albumName}</div>
+        <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
+      </div>
+      <div class="flex items-center">
+        <span class="text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
+      </div>
+      <div class="flex items-center country-cell">
+        <span class="text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
+      </div>
+      <div class="flex items-center genre-1-cell">
+        <span class="text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
+      </div>
+      <div class="flex items-center genre-2-cell">
+        <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
+      </div>
+      <div class="flex items-center comment-cell relative">
+        <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
+      </div>
+      <div class="flex items-center track-cell">
+        <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>
+      </div>
+    `;
+
+    // Add shared event handlers
+    attachDesktopEventHandlers(row, index);
+    return row;
+  }
+
+  /**
+   * Attach event handlers to desktop row
+   * @param {HTMLElement} row - Row element
+   * @param {number} index - Album index
+   */
+  function attachDesktopEventHandlers(row, index) {
+    const currentList = getCurrentList();
+
+    // Add click handler to track cell for quick selection
+    const trackCell = row.querySelector('.track-cell');
+    if (trackCell) {
+      trackCell.onclick = async () => {
+        const currentIndex = parseInt(row.dataset.index);
+        const albumsForTrack = getListData(currentList);
+        const album = albumsForTrack && albumsForTrack[currentIndex];
+        if (!album) return;
+        if (!album.tracks || album.tracks.length === 0) {
+          showToast('Fetching tracks...', 'info');
+          try {
+            await fetchTracksForAlbum(album);
+            await saveList(currentList, albumsForTrack);
+          } catch (_err) {
+            showToast('Error fetching tracks', 'error');
+            return;
+          }
+        }
+
+        const rect = trackCell.getBoundingClientRect();
+        showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
+      };
+    }
+
+    // Add click handler to country cell
+    const countryCell = row.querySelector('.country-cell');
+    countryCell.onclick = () => {
+      const currentIndex = parseInt(row.dataset.index);
+      makeCountryEditable(countryCell, currentIndex);
+    };
+
+    // Add click handlers to genre cells
+    const genre1Cell = row.querySelector('.genre-1-cell');
+    genre1Cell.onclick = () => {
+      const currentIndex = parseInt(row.dataset.index);
+      makeGenreEditable(genre1Cell, currentIndex, 'genre_1');
+    };
+
+    const genre2Cell = row.querySelector('.genre-2-cell');
+    genre2Cell.onclick = () => {
+      const currentIndex = parseInt(row.dataset.index);
+      makeGenreEditable(genre2Cell, currentIndex, 'genre_2');
+    };
+
+    // Add click handler to comment cell
+    const commentCell = row.querySelector('.comment-cell');
+    commentCell.onclick = () => {
+      const currentIndex = parseInt(row.dataset.index);
+      makeCommentEditable(commentCell, currentIndex);
+    };
+
+    // Attach link preview
+    const albumsForPreview = getListData(currentList);
+    const album = albumsForPreview && albumsForPreview[index];
+    const comment = album ? album.comments || album.comment || '' : '';
+    attachLinkPreview(commentCell, comment);
+
+    // Add tooltip only if comment is truncated
+    const commentTextEl = commentCell.querySelector('.comment-text');
+    if (commentTextEl && comment) {
+      setTimeout(() => {
+        if (isTextTruncated(commentTextEl)) {
+          commentTextEl.setAttribute('data-comment', comment);
+        }
+      }, 0);
+    }
+
+    // Double-click handler for opening edit modal on the entire row
+    row.addEventListener('dblclick', (e) => {
+      const isInteractiveCell =
+        e.target.closest('.country-cell') ||
+        e.target.closest('.genre-1-cell') ||
+        e.target.closest('.genre-2-cell') ||
+        e.target.closest('.comment-cell') ||
+        e.target.closest('.track-cell');
+
+      if (isInteractiveCell) {
+        return;
+      }
+
+      e.preventDefault();
+      e.stopPropagation();
+
+      const currentIndex = parseInt(row.dataset.index);
+      const albumsForDblClick = getListData(getCurrentList());
+      if (albumsForDblClick && albumsForDblClick[currentIndex]) {
+        showMobileEditForm(currentIndex);
+      } else {
+        showToast('Album not found', 'error');
+      }
+    });
+
+    // Right-click handler for album rows
+    row.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      hideAllContextMenus();
+
+      const currentIndex = parseInt(row.dataset.index);
+      const albumsForContext = getListData(getCurrentList());
+      const album = albumsForContext && albumsForContext[currentIndex];
+      if (!album) return;
+      const albumId =
+        `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+
+      // Set context album state via window (will be refactored later)
+      window.currentContextAlbum = currentIndex;
+      window.currentContextAlbumId = albumId;
+
+      const contextMenu = document.getElementById('albumContextMenu');
+      if (!contextMenu) return;
+
+      // Position the menu
+      positionContextMenu(contextMenu, e.clientX, e.clientY);
+    });
+  }
+
+  /**
+   * Position a context menu, adjusting if it would overflow viewport
+   * @param {HTMLElement} menu - Menu element
+   * @param {number} x - X position
+   * @param {number} y - Y position
+   */
+  function positionContextMenu(menu, x, y) {
+    // Hide FAB when context menu is shown
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = 'none';
+    }
+
+    menu.style.left = `${x}px`;
+    menu.style.top = `${y}px`;
+    menu.classList.remove('hidden');
+
+    requestAnimationFrame(() => {
+      const rect = menu.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
+      let adjustedX = x;
+      let adjustedY = y;
+
+      if (rect.right > viewportWidth) {
+        adjustedX = x - rect.width;
+      }
+      if (rect.bottom > viewportHeight) {
+        adjustedY = y - rect.height;
+      }
+
+      if (adjustedX !== x || adjustedY !== y) {
+        menu.style.left = `${adjustedX}px`;
+        menu.style.top = `${adjustedY}px`;
+      }
+    });
+  }
+
+  /**
+   * Create mobile album card
+   * @param {Object} data - Processed album data
+   * @param {number} index - Album index
+   * @returns {HTMLElement} Card element
+   */
+  function createMobileAlbumCard(data, index) {
+    const cardWrapper = document.createElement('div');
+    cardWrapper.className = 'album-card-wrapper h-[110px]';
+
+    const card = document.createElement('div');
+    card.className =
+      'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[110px]';
+    card.dataset.index = index;
+
+    card.innerHTML = `
+      <!-- Position badge (upper right, above action column) -->
+      <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
+           style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${data.position <= 3 ? '8px' : '5px'} ${data.position === 1 ? 'rgba(255,215,0,1.0)' : data.position === 2 ? 'rgba(192,192,192,1.0)' : data.position === 3 ? 'rgba(205,127,50,1.0)' : 'rgba(255,255,255,0.25)'};"
+           data-position-element="true">
+        <span style="margin-top: 1px;">${data.position}</span>
+      </div>
+      <div class="flex items-stretch h-full bg-gray-900">
+        <!-- Left section: Album cover and Release date -->
+        <div class="flex-shrink-0 flex items-stretch h-full">
+          <!-- Album cover with release date below -->
+          <div class="flex flex-col items-center pl-[4px] pt-2 self-stretch">
+            <div class="flex-shrink-0">
+              ${
+                data.albumId
+                  ? `
+                <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
+                  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                      alt="${data.albumName}"
+                      class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
+                      data-album-id="${data.albumId}"
+                      decoding="async">
+                </div>
+              `
+                  : data.coverImage
+                    ? `
+                <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
+                  <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
+                      alt="${data.albumName}"
+                      class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
+                      decoding="async">
+                </div>
+              `
+                    : `
+                <div class="mobile-album-cover w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center relative">
+                  <i class="fas fa-compact-disc text-xl text-gray-600"></i>
+                </div>
+              `
+              }
+            </div>
+            <!-- Release date centered in remaining space below image -->
+            <div class="flex-1 flex items-center">
+              <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
+                ${data.releaseDate}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Main content -->
+        <div class="flex-1 min-w-0 pt-[3px] pb-0.5 pl-[7px] flex flex-col h-[102px]">
+          <!-- Line 1: Album name (always present) -->
+          <div class="h-5 flex items-center -ml-[2.5px]">
+            <h3 class="font-semibold text-gray-200 text-lg leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
+          </div>
+          
+          <!-- Line 2: Artist (always present) -->
+          <div class="h-4 flex items-center">
+            <p class="text-[13px] text-gray-500 truncate">
+              <i class="fas fa-user fa-xs mr-[7px]"></i>
+              <span data-field="artist-mobile-text">${data.artist}</span>
+            </p>
+          </div>
+          
+          <!-- Line 3: Country (may be empty) -->
+          <div class="h-4 flex items-center mt-[3px]">
+            <span class="text-[13px] text-gray-500">
+              <i class="fas fa-globe fa-xs mr-[7px]"></i>
+              <span data-field="country-mobile-text">${data.country || ''}</span>
+            </span>
+          </div>
+          
+          <!-- Line 4: Genres (may be empty) -->
+          <div class="h-4 flex items-center mt-[3px]">
+            <span class="text-[13px] text-gray-500 truncate">
+              <i class="fas fa-music fa-xs mr-[7px]"></i>
+              <span data-field="genre-mobile-text">${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || ''}</span>
+            </span>
+          </div>
+          
+          <!-- Line 5: Track selection (clickable to play) -->
+          <div class="h-4 flex items-center mt-[3px] ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'cursor-pointer active:opacity-70' : ''}" 
+               data-track-play-btn="${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'true' : ''}">
+            <span class="text-[13px] text-green-400 truncate">
+              <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
+              <span data-field="track-mobile-text">${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Actions on the right -->
+        <div class="flex items-center justify-center flex-shrink-0 w-[25px] border-l border-gray-800/50">
+          <button data-album-menu-btn
+                  class="p-2 text-gray-400 active:text-gray-200 no-drag">
+            <i class="fas fa-ellipsis-v"></i>
+          </button>
+        </div>
+      </div>
+    `;
+
+    cardWrapper.appendChild(card);
+
+    // Add shared event handlers
+    attachMobileEventHandlers(card, index);
+    return cardWrapper;
+  }
+
+  /**
+   * Attach event handlers to mobile card
+   * @param {HTMLElement} card - Card element
+   * @param {number} index - Album index
+   */
+  function attachMobileEventHandlers(card, index) {
+    const currentList = getCurrentList();
+
+    // Attach link preview to content area
+    const albumsForMobile = getListData(currentList);
+    const album = albumsForMobile && albumsForMobile[index];
+    const comment = album ? album.comments || album.comment || '' : '';
+    const contentDiv = card.querySelector('.flex-1.min-w-0');
+    if (contentDiv) attachLinkPreview(contentDiv, comment);
+
+    // Attach three-dot menu button handler
+    const menuBtn = card.querySelector('[data-album-menu-btn]');
+    if (menuBtn) {
+      menuBtn.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      menuBtn.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showMobileAlbumMenu(menuBtn);
+      });
+    }
+
+    // Attach track play button handler (only if track is selected)
+    const trackPlayBtn = card.querySelector('[data-track-play-btn="true"]');
+    if (trackPlayBtn) {
+      trackPlayBtn.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      trackPlayBtn.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      trackPlayBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const albumsForTrackPlay = getListData(getCurrentList());
+        const albumForTrackPlay =
+          albumsForTrackPlay && albumsForTrackPlay[index];
+        if (albumForTrackPlay) {
+          const albumId =
+            `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
+          playTrackSafe(albumId);
+        }
+      });
+    }
+  }
+
+  /**
+   * Create album item (router for desktop/mobile)
+   * @param {Object} album - Album data
+   * @param {number} index - Album index
+   * @param {boolean} isMobile - Whether to create mobile view
+   * @returns {HTMLElement} Album element
+   */
+  function createAlbumItem(album, index, isMobile = false) {
+    const data = processAlbumData(album, index);
+
+    if (isMobile) {
+      return createMobileAlbumCard(data, index);
+    } else {
+      return createDesktopAlbumRow(data, index);
+    }
+  }
+
+  /**
+   * Detect what type of update is needed
+   * @param {Array} oldAlbums - Previous album array
+   * @param {Array} newAlbums - New album array
+   * @returns {string} Update type
+   */
+  function detectUpdateType(oldAlbums, newAlbums) {
+    if (!ENABLE_INCREMENTAL_UPDATES || !oldAlbums) {
+      return 'FULL_REBUILD';
+    }
+
+    if (oldAlbums.length !== newAlbums.length) {
+      return 'FULL_REBUILD';
+    }
+
+    let positionChanges = 0;
+    let fieldChanges = 0;
+    let complexChanges = 0;
+
+    for (let i = 0; i < newAlbums.length; i++) {
+      const oldAlbum = oldAlbums[i];
+      const newAlbum = newAlbums[i];
+
+      const oldId =
+        oldAlbum._id ||
+        `${oldAlbum.artist}::${oldAlbum.album}::${oldAlbum.release_date}`;
+      const newId =
+        newAlbum._id ||
+        `${newAlbum.artist}::${newAlbum.album}::${newAlbum.release_date}`;
+
+      if (oldId !== newId) {
+        positionChanges++;
+      } else {
+        if (
+          oldAlbum.artist !== newAlbum.artist ||
+          oldAlbum.album !== newAlbum.album ||
+          oldAlbum.release_date !== newAlbum.release_date ||
+          oldAlbum.country !== newAlbum.country ||
+          oldAlbum.genre_1 !== newAlbum.genre_1 ||
+          oldAlbum.genre_2 !== newAlbum.genre_2 ||
+          oldAlbum.comments !== newAlbum.comments ||
+          oldAlbum.track_pick !== newAlbum.track_pick
+        ) {
+          fieldChanges++;
+        }
+
+        if (oldAlbum.cover_image !== newAlbum.cover_image) {
+          complexChanges++;
+        }
+      }
+    }
+
+    if (complexChanges > 0) {
+      return 'FULL_REBUILD';
+    }
+    if (positionChanges === 0 && fieldChanges > 0 && fieldChanges <= 10) {
+      return 'FIELD_UPDATE';
+    }
+    if (fieldChanges === 0 && positionChanges > 0) {
+      return 'POSITION_UPDATE';
+    }
+    if (positionChanges + fieldChanges <= 15) {
+      return 'HYBRID_UPDATE';
+    }
+
+    return 'FULL_REBUILD';
+  }
+
+  /**
+   * Update only changed fields in existing DOM elements
+   * @param {Array} albums - Album array
+   * @param {boolean} isMobile - Whether mobile view
+   * @returns {boolean} Success
+   */
+  function updateAlbumFields(albums, isMobile) {
+    const container = document.getElementById('albumContainer');
+    if (!container) return false;
+
+    const rowsContainer = isMobile
+      ? container.querySelector('.mobile-album-list')
+      : container.querySelector('.album-rows-container');
+
+    if (!rowsContainer) return false;
+
+    const rows = Array.from(rowsContainer.children);
+
+    if (rows.length !== albums.length) {
+      console.warn('DOM/data length mismatch, falling back');
+      return false;
+    }
+
+    try {
+      albums.forEach((album, index) => {
+        const row = rows[index];
+        if (!row) return;
+
+        row.dataset.index = index;
+        const data = processAlbumData(album, index);
+
+        // Update position number
+        const positionEl =
+          row.querySelector('[data-position-element="true"]') ||
+          row.querySelector('.position-display');
+        if (positionEl && positionEl.textContent !== data.position.toString()) {
+          positionEl.textContent = data.position;
+        }
+
+        // Update artist
+        if (!isMobile) {
+          const artistSpan = row.querySelectorAll(
+            '.flex.items-center > span'
+          )[0];
+          if (artistSpan) {
+            artistSpan.textContent = data.artist;
+            artistSpan.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
+          }
+        } else {
+          const artistSpan = row.querySelector(
+            '[data-field="artist-mobile-text"]'
+          );
+          if (artistSpan) {
+            artistSpan.textContent = data.artist;
+          }
+        }
+
+        // Update album name and release date
+        if (!isMobile) {
+          const albumNameDiv = row.querySelector(
+            '.font-semibold.text-gray-100'
+          );
+          if (albumNameDiv) albumNameDiv.textContent = data.albumName;
+
+          const releaseDateDiv = row.querySelector('.release-date-display');
+          if (releaseDateDiv) {
+            releaseDateDiv.textContent = data.releaseDate;
+            releaseDateDiv.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}`;
+            if (data.yearMismatch) {
+              releaseDateDiv.title = data.yearMismatchTooltip;
+            } else {
+              releaseDateDiv.removeAttribute('title');
+            }
+          }
+        } else {
+          const albumNameEl = row.querySelector('.font-semibold.text-white');
+          if (albumNameEl) albumNameEl.textContent = data.albumName;
+
+          const releaseDateEl = row.querySelector('.release-date-display');
+          if (releaseDateEl) {
+            releaseDateEl.textContent = data.releaseDate;
+            releaseDateEl.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
+            if (data.yearMismatch) {
+              releaseDateEl.title = data.yearMismatchTooltip;
+            } else {
+              releaseDateEl.removeAttribute('title');
+            }
+          }
+        }
+
+        if (!isMobile) {
+          // Update country
+          const countryCell =
+            row.querySelector('.country-cell') ||
+            row.querySelector('[data-field="country"]');
+          if (countryCell) {
+            const countrySpan = countryCell.querySelector('span');
+            if (countrySpan) {
+              countrySpan.textContent = data.countryDisplay;
+              countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
+            }
+          }
+
+          // Update genre 1
+          const genre1Cell =
+            row.querySelector('.genre-1-cell') ||
+            row.querySelector('[data-field="genre1"]');
+          if (genre1Cell) {
+            const genre1Span = genre1Cell.querySelector('span');
+            if (genre1Span) {
+              genre1Span.textContent = data.genre1Display;
+              genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
+            }
+          }
+
+          // Update genre 2
+          const genre2Cell =
+            row.querySelector('.genre-2-cell') ||
+            row.querySelector('[data-field="genre2"]');
+          if (genre2Cell) {
+            const genre2Span = genre2Cell.querySelector('span');
+            if (genre2Span) {
+              genre2Span.textContent = data.genre2Display;
+              genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
+            }
+          }
+
+          // Update comment
+          const commentCell =
+            row.querySelector('.comment-cell') ||
+            row.querySelector('[data-field="comment"]');
+          if (commentCell) {
+            const commentSpan = commentCell.querySelector('span');
+            if (commentSpan) {
+              commentSpan.textContent = data.comment || 'Comment';
+              commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
+
+              if (data.comment) {
+                commentSpan.setAttribute('data-comment', data.comment);
+              } else {
+                commentSpan.removeAttribute('data-comment');
+              }
+            }
+          }
+
+          // Update track pick
+          const trackCell = row.querySelector('.track-cell');
+          if (trackCell) {
+            const trackSpan = trackCell.querySelector('span');
+            if (trackSpan) {
+              trackSpan.textContent = data.trackPickDisplay;
+              trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
+              trackSpan.title = data.trackPick || 'Click to select track';
+            }
+          }
+        } else {
+          const countryMobile = row.querySelector(
+            '[data-field="country-mobile-text"]'
+          );
+          if (countryMobile) {
+            countryMobile.textContent = data.country || '';
+          }
+
+          const genreMobile = row.querySelector(
+            '[data-field="genre-mobile-text"]'
+          );
+          if (genreMobile) {
+            const genreDisplay =
+              data.genre1 && data.genre2
+                ? `${data.genre1} / ${data.genre2}`
+                : data.genre1 || data.genre2 || '';
+            genreMobile.textContent = genreDisplay;
+          }
+
+          const trackMobile = row.querySelector(
+            '[data-field="track-mobile-text"]'
+          );
+          if (trackMobile) {
+            const trackDisplay =
+              data.trackPick && data.trackPickDisplay !== 'Select Track'
+                ? data.trackPickDisplay
+                : '';
+            trackMobile.textContent = trackDisplay;
+
+            const trackPlayBtn = trackMobile.closest('[data-track-play-btn]');
+            if (trackPlayBtn) {
+              const hasTrack =
+                data.trackPick && data.trackPickDisplay !== 'Select Track';
+              trackPlayBtn.setAttribute(
+                'data-track-play-btn',
+                hasTrack ? 'true' : ''
+              );
+
+              if (hasTrack) {
+                trackPlayBtn.classList.add(
+                  'cursor-pointer',
+                  'active:opacity-70'
+                );
+                const newBtn = trackPlayBtn.cloneNode(true);
+                trackPlayBtn.parentNode.replaceChild(newBtn, trackPlayBtn);
+
+                newBtn.addEventListener(
+                  'touchstart',
+                  (e) => e.stopPropagation(),
+                  { passive: true }
+                );
+                newBtn.addEventListener(
+                  'touchend',
+                  (e) => e.stopPropagation(),
+                  {
+                    passive: true,
+                  }
+                );
+                newBtn.addEventListener('click', (e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  const albumsForPlay = getListData(getCurrentList());
+                  const albumForPlay = albumsForPlay && albumsForPlay[index];
+                  if (albumForPlay) {
+                    const albumId =
+                      `${albumForPlay.artist}::${albumForPlay.album}::${albumForPlay.release_date || ''}`.toLowerCase();
+                    playTrackSafe(albumId);
+                  }
+                });
+              } else {
+                trackPlayBtn.classList.remove(
+                  'cursor-pointer',
+                  'active:opacity-70'
+                );
+              }
+            }
+          }
+        }
+      });
+
+      return true;
+    } catch (err) {
+      console.error('Field update failed:', err);
+      return false;
+    }
+  }
+
+  /**
+   * Verify DOM integrity
+   * @param {Array} albums - Album array
+   * @param {boolean} isMobile - Whether mobile view
+   * @returns {boolean} Integrity check passed
+   */
+  function verifyDOMIntegrity(albums, isMobile) {
+    const container = document.getElementById('albumContainer');
+    if (!container) return false;
+
+    const rowsContainer = isMobile
+      ? container.querySelector('.mobile-album-list')
+      : container.querySelector('.album-rows-container');
+
+    if (!rowsContainer) return false;
+
+    const rows = rowsContainer.children;
+    return rows.length === albums.length;
+  }
+
+  /**
+   * Pre-populate position element cache for better performance
+   * @param {HTMLElement} container - Container element
+   * @param {boolean} isMobile - Whether mobile view
+   */
+  function prePopulatePositionCache(container, isMobile) {
+    let rows;
+
+    if (isMobile) {
+      rows = container.children;
+    } else {
+      const rowsContainer = container.querySelector('.album-rows-container');
+      rows = rowsContainer ? rowsContainer.children : container.children;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      let positionEl = row.querySelector('[data-position-element="true"]');
+
+      if (!positionEl) {
+        positionEl = row.querySelector('.position-display');
+      }
+
+      if (positionEl) {
+        positionElementCache.set(row, positionEl);
+      }
+    }
+  }
+
+  /**
+   * Update position numbers after reorder
+   * @param {HTMLElement} container - Container element
+   * @param {boolean} isMobile - Whether mobile view
+   */
+  function updatePositionNumbers(container, isMobile) {
+    let rows;
+
+    if (isMobile) {
+      rows = container.children;
+    } else {
+      const rowsContainer = container.querySelector('.album-rows-container');
+      rows = rowsContainer ? rowsContainer.children : container.children;
+    }
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const position = i + 1;
+
+      let positionEl = positionElementCache.get(row);
+      if (!positionEl) {
+        positionEl = row.querySelector('[data-position-element="true"]');
+
+        if (!positionEl) {
+          positionEl = row.querySelector('.position-display');
+        }
+
+        if (positionEl) {
+          positionElementCache.set(row, positionEl);
+        }
+      }
+
+      if (positionEl) {
+        const textEl = positionEl.querySelector('span') || positionEl;
+        textEl.textContent = position;
+
+        if (positionEl.classList.contains('position-badge')) {
+          positionEl.classList.remove(
+            'border-yellow-500',
+            'border-gray-400',
+            'border-amber-700',
+            'border-gray-500'
+          );
+          if (position === 1) {
+            positionEl.classList.add('border-yellow-500');
+          } else if (position === 2) {
+            positionEl.classList.add('border-gray-400');
+          } else if (position === 3) {
+            positionEl.classList.add('border-amber-700');
+          } else {
+            positionEl.classList.add('border-gray-500');
+          }
+
+          if (position === 1) {
+            positionEl.style.boxShadow = '0 0 8px rgba(255,215,0,1.0)';
+          } else if (position === 2) {
+            positionEl.style.boxShadow = '0 0 8px rgba(192,192,192,1.0)';
+          } else if (position === 3) {
+            positionEl.style.boxShadow = '0 0 8px rgba(205,127,50,1.0)';
+          } else {
+            positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.25)';
+          }
+        }
+      }
+      row.dataset.index = i;
+      const innerCard = row.querySelector('.album-card');
+      if (innerCard) {
+        innerCard.dataset.index = i;
+      }
+    }
+  }
+
+  /**
+   * Main display function - renders albums to the container
+   * @param {Array} albums - Album array to display
+   * @param {Object} options - Display options
+   * @param {boolean} options.forceFullRebuild - Force full rebuild
+   */
+  function displayAlbums(albums, options = {}) {
+    const { forceFullRebuild = false } = options;
+    const isMobile = window.innerWidth < 1024;
+    const container = document.getElementById('albumContainer');
+
+    if (!container) {
+      console.error('Album container not found!');
+      return;
+    }
+
+    // Try incremental update first
+    if (!forceFullRebuild) {
+      const updateType = detectUpdateType(lastRenderedAlbums, albums);
+
+      if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
+        const success = updateAlbumFields(albums, isMobile);
+
+        if (success && verifyDOMIntegrity(albums, isMobile)) {
+          requestAnimationFrame(() => {
+            lastRenderedAlbums = albums
+              ? JSON.parse(JSON.stringify(albums))
+              : null;
+          });
+
+          const albumContainer = isMobile
+            ? container.querySelector('.mobile-album-list')
+            : container.querySelector('.album-rows-container');
+          if (albumContainer) {
+            prePopulatePositionCache(albumContainer, isMobile);
+          }
+
+          reapplyNowPlayingBorder();
+          return;
+        }
+        console.warn(
+          `Incremental update (${updateType}) failed, falling back to full rebuild`
+        );
+      }
+    }
+
+    // Full rebuild path
+    positionElementCache = new WeakMap();
+
+    let albumContainer;
+
+    if (!albums || albums.length === 0) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'text-center text-gray-500 mt-20 px-4';
+      emptyDiv.innerHTML = `
+        <p class="text-xl mb-2">This list is empty</p>
+        <p class="text-sm">Click the + button to add albums${isMobile ? '' : ' or use the Add Album button'}</p>
+      `;
+      container.replaceChildren(emptyDiv);
+      return;
+    }
+
+    if (!isMobile) {
+      // Desktop: Table layout with header
+      albumContainer = document.createElement('div');
+      albumContainer.className = 'w-full relative';
+
+      const header = document.createElement('div');
+      header.className =
+        'album-header album-grid gap-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
+      header.style.alignItems = 'center';
+      header.innerHTML = `
+        <div class="text-center">#</div>
+        <div>Album</div>
+        <div></div>
+        <div>Artist</div>
+        <div>Country</div>
+        <div>Genre 1</div>
+        <div>Genre 2</div>
+        <div>Comment</div>
+        <div>Track</div>
+      `;
+      albumContainer.appendChild(header);
+
+      const rowsContainer = document.createElement('div');
+      rowsContainer.className = 'album-rows-container relative';
+
+      const fragment = document.createDocumentFragment();
+      albums.forEach((album, index) => {
+        const row = createAlbumItem(album, index, false);
+        fragment.appendChild(row);
+      });
+      rowsContainer.appendChild(fragment);
+
+      albumContainer.appendChild(rowsContainer);
+    } else {
+      // Mobile: Card layout
+      albumContainer = document.createElement('div');
+      albumContainer.className = 'mobile-album-list';
+
+      const fragment = document.createDocumentFragment();
+      albums.forEach((album, index) => {
+        const card = createAlbumItem(album, index, true);
+        fragment.appendChild(card);
+      });
+      albumContainer.appendChild(fragment);
+    }
+
+    container.replaceChildren(albumContainer);
+
+    prePopulatePositionCache(albumContainer, isMobile);
+    initializeUnifiedSorting(container, isMobile);
+
+    requestAnimationFrame(() => {
+      lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
+    });
+
+    reapplyNowPlayingBorder();
+  }
+
+  /**
+   * Batch fetch and apply album covers
+   * @param {Array} albums - Album array
+   */
+  async function fetchAndApplyCovers(albums) {
+    if (!albums || albums.length === 0) return;
+
+    const albumIds = albums.map((a) => a.album_id).filter((id) => id);
+
+    if (albumIds.length === 0) return;
+
+    try {
+      const response = await apiCall(
+        `/api/albums/covers?ids=${albumIds.join(',')}`
+      );
+      const { covers } = response;
+
+      if (!covers || Object.keys(covers).length === 0) return;
+
+      const imgElements = document.querySelectorAll('img[data-album-id]');
+      const imgMap = new Map();
+      imgElements.forEach((img) => {
+        const id = img.dataset.albumId;
+        if (!imgMap.has(id)) {
+          imgMap.set(id, []);
+        }
+        imgMap.get(id).push(img);
+      });
+
+      const decodePromises = [];
+      const updates = [];
+
+      for (const [albumId, dataUri] of Object.entries(covers)) {
+        const imgs = imgMap.get(albumId);
+        if (!imgs) continue;
+
+        for (const img of imgs) {
+          const tempImg = new Image();
+          tempImg.src = dataUri;
+
+          const decodePromise = tempImg
+            .decode()
+            .then(() => {
+              updates.push({ img, dataUri });
+            })
+            .catch(() => {
+              updates.push({ img, dataUri });
+            });
+
+          decodePromises.push(decodePromise);
+        }
+      }
+
+      await Promise.all(decodePromises);
+
+      requestAnimationFrame(() => {
+        for (const { img, dataUri } of updates) {
+          img.src = dataUri;
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to batch fetch covers:', err);
+    }
+  }
+
+  /**
+   * Clear the last rendered albums cache
+   * Used when switching lists
+   */
+  function clearLastRenderedCache() {
+    lastRenderedAlbums = null;
+  }
+
+  // Return public API
+  return {
+    displayAlbums,
+    fetchAndApplyCovers,
+    updatePositionNumbers,
+    clearLastRenderedCache,
+    // Expose for testing
+    processAlbumData,
+    createAlbumItem,
+    detectUpdateType,
+  };
+}

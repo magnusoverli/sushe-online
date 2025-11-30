@@ -2,10 +2,116 @@
 import genresText from '../data/genres.txt?raw';
 import countriesText from '../data/countries.txt?raw';
 import { getAlbumKey, isAlbumInList } from './modules/utils.js';
+import { createAlbumDisplay } from './modules/album-display.js';
+import { createContextMenus } from './modules/context-menus.js';
 
 // Lazy loading module cache
 let musicServicesModule = null;
 let importExportModule = null;
+
+// Album display module instance (initialized lazily when first needed)
+let albumDisplayModule = null;
+
+// Context menus module instance (initialized lazily when first needed)
+let contextMenusModule = null;
+
+/**
+ * Get or initialize the album display module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getAlbumDisplayModule() {
+  if (!albumDisplayModule) {
+    albumDisplayModule = createAlbumDisplay({
+      getListData,
+      getListMetadata,
+      getCurrentList: () => currentList,
+      saveList,
+      showToast,
+      apiCall,
+      formatReleaseDate,
+      isYearMismatch,
+      extractYearFromDate,
+      fetchTracksForAlbum,
+      makeCountryEditable,
+      makeGenreEditable,
+      makeCommentEditable,
+      attachLinkPreview,
+      showTrackSelectionMenu,
+      showMobileEditForm,
+      showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
+      playTrackSafe: (albumId) => window.playTrackSafe(albumId),
+      reapplyNowPlayingBorder,
+      initializeUnifiedSorting,
+    });
+  }
+  return albumDisplayModule;
+}
+
+// Wrapper functions that delegate to the module
+function displayAlbums(albums, options = {}) {
+  return getAlbumDisplayModule().displayAlbums(albums, options);
+}
+
+function fetchAndApplyCovers(albums) {
+  return getAlbumDisplayModule().fetchAndApplyCovers(albums);
+}
+
+function updatePositionNumbers(container, isMobile) {
+  return getAlbumDisplayModule().updatePositionNumbers(container, isMobile);
+}
+
+// Expose displayAlbums to window for templates and other modules
+window.displayAlbums = displayAlbums;
+
+/**
+ * Get or initialize the context menus module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getContextMenusModule() {
+  if (!contextMenusModule) {
+    contextMenusModule = createContextMenus({
+      getListData,
+      getListMetadata,
+      getCurrentList: () => currentList,
+      getLists: () => lists,
+      saveList,
+      selectList,
+      showToast,
+      showConfirmation,
+      apiCall,
+      findAlbumByIdentity,
+      downloadListAsJSON,
+      updatePlaylist,
+      openRenameModal,
+      updateListNav,
+      showMobileEditForm,
+      playAlbum,
+      playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
+      loadLists,
+      getContextState: () => ({
+        album: currentContextAlbum,
+        albumId: currentContextAlbumId,
+        list: currentContextList,
+      }),
+      setContextState: (state) => {
+        if ('album' in state) currentContextAlbum = state.album;
+        if ('albumId' in state) currentContextAlbumId = state.albumId;
+        if ('list' in state) currentContextList = state.list;
+      },
+      toggleOfficialStatus,
+    });
+  }
+  return contextMenusModule;
+}
+
+// Wrapper functions for context menus module
+function getListMenuConfig(listName) {
+  return getContextMenusModule().getListMenuConfig(listName);
+}
+
+function getDeviceIcon(type) {
+  return getContextMenusModule().getDeviceIcon(type);
+}
 
 // Global variables
 let lists = {};
@@ -2069,25 +2175,6 @@ function positionPlaySubmenu() {
   submenu.style.top = `${playRect.top}px`;
 }
 
-// Get appropriate icon for device type
-function getDeviceIcon(type) {
-  const icons = {
-    computer: 'fas fa-laptop',
-    smartphone: 'fas fa-mobile-alt',
-    speaker: 'fas fa-volume-up',
-    tv: 'fas fa-tv',
-    avr: 'fas fa-broadcast-tower',
-    stb: 'fas fa-satellite-dish',
-    audiodongle: 'fas fa-headphones',
-    gameconsole: 'fas fa-gamepad',
-    castvideo: 'fas fa-chromecast',
-    castaudio: 'fas fa-podcast',
-    automobile: 'fas fa-car',
-    tablet: 'fas fa-tablet-alt',
-  };
-  return icons[type?.toLowerCase()] || 'fas fa-music';
-}
-
 // Trigger the existing play album flow (open in app)
 function triggerPlayAlbum() {
   if (currentContextAlbum === null) return;
@@ -2811,37 +2898,6 @@ function createListButtonHTML(listName, isActive, isOfficial, isMobile) {
   }
 
   return buttonHTML;
-}
-
-// Get configuration for list context menu (shared between desktop and mobile)
-function getListMenuConfig(listName) {
-  const meta = getListMetadata(listName);
-  const hasYear = !!meta?.year;
-  const isOfficial = meta?.isOfficial || false;
-
-  // Determine music service text
-  const musicService = window.currentUser?.musicService;
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-
-  let musicServiceText = 'Send to Music Service';
-  if (musicService === 'spotify' && hasSpotify) {
-    musicServiceText = 'Send to Spotify';
-  } else if (musicService === 'tidal' && hasTidal) {
-    musicServiceText = 'Send to Tidal';
-  } else if (hasSpotify && !hasTidal) {
-    musicServiceText = 'Send to Spotify';
-  } else if (hasTidal && !hasSpotify) {
-    musicServiceText = 'Send to Tidal';
-  }
-
-  return {
-    hasYear,
-    isOfficial,
-    musicServiceText,
-    officialToggleText: isOfficial ? 'Remove Official' : 'Set as Official',
-    officialIconClass: isOfficial ? 'fa-star-half-alt' : 'fa-star',
-  };
 }
 
 // Update sidebar navigation with year tree view
@@ -3739,1152 +3795,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
   }, 0);
 }
 
-// Shared album data processing
-function processAlbumData(album, index) {
-  const position = index + 1;
-  const albumId = album.album_id || '';
-  const albumName = album.album || 'Unknown Album';
-  const artist = album.artist || 'Unknown Artist';
-  const rawReleaseDate = album.release_date || '';
-  const releaseDate = formatReleaseDate(rawReleaseDate);
-
-  // Check for year mismatch with current list
-  const listMeta = getListMetadata(currentList);
-  const listYear = listMeta?.year || null;
-  const yearMismatch = isYearMismatch(rawReleaseDate, listYear);
-  const releaseYear = extractYearFromDate(rawReleaseDate);
-  const yearMismatchTooltip = yearMismatch
-    ? `Release year (${releaseYear}) doesn't match list year (${listYear})`
-    : '';
-
-  const country = album.country || '';
-  const countryDisplay = country || 'Country';
-  const countryClass = country ? 'text-gray-300' : 'text-gray-800 italic';
-
-  const genre1 = album.genre_1 || album.genre || '';
-  const genre1Display = genre1 || 'Genre 1';
-  const genre1Class = genre1 ? 'text-gray-300' : 'text-gray-800 italic';
-
-  let genre2 = album.genre_2 || '';
-  if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
-  const genre2Display = genre2 || 'Genre 2';
-  const genre2Class = genre2 ? 'text-gray-300' : 'text-gray-800 italic';
-
-  let comment = album.comments || album.comment || '';
-  if (comment === 'Comment') comment = '';
-
-  // OPTIMIZED: Support both URL-based images (new) and base64 (fallback/legacy)
-  const coverImageUrl = album.cover_image_url || '';
-  const coverImage = album.cover_image || '';
-  const imageFormat = album.cover_image_format || 'PNG';
-
-  // Process track pick
-  const trackPick = album.track_pick || '';
-  let trackPickDisplay = '';
-  let trackPickClass = 'text-gray-800 italic';
-
-  if (trackPick && album.tracks && Array.isArray(album.tracks)) {
-    // Find the track that matches
-    const trackMatch = album.tracks.find((t) => t === trackPick);
-    if (trackMatch) {
-      // Extract track number and name
-      const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
-      if (match) {
-        const trackNum = match[1];
-        const trackName = match[2] || '';
-        trackPickDisplay = trackName
-          ? `${trackNum}. ${trackName}`
-          : `Track ${trackNum}`;
-        trackPickClass = 'text-gray-300';
-      } else {
-        trackPickDisplay = trackMatch;
-        trackPickClass = 'text-gray-300';
-      }
-    } else if (trackPick.match(/^\d+$/)) {
-      // Just a track number
-      trackPickDisplay = `Track ${trackPick}`;
-      trackPickClass = 'text-gray-300';
-    } else {
-      trackPickDisplay = trackPick;
-      trackPickClass = 'text-gray-300';
-    }
-  }
-
-  if (!trackPickDisplay) {
-    trackPickDisplay = 'Select Track';
-  }
-
-  return {
-    position,
-    albumId,
-    albumName,
-    artist,
-    releaseDate,
-    yearMismatch,
-    yearMismatchTooltip,
-    country,
-    countryDisplay,
-    countryClass,
-    genre1,
-    genre1Display,
-    genre1Class,
-    genre2,
-    genre2Display,
-    genre2Class,
-    comment,
-    coverImageUrl,
-    coverImage,
-    imageFormat,
-    trackPick,
-    trackPickDisplay,
-    trackPickClass,
-  };
-}
-
-// Create album item component (works for both desktop and mobile)
-function createAlbumItem(album, index, isMobile = false) {
-  const data = processAlbumData(album, index);
-
-  if (isMobile) {
-    return createMobileAlbumCard(data, index);
-  } else {
-    return createDesktopAlbumRow(data, index);
-  }
-}
-
-// Create desktop album row (preserves exact current design)
-function createDesktopAlbumRow(data, index) {
-  const row = document.createElement('div');
-  row.className = 'album-row album-grid gap-4 py-2';
-  row.dataset.index = index;
-
-  row.innerHTML = `
-    <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
-    <div class="flex items-center">
-      <div class="album-cover-container">
-        ${
-          data.albumId
-            ? `
-          <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
-              alt="${data.albumName}" 
-              class="album-cover rounded shadow-lg"
-              data-album-id="${data.albumId}"
-              decoding="async"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
-          >
-        `
-            : data.coverImage
-              ? `
-          <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
-              alt="${data.albumName}" 
-              class="album-cover rounded shadow-lg"
-              decoding="async"
-              onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
-          >
-        `
-              : `
-          <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-          </div>
-        `
-        }
-      </div>
-    </div>
-    <div class="flex flex-col justify-center">
-      <div class="font-semibold text-gray-100 truncate">${data.albumName}</div>
-      <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
-    </div>
-    <div class="flex items-center">
-      <span class="text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
-    </div>
-    <div class="flex items-center country-cell">
-      <span class="text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
-    </div>
-    <div class="flex items-center genre-1-cell">
-      <span class="text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
-    </div>
-    <div class="flex items-center genre-2-cell">
-      <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
-    </div>
-    <div class="flex items-center comment-cell relative">
-      <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
-    </div>
-    <div class="flex items-center track-cell">
-      <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>
-    </div>
-  `;
-
-  // Add shared event handlers
-  attachDesktopEventHandlers(row, index);
-  return row;
-}
-
-// Shared event handlers for desktop rows
-function attachDesktopEventHandlers(row, index) {
-  // Add click handler to track cell for quick selection
-  const trackCell = row.querySelector('.track-cell');
-  if (trackCell) {
-    trackCell.onclick = async () => {
-      const currentIndex = parseInt(row.dataset.index);
-      const albumsForTrack = getListData(currentList);
-      const album = albumsForTrack && albumsForTrack[currentIndex];
-      if (!album) return;
-      if (!album.tracks || album.tracks.length === 0) {
-        showToast('Fetching tracks...', 'info');
-        try {
-          await fetchTracksForAlbum(album);
-          await saveList(currentList, albumsForTrack);
-        } catch (_err) {
-          showToast('Error fetching tracks', 'error');
-          return;
-        }
-      }
-
-      // Show track selection menu at the cell position
-      const rect = trackCell.getBoundingClientRect();
-      showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
-    };
-  }
-
-  // Add click handler to country cell
-  const countryCell = row.querySelector('.country-cell');
-  countryCell.onclick = () => {
-    const currentIndex = parseInt(row.dataset.index);
-    makeCountryEditable(countryCell, currentIndex);
-  };
-
-  // Add click handlers to genre cells
-  const genre1Cell = row.querySelector('.genre-1-cell');
-  genre1Cell.onclick = () => {
-    const currentIndex = parseInt(row.dataset.index);
-    makeGenreEditable(genre1Cell, currentIndex, 'genre_1');
-  };
-
-  const genre2Cell = row.querySelector('.genre-2-cell');
-  genre2Cell.onclick = () => {
-    const currentIndex = parseInt(row.dataset.index);
-    makeGenreEditable(genre2Cell, currentIndex, 'genre_2');
-  };
-
-  // Add click handler to comment cell
-  const commentCell = row.querySelector('.comment-cell');
-  commentCell.onclick = () => {
-    const currentIndex = parseInt(row.dataset.index);
-    makeCommentEditable(commentCell, currentIndex);
-  };
-
-  // Attach link preview
-  const albumsForPreview = getListData(currentList);
-  const album = albumsForPreview && albumsForPreview[index];
-  const comment = album ? album.comments || album.comment || '' : '';
-  attachLinkPreview(commentCell, comment);
-
-  // Add tooltip only if comment is truncated
-  const commentTextEl = commentCell.querySelector('.comment-text');
-  if (commentTextEl && comment) {
-    // Use setTimeout to ensure the element is rendered
-    setTimeout(() => {
-      if (isTextTruncated(commentTextEl)) {
-        commentTextEl.setAttribute('data-comment', comment);
-      }
-    }, 0);
-  }
-
-  // Double-click handler for opening edit modal on the entire row
-  // But prevent it from triggering on interactive cells
-  row.addEventListener('dblclick', (e) => {
-    // Check if the double-click was on an interactive/editable cell
-    const isInteractiveCell =
-      e.target.closest('.country-cell') ||
-      e.target.closest('.genre-1-cell') ||
-      e.target.closest('.genre-2-cell') ||
-      e.target.closest('.comment-cell') ||
-      e.target.closest('.track-cell');
-
-    // If clicked on an interactive cell, don't open the edit modal
-    if (isInteractiveCell) {
-      return;
-    }
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Get current index from DOM (updated after drag-drop)
-    const currentIndex = parseInt(row.dataset.index);
-
-    // Verify album still exists at this index
-    const albumsForDblClick = getListData(currentList);
-    if (albumsForDblClick && albumsForDblClick[currentIndex]) {
-      showMobileEditForm(currentIndex);
-    } else {
-      showToast('Album not found', 'error');
-    }
-  });
-
-  // Right-click handler for album rows
-  row.addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Hide any open context menus first
-    hideAllContextMenus();
-
-    // Get current index from DOM (updated after drag-drop) instead of closure
-    const currentIndex = parseInt(row.dataset.index);
-    const albumsForContext = getListData(currentList);
-    const album = albumsForContext && albumsForContext[currentIndex];
-    if (!album) return;
-    const albumId =
-      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-
-    currentContextAlbum = currentIndex;
-    currentContextAlbumId = albumId; // Store identity as backup
-
-    const contextMenu = document.getElementById('albumContextMenu');
-    if (!contextMenu) return;
-
-    // Position the menu at cursor (using batched style operations)
-    positionContextMenu(contextMenu, e.clientX, e.clientY);
-  });
-}
-
-// Create mobile album card (preserves exact current design)
-function createMobileAlbumCard(data, index) {
-  const cardWrapper = document.createElement('div');
-  cardWrapper.className = 'album-card-wrapper h-[110px]';
-
-  const card = document.createElement('div');
-  card.className =
-    'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[110px]';
-  card.dataset.index = index;
-
-  card.innerHTML = `
-    <!-- Position badge (upper right, above action column) -->
-    <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
-         style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${data.position <= 3 ? '8px' : '5px'} ${data.position === 1 ? 'rgba(255,215,0,1.0)' : data.position === 2 ? 'rgba(192,192,192,1.0)' : data.position === 3 ? 'rgba(205,127,50,1.0)' : 'rgba(255,255,255,0.25)'};"
-         data-position-element="true">
-      <span style="margin-top: 1px;">${data.position}</span>
-    </div>
-    <div class="flex items-stretch h-full bg-gray-900">
-      <!-- Left section: Album cover and Release date -->
-      <div class="flex-shrink-0 flex items-stretch h-full">
-        <!-- Album cover with release date below -->
-        <div class="flex flex-col items-center pl-[4px] pt-2 self-stretch">
-          <div class="flex-shrink-0">
-            ${
-              data.albumId
-                ? `
-              <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
-                <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
-                    alt="${data.albumName}"
-                    class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
-                    data-album-id="${data.albumId}"
-                    decoding="async">
-              </div>
-            `
-                : data.coverImage
-                  ? `
-              <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
-                <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
-                    alt="${data.albumName}"
-                    class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
-                    decoding="async">
-              </div>
-            `
-                  : `
-              <div class="mobile-album-cover w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center relative">
-                <i class="fas fa-compact-disc text-xl text-gray-600"></i>
-              </div>
-            `
-            }
-          </div>
-          <!-- Release date centered in remaining space below image -->
-          <div class="flex-1 flex items-center">
-            <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
-              ${data.releaseDate}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Main content -->
-      <div class="flex-1 min-w-0 pt-[3px] pb-0.5 pl-[7px] flex flex-col h-[102px]">
-        <!-- Line 1: Album name (always present) -->
-        <div class="h-5 flex items-center -ml-[2.5px]">
-          <h3 class="font-semibold text-gray-200 text-lg leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
-        </div>
-        
-        <!-- Line 2: Artist (always present) -->
-        <div class="h-4 flex items-center">
-          <p class="text-[13px] text-gray-500 truncate">
-            <i class="fas fa-user fa-xs mr-[7px]"></i>
-            <span data-field="artist-mobile-text">${data.artist}</span>
-          </p>
-        </div>
-        
-        <!-- Line 3: Country (may be empty) -->
-        <div class="h-4 flex items-center mt-[3px]">
-          <span class="text-[13px] text-gray-500">
-            <i class="fas fa-globe fa-xs mr-[7px]"></i>
-            <span data-field="country-mobile-text">${data.country || ''}</span>
-          </span>
-        </div>
-        
-        <!-- Line 4: Genres (may be empty) -->
-        <div class="h-4 flex items-center mt-[3px]">
-          <span class="text-[13px] text-gray-500 truncate">
-            <i class="fas fa-music fa-xs mr-[7px]"></i>
-            <span data-field="genre-mobile-text">${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || ''}</span>
-          </span>
-        </div>
-        
-        <!-- Line 5: Track selection (clickable to play) -->
-        <div class="h-4 flex items-center mt-[3px] ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'cursor-pointer active:opacity-70' : ''}" 
-             data-track-play-btn="${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'true' : ''}">
-          <span class="text-[13px] text-green-400 truncate">
-            <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
-            <span data-field="track-mobile-text">${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
-          </span>
-        </div>
-      </div>
-
-      <!-- Actions on the right -->
-      <div class="flex items-center justify-center flex-shrink-0 w-[25px] border-l border-gray-800/50">
-        <button data-album-menu-btn
-                class="p-2 text-gray-400 active:text-gray-200 no-drag">
-          <i class="fas fa-ellipsis-v"></i>
-        </button>
-      </div>
-    </div>
-  `;
-
-  cardWrapper.appendChild(card);
-
-  // Add shared event handlers
-  attachMobileEventHandlers(card, index);
-  return cardWrapper;
-}
-
-// Shared event handlers for mobile cards
-function attachMobileEventHandlers(card, index) {
-  // Attach link preview to content area
-  const albumsForMobile = getListData(currentList);
-  const album = albumsForMobile && albumsForMobile[index];
-  const comment = album ? album.comments || album.comment || '' : '';
-  const contentDiv = card.querySelector('.flex-1.min-w-0');
-  if (contentDiv) attachLinkPreview(contentDiv, comment);
-
-  // Attach three-dot menu button handler
-  const menuBtn = card.querySelector('[data-album-menu-btn]');
-  if (menuBtn) {
-    // Prevent SortableJS from capturing touch events on the button
-    menuBtn.addEventListener(
-      'touchstart',
-      (e) => {
-        e.stopPropagation();
-      },
-      { passive: true }
-    );
-
-    menuBtn.addEventListener(
-      'touchend',
-      (e) => {
-        e.stopPropagation();
-      },
-      { passive: true }
-    );
-
-    menuBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      window.showMobileAlbumMenu(menuBtn);
-    });
-  }
-
-  // Attach track play button handler (only if track is selected)
-  const trackPlayBtn = card.querySelector('[data-track-play-btn="true"]');
-  if (trackPlayBtn) {
-    // Prevent SortableJS from capturing touch events
-    trackPlayBtn.addEventListener(
-      'touchstart',
-      (e) => {
-        e.stopPropagation();
-      },
-      { passive: true }
-    );
-
-    trackPlayBtn.addEventListener(
-      'touchend',
-      (e) => {
-        e.stopPropagation();
-      },
-      { passive: true }
-    );
-
-    trackPlayBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      // Get the album identity for safe playing
-      const albumsForTrackPlay = getListData(currentList);
-      const albumForTrackPlay = albumsForTrackPlay && albumsForTrackPlay[index];
-      if (albumForTrackPlay) {
-        const albumId =
-          `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
-        window.playTrackSafe(albumId);
-      }
-    });
-  }
-}
-
-// ============ INCREMENTAL DOM UPDATE SYSTEM ============
-// Performance optimization: Update only changed albums instead of full rebuild
-
-// Feature flag for incremental updates (can be disabled if issues arise)
-const ENABLE_INCREMENTAL_UPDATES = true;
-
-// Track last rendered state to detect changes
-let lastRenderedAlbums = null;
-
-// Detect what type of update is needed
-function detectUpdateType(oldAlbums, newAlbums) {
-  // Always do full rebuild if feature disabled or no previous state
-  if (!ENABLE_INCREMENTAL_UPDATES || !oldAlbums) {
-    return 'FULL_REBUILD';
-  }
-
-  // Length changed = albums added/removed = full rebuild
-  if (oldAlbums.length !== newAlbums.length) {
-    return 'FULL_REBUILD';
-  }
-
-  // Check what changed
-  let positionChanges = 0;
-  let fieldChanges = 0;
-  let complexChanges = 0;
-
-  for (let i = 0; i < newAlbums.length; i++) {
-    const oldAlbum = oldAlbums[i];
-    const newAlbum = newAlbums[i];
-
-    // Generate consistent IDs for comparison
-    const oldId =
-      oldAlbum._id ||
-      `${oldAlbum.artist}::${oldAlbum.album}::${oldAlbum.release_date}`;
-    const newId =
-      newAlbum._id ||
-      `${newAlbum.artist}::${newAlbum.album}::${newAlbum.release_date}`;
-
-    if (oldId !== newId) {
-      positionChanges++;
-    } else {
-      // Same album, check fields
-      if (
-        oldAlbum.artist !== newAlbum.artist ||
-        oldAlbum.album !== newAlbum.album ||
-        oldAlbum.release_date !== newAlbum.release_date ||
-        oldAlbum.country !== newAlbum.country ||
-        oldAlbum.genre_1 !== newAlbum.genre_1 ||
-        oldAlbum.genre_2 !== newAlbum.genre_2 ||
-        oldAlbum.comments !== newAlbum.comments ||
-        oldAlbum.track_pick !== newAlbum.track_pick
-      ) {
-        fieldChanges++;
-      }
-
-      // Cover image changes require full rebuild (complex innerHTML)
-      if (oldAlbum.cover_image !== newAlbum.cover_image) {
-        complexChanges++;
-      }
-    }
-  }
-
-  // Decide update strategy
-  if (complexChanges > 0) {
-    return 'FULL_REBUILD'; // Cover images changed = complex
-  }
-  if (positionChanges === 0 && fieldChanges > 0 && fieldChanges <= 10) {
-    return 'FIELD_UPDATE'; // Only fields changed = safe incremental update
-  }
-  if (fieldChanges === 0 && positionChanges > 0) {
-    return 'POSITION_UPDATE'; // Only positions changed = reorder DOM
-  }
-  if (positionChanges + fieldChanges <= 15) {
-    return 'HYBRID_UPDATE'; // Mixed but small = try incremental
-  }
-
-  return 'FULL_REBUILD'; // Complex changes = be safe
-}
-
-// Update only changed fields in existing DOM elements
-function updateAlbumFields(albums, isMobile) {
-  const container = document.getElementById('albumContainer');
-  if (!container) return false;
-
-  const rowsContainer = isMobile
-    ? container.querySelector('.mobile-album-list')
-    : container.querySelector('.album-rows-container');
-
-  if (!rowsContainer) return false;
-
-  const rows = Array.from(rowsContainer.children);
-
-  if (rows.length !== albums.length) {
-    console.warn('DOM/data length mismatch, falling back');
-    return false;
-  }
-
-  try {
-    albums.forEach((album, index) => {
-      const row = rows[index];
-      if (!row) return;
-
-      // Update dataset index
-      row.dataset.index = index;
-
-      // Process album data
-      const data = processAlbumData(album, index);
-
-      // Update position number
-      const positionEl =
-        row.querySelector('[data-position-element="true"]') ||
-        row.querySelector('.position-display');
-      if (positionEl && positionEl.textContent !== data.position.toString()) {
-        positionEl.textContent = data.position;
-      }
-
-      // Update artist
-      if (!isMobile) {
-        const artistSpan = row.querySelectorAll('.flex.items-center > span')[0];
-        if (artistSpan) {
-          artistSpan.textContent = data.artist;
-          artistSpan.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
-        }
-      } else {
-        const artistSpan = row.querySelector(
-          '[data-field="artist-mobile-text"]'
-        );
-        if (artistSpan) {
-          artistSpan.textContent = data.artist;
-        }
-      }
-
-      // Update album name and release date
-      if (!isMobile) {
-        const albumNameDiv = row.querySelector('.font-semibold.text-gray-100');
-        if (albumNameDiv) albumNameDiv.textContent = data.albumName;
-
-        const releaseDateDiv = row.querySelector('.release-date-display');
-        if (releaseDateDiv) {
-          releaseDateDiv.textContent = data.releaseDate;
-          releaseDateDiv.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}`;
-          if (data.yearMismatch) {
-            releaseDateDiv.title = data.yearMismatchTooltip;
-          } else {
-            releaseDateDiv.removeAttribute('title');
-          }
-        }
-      } else {
-        const albumNameEl = row.querySelector('.font-semibold.text-white');
-        if (albumNameEl) albumNameEl.textContent = data.albumName;
-
-        const releaseDateEl = row.querySelector('.release-date-display');
-        if (releaseDateEl) {
-          releaseDateEl.textContent = data.releaseDate;
-          releaseDateEl.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
-          if (data.yearMismatch) {
-            releaseDateEl.title = data.yearMismatchTooltip;
-          } else {
-            releaseDateEl.removeAttribute('title');
-          }
-        }
-      }
-
-      if (!isMobile) {
-        // Update country
-        const countryCell =
-          row.querySelector('.country-cell') ||
-          row.querySelector('[data-field="country"]');
-        if (countryCell) {
-          const countrySpan = countryCell.querySelector('span');
-          if (countrySpan) {
-            countrySpan.textContent = data.countryDisplay;
-            countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
-          }
-        }
-
-        // Update genre 1
-        const genre1Cell =
-          row.querySelector('.genre-1-cell') ||
-          row.querySelector('[data-field="genre1"]');
-        if (genre1Cell) {
-          const genre1Span = genre1Cell.querySelector('span');
-          if (genre1Span) {
-            genre1Span.textContent = data.genre1Display;
-            genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
-          }
-        }
-
-        // Update genre 2
-        const genre2Cell =
-          row.querySelector('.genre-2-cell') ||
-          row.querySelector('[data-field="genre2"]');
-        if (genre2Cell) {
-          const genre2Span = genre2Cell.querySelector('span');
-          if (genre2Span) {
-            genre2Span.textContent = data.genre2Display;
-            genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
-          }
-        }
-
-        // Update comment
-        const commentCell =
-          row.querySelector('.comment-cell') ||
-          row.querySelector('[data-field="comment"]');
-        if (commentCell) {
-          const commentSpan = commentCell.querySelector('span');
-          if (commentSpan) {
-            commentSpan.textContent = data.comment || 'Comment';
-            commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
-
-            // Update tooltip
-            if (data.comment) {
-              commentSpan.setAttribute('data-comment', data.comment);
-            } else {
-              commentSpan.removeAttribute('data-comment');
-            }
-          }
-        }
-
-        // Update track pick
-        const trackCell = row.querySelector('.track-cell');
-        if (trackCell) {
-          const trackSpan = trackCell.querySelector('span');
-          if (trackSpan) {
-            trackSpan.textContent = data.trackPickDisplay;
-            trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
-            trackSpan.title = data.trackPick || 'Click to select track';
-          }
-        }
-      } else {
-        const countryMobile = row.querySelector(
-          '[data-field="country-mobile-text"]'
-        );
-        if (countryMobile) {
-          countryMobile.textContent = data.country || '';
-        }
-
-        const genreMobile = row.querySelector(
-          '[data-field="genre-mobile-text"]'
-        );
-        if (genreMobile) {
-          const genreDisplay =
-            data.genre1 && data.genre2
-              ? `${data.genre1} / ${data.genre2}`
-              : data.genre1 || data.genre2 || '';
-          genreMobile.textContent = genreDisplay;
-        }
-
-        const trackMobile = row.querySelector(
-          '[data-field="track-mobile-text"]'
-        );
-        if (trackMobile) {
-          const trackDisplay =
-            data.trackPick && data.trackPickDisplay !== 'Select Track'
-              ? data.trackPickDisplay
-              : '';
-          trackMobile.textContent = trackDisplay;
-
-          // Update the track play button state and re-attach handler
-          const trackPlayBtn = trackMobile.closest('[data-track-play-btn]');
-          if (trackPlayBtn) {
-            const hasTrack =
-              data.trackPick && data.trackPickDisplay !== 'Select Track';
-            trackPlayBtn.setAttribute(
-              'data-track-play-btn',
-              hasTrack ? 'true' : ''
-            );
-
-            if (hasTrack) {
-              trackPlayBtn.classList.add('cursor-pointer', 'active:opacity-70');
-              // Re-attach click handler (remove old one first to avoid duplicates)
-              const newBtn = trackPlayBtn.cloneNode(true);
-              trackPlayBtn.parentNode.replaceChild(newBtn, trackPlayBtn);
-
-              newBtn.addEventListener(
-                'touchstart',
-                (e) => e.stopPropagation(),
-                { passive: true }
-              );
-              newBtn.addEventListener('touchend', (e) => e.stopPropagation(), {
-                passive: true,
-              });
-              newBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                e.preventDefault();
-                const albumsForPlay = getListData(currentList);
-                const albumForPlay = albumsForPlay && albumsForPlay[index];
-                if (albumForPlay) {
-                  const albumId =
-                    `${albumForPlay.artist}::${albumForPlay.album}::${albumForPlay.release_date || ''}`.toLowerCase();
-                  window.playTrackSafe(albumId);
-                }
-              });
-            } else {
-              trackPlayBtn.classList.remove(
-                'cursor-pointer',
-                'active:opacity-70'
-              );
-            }
-          }
-        }
-      }
-    });
-
-    return true; // Success
-  } catch (err) {
-    console.error('Field update failed:', err);
-    return false;
-  }
-}
-
-// Verify DOM integrity (safety check)
-function verifyDOMIntegrity(albums, isMobile) {
-  const container = document.getElementById('albumContainer');
-  if (!container) return false;
-
-  const rowsContainer = isMobile
-    ? container.querySelector('.mobile-album-list')
-    : container.querySelector('.album-rows-container');
-
-  if (!rowsContainer) return false;
-
-  const rows = rowsContainer.children;
-  return rows.length === albums.length;
-}
-
-// Display albums function - now consolidated with incremental updates
-function displayAlbums(albums, options = {}) {
-  const { forceFullRebuild = false } = options;
-  const isMobile = window.innerWidth < 1024; // Tailwind's lg breakpoint
-  const container = document.getElementById('albumContainer');
-
-  if (!container) {
-    console.error('Album container not found!');
-    return;
-  }
-
-  // Skip incremental update check when switching lists (saves ~2-5ms)
-  // Only attempt incremental updates when editing the same list
-  if (!forceFullRebuild) {
-    const updateType = detectUpdateType(lastRenderedAlbums, albums);
-
-    if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
-      // Attempt incremental field update
-      const success = updateAlbumFields(albums, isMobile);
-
-      if (success && verifyDOMIntegrity(albums, isMobile)) {
-        // Incremental update succeeded!
-        // Defer expensive JSON cloning to after render (non-blocking)
-        requestAnimationFrame(() => {
-          lastRenderedAlbums = albums
-            ? JSON.parse(JSON.stringify(albums))
-            : null;
-        });
-
-        // Update position cache
-        const albumContainer = isMobile
-          ? container.querySelector('.mobile-album-list')
-          : container.querySelector('.album-rows-container');
-        if (albumContainer) {
-          prePopulatePositionCache(albumContainer, isMobile);
-        }
-
-        // Re-apply now-playing border after incremental update
-        reapplyNowPlayingBorder();
-
-        return; // Done - skip full rebuild
-      }
-      // If failed, fall through to full rebuild
-      console.warn(
-        `Incremental update (${updateType}) failed, falling back to full rebuild`
-      );
-    }
-  }
-
-  // Full rebuild path (original behavior)
-  // Performance: Explicitly clear position cache before DOM rebuild
-  // Ensures deterministic cleanup without waiting for garbage collection
-  positionElementCache = new WeakMap();
-
-  // Build new content completely before touching the DOM
-  // This prevents the staggered rendering issue where the first image appears before others
-  let albumContainer;
-
-  if (!albums || albums.length === 0) {
-    // Create empty state message
-    const emptyDiv = document.createElement('div');
-    emptyDiv.className = 'text-center text-gray-500 mt-20 px-4';
-    emptyDiv.innerHTML = `
-      <p class="text-xl mb-2">This list is empty</p>
-      <p class="text-sm">Click the + button to add albums${isMobile ? '' : ' or use the Add Album button'}</p>
-    `;
-    // Atomic replacement - single DOM operation prevents progressive rendering
-    container.replaceChildren(emptyDiv);
-    return;
-  }
-
-  // Create container based on view type
-  if (!isMobile) {
-    // Desktop: Table layout with header
-    albumContainer = document.createElement('div');
-    albumContainer.className = 'w-full relative';
-
-    // Header
-    const header = document.createElement('div');
-    header.className =
-      'album-header album-grid gap-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
-    header.style.alignItems = 'center';
-    header.innerHTML = `
-      <div class="text-center">#</div>
-      <div>Album</div>
-      <div></div>
-      <div>Artist</div>
-      <div>Country</div>
-      <div>Genre 1</div>
-      <div>Genre 2</div>
-      <div>Comment</div>
-      <div>Track</div>
-    `;
-    albumContainer.appendChild(header);
-
-    const rowsContainer = document.createElement('div');
-    rowsContainer.className = 'album-rows-container relative';
-
-    // Create album rows - use DocumentFragment for batch DOM operations
-    // This prevents progressive rendering and ensures all images appear simultaneously
-    const fragment = document.createDocumentFragment();
-    albums.forEach((album, index) => {
-      const row = createAlbumItem(album, index, false);
-      fragment.appendChild(row);
-    });
-    rowsContainer.appendChild(fragment);
-
-    albumContainer.appendChild(rowsContainer);
-  } else {
-    // Mobile: Card layout
-    albumContainer = document.createElement('div');
-    albumContainer.className = 'mobile-album-list'; // Padding handled by #albumContainer CSS
-
-    // Create album cards - use DocumentFragment for batch DOM operations
-    // This prevents progressive rendering and ensures all images appear simultaneously
-    const fragment = document.createDocumentFragment();
-    albums.forEach((album, index) => {
-      const card = createAlbumItem(album, index, true);
-      fragment.appendChild(card);
-    });
-    albumContainer.appendChild(fragment);
-  }
-
-  // Atomic replacement - single DOM operation prevents progressive rendering
-  // This ensures all images decode and render simultaneously
-  container.replaceChildren(albumContainer);
-
-  // Pre-populate position element cache for better performance
-  prePopulatePositionCache(albumContainer, isMobile);
-
-  // Initialize sorting
-  initializeUnifiedSorting(container, isMobile);
-
-  // Defer expensive JSON cloning to after render (non-blocking, saves ~5-10ms)
-  requestAnimationFrame(() => {
-    lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
-  });
-
-  // Re-apply now-playing border after list render
-  reapplyNowPlayingBorder();
-}
-
-// Batch fetch and apply album covers - reduces N HTTP requests to 1
-async function fetchAndApplyCovers(albums) {
-  if (!albums || albums.length === 0) return;
-
-  // Collect album IDs that need covers
-  const albumIds = albums.map((a) => a.album_id).filter((id) => id); // Filter out empty/null IDs
-
-  if (albumIds.length === 0) return;
-
-  try {
-    const response = await apiCall(
-      `/api/albums/covers?ids=${albumIds.join(',')}`
-    );
-    const { covers } = response;
-
-    if (!covers || Object.keys(covers).length === 0) return;
-
-    // Query DOM once and build lookup map (avoids N querySelectorAll calls)
-    const imgElements = document.querySelectorAll('img[data-album-id]');
-    const imgMap = new Map();
-    imgElements.forEach((img) => {
-      const id = img.dataset.albumId;
-      if (!imgMap.has(id)) {
-        imgMap.set(id, []);
-      }
-      imgMap.get(id).push(img);
-    });
-
-    // Pre-decode all images in parallel, then apply in single batch
-    const decodePromises = [];
-    const updates = [];
-
-    for (const [albumId, dataUri] of Object.entries(covers)) {
-      const imgs = imgMap.get(albumId);
-      if (!imgs) continue;
-
-      for (const img of imgs) {
-        // Create temporary image for decoding
-        const tempImg = new Image();
-        tempImg.src = dataUri;
-
-        const decodePromise = tempImg
-          .decode()
-          .then(() => {
-            updates.push({ img, dataUri });
-          })
-          .catch(() => {
-            // Fallback: still update even if decode fails
-            updates.push({ img, dataUri });
-          });
-
-        decodePromises.push(decodePromise);
-      }
-    }
-
-    // Wait for all decodes to complete
-    await Promise.all(decodePromises);
-
-    // Apply all updates in a single animation frame to minimize reflows
-    requestAnimationFrame(() => {
-      for (const { img, dataUri } of updates) {
-        img.src = dataUri;
-      }
-    });
-  } catch (err) {
-    console.warn('Failed to batch fetch covers:', err);
-    // Fallback: individual images will still load via their original URLs
-  }
-}
-
-// Pre-populate position element cache for better performance
-function prePopulatePositionCache(container, isMobile) {
-  let rows;
-
-  if (isMobile) {
-    rows = container.children;
-  } else {
-    const rowsContainer = container.querySelector('.album-rows-container');
-    rows = rowsContainer ? rowsContainer.children : container.children;
-  }
-
-  // Pre-populate cache during initial render
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-
-    // Try O(1) lookup first using data attribute
-    let positionEl = row.querySelector('[data-position-element="true"]');
-
-    // Fallback to optimized single class selector
-    if (!positionEl) {
-      positionEl = row.querySelector('.position-display');
-    }
-
-    if (positionEl) {
-      positionElementCache.set(row, positionEl);
-    }
-  }
-}
-
-let positionElementCache = new WeakMap();
-
-// Optimized position number update with caching
-function updatePositionNumbers(container, isMobile) {
-  let rows;
-
-  if (isMobile) {
-    rows = container.children;
-  } else {
-    const rowsContainer = container.querySelector('.album-rows-container');
-    rows = rowsContainer ? rowsContainer.children : container.children;
-  }
-
-  // Direct execution for immediate position updates
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const position = i + 1;
-
-    // Use cached position element or find and cache it
-    let positionEl = positionElementCache.get(row);
-    if (!positionEl) {
-      // Try O(1) lookup first using data attribute
-      positionEl = row.querySelector('[data-position-element="true"]');
-
-      // Fallback to optimized single class selector
-      if (!positionEl) {
-        positionEl = row.querySelector('.position-display');
-      }
-
-      if (positionEl) {
-        positionElementCache.set(row, positionEl);
-      }
-    }
-
-    if (positionEl) {
-      // Update position number text (find span inside badge or use element directly)
-      const textEl = positionEl.querySelector('span') || positionEl;
-      textEl.textContent = position;
-
-      // Update badge styling for position badges (top 3 get special colors)
-      if (positionEl.classList.contains('position-badge')) {
-        // Update border color
-        positionEl.classList.remove(
-          'border-yellow-500',
-          'border-gray-400',
-          'border-amber-700',
-          'border-gray-500'
-        );
-        if (position === 1) {
-          positionEl.classList.add('border-yellow-500');
-        } else if (position === 2) {
-          positionEl.classList.add('border-gray-400');
-        } else if (position === 3) {
-          positionEl.classList.add('border-amber-700');
-        } else {
-          positionEl.classList.add('border-gray-500');
-        }
-
-        // Update glow effect (box-shadow)
-        if (position === 1) {
-          positionEl.style.boxShadow = '0 0 8px rgba(255,215,0,1.0)';
-        } else if (position === 2) {
-          positionEl.style.boxShadow = '0 0 8px rgba(192,192,192,1.0)';
-        } else if (position === 3) {
-          positionEl.style.boxShadow = '0 0 8px rgba(205,127,50,1.0)';
-        } else {
-          positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.25)';
-        }
-      }
-    }
-    row.dataset.index = i;
-    // Also update inner album-card for mobile (wrapper -> card structure)
-    const innerCard = row.querySelector('.album-card');
-    if (innerCard) {
-      innerCard.dataset.index = i;
-    }
-  }
-}
+// Album display functions moved to modules/album-display.js
 
 // Helper function to check if text is truncated
 function isTextTruncated(element) {
@@ -5073,7 +3984,6 @@ function initializeUnifiedSorting(container, isMobile) {
     });
   }
 }
-window.displayAlbums = displayAlbums;
 
 // Add this function to handle mobile album actions
 window.showMobileAlbumMenu = function (indexOrElement) {
