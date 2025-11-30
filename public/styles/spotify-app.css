@@ -603,6 +603,15 @@ input[list]::-webkit-list-button {
   background-color: #1f2937; /* gray-800 */
 }
 
+/* Year section header styling - subtle background to differentiate from list items */
+.year-section > button:first-child {
+  background-color: rgba(75, 85, 99, 0.15); /* subtle gray-600 tint */
+}
+
+.year-section > button:first-child:hover {
+  background-color: rgba(75, 85, 99, 0.3); /* slightly more visible on hover */
+}
+
 /* Simplified SortableJS visual feedback styles */
 .sortable-ghost {
   opacity: 0.5;

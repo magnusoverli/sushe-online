@@ -2181,11 +2181,23 @@ window.selectList = selectList;
 
 function updateHeaderTitle(listName) {
   const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
+  const mobileListName = document.getElementById('mobileCurrentListName');
 
   if (listName) {
     // Show the add album button in header if it exists
     if (headerAddAlbumBtn) {
       headerAddAlbumBtn.classList.remove('hidden');
+    }
+    // Update mobile header with current list name
+    if (mobileListName) {
+      mobileListName.textContent = listName;
+      mobileListName.classList.remove('hidden');
+    }
+  } else {
+    // Hide mobile list name when no list selected
+    if (mobileListName) {
+      mobileListName.classList.add('hidden');
+      mobileListName.textContent = '';
     }
   }
 }

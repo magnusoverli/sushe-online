@@ -59,14 +59,14 @@ const headerComponent = (user, activeSection = 'home') => `
         <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
       </div>
       
+      <!-- Current list name (mobile only) -->
+      <span id="mobileCurrentListName" class="lg:hidden text-sm text-gray-300 font-medium truncate max-w-[40%] hidden"></span>
+      
       <!-- User menu -->
-      <div class="flex items-center pr-1 lg:pr-2">
+      <div class="flex items-center pr-0.5 lg:pr-1">
         <span class="text-xs lg:text-sm text-gray-400 truncate max-w-[120px] lg:max-w-none">${user?.username || user?.email}</span>
-        <a href="/settings" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-6 lg:ml-8" title="Settings">
+        <a href="/settings" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-6" title="Settings">
           <i class="fas fa-cog text-lg"></i>
-        </a>
-        <a href="/logout" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-5" title="Logout">
-          <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
     </div>
