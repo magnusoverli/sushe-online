@@ -238,7 +238,7 @@ async function fetchSimilarArtists(artistName) {
     }
 
     content.innerHTML = renderSimilarArtistsList(data.artists);
-    attachAddButtonHandlers();
+    // No add handlers needed - similar artists just link to RYM
   } catch (err) {
     console.error('Error fetching similar artists:', err);
     content.innerHTML = renderErrorState(
@@ -253,6 +253,7 @@ async function fetchSimilarArtists(artistName) {
  */
 async function fetchRecommendations() {
   const content = discoveryModal.querySelector('#discoveryModalContent');
+  const subtitle = discoveryModal.querySelector('#discoveryModalSubtitle');
 
   try {
     const response = await fetch('/api/lastfm/recommendations', {
@@ -268,9 +269,15 @@ async function fetchRecommendations() {
     if (!data.albums || data.albums.length === 0) {
       content.innerHTML = renderEmptyState(
         data.message ||
-          'No recommendations available. Listen to more music on Last.fm!'
+          'No recommendations available. Add genres to your albums!'
       );
       return;
+    }
+
+    // Update subtitle to show what genres recommendations are based on
+    if (data.basedOn && data.basedOn.length > 0) {
+      const genreList = data.basedOn.map((g) => capitalizeGenre(g)).join(', ');
+      subtitle.textContent = `Based on: ${genreList}`;
     }
 
     content.innerHTML = renderRecommendationsList(data.albums);
@@ -285,6 +292,38 @@ async function fetchRecommendations() {
 }
 
 /**
+ * Capitalize genre name properly
+ * @param {string} genre - Genre name in lowercase
+ * @returns {string} Capitalized genre
+ */
+function capitalizeGenre(genre) {
+  if (!genre) return '';
+  return genre
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
+ * Create RateYourMusic URL for an artist
+ * @param {string} artistName - Artist name
+ * @returns {string} RYM artist URL
+ */
+function getRymArtistUrl(artistName) {
+  // RYM uses lowercase, hyphens for spaces, and removes most special characters
+  const slug = artistName
+    .toLowerCase()
+    .replace(/['']/g, '') // Remove apostrophes
+    .replace(/&/g, 'and') // Replace & with and
+    .replace(/[^\w\s-]/g, '') // Remove special chars except spaces and hyphens
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
+    .replace(/^-|-$/g, ''); // Trim leading/trailing hyphens
+
+  return `https://rateyourmusic.com/artist/${slug}`;
+}
+
+/**
  * Render similar artists list
  * @param {Array} artists - Array of artist objects
  */
@@ -294,7 +333,7 @@ function renderSimilarArtistsList(artists) {
       const matchPercent = Math.round(artist.match * 100);
       const hasAlbum = artist.topAlbum && artist.topAlbum.name;
       const albumImage = artist.topAlbum?.image || artist.image || '';
-      const existingList = artist.topAlbum?.existingInList;
+      const rymUrl = getRymArtistUrl(artist.name);
 
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
@@ -318,20 +357,13 @@ function renderSimilarArtistsList(artists) {
           <p class="text-xs text-purple-400">${matchPercent}% match</p>
         </div>
         
-        <!-- Add Button -->
+        <!-- RateYourMusic Link -->
         <div class="flex-shrink-0">
-          ${
-            hasAlbum
-              ? existingList
-                ? `<span class="text-xs text-gray-500 whitespace-nowrap">In "${escapeHtml(existingList)}"</span>`
-                : `<button class="add-to-list-btn px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors whitespace-nowrap"
-                   data-artist="${escapeHtml(artist.name)}"
-                   data-album="${escapeHtml(artist.topAlbum.name)}"
-                   data-mbid="${artist.topAlbum.mbid || ''}">
-                  <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">Add to...</span><span class="sm:hidden">Add</span>
-                </button>`
-              : ''
-          }
+          <a href="${rymUrl}" target="_blank" rel="noopener noreferrer"
+             class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors whitespace-nowrap inline-flex items-center gap-1">
+            <i class="fas fa-external-link-alt text-xs"></i>
+            <span class="hidden sm:inline">RYM</span>
+          </a>
         </div>
       </div>
     `;
@@ -351,6 +383,8 @@ function renderRecommendationsList(albums) {
       const playcount = album.playcount
         ? album.playcount.toLocaleString()
         : '0';
+      const genreLabel = album.genre ? capitalizeGenre(album.genre) : '';
+      const isNewArtist = album.isNewArtist;
 
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
@@ -365,9 +399,14 @@ function renderRecommendationsList(albums) {
         
         <!-- Info -->
         <div class="flex-grow min-w-0">
-          <p class="font-semibold text-white truncate">${escapeHtml(album.artist)}</p>
+          <p class="font-semibold text-white truncate">
+            ${escapeHtml(album.artist)}
+            ${isNewArtist ? '<span class="ml-1 text-xs text-green-400" title="New artist for you">NEW</span>' : ''}
+          </p>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(album.album)}</p>
-          <p class="text-xs text-gray-500">${playcount} plays</p>
+          <p class="text-xs text-gray-500">
+            ${genreLabel ? `<span class="text-yellow-500">${escapeHtml(genreLabel)}</span> · ` : ''}${playcount} plays
+          </p>
         </div>
         
         <!-- Add Button -->

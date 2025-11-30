@@ -503,6 +503,64 @@ test('getSimilarArtists should fetch similar artists with match scores', async (
 });
 
 // =============================================================================
+// getTagTopArtists tests
+// =============================================================================
+
+test('getTagTopArtists should fetch top artists for a tag/genre', async () => {
+  const mockResponse = {
+    topartists: {
+      artist: [
+        {
+          name: 'Black Metal Artist 1',
+          count: '100000',
+          mbid: 'artist-mbid-1',
+        },
+        {
+          name: 'Black Metal Artist 2',
+          count: '80000',
+          mbid: 'artist-mbid-2',
+        },
+      ],
+    },
+  };
+
+  const mockFetch = async (url) => {
+    assert.ok(url.includes('tag.getTopArtists'));
+    assert.ok(url.includes('tag=black+metal'));
+    return { json: async () => mockResponse };
+  };
+
+  const { getTagTopArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const artists = await getTagTopArtists('black metal', 10, 'apikey');
+
+  assert.strictEqual(artists.length, 2);
+  assert.strictEqual(artists[0].name, 'Black Metal Artist 1');
+  assert.strictEqual(artists[0].count, '100000');
+});
+
+test('getTagTopArtists should return empty array for unknown tag', async () => {
+  const mockResponse = {
+    error: 6,
+    message: 'Tag not found',
+  };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getTagTopArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const artists = await getTagTopArtists('nonexistent-genre-xyz', 10, 'apikey');
+
+  assert.strictEqual(artists.length, 0);
+});
+
+// =============================================================================
 // getArtistTopAlbums tests
 // =============================================================================
 

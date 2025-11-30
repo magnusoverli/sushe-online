@@ -3840,7 +3840,7 @@ module.exports = (app, deps) => {
   );
 
   // GET /api/lastfm/recommendations - Get personalized album recommendations
-  // Based on user's Last.fm listening history, filtered against existing lists
+  // Based on genres from user's lists, finding similar artists via Last.fm tags
   app.get('/api/lastfm/recommendations', ensureAuthAPI, async (req, res) => {
     if (!req.user.lastfmUsername) {
       return res.status(401).json({ error: 'Last.fm not connected' });
@@ -3848,71 +3848,104 @@ module.exports = (app, deps) => {
 
     try {
       const {
-        getTopAlbums,
-        getSimilarArtists,
+        getTagTopArtists,
         getArtistTopAlbums,
       } = require('../utils/lastfm-auth');
 
       const apiKey = process.env.LASTFM_API_KEY;
-      const username = req.user.lastfmUsername;
 
-      // Step 1: Get user's top artists from Last.fm (6 month period)
-      logger.info('Fetching recommendations for user:', username);
-      const topAlbums = await getTopAlbums(username, '6month', 20, apiKey);
+      // Step 1: Get genres from user's lists (weighted by frequency)
+      logger.info('Fetching genre-based recommendations for user');
+      const genreResult = await pool.query(
+        `SELECT 
+           LOWER(TRIM(genre)) as genre, 
+           COUNT(*) as count
+         FROM (
+           SELECT COALESCE(a.genre_1, li.genre_1) as genre
+           FROM list_items li
+           JOIN lists l ON li.list_id = l._id
+           LEFT JOIN albums a ON li.album_id = a.album_id
+           WHERE l.user_id = $1 
+             AND COALESCE(a.genre_1, li.genre_1) IS NOT NULL 
+             AND TRIM(COALESCE(a.genre_1, li.genre_1)) != ''
+           UNION ALL
+           SELECT COALESCE(a.genre_2, li.genre_2) as genre
+           FROM list_items li
+           JOIN lists l ON li.list_id = l._id
+           LEFT JOIN albums a ON li.album_id = a.album_id
+           WHERE l.user_id = $1 
+             AND COALESCE(a.genre_2, li.genre_2) IS NOT NULL 
+             AND TRIM(COALESCE(a.genre_2, li.genre_2)) != ''
+         ) genres
+         GROUP BY LOWER(TRIM(genre))
+         ORDER BY count DESC
+         LIMIT 8`,
+        [req.user._id]
+      );
 
-      // Extract unique top artists
-      const topArtists = [
-        ...new Set(topAlbums.map((a) => a.artist?.name).filter(Boolean)),
-      ].slice(0, 10);
+      const userGenres = genreResult.rows;
 
-      if (topArtists.length === 0) {
+      if (userGenres.length === 0) {
         return res.json({
           albums: [],
-          message: 'Not enough listening history',
+          message:
+            'No genres found in your lists. Add genres to your albums to get recommendations!',
         });
       }
 
-      // Step 2: Get similar artists for top artists (parallel)
-      const similarArtistsPromises = topArtists
-        .slice(0, 5)
-        .map(async (artistName) => {
-          try {
-            const similar = await getSimilarArtists(artistName, 5, apiKey);
-            return similar.map((s) => ({
-              name: s.name,
-              match: parseFloat(s.match) || 0,
-            }));
-          } catch {
-            return [];
-          }
+      logger.info('User genres for recommendations:', {
+        genres: userGenres.map((g) => `${g.genre} (${g.count})`),
+      });
+
+      // Step 2: Get top artists for each genre from Last.fm (parallel)
+      // Weight by genre frequency - more albums = more artists from that genre
+      const artistPromises = userGenres.map(async (genreData) => {
+        try {
+          // Get more artists for more frequent genres
+          const limit = Math.min(Math.max(3, genreData.count), 8);
+          const artists = await getTagTopArtists(
+            genreData.genre,
+            limit,
+            apiKey
+          );
+          return artists.map((a) => ({
+            name: a.name,
+            genre: genreData.genre,
+            tagCount: parseInt(a.count) || 0,
+          }));
+        } catch {
+          return [];
+        }
+      });
+
+      const artistResults = await Promise.all(artistPromises);
+      const allArtists = artistResults.flat();
+
+      if (allArtists.length === 0) {
+        return res.json({
+          albums: [],
+          message:
+            'Could not find artists for your genres. Try adding more common genre names.',
         });
+      }
 
-      const similarArtistsResults = await Promise.all(similarArtistsPromises);
-      const allSimilarArtists = similarArtistsResults.flat();
-
-      // Combine top artists with similar artists
-      const allArtists = [
-        ...topArtists.map((name) => ({ name, match: 1.0 })),
-        ...allSimilarArtists,
-      ];
-
-      // Deduplicate artists by name (keep highest match)
+      // Deduplicate artists (keep first occurrence which has highest tag relevance)
       const artistMap = new Map();
       for (const artist of allArtists) {
-        const existing = artistMap.get(artist.name.toLowerCase());
-        if (!existing || existing.match < artist.match) {
+        if (!artistMap.has(artist.name.toLowerCase())) {
           artistMap.set(artist.name.toLowerCase(), artist);
         }
       }
-      const uniqueArtists = Array.from(artistMap.values()).slice(0, 15);
+      const uniqueArtists = Array.from(artistMap.values()).slice(0, 20);
 
       // Step 3: Get top albums from these artists (parallel)
       const albumPromises = uniqueArtists.map(async (artist) => {
         try {
-          const albums = await getArtistTopAlbums(artist.name, 3, apiKey);
+          const albums = await getArtistTopAlbums(artist.name, 2, apiKey);
           return albums.map((album) => ({
             artist: artist.name,
             album: album.name,
+            genre: artist.genre,
             playcount: parseInt(album.playcount) || 0,
             image:
               album.image?.find((i) => i.size === 'extralarge')?.['#text'] ||
@@ -3941,11 +3974,22 @@ module.exports = (app, deps) => {
         userListsResult.rows.map((r) => `${r.artist}|||${r.album}`)
       );
 
-      // Step 5: Filter out albums already in user's lists
+      // Also filter out artists the user already has albums from
+      const existingArtists = new Set(
+        userListsResult.rows.map((r) => r.artist)
+      );
+
+      // Step 5: Filter out albums already in user's lists and prioritize new artists
       candidateAlbums = candidateAlbums.filter((album) => {
         const key = `${album.artist.toLowerCase()}|||${album.album.toLowerCase()}`;
         return !existingAlbums.has(key);
       });
+
+      // Boost albums from artists not in user's collection
+      candidateAlbums = candidateAlbums.map((album) => ({
+        ...album,
+        isNewArtist: !existingArtists.has(album.artist.toLowerCase()),
+      }));
 
       // Deduplicate by artist+album
       const albumMap = new Map();
@@ -3956,18 +4000,29 @@ module.exports = (app, deps) => {
         }
       }
 
-      // Sort by playcount and take top 15
+      // Sort: new artists first, then by playcount
       const recommendations = Array.from(albumMap.values())
-        .sort((a, b) => b.playcount - a.playcount)
+        .sort((a, b) => {
+          // Prioritize new artists
+          if (a.isNewArtist !== b.isNewArtist) {
+            return a.isNewArtist ? -1 : 1;
+          }
+          return b.playcount - a.playcount;
+        })
         .slice(0, 15);
 
-      logger.info('Generated recommendations:', {
+      logger.info('Generated genre-based recommendations:', {
+        genreCount: userGenres.length,
+        artistCount: uniqueArtists.length,
         candidateCount: candidateAlbums.length,
         filteredCount: recommendations.length,
         existingAlbumsCount: existingAlbums.size,
       });
 
-      res.json({ albums: recommendations });
+      res.json({
+        albums: recommendations,
+        basedOn: userGenres.slice(0, 5).map((g) => g.genre),
+      });
     } catch (error) {
       logger.error('Recommendations error:', error);
       res.status(500).json({ error: 'Failed to generate recommendations' });

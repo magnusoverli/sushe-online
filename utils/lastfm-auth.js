@@ -220,6 +220,40 @@ function createLastfmAuth(deps = {}) {
   }
 
   /**
+   * Get top artists for a tag/genre
+   * @param {string} tag - Tag/genre name (e.g., "black metal", "post-rock")
+   * @param {number} limit - Number of artists to return
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Array} - Array of artist objects
+   */
+  async function getTagTopArtists(tag, limit = 10, apiKey) {
+    const params = new URLSearchParams({
+      method: 'tag.getTopArtists',
+      tag: tag,
+      limit: String(limit),
+      api_key: apiKey || env.LASTFM_API_KEY,
+      format: 'json',
+    });
+
+    const response = await fetchFn(`${API_URL}?${params}`);
+    const data = await response.json();
+
+    if (data.error) {
+      // Tag not found is common - return empty array instead of throwing
+      if (data.error === 6) {
+        return [];
+      }
+      log.error('Last.fm getTagTopArtists failed:', {
+        error: data.error,
+        message: data.message,
+      });
+      throw new Error(data.message || 'Failed to fetch tag top artists');
+    }
+
+    return data.topartists?.artist || [];
+  }
+
+  /**
    * Get artist's top albums
    * @param {string} artist - Artist name
    * @param {number} limit - Number of albums to return
@@ -373,6 +407,7 @@ function createLastfmAuth(deps = {}) {
     getAlbumInfo,
     getRecentTracks,
     getSimilarArtists,
+    getTagTopArtists,
     getArtistTopAlbums,
     // Write operations
     scrobble,
@@ -394,6 +429,7 @@ module.exports = {
   getAlbumInfo: defaultInstance.getAlbumInfo,
   getRecentTracks: defaultInstance.getRecentTracks,
   getSimilarArtists: defaultInstance.getSimilarArtists,
+  getTagTopArtists: defaultInstance.getTagTopArtists,
   getArtistTopAlbums: defaultInstance.getArtistTopAlbums,
   scrobble: defaultInstance.scrobble,
   updateNowPlaying: defaultInstance.updateNowPlaying,
