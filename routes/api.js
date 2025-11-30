@@ -4029,124 +4029,47 @@ module.exports = (app, deps) => {
     }
   });
 
-  // GET /api/lastfm/similar-artists-with-albums - Get similar artists with their top album
+  // GET /api/lastfm/similar-artists - Get similar artists for discovery
   // Used by discovery modal for "Show similar artists" feature
-  app.get(
-    '/api/lastfm/similar-artists-with-albums',
-    ensureAuthAPI,
-    async (req, res) => {
-      const { artist, limit = 15 } = req.query;
+  app.get('/api/lastfm/similar-artists', ensureAuthAPI, async (req, res) => {
+    const { artist, limit = 15 } = req.query;
 
-      if (!artist) {
-        return res.status(400).json({ error: 'artist is required' });
-      }
-
-      if (!req.user.lastfmUsername) {
-        return res.status(401).json({ error: 'Last.fm not connected' });
-      }
-
-      try {
-        const {
-          getSimilarArtists,
-          getArtistTopAlbums,
-        } = require('../utils/lastfm-auth');
-        const apiKey = process.env.LASTFM_API_KEY;
-
-        // Get similar artists
-        const similarArtists = await getSimilarArtists(
-          artist,
-          Math.min(parseInt(limit) || 15, 30),
-          apiKey
-        );
-
-        if (!similarArtists || similarArtists.length === 0) {
-          return res.json({ artists: [], message: 'No similar artists found' });
-        }
-
-        // Get top album for each similar artist (parallel with rate limiting)
-        const artistsWithAlbums = await Promise.all(
-          similarArtists.map(async (similarArtist) => {
-            try {
-              const albums = await getArtistTopAlbums(
-                similarArtist.name,
-                1,
-                apiKey
-              );
-              const topAlbum = albums[0];
-              return {
-                name: similarArtist.name,
-                match: parseFloat(similarArtist.match) || 0,
-                url: similarArtist.url,
-                image:
-                  similarArtist.image?.find((i) => i.size === 'large')?.[
-                    '#text'
-                  ] || null,
-                topAlbum: topAlbum
-                  ? {
-                      name: topAlbum.name,
-                      playcount: parseInt(topAlbum.playcount) || 0,
-                      image:
-                        topAlbum.image?.find((i) => i.size === 'extralarge')?.[
-                          '#text'
-                        ] || null,
-                      mbid: topAlbum.mbid || null,
-                    }
-                  : null,
-              };
-            } catch {
-              return {
-                name: similarArtist.name,
-                match: parseFloat(similarArtist.match) || 0,
-                url: similarArtist.url,
-                image: null,
-                topAlbum: null,
-              };
-            }
-          })
-        );
-
-        // Get user's existing albums to mark duplicates
-        const userListsResult = await pool.query(
-          `SELECT l.name as list_name, LOWER(COALESCE(a.artist, li.artist)) as artist, LOWER(COALESCE(a.album, li.album)) as album
-         FROM list_items li
-         JOIN lists l ON li.list_id = l._id
-         LEFT JOIN albums a ON li.album_id = a.album_id
-         WHERE l.user_id = $1`,
-          [req.user._id]
-        );
-
-        // Build map of album -> list name for duplicate detection
-        const existingAlbumsMap = new Map();
-        for (const row of userListsResult.rows) {
-          const key = `${row.artist}|||${row.album}`;
-          if (!existingAlbumsMap.has(key)) {
-            existingAlbumsMap.set(key, row.list_name);
-          }
-        }
-
-        // Add existingInList info to each artist's top album
-        const artistsWithDupeInfo = artistsWithAlbums.map((artist) => {
-          if (artist.topAlbum) {
-            const key = `${artist.name.toLowerCase()}|||${artist.topAlbum.name.toLowerCase()}`;
-            const existingList = existingAlbumsMap.get(key);
-            return {
-              ...artist,
-              topAlbum: {
-                ...artist.topAlbum,
-                existingInList: existingList || null,
-              },
-            };
-          }
-          return artist;
-        });
-
-        res.json({ artists: artistsWithDupeInfo });
-      } catch (error) {
-        logger.error('Similar artists with albums error:', error);
-        res.status(500).json({ error: 'Failed to fetch similar artists' });
-      }
+    if (!artist) {
+      return res.status(400).json({ error: 'artist is required' });
     }
-  );
+
+    if (!req.user.lastfmUsername) {
+      return res.status(401).json({ error: 'Last.fm not connected' });
+    }
+
+    try {
+      const { getSimilarArtists } = require('../utils/lastfm-auth');
+      const apiKey = process.env.LASTFM_API_KEY;
+
+      // Get similar artists from Last.fm
+      const similarArtists = await getSimilarArtists(
+        artist,
+        Math.min(parseInt(limit) || 15, 30),
+        apiKey
+      );
+
+      if (!similarArtists || similarArtists.length === 0) {
+        return res.json({ artists: [], message: 'No similar artists found' });
+      }
+
+      // Return just artist name and match score
+      const artists = similarArtists.map((similarArtist) => ({
+        name: similarArtist.name,
+        match: parseFloat(similarArtist.match) || 0,
+        url: similarArtist.url,
+      }));
+
+      res.json({ artists });
+    } catch (error) {
+      logger.error('Similar artists error:', error);
+      res.status(500).json({ error: 'Failed to fetch similar artists' });
+    }
+  });
 
   // GET /api/user/lists-summary - Get list names for the current user (for "Add to..." dropdown)
   app.get('/api/user/lists-summary', ensureAuthAPI, async (req, res) => {

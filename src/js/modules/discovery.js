@@ -220,7 +220,7 @@ async function fetchSimilarArtists(artistName) {
 
   try {
     const response = await fetch(
-      `/api/lastfm/similar-artists-with-albums?artist=${encodeURIComponent(artistName)}&limit=15`,
+      `/api/lastfm/similar-artists?artist=${encodeURIComponent(artistName)}&limit=20`,
       { credentials: 'include' }
     );
 
@@ -238,7 +238,6 @@ async function fetchSimilarArtists(artistName) {
     }
 
     content.innerHTML = renderSimilarArtistsList(data.artists);
-    // No add handlers needed - similar artists just link to RYM
   } catch (err) {
     console.error('Error fetching similar artists:', err);
     content.innerHTML = renderErrorState(
@@ -331,29 +330,18 @@ function renderSimilarArtistsList(artists) {
   const items = artists
     .map((artist) => {
       const matchPercent = Math.round(artist.match * 100);
-      const hasAlbum = artist.topAlbum && artist.topAlbum.name;
-      const albumImage = artist.topAlbum?.image || artist.image || '';
       const rymUrl = getRymArtistUrl(artist.name);
 
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
-        <!-- Album/Artist Image -->
-        <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gray-700 rounded flex-shrink-0 overflow-hidden">
-          ${
-            albumImage
-              ? `<img src="${albumImage}" alt="" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center\\'><i class=\\'fas fa-music text-gray-600\\'></i></div>'">`
-              : '<div class="w-full h-full flex items-center justify-center"><i class="fas fa-music text-gray-600"></i></div>'
-          }
+        <!-- Artist Icon -->
+        <div class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-700 rounded-full flex-shrink-0 flex items-center justify-center">
+          <i class="fas fa-user text-gray-500"></i>
         </div>
         
         <!-- Info -->
         <div class="flex-grow min-w-0">
           <p class="font-semibold text-white truncate">${escapeHtml(artist.name)}</p>
-          ${
-            hasAlbum
-              ? `<p class="text-sm text-gray-400 truncate">${escapeHtml(artist.topAlbum.name)}</p>`
-              : '<p class="text-sm text-gray-500 italic">No album data</p>'
-          }
           <p class="text-xs text-purple-400">${matchPercent}% match</p>
         </div>
         
