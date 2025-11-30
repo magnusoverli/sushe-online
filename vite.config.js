@@ -3,6 +3,7 @@ import path from 'path';
 
 export default defineConfig({
   publicDir: false,
+  base: '/js/',
   build: {
     rollupOptions: {
       input: path.resolve(__dirname, 'src/js/main.js'),

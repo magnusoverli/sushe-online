@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sushe-online-v5'; // Bumped to force cache clear after discovery API changes
+const CACHE_NAME = 'sushe-online-v6'; // Bumped to force cache clear after chunk path fixes
 const STATIC_ASSETS = ['/styles/output.css', '/manifest.json', '/og-image.png'];
 
 self.addEventListener('install', (event) => {
