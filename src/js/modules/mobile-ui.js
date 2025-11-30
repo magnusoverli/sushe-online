@@ -39,6 +39,7 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
  * @param {Function} deps.getAvailableGenres - Get available genres list
  * @param {Function} deps.setCurrentContextAlbum - Set current context album index
  * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
+ * @param {Function} deps.showDiscoveryModal - Show discovery modal for Last.fm features
  * @returns {Object} Mobile UI module API
  */
 export function createMobileUI(deps = {}) {
@@ -69,6 +70,7 @@ export function createMobileUI(deps = {}) {
     getAvailableGenres,
     setCurrentContextAlbum,
     refreshMobileBarVisibility,
+    showDiscoveryModal,
   } = deps;
 
   /**
@@ -275,6 +277,7 @@ export function createMobileUI(deps = {}) {
     const hasSpotify = window.currentUser?.spotifyAuth;
     const hasTidal = window.currentUser?.tidalAuth;
     const hasAnyService = hasSpotify || hasTidal;
+    const hasLastfm = !!window.currentUser?.lastfmUsername;
 
     const actionSheet = document.createElement('div');
     actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
@@ -334,6 +337,24 @@ export function createMobileUI(deps = {}) {
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
             <i class="fas fa-arrow-right mr-3 text-gray-400"></i>Move to List...
           </button>
+
+          ${
+            hasLastfm
+              ? `
+          <!-- Last.fm Discovery Options -->
+          <div class="border-t border-gray-700 my-2"></div>
+          <button data-action="similar-artists"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+            <i class="fas fa-users mr-3 text-purple-400"></i>Show Similar Artists
+          </button>
+          <button data-action="recommendations"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+            <i class="fas fa-lightbulb mr-3 text-yellow-400"></i>Personal Recommendations
+          </button>
+          <div class="border-t border-gray-700 my-2"></div>
+          `
+              : ''
+          }
 
           <button data-action="remove"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
@@ -500,6 +521,38 @@ export function createMobileUI(deps = {}) {
       closeSheet();
       showMobileMoveToListSheet(index, albumId);
     });
+
+    // Last.fm discovery option handlers
+    const similarArtistsBtn = actionSheet.querySelector(
+      '[data-action="similar-artists"]'
+    );
+    const recommendationsBtn = actionSheet.querySelector(
+      '[data-action="recommendations"]'
+    );
+
+    if (similarArtistsBtn) {
+      similarArtistsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSheet();
+        if (showDiscoveryModal && album.artist) {
+          showDiscoveryModal('similar', { artist: album.artist });
+        } else if (!album.artist) {
+          showToast('Could not find album artist', 'error');
+        }
+      });
+    }
+
+    if (recommendationsBtn) {
+      recommendationsBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSheet();
+        if (showDiscoveryModal) {
+          showDiscoveryModal('recommendations');
+        }
+      });
+    }
 
     removeBtn.addEventListener('click', (e) => {
       e.preventDefault();

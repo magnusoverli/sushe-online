@@ -210,6 +210,11 @@ function getMobileUIModule() {
           window.refreshMobileBarVisibility();
         }
       },
+      showDiscoveryModal: (type, data) => {
+        import('./modules/discovery.js').then(({ showDiscoveryModal }) => {
+          showDiscoveryModal(type, data);
+        });
+      },
     });
   }
   return mobileUIModule;
