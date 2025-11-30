@@ -3684,8 +3684,19 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'List not found' });
         }
 
-        // Get all albums in the list
-        const listItems = await listItemsAsync.find({ listId });
+        // Get all albums in the list with a JOIN to albums table
+        // list_items may have NULL artist/album, but albums table has the data
+        const listItemsResult = await pool.query(
+          `SELECT li._id, li.album_id,
+                  COALESCE(li.artist, a.artist) as artist,
+                  COALESCE(li.album, a.album) as album
+           FROM list_items li
+           LEFT JOIN albums a ON li.album_id = a.album_id
+           WHERE li.list_id = $1`,
+          [listId]
+        );
+        const listItems = listItemsResult.rows;
+
         if (listItems.length === 0) {
           return res.json({ playcounts: {}, staleCount: 0 });
         }
@@ -3733,7 +3744,7 @@ module.exports = (app, deps) => {
                 itemId: item._id,
                 artist: item.artist,
                 album: item.album,
-                albumId: item.albumId,
+                albumId: item.album_id,
               });
             }
           } else {
@@ -3743,7 +3754,7 @@ module.exports = (app, deps) => {
               itemId: item._id,
               artist: item.artist,
               album: item.album,
-              albumId: item.albumId,
+              albumId: item.album_id,
             });
           }
         }
