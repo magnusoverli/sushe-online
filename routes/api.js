@@ -3685,11 +3685,13 @@ module.exports = (app, deps) => {
         }
 
         // Get all albums in the list with a JOIN to albums table
-        // list_items may have NULL artist/album, but albums table has the data
+        // Prefer albums table (MusicBrainz) data for Last.fm lookups since it's more
+        // likely to match Last.fm's database (proper diacritics, canonical spelling)
+        // Fall back to list_items data if albums table has NULL
         const listItemsResult = await pool.query(
           `SELECT li._id, li.album_id,
-                  COALESCE(li.artist, a.artist) as artist,
-                  COALESCE(li.album, a.album) as album
+                  COALESCE(a.artist, li.artist) as artist,
+                  COALESCE(a.album, li.album) as album
            FROM list_items li
            LEFT JOIN albums a ON li.album_id = a.album_id
            WHERE li.list_id = $1`,
