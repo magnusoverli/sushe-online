@@ -3604,26 +3604,37 @@ module.exports = (app, deps) => {
 
   // GET /api/lastfm/similar-artists - Get similar artists (for discovery)
   app.get('/api/lastfm/similar-artists', ensureAuthAPI, async (req, res) => {
-    const { artist, limit = 10 } = req.query;
+    const { artist, limit = 20 } = req.query;
 
     if (!artist) {
       return res.status(400).json({ error: 'artist is required' });
     }
 
+    if (!req.user.lastfmUsername) {
+      return res.status(401).json({ error: 'Last.fm not connected' });
+    }
+
     try {
       const { getSimilarArtists } = require('../utils/lastfm-auth');
-      const artists = await getSimilarArtists(
+      const similarArtists = await getSimilarArtists(
         artist,
-        Math.min(parseInt(limit) || 10, 50),
+        Math.min(parseInt(limit) || 20, 50),
         process.env.LASTFM_API_KEY
       );
 
+      if (!similarArtists || similarArtists.length === 0) {
+        return res.json({ artists: [], message: 'No similar artists found' });
+      }
+
       res.json({
-        artists: artists.map((a) => ({
+        artists: similarArtists.map((a) => ({
           name: a.name,
           match: parseFloat(a.match) || 0,
           url: a.url,
-          image: a.image?.find((i) => i.size === 'large')?.['#text'] || null,
+          image:
+            a.image?.find((i) => i.size === 'large')?.['#text'] ||
+            a.image?.find((i) => i.size === 'medium')?.['#text'] ||
+            null,
         })),
       });
     } catch (error) {
@@ -4026,52 +4037,6 @@ module.exports = (app, deps) => {
     } catch (error) {
       logger.error('Recommendations error:', error);
       res.status(500).json({ error: 'Failed to generate recommendations' });
-    }
-  });
-
-  // GET /api/lastfm/similar-artists - Get similar artists for discovery
-  // Used by discovery modal for "Show similar artists" feature
-  app.get('/api/lastfm/similar-artists', ensureAuthAPI, async (req, res) => {
-    const { artist, limit = 15 } = req.query;
-
-    if (!artist) {
-      return res.status(400).json({ error: 'artist is required' });
-    }
-
-    if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
-    }
-
-    try {
-      const { getSimilarArtists } = require('../utils/lastfm-auth');
-      const apiKey = process.env.LASTFM_API_KEY;
-
-      // Get similar artists from Last.fm
-      const similarArtists = await getSimilarArtists(
-        artist,
-        Math.min(parseInt(limit) || 15, 30),
-        apiKey
-      );
-
-      if (!similarArtists || similarArtists.length === 0) {
-        return res.json({ artists: [], message: 'No similar artists found' });
-      }
-
-      // Return artist name, match score, and image
-      const artists = similarArtists.map((similarArtist) => ({
-        name: similarArtist.name,
-        match: parseFloat(similarArtist.match) || 0,
-        url: similarArtist.url,
-        image:
-          similarArtist.image?.find((i) => i.size === 'large')?.['#text'] ||
-          similarArtist.image?.find((i) => i.size === 'medium')?.['#text'] ||
-          null,
-      }));
-
-      res.json({ artists });
-    } catch (error) {
-      logger.error('Similar artists error:', error);
-      res.status(500).json({ error: 'Failed to fetch similar artists' });
     }
   });
 
