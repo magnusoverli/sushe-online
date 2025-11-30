@@ -3,6 +3,7 @@ module.exports = (app, deps) => {
     ensureAuth,
     ensureAdmin,
     users,
+    usersAsync,
     lists,
     listsAsync,
     listItemsAsync,
@@ -346,7 +347,10 @@ module.exports = (app, deps) => {
         connected_at: Date.now(),
       };
 
-      users.update(
+      // Await the database update to ensure it completes before redirect
+      // This prevents a race condition where the settings page loads before
+      // the database has been updated
+      await usersAsync.update(
         { _id: req.user._id },
         {
           $set: {
@@ -354,15 +358,8 @@ module.exports = (app, deps) => {
             lastfmUsername: sessionData.username,
             updatedAt: new Date(),
           },
-        },
-        {},
-        (err) => {
-          if (err) logger.error('Last.fm auth update error:', err);
         }
       );
-
-      req.user.lastfmAuth = lastfmAuth;
-      req.user.lastfmUsername = sessionData.username;
 
       logger.info(
         'Last.fm connected for user:',
@@ -379,25 +376,25 @@ module.exports = (app, deps) => {
     res.redirect('/settings');
   });
 
-  app.get('/auth/lastfm/disconnect', ensureAuth, (req, res) => {
+  app.get('/auth/lastfm/disconnect', ensureAuth, async (req, res) => {
     logger.info('Disconnecting Last.fm for user:', req.user.email);
 
-    users.update(
-      { _id: req.user._id },
-      {
-        $unset: { lastfmAuth: true, lastfmUsername: true },
-        $set: { updatedAt: new Date() },
-      },
-      {},
-      (err) => {
-        if (err) logger.error('Last.fm disconnect error:', err);
-      }
-    );
+    try {
+      // Await the database update to ensure it completes before redirect
+      await usersAsync.update(
+        { _id: req.user._id },
+        {
+          $unset: { lastfmAuth: true, lastfmUsername: true },
+          $set: { updatedAt: new Date() },
+        }
+      );
 
-    delete req.user.lastfmAuth;
-    delete req.user.lastfmUsername;
+      req.flash('success', 'Disconnected from Last.fm');
+    } catch (err) {
+      logger.error('Last.fm disconnect error:', err);
+      req.flash('error', 'Failed to disconnect from Last.fm');
+    }
 
-    req.flash('success', 'Disconnected from Last.fm');
     res.redirect('/settings');
   });
 
