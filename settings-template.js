@@ -276,7 +276,13 @@ const themeSection = (user) =>
   );
 
 // Music Services Section
-const musicServicesSection = (user, spotifyValid, tidalValid) =>
+const musicServicesSection = (
+  user,
+  spotifyValid,
+  tidalValid,
+  lastfmValid,
+  lastfmUsername
+) =>
   settingsCard(
     'Music Services',
     'fas fa-music',
@@ -339,6 +345,30 @@ const musicServicesSection = (user, spotifyValid, tidalValid) =>
                 `
                 : `
                 <a href="/auth/tidal" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
+                  Connect
+                </a>
+              `
+            }
+          </div>
+        </div>
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-800 rounded-lg">
+          <div class="flex items-center gap-3">
+            <i class="fab fa-lastfm text-red-500 text-xl"></i>
+            <span class="text-white font-medium">Last.fm</span>
+            ${lastfmValid && lastfmUsername ? `<span class="text-gray-400 text-sm">@${lastfmUsername}</span>` : ''}
+          </div>
+          <div class="flex items-center gap-3">
+            ${
+              lastfmValid
+                ? `
+                  <span class="text-green-500 text-sm">Connected</span>
+                  <a href="/auth/lastfm/disconnect" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
+                    Disconnect
+                  </a>
+                `
+                : `
+                <a href="/auth/lastfm" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
                   Connect
                 </a>
               `
@@ -539,8 +569,17 @@ const flashMessages = (flash) => `
 
 // Main Settings Template
 const settingsTemplate = (req, options) => {
-  const { user, userStats, stats, adminData, flash, spotifyValid, tidalValid } =
-    options;
+  const {
+    user,
+    userStats,
+    stats,
+    adminData,
+    flash,
+    spotifyValid,
+    tidalValid,
+    lastfmValid,
+    lastfmUsername,
+  } = options;
 
   return `
 <!DOCTYPE html>
@@ -687,7 +726,7 @@ const settingsTemplate = (req, options) => {
         <!-- Preferences Column -->
         <div class="space-y-6">
           ${themeSection(user)}
-          ${musicServicesSection(user, spotifyValid, tidalValid)}
+          ${musicServicesSection(user, spotifyValid, tidalValid, lastfmValid, lastfmUsername)}
           ${statisticsSection(userStats)}
           
           ${user.role !== 'admin' ? adminRequestSection(req) : ''}

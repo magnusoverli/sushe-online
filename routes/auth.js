@@ -278,6 +278,11 @@ module.exports = (app, deps) => {
       const spotifyValid = isTokenUsable(req.user.spotifyAuth);
       // For Tidal, no refresh token support, so use isTokenValid
       const tidalValid = isTokenValid(req.user.tidalAuth);
+      // For Last.fm, sessions never expire, just check if connected
+      const {
+        isSessionValid: isLastfmSessionValid,
+      } = require('../utils/lastfm-auth');
+      const lastfmValid = isLastfmSessionValid(req.user.lastfmAuth);
 
       const sanitized = sanitizeUser(req.user);
       // Get user's personal stats
@@ -514,6 +519,8 @@ module.exports = (app, deps) => {
           flash: res.locals.flash,
           spotifyValid,
           tidalValid,
+          lastfmValid,
+          lastfmUsername: req.user.lastfmUsername || null,
         })
       );
     } catch (error) {

@@ -301,6 +301,106 @@ module.exports = (app, deps) => {
     res.redirect('/settings');
   });
 
+  // ===== Last.fm Authentication =====
+  // Last.fm uses a simpler auth flow than OAuth2:
+  // 1. Redirect user to Last.fm auth page
+  // 2. User authorizes, Last.fm redirects back with a token
+  // 3. Exchange token for session key (which never expires)
+
+  app.get('/auth/lastfm', ensureAuth, (req, res) => {
+    const apiKey = process.env.LASTFM_API_KEY;
+
+    if (!apiKey) {
+      logger.warn('Last.fm API key not configured');
+      req.flash('error', 'Last.fm is not configured on this server');
+      return res.redirect('/settings');
+    }
+
+    const callbackUrl = `${process.env.BASE_URL}/auth/lastfm/callback`;
+    const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(callbackUrl)}`;
+
+    logger.info('Starting Last.fm auth flow for user:', req.user.email);
+    res.redirect(authUrl);
+  });
+
+  app.get('/auth/lastfm/callback', ensureAuth, async (req, res) => {
+    const { token } = req.query;
+
+    if (!token) {
+      logger.warn('Last.fm callback received without token');
+      req.flash('error', 'Last.fm authorization failed - no token received');
+      return res.redirect('/settings');
+    }
+
+    try {
+      const { getSession } = require('../utils/lastfm-auth');
+      const sessionData = await getSession(
+        token,
+        process.env.LASTFM_API_KEY,
+        process.env.LASTFM_SECRET
+      );
+
+      const lastfmAuth = {
+        session_key: sessionData.session_key,
+        username: sessionData.username,
+        connected_at: Date.now(),
+      };
+
+      users.update(
+        { _id: req.user._id },
+        {
+          $set: {
+            lastfmAuth: lastfmAuth,
+            lastfmUsername: sessionData.username,
+            updatedAt: new Date(),
+          },
+        },
+        {},
+        (err) => {
+          if (err) logger.error('Last.fm auth update error:', err);
+        }
+      );
+
+      req.user.lastfmAuth = lastfmAuth;
+      req.user.lastfmUsername = sessionData.username;
+
+      logger.info(
+        'Last.fm connected for user:',
+        req.user.email,
+        'as:',
+        sessionData.username
+      );
+      req.flash('success', `Connected to Last.fm as ${sessionData.username}`);
+    } catch (error) {
+      logger.error('Last.fm auth error:', error);
+      req.flash('error', `Last.fm connection failed: ${error.message}`);
+    }
+
+    res.redirect('/settings');
+  });
+
+  app.get('/auth/lastfm/disconnect', ensureAuth, (req, res) => {
+    logger.info('Disconnecting Last.fm for user:', req.user.email);
+
+    users.update(
+      { _id: req.user._id },
+      {
+        $unset: { lastfmAuth: true, lastfmUsername: true },
+        $set: { updatedAt: new Date() },
+      },
+      {},
+      (err) => {
+        if (err) logger.error('Last.fm disconnect error:', err);
+      }
+    );
+
+    delete req.user.lastfmAuth;
+    delete req.user.lastfmUsername;
+
+    req.flash('success', 'Disconnected from Last.fm');
+    res.redirect('/settings');
+  });
+
   // Admin: Make user admin
   app.post('/admin/make-admin', ensureAuth, ensureAdmin, (req, res) => {
     const { userId } = req.body;
