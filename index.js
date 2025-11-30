@@ -834,8 +834,22 @@ app.use((err, req, res, next) => {
 
 // Start server once database is ready
 const PORT = process.env.PORT || 3000;
+const MigrationManager = require('./db/migrations');
+
 ready
-  .then(() => {
+  .then(async () => {
+    // Run pending migrations automatically on startup
+    try {
+      const migrationManager = new MigrationManager(pool);
+      await migrationManager.runMigrations();
+    } catch (migrationErr) {
+      logger.error('Migration failed during startup', {
+        error: migrationErr.message,
+      });
+      // Don't exit - allow server to start even if migrations fail
+      // This prevents downtime if a migration has issues
+    }
+
     app.listen(PORT, () => {
       logger.info('Server started', {
         port: PORT,

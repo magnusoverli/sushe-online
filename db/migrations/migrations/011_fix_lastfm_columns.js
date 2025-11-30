@@ -27,7 +27,7 @@ async function up(pool) {
   logger.info('Last.fm auth columns verified/added successfully');
 }
 
-async function down(pool) {
+async function down(_pool) {
   // No-op: don't remove columns on rollback since they may have user data
   logger.info('Rollback is no-op for this fix migration');
 }
