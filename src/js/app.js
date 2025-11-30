@@ -1098,6 +1098,7 @@ function initializeAlbumContextMenu() {
     if (!toSubmenu) {
       playHideTimeout = setTimeout(() => {
         if (submenu) submenu.classList.add('hidden');
+        playOption.classList.remove('bg-gray-700', 'text-white');
       }, 200);
     }
   });
@@ -1197,6 +1198,7 @@ function initializeAlbumContextMenu() {
       if (!toSubmenu) {
         hideTimeout = setTimeout(() => {
           if (submenu) submenu.classList.add('hidden');
+          moveOption.classList.remove('bg-gray-700', 'text-white');
         }, 200);
       }
     });
