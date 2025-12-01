@@ -4264,14 +4264,16 @@ module.exports = (app, deps) => {
           let recencyBonus = 0;
           if (album.releaseYear) {
             const age = currentYear - album.releaseYear;
-            if (age === 0) {
-              recencyBonus = 0.25; // Current year: +25%
+            if (age <= 1) {
+              recencyBonus = 0.2; // Within last 1 year: +20%
             } else if (age <= 2) {
-              recencyBonus = 0.2; // Last 2 years: +20%
+              recencyBonus = 0.1; // 1-2 years: +10%
+            } else if (age <= 3) {
+              recencyBonus = 0; // 2-3 years: +0%
             } else if (age <= 5) {
-              recencyBonus = 0.1; // Last 5 years: +10%
-            } else if (age > 20) {
-              recencyBonus = -0.1; // Older than 20 years: -10%
+              recencyBonus = -0.2; // 4-5 years: -20%
+            } else {
+              recencyBonus = -0.3; // Older than 5 years: -30%
             }
           }
           return {
