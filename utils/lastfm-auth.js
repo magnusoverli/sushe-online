@@ -220,6 +220,203 @@ function createLastfmAuth(deps = {}) {
   }
 
   /**
+   * Get user's top artists by time period
+   * @param {string} username - Last.fm username
+   * @param {string} period - Time period: 7day, 1month, 3month, 6month, 12month, overall
+   * @param {number} limit - Number of artists to return (max 1000)
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Object} - { artists: Array, total: number, period: string }
+   */
+  async function getTopArtists(
+    username,
+    period = 'overall',
+    limit = 50,
+    apiKey
+  ) {
+    const params = new URLSearchParams({
+      method: 'user.getTopArtists',
+      user: username,
+      period: period,
+      limit: String(limit),
+      api_key: apiKey || env.LASTFM_API_KEY,
+      format: 'json',
+    });
+
+    const response = await fetchFn(`${API_URL}?${params}`);
+    const data = await response.json();
+
+    if (data.error) {
+      log.error('Last.fm getTopArtists failed:', {
+        error: data.error,
+        message: data.message,
+      });
+      throw new Error(data.message || 'Failed to fetch top artists');
+    }
+
+    const artists = (data.topartists?.artist || []).map((artist) => ({
+      name: artist.name,
+      playcount: parseInt(artist.playcount, 10) || 0,
+      mbid: artist.mbid || null,
+      url: artist.url,
+      rank: parseInt(artist['@attr']?.rank, 10) || 0,
+    }));
+
+    return {
+      artists,
+      total: parseInt(data.topartists?.['@attr']?.total, 10) || artists.length,
+      period,
+    };
+  }
+
+  /**
+   * Get user's top tags (genres they listen to most)
+   * @param {string} username - Last.fm username
+   * @param {number} limit - Number of tags to return
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Object} - { tags: Array }
+   */
+  async function getTopTags(username, limit = 50, apiKey) {
+    const params = new URLSearchParams({
+      method: 'user.getTopTags',
+      user: username,
+      limit: String(limit),
+      api_key: apiKey || env.LASTFM_API_KEY,
+      format: 'json',
+    });
+
+    const response = await fetchFn(`${API_URL}?${params}`);
+    const data = await response.json();
+
+    if (data.error) {
+      log.error('Last.fm getTopTags failed:', {
+        error: data.error,
+        message: data.message,
+      });
+      throw new Error(data.message || 'Failed to fetch top tags');
+    }
+
+    const tags = (data.toptags?.tag || []).map((tag) => ({
+      name: tag.name,
+      count: parseInt(tag.count, 10) || 0,
+      url: tag.url,
+    }));
+
+    return { tags };
+  }
+
+  /**
+   * Get user profile info (total scrobbles, registration, etc.)
+   * @param {string} username - Last.fm username
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Object} - User profile data
+   */
+  async function getUserInfo(username, apiKey) {
+    const params = new URLSearchParams({
+      method: 'user.getInfo',
+      user: username,
+      api_key: apiKey || env.LASTFM_API_KEY,
+      format: 'json',
+    });
+
+    const response = await fetchFn(`${API_URL}?${params}`);
+    const data = await response.json();
+
+    if (data.error) {
+      log.error('Last.fm getUserInfo failed:', {
+        error: data.error,
+        message: data.message,
+      });
+      throw new Error(data.message || 'Failed to fetch user info');
+    }
+
+    const user = data.user || {};
+    return {
+      username: user.name,
+      realname: user.realname || null,
+      playcount: parseInt(user.playcount, 10) || 0,
+      artist_count: parseInt(user.artist_count, 10) || 0,
+      album_count: parseInt(user.album_count, 10) || 0,
+      track_count: parseInt(user.track_count, 10) || 0,
+      registered: user.registered?.unixtime
+        ? new Date(parseInt(user.registered.unixtime, 10) * 1000)
+        : null,
+      country: user.country || null,
+      url: user.url,
+      image: user.image || [],
+    };
+  }
+
+  /**
+   * Get user's top artists across multiple time periods
+   * @param {string} username - Last.fm username
+   * @param {number} limitPerPeriod - Number of artists per period
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Object} - { '7day': [], '1month': [], '3month': [], '6month': [], '12month': [], 'overall': [] }
+   */
+  async function getAllTopArtists(username, limitPerPeriod = 50, apiKey) {
+    const periods = [
+      '7day',
+      '1month',
+      '3month',
+      '6month',
+      '12month',
+      'overall',
+    ];
+
+    const results = await Promise.all(
+      periods.map((period) =>
+        getTopArtists(username, period, limitPerPeriod, apiKey)
+      )
+    );
+
+    const output = {};
+    periods.forEach((period, index) => {
+      output[period] = results[index].artists;
+    });
+
+    return output;
+  }
+
+  /**
+   * Get user's top albums across multiple time periods
+   * @param {string} username - Last.fm username
+   * @param {number} limitPerPeriod - Number of albums per period
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Object} - { '7day': [], '1month': [], ... }
+   */
+  async function getAllTopAlbums(username, limitPerPeriod = 50, apiKey) {
+    const periods = [
+      '7day',
+      '1month',
+      '3month',
+      '6month',
+      '12month',
+      'overall',
+    ];
+
+    const results = await Promise.all(
+      periods.map((period) =>
+        getTopAlbums(username, period, limitPerPeriod, apiKey)
+      )
+    );
+
+    const output = {};
+    periods.forEach((period, index) => {
+      // Transform the raw data to a cleaner format
+      output[period] = (results[index] || []).map((album) => ({
+        name: album.name,
+        artist: album.artist?.name || album.artist || 'Unknown',
+        playcount: parseInt(album.playcount, 10) || 0,
+        mbid: album.mbid || null,
+        url: album.url,
+        rank: parseInt(album['@attr']?.rank, 10) || 0,
+      }));
+    });
+
+    return output;
+  }
+
+  /**
    * Get top artists for a tag/genre
    * @param {string} tag - Tag/genre name (e.g., "black metal", "post-rock")
    * @param {number} limit - Number of artists to return
@@ -436,10 +633,16 @@ function createLastfmAuth(deps = {}) {
     isSessionValid,
     // Auth
     getSession,
-    // Read operations
+    // Read operations - User data
     getTopAlbums,
+    getTopArtists,
+    getTopTags,
+    getUserInfo,
+    getAllTopArtists,
+    getAllTopAlbums,
     getAlbumInfo,
     getRecentTracks,
+    // Read operations - Discovery
     getSimilarArtists,
     getTagTopArtists,
     getTagTopAlbums,
@@ -460,13 +663,21 @@ module.exports = {
   generateSignature: defaultInstance.generateSignature,
   isSessionValid: defaultInstance.isSessionValid,
   getSession: defaultInstance.getSession,
+  // User data
   getTopAlbums: defaultInstance.getTopAlbums,
+  getTopArtists: defaultInstance.getTopArtists,
+  getTopTags: defaultInstance.getTopTags,
+  getUserInfo: defaultInstance.getUserInfo,
+  getAllTopArtists: defaultInstance.getAllTopArtists,
+  getAllTopAlbums: defaultInstance.getAllTopAlbums,
   getAlbumInfo: defaultInstance.getAlbumInfo,
   getRecentTracks: defaultInstance.getRecentTracks,
+  // Discovery
   getSimilarArtists: defaultInstance.getSimilarArtists,
   getTagTopArtists: defaultInstance.getTagTopArtists,
   getTagTopAlbums: defaultInstance.getTagTopAlbums,
   getArtistTopAlbums: defaultInstance.getArtistTopAlbums,
+  // Write operations
   scrobble: defaultInstance.scrobble,
   updateNowPlaying: defaultInstance.updateNowPlaying,
 };

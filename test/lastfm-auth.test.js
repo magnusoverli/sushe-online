@@ -730,3 +730,303 @@ test('updateNowPlaying should throw on API errors', async () => {
     /Invalid session key/
   );
 });
+
+// =============================================================================
+// getTopArtists tests
+// =============================================================================
+
+test('getTopArtists should fetch and transform artist data', async () => {
+  const mockResponse = {
+    topartists: {
+      artist: [
+        {
+          name: 'Artist 1',
+          playcount: '500',
+          mbid: 'mbid-1',
+          url: 'http://lastfm.com/artist1',
+          '@attr': { rank: '1' },
+        },
+        {
+          name: 'Artist 2',
+          playcount: '300',
+          mbid: 'mbid-2',
+          url: 'http://lastfm.com/artist2',
+          '@attr': { rank: '2' },
+        },
+      ],
+      '@attr': { total: '100' },
+    },
+  };
+
+  const mockFetch = async (url) => {
+    assert.ok(url.includes('user.getTopArtists'));
+    assert.ok(url.includes('user=testuser'));
+    assert.ok(url.includes('period=overall'));
+    return { json: async () => mockResponse };
+  };
+
+  const { getTopArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getTopArtists('testuser', 'overall', 50, 'apikey');
+
+  assert.strictEqual(result.artists.length, 2);
+  assert.strictEqual(result.artists[0].name, 'Artist 1');
+  assert.strictEqual(result.artists[0].playcount, 500);
+  assert.strictEqual(result.artists[0].rank, 1);
+  assert.strictEqual(result.total, 100);
+  assert.strictEqual(result.period, 'overall');
+});
+
+test('getTopArtists should handle missing optional fields', async () => {
+  const mockResponse = {
+    topartists: {
+      artist: [{ name: 'Artist 1', playcount: '100' }],
+    },
+  };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getTopArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getTopArtists('testuser', '7day', 50, 'apikey');
+
+  assert.strictEqual(result.artists[0].mbid, null);
+  assert.strictEqual(result.artists[0].rank, 0);
+});
+
+test('getTopArtists should throw on API errors', async () => {
+  const mockResponse = { error: 17, message: 'User not found' };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getTopArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  await assert.rejects(
+    async () => await getTopArtists('unknown', 'overall', 50, 'apikey'),
+    /User not found/
+  );
+});
+
+// =============================================================================
+// getTopTags tests
+// =============================================================================
+
+test('getTopTags should fetch user top tags', async () => {
+  const mockResponse = {
+    toptags: {
+      tag: [
+        {
+          name: 'black metal',
+          count: '150',
+          url: 'http://lastfm.com/tag/black+metal',
+        },
+        {
+          name: 'post-rock',
+          count: '100',
+          url: 'http://lastfm.com/tag/post-rock',
+        },
+      ],
+    },
+  };
+
+  const mockFetch = async (url) => {
+    assert.ok(url.includes('user.getTopTags'));
+    assert.ok(url.includes('user=testuser'));
+    return { json: async () => mockResponse };
+  };
+
+  const { getTopTags } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getTopTags('testuser', 50, 'apikey');
+
+  assert.strictEqual(result.tags.length, 2);
+  assert.strictEqual(result.tags[0].name, 'black metal');
+  assert.strictEqual(result.tags[0].count, 150);
+});
+
+test('getTopTags should throw on API errors', async () => {
+  const mockResponse = { error: 17, message: 'User not found' };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getTopTags } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  await assert.rejects(
+    async () => await getTopTags('unknown', 50, 'apikey'),
+    /User not found/
+  );
+});
+
+// =============================================================================
+// getUserInfo tests
+// =============================================================================
+
+test('getUserInfo should fetch user profile data', async () => {
+  const mockResponse = {
+    user: {
+      name: 'testuser',
+      realname: 'Test User',
+      playcount: '50000',
+      artist_count: '500',
+      album_count: '1000',
+      track_count: '5000',
+      registered: { unixtime: '1500000000' },
+      country: 'Norway',
+      url: 'http://lastfm.com/user/testuser',
+      image: [{ size: 'large', '#text': 'http://img.com/user.jpg' }],
+    },
+  };
+
+  const mockFetch = async (url) => {
+    assert.ok(url.includes('user.getInfo'));
+    assert.ok(url.includes('user=testuser'));
+    return { json: async () => mockResponse };
+  };
+
+  const { getUserInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getUserInfo('testuser', 'apikey');
+
+  assert.strictEqual(result.username, 'testuser');
+  assert.strictEqual(result.realname, 'Test User');
+  assert.strictEqual(result.playcount, 50000);
+  assert.strictEqual(result.artist_count, 500);
+  assert.strictEqual(result.album_count, 1000);
+  assert.strictEqual(result.track_count, 5000);
+  assert.strictEqual(result.country, 'Norway');
+  assert.ok(result.registered instanceof Date);
+});
+
+test('getUserInfo should handle missing optional fields', async () => {
+  const mockResponse = {
+    user: {
+      name: 'testuser',
+      playcount: '100',
+    },
+  };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getUserInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getUserInfo('testuser', 'apikey');
+
+  assert.strictEqual(result.realname, null);
+  assert.strictEqual(result.country, null);
+  assert.strictEqual(result.registered, null);
+});
+
+test('getUserInfo should throw on API errors', async () => {
+  const mockResponse = { error: 17, message: 'User not found' };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getUserInfo } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  await assert.rejects(
+    async () => await getUserInfo('unknown', 'apikey'),
+    /User not found/
+  );
+});
+
+// =============================================================================
+// getAllTopArtists tests
+// =============================================================================
+
+test('getAllTopArtists should fetch all time periods in parallel', async () => {
+  const fetchCalls = [];
+
+  const mockFetch = async (url) => {
+    fetchCalls.push(url);
+    const period = url.match(/period=([^&]+)/)?.[1] || 'overall';
+    return {
+      json: async () => ({
+        topartists: {
+          artist: [{ name: `Artist_${period}`, playcount: '100' }],
+          '@attr': { total: '1' },
+        },
+      }),
+    };
+  };
+
+  const { getAllTopArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getAllTopArtists('testuser', 50, 'apikey');
+
+  assert.strictEqual(fetchCalls.length, 6);
+  assert.ok(result['7day']);
+  assert.ok(result['1month']);
+  assert.ok(result['3month']);
+  assert.ok(result['6month']);
+  assert.ok(result['12month']);
+  assert.ok(result['overall']);
+  assert.strictEqual(result['7day'][0].name, 'Artist_7day');
+  assert.strictEqual(result['overall'][0].name, 'Artist_overall');
+});
+
+// =============================================================================
+// getAllTopAlbums tests
+// =============================================================================
+
+test('getAllTopAlbums should fetch all time periods and transform data', async () => {
+  const mockFetch = async (url) => {
+    const period = url.match(/period=([^&]+)/)?.[1] || 'overall';
+    return {
+      json: async () => ({
+        topalbums: {
+          album: [
+            {
+              name: `Album_${period}`,
+              artist: { name: 'Test Artist' },
+              playcount: '50',
+              mbid: 'mbid-1',
+              url: 'http://lastfm.com/album',
+              '@attr': { rank: '1' },
+            },
+          ],
+        },
+      }),
+    };
+  };
+
+  const { getAllTopAlbums } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
+  const result = await getAllTopAlbums('testuser', 50, 'apikey');
+
+  assert.ok(result['7day']);
+  assert.ok(result['overall']);
+  assert.strictEqual(result['7day'][0].name, 'Album_7day');
+  assert.strictEqual(result['7day'][0].artist, 'Test Artist');
+  assert.strictEqual(result['7day'][0].playcount, 50);
+  assert.strictEqual(result['7day'][0].rank, 1);
+});

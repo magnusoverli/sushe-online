@@ -83,7 +83,7 @@ module.exports = (app, deps) => {
       response_type: 'code',
       redirect_uri: process.env.SPOTIFY_REDIRECT_URI || '',
       scope:
-        'user-read-email user-read-private playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public user-read-playback-state user-modify-playback-state user-read-currently-playing streaming',
+        'user-read-email user-read-private playlist-read-private playlist-read-collaborative playlist-modify-private playlist-modify-public user-read-playback-state user-modify-playback-state user-read-currently-playing streaming user-top-read user-library-read user-read-recently-played',
       state,
     });
 
