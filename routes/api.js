@@ -32,6 +32,7 @@ module.exports = (app, deps) => {
     resetPasswordRateLimit,
   } = require('../middleware/rate-limit');
   const { ensureValidSpotifyToken } = require('../utils/spotify-auth');
+  const { ensureValidTidalToken } = require('../utils/tidal-auth');
   const { URLSearchParams } = require('url');
   const {
     htmlTemplate,
@@ -1827,22 +1828,25 @@ module.exports = (app, deps) => {
 
   // Search Tidal for an album and return the ID
   app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
-    if (
-      !req.user.tidalAuth ||
-      !req.user.tidalAuth.access_token ||
-      (req.user.tidalAuth.expires_at &&
-        req.user.tidalAuth.expires_at <= Date.now())
-    ) {
-      logger.warn('Tidal API request without valid token');
-      return res.status(400).json({ error: 'Not authenticated with Tidal' });
+    // Ensure valid Tidal token (auto-refresh if needed)
+    const tokenResult = await ensureValidTidalToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Tidal auth check failed:', tokenResult.error);
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'tidal',
+      });
     }
 
-    logger.debug('Tidal token expires at:', req.user.tidalAuth.expires_at);
+    const tidalAuth = tokenResult.tidalAuth;
+
+    logger.debug('Tidal token expires at:', tidalAuth.expires_at);
     logger.debug(
       'Using Tidal access token:',
-      (req.user.tidalAuth.access_token || '').slice(0, 6) +
+      (tidalAuth.access_token || '').slice(0, 6) +
         '...' +
-        (req.user.tidalAuth.access_token || '').slice(-4)
+        (tidalAuth.access_token || '').slice(-4)
     );
 
     const { artist, album } = req.query;
@@ -1860,7 +1864,7 @@ module.exports = (app, deps) => {
             'https://openapi.tidal.com/users/v1/me',
             {
               headers: {
-                Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+                Authorization: `Bearer ${tidalAuth.access_token}`,
                 Accept: 'application/vnd.api+json',
                 'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
               },
@@ -1901,7 +1905,7 @@ module.exports = (app, deps) => {
       );
       const resp = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+          Authorization: `Bearer ${tidalAuth.access_token}`,
           Accept: 'application/vnd.api+json',
           'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
         },
@@ -2030,18 +2034,18 @@ module.exports = (app, deps) => {
 
   // Search Tidal for a track and return the ID
   app.get('/api/tidal/track', ensureAuthAPI, async (req, res) => {
-    if (
-      !req.user.tidalAuth ||
-      !req.user.tidalAuth.access_token ||
-      (req.user.tidalAuth.expires_at &&
-        req.user.tidalAuth.expires_at <= Date.now())
-    ) {
+    // Ensure valid Tidal token (auto-refresh if needed)
+    const tokenResult = await ensureValidTidalToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Tidal auth check failed:', tokenResult.error);
       return res.status(401).json({
-        error: 'Not authenticated with Tidal',
-        code: 'NOT_AUTHENTICATED',
+        error: tokenResult.message,
+        code: tokenResult.error,
         service: 'tidal',
       });
     }
+
+    const tidalAuth = tokenResult.tidalAuth;
 
     const { artist, album, track } = req.query;
     if (!artist || !album || !track) {
@@ -2052,7 +2056,7 @@ module.exports = (app, deps) => {
     logger.info('Tidal track search:', artist, '-', album, '-', track);
 
     const headers = {
-      Authorization: `Bearer ${req.user.tidalAuth.access_token}`,
+      Authorization: `Bearer ${tidalAuth.access_token}`,
       Accept: 'application/vnd.api+json',
       'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
     };
@@ -2510,27 +2514,17 @@ module.exports = (app, deps) => {
         }
         auth = tokenResult.spotifyAuth;
       } else {
-        // For Tidal, no refresh token support (offline_access not available)
-        auth = req.user.tidalAuth;
-
-        if (!auth || !auth.access_token) {
+        // For Tidal, use automatic token refresh
+        const tokenResult = await ensureValidTidalToken(req.user, users);
+        if (!tokenResult.success) {
+          logger.warn('Tidal auth check failed:', tokenResult.error);
           return res.status(401).json({
-            error: `Not authenticated with Tidal. Please connect your Tidal account in Settings.`,
-            code: 'NOT_AUTHENTICATED',
+            error: tokenResult.message,
+            code: tokenResult.error,
             service: 'tidal',
           });
         }
-
-        // Check if Tidal token is expired
-        if (auth.expires_at && auth.expires_at <= Date.now() + 300000) {
-          logger.warn('Tidal token expired or expiring soon');
-          return res.status(401).json({
-            error:
-              'Your Tidal connection has expired. Please reconnect in Settings.',
-            code: 'TOKEN_EXPIRED',
-            service: 'tidal',
-          });
-        }
+        auth = tokenResult.tidalAuth;
       }
 
       // Check if playlist exists (for confirmation dialog)

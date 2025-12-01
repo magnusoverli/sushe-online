@@ -12,7 +12,6 @@ module.exports = (app, deps) => {
 
     spotifyTemplate,
     settingsTemplate,
-    isTokenValid,
     isTokenUsable,
     csrfProtection,
     ensureAuth,
@@ -273,11 +272,16 @@ module.exports = (app, deps) => {
 
   // Unified Settings Page
   app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
+    // Prevent browser caching so OAuth redirects show fresh state
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
     try {
       // For Spotify, use isTokenUsable since we can auto-refresh expired tokens
       const spotifyValid = isTokenUsable(req.user.spotifyAuth);
-      // For Tidal, no refresh token support, so use isTokenValid
-      const tidalValid = isTokenValid(req.user.tidalAuth);
+      // For Tidal, use isTokenUsable since we can now auto-refresh expired tokens
+      const tidalValid = isTokenUsable(req.user.tidalAuth);
       // For Last.fm, sessions never expire, just check if connected
       const {
         isSessionValid: isLastfmSessionValid,

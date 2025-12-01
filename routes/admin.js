@@ -184,15 +184,15 @@ module.exports = (app, deps) => {
       .replace(/=/g, '')
       .replace(/\+/g, '-')
       .replace(/\//g, '_');
+    logger.info('Starting Tidal OAuth flow, state:', state);
     req.session.tidalState = state;
     req.session.tidalVerifier = verifier;
-    // The TIDAL application grants these scopes:
-    //   user.read, collection.read, search.read, playlists.write,
-    //   playlists.read, entitlements.read, collection.write, playback,
-    //   recommendations.read, search.write
-    // The integration requests all available scopes. The `offline_access` scope
-    // is not available to this app, so tokens cannot be refreshed and must be
-    // re-authorized when they expire.
+
+    // Store returnTo path for after OAuth completes
+    if (req.query.returnTo) {
+      req.session.tidalReturnTo = req.query.returnTo;
+    }
+
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: process.env.TIDAL_CLIENT_ID || '',
@@ -216,6 +216,12 @@ module.exports = (app, deps) => {
     const verifier = req.session.tidalVerifier;
     delete req.session.tidalState;
     delete req.session.tidalVerifier;
+    logger.info(
+      'Tidal callback received. code:',
+      req.query.code,
+      'state:',
+      req.query.state
+    );
     try {
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
@@ -238,6 +244,11 @@ module.exports = (app, deps) => {
         throw new Error('Token request failed');
       }
       const token = await resp.json();
+      logger.info('Tidal token response:', {
+        access_token: token.access_token?.slice(0, 6) + '...',
+        expires_in: token.expires_in,
+        refresh: !!token.refresh_token,
+      });
       if (token && token.expires_in) {
         token.expires_at = Date.now() + token.expires_in * 1000;
       }
@@ -264,20 +275,27 @@ module.exports = (app, deps) => {
         logger.error('Tidal profile fetch error:', profileErr);
       }
 
-      users.update(
-        { _id: req.user._id },
-        {
-          $set: {
-            tidalAuth: token,
-            tidalCountry: countryCode,
-            updatedAt: new Date(),
+      await new Promise((resolve, reject) => {
+        users.update(
+          { _id: req.user._id },
+          {
+            $set: {
+              tidalAuth: token,
+              tidalCountry: countryCode,
+              updatedAt: new Date(),
+            },
           },
-        },
-        {},
-        (err) => {
-          if (err) logger.error('Tidal auth update error:', err);
-        }
-      );
+          {},
+          (err) => {
+            if (err) {
+              logger.error('Tidal auth update error:', err);
+              reject(err);
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
       req.user.tidalAuth = token;
       req.user.tidalCountry = countryCode;
       req.flash('success', 'Tidal connected');
@@ -285,20 +303,36 @@ module.exports = (app, deps) => {
       logger.error('Tidal auth error:', e);
       req.flash('error', 'Failed to authenticate with Tidal');
     }
-    res.redirect('/settings');
+
+    // Redirect back to where the user was (for automatic reconnects) or settings
+    const returnTo = req.session.tidalReturnTo || '/settings';
+    delete req.session.tidalReturnTo; // Clean up
+    res.redirect(returnTo);
   });
 
-  app.get('/auth/tidal/disconnect', ensureAuth, (req, res) => {
-    users.update(
-      { _id: req.user._id },
-      { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
-      {},
-      (err) => {
-        if (err) logger.error('Tidal disconnect error:', err);
-      }
-    );
-    delete req.user.tidalAuth;
-    req.flash('success', 'Tidal disconnected');
+  app.get('/auth/tidal/disconnect', ensureAuth, async (req, res) => {
+    try {
+      await new Promise((resolve, reject) => {
+        users.update(
+          { _id: req.user._id },
+          { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
+          {},
+          (err) => {
+            if (err) {
+              logger.error('Tidal disconnect error:', err);
+              reject(err);
+            } else {
+              resolve();
+            }
+          }
+        );
+      });
+      delete req.user.tidalAuth;
+      req.flash('success', 'Tidal disconnected');
+    } catch (e) {
+      logger.error('Tidal disconnect error:', e);
+      req.flash('error', 'Failed to disconnect Tidal');
+    }
     res.redirect('/settings');
   });
 
