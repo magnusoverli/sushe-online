@@ -3,6 +3,184 @@
 
 const logger = require('./logger');
 
+// ============================================
+// Artist Name Normalization
+// ============================================
+
+/**
+ * Normalize artist name for cross-source matching
+ * Handles common variations in artist names across Spotify, Last.fm, and internal data
+ * @param {string} name - Artist name to normalize
+ * @returns {string} - Normalized name (lowercase, stripped of common variations)
+ */
+function normalizeArtistName(name) {
+  if (!name) return '';
+
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      // Remove "the " prefix (e.g., "The Beatles" -> "beatles")
+      .replace(/^the\s+/, '')
+      // Remove common suffixes like "(band)", "[US]", etc.
+      .replace(/\s*\([^)]*\)\s*/g, '')
+      .replace(/\s*\[[^\]]*\]\s*/g, '')
+      // Normalize special characters
+      .replace(/[''`]/g, "'")
+      .replace(/[""]/g, '"')
+      // Remove diacritics (é -> e, ü -> u)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      // Remove punctuation except essential ones
+      .replace(/[.,!?;:]/g, '')
+      // Normalize whitespace
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/**
+ * Normalize genre/tag name for matching
+ * @param {string} genre - Genre/tag name
+ * @returns {string} - Normalized genre
+ */
+function normalizeGenre(genre) {
+  if (!genre) return '';
+
+  return (
+    genre
+      .toLowerCase()
+      .trim()
+      // Normalize hyphens and spaces
+      .replace(/[-_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/**
+ * Check if two artist names match (after normalization)
+ * @param {string} name1 - First artist name
+ * @param {string} name2 - Second artist name
+ * @returns {boolean} - True if names match
+ */
+function artistNamesMatch(name1, name2) {
+  return normalizeArtistName(name1) === normalizeArtistName(name2);
+}
+
+/**
+ * Find matching artist in a map by normalized name
+ * @param {Map} map - Map with normalized keys
+ * @param {string} artistName - Artist name to look up
+ * @returns {*} - Value from map or undefined
+ */
+function findArtistInMap(map, artistName) {
+  return map.get(normalizeArtistName(artistName));
+}
+
+/**
+ * Common genre mappings to standardize Last.fm tags
+ * Maps common variations to canonical names
+ */
+const GENRE_MAPPINGS = {
+  'hip hop': 'hip-hop',
+  hiphop: 'hip-hop',
+  'hip-hop/rap': 'hip-hop',
+  electronic: 'electronic',
+  electronica: 'electronic',
+  edm: 'electronic',
+  'r&b': 'r&b',
+  rnb: 'r&b',
+  'rhythm and blues': 'r&b',
+  'rock n roll': 'rock and roll',
+  'rock & roll': 'rock and roll',
+  'post punk': 'post-punk',
+  postpunk: 'post-punk',
+  'synth pop': 'synthpop',
+  'synth-pop': 'synthpop',
+  'death metal': 'death metal',
+  deathmetal: 'death metal',
+  'black metal': 'black metal',
+  blackmetal: 'black metal',
+  'thrash metal': 'thrash metal',
+  thrashmetal: 'thrash metal',
+  'nu metal': 'nu-metal',
+  'nu-metal': 'nu-metal',
+  numetal: 'nu-metal',
+  'alt rock': 'alternative rock',
+  'alt-rock': 'alternative rock',
+  'indie rock': 'indie rock',
+  indierock: 'indie rock',
+  'dream pop': 'dream pop',
+  dreampop: 'dream pop',
+  'shoe gaze': 'shoegaze',
+  'shoe-gaze': 'shoegaze',
+  'trip hop': 'trip-hop',
+  triphop: 'trip-hop',
+  'drum and bass': 'drum and bass',
+  'drum n bass': 'drum and bass',
+  dnb: 'drum and bass',
+  'd&b': 'drum and bass',
+};
+
+/**
+ * Filter and normalize Last.fm tags to usable genres
+ * Removes non-genre tags like decade tags, location tags, etc.
+ * @param {Array} tags - Array of tag objects with name property
+ * @returns {Array} - Filtered and normalized tags
+ */
+function filterGenreTags(tags) {
+  if (!tags || !Array.isArray(tags)) return [];
+
+  // Patterns to exclude
+  const excludePatterns = [
+    /^\d{2,4}s?$/, // Decade tags (80s, 90s, 1990s, 2000s)
+    /^\d{4}$/, // Year tags (2024)
+    /^seen live$/i, // Common non-genre tags
+    /^favorite/i,
+    /^favourite/i,
+    /^my /i,
+    /^under \d+/i, // "under 2000 listeners"
+    /^albums i own/i,
+    /^check out/i,
+  ];
+
+  // Country/location patterns (we want to keep these as we have a separate country field)
+  const locationPatterns = [
+    /^(usa?|uk|american|british|german|french|japanese|swedish|norwegian|finnish|australian|canadian|brazilian|korean|spanish|italian|mexican|dutch|belgian|polish|russian|danish|icelandic|irish|scottish|welsh|south african|new zealand)/i,
+  ];
+
+  return tags
+    .filter((tag) => {
+      const name = tag.name?.toLowerCase() || '';
+
+      // Skip empty or very short tags
+      if (name.length < 2) return false;
+
+      // Skip excluded patterns
+      for (const pattern of excludePatterns) {
+        if (pattern.test(name)) return false;
+      }
+
+      // Skip location tags
+      for (const pattern of locationPatterns) {
+        if (pattern.test(name)) return false;
+      }
+
+      return true;
+    })
+    .map((tag) => {
+      const normalized = normalizeGenre(tag.name);
+      // Apply canonical mapping if exists
+      const canonical = GENRE_MAPPINGS[normalized] || normalized;
+      return {
+        name: canonical,
+        count: tag.count || 0,
+      };
+    })
+    .slice(0, 5); // Top 5 genre tags per artist
+}
+
 /**
  * Position-based points for weighted aggregation
  * Albums ranked higher contribute more to preference scores
@@ -203,11 +381,16 @@ function createUserPreferences(deps = {}) {
 
   /**
    * Calculate affinity scores by combining internal data with external sources
+   * Now with TRUE CONSOLIDATION - Last.fm playcounts contribute to genre scores
+   * via artist tags fetched from Last.fm API
+   *
    * @param {Object} internalData - Data from aggregateFromLists
    * @param {Object} spotifyData - Data from Spotify API (optional)
    * @param {Object} lastfmData - Data from Last.fm API (optional)
+   *        lastfmData.overall - Array of { name, playcount, tags?: [...] }
+   *        lastfmData.artistTags - Map of artist name -> tags array (optional, for genre consolidation)
    * @param {Object} weights - Source weights (default: internal=0.4, spotify=0.35, lastfm=0.25)
-   * @returns {Object} - { genreAffinity, artistAffinity }
+   * @returns {Object} - { genreAffinity, artistAffinity, countryAffinity }
    */
   function calculateAffinity(
     internalData,
@@ -239,7 +422,7 @@ function createUserPreferences(deps = {}) {
       activeWeights.lastfm /= totalWeight;
     }
 
-    // Build artist affinity
+    // Build artist affinity (using normalized names for matching)
     const artistScores = new Map();
 
     // Add internal artists
@@ -247,14 +430,17 @@ function createUserPreferences(deps = {}) {
       const maxPoints = internalData.topArtists[0]?.points || 1;
       for (const artist of internalData.topArtists) {
         const normalized = artist.points / maxPoints;
-        const key = artist.name.toLowerCase();
-        artistScores.set(key, {
+        const key = normalizeArtistName(artist.name);
+        const existing = artistScores.get(key) || {
           name: artist.name,
-          score:
-            (artistScores.get(key)?.score || 0) +
-            normalized * activeWeights.internal,
-          sources: [...(artistScores.get(key)?.sources || []), 'internal'],
-        });
+          score: 0,
+          sources: [],
+          playcount: 0,
+        };
+        existing.score += normalized * activeWeights.internal;
+        if (!existing.sources.includes('internal'))
+          existing.sources.push('internal');
+        artistScores.set(key, existing);
       }
     }
 
@@ -272,12 +458,19 @@ function createUserPreferences(deps = {}) {
         for (let i = 0; i < artists.length; i++) {
           const artist = artists[i];
           const positionScore = 1 - i / artists.length; // 1.0 for first, decreasing
-          const key = artist.name.toLowerCase();
+          const key = normalizeArtistName(artist.name);
           const existing = spotifyArtists.get(key) || {
             name: artist.name,
             score: 0,
+            genres: artist.genres || [],
           };
           existing.score += positionScore * rangeWeight;
+          // Merge genres from all time ranges
+          if (artist.genres) {
+            for (const g of artist.genres) {
+              if (!existing.genres.includes(g)) existing.genres.push(g);
+            }
+          }
           spotifyArtists.set(key, existing);
         }
       }
@@ -292,33 +485,57 @@ function createUserPreferences(deps = {}) {
           name: artist.name,
           score: 0,
           sources: [],
+          playcount: 0,
         };
         existing.score += normalized * activeWeights.spotify;
         if (!existing.sources.includes('spotify'))
           existing.sources.push('spotify');
+        // Store Spotify genres on the artist for genre aggregation
+        existing.spotifyGenres = artist.genres;
         artistScores.set(key, existing);
       }
     }
 
-    // Add Last.fm artists
+    // Add Last.fm artists with playcount weighting
     if (lastfmData?.overall) {
       const maxPlaycount = lastfmData.overall[0]?.playcount || 1;
       for (const artist of lastfmData.overall) {
-        const normalized = artist.playcount / maxPlaycount;
-        const key = artist.name.toLowerCase();
+        const normalized = (artist.playcount || 0) / maxPlaycount;
+        const key = normalizeArtistName(artist.name);
         const existing = artistScores.get(key) || {
           name: artist.name,
           score: 0,
           sources: [],
+          playcount: 0,
         };
         existing.score += normalized * activeWeights.lastfm;
+        existing.playcount = artist.playcount || 0;
         if (!existing.sources.includes('lastfm'))
           existing.sources.push('lastfm');
+        // Store tags from artist data if available
+        if (artist.tags) {
+          existing.lastfmTags = artist.tags;
+        }
         artistScores.set(key, existing);
       }
     }
 
-    // Build genre affinity (from internal and Spotify)
+    // Build artist tags map from lastfmData.artistTags (if provided by sync service)
+    const lastfmArtistTags = new Map();
+    if (lastfmData?.artistTags) {
+      // artistTags can be a Map or an object
+      const tagsData =
+        lastfmData.artistTags instanceof Map
+          ? lastfmData.artistTags
+          : new Map(Object.entries(lastfmData.artistTags || {}));
+
+      for (const [artistName, tags] of tagsData) {
+        const key = normalizeArtistName(artistName);
+        lastfmArtistTags.set(key, filterGenreTags(tags));
+      }
+    }
+
+    // Build genre affinity - NOW WITH LAST.FM CONTRIBUTION!
     const genreScores = new Map();
 
     // Add internal genres
@@ -326,25 +543,27 @@ function createUserPreferences(deps = {}) {
       const maxPoints = internalData.topGenres[0]?.points || 1;
       for (const genre of internalData.topGenres) {
         const normalized = genre.points / maxPoints;
-        const key = genre.name.toLowerCase();
-        genreScores.set(key, {
+        const key = normalizeGenre(genre.name);
+        const existing = genreScores.get(key) || {
           name: genre.name,
-          score:
-            (genreScores.get(key)?.score || 0) +
-            normalized * activeWeights.internal,
-          sources: [...(genreScores.get(key)?.sources || []), 'internal'],
-        });
+          score: 0,
+          sources: [],
+        };
+        existing.score += normalized * activeWeights.internal;
+        if (!existing.sources.includes('internal'))
+          existing.sources.push('internal');
+        genreScores.set(key, existing);
       }
     }
 
     // Add Spotify genres (from artist genres)
-    if (spotifyData) {
+    if (spotifyData && activeWeights.spotify > 0) {
       const spotifyGenres = new Map();
       for (const range of ['short_term', 'medium_term', 'long_term']) {
         const artists = spotifyData[range] || [];
         for (const artist of artists) {
           for (const genre of artist.genres || []) {
-            const key = genre.toLowerCase();
+            const key = normalizeGenre(genre);
             const existing = spotifyGenres.get(key) || {
               name: genre,
               count: 0,
@@ -373,14 +592,79 @@ function createUserPreferences(deps = {}) {
       }
     }
 
+    // **NEW: Add Last.fm genres (derived from artist tags weighted by playcount)**
+    if (lastfmData?.overall && activeWeights.lastfm > 0) {
+      const lastfmGenres = new Map();
+      const maxPlaycount = lastfmData.overall[0]?.playcount || 1;
+
+      for (const artist of lastfmData.overall) {
+        const artistKey = normalizeArtistName(artist.name);
+        const playcount = artist.playcount || 0;
+        const playcountWeight = playcount / maxPlaycount;
+
+        // Get tags for this artist (from artistTags map or inline tags)
+        let tags = lastfmArtistTags.get(artistKey) || [];
+        if (tags.length === 0 && artist.tags) {
+          tags = filterGenreTags(artist.tags);
+        }
+
+        // Contribute each tag weighted by artist's playcount
+        for (const tag of tags) {
+          const tagKey = normalizeGenre(tag.name);
+          const existing = lastfmGenres.get(tagKey) || {
+            name: tag.name,
+            score: 0,
+          };
+          // Weight by playcount and tag relevance (count)
+          const tagWeight = tag.count > 0 ? Math.min(tag.count / 100, 1) : 0.5;
+          existing.score += playcountWeight * tagWeight;
+          lastfmGenres.set(tagKey, existing);
+        }
+      }
+
+      // Normalize and add to genre scores
+      const maxLastfmScore = Math.max(
+        ...Array.from(lastfmGenres.values()).map((g) => g.score),
+        1
+      );
+      for (const [key, genre] of lastfmGenres) {
+        const normalized = genre.score / maxLastfmScore;
+        const existing = genreScores.get(key) || {
+          name: genre.name,
+          score: 0,
+          sources: [],
+        };
+        existing.score += normalized * activeWeights.lastfm;
+        if (!existing.sources.includes('lastfm'))
+          existing.sources.push('lastfm');
+        genreScores.set(key, existing);
+      }
+    }
+
+    // Build country affinity from internal data only (Spotify/Last.fm don't provide this)
+    const countryScores = new Map();
+    if (internalData?.topCountries) {
+      const maxPoints = internalData.topCountries[0]?.points || 1;
+      for (const country of internalData.topCountries) {
+        const normalized = country.points / maxPoints;
+        const key = country.name.toLowerCase();
+        countryScores.set(key, {
+          name: country.name,
+          score: normalized,
+          count: country.count,
+        });
+      }
+    }
+
     // Convert to sorted arrays
     const artistAffinity = Array.from(artistScores.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, 100)
-      .map(({ name, score, sources }) => ({
+      .map(({ name, score, sources, playcount }) => ({
         name,
         score: Math.round(score * 1000) / 1000,
         sources,
+        ...(playcount > 0 ? { playcount } : {}),
       }));
 
     const genreAffinity = Array.from(genreScores.values())
@@ -392,7 +676,16 @@ function createUserPreferences(deps = {}) {
         sources,
       }));
 
-    return { artistAffinity, genreAffinity };
+    const countryAffinity = Array.from(countryScores.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 50)
+      .map(({ name, score, count }) => ({
+        name,
+        score: Math.round(score * 1000) / 1000,
+        count,
+      }));
+
+    return { artistAffinity, genreAffinity, countryAffinity };
   }
 
   /**
@@ -418,9 +711,11 @@ function createUserPreferences(deps = {}) {
       lastfmTopArtists = null,
       lastfmTopAlbums = null,
       lastfmTotalScrobbles = null,
+      lastfmArtistTags = null,
       lastfmSyncedAt = null,
       genreAffinity = null,
       artistAffinity = null,
+      countryAffinity = null,
     } = data;
 
     const query = `
@@ -437,11 +732,13 @@ function createUserPreferences(deps = {}) {
         lastfm_top_artists,
         lastfm_top_albums,
         lastfm_total_scrobbles,
+        lastfm_artist_tags,
         lastfm_synced_at,
         genre_affinity,
         artist_affinity,
+        country_affinity,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         top_genres = COALESCE($2, user_preferences.top_genres),
         top_artists = COALESCE($3, user_preferences.top_artists),
@@ -454,9 +751,11 @@ function createUserPreferences(deps = {}) {
         lastfm_top_artists = COALESCE($10, user_preferences.lastfm_top_artists),
         lastfm_top_albums = COALESCE($11, user_preferences.lastfm_top_albums),
         lastfm_total_scrobbles = COALESCE($12, user_preferences.lastfm_total_scrobbles),
-        lastfm_synced_at = COALESCE($13, user_preferences.lastfm_synced_at),
-        genre_affinity = COALESCE($14, user_preferences.genre_affinity),
-        artist_affinity = COALESCE($15, user_preferences.artist_affinity),
+        lastfm_artist_tags = COALESCE($13, user_preferences.lastfm_artist_tags),
+        lastfm_synced_at = COALESCE($14, user_preferences.lastfm_synced_at),
+        genre_affinity = COALESCE($15, user_preferences.genre_affinity),
+        artist_affinity = COALESCE($16, user_preferences.artist_affinity),
+        country_affinity = COALESCE($17, user_preferences.country_affinity),
         updated_at = NOW()
       RETURNING *
     `;
@@ -474,9 +773,11 @@ function createUserPreferences(deps = {}) {
       lastfmTopArtists ? JSON.stringify(lastfmTopArtists) : null,
       lastfmTopAlbums ? JSON.stringify(lastfmTopAlbums) : null,
       lastfmTotalScrobbles,
+      lastfmArtistTags ? JSON.stringify(lastfmArtistTags) : null,
       lastfmSyncedAt,
       genreAffinity ? JSON.stringify(genreAffinity) : null,
       artistAffinity ? JSON.stringify(artistAffinity) : null,
+      countryAffinity ? JSON.stringify(countryAffinity) : null,
     ]);
 
     log.info('Saved preferences for user:', userId);
@@ -563,6 +864,13 @@ module.exports = {
   // Position points constant
   POSITION_POINTS,
   getPositionPoints,
+  // Artist/genre normalization utilities
+  normalizeArtistName,
+  normalizeGenre,
+  artistNamesMatch,
+  findArtistInMap,
+  filterGenreTags,
+  GENRE_MAPPINGS,
   // Lazy default instance methods
   aggregateFromLists: (...args) =>
     getDefaultInstance().aggregateFromLists(...args),

@@ -304,10 +304,12 @@ module.exports = (app, deps) => {
         const prefs = await userPrefs.getPreferences(req.user._id);
         if (prefs) {
           musicPreferences = {
+            // Consolidated affinity scores (from all sources)
             topGenres: prefs.genre_affinity || [],
             topArtists: prefs.artist_affinity || [],
-            topCountries: prefs.top_countries || [],
+            topCountries: prefs.country_affinity || prefs.top_countries || [],
             totalAlbums: prefs.total_albums || 0,
+            // Source-specific data for detailed view
             spotify: {
               topArtists: prefs.spotify_top_artists || {},
               topTracks: prefs.spotify_top_tracks || {},

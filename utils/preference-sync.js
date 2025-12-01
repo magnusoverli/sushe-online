@@ -163,6 +163,7 @@ function createPreferenceSyncService(deps = {}) {
 
   /**
    * Sync Last.fm data for a user
+   * Now also fetches artist tags to enable genre consolidation
    * @param {Object} user - User object with lastfm_auth and lastfm_username
    * @returns {Object|null} - Last.fm data or null if failed
    */
@@ -180,10 +181,52 @@ function createPreferenceSyncService(deps = {}) {
       lastfmAuth.getUserInfo(username),
     ]);
 
+    // Fetch tags for top 30 overall artists (for genre consolidation)
+    // We limit to 30 to avoid rate limiting while still getting good coverage
+    let artistTags = new Map();
+    const overallArtists = topArtists?.overall || [];
+
+    if (overallArtists.length > 0) {
+      const topArtistNames = overallArtists.slice(0, 30).map((a) => a.name);
+
+      log.info('Fetching tags for Last.fm top artists', {
+        username,
+        artistCount: topArtistNames.length,
+      });
+
+      try {
+        // Use batch function with rate limiting (200ms between requests)
+        artistTags = await lastfmAuth.getArtistTagsBatch(
+          topArtistNames,
+          5, // 5 tags per artist
+          null, // Use default API key
+          200 // 200ms delay between requests
+        );
+
+        log.info('Fetched artist tags', {
+          username,
+          artistsWithTags: artistTags.size,
+        });
+      } catch (err) {
+        log.warn('Failed to fetch artist tags, continuing without them', {
+          username,
+          error: err.message,
+        });
+        // Don't fail the whole sync, just continue without tags
+      }
+    }
+
+    // Convert Map to plain object for JSON storage
+    const artistTagsObj = {};
+    for (const [name, tags] of artistTags) {
+      artistTagsObj[name] = tags;
+    }
+
     return {
       topArtists,
       topAlbums,
       totalScrobbles: userInfo.playcount,
+      artistTags: artistTagsObj,
       syncedAt: new Date(),
     };
   }
@@ -239,7 +282,7 @@ function createPreferenceSyncService(deps = {}) {
       }
     }
 
-    // 3. Sync Last.fm data
+    // 3. Sync Last.fm data (including artist tags for genre consolidation)
     if (user.lastfm_auth?.session_key && user.lastfm_username) {
       try {
         const lastfmData = await syncLastfmData(user);
@@ -247,6 +290,7 @@ function createPreferenceSyncService(deps = {}) {
           updates.lastfmTopArtists = lastfmData.topArtists;
           updates.lastfmTopAlbums = lastfmData.topAlbums;
           updates.lastfmTotalScrobbles = lastfmData.totalScrobbles;
+          updates.lastfmArtistTags = lastfmData.artistTags;
           updates.lastfmSyncedAt = lastfmData.syncedAt;
         }
       } catch (err) {
@@ -258,24 +302,32 @@ function createPreferenceSyncService(deps = {}) {
       }
     }
 
-    // 4. Calculate affinity scores
+    // 4. Calculate affinity scores (with proper data consolidation)
     try {
       const spotifyArtists = updates.spotifyTopArtists || null;
+
+      // Build Last.fm data with artist tags for genre consolidation
       const lastfmArtists = updates.lastfmTopArtists
-        ? { overall: updates.lastfmTopArtists.overall || [] }
+        ? {
+            overall: updates.lastfmTopArtists.overall || [],
+            artistTags: updates.lastfmArtistTags || {},
+          }
         : null;
 
-      const { genreAffinity, artistAffinity } = userPrefs.calculateAffinity(
-        {
-          topGenres: updates.topGenres || [],
-          topArtists: updates.topArtists || [],
-        },
-        spotifyArtists,
-        lastfmArtists
-      );
+      const { genreAffinity, artistAffinity, countryAffinity } =
+        userPrefs.calculateAffinity(
+          {
+            topGenres: updates.topGenres || [],
+            topArtists: updates.topArtists || [],
+            topCountries: updates.topCountries || [],
+          },
+          spotifyArtists,
+          lastfmArtists
+        );
 
       updates.genreAffinity = genreAffinity;
       updates.artistAffinity = artistAffinity;
+      updates.countryAffinity = countryAffinity;
     } catch (err) {
       log.error('Failed to calculate affinity', { userId, error: err.message });
       errors.push({ source: 'affinity', error: err.message });

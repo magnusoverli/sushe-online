@@ -220,6 +220,88 @@ function createLastfmAuth(deps = {}) {
   }
 
   /**
+   * Get top tags (genres) for an artist
+   * @param {string} artist - Artist name
+   * @param {number} limit - Number of tags to return
+   * @param {string} apiKey - Last.fm API key
+   * @returns {Array} - Array of tag objects with name and count
+   */
+  async function getArtistTopTags(artist, limit = 10, apiKey) {
+    const params = new URLSearchParams({
+      method: 'artist.getTopTags',
+      artist: artist,
+      limit: String(limit),
+      api_key: apiKey || env.LASTFM_API_KEY,
+      format: 'json',
+    });
+
+    const response = await fetchFn(`${API_URL}?${params}`);
+    const data = await response.json();
+
+    if (data.error) {
+      // Artist not found is common - return empty array
+      if (data.error === 6) {
+        return [];
+      }
+      log.error('Last.fm getArtistTopTags failed:', {
+        error: data.error,
+        message: data.message,
+        artist,
+      });
+      return []; // Don't throw, just return empty
+    }
+
+    return (data.toptags?.tag || []).map((tag) => ({
+      name: tag.name,
+      count: parseInt(tag.count, 10) || 0,
+      url: tag.url,
+    }));
+  }
+
+  /**
+   * Get top tags for multiple artists (with rate limiting)
+   * @param {Array} artists - Array of artist names or objects with name property
+   * @param {number} tagsPerArtist - Tags to fetch per artist
+   * @param {string} apiKey - Last.fm API key
+   * @param {number} delayMs - Delay between requests in ms
+   * @returns {Map} - Map of artist name -> tags array
+   */
+  async function getArtistTagsBatch(
+    artists,
+    tagsPerArtist = 5,
+    apiKey,
+    delayMs = 200
+  ) {
+    const results = new Map();
+    const artistNames = artists.map((a) =>
+      typeof a === 'string' ? a : a.name
+    );
+
+    for (const artistName of artistNames) {
+      try {
+        const tags = await getArtistTopTags(artistName, tagsPerArtist, apiKey);
+        results.set(artistName, tags);
+
+        // Rate limiting
+        if (
+          delayMs > 0 &&
+          artistNames.indexOf(artistName) < artistNames.length - 1
+        ) {
+          await new Promise((r) => setTimeout(r, delayMs));
+        }
+      } catch (err) {
+        log.warn('Failed to fetch tags for artist:', {
+          artist: artistName,
+          error: err.message,
+        });
+        results.set(artistName, []);
+      }
+    }
+
+    return results;
+  }
+
+  /**
    * Get user's top artists by time period
    * @param {string} username - Last.fm username
    * @param {string} period - Time period: 7day, 1month, 3month, 6month, 12month, overall
@@ -647,6 +729,8 @@ function createLastfmAuth(deps = {}) {
     getTagTopArtists,
     getTagTopAlbums,
     getArtistTopAlbums,
+    getArtistTopTags,
+    getArtistTagsBatch,
     // Write operations
     scrobble,
     updateNowPlaying,
@@ -677,6 +761,8 @@ module.exports = {
   getTagTopArtists: defaultInstance.getTagTopArtists,
   getTagTopAlbums: defaultInstance.getTagTopAlbums,
   getArtistTopAlbums: defaultInstance.getArtistTopAlbums,
+  getArtistTopTags: defaultInstance.getArtistTopTags,
+  getArtistTagsBatch: defaultInstance.getArtistTagsBatch,
   // Write operations
   scrobble: defaultInstance.scrobble,
   updateNowPlaying: defaultInstance.updateNowPlaying,

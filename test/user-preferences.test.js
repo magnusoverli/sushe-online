@@ -4,6 +4,11 @@ const {
   createUserPreferences,
   POSITION_POINTS,
   getPositionPoints,
+  normalizeArtistName,
+  normalizeGenre,
+  artistNamesMatch,
+  filterGenreTags,
+  GENRE_MAPPINGS,
 } = require('../utils/user-preferences.js');
 
 // =============================================================================
@@ -496,7 +501,41 @@ describe('savePreferences', () => {
     const params = pool.query.mock.calls[0].arguments[1];
     assert.ok(params[9]); // lastfmTopArtists
     assert.strictEqual(params[11], 5000); // lastfmTotalScrobbles
-    assert.ok(params[12]); // lastfmSyncedAt
+  });
+
+  it('should handle Last.fm artist tags', async () => {
+    const logger = createMockLogger();
+    const pool = createMockPool([{ rows: [{ id: 1 }] }]);
+    const { savePreferences } = createUserPreferences({ logger, pool });
+
+    const data = {
+      lastfmArtistTags: {
+        Burzum: [{ name: 'black metal', count: 100 }],
+      },
+    };
+
+    await savePreferences('user123', data);
+
+    const params = pool.query.mock.calls[0].arguments[1];
+    assert.ok(params[12]); // lastfmArtistTags should be serialized
+  });
+
+  it('should handle country affinity', async () => {
+    const logger = createMockLogger();
+    const pool = createMockPool([{ rows: [{ id: 1 }] }]);
+    const { savePreferences } = createUserPreferences({ logger, pool });
+
+    const data = {
+      countryAffinity: [
+        { name: 'Norway', score: 1, count: 10 },
+        { name: 'Sweden', score: 0.5, count: 5 },
+      ],
+    };
+
+    await savePreferences('user123', data);
+
+    const params = pool.query.mock.calls[0].arguments[1];
+    assert.ok(params[16]); // countryAffinity should be serialized
   });
 });
 
@@ -628,5 +667,343 @@ describe('checkRefreshNeeded', () => {
     assert.strictEqual(result.needsInternalRefresh, false);
     assert.strictEqual(result.needsSpotifyRefresh, true); // null = stale
     assert.strictEqual(result.needsLastfmRefresh, true); // null = stale
+  });
+});
+
+// =============================================================================
+// Artist Name Normalization tests
+// =============================================================================
+
+describe('normalizeArtistName', () => {
+  it('should lowercase and trim', () => {
+    assert.strictEqual(normalizeArtistName('  Artist Name  '), 'artist name');
+  });
+
+  it('should remove "the" prefix', () => {
+    assert.strictEqual(normalizeArtistName('The Beatles'), 'beatles');
+    assert.strictEqual(normalizeArtistName('THE SMITHS'), 'smiths');
+  });
+
+  it('should remove parenthetical suffixes', () => {
+    assert.strictEqual(normalizeArtistName('Sunn O))) (US)'), 'sunn o)))');
+    assert.strictEqual(normalizeArtistName('Death (band)'), 'death');
+  });
+
+  it('should remove bracket suffixes', () => {
+    assert.strictEqual(normalizeArtistName('Low [USA]'), 'low');
+  });
+
+  it('should normalize apostrophes', () => {
+    assert.strictEqual(
+      normalizeArtistName("Guns N' Roses"),
+      normalizeArtistName("Guns N' Roses")
+    );
+  });
+
+  it('should remove diacritics', () => {
+    assert.strictEqual(normalizeArtistName('Björk'), 'bjork');
+    assert.strictEqual(normalizeArtistName('Sigur Rós'), 'sigur ros');
+    assert.strictEqual(normalizeArtistName('Motörhead'), 'motorhead');
+  });
+
+  it('should normalize whitespace', () => {
+    assert.strictEqual(normalizeArtistName('Artist   Name'), 'artist name');
+  });
+
+  it('should handle empty/null input', () => {
+    assert.strictEqual(normalizeArtistName(''), '');
+    assert.strictEqual(normalizeArtistName(null), '');
+    assert.strictEqual(normalizeArtistName(undefined), '');
+  });
+});
+
+describe('normalizeGenre', () => {
+  it('should lowercase and trim', () => {
+    assert.strictEqual(normalizeGenre('  Black Metal  '), 'black metal');
+  });
+
+  it('should normalize hyphens to spaces', () => {
+    assert.strictEqual(normalizeGenre('death-metal'), 'death metal');
+    assert.strictEqual(normalizeGenre('post_punk'), 'post punk');
+  });
+
+  it('should normalize whitespace', () => {
+    assert.strictEqual(normalizeGenre('indie   rock'), 'indie rock');
+  });
+});
+
+describe('artistNamesMatch', () => {
+  it('should match identical names', () => {
+    assert.strictEqual(artistNamesMatch('The Beatles', 'The Beatles'), true);
+  });
+
+  it('should match case-insensitive', () => {
+    assert.strictEqual(artistNamesMatch('METALLICA', 'metallica'), true);
+  });
+
+  it('should match with/without "the" prefix', () => {
+    assert.strictEqual(artistNamesMatch('The Smiths', 'Smiths'), true);
+  });
+
+  it('should match with/without parenthetical', () => {
+    assert.strictEqual(artistNamesMatch('Death (band)', 'Death'), true);
+  });
+
+  it('should not match different artists', () => {
+    assert.strictEqual(artistNamesMatch('Metallica', 'Megadeth'), false);
+  });
+});
+
+describe('filterGenreTags', () => {
+  it('should filter out decade tags', () => {
+    const tags = [
+      { name: 'rock', count: 100 },
+      { name: '80s', count: 50 },
+      { name: '1990s', count: 40 },
+    ];
+    const result = filterGenreTags(tags);
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0].name, 'rock');
+  });
+
+  it('should filter out "seen live" tag', () => {
+    const tags = [
+      { name: 'metal', count: 100 },
+      { name: 'seen live', count: 80 },
+    ];
+    const result = filterGenreTags(tags);
+    assert.strictEqual(result.length, 1);
+  });
+
+  it('should filter out location/country tags', () => {
+    const tags = [
+      { name: 'black metal', count: 100 },
+      { name: 'norwegian', count: 90 },
+      { name: 'american', count: 80 },
+    ];
+    const result = filterGenreTags(tags);
+    assert.strictEqual(result.length, 1);
+    assert.strictEqual(result[0].name, 'black metal');
+  });
+
+  it('should apply genre mappings', () => {
+    const tags = [{ name: 'hip hop', count: 100 }];
+    const result = filterGenreTags(tags);
+    assert.strictEqual(result[0].name, 'hip-hop');
+  });
+
+  it('should limit to 5 tags', () => {
+    const tags = [];
+    for (let i = 0; i < 10; i++) {
+      tags.push({ name: `genre${i}`, count: 100 - i });
+    }
+    const result = filterGenreTags(tags);
+    assert.strictEqual(result.length, 5);
+  });
+
+  it('should handle empty/null input', () => {
+    assert.deepStrictEqual(filterGenreTags(null), []);
+    assert.deepStrictEqual(filterGenreTags([]), []);
+    assert.deepStrictEqual(filterGenreTags(undefined), []);
+  });
+});
+
+describe('GENRE_MAPPINGS', () => {
+  it('should have hip-hop mappings', () => {
+    assert.strictEqual(GENRE_MAPPINGS['hip hop'], 'hip-hop');
+    assert.strictEqual(GENRE_MAPPINGS['hiphop'], 'hip-hop');
+  });
+
+  it('should have electronic mappings', () => {
+    assert.strictEqual(GENRE_MAPPINGS['electronica'], 'electronic');
+    assert.strictEqual(GENRE_MAPPINGS['edm'], 'electronic');
+  });
+
+  it('should have shoegaze mappings', () => {
+    assert.strictEqual(GENRE_MAPPINGS['shoe gaze'], 'shoegaze');
+    assert.strictEqual(GENRE_MAPPINGS['shoe-gaze'], 'shoegaze');
+  });
+});
+
+// =============================================================================
+// calculateAffinity with Last.fm genre consolidation tests
+// =============================================================================
+
+describe('calculateAffinity - Last.fm genre consolidation', () => {
+  it('should include Last.fm genres from artist tags', () => {
+    const { calculateAffinity } = createUserPreferences({});
+
+    const internalData = {
+      topArtists: [],
+      topGenres: [],
+      topCountries: [],
+    };
+
+    const lastfmData = {
+      overall: [
+        { name: 'Burzum', playcount: 500 },
+        { name: 'Darkthrone', playcount: 400 },
+      ],
+      artistTags: {
+        Burzum: [
+          { name: 'black metal', count: 100 },
+          { name: 'ambient', count: 50 },
+        ],
+        Darkthrone: [
+          { name: 'black metal', count: 100 },
+          { name: 'crust punk', count: 30 },
+        ],
+      },
+    };
+
+    const result = calculateAffinity(internalData, null, lastfmData);
+
+    // Should have genres from Last.fm artist tags
+    const blackMetal = result.genreAffinity.find(
+      (g) => g.name === 'black metal'
+    );
+    assert.ok(blackMetal, 'black metal genre should be present');
+    assert.ok(blackMetal.sources.includes('lastfm'));
+    assert.ok(blackMetal.score > 0);
+  });
+
+  it('should weight genres by artist playcount', () => {
+    const { calculateAffinity } = createUserPreferences({});
+
+    const lastfmData = {
+      overall: [
+        { name: 'Artist High Plays', playcount: 1000 },
+        { name: 'Artist Low Plays', playcount: 100 },
+      ],
+      artistTags: {
+        'Artist High Plays': [{ name: 'genre a', count: 100 }],
+        'Artist Low Plays': [{ name: 'genre b', count: 100 }],
+      },
+    };
+
+    const result = calculateAffinity(
+      { topArtists: [], topGenres: [], topCountries: [] },
+      null,
+      lastfmData
+    );
+
+    const genreA = result.genreAffinity.find((g) => g.name === 'genre a');
+    const genreB = result.genreAffinity.find((g) => g.name === 'genre b');
+
+    // Genre A should have higher score due to higher playcount
+    assert.ok(genreA.score > genreB.score);
+  });
+
+  it('should consolidate same genre from multiple sources', () => {
+    const { calculateAffinity } = createUserPreferences({});
+
+    const internalData = {
+      topArtists: [],
+      topGenres: [{ name: 'rock', count: 10, points: 100 }],
+      topCountries: [],
+    };
+
+    const spotifyData = {
+      short_term: [{ name: 'Artist', genres: ['rock'] }],
+      medium_term: [],
+      long_term: [],
+    };
+
+    const lastfmData = {
+      overall: [{ name: 'Artist', playcount: 500 }],
+      artistTags: {
+        Artist: [{ name: 'rock', count: 100 }],
+      },
+    };
+
+    const result = calculateAffinity(internalData, spotifyData, lastfmData);
+
+    const rock = result.genreAffinity.find((g) => g.name === 'rock');
+    assert.ok(rock);
+    // Should have all three sources
+    assert.ok(rock.sources.includes('internal'));
+    assert.ok(rock.sources.includes('spotify'));
+    assert.ok(rock.sources.includes('lastfm'));
+  });
+
+  it('should return country affinity from internal data', () => {
+    const { calculateAffinity } = createUserPreferences({});
+
+    const internalData = {
+      topArtists: [],
+      topGenres: [],
+      topCountries: [
+        { name: 'Norway', count: 10, points: 200 },
+        { name: 'Sweden', count: 5, points: 100 },
+      ],
+    };
+
+    const result = calculateAffinity(internalData, null, null);
+
+    assert.ok(result.countryAffinity);
+    assert.strictEqual(result.countryAffinity.length, 2);
+    assert.strictEqual(result.countryAffinity[0].name, 'Norway');
+    assert.strictEqual(result.countryAffinity[0].score, 1); // Normalized to max
+  });
+
+  it('should handle artistTags as Map or object', () => {
+    const { calculateAffinity } = createUserPreferences({});
+
+    // Test with plain object (what comes from JSON storage)
+    const lastfmDataObj = {
+      overall: [{ name: 'Artist', playcount: 500 }],
+      artistTags: {
+        Artist: [{ name: 'rock', count: 100 }],
+      },
+    };
+
+    const result1 = calculateAffinity(
+      { topArtists: [], topGenres: [], topCountries: [] },
+      null,
+      lastfmDataObj
+    );
+
+    // Test with Map (what might come from sync service directly)
+    const artistTagsMap = new Map();
+    artistTagsMap.set('Artist', [{ name: 'rock', count: 100 }]);
+
+    const lastfmDataMap = {
+      overall: [{ name: 'Artist', playcount: 500 }],
+      artistTags: artistTagsMap,
+    };
+
+    const result2 = calculateAffinity(
+      { topArtists: [], topGenres: [], topCountries: [] },
+      null,
+      lastfmDataMap
+    );
+
+    // Both should produce same genre result
+    assert.strictEqual(
+      result1.genreAffinity[0].name,
+      result2.genreAffinity[0].name
+    );
+  });
+
+  it('should use normalized artist names for tag matching', () => {
+    const { calculateAffinity } = createUserPreferences({});
+
+    const lastfmData = {
+      overall: [{ name: 'The Beatles', playcount: 1000 }],
+      artistTags: {
+        // Tags stored with different casing/format
+        beatles: [{ name: 'rock', count: 100 }],
+      },
+    };
+
+    const result = calculateAffinity(
+      { topArtists: [], topGenres: [], topCountries: [] },
+      null,
+      lastfmData
+    );
+
+    // Should find the genre even with name mismatch
+    const rock = result.genreAffinity.find((g) => g.name === 'rock');
+    assert.ok(rock);
   });
 });
