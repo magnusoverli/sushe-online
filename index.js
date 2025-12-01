@@ -692,6 +692,7 @@ const rateLimitAdminRequest = createRateLimitAdminRequest({
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const apiRoutes = require('./routes/api');
+const preferencesRoutes = require('./routes/preferences');
 
 const deps = {
   htmlTemplate,
@@ -789,6 +790,7 @@ app.get('/api/health', async (req, res) => {
 authRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);
+preferencesRoutes(app, deps);
 
 // Icon routes for iOS/Safari compatibility
 app.get('/favicon.ico', (req, res) => {
