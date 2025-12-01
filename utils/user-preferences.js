@@ -390,19 +390,26 @@ function createUserPreferences(deps = {}) {
    *        lastfmData.overall - Array of { name, playcount, tags?: [...] }
    *        lastfmData.artistTags - Map of artist name -> tags array (optional, for genre consolidation)
    * @param {Object} weights - Source weights (default: internal=0.4, spotify=0.35, lastfm=0.25)
+   * @param {Object} artistCountries - Map of artist name -> { country, countryCode } from MusicBrainz (optional)
    * @returns {Object} - { genreAffinity, artistAffinity, countryAffinity }
    */
   function calculateAffinity(
     internalData,
     spotifyData = null,
     lastfmData = null,
-    weights = { internal: 0.4, spotify: 0.35, lastfm: 0.25 }
+    weights = { internal: 0.4, spotify: 0.35, lastfm: 0.25 },
+    artistCountries = {}
   ) {
     // Normalize weights if not all sources present
     const activeWeights = { ...weights };
     let totalWeight = 0;
 
-    if (internalData?.topArtists?.length > 0) totalWeight += weights.internal;
+    // Check for any internal data (artists, genres, or countries)
+    const hasInternalData =
+      internalData?.topArtists?.length > 0 ||
+      internalData?.topGenres?.length > 0 ||
+      internalData?.topCountries?.length > 0;
+    if (hasInternalData) totalWeight += weights.internal;
     else activeWeights.internal = 0;
 
     if (
@@ -641,18 +648,114 @@ function createUserPreferences(deps = {}) {
       }
     }
 
-    // Build country affinity from internal data only (Spotify/Last.fm don't provide this)
+    // Build country affinity from ALL sources via MusicBrainz lookups
     const countryScores = new Map();
-    if (internalData?.topCountries) {
+
+    // Helper to add country score
+    const addCountryScore = (countryName, score, source) => {
+      if (!countryName) return;
+      const key = countryName.toLowerCase();
+      const existing = countryScores.get(key) || {
+        name: countryName,
+        score: 0,
+        sources: [],
+        count: 0,
+      };
+      existing.score += score;
+      if (!existing.sources.includes(source)) existing.sources.push(source);
+      existing.count += 1;
+      countryScores.set(key, existing);
+    };
+
+    // Add from internal data (already weighted by position)
+    if (internalData?.topCountries && activeWeights.internal > 0) {
       const maxPoints = internalData.topCountries[0]?.points || 1;
       for (const country of internalData.topCountries) {
-        const normalized = country.points / maxPoints;
-        const key = country.name.toLowerCase();
-        countryScores.set(key, {
-          name: country.name,
-          score: normalized,
-          count: country.count,
-        });
+        const normalized =
+          (country.points / maxPoints) * activeWeights.internal;
+        addCountryScore(country.name, normalized, 'internal');
+      }
+    }
+
+    // Add from Spotify artists via MusicBrainz country lookup
+    if (
+      spotifyData &&
+      activeWeights.spotify > 0 &&
+      Object.keys(artistCountries).length > 0
+    ) {
+      const spotifyCountries = new Map();
+      const timeRangeWeights = {
+        short_term: 0.3,
+        medium_term: 0.4,
+        long_term: 0.3,
+      };
+
+      for (const [range, rangeWeight] of Object.entries(timeRangeWeights)) {
+        const artists = spotifyData[range] || [];
+        for (let i = 0; i < artists.length; i++) {
+          const artist = artists[i];
+          const positionScore = (1 - i / artists.length) * rangeWeight;
+
+          // Look up country from MusicBrainz cache
+          const countryData = artistCountries[artist.name];
+          if (countryData?.country) {
+            const key = countryData.country.toLowerCase();
+            const existing = spotifyCountries.get(key) || {
+              name: countryData.country,
+              score: 0,
+            };
+            existing.score += positionScore;
+            spotifyCountries.set(key, existing);
+          }
+        }
+      }
+
+      // Normalize and add to country scores
+      const maxSpotifyScore = Math.max(
+        ...Array.from(spotifyCountries.values()).map((c) => c.score),
+        1
+      );
+      for (const [, country] of spotifyCountries) {
+        const normalized =
+          (country.score / maxSpotifyScore) * activeWeights.spotify;
+        addCountryScore(country.name, normalized, 'spotify');
+      }
+    }
+
+    // Add from Last.fm artists via MusicBrainz country lookup
+    if (
+      lastfmData?.overall &&
+      activeWeights.lastfm > 0 &&
+      Object.keys(artistCountries).length > 0
+    ) {
+      const lastfmCountries = new Map();
+      const maxPlaycount = lastfmData.overall[0]?.playcount || 1;
+
+      for (const artist of lastfmData.overall) {
+        const playcountWeight = (artist.playcount || 0) / maxPlaycount;
+
+        // Look up country from MusicBrainz cache
+        const countryData = artistCountries[artist.name];
+        if (countryData?.country) {
+          const key = countryData.country.toLowerCase();
+          const existing = lastfmCountries.get(key) || {
+            name: countryData.country,
+            score: 0,
+          };
+          existing.score += playcountWeight;
+          lastfmCountries.set(key, existing);
+        }
+      }
+
+      // Normalize and add to country scores
+      const maxLastfmScore = Math.max(
+        ...Array.from(lastfmCountries.values()).map((c) => c.score),
+        1
+      );
+      for (const [, country] of lastfmCountries) {
+        const normalized =
+          (country.score / maxLastfmScore) * activeWeights.lastfm;
+        addCountryScore(country.name, normalized, 'lastfm');
       }
     }
 
@@ -679,10 +782,11 @@ function createUserPreferences(deps = {}) {
     const countryAffinity = Array.from(countryScores.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, 50)
-      .map(({ name, score, count }) => ({
+      .map(({ name, score, count, sources }) => ({
         name,
         score: Math.round(score * 1000) / 1000,
         count,
+        sources: sources || ['internal'],
       }));
 
     return { artistAffinity, genreAffinity, countryAffinity };
@@ -716,6 +820,7 @@ function createUserPreferences(deps = {}) {
       genreAffinity = null,
       artistAffinity = null,
       countryAffinity = null,
+      artistCountries = null,
     } = data;
 
     const query = `
@@ -737,8 +842,9 @@ function createUserPreferences(deps = {}) {
         genre_affinity,
         artist_affinity,
         country_affinity,
+        artist_countries,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW())
       ON CONFLICT (user_id) DO UPDATE SET
         top_genres = COALESCE($2, user_preferences.top_genres),
         top_artists = COALESCE($3, user_preferences.top_artists),
@@ -756,6 +862,7 @@ function createUserPreferences(deps = {}) {
         genre_affinity = COALESCE($15, user_preferences.genre_affinity),
         artist_affinity = COALESCE($16, user_preferences.artist_affinity),
         country_affinity = COALESCE($17, user_preferences.country_affinity),
+        artist_countries = COALESCE($18, user_preferences.artist_countries),
         updated_at = NOW()
       RETURNING *
     `;
@@ -778,6 +885,7 @@ function createUserPreferences(deps = {}) {
       genreAffinity ? JSON.stringify(genreAffinity) : null,
       artistAffinity ? JSON.stringify(artistAffinity) : null,
       countryAffinity ? JSON.stringify(countryAffinity) : null,
+      artistCountries ? JSON.stringify(artistCountries) : null,
     ]);
 
     log.info('Saved preferences for user:', userId);

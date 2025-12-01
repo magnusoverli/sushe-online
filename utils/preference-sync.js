@@ -5,6 +5,7 @@ const logger = require('./logger');
 const { createSpotifyAuth } = require('./spotify-auth');
 const { createLastfmAuth } = require('./lastfm-auth');
 const { createUserPreferences } = require('./user-preferences');
+const { createMusicBrainz } = require('./musicbrainz');
 
 // Default intervals
 const DEFAULT_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
@@ -36,6 +37,7 @@ function createPreferenceSyncService(deps = {}) {
   const lastfmAuth = deps.lastfmAuth || createLastfmAuth({ logger: log });
   const userPrefs =
     deps.userPrefs || createUserPreferences({ pool, logger: log });
+  const musicBrainz = deps.musicBrainz || createMusicBrainz({ logger: log });
 
   // Configuration
   const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;
@@ -302,7 +304,71 @@ function createPreferenceSyncService(deps = {}) {
       }
     }
 
-    // 4. Calculate affinity scores (with proper data consolidation)
+    // 4. Fetch artist countries from MusicBrainz for top artists across all sources
+    const artistCountries = {};
+    try {
+      // Collect unique artists from all sources (top 20 from each)
+      const uniqueArtists = new Set();
+
+      // From Spotify (all time ranges)
+      if (updates.spotifyTopArtists) {
+        for (const range of ['short_term', 'medium_term', 'long_term']) {
+          const artists = updates.spotifyTopArtists[range] || [];
+          artists.slice(0, 20).forEach((a) => uniqueArtists.add(a.name));
+        }
+      }
+
+      // From Last.fm overall
+      if (updates.lastfmTopArtists?.overall) {
+        updates.lastfmTopArtists.overall
+          .slice(0, 20)
+          .forEach((a) => uniqueArtists.add(a.name));
+      }
+
+      // From internal lists (already have countries, but good to verify/enrich)
+      if (updates.topArtists) {
+        updates.topArtists
+          .slice(0, 20)
+          .forEach((a) => uniqueArtists.add(a.name));
+      }
+
+      const artistList = Array.from(uniqueArtists).slice(0, 30); // Limit to 30 total
+
+      if (artistList.length > 0) {
+        log.info('Fetching artist countries from MusicBrainz', {
+          userId,
+          artistCount: artistList.length,
+        });
+
+        const countriesMap =
+          await musicBrainz.getArtistCountriesBatch(artistList);
+
+        // Convert Map to plain object
+        for (const [name, data] of countriesMap) {
+          if (data?.country) {
+            artistCountries[name] = data;
+          }
+        }
+
+        log.info('Fetched artist countries', {
+          userId,
+          artistsWithCountry: Object.keys(artistCountries).length,
+        });
+      }
+    } catch (err) {
+      log.warn('Failed to fetch artist countries, continuing without them', {
+        userId,
+        error: err.message,
+      });
+      // Don't fail the whole sync, just continue without country data
+    }
+
+    // Store artist countries for caching
+    if (Object.keys(artistCountries).length > 0) {
+      updates.artistCountries = artistCountries;
+    }
+
+    // 5. Calculate affinity scores (with proper data consolidation)
     try {
       const spotifyArtists = updates.spotifyTopArtists || null;
 
@@ -322,7 +388,9 @@ function createPreferenceSyncService(deps = {}) {
             topCountries: updates.topCountries || [],
           },
           spotifyArtists,
-          lastfmArtists
+          lastfmArtists,
+          { internal: 0.4, spotify: 0.35, lastfm: 0.25 },
+          artistCountries // Pass artist countries for cross-source country consolidation
         );
 
       updates.genreAffinity = genreAffinity;
@@ -333,7 +401,7 @@ function createPreferenceSyncService(deps = {}) {
       errors.push({ source: 'affinity', error: err.message });
     }
 
-    // 5. Save to database (only if we have some data)
+    // 6. Save to database (only if we have some data)
     if (Object.keys(updates).length > 0) {
       try {
         await userPrefs.savePreferences(userId, updates);
