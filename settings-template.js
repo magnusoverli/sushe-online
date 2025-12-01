@@ -469,14 +469,11 @@ const musicServicesSection = (
       ${formField(
         'Preferred Service',
         `
-          <div class="flex gap-3">
-            <select id="musicServiceSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500">
-              <option value="" ${!user.musicService ? 'selected' : ''}>Ask each time</option>
-              <option value="spotify" ${user.musicService === 'spotify' ? 'selected' : ''} ${!user.spotifyAuth ? 'disabled' : ''}>Spotify</option>
-              <option value="tidal" ${user.musicService === 'tidal' ? 'selected' : ''} ${!user.tidalAuth ? 'disabled' : ''}>Tidal</option>
-            </select>
-            ${button('Save', "updateMusicService(document.getElementById('musicServiceSelect').value)", 'bg-gray-700 hover:bg-gray-600')}
-          </div>
+          <select id="musicServiceSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500" onchange="updateMusicService(this.value)">
+            <option value="" ${!user.musicService ? 'selected' : ''}>Ask each time</option>
+            <option value="spotify" ${user.musicService === 'spotify' ? 'selected' : ''} ${!user.spotifyAuth ? 'disabled' : ''}>Spotify</option>
+            <option value="tidal" ${user.musicService === 'tidal' ? 'selected' : ''} ${!user.tidalAuth ? 'disabled' : ''}>Tidal</option>
+          </select>
         `,
         'Choose your default music service for playlist creation'
       )}
