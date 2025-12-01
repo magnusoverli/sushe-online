@@ -414,6 +414,271 @@ const statisticsSection = (userStats) =>
   `
   );
 
+// Helper to format relative time
+const getRelativeTime = (date) => {
+  if (!date) return 'Never';
+  const now = new Date();
+  const then = new Date(date);
+  const diffMs = now - then;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+  return formatDate(then);
+};
+
+// Progress bar component for affinity scores
+const affinityBar = (name, score, maxScore = 1) => {
+  const percentage = Math.round((score / maxScore) * 100);
+  return `
+    <div class="flex items-center gap-3 py-1">
+      <div class="w-28 sm:w-32 text-sm text-gray-300 truncate" title="${name}">${name}</div>
+      <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-accent-color to-accent-hover rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+      </div>
+      <div class="w-12 text-right text-xs text-gray-500">${score.toFixed(2)}</div>
+    </div>
+  `;
+};
+
+// Country tag component
+const countryTag = (country) => `
+  <span class="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">
+    ${country.name}
+    <span class="text-xs text-gray-500">(${country.count})</span>
+  </span>
+`;
+
+// Music Preferences Section
+const musicPreferencesSection = (prefs, spotifyValid, lastfmValid) => {
+  if (!prefs) {
+    return settingsCard(
+      'Music Preferences',
+      'fas fa-headphones',
+      `
+      <div class="text-center py-8">
+        <i class="fas fa-music text-4xl text-gray-600 mb-4"></i>
+        <p class="text-gray-400 mb-4">No preference data yet.</p>
+        <p class="text-sm text-gray-500 mb-6">Add albums to your lists or connect Spotify/Last.fm to see your music taste analysis.</p>
+        <button 
+          onclick="syncPreferences()" 
+          id="syncBtn"
+          class="px-4 py-2 bg-accent-color hover:bg-accent-hover text-white rounded-lg transition duration-200 font-medium"
+        >
+          <i class="fas fa-sync-alt mr-2"></i>Sync Now
+        </button>
+      </div>
+    `
+    );
+  }
+
+  const topGenres = (prefs.topGenres || []).slice(0, 10);
+  const topArtists = (prefs.topArtists || []).slice(0, 10);
+  const topCountries = (prefs.topCountries || []).slice(0, 8);
+
+  // Get Spotify short-term artists (recent)
+  const spotifyRecentArtists = prefs.spotify?.topArtists?.short_term || [];
+  const spotifyMediumArtists = prefs.spotify?.topArtists?.medium_term || [];
+
+  // Get Last.fm overall top artists
+  const lastfmTopArtists = prefs.lastfm?.topArtists?.overall || [];
+  const lastfmScrobbles = prefs.lastfm?.totalScrobbles || 0;
+
+  return settingsCard(
+    'Music Preferences',
+    'fas fa-headphones',
+    `
+    <div class="space-y-8">
+      <!-- Header with sync button -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-gray-800">
+        <div class="text-sm text-gray-400">
+          <i class="fas fa-clock mr-1"></i>
+          Last updated: ${getRelativeTime(prefs.updatedAt)}
+        </div>
+        <button 
+          onclick="syncPreferences()" 
+          id="syncBtn"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition duration-200 text-sm font-medium flex items-center gap-2"
+        >
+          <i class="fas fa-sync-alt" id="syncIcon"></i>
+          <span id="syncText">Sync Now</span>
+        </button>
+      </div>
+
+      <!-- Top Genres -->
+      ${
+        topGenres.length > 0
+          ? `
+      <div>
+        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i class="fas fa-tags text-accent-color"></i>
+          Top Genres
+        </h4>
+        <div class="space-y-1">
+          ${topGenres.map((g) => affinityBar(g.name, g.score)).join('')}
+        </div>
+      </div>
+      `
+          : ''
+      }
+
+      <!-- Top Artists -->
+      ${
+        topArtists.length > 0
+          ? `
+      <div>
+        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i class="fas fa-user-friends text-accent-color"></i>
+          Top Artists
+        </h4>
+        <div class="space-y-1">
+          ${topArtists.map((a) => affinityBar(a.name, a.score)).join('')}
+        </div>
+      </div>
+      `
+          : ''
+      }
+
+      <!-- Top Countries -->
+      ${
+        topCountries.length > 0
+          ? `
+      <div>
+        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i class="fas fa-globe text-accent-color"></i>
+          Top Countries
+        </h4>
+        <div class="flex flex-wrap gap-2">
+          ${topCountries.map((c) => countryTag(c)).join('')}
+        </div>
+      </div>
+      `
+          : ''
+      }
+
+      <!-- Spotify Data -->
+      ${
+        spotifyValid &&
+        (spotifyRecentArtists.length > 0 || spotifyMediumArtists.length > 0)
+          ? `
+      <div class="pt-4 border-t border-gray-800">
+        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i class="fab fa-spotify text-green-500"></i>
+          From Spotify
+          ${prefs.spotify?.syncedAt ? `<span class="text-xs font-normal text-gray-500 normal-case">(${getRelativeTime(prefs.spotify.syncedAt)})</span>` : ''}
+        </h4>
+        
+        ${
+          spotifyRecentArtists.length > 0
+            ? `
+        <div class="mb-4">
+          <div class="text-xs text-gray-500 mb-2">Recent favorites (last 4 weeks)</div>
+          <div class="flex flex-wrap gap-2">
+            ${spotifyRecentArtists
+              .slice(0, 8)
+              .map(
+                (a) => `
+              <span class="px-2 py-1 bg-green-900/30 border border-green-800/50 rounded text-xs text-green-300">${a.name}</span>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+        `
+            : ''
+        }
+        
+        ${
+          spotifyMediumArtists.length > 0
+            ? `
+        <div>
+          <div class="text-xs text-gray-500 mb-2">Medium-term favorites (6 months)</div>
+          <div class="flex flex-wrap gap-2">
+            ${spotifyMediumArtists
+              .slice(0, 8)
+              .map(
+                (a) => `
+              <span class="px-2 py-1 bg-green-900/20 border border-green-900/50 rounded text-xs text-green-400">${a.name}</span>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+        `
+            : ''
+        }
+      </div>
+      `
+          : ''
+      }
+
+      <!-- Last.fm Data -->
+      ${
+        lastfmValid && (lastfmTopArtists.length > 0 || lastfmScrobbles > 0)
+          ? `
+      <div class="pt-4 border-t border-gray-800">
+        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i class="fab fa-lastfm text-red-500"></i>
+          From Last.fm
+          ${prefs.lastfm?.syncedAt ? `<span class="text-xs font-normal text-gray-500 normal-case">(${getRelativeTime(prefs.lastfm.syncedAt)})</span>` : ''}
+        </h4>
+        
+        ${
+          lastfmScrobbles > 0
+            ? `
+        <div class="mb-4 flex items-center gap-2">
+          <span class="text-2xl font-bold text-white">${lastfmScrobbles.toLocaleString()}</span>
+          <span class="text-sm text-gray-400">total scrobbles</span>
+        </div>
+        `
+            : ''
+        }
+        
+        ${
+          lastfmTopArtists.length > 0
+            ? `
+        <div>
+          <div class="text-xs text-gray-500 mb-2">All-time top artists</div>
+          <div class="flex flex-wrap gap-2">
+            ${lastfmTopArtists
+              .slice(0, 8)
+              .map(
+                (a) => `
+              <span class="px-2 py-1 bg-red-900/30 border border-red-800/50 rounded text-xs text-red-300">
+                ${a.name}
+                <span class="text-red-500/70">(${a.playcount})</span>
+              </span>
+            `
+              )
+              .join('')}
+          </div>
+        </div>
+        `
+            : ''
+        }
+      </div>
+      `
+          : ''
+      }
+
+      <!-- Data Sources Summary -->
+      <div class="pt-4 border-t border-gray-800">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
+          <span>Data sources:</span>
+          ${prefs.totalAlbums > 0 ? `<span class="flex items-center gap-1"><i class="fas fa-list"></i> ${prefs.totalAlbums} albums</span>` : ''}
+          ${spotifyValid && prefs.spotify?.syncedAt ? `<span class="flex items-center gap-1"><i class="fab fa-spotify text-green-600"></i> Spotify</span>` : ''}
+          ${lastfmValid && prefs.lastfm?.syncedAt ? `<span class="flex items-center gap-1"><i class="fab fa-lastfm text-red-600"></i> Last.fm</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `
+  );
+};
+
 // Admin Request Section
 const adminRequestSection = (req) =>
   settingsCard(
@@ -579,6 +844,7 @@ const settingsTemplate = (req, options) => {
     tidalValid,
     lastfmValid,
     lastfmUsername,
+    musicPreferences,
   } = options;
 
   return `
@@ -730,6 +996,11 @@ const settingsTemplate = (req, options) => {
           ${statisticsSection(userStats)}
           
           ${user.role !== 'admin' ? adminRequestSection(req) : ''}
+        </div>
+        
+        <!-- Music Preferences (Full Width) -->
+        <div class="lg:col-span-2">
+          ${musicPreferencesSection(musicPreferences, spotifyValid, lastfmValid)}
         </div>
         
         <!-- Admin Panel (Full Width) -->
@@ -1122,6 +1393,46 @@ const settingsTemplate = (req, options) => {
       } catch (error) {
         console.error('Error updating music service:', error);
         showToast('Error updating music service', 'error');
+      }
+    }
+
+    // Sync music preferences
+    async function syncPreferences() {
+      const syncBtn = document.getElementById('syncBtn');
+      const syncIcon = document.getElementById('syncIcon');
+      const syncText = document.getElementById('syncText');
+      
+      if (!syncBtn || syncBtn.disabled) return;
+      
+      // Show loading state
+      syncBtn.disabled = true;
+      if (syncIcon) syncIcon.classList.add('fa-spin');
+      if (syncText) syncText.textContent = 'Syncing...';
+      
+      try {
+        const response = await fetch('/api/preferences/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          showToast('Preferences synced successfully!');
+          setTimeout(() => location.reload(), 1000);
+        } else {
+          showToast(data.message || 'Sync completed with some errors', 'error');
+          setTimeout(() => location.reload(), 1500);
+        }
+      } catch (error) {
+        console.error('Error syncing preferences:', error);
+        showToast('Error syncing preferences', 'error');
+        
+        // Reset button state
+        syncBtn.disabled = false;
+        if (syncIcon) syncIcon.classList.remove('fa-spin');
+        if (syncText) syncText.textContent = 'Sync Now';
       }
     }
     

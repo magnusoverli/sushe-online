@@ -296,6 +296,37 @@ module.exports = (app, deps) => {
         totalAlbums: albumCount,
       };
 
+      // Get user's music preferences
+      let musicPreferences = null;
+      try {
+        const { createUserPreferences } = require('../utils/user-preferences');
+        const userPrefs = createUserPreferences({ pool, logger });
+        const prefs = await userPrefs.getPreferences(req.user._id);
+        if (prefs) {
+          musicPreferences = {
+            topGenres: prefs.genre_affinity || [],
+            topArtists: prefs.artist_affinity || [],
+            topCountries: prefs.top_countries || [],
+            totalAlbums: prefs.total_albums || 0,
+            spotify: {
+              topArtists: prefs.spotify_top_artists || {},
+              topTracks: prefs.spotify_top_tracks || {},
+              syncedAt: prefs.spotify_synced_at,
+            },
+            lastfm: {
+              topArtists: prefs.lastfm_top_artists || {},
+              topAlbums: prefs.lastfm_top_albums || {},
+              totalScrobbles: prefs.lastfm_total_scrobbles || 0,
+              syncedAt: prefs.lastfm_synced_at,
+            },
+            updatedAt: prefs.updated_at,
+          };
+        }
+      } catch (prefsError) {
+        logger.error('Error fetching music preferences:', prefsError);
+        // Continue without preferences - not critical
+      }
+
       // If admin, get admin data
       let adminData = null;
       let stats = null;
@@ -521,6 +552,7 @@ module.exports = (app, deps) => {
           tidalValid,
           lastfmValid,
           lastfmUsername: req.user.lastfmUsername || null,
+          musicPreferences,
         })
       );
     } catch (error) {
