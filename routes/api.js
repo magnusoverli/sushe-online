@@ -3421,7 +3421,11 @@ module.exports = (app, deps) => {
     const { period = 'overall', limit = 50 } = req.query;
 
     if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     const validPeriods = [
@@ -3469,7 +3473,11 @@ module.exports = (app, deps) => {
     const { artist, album } = req.query;
 
     if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     if (!artist || !album) {
@@ -3501,7 +3509,11 @@ module.exports = (app, deps) => {
     const { albums } = req.body;
 
     if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     if (!albums || !Array.isArray(albums)) {
@@ -3547,7 +3559,11 @@ module.exports = (app, deps) => {
     const { artist, track, album, duration, timestamp } = req.body;
 
     if (!req.user.lastfmAuth?.session_key) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     if (!artist || !track) {
@@ -3579,7 +3595,11 @@ module.exports = (app, deps) => {
     const { artist, track, album, duration } = req.body;
 
     if (!req.user.lastfmAuth?.session_key) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     if (!artist || !track) {
@@ -3611,7 +3631,11 @@ module.exports = (app, deps) => {
     }
 
     if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     try {
@@ -3648,7 +3672,11 @@ module.exports = (app, deps) => {
     const { limit = 50 } = req.query;
 
     if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     try {
@@ -3685,7 +3713,11 @@ module.exports = (app, deps) => {
       const { refresh = 'false' } = req.query;
 
       if (!req.user.lastfmUsername) {
-        return res.status(401).json({ error: 'Last.fm not connected' });
+        return res.status(401).json({
+          error: 'Last.fm not connected',
+          code: 'NOT_AUTHENTICATED',
+          service: 'lastfm',
+        });
       }
 
       try {
@@ -3818,7 +3850,11 @@ module.exports = (app, deps) => {
       const { albums } = req.body;
 
       if (!req.user.lastfmUsername) {
-        return res.status(401).json({ error: 'Last.fm not connected' });
+        return res.status(401).json({
+          error: 'Last.fm not connected',
+          code: 'NOT_AUTHENTICATED',
+          service: 'lastfm',
+        });
       }
 
       if (!albums || !Array.isArray(albums) || albums.length === 0) {
@@ -3854,7 +3890,11 @@ module.exports = (app, deps) => {
   // Combines: user's genre preferences, context album (if provided), similar artists
   app.get('/api/lastfm/recommendations', ensureAuthAPI, async (req, res) => {
     if (!req.user.lastfmUsername) {
-      return res.status(401).json({ error: 'Last.fm not connected' });
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
     }
 
     // Optional context: the album the user right-clicked on
