@@ -347,10 +347,6 @@ export function createMobileUI(deps = {}) {
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
             <i class="fas fa-users mr-3 text-purple-400"></i>Show Similar Artists
           </button>
-          <button data-action="recommendations"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-            <i class="fas fa-lightbulb mr-3 text-yellow-400"></i>Personal Recommendations
-          </button>
           <div class="border-t border-gray-700 my-2"></div>
           `
               : ''
@@ -526,9 +522,6 @@ export function createMobileUI(deps = {}) {
     const similarArtistsBtn = actionSheet.querySelector(
       '[data-action="similar-artists"]'
     );
-    const recommendationsBtn = actionSheet.querySelector(
-      '[data-action="recommendations"]'
-    );
 
     if (similarArtistsBtn) {
       similarArtistsBtn.addEventListener('click', (e) => {
@@ -539,22 +532,6 @@ export function createMobileUI(deps = {}) {
           showDiscoveryModal('similar', { artist: album.artist });
         } else if (!album.artist) {
           showToast('Could not find album artist', 'error');
-        }
-      });
-    }
-
-    if (recommendationsBtn) {
-      recommendationsBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        closeSheet();
-        if (showDiscoveryModal) {
-          // Pass context album data for personalized recommendations
-          showDiscoveryModal('recommendations', {
-            artist: album.artist,
-            genre_1: album.genre_1,
-            genre_2: album.genre_2,
-          });
         }
       });
     }

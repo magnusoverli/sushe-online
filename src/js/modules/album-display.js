@@ -449,11 +449,9 @@ export function createAlbumDisplay(deps = {}) {
       const hasLastfm = !!window.currentUser?.lastfmUsername;
       const lastfmDivider = document.getElementById('lastfmMenuDivider');
       const similarOption = document.getElementById('similarArtistsOption');
-      const recsOption = document.getElementById('recommendationsOption');
 
       if (lastfmDivider) lastfmDivider.classList.toggle('hidden', !hasLastfm);
       if (similarOption) similarOption.classList.toggle('hidden', !hasLastfm);
-      if (recsOption) recsOption.classList.toggle('hidden', !hasLastfm);
 
       // Position the menu
       positionContextMenu(contextMenu, e.clientX, e.clientY);

@@ -1212,7 +1212,6 @@ function initializeAlbumContextMenu() {
 
   // Handle Last.fm discovery options
   const similarOption = document.getElementById('similarArtistsOption');
-  const recsOption = document.getElementById('recommendationsOption');
 
   if (similarOption) {
     similarOption.onclick = () => {
@@ -1239,43 +1238,6 @@ function initializeAlbumContextMenu() {
       } else {
         showToast('Could not find album artist', 'error');
       }
-
-      currentContextAlbum = null;
-      currentContextAlbumId = null;
-    };
-  }
-
-  if (recsOption) {
-    recsOption.onclick = () => {
-      contextMenu.classList.add('hidden');
-
-      // Get the album data for context-aware recommendations
-      const albumsData = getListData(currentList);
-      let album = albumsData && albumsData[currentContextAlbum];
-
-      // Handle identity mismatch (same logic as similarOption)
-      if (album && currentContextAlbumId) {
-        const expectedId =
-          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-        if (expectedId !== currentContextAlbumId) {
-          const result = findAlbumByIdentity(currentContextAlbumId);
-          if (result) album = result.album;
-        }
-      }
-
-      // Import and call showDiscoveryModal with context data
-      import('./modules/discovery.js').then(({ showDiscoveryModal }) => {
-        if (album) {
-          showDiscoveryModal('recommendations', {
-            artist: album.artist,
-            genre_1: album.genre_1,
-            genre_2: album.genre_2,
-          });
-        } else {
-          // Fallback: no context, just show general recommendations
-          showDiscoveryModal('recommendations');
-        }
-      });
 
       currentContextAlbum = null;
       currentContextAlbumId = null;
