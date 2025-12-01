@@ -17,6 +17,7 @@ const multer = require('multer');
 const os = require('os');
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
+const { createPreferenceSyncService } = require('./utils/preference-sync');
 const upload = multer({
   storage: multer.diskStorage({
     destination: os.tmpdir(),
@@ -856,6 +857,32 @@ ready
         environment: process.env.NODE_ENV || 'development',
         url: `http://localhost:${PORT}`,
       });
+
+      // Start preference sync service (only in production or if explicitly enabled)
+      if (
+        process.env.NODE_ENV === 'production' ||
+        process.env.ENABLE_PREFERENCE_SYNC === 'true'
+      ) {
+        try {
+          const syncService = createPreferenceSyncService({ pool, logger });
+          syncService.start();
+
+          // Clean shutdown
+          const shutdown = () => {
+            logger.info('Shutting down preference sync service...');
+            syncService.stop();
+          };
+          process.on('SIGTERM', shutdown);
+          process.on('SIGINT', shutdown);
+
+          logger.info('Preference sync service initialized');
+        } catch (syncErr) {
+          logger.error('Failed to start preference sync service', {
+            error: syncErr.message,
+          });
+          // Don't exit - sync service is not critical for app operation
+        }
+      }
     });
   })
   .catch((err) => {
