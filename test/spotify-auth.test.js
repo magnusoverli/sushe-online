@@ -790,7 +790,9 @@ test('fetchAllPages should fetch multiple pages', async () => {
       json: async () => ({
         items: isLastPage
           ? [{ id: `item_${offset}` }]
-          : Array.from({ length: 50 }, (_, i) => ({ id: `item_${offset + i}` })),
+          : Array.from({ length: 50 }, (_, i) => ({
+              id: `item_${offset + i}`,
+            })),
         total: 75,
         limit: 50,
         offset,
@@ -803,60 +805,51 @@ test('fetchAllPages should fetch multiple pages', async () => {
     fetch: mockFetch,
   });
 
-  const allItems = await fetchAllPages(
-    (offset) => getTopArtists('token', 'medium_term', 50, offset),
-    200
-  );
+  // =============================================================================
+  // getAllTopTracks tests
+  // =============================================================================
 
-  assert.strictEqual(callCount, 2);
-  assert.strictEqual(allItems.length, 51); // 50 + 1 from second page
-});
+  test('getAllTopTracks should fetch all time ranges in parallel', async () => {
+    const logger = createMockLogger();
+    const fetchCalls = [];
 
-// =============================================================================
-// getAllTopTracks tests
-// =============================================================================
+    const mockFetch = async (url) => {
+      fetchCalls.push(url);
+      const timeRange = url.includes('short_term')
+        ? 'short_term'
+        : url.includes('long_term')
+          ? 'long_term'
+          : 'medium_term';
 
-test('getAllTopTracks should fetch all time ranges in parallel', async () => {
-  const logger = createMockLogger();
-  const fetchCalls = [];
-
-  const mockFetch = async (url) => {
-    fetchCalls.push(url);
-    const timeRange = url.includes('short_term')
-      ? 'short_term'
-      : url.includes('long_term')
-        ? 'long_term'
-        : 'medium_term';
-
-    return {
-      ok: true,
-      json: async () => ({
-        items: [
-          {
-            id: `track_${timeRange}`,
-            name: `Track ${timeRange}`,
-            artists: [{ id: 'a1', name: 'Artist' }],
-            album: { id: 'al1', name: 'Album' },
-          },
-        ],
-        total: 1,
-        limit: 50,
-        offset: 0,
-      }),
+      return {
+        ok: true,
+        json: async () => ({
+          items: [
+            {
+              id: `track_${timeRange}`,
+              name: `Track ${timeRange}`,
+              artists: [{ id: 'a1', name: 'Artist' }],
+              album: { id: 'al1', name: 'Album' },
+            },
+          ],
+          total: 1,
+          limit: 50,
+          offset: 0,
+        }),
+      };
     };
-  };
 
-  const { getAllTopTracks } = createSpotifyAuth({ logger, fetch: mockFetch });
-  const result = await getAllTopTracks('valid_token', 50);
+    const { getAllTopTracks } = createSpotifyAuth({ logger, fetch: mockFetch });
+    const result = await getAllTopTracks('valid_token', 50);
 
-  assert.strictEqual(fetchCalls.length, 3);
-  assert.ok(result.short_term);
-  assert.ok(result.medium_term);
-  assert.ok(result.long_term);
-  assert.strictEqual(result.short_term[0].id, 'track_short_term');
-  assert.strictEqual(result.medium_term[0].id, 'track_medium_term');
-  assert.strictEqual(result.long_term[0].id, 'track_long_term');
-});
+    assert.strictEqual(fetchCalls.length, 3);
+    assert.ok(result.short_term);
+    assert.ok(result.medium_term);
+    assert.ok(result.long_term);
+    assert.strictEqual(result.short_term[0].id, 'track_short_term');
+    assert.strictEqual(result.medium_term[0].id, 'track_medium_term');
+    assert.strictEqual(result.long_term[0].id, 'track_long_term');
+  });
 
   const allItems = await fetchAllPages(
     (offset) => getTopArtists('token', 'medium_term', 50, offset),
