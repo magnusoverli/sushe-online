@@ -20,7 +20,7 @@
     "eslint.config.js",
     "playwright.config.js"
   ],
-  "reporter": ["text", "html", "lcov"],
+  "reporter": ["text-summary", "html", "lcov"],
   "check-coverage": false,
   "exclude-after-remap": false
 }
