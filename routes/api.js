@@ -3851,22 +3851,85 @@ module.exports = (app, deps) => {
   );
 
   // GET /api/lastfm/recommendations - Get personalized album recommendations
-  // Based on genres from user's lists, finding similar artists via Last.fm tags
+  // Combines: user's genre preferences, context album (if provided), similar artists
   app.get('/api/lastfm/recommendations', ensureAuthAPI, async (req, res) => {
     if (!req.user.lastfmUsername) {
       return res.status(401).json({ error: 'Last.fm not connected' });
     }
 
+    // Optional context: the album the user right-clicked on
+    const { contextArtist, contextGenre1, contextGenre2 } = req.query;
+    const hasContext = contextArtist || contextGenre1 || contextGenre2;
+
     try {
       const {
-        getTagTopArtists,
+        getTagTopAlbums,
+        getSimilarArtists,
         getArtistTopAlbums,
       } = require('../utils/lastfm-auth');
 
       const apiKey = process.env.LASTFM_API_KEY;
 
-      // Step 1: Get genres from user's lists (weighted by frequency)
-      logger.info('Fetching genre-based recommendations for user');
+      // ===========================================
+      // GENRE NORMALIZATION MAP
+      // Maps specific subgenres to broader Last.fm tags
+      // ===========================================
+      const genreNormalization = {
+        // Death metal variants
+        'dissonant death metal': 'death metal',
+        'technical death metal': 'death metal',
+        'melodic death metal': 'melodic death metal',
+        'brutal death metal': 'death metal',
+        'progressive death metal': 'progressive death metal',
+        'old school death metal': 'death metal',
+        'blackened death metal': 'death metal',
+        // Black metal variants
+        'atmospheric black metal': 'atmospheric black metal',
+        'depressive black metal': 'black metal',
+        'symphonic black metal': 'symphonic black metal',
+        'raw black metal': 'black metal',
+        'post-black metal': 'post-black metal',
+        // Other metal
+        'progressive metal': 'progressive metal',
+        'doom metal': 'doom metal',
+        'stoner metal': 'stoner metal',
+        'sludge metal': 'sludge metal',
+        'thrash metal': 'thrash metal',
+        'power metal': 'power metal',
+        'heavy metal': 'heavy metal',
+        // Rock variants
+        'alternative rock': 'alternative rock',
+        'indie rock': 'indie rock',
+        'post-rock': 'post-rock',
+        'progressive rock': 'progressive rock',
+        'psychedelic rock': 'psychedelic rock',
+        // Electronic
+        ambient: 'ambient',
+        electronic: 'electronic',
+        synthwave: 'synthwave',
+        industrial: 'industrial',
+        // Other
+        'post-punk': 'post-punk',
+        shoegaze: 'shoegaze',
+        'noise rock': 'noise rock',
+        experimental: 'experimental',
+        'avant-garde': 'avant-garde',
+      };
+
+      const normalizeGenre = (genre) => {
+        if (!genre) return null;
+        const lower = genre.toLowerCase().trim();
+        return genreNormalization[lower] || lower;
+      };
+
+      // ===========================================
+      // STEP 1: Get user's genre preferences from ALL their lists
+      // ===========================================
+      logger.info('Fetching genre-based recommendations for user', {
+        hasContext,
+        contextArtist,
+      });
+
       const genreResult = await pool.query(
         `SELECT 
            LOWER(TRIM(genre)) as genre, 
@@ -3890,13 +3953,80 @@ module.exports = (app, deps) => {
          ) genres
          GROUP BY LOWER(TRIM(genre))
          ORDER BY count DESC
-         LIMIT 8`,
+         LIMIT 10`,
         [req.user._id]
       );
 
-      const userGenres = genreResult.rows;
+      // Calculate total genre count for weighting
+      const totalGenreCount = genreResult.rows.reduce(
+        (sum, g) => sum + parseInt(g.count),
+        0
+      );
 
-      if (userGenres.length === 0) {
+      // Normalize genres and merge counts
+      const genreWeights = new Map();
+      for (const row of genreResult.rows) {
+        const normalized = normalizeGenre(row.genre);
+        if (normalized) {
+          const existing = genreWeights.get(normalized) || 0;
+          genreWeights.set(normalized, existing + parseInt(row.count));
+        }
+      }
+
+      // Convert to array with weights (0-1 scale)
+      const userGenres = Array.from(genreWeights.entries())
+        .map(([genre, count]) => ({
+          genre,
+          count,
+          weight: totalGenreCount > 0 ? count / totalGenreCount : 0,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 8);
+
+      // ===========================================
+      // STEP 2: Boost context genres if provided
+      // ===========================================
+      const contextGenres = [];
+      if (contextGenre1) {
+        const normalized = normalizeGenre(contextGenre1);
+        if (normalized) contextGenres.push(normalized);
+      }
+      if (contextGenre2) {
+        const normalized = normalizeGenre(contextGenre2);
+        if (normalized) contextGenres.push(normalized);
+      }
+
+      // Merge context genres with user genres (context gets 2x weight boost)
+      for (const cg of contextGenres) {
+        const existing = userGenres.find((g) => g.genre === cg);
+        if (existing) {
+          existing.weight *= 2; // Boost existing genre
+          existing.isContext = true;
+        } else {
+          userGenres.unshift({
+            genre: cg,
+            count: 0,
+            weight: 0.3, // Give context genres significant weight even if not in collection
+            isContext: true,
+          });
+        }
+      }
+
+      // Re-normalize weights to sum to 1
+      const totalWeight = userGenres.reduce((sum, g) => sum + g.weight, 0);
+      userGenres.forEach((g) => {
+        g.weight = totalWeight > 0 ? g.weight / totalWeight : 0;
+      });
+
+      logger.info('User genres for recommendations:', {
+        genres: userGenres.map(
+          (g) =>
+            `${g.genre} (${g.count}, w=${g.weight.toFixed(2)}${g.isContext ? ', CONTEXT' : ''})`
+        ),
+        contextGenres,
+      });
+
+      if (userGenres.length === 0 && !contextArtist) {
         return res.json({
           albums: [],
           message:
@@ -3904,74 +4034,108 @@ module.exports = (app, deps) => {
         });
       }
 
-      logger.info('User genres for recommendations:', {
-        genres: userGenres.map((g) => `${g.genre} (${g.count})`),
-      });
+      // ===========================================
+      // STEP 3: Fetch albums from Last.fm
+      // - Use tag.getTopAlbums for genre-based discovery
+      // - Use artist.getSimilar + getTopAlbums for context artist
+      // ===========================================
+      const candidateAlbums = [];
 
-      // Step 2: Get top artists for each genre from Last.fm (parallel)
-      // Weight by genre frequency - more albums = more artists from that genre
-      const artistPromises = userGenres.map(async (genreData) => {
+      // 3a: Get albums by genre (weighted by user's genre preferences)
+      const genreAlbumPromises = userGenres
+        .slice(0, 6)
+        .map(async (genreData) => {
+          try {
+            // More albums from higher-weighted genres
+            const limit = Math.max(5, Math.round(genreData.weight * 30));
+            const albums = await getTagTopAlbums(
+              genreData.genre,
+              limit,
+              apiKey
+            );
+
+            return albums.map((album) => ({
+              artist: album.artist?.name || album.artist,
+              album: album.name,
+              genre: genreData.genre,
+              genreWeight: genreData.weight,
+              isContextGenre: genreData.isContext || false,
+              playcount: parseInt(album.playcount) || 0,
+              image:
+                album.image?.find((i) => i.size === 'extralarge')?.['#text'] ||
+                album.image?.find((i) => i.size === 'large')?.['#text'] ||
+                null,
+              mbid: album.mbid || null,
+              source: 'genre',
+            }));
+          } catch (err) {
+            logger.debug(
+              `Failed to fetch albums for genre ${genreData.genre}:`,
+              err.message
+            );
+            return [];
+          }
+        });
+
+      // 3b: Get similar artists to context artist (if provided)
+      let similarArtistAlbums = [];
+      if (contextArtist) {
         try {
-          // Get more artists for more frequent genres
-          const limit = Math.min(Math.max(3, genreData.count), 8);
-          const artists = await getTagTopArtists(
-            genreData.genre,
-            limit,
+          const similarArtists = await getSimilarArtists(
+            contextArtist,
+            8,
             apiKey
           );
-          return artists.map((a) => ({
-            name: a.name,
-            genre: genreData.genre,
-            tagCount: parseInt(a.count) || 0,
-          }));
-        } catch {
-          return [];
+
+          const artistAlbumPromises = similarArtists
+            .slice(0, 6)
+            .map(async (artist) => {
+              try {
+                const albums = await getArtistTopAlbums(artist.name, 3, apiKey);
+                return albums.map((album) => ({
+                  artist: artist.name,
+                  album: album.name,
+                  genre: contextGenres[0] || null,
+                  genreWeight: 0,
+                  similarityScore: parseFloat(artist.match) || 0,
+                  playcount: parseInt(album.playcount) || 0,
+                  image:
+                    album.image?.find((i) => i.size === 'extralarge')?.[
+                      '#text'
+                    ] ||
+                    album.image?.find((i) => i.size === 'large')?.['#text'] ||
+                    null,
+                  mbid: album.mbid || null,
+                  source: 'similar-artist',
+                }));
+              } catch {
+                return [];
+              }
+            });
+
+          const results = await Promise.all(artistAlbumPromises);
+          similarArtistAlbums = results.flat();
+        } catch (err) {
+          logger.debug('Failed to fetch similar artists:', err.message);
         }
-      });
+      }
 
-      const artistResults = await Promise.all(artistPromises);
-      const allArtists = artistResults.flat();
+      // Combine all results
+      const genreAlbumsResults = await Promise.all(genreAlbumPromises);
+      candidateAlbums.push(...genreAlbumsResults.flat());
+      candidateAlbums.push(...similarArtistAlbums);
 
-      if (allArtists.length === 0) {
+      if (candidateAlbums.length === 0) {
         return res.json({
           albums: [],
           message:
-            'Could not find artists for your genres. Try adding more common genre names.',
+            'Could not find albums for your genres. Try adding more common genre names.',
         });
       }
 
-      // Deduplicate artists (keep first occurrence which has highest tag relevance)
-      const artistMap = new Map();
-      for (const artist of allArtists) {
-        if (!artistMap.has(artist.name.toLowerCase())) {
-          artistMap.set(artist.name.toLowerCase(), artist);
-        }
-      }
-      const uniqueArtists = Array.from(artistMap.values()).slice(0, 20);
-
-      // Step 3: Get top albums from these artists (parallel)
-      const albumPromises = uniqueArtists.map(async (artist) => {
-        try {
-          const albums = await getArtistTopAlbums(artist.name, 2, apiKey);
-          return albums.map((album) => ({
-            artist: artist.name,
-            album: album.name,
-            genre: artist.genre,
-            playcount: parseInt(album.playcount) || 0,
-            image:
-              album.image?.find((i) => i.size === 'extralarge')?.['#text'] ||
-              null,
-            mbid: album.mbid || null,
-          }));
-        } catch {
-          return [];
-        }
-      });
-
-      const albumResults = await Promise.all(albumPromises);
-      let candidateAlbums = albumResults.flat();
-
-      // Step 4: Get all albums in user's lists to filter out
+      // ===========================================
+      // STEP 4: Get user's existing albums to filter out
+      // ===========================================
       const userListsResult = await pool.query(
         `SELECT LOWER(TRIM(COALESCE(a.artist, li.artist))) as artist, 
                 LOWER(TRIM(COALESCE(a.album, li.album))) as album
@@ -3985,78 +4149,100 @@ module.exports = (app, deps) => {
       const existingAlbums = new Set(
         userListsResult.rows.map((r) => `${r.artist}|||${r.album}`)
       );
-
-      // Also filter out artists the user already has albums from
       const existingArtists = new Set(
         userListsResult.rows.map((r) => r.artist)
       );
 
-      logger.debug('Existing artists in collection:', {
-        count: existingArtists.size,
-        sample: Array.from(existingArtists).slice(0, 10),
-      });
+      // ===========================================
+      // STEP 5: Score and rank albums
+      // ===========================================
+      const scoredAlbums = candidateAlbums
+        .filter((album) => {
+          // Filter out albums already in collection
+          const key = `${album.artist.toLowerCase().trim()}|||${album.album.toLowerCase().trim()}`;
+          return !existingAlbums.has(key);
+        })
+        .map((album) => {
+          const normalizedArtist = album.artist.toLowerCase().trim();
+          const isNewArtist = !existingArtists.has(normalizedArtist);
 
-      // Step 5: Filter out albums already in user's lists and prioritize new artists
-      candidateAlbums = candidateAlbums.filter((album) => {
-        const key = `${album.artist.toLowerCase()}|||${album.album.toLowerCase()}`;
-        return !existingAlbums.has(key);
-      });
+          // Calculate composite score
+          let score = 0;
 
-      // Boost albums from artists not in user's collection
-      candidateAlbums = candidateAlbums.map((album) => {
-        const normalizedArtist = album.artist.toLowerCase().trim();
-        const isNew = !existingArtists.has(normalizedArtist);
-        return {
-          ...album,
-          isNewArtist: isNew,
-        };
-      });
+          // Base score from playcount (log scale to prevent domination)
+          const playcountScore =
+            album.playcount > 0 ? Math.log10(album.playcount) / 8 : 0;
+          score += playcountScore * 0.2; // 20% weight
 
-      logger.debug('Candidate albums with NEW flag:', {
-        totalCandidates: candidateAlbums.length,
-        newArtists: candidateAlbums.filter((a) => a.isNewArtist).length,
-        knownArtists: candidateAlbums.filter((a) => !a.isNewArtist).length,
-        sampleNew: candidateAlbums
-          .filter((a) => a.isNewArtist)
-          .slice(0, 3)
-          .map((a) => a.artist),
-        sampleKnown: candidateAlbums
-          .filter((a) => !a.isNewArtist)
-          .slice(0, 3)
-          .map((a) => a.artist),
-      });
+          // Genre weight contribution
+          score += (album.genreWeight || 0) * 0.3; // 30% weight
 
-      // Deduplicate by artist+album
+          // Similar artist score (if from context artist)
+          if (album.source === 'similar-artist' && album.similarityScore) {
+            score += album.similarityScore * 0.25; // 25% weight for similarity
+          }
+
+          // Context genre bonus
+          if (album.isContextGenre) {
+            score += 0.15; // 15% bonus for matching context genre
+          }
+
+          // New artist bonus
+          if (isNewArtist) {
+            score += 0.1; // 10% bonus for discovering new artists
+          }
+
+          return {
+            ...album,
+            isNewArtist,
+            score,
+          };
+        });
+
+      // Deduplicate by artist+album (keep highest scored)
       const albumMap = new Map();
-      for (const album of candidateAlbums) {
+      for (const album of scoredAlbums) {
         const key = `${album.artist.toLowerCase()}|||${album.album.toLowerCase()}`;
-        if (!albumMap.has(key)) {
+        if (!albumMap.has(key) || albumMap.get(key).score < album.score) {
           albumMap.set(key, album);
         }
       }
 
-      // Sort: new artists first, then by playcount
+      // Sort by score descending
       const recommendations = Array.from(albumMap.values())
-        .sort((a, b) => {
-          // Prioritize new artists
-          if (a.isNewArtist !== b.isNewArtist) {
-            return a.isNewArtist ? -1 : 1;
-          }
-          return b.playcount - a.playcount;
-        })
-        .slice(0, 15);
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 15)
+        .map((album) => ({
+          artist: album.artist,
+          album: album.album,
+          genre: album.genre,
+          playcount: album.playcount,
+          image: album.image,
+          mbid: album.mbid,
+          isNewArtist: album.isNewArtist,
+          // Debug info (can remove later)
+          _score: Math.round(album.score * 100) / 100,
+          _source: album.source,
+        }));
 
-      logger.info('Generated genre-based recommendations:', {
-        genreCount: userGenres.length,
-        artistCount: uniqueArtists.length,
+      logger.info('Generated recommendations:', {
+        contextArtist: contextArtist || 'none',
+        contextGenres,
+        userGenreCount: userGenres.length,
         candidateCount: candidateAlbums.length,
-        filteredCount: recommendations.length,
-        existingAlbumsCount: existingAlbums.size,
+        filteredCount: scoredAlbums.length,
+        resultCount: recommendations.length,
+        topScores: recommendations.slice(0, 3).map((r) => ({
+          artist: r.artist,
+          score: r._score,
+          source: r._source,
+        })),
       });
 
       res.json({
         albums: recommendations,
         basedOn: userGenres.slice(0, 5).map((g) => g.genre),
+        contextArtist: contextArtist || null,
       });
     } catch (error) {
       logger.error('Recommendations error:', error);

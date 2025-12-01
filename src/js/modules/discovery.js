@@ -110,7 +110,7 @@ function createModalElement() {
 /**
  * Show the discovery modal
  * @param {string} type - 'similar' or 'recommendations'
- * @param {Object} data - Additional data (e.g., artist name for similar)
+ * @param {Object} data - Additional data (e.g., artist name for similar, context album for recommendations)
  */
 export function showDiscoveryModal(type, data = {}) {
   if (!discoveryModal) {
@@ -130,7 +130,12 @@ export function showDiscoveryModal(type, data = {}) {
     icon.className = 'fas fa-users text-xl text-purple-400';
   } else {
     title.textContent = 'Recommendations';
-    subtitle.textContent = 'Based on your Last.fm listening history';
+    // Show context if provided
+    if (data.artist) {
+      subtitle.textContent = `Based on "${data.artist}" and your collection`;
+    } else {
+      subtitle.textContent = 'Based on your collection';
+    }
     icon.className = 'fas fa-lightbulb text-xl text-yellow-400';
   }
 
@@ -145,7 +150,7 @@ export function showDiscoveryModal(type, data = {}) {
   if (type === 'similar') {
     fetchSimilarArtists(data.artist);
   } else {
-    fetchRecommendations();
+    fetchRecommendations(data);
   }
 }
 
@@ -266,13 +271,28 @@ async function fetchSimilarArtists(artistName) {
 
 /**
  * Fetch recommendations from API
+ * @param {Object} contextData - Optional context from the album the user clicked on
  */
-async function fetchRecommendations() {
+async function fetchRecommendations(contextData = {}) {
   const content = discoveryModal.querySelector('#discoveryModalContent');
   const subtitle = discoveryModal.querySelector('#discoveryModalSubtitle');
 
   try {
-    const response = await fetch('/api/lastfm/recommendations', {
+    // Build URL with optional context parameters
+    const params = new URLSearchParams();
+    if (contextData.artist) {
+      params.set('contextArtist', contextData.artist);
+    }
+    if (contextData.genre_1) {
+      params.set('contextGenre1', contextData.genre_1);
+    }
+    if (contextData.genre_2) {
+      params.set('contextGenre2', contextData.genre_2);
+    }
+
+    const url = `/api/lastfm/recommendations${params.toString() ? '?' + params.toString() : ''}`;
+
+    const response = await fetch(url, {
       credentials: 'include',
     });
 

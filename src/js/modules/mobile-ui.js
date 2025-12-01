@@ -549,7 +549,12 @@ export function createMobileUI(deps = {}) {
         e.stopPropagation();
         closeSheet();
         if (showDiscoveryModal) {
-          showDiscoveryModal('recommendations');
+          // Pass context album data for personalized recommendations
+          showDiscoveryModal('recommendations', {
+            artist: album.artist,
+            genre_1: album.genre_1,
+            genre_2: album.genre_2,
+          });
         }
       });
     }
