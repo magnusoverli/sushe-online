@@ -4290,6 +4290,27 @@ module.exports = (app, deps) => {
           return true;
         });
 
+      // Deduplicate by artist - keep only the newest album per artist
+      const artistNewestAlbum = new Map();
+      for (const album of topCandidates) {
+        const artistKey = album.artist.toLowerCase().trim();
+        const existing = artistNewestAlbum.get(artistKey);
+        if (!existing) {
+          artistNewestAlbum.set(artistKey, album);
+        } else {
+          // Keep the newer album (higher release year wins, or higher score if same/unknown year)
+          const existingYear = existing.releaseYear || 0;
+          const albumYear = album.releaseYear || 0;
+          if (
+            albumYear > existingYear ||
+            (albumYear === existingYear && album.score > existing.score)
+          ) {
+            artistNewestAlbum.set(artistKey, album);
+          }
+        }
+      }
+      topCandidates = Array.from(artistNewestAlbum.values());
+
       // Final sort and slice
       const recommendations = topCandidates
         .sort((a, b) => b.score - a.score)
