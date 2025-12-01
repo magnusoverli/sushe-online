@@ -741,6 +741,37 @@ body.now-playing-bar-visible #addAlbumFAB {
   display: none;
 }
 
+/* ============================================
+   Tidal Widget Styles
+   ============================================ */
+
+/* Tidal widget container - desktop only */
+.tidal-widget {
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(17, 24, 39, 0.2) 100%
+  );
+}
+
+/* Smooth transitions for tidal widget states */
+#tidalWidgetNotConnected,
+#tidalWidgetConnected {
+  animation: fadeIn 0.2s ease;
+}
+
+/* Hide on mobile */
+@media (max-width: 1023px) {
+  .tidal-widget {
+    display: none !important;
+  }
+}
+
+/* Collapsed sidebar - hide tidal widget */
+#sidebar.collapsed .tidal-widget {
+  display: none;
+}
+
 /* Loading spinner */
 #miniplayerLoading i {
   animation: spin 1s linear infinite;

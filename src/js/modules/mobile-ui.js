@@ -278,6 +278,20 @@ export function createMobileUI(deps = {}) {
     const hasTidal = window.currentUser?.tidalAuth;
     const hasAnyService = hasSpotify || hasTidal;
     const hasLastfm = !!window.currentUser?.lastfmUsername;
+    const musicService = window.currentUser?.musicService;
+
+    // Determine which service to show for "Open in..." based on preference
+    // Priority: user preference > only connected service > Spotify (if both)
+    let primaryServiceName = '';
+    if (musicService === 'tidal' && hasTidal) {
+      primaryServiceName = 'Tidal';
+    } else if (musicService === 'spotify' && hasSpotify) {
+      primaryServiceName = 'Spotify';
+    } else if (hasTidal && !hasSpotify) {
+      primaryServiceName = 'Tidal';
+    } else if (hasSpotify) {
+      primaryServiceName = 'Spotify';
+    }
 
     const actionSheet = document.createElement('div');
     actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
@@ -311,7 +325,7 @@ export function createMobileUI(deps = {}) {
                 <button data-action="open-app"
                         class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
                   <i class="fas fa-external-link-alt mr-3 text-green-500 text-sm"></i>
-                  <span class="text-sm">Open in ${hasSpotify ? 'Spotify' : 'Tidal'}</span>
+                  <span class="text-sm">Open in ${primaryServiceName}</span>
                 </button>
                 
                 ${

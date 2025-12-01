@@ -1162,6 +1162,32 @@ const spotifyTemplate = (user) => `
           <i class="fas fa-spinner fa-spin text-gray-400"></i>
         </div>
       </div>
+      
+      <!-- Tidal Widget (Desktop only) -->
+      <div id="tidalWidget" class="tidal-widget flex-shrink-0 border-t border-gray-800 p-3 hidden">
+        <!-- Not Connected State -->
+        <div id="tidalWidgetNotConnected" class="text-center py-3">
+          <a href="/settings" 
+             class="inline-flex items-center gap-2 px-4 py-2 bg-[#000000] hover:bg-[#1a1a1a] text-white text-sm font-medium rounded-full transition-all hover:scale-105 shadow-lg border border-gray-700">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.012 3.992L8.008 7.996 4.004 3.992 0 7.996 4.004 12l-4.004 4.004L4.004 20.008 8.008 16.004 12.012 20.008 16.016 16.004 12.012 12l4.004-4.004L12.012 3.992zM16.042 7.996l3.979-3.979L24 7.996l-3.979 4.004 3.979 4.004-3.979 3.979-3.979-3.979L12.038 16.008 16.042 12l-4.004-4.004L16.042 7.996z"/>
+            </svg>
+            Connect Tidal
+          </a>
+          <p class="text-[10px] text-gray-600 mt-2">Open albums in Tidal</p>
+        </div>
+        
+        <!-- Connected State -->
+        <div id="tidalWidgetConnected" class="text-center py-3 hidden">
+          <div class="flex items-center justify-center gap-2 text-gray-400 mb-2">
+            <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.012 3.992L8.008 7.996 4.004 3.992 0 7.996 4.004 12l-4.004 4.004L4.004 20.008 8.008 16.004 12.012 20.008 16.016 16.004 12.012 12l4.004-4.004L12.012 3.992zM16.042 7.996l3.979-3.979L24 7.996l-3.979 4.004 3.979 4.004-3.979 3.979-3.979-3.979L12.038 16.008 16.042 12l-4.004-4.004L16.042 7.996z"/>
+            </svg>
+            <span class="text-xs font-medium text-white">Tidal Connected</span>
+          </div>
+          <p class="text-xs text-gray-500">Right-click albums to open in Tidal</p>
+        </div>
+      </div>
     </aside>
       
       <!-- Album Display Area -->
