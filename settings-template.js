@@ -6,6 +6,95 @@ const {
 } = require('./templates');
 const { adjustColor, colorWithOpacity } = require('./color-utils');
 
+// Country name to ISO code mapping (reverse of MusicBrainz COUNTRY_CODE_MAP)
+const COUNTRY_NAME_TO_CODE = {
+  'United States': 'US',
+  'United Kingdom': 'GB',
+  Canada: 'CA',
+  Australia: 'AU',
+  Germany: 'DE',
+  France: 'FR',
+  Japan: 'JP',
+  Sweden: 'SE',
+  Norway: 'NO',
+  Finland: 'FI',
+  Denmark: 'DK',
+  Iceland: 'IS',
+  Netherlands: 'NL',
+  Belgium: 'BE',
+  Italy: 'IT',
+  Spain: 'ES',
+  Portugal: 'PT',
+  Brazil: 'BR',
+  Mexico: 'MX',
+  Argentina: 'AR',
+  Poland: 'PL',
+  'Czech Republic': 'CZ',
+  Austria: 'AT',
+  Switzerland: 'CH',
+  Greece: 'GR',
+  'South Korea': 'KR',
+  China: 'CN',
+  Taiwan: 'TW',
+  'Hong Kong': 'HK',
+  India: 'IN',
+  Indonesia: 'ID',
+  Thailand: 'TH',
+  Philippines: 'PH',
+  Vietnam: 'VN',
+  Malaysia: 'MY',
+  Singapore: 'SG',
+  Russia: 'RU',
+  Ukraine: 'UA',
+  Ireland: 'IE',
+  Scotland: 'GB', // Part of UK
+  Wales: 'GB', // Part of UK
+  'New Zealand': 'NZ',
+  'South Africa': 'ZA',
+  Nigeria: 'NG',
+  Egypt: 'EG',
+  Israel: 'IL',
+  Turkey: 'TR',
+  'United Arab Emirates': 'AE',
+  'Saudi Arabia': 'SA',
+  Chile: 'CL',
+  Colombia: 'CO',
+  Peru: 'PE',
+  Venezuela: 'VE',
+  Cuba: 'CU',
+  'Puerto Rico': 'PR',
+  Jamaica: 'JM',
+  Hungary: 'HU',
+  Romania: 'RO',
+  Bulgaria: 'BG',
+  Serbia: 'RS',
+  Croatia: 'HR',
+  Slovenia: 'SI',
+  Slovakia: 'SK',
+  Lithuania: 'LT',
+  Latvia: 'LV',
+  Estonia: 'EE',
+  Luxembourg: 'LU',
+  Europe: 'EU', // MusicBrainz special
+  Worldwide: 'UN', // MusicBrainz special
+};
+
+// Convert country code to flag emoji using regional indicator symbols
+const countryCodeToFlag = (code) => {
+  if (!code || code.length !== 2) return '';
+  const codePoints = code
+    .toUpperCase()
+    .split('')
+    .map((char) => 127397 + char.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+};
+
+// Get flag emoji for a country name
+const getCountryFlag = (countryName) => {
+  const code = COUNTRY_NAME_TO_CODE[countryName];
+  return code ? countryCodeToFlag(code) : '';
+};
+
 // Reusable Settings Card Component
 const settingsCard = (title, icon, children, className = '') => `
   <div class="bg-gray-900 rounded-lg border border-gray-800 overflow-hidden ${className}">
@@ -431,27 +520,153 @@ const getRelativeTime = (date) => {
   return formatDate(then);
 };
 
-// Progress bar component for affinity scores
-const affinityBar = (name, score, maxScore = 1) => {
-  const percentage = Math.round((score / maxScore) * 100);
+// Stat card component for key metrics
+const statCard = (value, label, icon, colorClass = 'text-accent-color') => `
+  <div class="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50 text-center">
+    <div class="${colorClass} mb-2">
+      <i class="${icon} text-xl"></i>
+    </div>
+    <div class="text-2xl font-bold text-white mb-1">${value}</div>
+    <div class="text-xs text-gray-400 uppercase tracking-wide">${label}</div>
+  </div>
+`;
+
+// Progress bar component for affinity scores with ranking
+// Simple affinity list item - no progress bars or percentages (relative data isn't meaningful)
+const affinityBar = (name, rank = null, sources = []) => {
+  const sourceIcons = sources
+    .map((s) => {
+      if (s === 'spotify')
+        return '<i class="fab fa-spotify text-green-500" title="Spotify"></i>';
+      if (s === 'lastfm')
+        return '<i class="fab fa-lastfm text-red-500" title="Last.fm"></i>';
+      if (s === 'internal')
+        return '<i class="fas fa-list text-gray-400" title="Your lists"></i>';
+      return '';
+    })
+    .join('');
+
   return `
-    <div class="flex items-center gap-3 py-1">
-      <div class="w-28 sm:w-32 text-sm text-gray-300 truncate" title="${name}">${name}</div>
-      <div class="flex-1 h-2 bg-gray-800 rounded-full overflow-hidden">
-        <div class="h-full bg-gradient-to-r from-accent-color to-accent-hover rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
-      </div>
-      <div class="w-12 text-right text-xs text-gray-500">${score.toFixed(2)}</div>
+    <div class="flex items-center gap-3 py-2 group hover:bg-gray-800/30 rounded-lg px-2 -mx-2 transition-colors">
+      ${rank !== null ? `<div class="w-6 text-sm font-medium text-gray-500">${rank}</div>` : ''}
+      <div class="flex-1 text-sm text-gray-200 truncate font-medium" title="${name}">${name}</div>
+      ${sources.length > 0 ? `<div class="flex gap-1.5 opacity-60 group-hover:opacity-100 transition-opacity">${sourceIcons}</div>` : ''}
     </div>
   `;
 };
 
-// Country tag component
-const countryTag = (country) => `
-  <span class="inline-flex items-center gap-1 px-3 py-1 bg-gray-800 border border-gray-700 rounded-full text-sm text-gray-300">
-    ${country.name}
-    <span class="text-xs text-gray-500">(${country.count})</span>
-  </span>
-`;
+// Country bar component - sourced from user's lists only
+const countryBar = (country, maxCount, rank) => {
+  const count = country.count || 0;
+  const percentage = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+  const flag = getCountryFlag(country.name);
+
+  return `
+    <div class="flex items-center gap-3 py-2 group hover:bg-gray-800/30 rounded-lg px-2 -mx-2 transition-colors">
+      <div class="w-6 text-sm font-medium text-gray-500">${rank}</div>
+      <div class="w-28 sm:w-36 text-sm text-gray-200 truncate font-medium flex items-center gap-2" title="${country.name}">${flag ? `<span>${flag}</span>` : ''}<span class="truncate">${country.name}</span></div>
+      <div class="flex-1 h-2.5 bg-gray-800 rounded-full overflow-hidden">
+        <div class="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-500 ease-out" style="width: ${percentage}%"></div>
+      </div>
+      <div class="w-14 text-right text-xs text-gray-500 tabular-nums">${count} artist${count !== 1 ? 's' : ''}</div>
+    </div>
+  `;
+};
+
+// Service artist bar - Spotify shows simple list, Last.fm shows progress bar with play counts
+const serviceArtistBar = (
+  name,
+  value,
+  maxValue,
+  rank,
+  service = 'spotify',
+  country = null
+) => {
+  const countryDisplay = country
+    ? `<span class="text-gray-500 text-xs" title="${country}">· ${country}</span>`
+    : '';
+
+  // Spotify: simple list without progress bar (no meaningful data to show)
+  if (service === 'spotify') {
+    return `
+      <div class="flex items-center gap-3 py-2 group hover:bg-gray-800/30 rounded-lg px-2 -mx-2 transition-colors">
+        <div class="w-6 text-sm font-medium text-gray-500">${rank}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-200 truncate font-medium" title="${name}">${name}</span>
+            ${countryDisplay}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Last.fm: progress bar with play counts
+  const percentage = maxValue > 0 ? Math.round((value / maxValue) * 100) : 0;
+  return `
+    <div class="flex items-center gap-3 py-2 group hover:bg-gray-800/30 rounded-lg px-2 -mx-2 transition-colors">
+      <div class="w-6 text-sm font-medium text-gray-500">${rank}</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-200 truncate font-medium" title="${name}">${name}</span>
+          ${countryDisplay}
+        </div>
+        <div class="h-2 bg-gray-800 rounded-full overflow-hidden mt-1">
+          <div class="h-full bg-gradient-to-r from-red-500 to-red-400 rounded-full transition-all duration-500 ease-out" style="width: ${percentage}%"></div>
+        </div>
+      </div>
+      <div class="w-16 text-right text-xs text-gray-500 tabular-nums">${value.toLocaleString()}</div>
+    </div>
+  `;
+};
+
+// Track bar for Spotify top tracks - simple list without progress bar
+const trackBar = (track, rank) => {
+  return `
+    <div class="flex items-center gap-3 py-2 group hover:bg-gray-800/30 rounded-lg px-2 -mx-2 transition-colors">
+      <div class="w-6 text-sm font-medium text-gray-500">${rank}</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-gray-200 truncate font-medium" title="${track.name}">${track.name}</span>
+          <span class="text-gray-500 text-xs truncate" title="${track.artist}">· ${track.artist}</span>
+        </div>
+      </div>
+    </div>
+  `;
+};
+
+// Time range button component
+const timeRangeButton = (label, range, service, isActive) => {
+  const activeClass = isActive
+    ? service === 'spotify'
+      ? 'bg-green-600 text-white'
+      : 'bg-red-600 text-white'
+    : 'bg-gray-700 text-gray-300 hover:bg-gray-600';
+
+  return `
+    <button 
+      onclick="setTimeRange('${service}', '${range}')"
+      class="px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${activeClass}"
+      data-service="${service}"
+      data-range="${range}"
+    >
+      ${label}
+    </button>
+  `;
+};
+
+// Time range labels
+const TIME_RANGE_LABELS = {
+  short_term: '4 Weeks',
+  medium_term: '6 Months',
+  long_term: 'All Time',
+  '7day': '7 Days',
+  '1month': '1 Month',
+  '3month': '3 Months',
+  '6month': '6 Months',
+  '12month': '1 Year',
+  overall: 'All Time',
+};
 
 // Music Preferences Section
 const musicPreferencesSection = (prefs, spotifyValid, lastfmValid) => {
@@ -460,149 +675,281 @@ const musicPreferencesSection = (prefs, spotifyValid, lastfmValid) => {
       'Music Preferences',
       'fas fa-headphones',
       `
-      <div class="text-center py-8">
-        <i class="fas fa-music text-4xl text-gray-600 mb-4"></i>
-        <p class="text-gray-400 mb-4">No preference data yet.</p>
-        <p class="text-sm text-gray-500 mb-6">Add albums to your lists or connect Spotify/Last.fm to see your music taste analysis.</p>
+      <div class="text-center py-12">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+          <i class="fas fa-music text-2xl text-gray-600"></i>
+        </div>
+        <p class="text-gray-300 font-medium mb-2">No preference data yet</p>
+        <p class="text-sm text-gray-500 mb-6 max-w-md mx-auto">Add albums to your lists or connect Spotify/Last.fm to see your music taste analysis.</p>
         <button 
           onclick="syncPreferences()" 
           id="syncBtn"
-          class="px-4 py-2 bg-accent-color hover:bg-accent-hover text-white rounded-lg transition duration-200 font-medium"
+          class="px-5 py-2.5 bg-accent-color hover:bg-accent-hover text-white rounded-lg transition duration-200 font-medium inline-flex items-center gap-2"
         >
-          <i class="fas fa-sync-alt mr-2"></i>Sync Now
+          <i class="fas fa-sync-alt"></i>
+          Sync Now
         </button>
       </div>
-    `
+    `,
+      'lg:col-span-2'
     );
   }
 
-  const topGenres = (prefs.topGenres || []).slice(0, 10);
-  const topArtists = (prefs.topArtists || []).slice(0, 10);
-  const topCountries = (prefs.topCountries || []).slice(0, 8);
+  const topGenres = (prefs.topGenres || []).slice(0, 8);
+  const topArtists = (prefs.topArtists || []).slice(0, 8);
+  const topCountries = (prefs.topCountries || []).slice(0, 6);
+  const maxCountryCount = topCountries[0]?.count || 1;
 
-  // Get Spotify short-term artists (recent)
-  const spotifyRecentArtists = prefs.spotify?.topArtists?.short_term || [];
-  const spotifyMediumArtists = prefs.spotify?.topArtists?.medium_term || [];
+  // Get artist country data from MusicBrainz cache
+  const artistCountries = prefs.artistCountries || {};
 
-  // Get Last.fm overall top artists
-  const lastfmTopArtists = prefs.lastfm?.topArtists?.overall || [];
+  // Spotify data by time range
+  const spotifyArtistsByRange = prefs.spotify?.topArtists || {};
+  const spotifyTracksByRange = prefs.spotify?.topTracks || {};
+
+  // Last.fm data by time range
+  const lastfmArtistsByRange = prefs.lastfm?.topArtists || {};
   const lastfmScrobbles = prefs.lastfm?.totalScrobbles || 0;
+
+  // Check which time ranges have data
+  const spotifyRanges = ['short_term', 'medium_term', 'long_term'].filter(
+    (r) => spotifyArtistsByRange[r]?.length > 0
+  );
+  const lastfmRanges = [
+    '7day',
+    '1month',
+    '3month',
+    '6month',
+    '12month',
+    'overall',
+  ].filter((r) => lastfmArtistsByRange[r]?.length > 0);
+
+  // Default to medium_term for Spotify, overall for Last.fm
+  const defaultSpotifyRange = spotifyRanges.includes('medium_term')
+    ? 'medium_term'
+    : spotifyRanges[0] || 'medium_term';
+  const defaultLastfmRange = lastfmRanges.includes('overall')
+    ? 'overall'
+    : lastfmRanges[0] || 'overall';
+
+  // Count data sources
+  const hasListData = prefs.totalAlbums > 0;
+  const hasSpotifyData = spotifyValid && prefs.spotify?.syncedAt;
+  const hasLastfmData = lastfmValid && prefs.lastfm?.syncedAt;
+  const sourceCount = [hasListData, hasSpotifyData, hasLastfmData].filter(
+    Boolean
+  ).length;
 
   return settingsCard(
     'Music Preferences',
     'fas fa-headphones',
     `
-    <div class="space-y-8">
-      <!-- Header with sync button -->
-      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-gray-800">
-        <div class="text-sm text-gray-400">
-          <i class="fas fa-clock mr-1"></i>
-          Last updated: ${getRelativeTime(prefs.updatedAt)}
+    <div class="space-y-6">
+      <!-- Header with sync button and quick stats -->
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-gray-800">
+        <div class="flex items-center gap-4">
+          <div class="text-sm text-gray-400">
+            <i class="fas fa-clock mr-1.5"></i>
+            Updated ${getRelativeTime(prefs.updatedAt)}
+          </div>
         </div>
         <button 
           onclick="syncPreferences()" 
           id="syncBtn"
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition duration-200 text-sm font-medium flex items-center gap-2"
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg transition duration-200 text-sm font-medium inline-flex items-center gap-2 border border-gray-700"
         >
           <i class="fas fa-sync-alt" id="syncIcon"></i>
           <span id="syncText">Sync Now</span>
         </button>
       </div>
 
-      <!-- Top Genres -->
-      ${
-        topGenres.length > 0
-          ? `
-      <div>
-        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
-          <i class="fas fa-tags text-accent-color"></i>
-          Top Genres
-        </h4>
-        <div class="space-y-1">
-          ${topGenres.map((g) => affinityBar(g.name, g.score)).join('')}
-        </div>
+      <!-- Quick Stats Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        ${statCard(prefs.totalAlbums || 0, 'Albums', 'fas fa-compact-disc', 'text-accent-color')}
+        ${statCard(topGenres.length, 'Genres', 'fas fa-tags', 'text-purple-400')}
+        ${statCard(topArtists.length, 'Artists', 'fas fa-user-friends', 'text-blue-400')}
+        ${statCard(sourceCount, 'Sources', 'fas fa-database', 'text-green-400')}
       </div>
-      `
-          : ''
-      }
 
-      <!-- Top Artists -->
-      ${
-        topArtists.length > 0
-          ? `
-      <div>
-        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
-          <i class="fas fa-user-friends text-accent-color"></i>
-          Top Artists
-        </h4>
-        <div class="space-y-1">
-          ${topArtists.map((a) => affinityBar(a.name, a.score)).join('')}
+      <!-- Main Content Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Top Genres -->
+        ${
+          topGenres.length > 0
+            ? `
+        <div class="bg-gray-800/30 rounded-xl p-4 border border-gray-800">
+          <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-4 flex items-center gap-2">
+            <i class="fas fa-tags text-purple-400"></i>
+            Top Genres
+          </h4>
+          <div class="space-y-0.5">
+            ${topGenres.map((g, i) => affinityBar(g.name, i + 1, g.sources || [])).join('')}
+          </div>
         </div>
+        `
+            : ''
+        }
+
+        <!-- Top Artists -->
+        ${
+          topArtists.length > 0
+            ? `
+        <div class="bg-gray-800/30 rounded-xl p-4 border border-gray-800">
+          <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-4 flex items-center gap-2">
+            <i class="fas fa-user-friends text-blue-400"></i>
+            Top Artists
+          </h4>
+          <div class="space-y-0.5">
+            ${topArtists.map((a, i) => affinityBar(a.name, i + 1, a.sources || [])).join('')}
+          </div>
+        </div>
+        `
+            : ''
+        }
       </div>
-      `
-          : ''
-      }
 
       <!-- Top Countries -->
       ${
         topCountries.length > 0
           ? `
-      <div>
-        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
-          <i class="fas fa-globe text-accent-color"></i>
+      <div class="bg-gray-800/30 rounded-xl p-4 border border-gray-800">
+        <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-4 flex items-center gap-2">
+          <i class="fas fa-globe text-blue-400"></i>
           Top Countries
+          <span class="text-xs font-normal text-gray-500 normal-case ml-auto">by artist count</span>
         </h4>
-        <div class="flex flex-wrap gap-2">
-          ${topCountries.map((c) => countryTag(c)).join('')}
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6">
+          ${topCountries.map((c, i) => countryBar(c, maxCountryCount, i + 1)).join('')}
         </div>
       </div>
       `
           : ''
       }
 
-      <!-- Spotify Data -->
+      <!-- Connected Services -->
       ${
-        spotifyValid &&
-        (spotifyRecentArtists.length > 0 || spotifyMediumArtists.length > 0)
+        (spotifyValid && spotifyRanges.length > 0) ||
+        (lastfmValid && (lastfmRanges.length > 0 || lastfmScrobbles > 0))
           ? `
-      <div class="pt-4 border-t border-gray-800">
-        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
-          <i class="fab fa-spotify text-green-500"></i>
-          From Spotify
-          ${prefs.spotify?.syncedAt ? `<span class="text-xs font-normal text-gray-500 normal-case">(${getRelativeTime(prefs.spotify.syncedAt)})</span>` : ''}
-        </h4>
-        
+      <div class="space-y-6">
+        <!-- Spotify Section -->
         ${
-          spotifyRecentArtists.length > 0
+          spotifyValid && spotifyRanges.length > 0
             ? `
-        <div class="mb-4">
-          <div class="text-xs text-gray-500 mb-2">Recent favorites (last 4 weeks)</div>
-          <div class="flex flex-wrap gap-2">
-            ${spotifyRecentArtists
-              .slice(0, 8)
-              .map(
-                (a) => `
-              <span class="px-2 py-1 bg-green-900/30 border border-green-800/50 rounded text-xs text-green-300">${a.name}</span>
-            `
-              )
-              .join('')}
+        <div class="bg-gray-800/30 rounded-xl p-4 border border-gray-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h4 class="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2">
+              <i class="fab fa-spotify text-green-500"></i>
+              Spotify
+              ${prefs.spotify?.syncedAt ? `<span class="text-xs font-normal text-gray-500 normal-case">${getRelativeTime(prefs.spotify.syncedAt)}</span>` : ''}
+            </h4>
+            <div class="flex gap-1.5" id="spotifyRangeButtons">
+              ${spotifyRanges.map((r) => timeRangeButton(TIME_RANGE_LABELS[r], r, 'spotify', r === defaultSpotifyRange)).join('')}
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Spotify Artists -->
+            <div>
+              <h5 class="text-xs text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <i class="fas fa-user-friends"></i>
+                Top Artists
+              </h5>
+              ${spotifyRanges
+                .map(
+                  (range) => `
+                <div id="spotify-artists-${range}" class="space-y-0.5 ${range !== defaultSpotifyRange ? 'hidden' : ''}" data-service="spotify" data-type="artists" data-range="${range}" data-content="true">
+                  ${(spotifyArtistsByRange[range] || [])
+                    .slice(0, 8)
+                    .map((a, i) => {
+                      const country = artistCountries[a.name]?.country || null;
+                      const maxRank = (spotifyArtistsByRange[range] || [])
+                        .length;
+                      return serviceArtistBar(
+                        a.name,
+                        maxRank - i,
+                        maxRank,
+                        i + 1,
+                        'spotify',
+                        country
+                      );
+                    })
+                    .join('')}
+                </div>
+              `
+                )
+                .join('')}
+            </div>
+            
+            <!-- Spotify Tracks -->
+            <div>
+              <h5 class="text-xs text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+                <i class="fas fa-music"></i>
+                Top Tracks
+              </h5>
+              ${spotifyRanges
+                .map(
+                  (range) => `
+                <div id="spotify-tracks-${range}" class="space-y-0.5 ${range !== defaultSpotifyRange ? 'hidden' : ''}" data-service="spotify" data-type="tracks" data-range="${range}" data-content="true">
+                  ${(spotifyTracksByRange[range] || [])
+                    .slice(0, 8)
+                    .map((t, i) => trackBar(t, i + 1))
+                    .join('')}
+                </div>
+              `
+                )
+                .join('')}
+            </div>
           </div>
         </div>
         `
             : ''
         }
-        
+
+        <!-- Last.fm Section -->
         ${
-          spotifyMediumArtists.length > 0
+          lastfmValid && (lastfmRanges.length > 0 || lastfmScrobbles > 0)
             ? `
-        <div>
-          <div class="text-xs text-gray-500 mb-2">Medium-term favorites (6 months)</div>
-          <div class="flex flex-wrap gap-2">
-            ${spotifyMediumArtists
-              .slice(0, 8)
+        <div class="bg-gray-800/30 rounded-xl p-4 border border-gray-800">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <h4 class="text-sm font-semibold text-white uppercase tracking-wide flex items-center gap-2">
+              <i class="fab fa-lastfm text-red-500"></i>
+              Last.fm
+              ${prefs.lastfm?.syncedAt ? `<span class="text-xs font-normal text-gray-500 normal-case">${getRelativeTime(prefs.lastfm.syncedAt)}</span>` : ''}
+              ${lastfmScrobbles > 0 ? `<span class="text-xs font-normal text-gray-500 normal-case">· ${lastfmScrobbles.toLocaleString()} scrobbles</span>` : ''}
+            </h4>
+            <div class="flex gap-1.5 flex-wrap" id="lastfmRangeButtons">
+              ${lastfmRanges.map((r) => timeRangeButton(TIME_RANGE_LABELS[r], r, 'lastfm', r === defaultLastfmRange)).join('')}
+            </div>
+          </div>
+          
+          <div>
+            <h5 class="text-xs text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+              <i class="fas fa-user-friends"></i>
+              Top Artists
+              <span class="text-gray-500 font-normal normal-case">(by play count)</span>
+            </h5>
+            ${lastfmRanges
               .map(
-                (a) => `
-              <span class="px-2 py-1 bg-green-900/20 border border-green-900/50 rounded text-xs text-green-400">${a.name}</span>
+                (range) => `
+              <div id="lastfm-artists-${range}" class="space-y-0.5 ${range !== defaultLastfmRange ? 'hidden' : ''}" data-service="lastfm" data-type="artists" data-range="${range}" data-content="true">
+                ${(lastfmArtistsByRange[range] || [])
+                  .slice(0, 8)
+                  .map((a, i) => {
+                    const country = artistCountries[a.name]?.country || null;
+                    const maxPlaycount =
+                      (lastfmArtistsByRange[range] || [])[0]?.playcount || 1;
+                    return serviceArtistBar(
+                      a.name,
+                      a.playcount || 0,
+                      maxPlaycount,
+                      i + 1,
+                      'lastfm',
+                      country
+                    );
+                  })
+                  .join('')}
+              </div>
             `
               )
               .join('')}
@@ -616,66 +963,18 @@ const musicPreferencesSection = (prefs, spotifyValid, lastfmValid) => {
           : ''
       }
 
-      <!-- Last.fm Data -->
-      ${
-        lastfmValid && (lastfmTopArtists.length > 0 || lastfmScrobbles > 0)
-          ? `
-      <div class="pt-4 border-t border-gray-800">
-        <h4 class="text-sm font-semibold text-gray-300 uppercase tracking-wide mb-4 flex items-center gap-2">
-          <i class="fab fa-lastfm text-red-500"></i>
-          From Last.fm
-          ${prefs.lastfm?.syncedAt ? `<span class="text-xs font-normal text-gray-500 normal-case">(${getRelativeTime(prefs.lastfm.syncedAt)})</span>` : ''}
-        </h4>
-        
-        ${
-          lastfmScrobbles > 0
-            ? `
-        <div class="mb-4 flex items-center gap-2">
-          <span class="text-2xl font-bold text-white">${lastfmScrobbles.toLocaleString()}</span>
-          <span class="text-sm text-gray-400">total scrobbles</span>
-        </div>
-        `
-            : ''
-        }
-        
-        ${
-          lastfmTopArtists.length > 0
-            ? `
-        <div>
-          <div class="text-xs text-gray-500 mb-2">All-time top artists</div>
-          <div class="flex flex-wrap gap-2">
-            ${lastfmTopArtists
-              .slice(0, 8)
-              .map(
-                (a) => `
-              <span class="px-2 py-1 bg-red-900/30 border border-red-800/50 rounded text-xs text-red-300">
-                ${a.name}
-                <span class="text-red-500/70">(${a.playcount})</span>
-              </span>
-            `
-              )
-              .join('')}
-          </div>
-        </div>
-        `
-            : ''
-        }
-      </div>
-      `
-          : ''
-      }
-
-      <!-- Data Sources Summary -->
-      <div class="pt-4 border-t border-gray-800">
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
-          <span>Data sources:</span>
-          ${prefs.totalAlbums > 0 ? `<span class="flex items-center gap-1"><i class="fas fa-list"></i> ${prefs.totalAlbums} albums</span>` : ''}
-          ${spotifyValid && prefs.spotify?.syncedAt ? `<span class="flex items-center gap-1"><i class="fab fa-spotify text-green-600"></i> Spotify</span>` : ''}
-          ${lastfmValid && prefs.lastfm?.syncedAt ? `<span class="flex items-center gap-1"><i class="fab fa-lastfm text-red-600"></i> Last.fm</span>` : ''}
+      <!-- Data Sources Footer -->
+      <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-gray-800">
+        <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+          <span class="uppercase tracking-wide">Sources:</span>
+          ${hasListData ? `<span class="flex items-center gap-1.5 text-gray-400"><i class="fas fa-list"></i> ${prefs.totalAlbums} albums</span>` : ''}
+          ${hasSpotifyData ? `<span class="flex items-center gap-1.5 text-green-400"><i class="fab fa-spotify"></i> Connected</span>` : ''}
+          ${hasLastfmData ? `<span class="flex items-center gap-1.5 text-red-400"><i class="fab fa-lastfm"></i> Connected</span>` : ''}
         </div>
       </div>
     </div>
-  `
+  `,
+    'lg:col-span-2'
   );
 };
 
@@ -1434,6 +1733,42 @@ const settingsTemplate = (req, options) => {
         if (syncIcon) syncIcon.classList.remove('fa-spin');
         if (syncText) syncText.textContent = 'Sync Now';
       }
+    }
+
+    // Time range selector for Spotify/Last.fm data
+    function setTimeRange(service, range) {
+      // Update button states
+      const buttonContainer = document.getElementById(service + 'RangeButtons');
+      if (buttonContainer) {
+        const buttons = buttonContainer.querySelectorAll('button');
+        buttons.forEach(btn => {
+          const btnRange = btn.getAttribute('data-range');
+          const isActive = btnRange === range;
+          const activeClass = service === 'spotify' ? 'bg-green-600 text-white' : 'bg-red-600 text-white';
+          const inactiveClass = 'bg-gray-700 text-gray-300 hover:bg-gray-600';
+          
+          // Remove all state classes
+          btn.classList.remove('bg-green-600', 'bg-red-600', 'bg-gray-700', 'text-white', 'text-gray-300', 'hover:bg-gray-600');
+          
+          // Add appropriate classes
+          if (isActive) {
+            activeClass.split(' ').forEach(c => btn.classList.add(c));
+          } else {
+            inactiveClass.split(' ').forEach(c => btn.classList.add(c));
+          }
+        });
+      }
+      
+      // Show/hide data sections (only target elements with data-content attribute, not buttons)
+      const allSections = document.querySelectorAll('[data-service="' + service + '"][data-content]');
+      allSections.forEach(section => {
+        const sectionRange = section.getAttribute('data-range');
+        if (sectionRange === range) {
+          section.classList.remove('hidden');
+        } else {
+          section.classList.add('hidden');
+        }
+      });
     }
     
     ${

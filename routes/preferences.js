@@ -67,6 +67,12 @@ module.exports = (app, deps) => {
             artists: prefs.artist_affinity || [],
           },
 
+          // Country affinity data
+          countryAffinity: prefs.country_affinity || [],
+
+          // Artist country cache (from MusicBrainz)
+          artistCountries: prefs.artist_countries || {},
+
           // Metadata
           createdAt: prefs.created_at,
           updatedAt: prefs.updated_at,

@@ -398,7 +398,7 @@ function createUserPreferences(deps = {}) {
     spotifyData = null,
     lastfmData = null,
     weights = { internal: 0.4, spotify: 0.35, lastfm: 0.25 },
-    artistCountries = {}
+    _artistCountries = {} // eslint-disable-line no-unused-vars
   ) {
     // Normalize weights if not all sources present
     const activeWeights = { ...weights };
@@ -648,114 +648,20 @@ function createUserPreferences(deps = {}) {
       }
     }
 
-    // Build country affinity from ALL sources via MusicBrainz lookups
+    // Build country affinity from internal data only (user's lists)
     const countryScores = new Map();
 
-    // Helper to add country score
-    const addCountryScore = (countryName, score, source) => {
-      if (!countryName) return;
-      const key = countryName.toLowerCase();
-      const existing = countryScores.get(key) || {
-        name: countryName,
-        score: 0,
-        sources: [],
-        count: 0,
-      };
-      existing.score += score;
-      if (!existing.sources.includes(source)) existing.sources.push(source);
-      existing.count += 1;
-      countryScores.set(key, existing);
-    };
-
-    // Add from internal data (already weighted by position)
-    if (internalData?.topCountries && activeWeights.internal > 0) {
+    if (internalData?.topCountries) {
       const maxPoints = internalData.topCountries[0]?.points || 1;
       for (const country of internalData.topCountries) {
-        const normalized =
-          (country.points / maxPoints) * activeWeights.internal;
-        addCountryScore(country.name, normalized, 'internal');
-      }
-    }
-
-    // Add from Spotify artists via MusicBrainz country lookup
-    if (
-      spotifyData &&
-      activeWeights.spotify > 0 &&
-      Object.keys(artistCountries).length > 0
-    ) {
-      const spotifyCountries = new Map();
-      const timeRangeWeights = {
-        short_term: 0.3,
-        medium_term: 0.4,
-        long_term: 0.3,
-      };
-
-      for (const [range, rangeWeight] of Object.entries(timeRangeWeights)) {
-        const artists = spotifyData[range] || [];
-        for (let i = 0; i < artists.length; i++) {
-          const artist = artists[i];
-          const positionScore = (1 - i / artists.length) * rangeWeight;
-
-          // Look up country from MusicBrainz cache
-          const countryData = artistCountries[artist.name];
-          if (countryData?.country) {
-            const key = countryData.country.toLowerCase();
-            const existing = spotifyCountries.get(key) || {
-              name: countryData.country,
-              score: 0,
-            };
-            existing.score += positionScore;
-            spotifyCountries.set(key, existing);
-          }
-        }
-      }
-
-      // Normalize and add to country scores
-      const maxSpotifyScore = Math.max(
-        ...Array.from(spotifyCountries.values()).map((c) => c.score),
-        1
-      );
-      for (const [, country] of spotifyCountries) {
-        const normalized =
-          (country.score / maxSpotifyScore) * activeWeights.spotify;
-        addCountryScore(country.name, normalized, 'spotify');
-      }
-    }
-
-    // Add from Last.fm artists via MusicBrainz country lookup
-    if (
-      lastfmData?.overall &&
-      activeWeights.lastfm > 0 &&
-      Object.keys(artistCountries).length > 0
-    ) {
-      const lastfmCountries = new Map();
-      const maxPlaycount = lastfmData.overall[0]?.playcount || 1;
-
-      for (const artist of lastfmData.overall) {
-        const playcountWeight = (artist.playcount || 0) / maxPlaycount;
-
-        // Look up country from MusicBrainz cache
-        const countryData = artistCountries[artist.name];
-        if (countryData?.country) {
-          const key = countryData.country.toLowerCase();
-          const existing = lastfmCountries.get(key) || {
-            name: countryData.country,
-            score: 0,
-          };
-          existing.score += playcountWeight;
-          lastfmCountries.set(key, existing);
-        }
-      }
-
-      // Normalize and add to country scores
-      const maxLastfmScore = Math.max(
-        ...Array.from(lastfmCountries.values()).map((c) => c.score),
-        1
-      );
-      for (const [, country] of lastfmCountries) {
-        const normalized =
-          (country.score / maxLastfmScore) * activeWeights.lastfm;
-        addCountryScore(country.name, normalized, 'lastfm');
+        const key = country.name.toLowerCase();
+        // Normalize score relative to max points
+        const normalizedScore = (country.points || 0) / maxPoints;
+        countryScores.set(key, {
+          name: country.name,
+          score: normalizedScore,
+          count: country.count || 0,
+        });
       }
     }
 
@@ -782,11 +688,10 @@ function createUserPreferences(deps = {}) {
     const countryAffinity = Array.from(countryScores.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, 50)
-      .map(({ name, score, count, sources }) => ({
+      .map(({ name, score, count }) => ({
         name,
         score: Math.round(score * 1000) / 1000,
         count,
-        sources: sources || ['internal'],
       }));
 
     return { artistAffinity, genreAffinity, countryAffinity };
