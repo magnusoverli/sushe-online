@@ -3973,7 +3973,8 @@ module.exports = (app, deps) => {
 
       // Step 4: Get all albums in user's lists to filter out
       const userListsResult = await pool.query(
-        `SELECT LOWER(COALESCE(a.artist, li.artist)) as artist, LOWER(COALESCE(a.album, li.album)) as album
+        `SELECT LOWER(TRIM(COALESCE(a.artist, li.artist))) as artist, 
+                LOWER(TRIM(COALESCE(a.album, li.album))) as album
          FROM list_items li
          JOIN lists l ON li.list_id = l._id
          LEFT JOIN albums a ON li.album_id = a.album_id
@@ -3990,6 +3991,11 @@ module.exports = (app, deps) => {
         userListsResult.rows.map((r) => r.artist)
       );
 
+      logger.debug('Existing artists in collection:', {
+        count: existingArtists.size,
+        sample: Array.from(existingArtists).slice(0, 10),
+      });
+
       // Step 5: Filter out albums already in user's lists and prioritize new artists
       candidateAlbums = candidateAlbums.filter((album) => {
         const key = `${album.artist.toLowerCase()}|||${album.album.toLowerCase()}`;
@@ -3997,10 +4003,28 @@ module.exports = (app, deps) => {
       });
 
       // Boost albums from artists not in user's collection
-      candidateAlbums = candidateAlbums.map((album) => ({
-        ...album,
-        isNewArtist: !existingArtists.has(album.artist.toLowerCase()),
-      }));
+      candidateAlbums = candidateAlbums.map((album) => {
+        const normalizedArtist = album.artist.toLowerCase().trim();
+        const isNew = !existingArtists.has(normalizedArtist);
+        return {
+          ...album,
+          isNewArtist: isNew,
+        };
+      });
+
+      logger.debug('Candidate albums with NEW flag:', {
+        totalCandidates: candidateAlbums.length,
+        newArtists: candidateAlbums.filter((a) => a.isNewArtist).length,
+        knownArtists: candidateAlbums.filter((a) => !a.isNewArtist).length,
+        sampleNew: candidateAlbums
+          .filter((a) => a.isNewArtist)
+          .slice(0, 3)
+          .map((a) => a.artist),
+        sampleKnown: candidateAlbums
+          .filter((a) => !a.isNewArtist)
+          .slice(0, 3)
+          .map((a) => a.artist),
+      });
 
       // Deduplicate by artist+album
       const albumMap = new Map();
