@@ -3858,8 +3858,11 @@ module.exports = (app, deps) => {
     }
 
     // Optional context: the album the user right-clicked on
-    const { contextArtist, contextGenre1, contextGenre2 } = req.query;
+    const { contextArtist, contextGenre1, contextGenre2, currentYearOnly } =
+      req.query;
     const hasContext = contextArtist || contextGenre1 || contextGenre2;
+    const filterCurrentYear = currentYearOnly === 'true';
+    const currentYear = new Date().getFullYear();
 
     try {
       const {
@@ -3869,6 +3872,29 @@ module.exports = (app, deps) => {
       } = require('../utils/lastfm-auth');
 
       const apiKey = process.env.LASTFM_API_KEY;
+
+      // Helper function to fetch release year from MusicBrainz
+      const fetchReleaseYear = async (mbid) => {
+        if (!mbid) return null;
+        try {
+          const response = await fetch(
+            `https://musicbrainz.org/ws/2/release-group/${mbid}?fmt=json`,
+            {
+              headers: {
+                'User-Agent': 'SuSheOnline/1.0 (https://sushe.overli.dev)',
+              },
+            }
+          );
+          if (!response.ok) return null;
+          const data = await response.json();
+          if (data['first-release-date']) {
+            return parseInt(data['first-release-date'].substring(0, 4));
+          }
+          return null;
+        } catch {
+          return null;
+        }
+      };
 
       // ===========================================
       // GENRE NORMALIZATION MAP
@@ -4208,8 +4234,62 @@ module.exports = (app, deps) => {
         }
       }
 
-      // Sort by score descending
-      const recommendations = Array.from(albumMap.values())
+      // Sort by score descending and take top candidates for release date lookup
+      let topCandidates = Array.from(albumMap.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 25); // Get more candidates for filtering
+
+      // ===========================================
+      // STEP 6: Fetch release years and apply recency boost
+      // ===========================================
+      logger.info('Fetching release years for top candidates', {
+        count: topCandidates.filter((a) => a.mbid).length,
+        filterCurrentYear,
+      });
+
+      // Fetch release years in parallel (only for albums with mbid)
+      const releaseYearPromises = topCandidates.map(async (album) => {
+        if (album.mbid) {
+          const year = await fetchReleaseYear(album.mbid);
+          return { ...album, releaseYear: year };
+        }
+        return album;
+      });
+
+      topCandidates = await Promise.all(releaseYearPromises);
+
+      // Apply recency bonus and filter if currentYearOnly
+      topCandidates = topCandidates
+        .map((album) => {
+          let recencyBonus = 0;
+          if (album.releaseYear) {
+            const age = currentYear - album.releaseYear;
+            if (age === 0) {
+              recencyBonus = 0.25; // Current year: +25%
+            } else if (age <= 2) {
+              recencyBonus = 0.2; // Last 2 years: +20%
+            } else if (age <= 5) {
+              recencyBonus = 0.1; // Last 5 years: +10%
+            } else if (age > 20) {
+              recencyBonus = -0.1; // Older than 20 years: -10%
+            }
+          }
+          return {
+            ...album,
+            score: album.score + recencyBonus,
+            recencyBonus,
+          };
+        })
+        .filter((album) => {
+          // Filter to current year only if requested
+          if (filterCurrentYear) {
+            return album.releaseYear === currentYear;
+          }
+          return true;
+        });
+
+      // Final sort and slice
+      const recommendations = topCandidates
         .sort((a, b) => b.score - a.score)
         .slice(0, 15)
         .map((album) => ({
@@ -4220,22 +4300,25 @@ module.exports = (app, deps) => {
           image: album.image,
           mbid: album.mbid,
           isNewArtist: album.isNewArtist,
+          releaseYear: album.releaseYear || null,
           // Debug info (can remove later)
           _score: Math.round(album.score * 100) / 100,
           _source: album.source,
+          _recencyBonus: album.recencyBonus || 0,
         }));
 
       logger.info('Generated recommendations:', {
         contextArtist: contextArtist || 'none',
         contextGenres,
+        filterCurrentYear,
         userGenreCount: userGenres.length,
         candidateCount: candidateAlbums.length,
-        filteredCount: scoredAlbums.length,
+        withReleaseYear: topCandidates.filter((a) => a.releaseYear).length,
         resultCount: recommendations.length,
         topScores: recommendations.slice(0, 3).map((r) => ({
           artist: r.artist,
+          year: r.releaseYear,
           score: r._score,
-          source: r._source,
         })),
       });
 
@@ -4243,6 +4326,7 @@ module.exports = (app, deps) => {
         albums: recommendations,
         basedOn: userGenres.slice(0, 5).map((g) => g.genre),
         contextArtist: contextArtist || null,
+        currentYearOnly: filterCurrentYear,
       });
     } catch (error) {
       logger.error('Recommendations error:', error);

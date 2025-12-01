@@ -13,9 +13,11 @@ import { searchArtistImageRacing } from '../musicbrainz.js';
 
 // Module state
 let discoveryModal = null;
-let similarArtistsAbortController = null;
 let _currentModalType = null; // Prefixed with _ as it's set but used for future features
 let userLists = [];
+let similarArtistsAbortController = null;
+let currentRecommendationContext = null; // Store context for refresh/toggle
+let currentYearOnlyFilter = false;
 
 /**
  * Initialize the discovery module
@@ -64,17 +66,26 @@ function createModalElement() {
   modal.innerHTML = `
     <div class="discovery-modal-content bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
       <!-- Modal Header -->
-      <div class="p-4 sm:p-6 border-b border-gray-800 flex items-center justify-between flex-shrink-0">
-        <div class="flex items-center gap-3">
-          <i id="discoveryModalIcon" class="fas fa-music text-xl text-gray-400"></i>
-          <div>
-            <h3 id="discoveryModalTitle" class="text-lg sm:text-xl font-bold text-white">Discovery</h3>
-            <p id="discoveryModalSubtitle" class="text-sm text-gray-500"></p>
+      <div class="p-4 sm:p-6 border-b border-gray-800 flex-shrink-0">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <i id="discoveryModalIcon" class="fas fa-music text-xl text-gray-400"></i>
+            <div>
+              <h3 id="discoveryModalTitle" class="text-lg sm:text-xl font-bold text-white">Discovery</h3>
+              <p id="discoveryModalSubtitle" class="text-sm text-gray-500"></p>
+            </div>
           </div>
+          <button id="discoveryModalClose" class="text-gray-500 hover:text-white transition-colors p-2">
+            <i class="fas fa-times text-xl"></i>
+          </button>
         </div>
-        <button id="discoveryModalClose" class="text-gray-500 hover:text-white transition-colors p-2">
-          <i class="fas fa-times text-xl"></i>
-        </button>
+        <!-- Filter toggle (only shown for recommendations) -->
+        <div id="discoveryModalFilters" class="hidden mt-3 pt-3 border-t border-gray-800">
+          <label class="flex items-center gap-2 cursor-pointer text-sm text-gray-400 hover:text-white transition-colors">
+            <input type="checkbox" id="currentYearOnlyToggle" class="w-4 h-4 rounded bg-gray-700 border-gray-600 text-yellow-500 focus:ring-yellow-500 focus:ring-offset-gray-900">
+            <span>Only show albums from ${new Date().getFullYear()}</span>
+          </label>
+        </div>
       </div>
       
       <!-- Modal Content (scrollable) -->
@@ -91,6 +102,20 @@ function createModalElement() {
   modal
     .querySelector('#discoveryModalClose')
     .addEventListener('click', hideDiscoveryModal);
+
+  // Current year toggle handler
+  const toggle = modal.querySelector('#currentYearOnlyToggle');
+  if (toggle) {
+    toggle.addEventListener('change', (e) => {
+      currentYearOnlyFilter = e.target.checked;
+      // Re-fetch recommendations with new filter
+      if (currentRecommendationContext !== null) {
+        const content = discoveryModal.querySelector('#discoveryModalContent');
+        content.innerHTML = renderSkeletonLoaders();
+        fetchRecommendations(currentRecommendationContext);
+      }
+    });
+  }
 
   // Click outside to close
   modal.addEventListener('click', (e) => {
@@ -122,12 +147,16 @@ export function showDiscoveryModal(type, data = {}) {
   const title = discoveryModal.querySelector('#discoveryModalTitle');
   const subtitle = discoveryModal.querySelector('#discoveryModalSubtitle');
   const icon = discoveryModal.querySelector('#discoveryModalIcon');
+  const filters = discoveryModal.querySelector('#discoveryModalFilters');
+  const toggle = discoveryModal.querySelector('#currentYearOnlyToggle');
 
   // Set header based on type
   if (type === 'similar') {
     title.textContent = 'Similar Artists';
     subtitle.textContent = `Based on ${data.artist || 'selected artist'}`;
     icon.className = 'fas fa-users text-xl text-purple-400';
+    // Hide filters for similar artists
+    if (filters) filters.classList.add('hidden');
   } else {
     title.textContent = 'Recommendations';
     // Show context if provided
@@ -137,6 +166,12 @@ export function showDiscoveryModal(type, data = {}) {
       subtitle.textContent = 'Based on your collection';
     }
     icon.className = 'fas fa-lightbulb text-xl text-yellow-400';
+    // Show filters for recommendations
+    if (filters) filters.classList.remove('hidden');
+    // Reset toggle to current state
+    if (toggle) toggle.checked = currentYearOnlyFilter;
+    // Store context for refresh
+    currentRecommendationContext = data;
   }
 
   // Show loading state
@@ -288,6 +323,9 @@ async function fetchRecommendations(contextData = {}) {
     }
     if (contextData.genre_2) {
       params.set('contextGenre2', contextData.genre_2);
+    }
+    if (currentYearOnlyFilter) {
+      params.set('currentYearOnly', 'true');
     }
 
     const url = `/api/lastfm/recommendations${params.toString() ? '?' + params.toString() : ''}`;
@@ -444,6 +482,8 @@ function renderSimilarArtistsList(artists) {
  * @param {Array} albums - Array of album objects
  */
 function renderRecommendationsList(albums) {
+  const currentYear = new Date().getFullYear();
+
   const items = albums
     .map((album) => {
       const playcount = album.playcount
@@ -451,6 +491,8 @@ function renderRecommendationsList(albums) {
         : '0';
       const genreLabel = album.genre ? capitalizeGenre(album.genre) : '';
       const isNewArtist = album.isNewArtist;
+      const releaseYear = album.releaseYear;
+      const isCurrentYear = releaseYear === currentYear;
 
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
@@ -471,7 +513,7 @@ function renderRecommendationsList(albums) {
           </p>
           <p class="text-sm text-gray-400 truncate">${escapeHtml(album.album)}</p>
           <p class="text-xs text-gray-500">
-            ${genreLabel ? `<span class="text-yellow-500">${escapeHtml(genreLabel)}</span> · ` : ''}${playcount} plays
+            ${releaseYear ? `<span class="${isCurrentYear ? 'text-green-400 font-medium' : 'text-gray-400'}">${releaseYear}</span> · ` : ''}${genreLabel ? `<span class="text-yellow-500">${escapeHtml(genreLabel)}</span> · ` : ''}${playcount} plays
           </p>
         </div>
         
