@@ -4345,12 +4345,21 @@ module.exports = (app, deps) => {
         })),
       });
 
-      res.json({
+      // Build response with helpful message if current year filter yields few/no results
+      const response = {
         albums: recommendations,
         basedOn: userGenres.slice(0, 5).map((g) => g.genre),
         contextArtist: contextArtist || null,
         currentYearOnly: filterCurrentYear,
-      });
+      };
+
+      if (filterCurrentYear && recommendations.length === 0) {
+        response.message = `No ${currentYear} releases found for your genres. Try disabling the filter to see all recommendations.`;
+      } else if (filterCurrentYear && recommendations.length < 5) {
+        response.message = `Only ${recommendations.length} release${recommendations.length === 1 ? '' : 's'} from ${currentYear} found. Disable the filter for more options.`;
+      }
+
+      res.json(response);
     } catch (error) {
       logger.error('Recommendations error:', error);
       res.status(500).json({ error: 'Failed to generate recommendations' });
