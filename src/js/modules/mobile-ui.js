@@ -283,14 +283,19 @@ export function createMobileUI(deps = {}) {
     // Determine which service to show for "Open in..." based on preference
     // Priority: user preference > only connected service > Spotify (if both)
     let primaryServiceName = '';
+    let showSpotifyConnect = false;
     if (musicService === 'tidal' && hasTidal) {
       primaryServiceName = 'Tidal';
+      showSpotifyConnect = false; // User explicitly chose Tidal
     } else if (musicService === 'spotify' && hasSpotify) {
       primaryServiceName = 'Spotify';
+      showSpotifyConnect = true;
     } else if (hasTidal && !hasSpotify) {
       primaryServiceName = 'Tidal';
+      showSpotifyConnect = false;
     } else if (hasSpotify) {
       primaryServiceName = 'Spotify';
+      showSpotifyConnect = true;
     }
 
     const actionSheet = document.createElement('div');
@@ -315,7 +320,7 @@ export function createMobileUI(deps = {}) {
               <span>
                 <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
               </span>
-              ${hasSpotify ? '<i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-chevron></i>' : ''}
+              ${showSpotifyConnect ? '<i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-chevron></i>' : ''}
             </button>
             
             <!-- Expandable device list (hidden by default) -->
@@ -329,7 +334,7 @@ export function createMobileUI(deps = {}) {
                 </button>
                 
                 ${
-                  hasSpotify
+                  showSpotifyConnect
                     ? `
                 <!-- Spotify Connect devices section -->
                 <div class="mt-1 pt-1 border-t border-gray-800">

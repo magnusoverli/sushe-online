@@ -1424,8 +1424,9 @@ async function showPlayAlbumSubmenu() {
     `);
   }
 
-  // If Spotify is connected, fetch available devices for Spotify Connect
-  if (hasSpotify) {
+  // Only show Spotify Connect devices if user's primary service is Spotify
+  // (not if they explicitly chose Tidal as their preference)
+  if (primaryService === 'spotify' && hasSpotify) {
     menuItems.push(`
       <div class="border-t border-gray-700 my-1"></div>
       <div class="px-4 py-1 text-xs text-gray-500 uppercase tracking-wide">Spotify Connect</div>
