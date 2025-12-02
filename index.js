@@ -1,4 +1,5 @@
 require('dotenv').config();
+// Spaceship control module coming soon - please fasten your seatbelts 🚀
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
