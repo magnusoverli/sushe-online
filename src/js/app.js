@@ -215,6 +215,7 @@ function getMobileUIModule() {
           showDiscoveryModal(type, data);
         });
       },
+      playSpecificTrack,
     });
   }
   return mobileUIModule;
@@ -1823,6 +1824,83 @@ window.playTrackSafe = function (albumId) {
   }
   playTrack(result.index);
 };
+
+// Play a specific track by name (for use in edit modal track list)
+function playSpecificTrack(index, trackName) {
+  const albums = getListData(currentList);
+  const album = albums && albums[index];
+  if (!album) return;
+
+  if (!trackName) {
+    showToast('No track specified', 'error');
+    return;
+  }
+
+  const hasSpotify = window.currentUser?.spotifyAuth;
+  const hasTidal = window.currentUser?.tidalAuth;
+  const preferred = window.currentUser?.musicService;
+
+  const chooseService = () => {
+    if (preferred === 'spotify' && hasSpotify) {
+      return Promise.resolve('spotify');
+    }
+    if (preferred === 'tidal' && hasTidal) {
+      return Promise.resolve('tidal');
+    }
+    if (hasSpotify && hasTidal) {
+      return showServicePicker(true, true);
+    } else if (hasSpotify) {
+      return Promise.resolve('spotify');
+    } else if (hasTidal) {
+      return Promise.resolve('tidal');
+    } else {
+      showToast('No music service connected', 'error');
+      return Promise.resolve(null);
+    }
+  };
+
+  chooseService().then((service) => {
+    hideConfirmation();
+    if (!service) return;
+
+    const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}&track=${encodeURIComponent(trackName)}`;
+    const endpoint =
+      service === 'spotify' ? '/api/spotify/track' : '/api/tidal/track';
+
+    fetch(`${endpoint}?${query}`, { credentials: 'include' })
+      .then(async (r) => {
+        let data;
+        try {
+          data = await r.json();
+        } catch (_) {
+          throw new Error('Invalid response');
+        }
+
+        if (!r.ok) {
+          throw new Error(data.error || 'Request failed');
+        }
+        return data;
+      })
+      .then((data) => {
+        if (data.id) {
+          if (service === 'spotify') {
+            window.location.href = `spotify:track:${data.id}`;
+          } else {
+            window.location.href = `tidal://track/${data.id}`;
+          }
+        } else if (data.error) {
+          showToast(data.error, 'error');
+        } else {
+          showToast('Track not found on ' + service, 'error');
+        }
+      })
+      .catch((err) => {
+        console.error('Play track error:', err);
+        showToast(err.message || 'Failed to open track', 'error');
+      });
+  });
+}
+window.playSpecificTrack = playSpecificTrack;
 
 // Create list functionality
 function initializeCreateList() {

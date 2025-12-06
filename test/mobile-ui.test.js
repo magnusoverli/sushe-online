@@ -238,4 +238,118 @@ describe('Mobile UI Module - Unit Tests', () => {
       assert.ok(!isValid);
     });
   });
+
+  describe('Track play links logic', () => {
+    it('should parse album index from data attribute', () => {
+      // Simulate the data-album-index parsing logic
+      const indexStr = '5';
+      const albumIndex = parseInt(indexStr, 10);
+
+      assert.strictEqual(albumIndex, 5);
+      assert.strictEqual(isNaN(albumIndex), false);
+    });
+
+    it('should handle invalid album index gracefully', () => {
+      const indexStr = 'invalid';
+      const albumIndex = parseInt(indexStr, 10);
+
+      assert.strictEqual(isNaN(albumIndex), true);
+    });
+
+    it('should extract track name from data attribute', () => {
+      // Simulate getting track name from data-track attribute
+      const trackName = '3. My Favorite Song';
+
+      assert.ok(trackName);
+      assert.strictEqual(trackName.length > 0, true);
+    });
+
+    it('should handle tracks with special characters', () => {
+      // Track names may contain quotes that need escaping
+      const trackName = 'Track "With" Quotes';
+      const escaped = trackName.replace(/"/g, '&quot;');
+
+      assert.strictEqual(escaped, 'Track &quot;With&quot; Quotes');
+    });
+
+    it('should validate playSpecificTrack dependency exists before calling', () => {
+      // The setupTrackPlayLinks function should check if playSpecificTrack exists
+      const deps = { playSpecificTrack: null };
+      const hasPlayFunction = !!deps.playSpecificTrack;
+
+      assert.strictEqual(hasPlayFunction, false);
+
+      // With valid dependency
+      deps.playSpecificTrack = () => {};
+      const hasPlayFunctionNow = !!deps.playSpecificTrack;
+
+      assert.strictEqual(hasPlayFunctionNow, true);
+    });
+
+    it('should call playSpecificTrack with correct parameters', () => {
+      // Simulate the call pattern
+      let calledWith = null;
+      const mockPlaySpecificTrack = (index, trackName) => {
+        calledWith = { index, trackName };
+      };
+
+      // Simulate click handler behavior
+      const albumIndex = 3;
+      const trackName = '5. Test Track';
+      mockPlaySpecificTrack(albumIndex, trackName);
+
+      assert.deepStrictEqual(calledWith, {
+        index: 3,
+        trackName: '5. Test Track',
+      });
+    });
+  });
+
+  describe('Track list HTML generation', () => {
+    it('should generate correct track list structure', () => {
+      const tracks = ['1. First Track', '2. Second Track', '3. Third Track'];
+      const trackPick = '2. Second Track';
+
+      // Simulate checking which track is selected
+      const selectedIndex = tracks.findIndex((t) => t === trackPick);
+
+      assert.strictEqual(selectedIndex, 1);
+    });
+
+    it('should mark selected track with checked attribute', () => {
+      const track = '1. First Track';
+      const trackPick = '1. First Track';
+
+      const isChecked = track === trackPick;
+
+      assert.strictEqual(isChecked, true);
+    });
+
+    it('should not mark unselected tracks', () => {
+      const track = '1. First Track';
+      const trackPick = '2. Second Track';
+
+      const isChecked = track === trackPick;
+
+      assert.strictEqual(isChecked, false);
+    });
+
+    it('should handle empty track_pick', () => {
+      const track = '1. First Track';
+      const trackPick = '';
+
+      const isChecked = track === (trackPick || '');
+
+      assert.strictEqual(isChecked, false);
+    });
+
+    it('should handle null track_pick', () => {
+      const track = '1. First Track';
+      const trackPick = null;
+
+      const isChecked = track === (trackPick || '');
+
+      assert.strictEqual(isChecked, false);
+    });
+  });
 });

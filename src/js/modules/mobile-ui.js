@@ -40,6 +40,7 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
  * @param {Function} deps.setCurrentContextAlbum - Set current context album index
  * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @param {Function} deps.showDiscoveryModal - Show discovery modal for Last.fm features
+ * @param {Function} deps.playSpecificTrack - Play a specific track by name
  * @returns {Object} Mobile UI module API
  */
 export function createMobileUI(deps = {}) {
@@ -71,6 +72,7 @@ export function createMobileUI(deps = {}) {
     setCurrentContextAlbum,
     refreshMobileBarVisibility,
     showDiscoveryModal,
+    playSpecificTrack,
   } = deps;
 
   /**
@@ -1054,7 +1056,7 @@ export function createMobileUI(deps = {}) {
               <label class="block text-gray-400 text-sm mb-2">Selected Track</label>
               <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
             </div>
-            <div id="trackPickContainer">
+            <div id="trackPickContainer" data-album-index="${index}">
             ${
               Array.isArray(album.tracks) && album.tracks.length > 0
                 ? `
@@ -1062,11 +1064,9 @@ export function createMobileUI(deps = {}) {
                 ${album.tracks
                   .map(
                     (t) => `
-                  <li>
-                    <label class="flex items-center space-x-2">
-                      <input type="checkbox" class="track-pick-checkbox" value="${t}" ${t === (album.track_pick || '') ? 'checked' : ''}>
-                      <span>${t}</span>
-                    </label>
+                  <li class="flex items-center space-x-2">
+                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${t}" ${t === (album.track_pick || '') ? 'checked' : ''}>
+                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${t.replace(/"/g, '&quot;')}">${t}</span>
                   </li>`
                   )
                   .join('')}
@@ -1119,9 +1119,26 @@ export function createMobileUI(deps = {}) {
       });
     }
 
+    function setupTrackPlayLinks() {
+      if (!trackPickContainer || !playSpecificTrack) return;
+      const albumIndex = parseInt(trackPickContainer.dataset.albumIndex, 10);
+      const links = trackPickContainer.querySelectorAll('.track-play-link');
+      links.forEach((link) => {
+        link.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const trackName = link.dataset.track;
+          if (trackName) {
+            playSpecificTrack(albumIndex, trackName);
+          }
+        };
+      });
+    }
+
     // Fetch track list when button is clicked
     const fetchBtn = document.getElementById('fetchTracksBtn');
     setupTrackPickCheckboxes();
+    setupTrackPlayLinks();
 
     if (fetchBtn) {
       fetchBtn.onclick = async () => {
@@ -1137,11 +1154,9 @@ export function createMobileUI(deps = {}) {
                 ? `<ul class="space-y-2">${tracks
                     .map(
                       (t) => `
-                  <li>
-                    <label class="flex items-center space-x-2">
-                      <input type="checkbox" class="track-pick-checkbox" value="${t}">
-                      <span>${t}</span>
-                    </label>
+                  <li class="flex items-center space-x-2">
+                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${t}">
+                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${t.replace(/"/g, '&quot;')}">${t}</span>
                   </li>`
                     )
                     .join('')}</ul>`
@@ -1149,6 +1164,7 @@ export function createMobileUI(deps = {}) {
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number">`;
             setupTrackPickCheckboxes();
+            setupTrackPlayLinks();
           }
           showToast('Tracks loaded');
         } catch (err) {
