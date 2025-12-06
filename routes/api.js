@@ -1368,7 +1368,26 @@ module.exports = (app, deps) => {
         },
       });
       if (!resp.ok) {
-        throw new Error(`Spotify API error ${resp.status}`);
+        const errorData = await resp.json().catch(() => ({}));
+        const errorMsg =
+          errorData?.error?.message || `Spotify API error ${resp.status}`;
+        logger.error('Spotify search API error:', resp.status, errorMsg);
+
+        // Pass through the actual status code
+        if (resp.status === 401) {
+          return res.status(401).json({
+            error: 'Spotify authentication expired',
+            code: 'TOKEN_EXPIRED',
+            service: 'spotify',
+          });
+        }
+        return res
+          .status(resp.status >= 400 && resp.status < 500 ? resp.status : 502)
+          .json({
+            error: errorMsg,
+            code: 'SPOTIFY_ERROR',
+            service: 'spotify',
+          });
       }
       const data = await resp.json();
       if (!data.albums || !data.albums.items.length) {
@@ -1499,25 +1518,24 @@ module.exports = (app, deps) => {
         return res.status(404).json({
           error:
             'No active device found. Please open Spotify on a device first.',
+          code: 'NO_DEVICE',
+          service: 'spotify',
         });
       }
 
       if (resp.status === 403) {
         return res.status(403).json({
           error: 'Spotify Premium is required for playback control.',
+          code: 'PREMIUM_REQUIRED',
+          service: 'spotify',
         });
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      logger.error('Spotify play API error:', resp.status, errorData);
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'play');
     } catch (err) {
       logger.error('Spotify play error:', err);
-      res
-        .status(500)
-        .json({ error: err.message || 'Failed to start playback' });
+      res.status(500).json({ error: 'Failed to start playback' });
     }
   });
 
