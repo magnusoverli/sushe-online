@@ -19,6 +19,7 @@ let lastPosition = 0;
 let consecutiveErrors = 0;
 let isPollingPaused = false;
 let isHeadlessMode = false; // True when running without UI (mobile)
+let isPremiumRequired = false; // True if user needs Spotify Premium for playback control
 const pendingActions = new Set();
 
 // Last.fm scrobbling state
@@ -341,6 +342,29 @@ async function apiCall(url, options = {}, actionName = null) {
     });
 
     if (!response.ok) {
+      // Try to parse error response for specific codes
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const errorData = await response.json();
+
+        // Handle Premium required - stop polling entirely
+        if (errorData.code === 'PREMIUM_REQUIRED') {
+          isPremiumRequired = true;
+          stopPolling();
+          hideMiniplayer();
+          // Don't log this as an error - it's expected for Free users
+          console.info(
+            'Spotify miniplayer disabled: Premium required for playback control'
+          );
+          return null;
+        }
+
+        // Handle no device - not an error, just no active playback
+        if (errorData.code === 'NO_DEVICE') {
+          return { is_playing: false, device: null, item: null };
+        }
+      }
+
       throw new Error(`API error ${response.status}`);
     }
 
@@ -676,6 +700,15 @@ function showState(state) {
     case 'loading':
       elements.loading?.classList.remove('hidden');
       break;
+  }
+}
+
+/**
+ * Hide the miniplayer entirely (e.g., when Premium is required)
+ */
+function hideMiniplayer() {
+  if (elements.container) {
+    elements.container.classList.add('hidden');
   }
 }
 
@@ -1158,6 +1191,8 @@ async function pollPlaybackState() {
  * Start polling for playback state
  */
 function startPolling() {
+  // Don't poll if Premium is required (Free user)
+  if (isPremiumRequired) return;
   if (isPollingPaused) return;
   stopPolling();
 

@@ -1422,9 +1422,14 @@ module.exports = (app, deps) => {
       });
 
       if (!resp.ok) {
-        const errorText = await resp.text();
-        logger.error('Spotify devices API error:', resp.status, errorText);
-        throw new Error(`Spotify API error ${resp.status}`);
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(
+          resp,
+          errorData,
+          res,
+          logger,
+          'devices'
+        );
       }
 
       const data = await resp.json();
@@ -1518,6 +1523,50 @@ module.exports = (app, deps) => {
 
   // ============ SPOTIFY PLAYBACK CONTROL ENDPOINTS ============
 
+  // Helper to handle Spotify player API errors (Premium-required endpoints)
+  function handleSpotifyPlayerError(resp, errorData, res, logger, action) {
+    // 403 = Premium required for playback control
+    if (resp.status === 403) {
+      // Only log once per session type of thing, not every poll
+      logger.debug('Spotify Premium required for:', action);
+      return res.status(403).json({
+        error: 'Spotify Premium required for playback control',
+        code: 'PREMIUM_REQUIRED',
+        service: 'spotify',
+      });
+    }
+
+    // 401 = Token invalid/expired (should have been caught by ensureValidSpotifyToken)
+    if (resp.status === 401) {
+      return res.status(401).json({
+        error: 'Spotify authentication expired',
+        code: 'TOKEN_EXPIRED',
+        service: 'spotify',
+      });
+    }
+
+    // 404 = No active device
+    if (resp.status === 404) {
+      return res.status(404).json({
+        error: 'No active Spotify device found',
+        code: 'NO_DEVICE',
+        service: 'spotify',
+      });
+    }
+
+    // Other errors
+    const message =
+      errorData?.error?.message || `Spotify API error ${resp.status}`;
+    logger.error(`Spotify ${action} error:`, resp.status, message);
+    return res
+      .status(resp.status >= 400 && resp.status < 500 ? resp.status : 502)
+      .json({
+        error: message,
+        code: 'SPOTIFY_ERROR',
+        service: 'spotify',
+      });
+  }
+
   // Get current playback state
   app.get('/api/spotify/playback', ensureAuthAPI, async (req, res) => {
     const tokenResult = await ensureValidSpotifyToken(req.user, users);
@@ -1542,9 +1591,14 @@ module.exports = (app, deps) => {
       }
 
       if (!resp.ok) {
-        const errorText = await resp.text();
-        logger.error('Spotify playback state error:', resp.status, errorText);
-        throw new Error(`Spotify API error ${resp.status}`);
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(
+          resp,
+          errorData,
+          res,
+          logger,
+          'playback state'
+        );
       }
 
       const data = await resp.json();
@@ -1579,14 +1633,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'pause');
     } catch (err) {
       logger.error('Spotify pause error:', err);
-      res
-        .status(500)
-        .json({ error: err.message || 'Failed to pause playback' });
+      res.status(500).json({ error: 'Failed to pause playback' });
     }
   });
 
@@ -1614,14 +1664,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'resume');
     } catch (err) {
       logger.error('Spotify resume error:', err);
-      res
-        .status(500)
-        .json({ error: err.message || 'Failed to resume playback' });
+      res.status(500).json({ error: 'Failed to resume playback' });
     }
   });
 
@@ -1652,14 +1698,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'previous');
     } catch (err) {
       logger.error('Spotify previous track error:', err);
-      res
-        .status(500)
-        .json({ error: err.message || 'Failed to skip to previous' });
+      res.status(500).json({ error: 'Failed to skip to previous' });
     }
   });
 
@@ -1687,12 +1729,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'next');
     } catch (err) {
       logger.error('Spotify next track error:', err);
-      res.status(500).json({ error: err.message || 'Failed to skip to next' });
+      res.status(500).json({ error: 'Failed to skip to next' });
     }
   });
 
@@ -1728,12 +1768,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'seek');
     } catch (err) {
       logger.error('Spotify seek error:', err);
-      res.status(500).json({ error: err.message || 'Failed to seek' });
+      res.status(500).json({ error: 'Failed to seek' });
     }
   });
 
@@ -1771,12 +1809,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'volume');
     } catch (err) {
       logger.error('Spotify volume error:', err);
-      res.status(500).json({ error: err.message || 'Failed to set volume' });
+      res.status(500).json({ error: 'Failed to set volume' });
     }
   });
 
@@ -1815,14 +1851,10 @@ module.exports = (app, deps) => {
       }
 
       const errorData = await resp.json().catch(() => ({}));
-      throw new Error(
-        errorData.error?.message || `Spotify API error ${resp.status}`
-      );
+      return handleSpotifyPlayerError(resp, errorData, res, logger, 'transfer');
     } catch (err) {
       logger.error('Spotify transfer error:', err);
-      res
-        .status(500)
-        .json({ error: err.message || 'Failed to transfer playback' });
+      res.status(500).json({ error: 'Failed to transfer playback' });
     }
   });
 
