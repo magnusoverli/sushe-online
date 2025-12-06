@@ -135,6 +135,7 @@ module.exports = {
     // Hover states
     'hover:text-gray-100',
     'hover:text-red-400',
+    'hover:text-green-400',
     'hover:bg-gray-700',
     'hover:bg-gray-800/30',
     'hover:bg-red-700',
