@@ -2536,17 +2536,39 @@ module.exports = (app, deps) => {
       body: req.body,
     });
 
-    // Validate user has a preferred music service or service is specified
-    const targetService = service || req.user.musicService;
+    // Determine target service: explicit service > user preference > auto-detect from auth
+    let targetService = service || req.user.musicService;
 
-    try {
-      if (!targetService || !['spotify', 'tidal'].includes(targetService)) {
+    // If no explicit service is set, auto-detect from authenticated services
+    if (!targetService || !['spotify', 'tidal'].includes(targetService)) {
+      const hasSpotify = req.user.spotifyAuth?.access_token;
+      const hasTidal = req.user.tidalAuth?.access_token;
+
+      // If only one service is authenticated, use it automatically
+      if (hasSpotify && !hasTidal) {
+        targetService = 'spotify';
+        logger.info('Auto-detected music service:', { targetService: 'spotify' });
+      } else if (hasTidal && !hasSpotify) {
+        targetService = 'tidal';
+        logger.info('Auto-detected music service:', { targetService: 'tidal' });
+      } else if (!hasSpotify && !hasTidal) {
+        // No services authenticated
         return res.status(400).json({
           error:
-            'No music service specified. Please set a preferred service in settings.',
+            'No music service connected. Please connect Spotify or Tidal in settings.',
+          code: 'NOT_AUTHENTICATED',
+        });
+      } else {
+        // Multiple services authenticated but no preference set
+        return res.status(400).json({
+          error:
+            'Multiple music services connected. Please set a preferred service in settings.',
           code: 'NO_SERVICE',
         });
       }
+    }
+
+    try {
 
       let auth;
 
