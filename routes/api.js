@@ -1357,7 +1357,7 @@ module.exports = (app, deps) => {
     if (!artist || !album) {
       return res.status(400).json({ error: 'artist and album are required' });
     }
-    logger.info('Spotify album search:', artist, '-', album);
+    logger.info('Spotify album search:', { artist, album });
 
     try {
       const query = `album:${album} artist:${artist}`;
@@ -1371,7 +1371,13 @@ module.exports = (app, deps) => {
         const errorData = await resp.json().catch(() => ({}));
         const errorMsg =
           errorData?.error?.message || `Spotify API error ${resp.status}`;
-        logger.error('Spotify search API error:', resp.status, errorMsg);
+        logger.error('Spotify search API error:', {
+          status: resp.status,
+          statusText: resp.statusText,
+          error: errorMsg,
+          artist,
+          album,
+        });
 
         // Pass through the actual status code
         if (resp.status === 401) {
@@ -1391,13 +1397,19 @@ module.exports = (app, deps) => {
       }
       const data = await resp.json();
       if (!data.albums || !data.albums.items.length) {
+        logger.info('Album not found on Spotify:', { artist, album });
         return res.status(404).json({ error: 'Album not found' });
       }
       const albumId = data.albums.items[0].id;
-      logger.info('Spotify search result id:', albumId);
+      logger.info('Spotify search result:', { albumId, artist, album });
       res.json({ id: albumId });
     } catch (err) {
-      logger.error('Spotify search error:', err);
+      logger.error('Spotify search error:', {
+        error: err.message,
+        stack: err.stack,
+        artist,
+        album,
+      });
       res.status(500).json({ error: 'Failed to search Spotify' });
     }
   });
@@ -2001,7 +2013,7 @@ module.exports = (app, deps) => {
         .status(400)
         .json({ error: 'artist, album, and track are required' });
     }
-    logger.info('Spotify track search:', artist, '-', album, '-', track);
+    logger.info('Spotify track search:', { artist, album, track });
 
     const headers = {
       Authorization: `Bearer ${spotifyAuth.access_token}`,
@@ -2015,10 +2027,20 @@ module.exports = (app, deps) => {
         { headers }
       );
       if (!albumResp.ok) {
-        throw new Error(`Spotify API error ${albumResp.status}`);
+        const errorText = await albumResp.text();
+        logger.error('Spotify album search failed:', {
+          status: albumResp.status,
+          statusText: albumResp.statusText,
+          error: errorText,
+          query: albumQuery,
+        });
+        throw new Error(
+          `Spotify API error ${albumResp.status}: ${albumResp.statusText}`
+        );
       }
       const albumData = await albumResp.json();
       if (!albumData.albums || !albumData.albums.items.length) {
+        logger.info('Album not found on Spotify:', { artist, album });
         return res.status(404).json({ error: 'Album not found' });
       }
       const spotifyAlbumId = albumData.albums.items[0].id;
@@ -2029,7 +2051,16 @@ module.exports = (app, deps) => {
         { headers }
       );
       if (!tracksResp.ok) {
-        throw new Error(`Spotify API error ${tracksResp.status}`);
+        const errorText = await tracksResp.text();
+        logger.error('Spotify tracks fetch failed:', {
+          status: tracksResp.status,
+          statusText: tracksResp.statusText,
+          error: errorText,
+          albumId: spotifyAlbumId,
+        });
+        throw new Error(
+          `Spotify API error ${tracksResp.status}: ${tracksResp.statusText}`
+        );
       }
       const tracksData = await tracksResp.json();
       const tracks = tracksData.items;
@@ -2038,7 +2069,10 @@ module.exports = (app, deps) => {
       const trackNum = parseInt(track);
       if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
         const matchedTrack = tracks[trackNum - 1];
-        logger.info('Spotify track matched by number:', matchedTrack.id);
+        logger.info('Spotify track matched by number:', {
+          trackId: matchedTrack.id,
+          trackName: matchedTrack.name,
+        });
         return res.json({ id: matchedTrack.id });
       }
 
@@ -2054,7 +2088,10 @@ module.exports = (app, deps) => {
           searchName.toLowerCase().includes(t.name.toLowerCase())
       );
       if (matchingTrack) {
-        logger.info('Spotify track matched by name:', matchingTrack.id);
+        logger.info('Spotify track matched by name:', {
+          trackId: matchingTrack.id,
+          trackName: matchingTrack.name,
+        });
         return res.json({ id: matchingTrack.id });
       }
 
@@ -2067,17 +2104,24 @@ module.exports = (app, deps) => {
       if (fallbackResp.ok) {
         const fallbackData = await fallbackResp.json();
         if (fallbackData.tracks.items.length > 0) {
-          logger.info(
-            'Spotify track matched by fallback search:',
-            fallbackData.tracks.items[0].id
-          );
+          logger.info('Spotify track matched by fallback search:', {
+            trackId: fallbackData.tracks.items[0].id,
+            trackName: fallbackData.tracks.items[0].name,
+          });
           return res.json({ id: fallbackData.tracks.items[0].id });
         }
       }
 
+      logger.info('Track not found on Spotify:', { artist, album, track });
       return res.status(404).json({ error: 'Track not found' });
     } catch (err) {
-      logger.error('Spotify track search error:', err);
+      logger.error('Spotify track search error:', {
+        error: err.message,
+        stack: err.stack,
+        artist,
+        album,
+        track,
+      });
       res.status(500).json({ error: 'Failed to search Spotify' });
     }
   });
