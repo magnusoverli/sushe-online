@@ -2034,9 +2034,41 @@ module.exports = (app, deps) => {
           error: errorText,
           query: albumQuery,
         });
-        throw new Error(
-          `Spotify API error ${albumResp.status}: ${albumResp.statusText}`
-        );
+
+        // Handle specific error cases with proper status codes
+        if (albumResp.status === 403) {
+          return res.status(403).json({
+            error:
+              'Your Spotify account is not authorized to use this app. Please contact the administrator.',
+            code: 'SPOTIFY_FORBIDDEN',
+            service: 'spotify',
+            details:
+              'The Spotify app is in development mode. Users must be added to the allowlist.',
+          });
+        }
+
+        if (albumResp.status === 401) {
+          return res.status(401).json({
+            error: 'Spotify authentication expired',
+            code: 'TOKEN_EXPIRED',
+            service: 'spotify',
+          });
+        }
+
+        if (albumResp.status === 429) {
+          return res.status(429).json({
+            error: 'Spotify rate limit exceeded. Please try again later.',
+            code: 'RATE_LIMITED',
+            service: 'spotify',
+          });
+        }
+
+        // Generic error for other cases
+        return res.status(502).json({
+          error: `Spotify API error: ${albumResp.statusText}`,
+          code: 'SPOTIFY_API_ERROR',
+          service: 'spotify',
+        });
       }
       const albumData = await albumResp.json();
       if (!albumData.albums || !albumData.albums.items.length) {
@@ -2058,9 +2090,41 @@ module.exports = (app, deps) => {
           error: errorText,
           albumId: spotifyAlbumId,
         });
-        throw new Error(
-          `Spotify API error ${tracksResp.status}: ${tracksResp.statusText}`
-        );
+
+        // Handle specific error cases with proper status codes
+        if (tracksResp.status === 403) {
+          return res.status(403).json({
+            error:
+              'Your Spotify account is not authorized to use this app. Please contact the administrator.',
+            code: 'SPOTIFY_FORBIDDEN',
+            service: 'spotify',
+            details:
+              'The Spotify app is in development mode. Users must be added to the allowlist.',
+          });
+        }
+
+        if (tracksResp.status === 401) {
+          return res.status(401).json({
+            error: 'Spotify authentication expired',
+            code: 'TOKEN_EXPIRED',
+            service: 'spotify',
+          });
+        }
+
+        if (tracksResp.status === 429) {
+          return res.status(429).json({
+            error: 'Spotify rate limit exceeded. Please try again later.',
+            code: 'RATE_LIMITED',
+            service: 'spotify',
+          });
+        }
+
+        // Generic error for other cases
+        return res.status(502).json({
+          error: `Spotify API error: ${tracksResp.statusText}`,
+          code: 'SPOTIFY_API_ERROR',
+          service: 'spotify',
+        });
       }
       const tracksData = await tracksResp.json();
       const tracks = tracksData.items;
