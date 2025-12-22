@@ -2013,7 +2013,13 @@ module.exports = (app, deps) => {
         .status(400)
         .json({ error: 'artist, album, and track are required' });
     }
-    logger.info('Spotify track search:', { artist, album, track });
+    logger.info('Spotify track search:', {
+      artist,
+      album,
+      track,
+      user_scopes: spotifyAuth.scope,
+      scope_count: spotifyAuth.scope?.split(' ').length || 0,
+    });
 
     const headers = {
       Authorization: `Bearer ${spotifyAuth.access_token}`,
@@ -2037,13 +2043,21 @@ module.exports = (app, deps) => {
 
         // Handle specific error cases with proper status codes
         if (albumResp.status === 403) {
+          // Log the user's scopes to help diagnose the issue
+          logger.warn('Spotify 403 Forbidden - checking user scopes:', {
+            user_scopes: spotifyAuth.scope,
+            user_id: req.user?._id,
+            error_message: errorText,
+          });
+
           return res.status(403).json({
             error:
-              'Your Spotify account is not authorized to use this app. Please contact the administrator.',
+              'Spotify access denied. You may need to reconnect your Spotify account with updated permissions.',
             code: 'SPOTIFY_FORBIDDEN',
             service: 'spotify',
+            action: 'reauth',
             details:
-              'The Spotify app is in development mode. Users must be added to the allowlist.',
+              'This can happen if your account permissions changed or if the app requires new permissions. Try disconnecting and reconnecting Spotify in Settings.',
           });
         }
 
@@ -2093,13 +2107,21 @@ module.exports = (app, deps) => {
 
         // Handle specific error cases with proper status codes
         if (tracksResp.status === 403) {
+          // Log the user's scopes to help diagnose the issue
+          logger.warn('Spotify 403 Forbidden - checking user scopes:', {
+            user_scopes: spotifyAuth.scope,
+            user_id: req.user?._id,
+            error_message: errorText,
+          });
+
           return res.status(403).json({
             error:
-              'Your Spotify account is not authorized to use this app. Please contact the administrator.',
+              'Spotify access denied. You may need to reconnect your Spotify account with updated permissions.',
             code: 'SPOTIFY_FORBIDDEN',
             service: 'spotify',
+            action: 'reauth',
             details:
-              'The Spotify app is in development mode. Users must be added to the allowlist.',
+              'This can happen if your account permissions changed or if the app requires new permissions. Try disconnecting and reconnecting Spotify in Settings.',
           });
         }
 

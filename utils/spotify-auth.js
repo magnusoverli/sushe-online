@@ -93,6 +93,8 @@ function createSpotifyAuth(deps = {}) {
       log.info('Spotify token refreshed successfully', {
         expires_in: newToken.expires_in,
         new_refresh_token: !!newToken.refresh_token,
+        scopes_returned: newToken.scope || 'using_old_scopes',
+        scopes_count: result.scope?.split(' ').length || 0,
       });
 
       return result;
