@@ -2065,6 +2065,28 @@ module.exports = (app, deps) => {
       const tracksData = await tracksResp.json();
       const tracks = tracksData.items;
 
+      // Validate tracks array exists
+      if (!tracks || !Array.isArray(tracks)) {
+        logger.error('Invalid tracks response from Spotify:', {
+          tracksData,
+          albumId: spotifyAlbumId,
+          artist,
+          album,
+        });
+        return res
+          .status(500)
+          .json({ error: 'Invalid response from Spotify API' });
+      }
+
+      if (tracks.length === 0) {
+        logger.info('Album has no tracks on Spotify:', {
+          albumId: spotifyAlbumId,
+          artist,
+          album,
+        });
+        return res.status(404).json({ error: 'Album has no tracks' });
+      }
+
       // Try to match by track number first
       const trackNum = parseInt(track);
       if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
