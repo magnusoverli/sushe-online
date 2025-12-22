@@ -2547,10 +2547,14 @@ module.exports = (app, deps) => {
       // If only one service is authenticated, use it automatically
       if (hasSpotify && !hasTidal) {
         targetService = 'spotify';
-        logger.info('Auto-detected music service:', { targetService: 'spotify' });
+        logger.info('Auto-detected music service:', {
+          targetService: 'spotify',
+        });
       } else if (hasTidal && !hasSpotify) {
         targetService = 'tidal';
-        logger.info('Auto-detected music service:', { targetService: 'tidal' });
+        logger.info('Auto-detected music service:', {
+          targetService: 'tidal',
+        });
       } else if (!hasSpotify && !hasTidal) {
         // No services authenticated
         return res.status(400).json({
@@ -2569,7 +2573,6 @@ module.exports = (app, deps) => {
     }
 
     try {
-
       let auth;
 
       // Handle authentication differently for each service
