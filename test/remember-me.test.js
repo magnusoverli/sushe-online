@@ -78,9 +78,18 @@ function createTestApp() {
     isTokenValid: () => true,
     isTokenUsable: () => true,
     users: { update: mock.fn((_q, _u, _o, cb) => cb(null, 1)) },
-    usersAsync: { update: mock.fn(async () => 1), findOne: mock.fn(async () => testUser) },
-    listsAsync: { find: mock.fn(async () => []), count: mock.fn(async () => 0) },
-    listItemsAsync: { count: mock.fn(async () => 0), find: mock.fn(async () => []) },
+    usersAsync: {
+      update: mock.fn(async () => 1),
+      findOne: mock.fn(async () => testUser),
+    },
+    listsAsync: {
+      find: mock.fn(async () => []),
+      count: mock.fn(async () => 0),
+    },
+    listItemsAsync: {
+      count: mock.fn(async () => 0),
+      find: mock.fn(async () => []),
+    },
     bcrypt: { hash: mock.fn(), compare: mock.fn() },
     isValidEmail: () => true,
     isValidUsername: () => true,
@@ -137,7 +146,9 @@ describe('Remember me (session cookie lifetime)', () => {
     assert.strictEqual(res.headers.location, '/');
     assert.ok(Array.isArray(res.headers['set-cookie']));
 
-    const maxAgeSeconds = parseSetCookieMaxAgeSeconds(res.headers['set-cookie'][0]);
+    const maxAgeSeconds = parseSetCookieMaxAgeSeconds(
+      res.headers['set-cookie'][0]
+    );
     assert.ok(maxAgeSeconds !== null);
     // Expect ~30 days (allow a little drift for timing and rounding)
     assert.ok(maxAgeSeconds > 25 * 24 * 60 * 60);
@@ -156,12 +167,12 @@ describe('Remember me (session cookie lifetime)', () => {
     assert.strictEqual(res.headers.location, '/');
     assert.ok(Array.isArray(res.headers['set-cookie']));
 
-    const maxAgeSeconds = parseSetCookieMaxAgeSeconds(res.headers['set-cookie'][0]);
+    const maxAgeSeconds = parseSetCookieMaxAgeSeconds(
+      res.headers['set-cookie'][0]
+    );
     assert.ok(maxAgeSeconds !== null);
     // Expect ~24 hours
     assert.ok(maxAgeSeconds > 20 * 60 * 60);
     assert.ok(maxAgeSeconds < 36 * 60 * 60);
   });
 });
-
-
