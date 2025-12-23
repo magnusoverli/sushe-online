@@ -32,6 +32,8 @@ function extractAlbumDataFromPage(context) {
   const data = {
     artist: '',
     album: '',
+    genre_1: '',
+    genre_2: '',
   };
 
   // Parse from URL - RYM URLs are typically: /release/album/artist_name/album_name/
@@ -63,7 +65,49 @@ function extractAlbumDataFromPage(context) {
     }
   }
 
+  // Extract genres from RYM page (only available on album detail pages)
+  const genres = extractGenresFromPage();
+  data.genre_1 = genres.genre_1;
+  data.genre_2 = genres.genre_2;
+
   return data;
+}
+
+// Extract genres from RateYourMusic album page
+// RYM has primary genres (main classification) and secondary genres (influences/descriptors)
+// Logic: Use first 2 primary, or 1 primary + 1 secondary, or first 2 secondary
+function extractGenresFromPage() {
+  // Extract primary genres from .release_pri_genres .genre elements
+  const primaryGenres = Array.from(
+    document.querySelectorAll('.release_pri_genres .genre')
+  ).map((el) => el.textContent.trim());
+
+  // Extract secondary genres from .release_sec_genres .genre elements
+  const secondaryGenres = Array.from(
+    document.querySelectorAll('.release_sec_genres .genre')
+  ).map((el) => el.textContent.trim());
+
+  let genre_1 = '';
+  let genre_2 = '';
+
+  if (primaryGenres.length >= 2) {
+    // 2+ primary genres: use first two primary
+    genre_1 = primaryGenres[0];
+    genre_2 = primaryGenres[1];
+  } else if (primaryGenres.length === 1) {
+    // 1 primary genre: use it + first secondary (if available)
+    genre_1 = primaryGenres[0];
+    genre_2 = secondaryGenres[0] || '';
+  } else if (secondaryGenres.length > 0) {
+    // 0 primary genres: use first two secondary
+    genre_1 = secondaryGenres[0];
+    genre_2 = secondaryGenres[1] || '';
+  }
+  // else: no genres found, both stay empty
+
+  console.log('Extracted genres:', { genre_1, genre_2, primaryGenres, secondaryGenres });
+
+  return { genre_1, genre_2 };
 }
 
 // Clean up name formatting

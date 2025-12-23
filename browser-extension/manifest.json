@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "SuShe Online - RateYourMusic Integration",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "description": "Add albums from RateYourMusic directly to your SuShe Online lists",
   "permissions": ["contextMenus", "storage", "notifications", "scripting"],
   "host_permissions": [
     "*://*.rateyourmusic.com/*",
     "http://localhost:3000/*",
+    "http://127.0.0.1:3000/*",
     "https://*/*"
   ],
   "background": {
@@ -22,6 +23,8 @@
       "matches": [
         "http://localhost:3000/extension/auth",
         "http://localhost:3000/extension/auth*",
+        "http://127.0.0.1:3000/extension/auth",
+        "http://127.0.0.1:3000/extension/auth*",
         "https://*/extension/auth",
         "https://*/extension/auth*"
       ],

@@ -1026,19 +1026,25 @@ async function addAlbumToList(info, tab, listName) {
     }
 
     // Add new album to list
+    // Genres are extracted from the RYM page by the content script
     currentList.push({
       artist: albumData.artist,
       album: albumData.album,
       album_id: releaseGroup.id || '',
       release_date: releaseGroup['first-release-date'] || '',
       country: artistCountry,
-      genre_1: '',
-      genre_2: '',
+      genre_1: albumData.genre_1 || '',
+      genre_2: albumData.genre_2 || '',
       comments: '',
       tracks: null,
       track_pick: null,
       cover_image: coverImageData,
       cover_image_format: coverImageFormat,
+    });
+
+    console.log('Album genres from RYM:', {
+      genre_1: albumData.genre_1,
+      genre_2: albumData.genre_2,
     });
 
     // Save updated list
