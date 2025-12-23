@@ -105,7 +105,12 @@ function extractGenresFromPage() {
   }
   // else: no genres found, both stay empty
 
-  console.log('Extracted genres:', { genre_1, genre_2, primaryGenres, secondaryGenres });
+  console.log('Extracted genres:', {
+    genre_1,
+    genre_2,
+    primaryGenres,
+    secondaryGenres,
+  });
 
   return { genre_1, genre_2 };
 }

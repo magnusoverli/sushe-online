@@ -15,7 +15,7 @@ let AUTH_TOKEN = null;
 let userListsByYear = {}; // { year: [{ name, count }], ... } - grouped by year
 let userLists = []; // Flat list of names for backward compatibility
 let listsLastFetched = 0;
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+const CACHE_DURATION = 1 * 60 * 1000; // 1 minute (server has its own 5-min cache)
 
 // Use shared utilities
 const {
@@ -146,46 +146,24 @@ chrome.runtime.onStartup.addListener(async () => {
   createContextMenus();
 });
 
-// Refresh lists when context menu is shown (prefetch for better UX)
-// This ensures the user always sees up-to-date lists without manual refresh
+// Refresh lists when context menu is shown (always fetch fresh)
+// This ensures the user always sees up-to-date lists (e.g., after renaming)
 // Note: onShown is only available in some browsers/versions, so we check first
+// Server has its own 5-minute cache to prevent DB hammering, so we can be aggressive here
 if (chrome.contextMenus.onShown) {
   chrome.contextMenus.onShown.addListener(async (info) => {
     // Only refresh if showing our menu on RYM pages
     if (info.menuIds && info.menuIds.includes('sushe-main')) {
-      // Use a short cache (30 seconds) for the "on shown" refresh to avoid
-      // hammering the API on every right-click
-      const now = Date.now();
-      const SHORT_CACHE = 30 * 1000; // 30 seconds
-
-      // FIX: Read from persistent storage instead of in-memory variable
-      // Service workers can restart at any time, losing in-memory state
-      const { listsLastFetched: lastFetched = 0 } =
-        await chrome.storage.local.get('listsLastFetched');
-
-      if (now - lastFetched > SHORT_CACHE) {
-        console.log(
-          '[onShown] Refreshing lists (last fetched',
-          Math.round((now - lastFetched) / 1000),
-          'seconds ago)...'
-        );
-        try {
-          // Fetch and wait for completion
-          // Note: fetchUserLists() calls updateContextMenuWithLists() which
-          // rebuilds the entire menu structure, so no refresh() call needed
-          await fetchUserLists(true);
-          console.log('[onShown] Lists refreshed successfully');
-        } catch (err) {
-          console.error('[onShown] List refresh failed:', err.message);
-          // Don't fail completely - the menu will show cached lists or error state
-          // fetchUserLists() already handles showing error menus
-        }
-      } else {
-        console.log(
-          '[onShown] Using cached lists (fetched',
-          Math.round((now - lastFetched) / 1000),
-          'seconds ago)'
-        );
+      console.log('[onShown] Fetching fresh lists for context menu...');
+      try {
+        // Always fetch fresh - server cache protects against DB hammering
+        // This ensures list renames/additions appear immediately
+        await fetchUserLists(true);
+        console.log('[onShown] Lists refreshed successfully');
+      } catch (err) {
+        console.error('[onShown] List refresh failed:', err.message);
+        // Don't fail completely - the menu will show cached lists or error state
+        // fetchUserLists() already handles showing error menus
       }
     }
   });
