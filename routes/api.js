@@ -89,18 +89,56 @@ module.exports = (app, deps) => {
       ) VALUES (
         $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
       ) ON CONFLICT (album_id) DO UPDATE SET
-        artist = COALESCE(albums.artist, EXCLUDED.artist),
-        album = COALESCE(albums.album, EXCLUDED.album),
-        release_date = COALESCE(albums.release_date, EXCLUDED.release_date),
-        country = COALESCE(albums.country, EXCLUDED.country),
-        genre_1 = COALESCE(albums.genre_1, EXCLUDED.genre_1),
-        genre_2 = COALESCE(albums.genre_2, EXCLUDED.genre_2),
-        tracks = COALESCE(albums.tracks, EXCLUDED.tracks),
-        cover_image = COALESCE(albums.cover_image, EXCLUDED.cover_image),
-        cover_image_format = COALESCE(albums.cover_image_format, EXCLUDED.cover_image_format),
+        artist = COALESCE(NULLIF(EXCLUDED.artist, ''), albums.artist),
+        album = COALESCE(NULLIF(EXCLUDED.album, ''), albums.album),
+        release_date = COALESCE(NULLIF(EXCLUDED.release_date, ''), albums.release_date),
+        country = COALESCE(NULLIF(EXCLUDED.country, ''), albums.country),
+        genre_1 = COALESCE(NULLIF(EXCLUDED.genre_1, ''), albums.genre_1),
+        genre_2 = COALESCE(NULLIF(EXCLUDED.genre_2, ''), albums.genre_2),
+        tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
+        cover_image = COALESCE(NULLIF(EXCLUDED.cover_image, ''), albums.cover_image),
+        cover_image_format = COALESCE(NULLIF(EXCLUDED.cover_image_format, ''), albums.cover_image_format),
         updated_at = EXCLUDED.updated_at`,
       values
     );
+  }
+
+  /**
+   * Invalidate list caches for all users who have a specific album in their lists.
+   * This ensures that when canonical album data (e.g., genres) is updated,
+   * all users who rely on the canonical data (stored NULL in list_items) see the update.
+   *
+   * @param {string} albumId - The album_id to find affected users for
+   */
+  async function invalidateCachesForAlbumUsers(albumId) {
+    if (!albumId) return;
+
+    try {
+      // Find all users who have this album in any of their lists
+      const result = await pool.query(
+        `SELECT DISTINCT l.user_id 
+         FROM lists l 
+         JOIN list_items li ON li.list_id = l._id 
+         WHERE li.album_id = $1`,
+        [albumId]
+      );
+
+      // Invalidate list caches for each affected user
+      for (const row of result.rows) {
+        // Invalidate all list-related caches for this user
+        // The pattern match will catch /api/lists and /api/lists/:name
+        responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
+      }
+
+      if (result.rows.length > 0) {
+        logger.debug(
+          `Invalidated caches for ${result.rows.length} users with album ${albumId}`
+        );
+      }
+    } catch (error) {
+      // Log but don't fail the request - cache invalidation is not critical
+      logger.warn(`Failed to invalidate caches for album ${albumId}:`, error);
+    }
   }
 
   // ============ API ENDPOINTS FOR LISTS ============
@@ -476,10 +514,14 @@ module.exports = (app, deps) => {
         // Clear album cache for this batch operation
         clearAlbumCache();
 
+        // Track album IDs that were upserted for cache invalidation
+        const upsertedAlbumIds = [];
+
         for (let i = 0; i < data.length; i++) {
           const album = data[i];
           if (album.album_id) {
             await upsertAlbumRecord(album, timestamp);
+            upsertedAlbumIds.push(album.album_id);
           }
 
           // Deduplicate: Only store values that differ from albums table
@@ -570,6 +612,15 @@ module.exports = (app, deps) => {
         // Use req.originalUrl to match the exact cache key format (includes URL encoding)
         responseCache.invalidate(`GET:${req.originalUrl}:${req.user._id}`);
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+        // Invalidate caches for other users who have these albums in their lists
+        // This ensures they see updated canonical data (e.g., genre corrections)
+        // Run in parallel for better performance, don't await to avoid blocking response
+        Promise.all(
+          upsertedAlbumIds.map((albumId) =>
+            invalidateCachesForAlbumUsers(albumId)
+          )
+        ).catch((err) => logger.warn('Album cache invalidation failed:', err));
 
         res.json({
           success: true,
