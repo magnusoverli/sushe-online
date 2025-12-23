@@ -227,6 +227,18 @@ module.exports = (app, deps) => {
 
       logger.info('User logged in successfully', { email: user.email });
 
+      // "Remember me" support:
+      // The login form sends `remember=on` (checkbox). If set, extend the session cookie.
+      // Otherwise keep the default shorter session lifetime.
+      // Note: express-session persists cookie options into the session store on save.
+      const remember =
+        req.body.remember === 'on' ||
+        req.body.remember === 'true' ||
+        req.body.remember === true;
+      const oneDayMs = 1000 * 60 * 60 * 24;
+      const rememberMs = 30 * oneDayMs;
+      req.session.cookie.maxAge = remember ? rememberMs : oneDayMs;
+
       // Record last activity
       const timestamp = new Date();
       req.user.lastActivity = timestamp;

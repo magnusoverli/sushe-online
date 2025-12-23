@@ -128,7 +128,10 @@ export function normalizeDateForInput(dateStr, userFormat = null) {
 export function formatReleaseDate(dateStr, userFormat = null) {
   if (!dateStr) return '';
 
-  const format = userFormat ?? window.currentUser?.dateFormat ?? 'MM/DD/YYYY';
+  const format =
+    userFormat ??
+    (typeof window !== 'undefined' ? window.currentUser?.dateFormat : null) ??
+    'MM/DD/YYYY';
 
   // Year only
   if (/^\d{4}$/.test(dateStr)) {
@@ -160,7 +163,10 @@ export function formatReleaseDate(dateStr, userFormat = null) {
  */
 export function formatDateForStorage(isoDate, userFormat = null) {
   if (!isoDate) return '';
-  const format = userFormat ?? window.currentUser?.dateFormat ?? 'MM/DD/YYYY';
+  const format =
+    userFormat ??
+    (typeof window !== 'undefined' ? window.currentUser?.dateFormat : null) ??
+    'MM/DD/YYYY';
   const [year, month, day] = isoDate.split('-');
   if (format === 'DD/MM/YYYY') {
     return `${day}/${month}/${year}`;
