@@ -105,7 +105,9 @@ function extractGenresFromContext(context) {
     albumLink.closest('[class*="release_row"]'); // Release list pages
 
   if (!container) {
-    console.log('No container found for album, falling back to page extraction');
+    console.log(
+      'No container found for album, falling back to page extraction'
+    );
     return null;
   }
 
@@ -118,7 +120,9 @@ function extractGenresFromContext(context) {
     return null;
   }
 
-  const allGenres = Array.from(genreElements).map((el) => el.textContent.trim());
+  const allGenres = Array.from(genreElements).map((el) =>
+    el.textContent.trim()
+  );
   console.log('Genres found in container:', allGenres);
 
   // Apply the same logic as page extraction:
