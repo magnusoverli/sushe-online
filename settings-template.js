@@ -2764,16 +2764,16 @@ const settingsTemplate = (req, options) => {
         let actionButtons = '';
         if (event.event_type === 'account_approval') {
           actionButtons = \`
-            <button onclick="executeEventAction('\${event.id}', 'approved')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition flex items-center gap-1">
+            <button onclick="executeEventAction('\${event.id}', 'approve')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition flex items-center gap-1">
               <i class="fas fa-check"></i> Approve
             </button>
-            <button onclick="executeEventAction('\${event.id}', 'rejected')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center gap-1">
+            <button onclick="executeEventAction('\${event.id}', 'reject')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center gap-1">
               <i class="fas fa-times"></i> Reject
             </button>
           \`;
         } else {
           actionButtons = \`
-            <button onclick="executeEventAction('\${event.id}', 'dismissed')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition flex items-center gap-1">
+            <button onclick="executeEventAction('\${event.id}', 'dismiss')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition flex items-center gap-1">
               <i class="fas fa-check"></i> Dismiss
             </button>
           \`;
