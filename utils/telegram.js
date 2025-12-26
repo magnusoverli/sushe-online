@@ -135,7 +135,9 @@ function createTelegramNotifier(deps = {}) {
     try {
       // Delete any existing webhook first - getUpdates won't work if webhook is set
       try {
-        await apiRequest(token, 'deleteWebhook', { drop_pending_updates: false });
+        await apiRequest(token, 'deleteWebhook', {
+          drop_pending_updates: false,
+        });
         log.info('detectGroups: cleared existing webhook to enable getUpdates');
       } catch (webhookErr) {
         log.warn('detectGroups: could not clear webhook:', webhookErr.message);
