@@ -4446,10 +4446,8 @@ module.exports = (app, deps) => {
       // #endregion
 
       if (parsed?.type === 'event_action') {
-        // Get the linked admin user
-        const adminUser = await telegramNotifier.getLinkedAdmin(
-          telegramUser.id
-        );
+        // Try to get linked admin user, but don't require it
+        let adminUser = await telegramNotifier.getLinkedAdmin(telegramUser.id);
 
         // #region agent log
         logger.warn('[DEBUG-TELEGRAM-LINK] getLinkedAdmin result', {
@@ -4459,26 +4457,26 @@ module.exports = (app, deps) => {
         });
         // #endregion
 
-        // If not linked, try to find admin by Telegram username
-        if (!adminUser && telegramUser.username) {
-          // For now, we'll use a placeholder - in production, you'd want
-          // the admin to link their account first
+        // If not linked, use Telegram user info directly (skip linking requirement)
+        if (!adminUser) {
+          // Create a pseudo-admin object from Telegram user info for audit purposes
+          adminUser = {
+            _id: `telegram:${telegramUser.id}`,
+            username: telegramUser.username || `telegram_${telegramUser.id}`,
+            source: 'telegram',
+            telegramUserId: telegramUser.id,
+          };
+
           // #region agent log
           logger.warn(
-            '[DEBUG-TELEGRAM-LINK] Admin not linked - showing error to user',
+            '[DEBUG-TELEGRAM-LINK] Using Telegram user directly (no linking required)',
             {
               telegramUserId: telegramUser.id,
               telegramUsername: telegramUser.username,
+              pseudoAdminUser: adminUser,
             }
           );
           // #endregion
-
-          await telegramNotifier.answerCallbackQuery(
-            callbackQuery.id,
-            '⚠️ Your Telegram account is not linked. Please link it in Settings.',
-            true
-          );
-          return res.sendStatus(200);
         }
 
         // Get admin event service
