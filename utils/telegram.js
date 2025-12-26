@@ -835,18 +835,15 @@ function createTelegramNotifier(deps = {}) {
    */
   async function getLinkedAdmin(telegramUserId) {
     // #region agent log
-    log.info('[DEBUG-TELEGRAM-LINK] getLinkedAdmin called', {
+    log.warn('[DEBUG-TELEGRAM-LINK] getLinkedAdmin called', {
       telegramUserId,
       telegramUserIdType: typeof telegramUserId,
       poolExists: !!pool,
-      hypothesisId: 'A,B,C',
     });
     // #endregion
     if (!pool) {
       // #region agent log
-      log.info('[DEBUG-TELEGRAM-LINK] pool is null, returning null', {
-        hypothesisId: 'C',
-      });
+      log.warn('[DEBUG-TELEGRAM-LINK] pool is null, returning null');
       // #endregion
       return null;
     }
@@ -856,18 +853,16 @@ function createTelegramNotifier(deps = {}) {
       const countResult = await pool.query(
         'SELECT COUNT(*) as count FROM telegram_admins'
       );
-      log.info('[DEBUG-TELEGRAM-LINK] telegram_admins table count', {
+      log.warn('[DEBUG-TELEGRAM-LINK] telegram_admins table count', {
         count: countResult.rows[0]?.count,
-        hypothesisId: 'A',
       });
 
       // Also check what entries exist
       const allAdmins = await pool.query(
         'SELECT telegram_user_id, telegram_username, user_id FROM telegram_admins'
       );
-      log.info('[DEBUG-TELEGRAM-LINK] all telegram_admins entries', {
+      log.warn('[DEBUG-TELEGRAM-LINK] all telegram_admins entries', {
         entries: allAdmins.rows,
-        hypothesisId: 'A,E',
       });
       // #endregion
 
@@ -879,10 +874,9 @@ function createTelegramNotifier(deps = {}) {
       );
 
       // #region agent log
-      log.info('[DEBUG-TELEGRAM-LINK] query result', {
+      log.warn('[DEBUG-TELEGRAM-LINK] query result', {
         rowCount: result.rows.length,
         foundUser: result.rows[0]?.username || null,
-        hypothesisId: 'A,B,E',
       });
       // #endregion
 
@@ -892,7 +886,6 @@ function createTelegramNotifier(deps = {}) {
       log.error('[DEBUG-TELEGRAM-LINK] query error', {
         error: err.message,
         stack: err.stack,
-        hypothesisId: 'D',
       });
       // #endregion
       return null;

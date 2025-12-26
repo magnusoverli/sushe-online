@@ -4430,12 +4430,11 @@ module.exports = (app, deps) => {
       const telegramUser = callbackQuery.from;
 
       // #region agent log
-      logger.info('[DEBUG-TELEGRAM-LINK] Telegram callback received', {
+      logger.warn('[DEBUG-TELEGRAM-LINK] Telegram callback received', {
         callbackData,
         telegramUserId: telegramUser.id,
         telegramUserIdType: typeof telegramUser.id,
         telegramUsername: telegramUser.username,
-        hypothesisId: 'B',
       });
       // #endregion
 
@@ -4443,10 +4442,7 @@ module.exports = (app, deps) => {
       const parsed = telegramNotifier.parseCallbackData(callbackData);
 
       // #region agent log
-      logger.info('[DEBUG-TELEGRAM-LINK] Parsed callback data', {
-        parsed,
-        hypothesisId: 'general',
-      });
+      logger.warn('[DEBUG-TELEGRAM-LINK] Parsed callback data', { parsed });
       // #endregion
 
       if (parsed?.type === 'event_action') {
@@ -4456,11 +4452,10 @@ module.exports = (app, deps) => {
         );
 
         // #region agent log
-        logger.info('[DEBUG-TELEGRAM-LINK] getLinkedAdmin result', {
+        logger.warn('[DEBUG-TELEGRAM-LINK] getLinkedAdmin result', {
           adminUserFound: !!adminUser,
           adminUsername: adminUser?.username || null,
           telegramUserId: telegramUser.id,
-          hypothesisId: 'A,B,C,D,E',
         });
         // #endregion
 
@@ -4474,7 +4469,6 @@ module.exports = (app, deps) => {
             {
               telegramUserId: telegramUser.id,
               telegramUsername: telegramUser.username,
-              hypothesisId: 'A',
             }
           );
           // #endregion
