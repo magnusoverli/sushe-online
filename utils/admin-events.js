@@ -295,13 +295,17 @@ function createAdminEventService(deps = {}) {
     // Determine the new status based on the action
     const status = action === 'dismiss' ? 'dismissed' : action;
 
+    // For Telegram-sourced pseudo-admins (not in users table), use NULL for resolved_by
+    // The username is still logged for audit purposes
+    const resolvedById = adminUser.source === 'telegram' ? null : adminUser._id;
+
     // Update the event
     const updateResult = await pool.query(
       `UPDATE admin_events 
        SET status = $1, resolved_at = NOW(), resolved_by = $2, resolved_via = $3
        WHERE id = $4
        RETURNING *`,
-      [status, adminUser._id, resolvedVia, eventId]
+      [status, resolvedById, resolvedVia, eventId]
     );
 
     const updatedEvent = updateResult.rows[0];
