@@ -55,12 +55,12 @@ function getPositionPoints(position) {
 }
 
 /**
- * Create master list utilities with injected dependencies
+ * Create aggregate list utilities with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL pool instance
  * @param {Object} deps.logger - Logger instance (optional)
  */
-function createMasterList(deps = {}) {
+function createAggregateList(deps = {}) {
   const log = deps.logger || logger;
   const pool = deps.pool;
 
@@ -69,12 +69,12 @@ function createMasterList(deps = {}) {
   }
 
   /**
-   * Aggregate all official lists for a year into a master list
+   * Aggregate all official lists for a year into an aggregate list
    * @param {number} year - The year to aggregate
-   * @returns {Promise<Object>} Aggregated master list data and stats
+   * @returns {Promise<Object>} Aggregated list data and stats
    */
   async function aggregateForYear(year) {
-    log.info(`Aggregating master list for year ${year}`);
+    log.info(`Aggregating list for year ${year}`);
 
     // Get all official lists for the year with user info
     const listsResult = await pool.query(
@@ -247,23 +247,23 @@ function createMasterList(deps = {}) {
     };
 
     log.info(
-      `Master list for ${year}: ${albums.length} albums from ${officialLists.length} participants`
+      `Aggregate list for ${year}: ${albums.length} albums from ${officialLists.length} participants`
     );
 
     return { data, stats };
   }
 
   /**
-   * Recompute and store master list for a year
+   * Recompute and store aggregate list for a year
    * @param {number} year - The year to recompute
-   * @returns {Promise<Object>} The updated master list record
+   * @returns {Promise<Object>} The updated aggregate list record
    */
   async function recompute(year) {
-    log.info(`Recomputing master list for year ${year}`);
+    log.info(`Recomputing aggregate list for year ${year}`);
 
     const { data, stats } = await aggregateForYear(year);
 
-    // Upsert the master list record
+    // Upsert the aggregate list record
     const result = await pool.query(
       `
       INSERT INTO master_lists (year, data, stats, computed_at, created_at, updated_at)
@@ -278,14 +278,14 @@ function createMasterList(deps = {}) {
       [year, JSON.stringify(data), JSON.stringify(stats)]
     );
 
-    log.info(`Master list for ${year} recomputed successfully`);
+    log.info(`Aggregate list for ${year} recomputed successfully`);
     return result.rows[0];
   }
 
   /**
-   * Get master list for a year (from cache)
+   * Get aggregate list for a year (from cache)
    * @param {number} year - The year
-   * @returns {Promise<Object|null>} The master list record or null
+   * @returns {Promise<Object|null>} The aggregate list record or null
    */
   async function get(year) {
     const result = await pool.query(
@@ -301,9 +301,9 @@ function createMasterList(deps = {}) {
    * @returns {Promise<Object>} Status object
    */
   async function getStatus(year) {
-    const masterList = await get(year);
+    const aggregateList = await get(year);
 
-    if (!masterList) {
+    if (!aggregateList) {
       return {
         exists: false,
         revealed: false,
@@ -326,13 +326,13 @@ function createMasterList(deps = {}) {
     );
 
     // Include total album count from stats (safe to reveal)
-    const totalAlbums = masterList.stats?.totalAlbums || 0;
+    const totalAlbums = aggregateList.stats?.totalAlbums || 0;
 
     return {
       exists: true,
-      revealed: masterList.revealed,
-      revealedAt: masterList.revealed_at,
-      computedAt: masterList.computed_at,
+      revealed: aggregateList.revealed,
+      revealedAt: aggregateList.revealed_at,
+      computedAt: aggregateList.computed_at,
       totalAlbums,
       confirmations: confirmResult.rows.map((r) => ({
         username: r.username,
@@ -352,15 +352,15 @@ function createMasterList(deps = {}) {
   async function addConfirmation(year, adminUserId) {
     log.info(`Admin ${adminUserId} confirming reveal for year ${year}`);
 
-    // Ensure master list exists
-    let masterList = await get(year);
-    if (!masterList) {
+    // Ensure aggregate list exists
+    let aggregateList = await get(year);
+    if (!aggregateList) {
       // Create it if it doesn't exist
       await recompute(year);
-      masterList = await get(year);
+      aggregateList = await get(year);
     }
 
-    if (masterList.revealed) {
+    if (aggregateList.revealed) {
       return { alreadyRevealed: true, status: await getStatus(year) };
     }
 
@@ -384,7 +384,7 @@ function createMasterList(deps = {}) {
     // If 2 or more confirmations, reveal the list
     if (confirmationCount >= 2) {
       log.info(
-        `Master list for ${year} has reached 2 confirmations - revealing!`
+        `Aggregate list for ${year} has reached 2 confirmations - revealing!`
       );
       await pool.query(
         `
@@ -408,8 +408,8 @@ function createMasterList(deps = {}) {
   async function removeConfirmation(year, adminUserId) {
     log.info(`Admin ${adminUserId} revoking confirmation for year ${year}`);
 
-    const masterList = await get(year);
-    if (masterList && masterList.revealed) {
+    const aggregateList = await get(year);
+    if (aggregateList && aggregateList.revealed) {
       return { alreadyRevealed: true, status: await getStatus(year) };
     }
 
@@ -427,15 +427,15 @@ function createMasterList(deps = {}) {
    * @returns {Promise<Object|null>} Stats or null
    */
   async function getStats(year) {
-    const masterList = await get(year);
-    if (!masterList) {
+    const aggregateList = await get(year);
+    if (!aggregateList) {
       return null;
     }
-    return masterList.stats;
+    return aggregateList.stats;
   }
 
   /**
-   * Get list of years that have revealed master lists
+   * Get list of years that have revealed aggregate lists
    * @returns {Promise<Array>} Array of years
    */
   async function getRevealedYears() {
@@ -464,4 +464,4 @@ function createMasterList(deps = {}) {
   };
 }
 
-module.exports = { createMasterList, getPositionPoints, POSITION_POINTS };
+module.exports = { createAggregateList, getPositionPoints, POSITION_POINTS };

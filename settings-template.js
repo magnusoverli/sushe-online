@@ -1073,15 +1073,15 @@ const adminPanelSection = (stats, adminData) =>
       </div>
     </div>
     
-    <!-- Master List Management -->
+    <!-- Aggregate List Management -->
     <div class="mb-8">
       <h4 class="text-lg font-semibold text-white mb-4">
-        <i class="fas fa-trophy mr-2 text-yellow-500"></i>Master List (Album of the Year)
+        <i class="fas fa-trophy mr-2 text-yellow-500"></i>Aggregate List (Album of the Year)
       </h4>
-      <div id="masterListAdmin" class="space-y-4">
+      <div id="aggregateListAdmin" class="space-y-4">
         <div class="text-center py-4">
           <i class="fas fa-spinner fa-spin text-gray-500"></i>
-          <span class="text-gray-400 ml-2">Loading master list data...</span>
+          <span class="text-gray-400 ml-2">Loading aggregate list data...</span>
         </div>
       </div>
     </div>
@@ -2140,16 +2140,16 @@ const settingsTemplate = (req, options) => {
         console.log(\`[\${restoreId}] === CLIENT: RESTORE FLOW COMPLETED ===\`);
       });
       
-      // ============ MASTER LIST FUNCTIONS ============
+      // ============ AGGREGATE LIST FUNCTIONS ============
       
-      // Load master list admin panel data
-      async function loadMasterListAdmin() {
-        const container = document.getElementById('masterListAdmin');
+      // Load aggregate list admin panel data
+      async function loadAggregateListAdmin() {
+        const container = document.getElementById('aggregateListAdmin');
         if (!container) return;
         
         try {
           // Get years that have official lists
-          const yearsRes = await fetch('/api/master-list-years/with-official-lists', {
+          const yearsRes = await fetch('/api/aggregate-list-years/with-official-lists', {
             credentials: 'same-origin'
           });
           
@@ -2171,7 +2171,7 @@ const settingsTemplate = (req, options) => {
           for (const year of years) {
             try {
               // Get status
-              const statusRes = await fetch(\`/api/master-list/\${year}/status\`, {
+              const statusRes = await fetch(\`/api/aggregate-list/\${year}/status\`, {
                 credentials: 'same-origin'
               });
               
@@ -2183,7 +2183,7 @@ const settingsTemplate = (req, options) => {
               // Get stats
               let stats = null;
               try {
-                const statsRes = await fetch(\`/api/master-list/\${year}/stats\`, {
+                const statsRes = await fetch(\`/api/aggregate-list/\${year}/stats\`, {
                   credentials: 'same-origin'
                 });
                 if (statsRes.ok) {
@@ -2192,20 +2192,20 @@ const settingsTemplate = (req, options) => {
                 }
               } catch (e) {}
               
-              html += renderMasterListYear(year, status, stats);
+              html += renderAggregateListYear(year, status, stats);
             } catch (e) {
-              console.error(\`Error loading master list for \${year}:\`, e);
+              console.error(\`Error loading aggregate list for \${year}:\`, e);
             }
           }
           
-          container.innerHTML = html || '<p class="text-gray-500 text-sm">No master list data available.</p>';
+          container.innerHTML = html || '<p class="text-gray-500 text-sm">No aggregate list data available.</p>';
         } catch (error) {
-          console.error('Error loading master list admin:', error);
-          container.innerHTML = '<p class="text-red-400">Error loading master list data</p>';
+          console.error('Error loading aggregate list admin:', error);
+          container.innerHTML = '<p class="text-red-400">Error loading aggregate list data</p>';
         }
       }
       
-      function renderMasterListYear(year, status, stats) {
+      function renderAggregateListYear(year, status, stats) {
         const isRevealed = status.revealed;
         const confirmCount = status.confirmationCount || 0;
         const required = status.requiredConfirmations || 2;
@@ -2254,15 +2254,15 @@ const settingsTemplate = (req, options) => {
         
         let actionsHtml = '';
         if (isRevealed) {
-          actionsHtml = \`<a href="/master-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a>\`;
+          actionsHtml = \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a>\`;
         } else {
           const hasConfirmed = status.confirmations && status.confirmations.some(c => c.username === '${user.username}');
           if (hasConfirmed) {
-            actionsHtml = \`<button onclick="revokeMasterListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
+            actionsHtml = \`<button onclick="revokeAggregateListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
           } else {
-            actionsHtml = \`<button onclick="confirmMasterListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
+            actionsHtml = \`<button onclick="confirmAggregateListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
           }
-          actionsHtml += \` <a href="/master-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-external-link-alt"></i>Open Page</a>\`;
+          actionsHtml += \` <a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-external-link-alt"></i>Open Page</a>\`;
         }
         
         return \`
@@ -2280,11 +2280,11 @@ const settingsTemplate = (req, options) => {
         \`;
       }
       
-      async function confirmMasterListReveal(year) {
-        if (!confirm(\`Confirm reveal of Master List \${year}? This action contributes to revealing the list to everyone.\`)) return;
+      async function confirmAggregateListReveal(year) {
+        if (!confirm(\`Confirm reveal of Aggregate List \${year}? This action contributes to revealing the list to everyone.\`)) return;
         
         try {
-          const response = await fetch(\`/api/master-list/\${year}/confirm\`, {
+          const response = await fetch(\`/api/aggregate-list/\${year}/confirm\`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
@@ -2294,11 +2294,11 @@ const settingsTemplate = (req, options) => {
           
           if (data.success) {
             if (data.revealed) {
-              showToast(\`Master List \${year} has been revealed!\`);
+              showToast(\`Aggregate List \${year} has been revealed!\`);
             } else {
               showToast('Confirmation added. Waiting for more confirmations.');
             }
-            loadMasterListAdmin();
+            loadAggregateListAdmin();
           } else {
             showToast(data.error || 'Error confirming reveal', 'error');
           }
@@ -2308,11 +2308,11 @@ const settingsTemplate = (req, options) => {
         }
       }
       
-      async function revokeMasterListConfirm(year) {
+      async function revokeAggregateListConfirm(year) {
         if (!confirm('Revoke your confirmation?')) return;
         
         try {
-          const response = await fetch(\`/api/master-list/\${year}/confirm\`, {
+          const response = await fetch(\`/api/aggregate-list/\${year}/confirm\`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
             credentials: 'same-origin'
@@ -2322,7 +2322,7 @@ const settingsTemplate = (req, options) => {
           
           if (data.success) {
             showToast('Confirmation revoked');
-            loadMasterListAdmin();
+            loadAggregateListAdmin();
           } else {
             showToast(data.error || 'Error revoking confirmation', 'error');
           }
@@ -2332,8 +2332,8 @@ const settingsTemplate = (req, options) => {
         }
       }
       
-      // Load master list admin panel on page load
-      loadMasterListAdmin();
+      // Load aggregate list admin panel on page load
+      loadAggregateListAdmin();
     `
         : ''
     }

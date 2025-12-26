@@ -693,7 +693,7 @@ const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
 const apiRoutes = require('./routes/api');
 const preferencesRoutes = require('./routes/preferences');
-const masterListRoutes = require('./routes/master-list');
+const aggregateListRoutes = require('./routes/aggregate-list');
 
 const deps = {
   htmlTemplate,
@@ -792,10 +792,10 @@ authRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);
 preferencesRoutes(app, deps);
-const { masterList } = masterListRoutes(app, deps);
+const { aggregateList } = aggregateListRoutes(app, deps);
 
-// Store masterList instance for use in triggers (e.g., official list updates)
-app.locals.masterList = masterList;
+// Store aggregateList instance for use in triggers (e.g., official list updates)
+app.locals.aggregateList = aggregateList;
 
 // Icon routes for iOS/Safari compatibility
 app.get('/favicon.ico', (req, res) => {

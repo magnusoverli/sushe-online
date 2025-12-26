@@ -1,10 +1,10 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const {
-  createMasterList,
+  createAggregateList,
   POSITION_POINTS,
   getPositionPoints,
-} = require('../utils/master-list.js');
+} = require('../utils/aggregate-list.js');
 
 // =============================================================================
 // Helper functions
@@ -34,7 +34,7 @@ function createMockPool(queryResults = []) {
 // POSITION_POINTS tests
 // =============================================================================
 
-describe('master-list POSITION_POINTS', () => {
+describe('aggregate-list POSITION_POINTS', () => {
   it('should have correct points for position 1', () => {
     assert.strictEqual(POSITION_POINTS[1], 60);
   });
@@ -56,7 +56,7 @@ describe('master-list POSITION_POINTS', () => {
   });
 });
 
-describe('master-list getPositionPoints', () => {
+describe('aggregate-list getPositionPoints', () => {
   it('should return correct points for valid positions', () => {
     assert.strictEqual(getPositionPoints(1), 60);
     assert.strictEqual(getPositionPoints(5), 43);
@@ -75,26 +75,26 @@ describe('master-list getPositionPoints', () => {
 });
 
 // =============================================================================
-// createMasterList factory tests
+// createAggregateList factory tests
 // =============================================================================
 
-describe('createMasterList', () => {
+describe('createAggregateList', () => {
   it('should throw if pool is not provided', () => {
-    assert.throws(() => createMasterList({}), /PostgreSQL pool is required/);
+    assert.throws(() => createAggregateList({}), /PostgreSQL pool is required/);
   });
 
   it('should create instance with pool', () => {
     const pool = createMockPool();
-    const masterList = createMasterList({ pool });
-    assert.ok(masterList);
-    assert.strictEqual(typeof masterList.aggregateForYear, 'function');
-    assert.strictEqual(typeof masterList.recompute, 'function');
-    assert.strictEqual(typeof masterList.get, 'function');
-    assert.strictEqual(typeof masterList.getStatus, 'function');
-    assert.strictEqual(typeof masterList.addConfirmation, 'function');
-    assert.strictEqual(typeof masterList.removeConfirmation, 'function');
-    assert.strictEqual(typeof masterList.getStats, 'function');
-    assert.strictEqual(typeof masterList.getRevealedYears, 'function');
+    const aggregateList = createAggregateList({ pool });
+    assert.ok(aggregateList);
+    assert.strictEqual(typeof aggregateList.aggregateForYear, 'function');
+    assert.strictEqual(typeof aggregateList.recompute, 'function');
+    assert.strictEqual(typeof aggregateList.get, 'function');
+    assert.strictEqual(typeof aggregateList.getStatus, 'function');
+    assert.strictEqual(typeof aggregateList.addConfirmation, 'function');
+    assert.strictEqual(typeof aggregateList.removeConfirmation, 'function');
+    assert.strictEqual(typeof aggregateList.getStats, 'function');
+    assert.strictEqual(typeof aggregateList.getRevealedYears, 'function');
   });
 });
 
@@ -108,9 +108,9 @@ describe('aggregateForYear', () => {
       { rows: [] }, // No official lists
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.aggregateForYear(2024);
+    const result = await aggregateList.aggregateForYear(2024);
 
     assert.strictEqual(result.data.year, 2024);
     assert.strictEqual(result.data.participantCount, 0);
@@ -173,9 +173,9 @@ describe('aggregateForYear', () => {
       },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.aggregateForYear(2024);
+    const result = await aggregateList.aggregateForYear(2024);
 
     assert.strictEqual(result.data.participantCount, 2);
     assert.strictEqual(result.data.albums.length, 2);
@@ -258,9 +258,9 @@ describe('aggregateForYear', () => {
       },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.aggregateForYear(2024);
+    const result = await aggregateList.aggregateForYear(2024);
 
     // Album B has more voters (2) than Album A (1), but Album A has more points (60 > 62)
     // Wait, Album B has 32+30=62 points, Album A has 60 points
@@ -328,9 +328,9 @@ describe('aggregateForYear', () => {
       },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.aggregateForYear(2024);
+    const result = await aggregateList.aggregateForYear(2024);
     const album = result.data.albums[0];
 
     assert.strictEqual(album.highestPosition, 1);
@@ -435,9 +435,9 @@ describe('aggregateForYear', () => {
       },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.aggregateForYear(2024);
+    const result = await aggregateList.aggregateForYear(2024);
 
     assert.strictEqual(result.stats.participantCount, 3);
     assert.strictEqual(result.stats.totalAlbums, 3);
@@ -453,15 +453,15 @@ describe('aggregateForYear', () => {
 // =============================================================================
 
 describe('get', () => {
-  it('should return null when master list does not exist', async () => {
+  it('should return null when aggregate list does not exist', async () => {
     const pool = createMockPool([{ rows: [] }]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const result = await masterList.get(2024);
+    const result = await aggregateList.get(2024);
     assert.strictEqual(result, null);
   });
 
-  it('should return master list record when it exists', async () => {
+  it('should return aggregate list record when it exists', async () => {
     const mockRecord = {
       year: 2024,
       revealed: true,
@@ -470,9 +470,9 @@ describe('get', () => {
       stats: {},
     };
     const pool = createMockPool([{ rows: [mockRecord] }]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const result = await masterList.get(2024);
+    const result = await aggregateList.get(2024);
     assert.deepStrictEqual(result, mockRecord);
   });
 });
@@ -482,11 +482,11 @@ describe('get', () => {
 // =============================================================================
 
 describe('getStatus', () => {
-  it('should return exists: false when master list does not exist', async () => {
+  it('should return exists: false when aggregate list does not exist', async () => {
     const pool = createMockPool([{ rows: [] }]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const status = await masterList.getStatus(2024);
+    const status = await aggregateList.getStatus(2024);
 
     assert.strictEqual(status.exists, false);
     assert.strictEqual(status.revealed, false);
@@ -504,9 +504,9 @@ describe('getStatus', () => {
         rows: [{ username: 'admin1', confirmed_at: new Date('2024-01-01') }],
       },
     ]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const status = await masterList.getStatus(2024);
+    const status = await aggregateList.getStatus(2024);
 
     assert.strictEqual(status.exists, true);
     assert.strictEqual(status.revealed, false);
@@ -528,9 +528,9 @@ describe('addConfirmation', () => {
       { rows: [] },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.addConfirmation(2024, 'admin1');
+    const result = await aggregateList.addConfirmation(2024, 'admin1');
 
     assert.strictEqual(result.alreadyRevealed, true);
   });
@@ -549,9 +549,9 @@ describe('addConfirmation', () => {
       { rows: [{ username: 'admin1', confirmed_at: new Date() }] },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.addConfirmation(2024, 'admin1');
+    const result = await aggregateList.addConfirmation(2024, 'admin1');
 
     assert.strictEqual(result.revealed, false);
     assert.strictEqual(result.status.confirmationCount, 1);
@@ -578,9 +578,9 @@ describe('addConfirmation', () => {
       },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.addConfirmation(2024, 'admin2');
+    const result = await aggregateList.addConfirmation(2024, 'admin2');
 
     assert.strictEqual(result.revealed, true);
   });
@@ -601,9 +601,9 @@ describe('removeConfirmation', () => {
       { rows: [] },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.removeConfirmation(2024, 'admin1');
+    const result = await aggregateList.removeConfirmation(2024, 'admin1');
 
     assert.strictEqual(result.alreadyRevealed, true);
   });
@@ -620,9 +620,9 @@ describe('removeConfirmation', () => {
       { rows: [] },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.removeConfirmation(2024, 'admin1');
+    const result = await aggregateList.removeConfirmation(2024, 'admin1');
 
     assert.ok(result.status);
     assert.strictEqual(result.status.confirmationCount, 0);
@@ -634,20 +634,20 @@ describe('removeConfirmation', () => {
 // =============================================================================
 
 describe('getStats', () => {
-  it('should return null when master list does not exist', async () => {
+  it('should return null when aggregate list does not exist', async () => {
     const pool = createMockPool([{ rows: [] }]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const stats = await masterList.getStats(2024);
+    const stats = await aggregateList.getStats(2024);
     assert.strictEqual(stats, null);
   });
 
-  it('should return stats when master list exists', async () => {
+  it('should return stats when aggregate list exists', async () => {
     const mockStats = { participantCount: 5, totalAlbums: 42 };
     const pool = createMockPool([{ rows: [{ stats: mockStats }] }]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const stats = await masterList.getStats(2024);
+    const stats = await aggregateList.getStats(2024);
     assert.deepStrictEqual(stats, mockStats);
   });
 });
@@ -659,9 +659,9 @@ describe('getStats', () => {
 describe('getRevealedYears', () => {
   it('should return empty array when no revealed lists', async () => {
     const pool = createMockPool([{ rows: [] }]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const years = await masterList.getRevealedYears();
+    const years = await aggregateList.getRevealedYears();
     assert.deepStrictEqual(years, []);
   });
 
@@ -674,9 +674,9 @@ describe('getRevealedYears', () => {
         ],
       },
     ]);
-    const masterList = createMasterList({ pool });
+    const aggregateList = createAggregateList({ pool });
 
-    const years = await masterList.getRevealedYears();
+    const years = await aggregateList.getRevealedYears();
     assert.strictEqual(years.length, 2);
     assert.strictEqual(years[0].year, 2024);
     assert.strictEqual(years[1].year, 2023);
@@ -688,7 +688,7 @@ describe('getRevealedYears', () => {
 // =============================================================================
 
 describe('recompute', () => {
-  it('should aggregate and store master list', async () => {
+  it('should aggregate and store aggregate list', async () => {
     const pool = createMockPool([
       // aggregateForYear - official lists
       { rows: [{ list_id: 'list1', user_id: 'user1', username: 'alice' }] },
@@ -714,9 +714,9 @@ describe('recompute', () => {
       { rows: [{ year: 2024, data: {}, stats: {} }] },
     ]);
     const logger = createMockLogger();
-    const masterList = createMasterList({ pool, logger });
+    const aggregateList = createAggregateList({ pool, logger });
 
-    const result = await masterList.recompute(2024);
+    const result = await aggregateList.recompute(2024);
 
     assert.ok(result);
     // Verify upsert was called (3rd query)

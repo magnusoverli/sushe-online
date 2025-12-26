@@ -1,54 +1,54 @@
-const { createMasterList } = require('../utils/master-list');
-const { masterListTemplate } = require('../templates');
+const { createAggregateList } = require('../utils/aggregate-list');
+const { aggregateListTemplate } = require('../templates');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const { ensureAuthAPI, ensureAuth, ensureAdmin, pool } = deps;
 
-  // Create master list utility instance
-  const masterList = createMasterList({ pool, logger });
+  // Create aggregate list utility instance
+  const aggregateList = createAggregateList({ pool, logger });
 
-  // ============ MASTER LIST PAGE ROUTES ============
+  // ============ AGGREGATE LIST PAGE ROUTES ============
 
   /**
-   * GET /master-list/:year
-   * Render the master list page for a specific year
+   * GET /aggregate-list/:year
+   * Render the aggregate list page for a specific year
    */
-  app.get('/master-list/:year', ensureAuth, (req, res) => {
+  app.get('/aggregate-list/:year', ensureAuth, (req, res) => {
     const year = parseInt(req.params.year, 10);
     if (isNaN(year) || year < 1000 || year > 9999) {
       return res.status(400).send('Invalid year');
     }
 
     const isAdmin = req.user && req.user.role === 'admin';
-    res.send(masterListTemplate(req.user, year, isAdmin));
+    res.send(aggregateListTemplate(req.user, year, isAdmin));
   });
 
-  // ============ MASTER LIST API ENDPOINTS ============
+  // ============ AGGREGATE LIST API ENDPOINTS ============
 
   /**
-   * GET /api/master-list/:year
-   * Get the full master list for a year (only if revealed)
+   * GET /api/aggregate-list/:year
+   * Get the full aggregate list for a year (only if revealed)
    */
-  app.get('/api/master-list/:year', ensureAuthAPI, async (req, res) => {
+  app.get('/api/aggregate-list/:year', ensureAuthAPI, async (req, res) => {
     try {
       const year = parseInt(req.params.year, 10);
       if (isNaN(year) || year < 1000 || year > 9999) {
         return res.status(400).json({ error: 'Invalid year' });
       }
 
-      const record = await masterList.get(year);
+      const record = await aggregateList.get(year);
 
       if (!record) {
         return res
           .status(404)
-          .json({ error: 'Master list not found for this year' });
+          .json({ error: 'Aggregate list not found for this year' });
       }
 
       if (!record.revealed) {
         return res.status(403).json({
-          error: 'Master list has not been revealed yet',
-          status: await masterList.getStatus(year),
+          error: 'Aggregate list has not been revealed yet',
+          status: await aggregateList.getStatus(year),
         });
       }
 
@@ -60,36 +60,40 @@ module.exports = (app, deps) => {
         data: record.data,
       });
     } catch (err) {
-      logger.error('Error fetching master list:', err);
+      logger.error('Error fetching aggregate list:', err);
       res.status(500).json({ error: 'Database error' });
     }
   });
 
   /**
-   * GET /api/master-list/:year/status
+   * GET /api/aggregate-list/:year/status
    * Get reveal status and confirmation info for a year
    */
-  app.get('/api/master-list/:year/status', ensureAuthAPI, async (req, res) => {
-    try {
-      const year = parseInt(req.params.year, 10);
-      if (isNaN(year) || year < 1000 || year > 9999) {
-        return res.status(400).json({ error: 'Invalid year' });
-      }
+  app.get(
+    '/api/aggregate-list/:year/status',
+    ensureAuthAPI,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
 
-      const status = await masterList.getStatus(year);
-      res.json(status);
-    } catch (err) {
-      logger.error('Error fetching master list status:', err);
-      res.status(500).json({ error: 'Database error' });
+        const status = await aggregateList.getStatus(year);
+        res.json(status);
+      } catch (err) {
+        logger.error('Error fetching aggregate list status:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
     }
-  });
+  );
 
   /**
-   * GET /api/master-list/:year/stats
+   * GET /api/aggregate-list/:year/stats
    * Get anonymous stats for admin preview (no identifying album info)
    */
   app.get(
-    '/api/master-list/:year/stats',
+    '/api/aggregate-list/:year/stats',
     ensureAuthAPI,
     ensureAdmin,
     async (req, res) => {
@@ -99,12 +103,12 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid year' });
         }
 
-        // First ensure the master list is computed
-        let record = await masterList.get(year);
+        // First ensure the aggregate list is computed
+        let record = await aggregateList.get(year);
         if (!record) {
           // Recompute if it doesn't exist
-          await masterList.recompute(year);
-          record = await masterList.get(year);
+          await aggregateList.recompute(year);
+          record = await aggregateList.get(year);
         }
 
         if (!record) {
@@ -120,18 +124,18 @@ module.exports = (app, deps) => {
           stats: record.stats,
         });
       } catch (err) {
-        logger.error('Error fetching master list stats:', err);
+        logger.error('Error fetching aggregate list stats:', err);
         res.status(500).json({ error: 'Database error' });
       }
     }
   );
 
   /**
-   * POST /api/master-list/:year/confirm
+   * POST /api/aggregate-list/:year/confirm
    * Add admin confirmation for reveal
    */
   app.post(
-    '/api/master-list/:year/confirm',
+    '/api/aggregate-list/:year/confirm',
     ensureAuthAPI,
     ensureAdmin,
     async (req, res) => {
@@ -141,11 +145,11 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid year' });
         }
 
-        const result = await masterList.addConfirmation(year, req.user._id);
+        const result = await aggregateList.addConfirmation(year, req.user._id);
 
         if (result.alreadyRevealed) {
           return res.status(400).json({
-            error: 'Master list has already been revealed',
+            error: 'Aggregate list has already been revealed',
             status: result.status,
           });
         }
@@ -156,18 +160,18 @@ module.exports = (app, deps) => {
           status: result.status,
         });
       } catch (err) {
-        logger.error('Error confirming master list reveal:', err);
+        logger.error('Error confirming aggregate list reveal:', err);
         res.status(500).json({ error: 'Database error' });
       }
     }
   );
 
   /**
-   * DELETE /api/master-list/:year/confirm
+   * DELETE /api/aggregate-list/:year/confirm
    * Remove admin confirmation
    */
   app.delete(
-    '/api/master-list/:year/confirm',
+    '/api/aggregate-list/:year/confirm',
     ensureAuthAPI,
     ensureAdmin,
     async (req, res) => {
@@ -177,12 +181,15 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid year' });
         }
 
-        const result = await masterList.removeConfirmation(year, req.user._id);
+        const result = await aggregateList.removeConfirmation(
+          year,
+          req.user._id
+        );
 
         if (result.alreadyRevealed) {
           return res.status(400).json({
             error:
-              'Cannot revoke confirmation - master list has already been revealed',
+              'Cannot revoke confirmation - aggregate list has already been revealed',
             status: result.status,
           });
         }
@@ -192,19 +199,19 @@ module.exports = (app, deps) => {
           status: result.status,
         });
       } catch (err) {
-        logger.error('Error revoking master list confirmation:', err);
+        logger.error('Error revoking aggregate list confirmation:', err);
         res.status(500).json({ error: 'Database error' });
       }
     }
   );
 
   /**
-   * GET /api/master-list/years
-   * Get list of years with revealed master lists
+   * GET /api/aggregate-list/years
+   * Get list of years with revealed aggregate lists
    */
-  app.get('/api/master-list-years', ensureAuthAPI, async (req, res) => {
+  app.get('/api/aggregate-list-years', ensureAuthAPI, async (req, res) => {
     try {
-      const years = await masterList.getRevealedYears();
+      const years = await aggregateList.getRevealedYears();
       res.json({ years });
     } catch (err) {
       logger.error('Error fetching revealed years:', err);
@@ -213,11 +220,11 @@ module.exports = (app, deps) => {
   });
 
   /**
-   * GET /api/master-list-years/with-official-lists
+   * GET /api/aggregate-list-years/with-official-lists
    * Get list of years that have at least one official list (for admin panel)
    */
   app.get(
-    '/api/master-list-years/with-official-lists',
+    '/api/aggregate-list-years/with-official-lists',
     ensureAuthAPI,
     ensureAdmin,
     async (req, res) => {
@@ -237,11 +244,11 @@ module.exports = (app, deps) => {
   );
 
   /**
-   * POST /api/master-list/:year/recompute
-   * Force recomputation of master list (admin only)
+   * POST /api/aggregate-list/:year/recompute
+   * Force recomputation of aggregate list (admin only)
    */
   app.post(
-    '/api/master-list/:year/recompute',
+    '/api/aggregate-list/:year/recompute',
     ensureAuthAPI,
     ensureAdmin,
     async (req, res) => {
@@ -251,21 +258,21 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid year' });
         }
 
-        await masterList.recompute(year);
-        const status = await masterList.getStatus(year);
+        await aggregateList.recompute(year);
+        const status = await aggregateList.getStatus(year);
 
         res.json({
           success: true,
-          message: `Master list for ${year} recomputed`,
+          message: `Aggregate list for ${year} recomputed`,
           status,
         });
       } catch (err) {
-        logger.error('Error recomputing master list:', err);
+        logger.error('Error recomputing aggregate list:', err);
         res.status(500).json({ error: 'Database error' });
       }
     }
   );
 
-  // Export the masterList instance for use in triggers
-  return { masterList };
+  // Export the aggregateList instance for use in triggers
+  return { aggregateList };
 };

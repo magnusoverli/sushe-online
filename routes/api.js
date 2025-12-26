@@ -21,8 +21,8 @@ const {
   getStorableTracksValue,
 } = require('../utils/deduplication');
 
-// Import master list utilities for recomputation triggers
-const { createMasterList } = require('../utils/master-list');
+// Import aggregate list utilities for recomputation triggers
+const { createAggregateList } = require('../utils/aggregate-list');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
@@ -59,18 +59,18 @@ module.exports = (app, deps) => {
     pool,
   } = deps;
 
-  // Create master list instance for recomputation triggers
-  const masterList = createMasterList({ pool, logger });
+  // Create aggregate list instance for recomputation triggers
+  const aggregateList = createAggregateList({ pool, logger });
 
   /**
-   * Helper to trigger master list recomputation for a year (non-blocking)
+   * Helper to trigger aggregate list recomputation for a year (non-blocking)
    * @param {number} year - The year to recompute
    */
-  function triggerMasterListRecompute(year) {
+  function triggerAggregateListRecompute(year) {
     if (!year) return;
     // Fire and forget - don't block the response
-    masterList.recompute(year).catch((err) => {
-      logger.error(`Failed to recompute master list for year ${year}:`, err);
+    aggregateList.recompute(year).catch((err) => {
+      logger.error(`Failed to recompute aggregate list for year ${year}:`, err);
     });
   }
 
@@ -455,7 +455,7 @@ module.exports = (app, deps) => {
 
         results.push({ listId, success: true });
 
-        // Track years that need master list recomputation
+        // Track years that need aggregate list recomputation
         if (oldYear !== null) yearsToRecompute.add(oldYear);
         if (newYear !== null && newIsOfficial) yearsToRecompute.add(newYear);
       }
@@ -465,9 +465,9 @@ module.exports = (app, deps) => {
       // Invalidate caches
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
-      // Trigger master list recomputation for affected years
+      // Trigger aggregate list recomputation for affected years
       for (const year of yearsToRecompute) {
-        triggerMasterListRecompute(year);
+        triggerAggregateListRecompute(year);
       }
 
       res.json({
@@ -804,11 +804,11 @@ module.exports = (app, deps) => {
           )
         ).catch((err) => logger.warn('Album cache invalidation failed:', err));
 
-        // If this is an official list, trigger master list recomputation
+        // If this is an official list, trigger aggregate list recomputation
         if (existingList && existingList.isOfficial) {
           const listYear = yearValidation.value || existingList.year;
           if (listYear) {
-            triggerMasterListRecompute(listYear);
+            triggerAggregateListRecompute(listYear);
           }
         }
 
@@ -925,16 +925,16 @@ module.exports = (app, deps) => {
       }
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
-      // If year changed on an official list, trigger master list recomputation
+      // If year changed on an official list, trigger aggregate list recomputation
       const yearValidation =
         year !== undefined ? validateYear(year) : { value: existingList.year };
       if (existingList.isOfficial && year !== undefined) {
         // Recompute for both old and new year if they differ
         if (existingList.year && existingList.year !== yearValidation.value) {
-          triggerMasterListRecompute(existingList.year);
+          triggerAggregateListRecompute(existingList.year);
         }
         if (yearValidation.value) {
-          triggerMasterListRecompute(yearValidation.value);
+          triggerAggregateListRecompute(yearValidation.value);
         }
       }
 
@@ -1010,9 +1010,9 @@ module.exports = (app, deps) => {
       );
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
-      // Trigger master list recomputation for this year
+      // Trigger aggregate list recomputation for this year
       if (existingList.year) {
-        triggerMasterListRecompute(existingList.year);
+        triggerAggregateListRecompute(existingList.year);
       }
 
       res.json({
@@ -1034,7 +1034,7 @@ module.exports = (app, deps) => {
     const { name } = req.params;
 
     try {
-      // First, check if the list is official (need to recompute master list if so)
+      // First, check if the list is official (need to recompute aggregate list if so)
       const existingList = await listsAsync.findOne({
         userId: req.user._id,
         name,
@@ -1044,7 +1044,7 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      // Store info for master list recomputation before deleting
+      // Store info for aggregate list recomputation before deleting
       const wasOfficial = existingList.isOfficial;
       const listYear = existingList.year;
 
@@ -1073,9 +1073,9 @@ module.exports = (app, deps) => {
         );
       }
 
-      // If this was an official list, trigger master list recomputation
+      // If this was an official list, trigger aggregate list recomputation
       if (wasOfficial && listYear) {
-        triggerMasterListRecompute(listYear);
+        triggerAggregateListRecompute(listYear);
       }
 
       res.json({ success: true, message: 'List deleted' });

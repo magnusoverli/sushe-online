@@ -1437,8 +1437,8 @@ const spotifyTemplate = (user) => `
 </html>
 `;
 
-// Master List template - collaborative album of the year page
-const masterListTemplate = (user, year, isAdmin = false) => `
+// Aggregate List template - collaborative album of the year page
+const aggregateListTemplate = (user, year, isAdmin = false) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1558,10 +1558,10 @@ const masterListTemplate = (user, year, isAdmin = false) => `
     </div>
     
     <!-- Content container - populated by JavaScript -->
-    <div id="masterListContent" class="space-y-4">
+    <div id="aggregateListContent" class="space-y-4">
       <div class="text-center py-12">
         <i class="fas fa-spinner fa-spin text-4xl text-gray-500 mb-4"></i>
-        <p class="text-gray-400">Loading master list...</p>
+        <p class="text-gray-400">Loading aggregate list...</p>
       </div>
     </div>
     
@@ -1610,12 +1610,12 @@ const masterListTemplate = (user, year, isAdmin = false) => `
       return pos + (s[(v - 20) % 10] || s[v] || s[0]);
     }
     
-    // Render revealed master list
-    function renderMasterList(data) {
-      const container = document.getElementById('masterListContent');
+    // Render revealed aggregate list
+    function renderAggregateList(data) {
+      const container = document.getElementById('aggregateListContent');
       
       if (!data.albums || data.albums.length === 0) {
-        container.innerHTML = '<div class="text-center py-12 text-gray-400">No albums in the master list yet.</div>';
+        container.innerHTML = '<div class="text-center py-12 text-gray-400">No albums in the aggregate list yet.</div>';
         return;
       }
       
@@ -1655,7 +1655,7 @@ const masterListTemplate = (user, year, isAdmin = false) => `
     
     // Render pre-reveal status with position placeholders
     function renderPendingReveal(status) {
-      const container = document.getElementById('masterListContent');
+      const container = document.getElementById('aggregateListContent');
       const totalAlbums = status.totalAlbums || 0;
       
       // Generate position placeholder cards
@@ -1721,7 +1721,7 @@ const masterListTemplate = (user, year, isAdmin = false) => `
       let html = '';
       
       if (status.revealed) {
-        html = '<p class="text-green-400"><i class="fas fa-check-circle mr-2"></i>Master list has been revealed</p>';
+        html = '<p class="text-green-400"><i class="fas fa-check-circle mr-2"></i>Aggregate list has been revealed</p>';
       } else {
         // Stats preview (anonymous)
         if (stats) {
@@ -1752,11 +1752,11 @@ const masterListTemplate = (user, year, isAdmin = false) => `
     // Admin actions
     async function confirmReveal() {
       try {
-        const result = await apiFetch('/api/master-list/' + YEAR + '/confirm', { method: 'POST' });
+        const result = await apiFetch('/api/aggregate-list/' + YEAR + '/confirm', { method: 'POST' });
         if (result.revealed) {
           window.location.reload();
         } else {
-          loadMasterList();
+          loadAggregateList();
         }
       } catch (err) {
         alert('Error: ' + err.message);
@@ -1765,23 +1765,23 @@ const masterListTemplate = (user, year, isAdmin = false) => `
     
     async function revokeConfirmation() {
       try {
-        await apiFetch('/api/master-list/' + YEAR + '/confirm', { method: 'DELETE' });
-        loadMasterList();
+        await apiFetch('/api/aggregate-list/' + YEAR + '/confirm', { method: 'DELETE' });
+        loadAggregateList();
       } catch (err) {
         alert('Error: ' + err.message);
       }
     }
     
     // Main load function
-    async function loadMasterList() {
+    async function loadAggregateList() {
       try {
         // First check status
-        const status = await apiFetch('/api/master-list/' + YEAR + '/status');
+        const status = await apiFetch('/api/aggregate-list/' + YEAR + '/status');
         
         if (status.revealed) {
           // Load full data
-          const data = await apiFetch('/api/master-list/' + YEAR);
-          renderMasterList(data.data);
+          const data = await apiFetch('/api/aggregate-list/' + YEAR);
+          renderAggregateList(data.data);
         } else {
           // Show pending state
           renderPendingReveal(status);
@@ -1790,20 +1790,20 @@ const masterListTemplate = (user, year, isAdmin = false) => `
         // Load admin panel if admin
         if (IS_ADMIN) {
           try {
-            const statsRes = await apiFetch('/api/master-list/' + YEAR + '/stats');
+            const statsRes = await apiFetch('/api/aggregate-list/' + YEAR + '/stats');
             renderAdminPanel(status, statsRes.stats);
           } catch (e) {
             renderAdminPanel(status, null);
           }
         }
       } catch (err) {
-        document.getElementById('masterListContent').innerHTML = 
+        document.getElementById('aggregateListContent').innerHTML = 
           '<div class="text-center py-12"><i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i><p class="text-gray-400">' + err.message + '</p></div>';
       }
     }
     
     // Initialize
-    loadMasterList();
+    loadAggregateList();
   </script>
 </body>
 </html>
@@ -1817,7 +1817,7 @@ module.exports = {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
-  masterListTemplate,
+  aggregateListTemplate,
   headerComponent,
   formatDate,
   formatDateTime,
