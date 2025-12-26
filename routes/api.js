@@ -4429,14 +4429,25 @@ module.exports = (app, deps) => {
       const callbackData = callbackQuery.data;
       const telegramUser = callbackQuery.from;
 
-      logger.debug('Telegram callback received:', {
+      // #region agent log
+      logger.info('[DEBUG-TELEGRAM-LINK] Telegram callback received', {
         callbackData,
         telegramUserId: telegramUser.id,
+        telegramUserIdType: typeof telegramUser.id,
         telegramUsername: telegramUser.username,
+        hypothesisId: 'B',
       });
+      // #endregion
 
       // Parse the callback data
       const parsed = telegramNotifier.parseCallbackData(callbackData);
+
+      // #region agent log
+      logger.info('[DEBUG-TELEGRAM-LINK] Parsed callback data', {
+        parsed,
+        hypothesisId: 'general',
+      });
+      // #endregion
 
       if (parsed?.type === 'event_action') {
         // Get the linked admin user
@@ -4444,14 +4455,29 @@ module.exports = (app, deps) => {
           telegramUser.id
         );
 
+        // #region agent log
+        logger.info('[DEBUG-TELEGRAM-LINK] getLinkedAdmin result', {
+          adminUserFound: !!adminUser,
+          adminUsername: adminUser?.username || null,
+          telegramUserId: telegramUser.id,
+          hypothesisId: 'A,B,C,D,E',
+        });
+        // #endregion
+
         // If not linked, try to find admin by Telegram username
         if (!adminUser && telegramUser.username) {
           // For now, we'll use a placeholder - in production, you'd want
           // the admin to link their account first
+          // #region agent log
           logger.warn(
-            'Telegram user not linked to admin account:',
-            telegramUser.username
+            '[DEBUG-TELEGRAM-LINK] Admin not linked - showing error to user',
+            {
+              telegramUserId: telegramUser.id,
+              telegramUsername: telegramUser.username,
+              hypothesisId: 'A',
+            }
           );
+          // #endregion
 
           await telegramNotifier.answerCallbackQuery(
             callbackQuery.id,

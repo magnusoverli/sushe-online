@@ -834,16 +834,69 @@ function createTelegramNotifier(deps = {}) {
    * @returns {Object|null} - App user or null
    */
   async function getLinkedAdmin(telegramUserId) {
-    if (!pool) return null;
+    // #region agent log
+    log.info('[DEBUG-TELEGRAM-LINK] getLinkedAdmin called', {
+      telegramUserId,
+      telegramUserIdType: typeof telegramUserId,
+      poolExists: !!pool,
+      hypothesisId: 'A,B,C',
+    });
+    // #endregion
+    if (!pool) {
+      // #region agent log
+      log.info('[DEBUG-TELEGRAM-LINK] pool is null, returning null', {
+        hypothesisId: 'C',
+      });
+      // #endregion
+      return null;
+    }
 
-    const result = await pool.query(
-      `SELECT u.* FROM users u
-       JOIN telegram_admins ta ON u._id = ta.user_id
-       WHERE ta.telegram_user_id = $1`,
-      [telegramUserId]
-    );
+    try {
+      // #region agent log - Check if telegram_admins table has any entries
+      const countResult = await pool.query(
+        'SELECT COUNT(*) as count FROM telegram_admins'
+      );
+      log.info('[DEBUG-TELEGRAM-LINK] telegram_admins table count', {
+        count: countResult.rows[0]?.count,
+        hypothesisId: 'A',
+      });
 
-    return result.rows[0] || null;
+      // Also check what entries exist
+      const allAdmins = await pool.query(
+        'SELECT telegram_user_id, telegram_username, user_id FROM telegram_admins'
+      );
+      log.info('[DEBUG-TELEGRAM-LINK] all telegram_admins entries', {
+        entries: allAdmins.rows,
+        hypothesisId: 'A,E',
+      });
+      // #endregion
+
+      const result = await pool.query(
+        `SELECT u.* FROM users u
+         JOIN telegram_admins ta ON u._id = ta.user_id
+         WHERE ta.telegram_user_id = $1`,
+        [telegramUserId]
+      );
+
+      // #region agent log
+      log.info('[DEBUG-TELEGRAM-LINK] query result', {
+        rowCount: result.rows.length,
+        foundUser: result.rows[0]?.username || null,
+        hypothesisId: 'A,B,E',
+      });
+      // #endregion
+
+      return result.rows[0] || null;
+    } catch (err) {
+      // #region agent log
+      log.error('[DEBUG-TELEGRAM-LINK] query error', {
+        error: err.message,
+        stack: err.stack,
+        hypothesisId: 'D',
+      });
+      // #endregion
+      return null;
+    }
   }
 
   /**
