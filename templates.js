@@ -68,6 +68,9 @@ const headerComponent = (user, activeSection = 'home') => `
         <a href="/settings" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-6" title="Settings">
           <i class="fas fa-cog text-lg"></i>
         </a>
+        <a href="/logout" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">
+          <i class="fas fa-sign-out-alt text-lg"></i>
+        </a>
       </div>
     </div>
   </header>
@@ -1537,18 +1540,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
 <body class="bg-black text-gray-200 min-h-screen">
   <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
   
-  <!-- Header -->
-  <header class="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-50">
-    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-      <a href="/" class="text-xl font-bold text-red-600 hover:text-red-500 transition">SuShe</a>
-      <div class="flex items-center gap-4">
-        <span class="text-sm text-gray-400">${user?.username || user?.email}</span>
-        <a href="/settings" class="text-gray-400 hover:text-white transition" title="Settings">
-          <i class="fas fa-cog"></i>
-        </a>
-      </div>
-    </div>
-  </header>
+  ${headerComponent(user, 'aggregate')}
   
   <!-- Main content -->
   <main class="max-w-6xl mx-auto px-4 py-8">

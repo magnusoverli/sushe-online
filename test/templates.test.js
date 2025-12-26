@@ -718,12 +718,12 @@ describe('templates utilities', () => {
       assert.ok(result.includes('fa-cog'));
     });
 
-    it('should not include logout link in header (moved to settings)', () => {
+    it('should include logout link in header', () => {
       const user = { username: 'test' };
       const result = templates.headerComponent(user);
 
-      assert.ok(!result.includes('href="/logout"'));
-      assert.ok(!result.includes('fa-sign-out-alt'));
+      assert.ok(result.includes('href="/logout"'));
+      assert.ok(result.includes('fa-sign-out-alt'));
     });
 
     it('should show username when provided', () => {
