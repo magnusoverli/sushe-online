@@ -51,10 +51,10 @@ const loginRateLimit = rateLimit({
 });
 
 // Moderate rate limiting for registration
-// 3 attempts per hour per IP (prevents spam registrations)
+// 10 attempts per hour per IP (prevents spam registrations while allowing legitimate retries)
 const registerRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: parseInt(process.env.RATE_LIMIT_REGISTER_MAX) || 3,
+  max: parseInt(process.env.RATE_LIMIT_REGISTER_MAX) || 10,
   message: 'Too many registration attempts. Please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
