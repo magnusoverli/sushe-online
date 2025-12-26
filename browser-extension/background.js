@@ -784,6 +784,23 @@ async function addAlbumToList(info, tab, listName) {
   }
 
   try {
+    // Show immediate feedback to user while we process
+    // Parse the URL to get a rough album name for the notification
+    const urlForParsing = info.linkUrl || info.pageUrl || '';
+    const urlMatch = urlForParsing.match(/\/release\/[^/]+\/([^/]+)\/([^/]+)/);
+    if (urlMatch) {
+      const roughArtist = decodeURIComponent(urlMatch[1].replace(/[-_]/g, ' '));
+      const roughAlbum = decodeURIComponent(urlMatch[2].replace(/[-_]/g, ' '));
+      const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
+      showNotificationWithImage(
+        'Adding album...',
+        `Processing ${roughAlbum} by ${roughArtist}...`,
+        rymCoverUrl
+      );
+    } else {
+      showNotification('Adding album...', 'Processing album data...');
+    }
+
     // Send message to content script to extract album data
     console.log('Sending message to content script...');
     let albumData;
@@ -836,14 +853,6 @@ async function addAlbumToList(info, tab, listName) {
     }
 
     console.log('Extracted album data:', albumData);
-
-    // Show progress notification with album cover from RateYourMusic
-    const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
-    showNotificationWithImage(
-      'Adding album...',
-      `Adding ${albumData.album} by ${albumData.artist} to ${listName}`,
-      rymCoverUrl
-    );
 
     // Search MusicBrainz for the album
     console.log('Searching MusicBrainz for album...');

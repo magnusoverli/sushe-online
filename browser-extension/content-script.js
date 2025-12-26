@@ -1,5 +1,6 @@
 // Content script for RateYourMusic pages
 // Extracts album data from the page when requested
+/* global DOMParser */
 
 console.log('SuShe Online content script loaded on RateYourMusic');
 
@@ -8,18 +9,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Content script received message:', message.action);
 
   if (message.action === 'extractAlbumData') {
-    try {
-      console.log('Extracting album data from page...');
+    // Handle async extraction
+    (async () => {
+      try {
+        console.log('Extracting album data from page...');
 
-      const albumData = extractAlbumDataFromPage(message);
-      console.log('Extracted album data:', albumData);
+        const albumData = await extractAlbumDataFromPage(message);
+        console.log('Extracted album data:', albumData);
 
-      // Always send response, even if extraction failed
-      sendResponse(albumData);
-    } catch (error) {
-      console.error('Error in content script:', error);
-      sendResponse({ error: error.message });
-    }
+        // Always send response, even if extraction failed
+        sendResponse(albumData);
+      } catch (error) {
+        console.error('Error in content script:', error);
+        sendResponse({ error: error.message });
+      }
+    })();
     return true; // Keep channel open for async response
   }
 
@@ -28,7 +32,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Extract album information from RateYourMusic page
-function extractAlbumDataFromPage(context) {
+async function extractAlbumDataFromPage(context) {
   const data = {
     artist: '',
     album: '',
@@ -37,6 +41,7 @@ function extractAlbumDataFromPage(context) {
   };
 
   // Parse from URL - RYM URLs are typically: /release/album/artist_name/album_name/
+  let albumUrl = null;
   if (context.linkUrl || context.pageUrl) {
     const url = context.linkUrl || context.pageUrl;
     const match = url.match(/\/release\/[^/]+\/([^/]+)\/([^/]+)/);
@@ -50,6 +55,9 @@ function extractAlbumDataFromPage(context) {
       // Clean up artist and album names
       data.artist = cleanName(data.artist);
       data.album = cleanName(data.album);
+
+      // Store the album URL for potential genre fetching
+      albumUrl = url;
     }
   }
 
@@ -67,11 +75,72 @@ function extractAlbumDataFromPage(context) {
 
   // Extract genres - try context-aware extraction first (for chart/list pages),
   // then fall back to page-level extraction (for album detail pages)
-  const genres = extractGenresFromContext(context) || extractGenresFromPage();
+  const contextGenres = extractGenresFromContext(context);
+  let genres = contextGenres || extractGenresFromPage();
+
+  // If no genres found locally, fetch the album detail page to get accurate genres
+  if (!genres.genre_1 && albumUrl) {
+    console.log('No genres found locally, fetching album page:', albumUrl);
+    genres = await fetchGenresFromAlbumPage(albumUrl);
+  }
+
   data.genre_1 = genres.genre_1;
   data.genre_2 = genres.genre_2;
 
   return data;
+}
+
+// Fetch the album detail page and extract genres from it
+async function fetchGenresFromAlbumPage(albumUrl) {
+  try {
+    const response = await fetch(albumUrl, {
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'text/html',
+      },
+    });
+
+    if (!response.ok) {
+      console.warn('Failed to fetch album page:', response.status);
+      return { genre_1: '', genre_2: '' };
+    }
+
+    const html = await response.text();
+
+    // Parse the HTML to extract genres
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    // Extract primary genres
+    const primaryGenres = Array.from(
+      doc.querySelectorAll('.release_pri_genres .genre')
+    ).map((el) => el.textContent.trim());
+
+    // Extract secondary genres
+    const secondaryGenres = Array.from(
+      doc.querySelectorAll('.release_sec_genres .genre')
+    ).map((el) => el.textContent.trim());
+
+    let genre_1 = '';
+    let genre_2 = '';
+
+    if (primaryGenres.length >= 2) {
+      genre_1 = primaryGenres[0];
+      genre_2 = primaryGenres[1];
+    } else if (primaryGenres.length === 1) {
+      genre_1 = primaryGenres[0];
+      genre_2 = secondaryGenres[0] || '';
+    } else if (secondaryGenres.length > 0) {
+      genre_1 = secondaryGenres[0];
+      genre_2 = secondaryGenres[1] || '';
+    }
+
+    console.log('Fetched genres from album page:', { genre_1, genre_2 });
+    return { genre_1, genre_2 };
+  } catch (error) {
+    console.error('Error fetching album page for genres:', error);
+    return { genre_1: '', genre_2: '' };
+  }
 }
 
 // Extract genres from the specific album context (for chart pages, list pages, etc.)
