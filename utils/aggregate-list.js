@@ -77,12 +77,14 @@ function createAggregateList(deps = {}) {
     log.info(`Aggregating list for year ${year}`);
 
     // Get all official lists for the year with user info
+    // Only include users who are approved contributors for this year
     const listsResult = await pool.query(
       `
       SELECT l._id as list_id, l.user_id, u.username
       FROM lists l
       JOIN users u ON l.user_id = u._id
       WHERE l.year = $1 AND l.is_official = TRUE
+        AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
     `,
       [year]
     );
@@ -450,6 +452,152 @@ function createAggregateList(deps = {}) {
     return result.rows;
   }
 
+  /**
+   * Get approved contributors for a year
+   * @param {number} year - The year
+   * @returns {Promise<Array>} Array of contributors with user info
+   */
+  async function getContributors(year) {
+    const result = await pool.query(
+      `
+      SELECT 
+        c.user_id,
+        c.added_at,
+        u.username,
+        u.email,
+        a.username as added_by_username
+      FROM aggregate_list_contributors c
+      JOIN users u ON c.user_id = u._id
+      JOIN users a ON c.added_by = a._id
+      WHERE c.year = $1
+      ORDER BY c.added_at DESC
+    `,
+      [year]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Get all users who have official lists for a year (eligible for contribution)
+   * @param {number} year - The year
+   * @returns {Promise<Array>} Array of eligible users with their contribution status
+   */
+  async function getEligibleUsers(year) {
+    const result = await pool.query(
+      `
+      SELECT 
+        u._id as user_id,
+        u.username,
+        u.email,
+        l._id as list_id,
+        l.name as list_name,
+        (SELECT COUNT(*) FROM list_items li WHERE li.list_id = l._id) as album_count,
+        EXISTS(
+          SELECT 1 FROM aggregate_list_contributors c 
+          WHERE c.year = $1 AND c.user_id = u._id
+        ) as is_contributor
+      FROM lists l
+      JOIN users u ON l.user_id = u._id
+      WHERE l.year = $1 AND l.is_official = TRUE
+      ORDER BY u.username
+    `,
+      [year]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Add a user as a contributor for a year
+   * @param {number} year - The year
+   * @param {string} userId - The user to add
+   * @param {string} addedBy - The admin who added them
+   * @returns {Promise<Object>} Result with success status
+   */
+  async function addContributor(year, userId, addedBy) {
+    log.info(`Adding user ${userId} as contributor for year ${year}`);
+
+    try {
+      await pool.query(
+        `
+        INSERT INTO aggregate_list_contributors (year, user_id, added_by)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (year, user_id) DO NOTHING
+      `,
+        [year, userId, addedBy]
+      );
+
+      return { success: true };
+    } catch (err) {
+      log.error(`Error adding contributor: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Remove a user as a contributor for a year
+   * @param {number} year - The year
+   * @param {string} userId - The user to remove
+   * @returns {Promise<Object>} Result with success status
+   */
+  async function removeContributor(year, userId) {
+    log.info(`Removing user ${userId} as contributor for year ${year}`);
+
+    const result = await pool.query(
+      `
+      DELETE FROM aggregate_list_contributors 
+      WHERE year = $1 AND user_id = $2
+      RETURNING *
+    `,
+      [year, userId]
+    );
+
+    return { success: true, removed: result.rowCount > 0 };
+  }
+
+  /**
+   * Bulk update contributors for a year (add multiple at once)
+   * @param {number} year - The year
+   * @param {Array<string>} userIds - Array of user IDs to set as contributors
+   * @param {string} addedBy - The admin making the change
+   * @returns {Promise<Object>} Result with counts
+   */
+  async function setContributors(year, userIds, addedBy) {
+    log.info(`Setting ${userIds.length} contributors for year ${year}`);
+
+    // Start a transaction
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Remove all existing contributors for this year
+      await client.query(
+        'DELETE FROM aggregate_list_contributors WHERE year = $1',
+        [year]
+      );
+
+      // Add the new contributors
+      if (userIds.length > 0) {
+        const values = userIds
+          .map((_, i) => `($1, $${i + 2}, $${userIds.length + 2})`)
+          .join(', ');
+        await client.query(
+          `INSERT INTO aggregate_list_contributors (year, user_id, added_by) VALUES ${values}`,
+          [year, ...userIds, addedBy]
+        );
+      }
+
+      await client.query('COMMIT');
+
+      return { success: true, count: userIds.length };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      log.error(`Error setting contributors: ${err.message}`);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   return {
     aggregateForYear,
     recompute,
@@ -459,6 +607,11 @@ function createAggregateList(deps = {}) {
     removeConfirmation,
     getStats,
     getRevealedYears,
+    getContributors,
+    getEligibleUsers,
+    addContributor,
+    removeContributor,
+    setContributors,
     getPositionPoints,
     POSITION_POINTS,
   };

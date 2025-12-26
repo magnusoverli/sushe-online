@@ -95,6 +95,12 @@ describe('createAggregateList', () => {
     assert.strictEqual(typeof aggregateList.removeConfirmation, 'function');
     assert.strictEqual(typeof aggregateList.getStats, 'function');
     assert.strictEqual(typeof aggregateList.getRevealedYears, 'function');
+    // Contributor management functions
+    assert.strictEqual(typeof aggregateList.getContributors, 'function');
+    assert.strictEqual(typeof aggregateList.getEligibleUsers, 'function');
+    assert.strictEqual(typeof aggregateList.addContributor, 'function');
+    assert.strictEqual(typeof aggregateList.removeContributor, 'function');
+    assert.strictEqual(typeof aggregateList.setContributors, 'function');
   });
 });
 
@@ -721,5 +727,231 @@ describe('recompute', () => {
     assert.ok(result);
     // Verify upsert was called (3rd query)
     assert.strictEqual(pool.query.mock.calls.length, 3);
+  });
+});
+
+// =============================================================================
+// Contributor Management tests
+// =============================================================================
+
+describe('getContributors', () => {
+  it('should return empty array when no contributors exist', async () => {
+    const pool = createMockPool([{ rows: [] }]);
+    const aggregateList = createAggregateList({ pool });
+
+    const contributors = await aggregateList.getContributors(2024);
+    assert.deepStrictEqual(contributors, []);
+  });
+
+  it('should return contributors with user info', async () => {
+    const mockContributors = [
+      {
+        user_id: 'user1',
+        added_at: new Date('2024-12-01'),
+        username: 'alice',
+        email: 'alice@test.com',
+        added_by_username: 'admin',
+      },
+      {
+        user_id: 'user2',
+        added_at: new Date('2024-12-02'),
+        username: 'bob',
+        email: 'bob@test.com',
+        added_by_username: 'admin',
+      },
+    ];
+    const pool = createMockPool([{ rows: mockContributors }]);
+    const aggregateList = createAggregateList({ pool });
+
+    const contributors = await aggregateList.getContributors(2024);
+    assert.strictEqual(contributors.length, 2);
+    assert.strictEqual(contributors[0].username, 'alice');
+    assert.strictEqual(contributors[1].username, 'bob');
+  });
+});
+
+describe('getEligibleUsers', () => {
+  it('should return empty array when no users have official lists', async () => {
+    const pool = createMockPool([{ rows: [] }]);
+    const aggregateList = createAggregateList({ pool });
+
+    const eligibleUsers = await aggregateList.getEligibleUsers(2024);
+    assert.deepStrictEqual(eligibleUsers, []);
+  });
+
+  it('should return eligible users with contributor status', async () => {
+    const mockUsers = [
+      {
+        user_id: 'user1',
+        username: 'alice',
+        email: 'alice@test.com',
+        list_id: 'list1',
+        list_name: 'AOTY 2024',
+        album_count: 25,
+        is_contributor: true,
+      },
+      {
+        user_id: 'user2',
+        username: 'bob',
+        email: 'bob@test.com',
+        list_id: 'list2',
+        list_name: 'Best of 2024',
+        album_count: 40,
+        is_contributor: false,
+      },
+    ];
+    const pool = createMockPool([{ rows: mockUsers }]);
+    const aggregateList = createAggregateList({ pool });
+
+    const eligibleUsers = await aggregateList.getEligibleUsers(2024);
+    assert.strictEqual(eligibleUsers.length, 2);
+    assert.strictEqual(eligibleUsers[0].is_contributor, true);
+    assert.strictEqual(eligibleUsers[1].is_contributor, false);
+  });
+});
+
+describe('addContributor', () => {
+  it('should add a contributor successfully', async () => {
+    const pool = createMockPool([{ rows: [] }]);
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    const result = await aggregateList.addContributor(2024, 'user1', 'admin1');
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(pool.query.mock.calls.length, 1);
+    // Verify the query contains correct parameters
+    const queryCall = pool.query.mock.calls[0];
+    assert.ok(
+      queryCall.arguments[0].includes('INSERT INTO aggregate_list_contributors')
+    );
+  });
+});
+
+describe('removeContributor', () => {
+  it('should remove a contributor and return removed: true', async () => {
+    const pool = createMockPool([
+      { rows: [{ user_id: 'user1' }], rowCount: 1 },
+    ]);
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    const result = await aggregateList.removeContributor(2024, 'user1');
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.removed, true);
+  });
+
+  it('should return removed: false when contributor does not exist', async () => {
+    const pool = createMockPool([{ rows: [], rowCount: 0 }]);
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    const result = await aggregateList.removeContributor(2024, 'nonexistent');
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.removed, false);
+  });
+});
+
+describe('setContributors', () => {
+  it('should set contributors in bulk', async () => {
+    // Create a mock client for transaction
+    const mockClient = {
+      query: mock.fn(async () => ({ rows: [] })),
+      release: mock.fn(),
+    };
+    const pool = {
+      query: mock.fn(),
+      connect: mock.fn(async () => mockClient),
+    };
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    const result = await aggregateList.setContributors(
+      2024,
+      ['user1', 'user2', 'user3'],
+      'admin1'
+    );
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.count, 3);
+    // Verify transaction was used
+    assert.strictEqual(pool.connect.mock.calls.length, 1);
+    assert.strictEqual(mockClient.release.mock.calls.length, 1);
+    // Verify BEGIN, DELETE, INSERT, COMMIT were called
+    assert.strictEqual(mockClient.query.mock.calls.length, 4);
+  });
+
+  it('should handle empty userIds array', async () => {
+    const mockClient = {
+      query: mock.fn(async () => ({ rows: [] })),
+      release: mock.fn(),
+    };
+    const pool = {
+      query: mock.fn(),
+      connect: mock.fn(async () => mockClient),
+    };
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    const result = await aggregateList.setContributors(2024, [], 'admin1');
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.count, 0);
+    // Should only have BEGIN, DELETE, COMMIT (no INSERT for empty array)
+    assert.strictEqual(mockClient.query.mock.calls.length, 3);
+  });
+
+  it('should rollback on error', async () => {
+    const mockClient = {
+      query: mock.fn(async (sql) => {
+        if (sql.includes('INSERT')) {
+          throw new Error('Database error');
+        }
+        return { rows: [] };
+      }),
+      release: mock.fn(),
+    };
+    const pool = {
+      query: mock.fn(),
+      connect: mock.fn(async () => mockClient),
+    };
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    await assert.rejects(
+      async () => aggregateList.setContributors(2024, ['user1'], 'admin1'),
+      /Database error/
+    );
+
+    // Verify ROLLBACK was called
+    const queries = mockClient.query.mock.calls.map((c) => c.arguments[0]);
+    assert.ok(queries.includes('ROLLBACK'));
+  });
+});
+
+describe('aggregateForYear with contributors filter', () => {
+  it('should only include users who are approved contributors', async () => {
+    // This test verifies the SQL query filters by contributor table
+    const pool = createMockPool([
+      // The query now includes a subquery to filter by contributors
+      { rows: [] }, // No results because no one is a contributor
+    ]);
+    const logger = createMockLogger();
+    const aggregateList = createAggregateList({ pool, logger });
+
+    const result = await aggregateList.aggregateForYear(2024);
+
+    // Verify the query includes the contributors filter
+    const queryCall = pool.query.mock.calls[0];
+    assert.ok(
+      queryCall.arguments[0].includes('aggregate_list_contributors'),
+      'Query should filter by aggregate_list_contributors table'
+    );
+
+    // With no contributors, result should be empty
+    assert.strictEqual(result.data.participantCount, 0);
+    assert.deepStrictEqual(result.data.albums, []);
   });
 });

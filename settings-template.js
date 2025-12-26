@@ -2225,7 +2225,7 @@ const settingsTemplate = (req, options) => {
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center text-sm">
               <div class="bg-gray-800 rounded p-2">
                 <div class="font-bold text-white">\${stats.participantCount || 0}</div>
-                <div class="text-xs text-gray-500">Voters</div>
+                <div class="text-xs text-gray-500">Contributors</div>
               </div>
               <div class="bg-gray-800 rounded p-2">
                 <div class="font-bold text-white">\${stats.totalAlbums || 0}</div>
@@ -2253,14 +2253,17 @@ const settingsTemplate = (req, options) => {
         }
         
         let actionsHtml = '';
+        // Always show Manage Contributors button for admins (even after reveal for reference)
+        actionsHtml += \`<button onclick="showContributorManager(\${year})" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-users"></i>Manage Contributors</button> \`;
+        
         if (isRevealed) {
-          actionsHtml = \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a>\`;
+          actionsHtml += \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a>\`;
         } else {
           const hasConfirmed = status.confirmations && status.confirmations.some(c => c.username === '${user.username}');
           if (hasConfirmed) {
-            actionsHtml = \`<button onclick="revokeAggregateListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
+            actionsHtml += \`<button onclick="revokeAggregateListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
           } else {
-            actionsHtml = \`<button onclick="confirmAggregateListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
+            actionsHtml += \`<button onclick="confirmAggregateListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
           }
           actionsHtml += \` <a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-external-link-alt"></i>Open Page</a>\`;
         }
@@ -2276,6 +2279,7 @@ const settingsTemplate = (req, options) => {
             <div class="mt-3 flex flex-wrap gap-2">
               \${actionsHtml}
             </div>
+            <div id="contributors-\${year}" class="hidden mt-4 pt-4 border-t border-gray-700"></div>
           </div>
         \`;
       }
@@ -2329,6 +2333,183 @@ const settingsTemplate = (req, options) => {
         } catch (error) {
           console.error('Error:', error);
           showToast('Error revoking confirmation', 'error');
+        }
+      }
+      
+      // ============ CONTRIBUTOR MANAGEMENT ============
+      
+      async function showContributorManager(year) {
+        const container = document.getElementById(\`contributors-\${year}\`);
+        if (!container) return;
+        
+        // Toggle visibility
+        if (!container.classList.contains('hidden')) {
+          container.classList.add('hidden');
+          return;
+        }
+        
+        container.classList.remove('hidden');
+        container.innerHTML = '<div class="text-center py-2"><i class="fas fa-spinner fa-spin text-gray-500"></i> Loading eligible users...</div>';
+        
+        try {
+          const response = await fetch(\`/api/aggregate-list/\${year}/eligible-users\`, {
+            credentials: 'same-origin'
+          });
+          
+          if (!response.ok) {
+            throw new Error('Failed to load eligible users');
+          }
+          
+          const data = await response.json();
+          const eligibleUsers = data.eligibleUsers || [];
+          
+          if (eligibleUsers.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No users have official lists for this year.</p>';
+            return;
+          }
+          
+          const contributorCount = eligibleUsers.filter(u => u.is_contributor).length;
+          
+          let html = \`
+            <div class="mb-3 flex items-center justify-between">
+              <span class="text-sm text-gray-400">
+                <i class="fas fa-users mr-1"></i>
+                <span id="contributor-count-\${year}">\${contributorCount}</span> of \${eligibleUsers.length} users selected as contributors
+              </span>
+              <div class="flex gap-2">
+                <button onclick="selectAllContributors(\${year})" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition">Select All</button>
+                <button onclick="deselectAllContributors(\${year})" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition">Deselect All</button>
+              </div>
+            </div>
+            <div class="space-y-2 max-h-64 overflow-y-auto" id="user-list-\${year}">
+          \`;
+          
+          for (const user of eligibleUsers) {
+            const isChecked = user.is_contributor ? 'checked' : '';
+            html += \`
+              <label class="flex items-center gap-3 p-2 bg-gray-900 rounded cursor-pointer hover:bg-gray-800 transition">
+                <input type="checkbox" 
+                       class="contributor-checkbox w-5 h-5 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900"
+                       data-year="\${year}" 
+                       data-user-id="\${user.user_id}" 
+                       \${isChecked}
+                       onchange="toggleContributor(\${year}, '\${user.user_id}', this.checked)">
+                <div class="flex-1">
+                  <span class="text-white font-medium">\${user.username}</span>
+                  <span class="text-gray-500 text-sm ml-2">(\${user.album_count} albums)</span>
+                </div>
+                <span class="text-xs text-gray-600">\${user.list_name}</span>
+              </label>
+            \`;
+          }
+          
+          html += '</div>';
+          container.innerHTML = html;
+          
+        } catch (error) {
+          console.error('Error loading contributor manager:', error);
+          container.innerHTML = '<p class="text-red-400 text-sm">Error loading users</p>';
+        }
+      }
+      
+      async function toggleContributor(year, userId, isContributor) {
+        try {
+          let response;
+          if (isContributor) {
+            response = await fetch(\`/api/aggregate-list/\${year}/contributors\`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ userId })
+            });
+          } else {
+            response = await fetch(\`/api/aggregate-list/\${year}/contributors/\${userId}\`, {
+              method: 'DELETE',
+              credentials: 'same-origin'
+            });
+          }
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            // Update the contributor count
+            updateContributorCount(year);
+            // Refresh the aggregate list stats
+            loadAggregateListAdmin();
+          } else {
+            showToast(data.error || 'Error updating contributor', 'error');
+            // Revert checkbox
+            const checkbox = document.querySelector(\`input[data-year="\${year}"][data-user-id="\${userId}"]\`);
+            if (checkbox) checkbox.checked = !isContributor;
+          }
+        } catch (error) {
+          console.error('Error toggling contributor:', error);
+          showToast('Error updating contributor', 'error');
+          // Revert checkbox
+          const checkbox = document.querySelector(\`input[data-year="\${year}"][data-user-id="\${userId}"]\`);
+          if (checkbox) checkbox.checked = !isContributor;
+        }
+      }
+      
+      function updateContributorCount(year) {
+        const checkboxes = document.querySelectorAll(\`input.contributor-checkbox[data-year="\${year}"]:checked\`);
+        const countEl = document.getElementById(\`contributor-count-\${year}\`);
+        if (countEl) {
+          countEl.textContent = checkboxes.length;
+        }
+      }
+      
+      async function selectAllContributors(year) {
+        const checkboxes = document.querySelectorAll(\`input.contributor-checkbox[data-year="\${year}"]\`);
+        const userIds = Array.from(checkboxes).map(cb => cb.dataset.userId);
+        
+        try {
+          const response = await fetch(\`/api/aggregate-list/\${year}/contributors\`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ userIds })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            checkboxes.forEach(cb => cb.checked = true);
+            updateContributorCount(year);
+            showToast(\`All \${userIds.length} users selected as contributors\`);
+            loadAggregateListAdmin();
+          } else {
+            showToast(data.error || 'Error selecting all', 'error');
+          }
+        } catch (error) {
+          console.error('Error selecting all:', error);
+          showToast('Error selecting all contributors', 'error');
+        }
+      }
+      
+      async function deselectAllContributors(year) {
+        try {
+          const response = await fetch(\`/api/aggregate-list/\${year}/contributors\`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ userIds: [] })
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            const checkboxes = document.querySelectorAll(\`input.contributor-checkbox[data-year="\${year}"]\`);
+            checkboxes.forEach(cb => cb.checked = false);
+            updateContributorCount(year);
+            showToast('All contributors removed');
+            loadAggregateListAdmin();
+          } else {
+            showToast(data.error || 'Error deselecting all', 'error');
+          }
+        } catch (error) {
+          console.error('Error deselecting all:', error);
+          showToast('Error deselecting all contributors', 'error');
         }
       }
       

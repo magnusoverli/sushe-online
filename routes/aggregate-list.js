@@ -273,6 +273,168 @@ module.exports = (app, deps) => {
     }
   );
 
+  // ============ CONTRIBUTOR MANAGEMENT ENDPOINTS ============
+
+  /**
+   * GET /api/aggregate-list/:year/contributors
+   * Get approved contributors for a year (admin only)
+   */
+  app.get(
+    '/api/aggregate-list/:year/contributors',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const contributors = await aggregateList.getContributors(year);
+        res.json({ year, contributors });
+      } catch (err) {
+        logger.error('Error fetching contributors:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * GET /api/aggregate-list/:year/eligible-users
+   * Get all users with official lists for a year (for contributor selection UI)
+   */
+  app.get(
+    '/api/aggregate-list/:year/eligible-users',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const eligibleUsers = await aggregateList.getEligibleUsers(year);
+        res.json({ year, eligibleUsers });
+      } catch (err) {
+        logger.error('Error fetching eligible users:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * POST /api/aggregate-list/:year/contributors
+   * Add a user as contributor (admin only)
+   */
+  app.post(
+    '/api/aggregate-list/:year/contributors',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const { userId } = req.body;
+        if (!userId) {
+          return res.status(400).json({ error: 'userId is required' });
+        }
+
+        await aggregateList.addContributor(year, userId, req.user._id);
+
+        // Recompute the aggregate list with the new contributor
+        await aggregateList.recompute(year);
+
+        res.json({
+          success: true,
+          message: `User added as contributor for ${year}`,
+        });
+      } catch (err) {
+        logger.error('Error adding contributor:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * DELETE /api/aggregate-list/:year/contributors/:userId
+   * Remove a user as contributor (admin only)
+   */
+  app.delete(
+    '/api/aggregate-list/:year/contributors/:userId',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const { userId } = req.params;
+        if (!userId) {
+          return res.status(400).json({ error: 'userId is required' });
+        }
+
+        const result = await aggregateList.removeContributor(year, userId);
+
+        // Recompute the aggregate list without this contributor
+        await aggregateList.recompute(year);
+
+        res.json({
+          success: true,
+          removed: result.removed,
+          message: result.removed
+            ? `User removed as contributor for ${year}`
+            : 'User was not a contributor',
+        });
+      } catch (err) {
+        logger.error('Error removing contributor:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * PUT /api/aggregate-list/:year/contributors
+   * Bulk update contributors for a year (set all at once)
+   */
+  app.put(
+    '/api/aggregate-list/:year/contributors',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const { userIds } = req.body;
+        if (!Array.isArray(userIds)) {
+          return res.status(400).json({ error: 'userIds must be an array' });
+        }
+
+        await aggregateList.setContributors(year, userIds, req.user._id);
+
+        // Recompute the aggregate list with new contributors
+        await aggregateList.recompute(year);
+
+        res.json({
+          success: true,
+          count: userIds.length,
+          message: `Set ${userIds.length} contributors for ${year}`,
+        });
+      } catch (err) {
+        logger.error('Error setting contributors:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
   // Export the aggregateList instance for use in triggers
   return { aggregateList };
 };
