@@ -107,8 +107,8 @@ module.exports = (app, deps) => {
           return res.redirect('/register');
         }
 
-        // Insert new user
-        const _newUser = await usersAsync.insert({
+        // Insert new user with pending approval status
+        const newUser = await usersAsync.insert({
           email,
           username,
           hash,
@@ -118,12 +118,54 @@ module.exports = (app, deps) => {
           accentColor: '#dc2626',
           timeFormat: '24h',
           dateFormat: 'MM/DD/YYYY',
+          approvalStatus: 'pending',
           createdAt: new Date(),
           updatedAt: new Date(),
         });
 
-        logger.info('New user registered', { email, username });
-        req.flash('success', 'Registration successful! Please login.');
+        logger.info('New user registered (pending approval)', {
+          email,
+          username,
+        });
+
+        // Create admin event for approval with Telegram notification
+        try {
+          const adminEventService = app.locals.adminEventService;
+          if (adminEventService) {
+            await adminEventService.createEvent({
+              type: 'account_approval',
+              title: 'New User Registration',
+              description: `User "${username}" (${email}) has registered and needs approval.`,
+              data: {
+                userId: newUser._id,
+                username,
+                email,
+              },
+              priority: 'normal',
+              actions: [
+                { id: 'approve', label: '✅ Approve' },
+                { id: 'reject', label: '❌ Reject' },
+              ],
+            });
+            logger.info('Admin event created for registration approval', {
+              username,
+            });
+          } else {
+            logger.warn(
+              'Admin event service not available, skipping approval event'
+            );
+          }
+        } catch (eventError) {
+          // Don't fail registration if event creation fails
+          logger.error('Failed to create admin event for registration:', {
+            error: eventError.message,
+          });
+        }
+
+        req.flash(
+          'success',
+          'Registration successful! Your account is pending admin approval.'
+        );
         res.redirect('/login');
       } catch (err) {
         logger.error('Database error during registration', {

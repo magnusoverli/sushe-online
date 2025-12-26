@@ -883,6 +883,83 @@ module.exports = (app, deps) => {
   // Create admin event service instance
   const adminEventService = createAdminEventService({ pool, logger });
 
+  // ============ ACCOUNT APPROVAL ACTION HANDLERS ============
+  // Register handlers for account_approval events (approve/reject new registrations)
+
+  adminEventService.registerActionHandler(
+    'account_approval',
+    'approve',
+    async (eventData, adminUser) => {
+      const { userId, username } = eventData;
+
+      if (!userId) {
+        return { success: false, message: 'Missing user ID in event data' };
+      }
+
+      try {
+        // Update user's approval status to 'approved'
+        const result = await usersAsync.update(
+          { _id: userId },
+          { $set: { approvalStatus: 'approved', updatedAt: new Date() } }
+        );
+
+        if (result === 0) {
+          return { success: false, message: 'User not found' };
+        }
+
+        logger.info(`User registration approved: ${username}`, {
+          userId,
+          approvedBy: adminUser.username,
+        });
+
+        return {
+          success: true,
+          message: `Approved registration for ${username}`,
+        };
+      } catch (err) {
+        logger.error('Error approving user registration:', err);
+        return { success: false, message: 'Database error' };
+      }
+    }
+  );
+
+  adminEventService.registerActionHandler(
+    'account_approval',
+    'reject',
+    async (eventData, adminUser) => {
+      const { userId, username } = eventData;
+
+      if (!userId) {
+        return { success: false, message: 'Missing user ID in event data' };
+      }
+
+      try {
+        // Update user's approval status to 'rejected' (keep for audit trail)
+        const result = await usersAsync.update(
+          { _id: userId },
+          { $set: { approvalStatus: 'rejected', updatedAt: new Date() } }
+        );
+
+        if (result === 0) {
+          return { success: false, message: 'User not found' };
+        }
+
+        logger.info(`User registration rejected: ${username}`, {
+          userId,
+          rejectedBy: adminUser.username,
+        });
+
+        return {
+          success: true,
+          message: `Rejected registration for ${username}`,
+        };
+      } catch (err) {
+        logger.error('Error rejecting user registration:', err);
+        return { success: false, message: 'Database error' };
+      }
+    }
+  );
+
   // Get pending events
   app.get('/api/admin/events', ensureAuth, ensureAdmin, async (req, res) => {
     try {

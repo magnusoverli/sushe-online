@@ -312,6 +312,24 @@ passport.use(
 
         // Always return the same message regardless of whether email or password was wrong
         if (isMatch && user) {
+          // Check approval status before allowing login
+          // Treat null/undefined as 'approved' for backwards compatibility with existing users
+          const approvalStatus = user.approvalStatus || 'approved';
+
+          if (approvalStatus === 'pending') {
+            logger.warn('Login blocked: Account pending approval', { email });
+            return done(null, false, {
+              message: 'Your account is pending admin approval',
+            });
+          }
+
+          if (approvalStatus === 'rejected') {
+            logger.warn('Login blocked: Registration rejected', { email });
+            return done(null, false, {
+              message: 'Your registration was not approved',
+            });
+          }
+
           logger.info('Login successful', { email });
           return done(null, user);
         } else {
