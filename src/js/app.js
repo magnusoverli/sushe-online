@@ -16,6 +16,7 @@ import {
   showConfirmation,
   hideConfirmation,
 } from './modules/ui-utils.js';
+import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 
 // Re-export UI utilities for backward compatibility
 export { showToast, showConfirmation };
@@ -2348,6 +2349,7 @@ async function selectList(listName) {
 
 // Expose selectList to window after it's defined
 window.selectList = selectList;
+window.loadLists = loadLists;
 
 function updateHeaderTitle(listName) {
   const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
@@ -2937,6 +2939,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Confirmation modal handlers are managed by showConfirmation function
       // No static handlers needed since we use the Promise-based approach
+
+      // Check if user needs to complete list setup (year + official designation)
+      // Delay slightly to let the main UI render first
+      setTimeout(() => {
+        checkListSetupStatus().catch((err) => {
+          console.warn('Failed to check list setup status:', err);
+        });
+      }, 1000);
     })
     .catch((_err) => {
       showToast('Failed to initialize', 'error');

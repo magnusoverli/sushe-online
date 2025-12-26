@@ -1073,6 +1073,19 @@ const adminPanelSection = (stats, adminData) =>
       </div>
     </div>
     
+    <!-- Master List Management -->
+    <div class="mb-8">
+      <h4 class="text-lg font-semibold text-white mb-4">
+        <i class="fas fa-trophy mr-2 text-yellow-500"></i>Master List (Album of the Year)
+      </h4>
+      <div id="masterListAdmin" class="space-y-4">
+        <div class="text-center py-4">
+          <i class="fas fa-spinner fa-spin text-gray-500"></i>
+          <span class="text-gray-400 ml-2">Loading master list data...</span>
+        </div>
+      </div>
+    </div>
+    
     <!-- User Management -->
     <div>
       <h4 class="text-lg font-semibold text-white mb-4">User Management</h4>
@@ -2126,6 +2139,201 @@ const settingsTemplate = (req, options) => {
         
         console.log(\`[\${restoreId}] === CLIENT: RESTORE FLOW COMPLETED ===\`);
       });
+      
+      // ============ MASTER LIST FUNCTIONS ============
+      
+      // Load master list admin panel data
+      async function loadMasterListAdmin() {
+        const container = document.getElementById('masterListAdmin');
+        if (!container) return;
+        
+        try {
+          // Get years that have official lists
+          const yearsRes = await fetch('/api/master-list-years/with-official-lists', {
+            credentials: 'same-origin'
+          });
+          
+          if (!yearsRes.ok) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No official lists found. Users need to mark their lists as "official" for a specific year.</p>';
+            return;
+          }
+          
+          const yearsData = await yearsRes.json();
+          const years = yearsData.years || [];
+          
+          if (years.length === 0) {
+            container.innerHTML = '<p class="text-gray-500 text-sm">No official lists found. Users need to mark their lists as "official" for a specific year.</p>';
+            return;
+          }
+          
+          let html = '';
+          
+          for (const year of years) {
+            try {
+              // Get status
+              const statusRes = await fetch(\`/api/master-list/\${year}/status\`, {
+                credentials: 'same-origin'
+              });
+              
+              let status = { exists: false, revealed: false, confirmations: [], confirmationCount: 0, requiredConfirmations: 2 };
+              if (statusRes.ok) {
+                status = await statusRes.json();
+              }
+              
+              // Get stats
+              let stats = null;
+              try {
+                const statsRes = await fetch(\`/api/master-list/\${year}/stats\`, {
+                  credentials: 'same-origin'
+                });
+                if (statsRes.ok) {
+                  const statsData = await statsRes.json();
+                  stats = statsData.stats;
+                }
+              } catch (e) {}
+              
+              html += renderMasterListYear(year, status, stats);
+            } catch (e) {
+              console.error(\`Error loading master list for \${year}:\`, e);
+            }
+          }
+          
+          container.innerHTML = html || '<p class="text-gray-500 text-sm">No master list data available.</p>';
+        } catch (error) {
+          console.error('Error loading master list admin:', error);
+          container.innerHTML = '<p class="text-red-400">Error loading master list data</p>';
+        }
+      }
+      
+      function renderMasterListYear(year, status, stats) {
+        const isRevealed = status.revealed;
+        const confirmCount = status.confirmationCount || 0;
+        const required = status.requiredConfirmations || 2;
+        
+        let statusBadge = '';
+        if (isRevealed) {
+          statusBadge = '<span class="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded">Revealed</span>';
+        } else if (confirmCount > 0) {
+          statusBadge = \`<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded">\${confirmCount}/\${required} Confirmations</span>\`;
+        } else {
+          statusBadge = '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded">Pending</span>';
+        }
+        
+        let statsHtml = '';
+        if (stats && !isRevealed) {
+          statsHtml = \`
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center text-sm">
+              <div class="bg-gray-800 rounded p-2">
+                <div class="font-bold text-white">\${stats.participantCount || 0}</div>
+                <div class="text-xs text-gray-500">Voters</div>
+              </div>
+              <div class="bg-gray-800 rounded p-2">
+                <div class="font-bold text-white">\${stats.totalAlbums || 0}</div>
+                <div class="text-xs text-gray-500">Albums</div>
+              </div>
+              <div class="bg-gray-800 rounded p-2">
+                <div class="font-bold text-white">\${stats.albumsWith3PlusVoters || 0}</div>
+                <div class="text-xs text-gray-500">3+ Votes</div>
+              </div>
+              <div class="bg-gray-800 rounded p-2">
+                <div class="font-bold text-white">\${stats.albumsWith2Voters || 0}</div>
+                <div class="text-xs text-gray-500">2 Votes</div>
+              </div>
+            </div>
+          \`;
+        }
+        
+        let confirmationsHtml = '';
+        if (status.confirmations && status.confirmations.length > 0) {
+          confirmationsHtml = '<div class="mt-2 text-sm">' +
+            status.confirmations.map(c => 
+              \`<span class="inline-flex items-center gap-1 text-green-400 mr-3"><i class="fas fa-check-circle"></i>\${c.username}</span>\`
+            ).join('') +
+          '</div>';
+        }
+        
+        let actionsHtml = '';
+        if (isRevealed) {
+          actionsHtml = \`<a href="/master-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a>\`;
+        } else {
+          const hasConfirmed = status.confirmations && status.confirmations.some(c => c.username === '${user.username}');
+          if (hasConfirmed) {
+            actionsHtml = \`<button onclick="revokeMasterListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
+          } else {
+            actionsHtml = \`<button onclick="confirmMasterListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
+          }
+          actionsHtml += \` <a href="/master-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-external-link-alt"></i>Open Page</a>\`;
+        }
+        
+        return \`
+          <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+            <div class="flex items-center justify-between mb-2">
+              <h5 class="text-lg font-bold text-white">\${year}</h5>
+              \${statusBadge}
+            </div>
+            \${confirmationsHtml}
+            \${statsHtml}
+            <div class="mt-3 flex flex-wrap gap-2">
+              \${actionsHtml}
+            </div>
+          </div>
+        \`;
+      }
+      
+      async function confirmMasterListReveal(year) {
+        if (!confirm(\`Confirm reveal of Master List \${year}? This action contributes to revealing the list to everyone.\`)) return;
+        
+        try {
+          const response = await fetch(\`/api/master-list/\${year}/confirm\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            if (data.revealed) {
+              showToast(\`Master List \${year} has been revealed!\`);
+            } else {
+              showToast('Confirmation added. Waiting for more confirmations.');
+            }
+            loadMasterListAdmin();
+          } else {
+            showToast(data.error || 'Error confirming reveal', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error confirming reveal', 'error');
+        }
+      }
+      
+      async function revokeMasterListConfirm(year) {
+        if (!confirm('Revoke your confirmation?')) return;
+        
+        try {
+          const response = await fetch(\`/api/master-list/\${year}/confirm\`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Confirmation revoked');
+            loadMasterListAdmin();
+          } else {
+            showToast(data.error || 'Error revoking confirmation', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error revoking confirmation', 'error');
+        }
+      }
+      
+      // Load master list admin panel on page load
+      loadMasterListAdmin();
     `
         : ''
     }

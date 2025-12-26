@@ -837,6 +837,44 @@ const serviceSelectModalComponent = () => `
   </div>
 `;
 
+// Component: List Setup Wizard Modal
+const listSetupWizardComponent = () => `
+  <div id="listSetupWizard" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-700 flex-shrink-0">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-red-600/20 flex items-center justify-center">
+            <i class="fas fa-list-check text-red-500"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-bold text-white">Complete Your Lists</h3>
+            <p class="text-sm text-gray-400">Set years and designate your official lists</p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Modal Content - Scrollable -->
+      <div class="p-6 overflow-y-auto flex-1" id="listSetupContent">
+        <div class="text-center py-8 text-gray-500">
+          <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+          <p>Loading your lists...</p>
+        </div>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-gray-700 flex-shrink-0 flex gap-3 justify-between">
+        <button id="listSetupDismiss" class="px-4 py-2 text-gray-400 hover:text-gray-300 transition text-sm">
+          Remind me later
+        </button>
+        <button id="listSetupSave" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+          <i class="fas fa-check mr-2"></i>Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
 // Main Spotify template - Consolidated version
 const spotifyTemplate = (user) => `
 <!DOCTYPE html>
@@ -1288,6 +1326,7 @@ const spotifyTemplate = (user) => `
   ${importConflictModalComponent()}
   ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
+  ${listSetupWizardComponent()}
   
   <script>
     // Global state - must be set before bundle.js loads
@@ -1398,6 +1437,378 @@ const spotifyTemplate = (user) => `
 </html>
 `;
 
+// Master List template - collaborative album of the year page
+const masterListTemplate = (user, year, isAdmin = false) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <meta property="og:title" content="AOTY ${year} - SuShe Online">
+  <meta property="og:description" content="Album of the Year ${year}">
+  <meta property="og:image" content="/og-image.png">
+  <title>AOTY ${year} - SuShe Online</title>
+  <link rel="icon" type="image/png" href="/og-image.png">
+  <link rel="apple-touch-icon" href="/og-image.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link href="${asset('/styles/output.css')}" rel="stylesheet">
+  <style>
+    :root {
+      --accent-color: ${user?.accentColor || '#dc2626'};
+      --accent-hover: ${adjustColor(user?.accentColor || '#dc2626', -30)};
+      --accent-light: ${adjustColor(user?.accentColor || '#dc2626', 40)};
+      --accent-dark: ${adjustColor(user?.accentColor || '#dc2626', -50)};
+      --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
+      --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
+    }
+    
+    .text-red-600, .text-red-500 { color: var(--accent-color) !important; }
+    .border-red-600 { border-color: var(--accent-color) !important; }
+    .bg-red-600 { background-color: var(--accent-color) !important; }
+    .hover\\:bg-red-700:hover { background-color: var(--accent-hover) !important; }
+    
+    .metal-title {
+      font-family: 'Cinzel', serif;
+      text-shadow: 0 0 20px var(--accent-glow);
+    }
+    
+    .album-card {
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .album-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+    }
+    
+    .position-badge {
+      width: 3rem;
+      height: 3rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      border-radius: 50%;
+      border: 2px solid;
+    }
+    
+    .position-badge.gold { border-color: #fbbf24; box-shadow: 0 0 12px rgba(251, 191, 36, 0.6); }
+    .position-badge.silver { border-color: #9ca3af; box-shadow: 0 0 12px rgba(156, 163, 175, 0.6); }
+    .position-badge.bronze { border-color: #d97706; box-shadow: 0 0 12px rgba(217, 119, 6, 0.6); }
+    
+    .voter-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.5rem;
+      background: #374151;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      margin: 0.125rem;
+    }
+    
+    .confirmation-card {
+      background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+      border: 1px solid #374151;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .animate-fade-in {
+      animation: fadeIn 0.5s ease-out forwards;
+    }
+    
+    .reveal-pending {
+      filter: blur(0);
+      background: repeating-linear-gradient(
+        45deg,
+        #1f2937,
+        #1f2937 10px,
+        #111827 10px,
+        #111827 20px
+      );
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body class="bg-black text-gray-200 min-h-screen">
+  <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
+  
+  <!-- Header -->
+  <header class="bg-gray-900/80 backdrop-blur-sm border-b border-gray-700/50 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+      <a href="/" class="text-xl font-bold text-red-600 hover:text-red-500 transition">SuShe</a>
+      <div class="flex items-center gap-4">
+        <span class="text-sm text-gray-400">${user?.username || user?.email}</span>
+        <a href="/settings" class="text-gray-400 hover:text-white transition" title="Settings">
+          <i class="fas fa-cog"></i>
+        </a>
+      </div>
+    </div>
+  </header>
+  
+  <!-- Main content -->
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- Title -->
+    <div class="text-center mb-12">
+      <h1 class="metal-title text-4xl md:text-5xl font-bold text-red-600">AOTY ${year}</h1>
+    </div>
+    
+    <!-- Content container - populated by JavaScript -->
+    <div id="masterListContent" class="space-y-4">
+      <div class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-4xl text-gray-500 mb-4"></i>
+        <p class="text-gray-400">Loading master list...</p>
+      </div>
+    </div>
+    
+    <!-- Admin panel (hidden by default, shown via JS if admin) -->
+    ${
+      isAdmin
+        ? `
+    <div id="adminPanel" class="mt-12 p-6 confirmation-card rounded-lg hidden">
+      <h2 class="text-xl font-bold text-gray-200 mb-4">
+        <i class="fas fa-shield-alt mr-2"></i>Admin Controls
+      </h2>
+      <div id="adminContent">
+        <!-- Populated by JavaScript -->
+      </div>
+    </div>
+    `
+        : ''
+    }
+  </main>
+  
+  <script>
+    const YEAR = ${year};
+    const IS_ADMIN = ${isAdmin};
+    const USER_ID = '${user?._id || ''}';
+    
+    // Fetch wrapper with error handling
+    async function apiFetch(url, options = {}) {
+      const res = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(err.error || 'Request failed');
+      }
+      return res.json();
+    }
+    
+    // Format position with ordinal suffix
+    function formatPosition(pos) {
+      const s = ['th', 'st', 'nd', 'rd'];
+      const v = pos % 100;
+      return pos + (s[(v - 20) % 10] || s[v] || s[0]);
+    }
+    
+    // Render revealed master list
+    function renderMasterList(data) {
+      const container = document.getElementById('masterListContent');
+      
+      if (!data.albums || data.albums.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-gray-400">No albums in the master list yet.</div>';
+        return;
+      }
+      
+      const html = data.albums.map((album, index) => {
+        const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+        const delay = Math.min(index * 50, 500);
+        
+        const votersHtml = album.voters.map(v => 
+          '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-1">#' + v.position + '</span></span>'
+        ).join('');
+        
+        return '<div class="album-card bg-gray-800/50 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+          '<div class="flex items-start gap-4">' +
+            '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
+            '<div class="flex-shrink-0">' +
+              (album.coverImage ? 
+                '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-16 h-16 md:w-20 md:h-20 rounded object-cover">' :
+                '<div class="w-16 h-16 md:w-20 md:h-20 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-2xl"></i></div>'
+              ) +
+            '</div>' +
+            '<div class="flex-1 min-w-0">' +
+              '<h3 class="font-bold text-white truncate">' + (album.album || 'Unknown Album') + '</h3>' +
+              '<p class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</p>' +
+              '<div class="flex items-center gap-4 mt-2 text-sm">' +
+                '<span class="text-red-500 font-bold">' + album.totalPoints + ' pts</span>' +
+                '<span class="text-gray-500">' + album.voterCount + ' voter' + (album.voterCount !== 1 ? 's' : '') + '</span>' +
+                '<span class="text-gray-500">avg: ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+              '</div>' +
+              '<div class="mt-2 flex flex-wrap">' + votersHtml + '</div>' +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+      
+      container.innerHTML = html;
+    }
+    
+    // Render pre-reveal status with position placeholders
+    function renderPendingReveal(status) {
+      const container = document.getElementById('masterListContent');
+      const totalAlbums = status.totalAlbums || 0;
+      
+      // Generate position placeholder cards
+      let placeholdersHtml = '';
+      if (totalAlbums > 0) {
+        for (let i = 1; i <= totalAlbums; i++) {
+          const positionClass = i === 1 ? 'gold' : i === 2 ? 'silver' : i === 3 ? 'bronze' : '';
+          const delay = Math.min((i - 1) * 30, 300);
+          
+          placeholdersHtml += 
+            '<div class="album-card bg-gray-800/30 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+              '<div class="flex items-center gap-4">' +
+                '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + i + '</div>' +
+                '<div class="w-16 h-16 md:w-20 md:h-20 rounded bg-gray-700/50 flex items-center justify-center flex-shrink-0">' +
+                  '<i class="fas fa-question text-gray-600 text-2xl"></i>' +
+                '</div>' +
+                '<div class="flex-1 min-w-0">' +
+                  '<div class="h-5 bg-gray-700/50 rounded w-2/3 mb-2"></div>' +
+                  '<div class="h-4 bg-gray-700/30 rounded w-1/2"></div>' +
+                '</div>' +
+                '<div class="flex-shrink-0">' +
+                  '<i class="fas fa-lock text-gray-600"></i>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+        }
+      } else {
+        placeholdersHtml = '<div class="text-center py-8 text-gray-500">No official lists submitted yet.</div>';
+      }
+      
+      // Confirmations section for bottom
+      const confirmationsHtml = status.confirmations.map(c => 
+        '<div class="flex items-center gap-2 text-green-400"><i class="fas fa-check-circle"></i><span>' + c.username + '</span><span class="text-gray-500 text-sm">' + new Date(c.confirmedAt).toLocaleString() + '</span></div>'
+      ).join('');
+      
+      const pendingCount = status.requiredConfirmations - status.confirmationCount;
+      const pendingHtml = pendingCount > 0 ? 
+        '<div class="flex items-center gap-2 text-gray-500"><i class="far fa-circle"></i><span>Awaiting ' + pendingCount + ' more confirmation' + (pendingCount !== 1 ? 's' : '') + '</span></div>' : '';
+      
+      container.innerHTML = 
+        '<div class="mb-6 text-center">' +
+          '<p class="text-gray-400 text-sm"><i class="fas fa-lock mr-2"></i>Awaiting reveal (' + status.confirmationCount + '/' + status.requiredConfirmations + ' confirmations)</p>' +
+        '</div>' +
+        '<div class="space-y-3">' + placeholdersHtml + '</div>' +
+        '<div class="mt-8 pt-6 border-t border-gray-700/50 text-center">' +
+          '<div class="inline-block text-left">' +
+            '<p class="text-sm text-gray-500 uppercase tracking-wide mb-2">Admin Confirmations</p>' +
+            '<div class="space-y-1">' + confirmationsHtml + pendingHtml + '</div>' +
+          '</div>' +
+        '</div>';
+    }
+    
+    // Render admin panel
+    function renderAdminPanel(status, stats) {
+      if (!IS_ADMIN) return;
+      
+      const panel = document.getElementById('adminPanel');
+      const content = document.getElementById('adminContent');
+      panel.classList.remove('hidden');
+      
+      const hasConfirmed = status.confirmations.some(c => c.username === '${user?.username || ''}');
+      
+      let html = '';
+      
+      if (status.revealed) {
+        html = '<p class="text-green-400"><i class="fas fa-check-circle mr-2"></i>Master list has been revealed</p>';
+      } else {
+        // Stats preview (anonymous)
+        if (stats) {
+          html += '<div class="mb-6">' +
+            '<h3 class="text-sm text-gray-500 uppercase tracking-wide mb-2">Anonymous Stats Preview</h3>' +
+            '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">' +
+              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.participantCount + '</div><div class="text-xs text-gray-500">Participants</div></div>' +
+              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.totalAlbums + '</div><div class="text-xs text-gray-500">Total Albums</div></div>' +
+              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.albumsWith3PlusVoters + '</div><div class="text-xs text-gray-500">3+ Voters</div></div>' +
+              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.albumsWith2Voters + '</div><div class="text-xs text-gray-500">2 Voters</div></div>' +
+            '</div>' +
+          '</div>';
+        }
+        
+        // Confirmation button
+        html += '<div class="flex items-center gap-4">' +
+          (hasConfirmed ? 
+            '<button onclick="revokeConfirmation()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition"><i class="fas fa-times mr-2"></i>Revoke Confirmation</button>' :
+            '<button onclick="confirmReveal()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition"><i class="fas fa-check mr-2"></i>Confirm Reveal</button>'
+          ) +
+          '<span class="text-gray-500">' + status.confirmationCount + '/' + status.requiredConfirmations + ' confirmations</span>' +
+        '</div>';
+      }
+      
+      content.innerHTML = html;
+    }
+    
+    // Admin actions
+    async function confirmReveal() {
+      try {
+        const result = await apiFetch('/api/master-list/' + YEAR + '/confirm', { method: 'POST' });
+        if (result.revealed) {
+          window.location.reload();
+        } else {
+          loadMasterList();
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    async function revokeConfirmation() {
+      try {
+        await apiFetch('/api/master-list/' + YEAR + '/confirm', { method: 'DELETE' });
+        loadMasterList();
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+    
+    // Main load function
+    async function loadMasterList() {
+      try {
+        // First check status
+        const status = await apiFetch('/api/master-list/' + YEAR + '/status');
+        
+        if (status.revealed) {
+          // Load full data
+          const data = await apiFetch('/api/master-list/' + YEAR);
+          renderMasterList(data.data);
+        } else {
+          // Show pending state
+          renderPendingReveal(status);
+        }
+        
+        // Load admin panel if admin
+        if (IS_ADMIN) {
+          try {
+            const statsRes = await apiFetch('/api/master-list/' + YEAR + '/stats');
+            renderAdminPanel(status, statsRes.stats);
+          } catch (e) {
+            renderAdminPanel(status, null);
+          }
+        }
+      } catch (err) {
+        document.getElementById('masterListContent').innerHTML = 
+          '<div class="text-center py-12"><i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i><p class="text-gray-400">' + err.message + '</p></div>';
+      }
+    }
+    
+    // Initialize
+    loadMasterList();
+  </script>
+</body>
+</html>
+`;
+
 module.exports = {
   htmlTemplate,
   registerTemplate,
@@ -1406,6 +1817,7 @@ module.exports = {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
+  masterListTemplate,
   headerComponent,
   formatDate,
   formatDateTime,

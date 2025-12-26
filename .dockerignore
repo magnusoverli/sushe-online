@@ -16,6 +16,7 @@ public/styles/output.css
 # Test artifacts
 playwright-report/
 test-results/
+coverage/
 
 # IDE and editor files
 .vscode/

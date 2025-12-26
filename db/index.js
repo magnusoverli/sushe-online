@@ -162,10 +162,12 @@ let users,
   lists,
   listItems,
   albums,
+  masterLists,
   usersAsync,
   listsAsync,
   listItemsAsync,
   albumsAsync,
+  masterListsAsync,
   pool;
 let ready = Promise.resolve();
 
@@ -205,6 +207,7 @@ if (process.env.DATABASE_URL) {
     updatedAt: 'updated_at',
     lastActivity: 'last_activity',
     lastfmAuth: 'lastfm_auth',
+    listSetupDismissedUntil: 'list_setup_dismissed_until',
     lastfmUsername: 'lastfm_username',
   };
   const listsMap = {
@@ -251,14 +254,27 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };
+  const masterListsMap = {
+    _id: 'id',
+    year: 'year',
+    revealed: 'revealed',
+    revealedAt: 'revealed_at',
+    computedAt: 'computed_at',
+    data: 'data',
+    stats: 'stats',
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+  };
   users = new PgDatastore(pool, 'users', usersMap);
   lists = new PgDatastore(pool, 'lists', listsMap);
   listItems = new PgDatastore(pool, 'list_items', listItemsMap);
   albums = new PgDatastore(pool, 'albums', albumsMap);
+  masterLists = new PgDatastore(pool, 'master_lists', masterListsMap);
   usersAsync = users;
   listsAsync = lists;
   listItemsAsync = listItems;
   albumsAsync = albums;
+  masterListsAsync = masterLists;
   async function migrateUsers() {
     try {
       // Run user migrations in parallel for better performance
@@ -475,10 +491,12 @@ module.exports = {
   lists,
   listItems,
   albums,
+  masterLists,
   usersAsync,
   listsAsync,
   listItemsAsync,
   albumsAsync,
+  masterListsAsync,
   dataDir,
   ready,
   pool,

@@ -1,0 +1,467 @@
+const logger = require('./logger');
+
+/**
+ * Position-based points for weighted aggregation
+ * Same as user-preferences.js for consistency
+ */
+const POSITION_POINTS = {
+  1: 60,
+  2: 54,
+  3: 50,
+  4: 46,
+  5: 43,
+  6: 40,
+  7: 38,
+  8: 36,
+  9: 34,
+  10: 32,
+  11: 30,
+  12: 28,
+  13: 26,
+  14: 24,
+  15: 22,
+  16: 20,
+  17: 18,
+  18: 16,
+  19: 14,
+  20: 12,
+  21: 11,
+  22: 10,
+  23: 9,
+  24: 8,
+  25: 7,
+  26: 6,
+  27: 5,
+  28: 4,
+  29: 3,
+  30: 2,
+  31: 2,
+  32: 2,
+  33: 2,
+  34: 2,
+  35: 2,
+  36: 1,
+  37: 1,
+  38: 1,
+  39: 1,
+  40: 1,
+};
+
+/**
+ * Get points for a position (0 for positions beyond 40)
+ */
+function getPositionPoints(position) {
+  return POSITION_POINTS[position] || 0;
+}
+
+/**
+ * Create master list utilities with injected dependencies
+ * @param {Object} deps - Dependencies
+ * @param {Object} deps.pool - PostgreSQL pool instance
+ * @param {Object} deps.logger - Logger instance (optional)
+ */
+function createMasterList(deps = {}) {
+  const log = deps.logger || logger;
+  const pool = deps.pool;
+
+  if (!pool) {
+    throw new Error('PostgreSQL pool is required');
+  }
+
+  /**
+   * Aggregate all official lists for a year into a master list
+   * @param {number} year - The year to aggregate
+   * @returns {Promise<Object>} Aggregated master list data and stats
+   */
+  async function aggregateForYear(year) {
+    log.info(`Aggregating master list for year ${year}`);
+
+    // Get all official lists for the year with user info
+    const listsResult = await pool.query(
+      `
+      SELECT l._id as list_id, l.user_id, u.username
+      FROM lists l
+      JOIN users u ON l.user_id = u._id
+      WHERE l.year = $1 AND l.is_official = TRUE
+    `,
+      [year]
+    );
+
+    const officialLists = listsResult.rows;
+    log.info(`Found ${officialLists.length} official lists for year ${year}`);
+
+    if (officialLists.length === 0) {
+      return {
+        data: {
+          year,
+          generatedAt: new Date().toISOString(),
+          participantCount: 0,
+          albums: [],
+        },
+        stats: {
+          year,
+          participantCount: 0,
+          totalAlbums: 0,
+          albumsWith3PlusVoters: 0,
+          albumsWith2Voters: 0,
+          albumsWith1Voter: 0,
+          topPointsDistribution: [],
+          computedAt: new Date().toISOString(),
+        },
+      };
+    }
+
+    // Build a map of user_id -> username for quick lookup
+    const userMap = new Map();
+    for (const list of officialLists) {
+      userMap.set(list.user_id, list.username);
+    }
+
+    // Get all list items from official lists
+    const listIds = officialLists.map((l) => l.list_id);
+    const itemsResult = await pool.query(
+      `
+      SELECT 
+        li.list_id,
+        li.position,
+        li.album_id,
+        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
+        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        COALESCE(NULLIF(li.release_date, ''), a.release_date) as release_date,
+        COALESCE(NULLIF(li.country, ''), a.country) as country,
+        COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
+        COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
+        COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
+        l.user_id
+      FROM list_items li
+      JOIN lists l ON li.list_id = l._id
+      LEFT JOIN albums a ON li.album_id = a.album_id
+      WHERE li.list_id = ANY($1)
+      ORDER BY li.position
+    `,
+      [listIds]
+    );
+
+    // Aggregate by album_id
+    const albumMap = new Map();
+
+    for (const item of itemsResult.rows) {
+      const albumKey = item.album_id || `${item.artist}::${item.album}`;
+      const points = getPositionPoints(item.position);
+      const username = userMap.get(item.user_id);
+
+      if (!albumMap.has(albumKey)) {
+        albumMap.set(albumKey, {
+          albumId: item.album_id || null,
+          artist: item.artist || '',
+          album: item.album || '',
+          coverImage: item.cover_image || '',
+          releaseDate: item.release_date || '',
+          country: item.country || '',
+          genre1: item.genre_1 || '',
+          genre2: item.genre_2 || '',
+          totalPoints: 0,
+          voterCount: 0,
+          positions: [],
+          voters: [],
+        });
+      }
+
+      const albumData = albumMap.get(albumKey);
+      albumData.totalPoints += points;
+      albumData.voterCount += 1;
+      albumData.positions.push(item.position);
+      albumData.voters.push({
+        username,
+        position: item.position,
+        points,
+      });
+    }
+
+    // Convert to array and sort
+    // Primary sort: totalPoints DESC
+    // Tiebreaker: voterCount DESC (more voters = broader consensus)
+    const albums = Array.from(albumMap.values())
+      .map((album) => {
+        const positions = album.positions;
+        return {
+          albumId: album.albumId,
+          artist: album.artist,
+          album: album.album,
+          coverImage: album.coverImage,
+          releaseDate: album.releaseDate,
+          country: album.country,
+          genre1: album.genre1,
+          genre2: album.genre2,
+          totalPoints: album.totalPoints,
+          voterCount: album.voterCount,
+          averagePosition:
+            Math.round(
+              (positions.reduce((a, b) => a + b, 0) / positions.length) * 100
+            ) / 100,
+          highestPosition: Math.min(...positions),
+          lowestPosition: Math.max(...positions),
+          voters: album.voters.sort((a, b) => a.position - b.position),
+        };
+      })
+      .sort((a, b) => {
+        // Primary: more points wins
+        if (b.totalPoints !== a.totalPoints) {
+          return b.totalPoints - a.totalPoints;
+        }
+        // Tiebreaker: more voters wins (broader consensus)
+        return b.voterCount - a.voterCount;
+      });
+
+    // Assign ranks
+    albums.forEach((album, index) => {
+      album.rank = index + 1;
+    });
+
+    // Generate anonymous stats (safe for admin preview)
+    const albumsWith3PlusVoters = albums.filter(
+      (a) => a.voterCount >= 3
+    ).length;
+    const albumsWith2Voters = albums.filter((a) => a.voterCount === 2).length;
+    const albumsWith1Voter = albums.filter((a) => a.voterCount === 1).length;
+
+    // Top points distribution (first 20 albums, no identifying info)
+    const topPointsDistribution = albums.slice(0, 20).map((a) => a.totalPoints);
+
+    const data = {
+      year,
+      generatedAt: new Date().toISOString(),
+      participantCount: officialLists.length,
+      albums,
+    };
+
+    const stats = {
+      year,
+      participantCount: officialLists.length,
+      totalAlbums: albums.length,
+      albumsWith3PlusVoters,
+      albumsWith2Voters,
+      albumsWith1Voter,
+      topPointsDistribution,
+      computedAt: new Date().toISOString(),
+    };
+
+    log.info(
+      `Master list for ${year}: ${albums.length} albums from ${officialLists.length} participants`
+    );
+
+    return { data, stats };
+  }
+
+  /**
+   * Recompute and store master list for a year
+   * @param {number} year - The year to recompute
+   * @returns {Promise<Object>} The updated master list record
+   */
+  async function recompute(year) {
+    log.info(`Recomputing master list for year ${year}`);
+
+    const { data, stats } = await aggregateForYear(year);
+
+    // Upsert the master list record
+    const result = await pool.query(
+      `
+      INSERT INTO master_lists (year, data, stats, computed_at, created_at, updated_at)
+      VALUES ($1, $2, $3, NOW(), NOW(), NOW())
+      ON CONFLICT (year) DO UPDATE SET
+        data = $2,
+        stats = $3,
+        computed_at = NOW(),
+        updated_at = NOW()
+      RETURNING *
+    `,
+      [year, JSON.stringify(data), JSON.stringify(stats)]
+    );
+
+    log.info(`Master list for ${year} recomputed successfully`);
+    return result.rows[0];
+  }
+
+  /**
+   * Get master list for a year (from cache)
+   * @param {number} year - The year
+   * @returns {Promise<Object|null>} The master list record or null
+   */
+  async function get(year) {
+    const result = await pool.query(
+      'SELECT * FROM master_lists WHERE year = $1',
+      [year]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Get reveal status and confirmations for a year
+   * @param {number} year - The year
+   * @returns {Promise<Object>} Status object
+   */
+  async function getStatus(year) {
+    const masterList = await get(year);
+
+    if (!masterList) {
+      return {
+        exists: false,
+        revealed: false,
+        confirmations: [],
+        confirmationCount: 0,
+        requiredConfirmations: 2,
+      };
+    }
+
+    // Get confirmations with admin usernames
+    const confirmResult = await pool.query(
+      `
+      SELECT c.confirmed_at, u.username
+      FROM master_list_confirmations c
+      JOIN users u ON c.admin_user_id = u._id
+      WHERE c.year = $1
+      ORDER BY c.confirmed_at
+    `,
+      [year]
+    );
+
+    // Include total album count from stats (safe to reveal)
+    const totalAlbums = masterList.stats?.totalAlbums || 0;
+
+    return {
+      exists: true,
+      revealed: masterList.revealed,
+      revealedAt: masterList.revealed_at,
+      computedAt: masterList.computed_at,
+      totalAlbums,
+      confirmations: confirmResult.rows.map((r) => ({
+        username: r.username,
+        confirmedAt: r.confirmed_at,
+      })),
+      confirmationCount: confirmResult.rows.length,
+      requiredConfirmations: 2,
+    };
+  }
+
+  /**
+   * Add admin confirmation for reveal
+   * @param {number} year - The year
+   * @param {string} adminUserId - The admin user ID
+   * @returns {Promise<Object>} Updated status
+   */
+  async function addConfirmation(year, adminUserId) {
+    log.info(`Admin ${adminUserId} confirming reveal for year ${year}`);
+
+    // Ensure master list exists
+    let masterList = await get(year);
+    if (!masterList) {
+      // Create it if it doesn't exist
+      await recompute(year);
+      masterList = await get(year);
+    }
+
+    if (masterList.revealed) {
+      return { alreadyRevealed: true, status: await getStatus(year) };
+    }
+
+    // Add confirmation (ignore if already confirmed by this admin)
+    await pool.query(
+      `
+      INSERT INTO master_list_confirmations (year, admin_user_id)
+      VALUES ($1, $2)
+      ON CONFLICT (year, admin_user_id) DO NOTHING
+    `,
+      [year, adminUserId]
+    );
+
+    // Check if we have enough confirmations
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM master_list_confirmations WHERE year = $1',
+      [year]
+    );
+    const confirmationCount = parseInt(countResult.rows[0].count, 10);
+
+    // If 2 or more confirmations, reveal the list
+    if (confirmationCount >= 2) {
+      log.info(
+        `Master list for ${year} has reached 2 confirmations - revealing!`
+      );
+      await pool.query(
+        `
+        UPDATE master_lists 
+        SET revealed = TRUE, revealed_at = NOW(), updated_at = NOW()
+        WHERE year = $1
+      `,
+        [year]
+      );
+    }
+
+    return { revealed: confirmationCount >= 2, status: await getStatus(year) };
+  }
+
+  /**
+   * Remove admin confirmation
+   * @param {number} year - The year
+   * @param {string} adminUserId - The admin user ID
+   * @returns {Promise<Object>} Updated status
+   */
+  async function removeConfirmation(year, adminUserId) {
+    log.info(`Admin ${adminUserId} revoking confirmation for year ${year}`);
+
+    const masterList = await get(year);
+    if (masterList && masterList.revealed) {
+      return { alreadyRevealed: true, status: await getStatus(year) };
+    }
+
+    await pool.query(
+      'DELETE FROM master_list_confirmations WHERE year = $1 AND admin_user_id = $2',
+      [year, adminUserId]
+    );
+
+    return { status: await getStatus(year) };
+  }
+
+  /**
+   * Get anonymous stats for admin preview
+   * @param {number} year - The year
+   * @returns {Promise<Object|null>} Stats or null
+   */
+  async function getStats(year) {
+    const masterList = await get(year);
+    if (!masterList) {
+      return null;
+    }
+    return masterList.stats;
+  }
+
+  /**
+   * Get list of years that have revealed master lists
+   * @returns {Promise<Array>} Array of years
+   */
+  async function getRevealedYears() {
+    const result = await pool.query(
+      `
+      SELECT year, revealed_at 
+      FROM master_lists 
+      WHERE revealed = TRUE 
+      ORDER BY year DESC
+    `
+    );
+    return result.rows;
+  }
+
+  return {
+    aggregateForYear,
+    recompute,
+    get,
+    getStatus,
+    addConfirmation,
+    removeConfirmation,
+    getStats,
+    getRevealedYears,
+    getPositionPoints,
+    POSITION_POINTS,
+  };
+}
+
+module.exports = { createMasterList, getPositionPoints, POSITION_POINTS };

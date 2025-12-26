@@ -21,6 +21,9 @@ const {
   getStorableTracksValue,
 } = require('../utils/deduplication');
 
+// Import master list utilities for recomputation triggers
+const { createMasterList } = require('../utils/master-list');
+
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const {
@@ -55,6 +58,21 @@ module.exports = (app, deps) => {
     csrfProtection,
     pool,
   } = deps;
+
+  // Create master list instance for recomputation triggers
+  const masterList = createMasterList({ pool, logger });
+
+  /**
+   * Helper to trigger master list recomputation for a year (non-blocking)
+   * @param {number} year - The year to recompute
+   */
+  function triggerMasterListRecompute(year) {
+    if (!year) return;
+    // Fire and forget - don't block the response
+    masterList.recompute(year).catch((err) => {
+      logger.error(`Failed to recompute master list for year ${year}:`, err);
+    });
+  }
 
   async function upsertAlbumRecord(album, timestamp) {
     const values = [
@@ -319,6 +337,170 @@ module.exports = (app, deps) => {
       }
     }
   );
+
+  // Check if user needs to complete list setup (year assignment + official designation)
+  app.get('/api/lists/setup-status', ensureAuthAPI, async (req, res) => {
+    try {
+      // Get all user's lists
+      const result = await pool.query(
+        `SELECT _id, name, year, is_official FROM lists WHERE user_id = $1`,
+        [req.user._id]
+      );
+
+      const lists = result.rows;
+      const listsWithoutYear = lists.filter((l) => l.year === null);
+      const yearsWithLists = [
+        ...new Set(lists.filter((l) => l.year !== null).map((l) => l.year)),
+      ];
+
+      // Check which years have an official list
+      const yearsWithOfficialList = lists
+        .filter((l) => l.is_official && l.year !== null)
+        .map((l) => l.year);
+
+      const yearsNeedingOfficial = yearsWithLists.filter(
+        (year) => !yearsWithOfficialList.includes(year)
+      );
+
+      const needsSetup =
+        listsWithoutYear.length > 0 || yearsNeedingOfficial.length > 0;
+
+      res.json({
+        needsSetup,
+        listsWithoutYear: listsWithoutYear.map((l) => ({
+          id: l._id,
+          name: l.name,
+        })),
+        yearsNeedingOfficial,
+        yearsSummary: yearsWithLists.map((year) => ({
+          year,
+          hasOfficial: yearsWithOfficialList.includes(year),
+          lists: lists
+            .filter((l) => l.year === year)
+            .map((l) => ({
+              id: l._id,
+              name: l.name,
+              isOfficial: l.is_official,
+            })),
+        })),
+        // Include the dismissed timestamp if user has dismissed the wizard
+        dismissedUntil: req.user.listSetupDismissedUntil || null,
+      });
+    } catch (err) {
+      logger.error('Error checking list setup status:', err);
+      res.status(500).json({ error: 'Failed to check setup status' });
+    }
+  });
+
+  // Bulk update lists (year assignment and official designation)
+  app.post('/api/lists/bulk-update', ensureAuthAPI, async (req, res) => {
+    const { updates } = req.body;
+
+    if (!Array.isArray(updates)) {
+      return res.status(400).json({ error: 'Updates must be an array' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const results = [];
+      const yearsToRecompute = new Set();
+
+      for (const update of updates) {
+        const { listId, year, isOfficial } = update;
+
+        if (!listId) {
+          results.push({ listId, success: false, error: 'Missing listId' });
+          continue;
+        }
+
+        // Verify the list belongs to this user
+        const listCheck = await client.query(
+          'SELECT _id, year, is_official FROM lists WHERE _id = $1 AND user_id = $2',
+          [listId, req.user._id]
+        );
+
+        if (listCheck.rows.length === 0) {
+          results.push({ listId, success: false, error: 'List not found' });
+          continue;
+        }
+
+        const oldList = listCheck.rows[0];
+        const oldYear = oldList.year;
+        const newYear = year !== undefined ? year : oldList.year;
+        const newIsOfficial =
+          isOfficial !== undefined ? isOfficial : oldList.is_official;
+
+        // Validate year if provided
+        if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
+          results.push({ listId, success: false, error: 'Invalid year' });
+          continue;
+        }
+
+        // If setting as official, unset any other official list for that year
+        if (newIsOfficial && newYear !== null) {
+          await client.query(
+            `UPDATE lists SET is_official = FALSE, updated_at = NOW() 
+             WHERE user_id = $1 AND year = $2 AND is_official = TRUE AND _id != $3`,
+            [req.user._id, newYear, listId]
+          );
+        }
+
+        // Update the list
+        await client.query(
+          `UPDATE lists SET year = $1, is_official = $2, updated_at = NOW() WHERE _id = $3`,
+          [newYear, newIsOfficial, listId]
+        );
+
+        results.push({ listId, success: true });
+
+        // Track years that need master list recomputation
+        if (oldYear !== null) yearsToRecompute.add(oldYear);
+        if (newYear !== null && newIsOfficial) yearsToRecompute.add(newYear);
+      }
+
+      await client.query('COMMIT');
+
+      // Invalidate caches
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+      // Trigger master list recomputation for affected years
+      for (const year of yearsToRecompute) {
+        triggerMasterListRecompute(year);
+      }
+
+      res.json({
+        success: true,
+        results,
+        recomputingYears: [...yearsToRecompute],
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      logger.error('Error bulk updating lists:', err);
+      res.status(500).json({ error: 'Failed to update lists' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // Dismiss list setup wizard (temporary)
+  app.post('/api/lists/setup-dismiss', ensureAuthAPI, async (req, res) => {
+    try {
+      // Dismiss for 24 hours
+      const dismissedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+      await pool.query(
+        `UPDATE users SET list_setup_dismissed_until = $1 WHERE _id = $2`,
+        [dismissedUntil, req.user._id]
+      );
+
+      res.json({ success: true, dismissedUntil });
+    } catch (err) {
+      logger.error('Error dismissing setup wizard:', err);
+      res.status(500).json({ error: 'Failed to dismiss wizard' });
+    }
+  });
 
   // Points calculation for export (matches client-side logic in import-export.js)
   const POSITION_POINTS = {
@@ -622,6 +804,14 @@ module.exports = (app, deps) => {
           )
         ).catch((err) => logger.warn('Album cache invalidation failed:', err));
 
+        // If this is an official list, trigger master list recomputation
+        if (existingList && existingList.isOfficial) {
+          const listYear = yearValidation.value || existingList.year;
+          if (listYear) {
+            triggerMasterListRecompute(listYear);
+          }
+        }
+
         res.json({
           success: true,
           message: existingList ? 'List updated' : 'List created',
@@ -735,9 +925,20 @@ module.exports = (app, deps) => {
       }
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
-      // Return updated metadata
+      // If year changed on an official list, trigger master list recomputation
       const yearValidation =
         year !== undefined ? validateYear(year) : { value: existingList.year };
+      if (existingList.isOfficial && year !== undefined) {
+        // Recompute for both old and new year if they differ
+        if (existingList.year && existingList.year !== yearValidation.value) {
+          triggerMasterListRecompute(existingList.year);
+        }
+        if (yearValidation.value) {
+          triggerMasterListRecompute(yearValidation.value);
+        }
+      }
+
+      // Return updated metadata
       res.json({
         success: true,
         name: newName || name,
@@ -809,6 +1010,11 @@ module.exports = (app, deps) => {
       );
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
+      // Trigger master list recomputation for this year
+      if (existingList.year) {
+        triggerMasterListRecompute(existingList.year);
+      }
+
       res.json({
         success: true,
         name: name,
@@ -824,18 +1030,26 @@ module.exports = (app, deps) => {
   });
 
   // Delete a specific list
-  app.delete('/api/lists/:name', ensureAuthAPI, (req, res) => {
+  app.delete('/api/lists/:name', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
 
-    lists.remove({ userId: req.user._id, name }, {}, (err, numRemoved) => {
-      if (err) {
-        logger.error('Error deleting list:', err);
-        return res.status(500).json({ error: 'Error deleting list' });
-      }
+    try {
+      // First, check if the list is official (need to recompute master list if so)
+      const existingList = await listsAsync.findOne({
+        userId: req.user._id,
+        name,
+      });
 
-      if (numRemoved === 0) {
+      if (!existingList) {
         return res.status(404).json({ error: 'List not found' });
       }
+
+      // Store info for master list recomputation before deleting
+      const wasOfficial = existingList.isOfficial;
+      const listYear = existingList.year;
+
+      // Delete the list
+      await pool.query('DELETE FROM lists WHERE _id = $1', [existingList._id]);
 
       // Invalidate cache for deleted list and list index
       responseCache.invalidate(
@@ -859,12 +1073,16 @@ module.exports = (app, deps) => {
         );
       }
 
-      res.json({ success: true, message: 'List deleted' });
+      // If this was an official list, trigger master list recomputation
+      if (wasOfficial && listYear) {
+        triggerMasterListRecompute(listYear);
+      }
 
-      // Invalidate cache for this user's lists
-      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
-      responseCache.invalidate(`GET:/api/lists/${name}:${req.user._id}`);
-    });
+      res.json({ success: true, message: 'List deleted' });
+    } catch (err) {
+      logger.error('Error deleting list:', err);
+      return res.status(500).json({ error: 'Error deleting list' });
+    }
   });
 
   // ============ PASSWORD RESET ROUTES ============
