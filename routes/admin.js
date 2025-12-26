@@ -873,4 +873,387 @@ module.exports = (app, deps) => {
         ' seconds',
     });
   });
+
+  // ============ ADMIN EVENTS API ============
+  // Core event system for admin actions (works with or without Telegram)
+
+  const { createAdminEventService } = require('../utils/admin-events');
+  const { pool } = deps;
+
+  // Create admin event service instance
+  const adminEventService = createAdminEventService({ pool, logger });
+
+  // Get pending events
+  app.get('/api/admin/events', ensureAuth, ensureAdmin, async (req, res) => {
+    try {
+      const { type, priority, limit, offset } = req.query;
+      const result = await adminEventService.getPendingEvents({
+        type,
+        priority,
+        limit: limit ? parseInt(limit, 10) : 50,
+        offset: offset ? parseInt(offset, 10) : 0,
+      });
+      res.json(result);
+    } catch (error) {
+      logger.error('Error fetching admin events:', error);
+      res.status(500).json({ error: 'Failed to fetch events' });
+    }
+  });
+
+  // Get event history
+  app.get(
+    '/api/admin/events/history',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { type, limit, offset } = req.query;
+        const result = await adminEventService.getEventHistory({
+          type,
+          limit: limit ? parseInt(limit, 10) : 50,
+          offset: offset ? parseInt(offset, 10) : 0,
+        });
+        res.json(result);
+      } catch (error) {
+        logger.error('Error fetching event history:', error);
+        res.status(500).json({ error: 'Failed to fetch event history' });
+      }
+    }
+  );
+
+  // Get pending event counts (for dashboard badge)
+  app.get(
+    '/api/admin/events/counts',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const counts = await adminEventService.getPendingCountsByPriority();
+        res.json(counts);
+      } catch (error) {
+        logger.error('Error fetching event counts:', error);
+        res.status(500).json({ error: 'Failed to fetch counts' });
+      }
+    }
+  );
+
+  // Get single event by ID
+  app.get(
+    '/api/admin/events/:eventId',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const event = await adminEventService.getEventById(req.params.eventId);
+        if (!event) {
+          return res.status(404).json({ error: 'Event not found' });
+        }
+        res.json(event);
+      } catch (error) {
+        logger.error('Error fetching event:', error);
+        res.status(500).json({ error: 'Failed to fetch event' });
+      }
+    }
+  );
+
+  // Execute action on event
+  app.post(
+    '/api/admin/events/:eventId/action/:action',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { eventId, action } = req.params;
+        const result = await adminEventService.executeAction(
+          eventId,
+          action,
+          req.user,
+          'web'
+        );
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.message });
+        }
+
+        res.json({
+          success: true,
+          message: result.message,
+          event: result.event,
+        });
+      } catch (error) {
+        logger.error('Error executing event action:', error);
+        res.status(500).json({ error: 'Failed to execute action' });
+      }
+    }
+  );
+
+  // Get available actions for an event type
+  app.get(
+    '/api/admin/events/actions/:eventType',
+    ensureAuth,
+    ensureAdmin,
+    (req, res) => {
+      const actions = adminEventService.getAvailableActions(
+        req.params.eventType
+      );
+      res.json({ actions });
+    }
+  );
+
+  // Expose admin event service for use by other modules
+  app.locals.adminEventService = adminEventService;
+
+  // ============ TELEGRAM SETUP API ============
+  // Configuration endpoints for Telegram notifications
+
+  const { createTelegramNotifier } = require('../utils/telegram');
+
+  // Create telegram notifier instance
+  const telegramNotifier = createTelegramNotifier({ pool, logger });
+
+  // Wire up telegram to admin events service
+  adminEventService.setTelegramNotifier(telegramNotifier);
+
+  // Expose telegram notifier for use by other modules
+  app.locals.telegramNotifier = telegramNotifier;
+
+  // Get current Telegram configuration status
+  app.get(
+    '/api/admin/telegram/status',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const config = await telegramNotifier.getConfig();
+        if (!config) {
+          return res.json({ configured: false });
+        }
+
+        res.json({
+          configured: true,
+          enabled: config.enabled,
+          chatId: config.chatId,
+          chatTitle: config.chatTitle,
+          threadId: config.threadId,
+          topicName: config.topicName,
+          configuredAt: config.configuredAt,
+        });
+      } catch (error) {
+        logger.error('Error getting Telegram status:', error);
+        res.status(500).json({ error: 'Failed to get status' });
+      }
+    }
+  );
+
+  // Validate bot token
+  app.post(
+    '/api/admin/telegram/validate-token',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { token } = req.body;
+        if (!token) {
+          return res.status(400).json({ error: 'Token is required' });
+        }
+
+        const result = await telegramNotifier.validateToken(token);
+        res.json(result);
+      } catch (error) {
+        logger.error('Error validating Telegram token:', error);
+        res.status(500).json({ error: 'Failed to validate token' });
+      }
+    }
+  );
+
+  // Detect groups the bot has been added to
+  app.post(
+    '/api/admin/telegram/detect-groups',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { token } = req.body;
+        if (!token) {
+          return res.status(400).json({ error: 'Token is required' });
+        }
+
+        const groups = await telegramNotifier.detectGroups(token);
+        res.json({ groups });
+      } catch (error) {
+        logger.error('Error detecting Telegram groups:', error);
+        res.status(500).json({ error: 'Failed to detect groups' });
+      }
+    }
+  );
+
+  // Get group info (check if forum, get topics)
+  app.post(
+    '/api/admin/telegram/group-info',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { token, chatId } = req.body;
+        if (!token || !chatId) {
+          return res
+            .status(400)
+            .json({ error: 'Token and chatId are required' });
+        }
+
+        const info = await telegramNotifier.getChatInfo(token, chatId);
+        res.json(info);
+      } catch (error) {
+        logger.error('Error getting Telegram group info:', error);
+        res.status(500).json({ error: 'Failed to get group info' });
+      }
+    }
+  );
+
+  // Save Telegram configuration
+  app.post(
+    '/api/admin/telegram/save-config',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { botToken, chatId, threadId, chatTitle, topicName } = req.body;
+
+        if (!botToken || !chatId) {
+          return res
+            .status(400)
+            .json({ error: 'Bot token and chat ID are required' });
+        }
+
+        const config = await telegramNotifier.saveConfig({
+          botToken,
+          chatId,
+          threadId: threadId || null,
+          chatTitle: chatTitle || 'Admin Group',
+          topicName: topicName || null,
+          configuredBy: req.user._id,
+        });
+
+        logger.info('Telegram configured by admin:', req.user.username);
+
+        res.json({
+          success: true,
+          config: {
+            chatId: config.chat_id,
+            chatTitle: config.chat_title,
+            threadId: config.thread_id,
+            topicName: config.topic_name,
+            enabled: config.enabled,
+          },
+        });
+      } catch (error) {
+        logger.error('Error saving Telegram config:', error);
+        res.status(500).json({ error: 'Failed to save configuration' });
+      }
+    }
+  );
+
+  // Send test message (for saved config)
+  app.post(
+    '/api/admin/telegram/test',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const result = await telegramNotifier.sendTestMessage();
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        res.json({ success: true, messageId: result.messageId });
+      } catch (error) {
+        logger.error('Error sending test message:', error);
+        res.status(500).json({ error: 'Failed to send test message' });
+      }
+    }
+  );
+
+  // Send test message preview (before config is saved, using provided credentials)
+  app.post(
+    '/api/admin/telegram/test-preview',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { token, chatId, threadId } = req.body;
+
+        if (!token || !chatId) {
+          return res
+            .status(400)
+            .json({ error: 'Token and chatId are required' });
+        }
+
+        const result = await telegramNotifier.sendTestMessageWithCredentials(
+          token,
+          chatId,
+          threadId
+        );
+
+        if (!result.success) {
+          return res.status(400).json({ error: result.error });
+        }
+
+        res.json({ success: true, messageId: result.messageId });
+      } catch (error) {
+        logger.error('Error sending test preview message:', error);
+        res.status(500).json({ error: 'Failed to send test message' });
+      }
+    }
+  );
+
+  // Disconnect Telegram
+  app.delete(
+    '/api/admin/telegram/disconnect',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        await telegramNotifier.disconnect();
+        logger.info('Telegram disconnected by admin:', req.user.username);
+        res.json({ success: true });
+      } catch (error) {
+        logger.error('Error disconnecting Telegram:', error);
+        res.status(500).json({ error: 'Failed to disconnect' });
+      }
+    }
+  );
+
+  // Link current admin to their Telegram account
+  app.post(
+    '/api/admin/telegram/link-account',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { telegramUserId, telegramUsername } = req.body;
+
+        if (!telegramUserId) {
+          return res
+            .status(400)
+            .json({ error: 'Telegram user ID is required' });
+        }
+
+        const success = await telegramNotifier.linkAdmin(
+          telegramUserId,
+          telegramUsername,
+          req.user._id
+        );
+
+        if (!success) {
+          return res.status(500).json({ error: 'Failed to link account' });
+        }
+
+        res.json({ success: true });
+      } catch (error) {
+        logger.error('Error linking Telegram account:', error);
+        res.status(500).json({ error: 'Failed to link account' });
+      }
+    }
+  );
 };

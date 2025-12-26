@@ -4396,6 +4396,113 @@ module.exports = (app, deps) => {
       res.status(500).json({ error: 'Failed to fetch lists' });
     }
   });
+
+  // ============ TELEGRAM WEBHOOK ============
+  // Receives callbacks from Telegram when admins click inline buttons
+
+  const { createTelegramNotifier } = require('../utils/telegram');
+  const { createAdminEventService } = require('../utils/admin-events');
+
+  // POST /api/telegram/webhook/:secret - Telegram webhook endpoint
+  app.post('/api/telegram/webhook/:secret', async (req, res) => {
+    // Get telegram notifier from app.locals (set by admin routes)
+    // If not available, create a temporary one for verification
+    let telegramNotifier = app.locals.telegramNotifier;
+    if (!telegramNotifier) {
+      telegramNotifier = createTelegramNotifier({ pool, logger });
+    }
+
+    // Verify the webhook secret
+    const isValid = await telegramNotifier.verifyWebhookSecret(
+      req.params.secret
+    );
+    if (!isValid) {
+      logger.warn('Invalid Telegram webhook secret');
+      return res.sendStatus(403);
+    }
+
+    const update = req.body;
+
+    // Handle callback queries (button clicks)
+    if (update.callback_query) {
+      const callbackQuery = update.callback_query;
+      const callbackData = callbackQuery.data;
+      const telegramUser = callbackQuery.from;
+
+      logger.debug('Telegram callback received:', {
+        callbackData,
+        telegramUserId: telegramUser.id,
+        telegramUsername: telegramUser.username,
+      });
+
+      // Parse the callback data
+      const parsed = telegramNotifier.parseCallbackData(callbackData);
+
+      if (parsed?.type === 'event_action') {
+        // Get the linked admin user
+        const adminUser = await telegramNotifier.getLinkedAdmin(
+          telegramUser.id
+        );
+
+        // If not linked, try to find admin by Telegram username
+        if (!adminUser && telegramUser.username) {
+          // For now, we'll use a placeholder - in production, you'd want
+          // the admin to link their account first
+          logger.warn(
+            'Telegram user not linked to admin account:',
+            telegramUser.username
+          );
+
+          await telegramNotifier.answerCallbackQuery(
+            callbackQuery.id,
+            '⚠️ Your Telegram account is not linked. Please link it in Settings.',
+            true
+          );
+          return res.sendStatus(200);
+        }
+
+        // Get admin event service
+        let adminEventService = app.locals.adminEventService;
+        if (!adminEventService) {
+          adminEventService = createAdminEventService({
+            pool,
+            logger,
+            telegramNotifier,
+          });
+        }
+
+        // Execute the action
+        const result = await adminEventService.executeAction(
+          parsed.eventId,
+          parsed.action,
+          adminUser,
+          'telegram'
+        );
+
+        if (result.success) {
+          await telegramNotifier.answerCallbackQuery(
+            callbackQuery.id,
+            `✓ ${result.message}`
+          );
+        } else {
+          await telegramNotifier.answerCallbackQuery(
+            callbackQuery.id,
+            `✗ ${result.message}`,
+            true
+          );
+        }
+      } else {
+        // Unknown callback data
+        await telegramNotifier.answerCallbackQuery(
+          callbackQuery.id,
+          'Unknown action'
+        );
+      }
+    }
+
+    // Always respond 200 to Telegram
+    res.sendStatus(200);
+  });
 };
 
 // Background function to refresh playcounts from Last.fm API

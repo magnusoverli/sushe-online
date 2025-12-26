@@ -1007,6 +1007,188 @@ const adminRequestSection = (req) =>
   `
   );
 
+// Admin Events Dashboard Section
+const adminEventsSection = () =>
+  settingsCard(
+    'Admin Actions Required',
+    'fas fa-clipboard-list text-orange-500',
+    `
+    <div id="adminEventsContainer">
+      <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+          <span class="text-sm text-gray-400">Filter:</span>
+          <select id="eventTypeFilter" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white" onchange="loadAdminEvents()">
+            <option value="">All Types</option>
+            <option value="account_approval">Account Approvals</option>
+          </select>
+          <select id="eventPriorityFilter" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white" onchange="loadAdminEvents()">
+            <option value="">All Priorities</option>
+            <option value="urgent">Urgent</option>
+            <option value="high">High</option>
+            <option value="normal">Normal</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <button onclick="loadAdminEvents()" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm transition flex items-center gap-2">
+          <i class="fas fa-sync-alt"></i> Refresh
+        </button>
+      </div>
+      
+      <div id="adminEventsList" class="space-y-3">
+        <div class="text-center py-8">
+          <i class="fas fa-spinner fa-spin text-gray-500 text-xl"></i>
+          <p class="text-gray-400 mt-2">Loading events...</p>
+        </div>
+      </div>
+      
+      <div id="noEventsMessage" class="hidden text-center py-8">
+        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-gray-800 flex items-center justify-center">
+          <i class="fas fa-check-circle text-2xl text-green-500"></i>
+        </div>
+        <p class="text-gray-300 font-medium">All caught up!</p>
+        <p class="text-sm text-gray-500">No pending admin actions</p>
+      </div>
+      
+      <div class="mt-4 pt-4 border-t border-gray-800">
+        <button onclick="showEventHistory()" class="text-sm text-gray-400 hover:text-white transition flex items-center gap-2">
+          <i class="fas fa-history"></i> View History
+        </button>
+      </div>
+    </div>
+  `,
+    'lg:col-span-full'
+  );
+
+// Admin Notifications Section (integrations row style like Music Services)
+const adminNotificationsSection = () =>
+  settingsCard(
+    'Admin Notifications',
+    'fas fa-bell text-yellow-500',
+    `
+    <div class="space-y-4">
+      <!-- Telegram Integration Row (like Spotify/Tidal/Last.fm) -->
+      <div id="telegramIntegrationRow" class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-gray-800 rounded-lg">
+        <div class="flex items-center gap-3">
+          <i class="fab fa-telegram text-blue-400 text-xl"></i>
+          <div>
+            <span class="text-white font-medium">Telegram</span>
+            <div id="telegramStatusText" class="text-sm text-gray-500">Checking status...</div>
+          </div>
+        </div>
+        <div id="telegramActionButtons" class="flex items-center gap-3">
+          <!-- Buttons populated by JS based on state -->
+          <span class="text-gray-500 text-sm"><i class="fas fa-spinner fa-spin"></i></span>
+        </div>
+      </div>
+      
+      <p class="text-xs text-gray-500">
+        <i class="fas fa-info-circle mr-1"></i>
+        Receive instant notifications for admin events and take quick actions directly from Telegram.
+      </p>
+    </div>
+  `,
+    ''
+  );
+
+// Telegram Setup Modal (standalone, not in a settingsCard)
+const telegramSetupModal = () => `
+  <div id="telegramModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all">
+      <!-- Header -->
+      <div class="p-6 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xl font-semibold text-white flex items-center gap-3">
+            <i class="fab fa-telegram text-blue-400"></i>
+            Configure Telegram
+          </h3>
+          <button onclick="closeTelegramModal()" class="text-gray-400 hover:text-white transition-colors">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+      </div>
+      
+      <!-- Content -->
+      <div class="p-6 space-y-6">
+        <!-- Step 1: Bot Token -->
+        <div id="telegramModalStep1" class="bg-gray-800/50 rounded-lg p-4 border border-gray-700">
+          <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs text-white">1</span>
+            Create a Telegram Bot
+          </h4>
+          <ol class="text-sm text-gray-400 mb-4 space-y-1 list-decimal list-inside">
+            <li>Open Telegram and message <a href="https://t.me/BotFather" target="_blank" class="text-blue-400 hover:underline">@BotFather</a></li>
+            <li>Send <code class="bg-gray-800 px-1.5 py-0.5 rounded text-xs">/newbot</code> and follow the prompts</li>
+            <li>Copy the bot token and paste it below</li>
+          </ol>
+          <div class="flex gap-2">
+            <input 
+              type="password" 
+              id="telegramBotToken" 
+              placeholder="Paste your bot token here..."
+              class="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+            >
+            <button onclick="validateTelegramToken()" id="validateTokenBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-check"></i> Validate
+            </button>
+          </div>
+          <div id="tokenValidationResult" class="mt-2 text-sm hidden"></div>
+        </div>
+        
+        <!-- Step 2: Select Group -->
+        <div id="telegramModalStep2" class="bg-gray-800/50 rounded-lg p-4 border border-gray-700 opacity-50 pointer-events-none">
+          <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span id="step2Badge" class="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs">2</span>
+            Connect to Admin Group
+          </h4>
+          <p class="text-sm text-gray-400 mb-4">
+            Add your bot to an admin-only group, then send any message in the group and click Detect.
+          </p>
+          <div class="flex gap-2 mb-3">
+            <button onclick="detectTelegramGroups()" id="detectGroupsBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-search"></i> Detect Groups
+            </button>
+          </div>
+          <select id="telegramGroupSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:outline-none focus:border-gray-500 hidden">
+            <option value="">Select a group...</option>
+          </select>
+          <div id="groupSelectResult" class="mt-2 text-sm hidden"></div>
+        </div>
+        
+        <!-- Step 3: Select Topic (for forum groups) -->
+        <div id="telegramModalStep3" class="bg-gray-800/50 rounded-lg p-4 border border-gray-700 opacity-50 pointer-events-none hidden">
+          <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span class="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs">3</span>
+            Select Topic (Optional)
+          </h4>
+          <p class="text-sm text-gray-400 mb-4">
+            This group has Topics enabled. Select a topic for notifications or use General.
+          </p>
+          <select id="telegramTopicSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:outline-none focus:border-gray-500">
+            <option value="">General (default)</option>
+          </select>
+        </div>
+        
+        <!-- Step 4: Test & Save -->
+        <div id="telegramModalStep4" class="bg-gray-800/50 rounded-lg p-4 border border-gray-700 opacity-50 pointer-events-none">
+          <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span id="step4Badge" class="w-6 h-6 rounded-full bg-gray-700 flex items-center justify-center text-xs">4</span>
+            Test & Activate
+          </h4>
+          <div id="telegramSaveResult" class="mb-3 text-sm hidden"></div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="sendTelegramTestFromModal()" id="telegramTestBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-paper-plane"></i> Send Test
+            </button>
+            <button onclick="saveTelegramConfig()" id="telegramSaveBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-save"></i> Save & Enable
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
 // Admin Panel Section
 const adminPanelSection = (stats, adminData) =>
   settingsCard(
@@ -1312,6 +1494,12 @@ const settingsTemplate = (req, options) => {
           ${musicPreferencesSection(musicPreferences, spotifyValid, lastfmValid)}
         </div>
         
+        <!-- Admin Events Dashboard (Admin Only, Full Width) -->
+        ${user.role === 'admin' ? adminEventsSection() : ''}
+        
+        <!-- Admin Notifications (Admin Only) -->
+        ${user.role === 'admin' ? adminNotificationsSection() : ''}
+        
         <!-- Admin Panel (Full Width) -->
         ${user.role === 'admin' ? adminPanelSection(stats, { ...adminData, currentUserId: user._id }) : ''}
       </div>
@@ -1474,6 +1662,9 @@ const settingsTemplate = (req, options) => {
   
   <!-- Toast container -->
   <div id="toast" class="toast"></div>
+  
+  <!-- Telegram Setup Modal -->
+  ${user.role === 'admin' ? telegramSetupModal() : ''}
   
   <script>
     // Toast function
@@ -2515,6 +2706,531 @@ const settingsTemplate = (req, options) => {
       
       // Load aggregate list admin panel on page load
       loadAggregateListAdmin();
+      
+      // ============ ADMIN EVENTS FUNCTIONS ============
+      
+      async function loadAdminEvents() {
+        const container = document.getElementById('adminEventsList');
+        const noEventsMsg = document.getElementById('noEventsMessage');
+        const typeFilter = document.getElementById('eventTypeFilter')?.value || '';
+        const priorityFilter = document.getElementById('eventPriorityFilter')?.value || '';
+        
+        try {
+          let url = '/api/admin/events?';
+          if (typeFilter) url += \`type=\${typeFilter}&\`;
+          if (priorityFilter) url += \`priority=\${priorityFilter}&\`;
+          
+          const response = await fetch(url, { credentials: 'same-origin' });
+          const data = await response.json();
+          
+          if (!data.events || data.events.length === 0) {
+            container.classList.add('hidden');
+            noEventsMsg.classList.remove('hidden');
+            return;
+          }
+          
+          container.classList.remove('hidden');
+          noEventsMsg.classList.add('hidden');
+          
+          container.innerHTML = data.events.map(event => renderAdminEvent(event)).join('');
+        } catch (error) {
+          console.error('Error loading admin events:', error);
+          container.innerHTML = '<p class="text-red-400 text-center py-4">Error loading events</p>';
+        }
+      }
+      
+      function renderAdminEvent(event) {
+        const priorityColors = {
+          urgent: 'bg-red-900/50 border-red-700',
+          high: 'bg-orange-900/30 border-orange-700',
+          normal: 'bg-gray-800 border-gray-700',
+          low: 'bg-gray-800/50 border-gray-700/50'
+        };
+        const priorityIcons = {
+          urgent: 'text-red-500',
+          high: 'text-orange-500',
+          normal: 'text-yellow-500',
+          low: 'text-gray-500'
+        };
+        
+        const colorClass = priorityColors[event.priority] || priorityColors.normal;
+        const iconClass = priorityIcons[event.priority] || priorityIcons.normal;
+        const timeAgo = getRelativeTime(new Date(event.created_at));
+        
+        // Parse event data
+        const eventData = typeof event.data === 'string' ? JSON.parse(event.data) : (event.data || {});
+        
+        // Build action buttons based on event type
+        let actionButtons = '';
+        if (event.event_type === 'account_approval') {
+          actionButtons = \`
+            <button onclick="executeEventAction('\${event.id}', 'approved')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition flex items-center gap-1">
+              <i class="fas fa-check"></i> Approve
+            </button>
+            <button onclick="executeEventAction('\${event.id}', 'rejected')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center gap-1">
+              <i class="fas fa-times"></i> Reject
+            </button>
+          \`;
+        } else {
+          actionButtons = \`
+            <button onclick="executeEventAction('\${event.id}', 'dismissed')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition flex items-center gap-1">
+              <i class="fas fa-check"></i> Dismiss
+            </button>
+          \`;
+        }
+        
+        return \`
+          <div class="rounded-lg p-4 border \${colorClass}">
+            <div class="flex items-start justify-between gap-4">
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-1">
+                  <i class="fas fa-circle text-xs \${iconClass}"></i>
+                  <span class="text-xs text-gray-500 uppercase">\${event.priority}</span>
+                  <span class="text-xs text-gray-600">•</span>
+                  <span class="text-xs text-gray-500">\${event.event_type.replace('_', ' ')}</span>
+                  <span class="text-xs text-gray-600">•</span>
+                  <span class="text-xs text-gray-500">\${timeAgo}</span>
+                </div>
+                <h5 class="text-white font-medium mb-1">\${event.title}</h5>
+                \${event.description ? \`<p class="text-sm text-gray-400">\${event.description}</p>\` : ''}
+                \${eventData.username ? \`<p class="text-sm text-gray-500 mt-1">User: <span class="text-gray-300">\${eventData.username}</span></p>\` : ''}
+                \${eventData.email ? \`<p class="text-sm text-gray-500">Email: <span class="text-gray-300">\${eventData.email}</span></p>\` : ''}
+              </div>
+              <div class="flex gap-2">
+                \${actionButtons}
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+      
+      function getRelativeTime(date) {
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        const diffDays = Math.floor(diffMs / 86400000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return \`\${diffMins}m ago\`;
+        if (diffHours < 24) return \`\${diffHours}h ago\`;
+        if (diffDays < 7) return \`\${diffDays}d ago\`;
+        return date.toLocaleDateString();
+      }
+      
+      async function executeEventAction(eventId, action) {
+        try {
+          const response = await fetch(\`/api/admin/events/\${eventId}/action/\${action}\`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast(data.message || 'Action completed');
+            loadAdminEvents();
+          } else {
+            showToast(data.error || 'Error executing action', 'error');
+          }
+        } catch (error) {
+          console.error('Error executing action:', error);
+          showToast('Error executing action', 'error');
+        }
+      }
+      
+      async function showEventHistory() {
+        // TODO: Implement event history modal
+        showToast('Event history coming soon!');
+      }
+      
+      // Load admin events on page load
+      loadAdminEvents();
+      
+      // ============ TELEGRAM INTEGRATION FUNCTIONS ============
+      
+      let telegramBotInfo = null;
+      let telegramSelectedGroup = null;
+      let telegramConfigData = null;
+      
+      // Update the Telegram row in the Admin Notifications section
+      function updateTelegramRow(data) {
+        const statusText = document.getElementById('telegramStatusText');
+        const actionButtons = document.getElementById('telegramActionButtons');
+        
+        if (!statusText || !actionButtons) return;
+        
+        if (data.configured && data.enabled) {
+          telegramConfigData = data;
+          const topicInfo = data.topicName ? \` → \${data.topicName}\` : '';
+          statusText.innerHTML = \`<span class="text-green-500">Connected to \${data.chatTitle || 'Admin Group'}\${topicInfo}</span>\`;
+          actionButtons.innerHTML = \`
+            <span class="text-green-500 text-sm">Connected</span>
+            <button onclick="sendTelegramTest()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
+              Test
+            </button>
+            <button onclick="disconnectTelegram()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
+              Disconnect
+            </button>
+          \`;
+        } else {
+          telegramConfigData = null;
+          statusText.innerHTML = '<span class="text-gray-500">Not configured</span>';
+          actionButtons.innerHTML = \`
+            <button onclick="openTelegramModal()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
+              Configure
+            </button>
+          \`;
+        }
+      }
+      
+      async function loadTelegramStatus() {
+        try {
+          const response = await fetch('/api/admin/telegram/status', { credentials: 'same-origin' });
+          const data = await response.json();
+          updateTelegramRow(data);
+        } catch (error) {
+          console.error('Error loading Telegram status:', error);
+          const statusText = document.getElementById('telegramStatusText');
+          const actionButtons = document.getElementById('telegramActionButtons');
+          if (statusText) statusText.innerHTML = '<span class="text-red-400">Error loading status</span>';
+          if (actionButtons) actionButtons.innerHTML = \`
+            <button onclick="loadTelegramStatus()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition duration-200">
+              Retry
+            </button>
+          \`;
+        }
+      }
+      
+      // Modal functions
+      function openTelegramModal() {
+        const modal = document.getElementById('telegramModal');
+        if (modal) {
+          modal.classList.remove('hidden');
+          resetTelegramModalState();
+        }
+      }
+      
+      function closeTelegramModal() {
+        const modal = document.getElementById('telegramModal');
+        if (modal) modal.classList.add('hidden');
+      }
+      
+      function resetTelegramModalState() {
+        telegramBotInfo = null;
+        telegramSelectedGroup = null;
+        
+        // Reset inputs
+        const tokenInput = document.getElementById('telegramBotToken');
+        if (tokenInput) tokenInput.value = '';
+        
+        const tokenResult = document.getElementById('tokenValidationResult');
+        if (tokenResult) tokenResult.classList.add('hidden');
+        
+        const groupSelect = document.getElementById('telegramGroupSelect');
+        if (groupSelect) {
+          groupSelect.classList.add('hidden');
+          groupSelect.innerHTML = '<option value="">Select a group...</option>';
+        }
+        
+        const groupResult = document.getElementById('groupSelectResult');
+        if (groupResult) groupResult.classList.add('hidden');
+        
+        const saveResult = document.getElementById('telegramSaveResult');
+        if (saveResult) saveResult.classList.add('hidden');
+        
+        // Reset step states
+        const step2 = document.getElementById('telegramModalStep2');
+        const step3 = document.getElementById('telegramModalStep3');
+        const step4 = document.getElementById('telegramModalStep4');
+        
+        if (step2) step2.classList.add('opacity-50', 'pointer-events-none');
+        if (step3) {
+          step3.classList.add('opacity-50', 'pointer-events-none', 'hidden');
+        }
+        if (step4) step4.classList.add('opacity-50', 'pointer-events-none');
+      }
+      
+      async function validateTelegramToken() {
+        const tokenInput = document.getElementById('telegramBotToken');
+        const resultDiv = document.getElementById('tokenValidationResult');
+        const token = tokenInput.value.trim();
+        
+        if (!token) {
+          resultDiv.innerHTML = '<span class="text-red-400">Please enter a bot token</span>';
+          resultDiv.classList.remove('hidden');
+          return;
+        }
+        
+        resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin text-gray-400"></i> Validating...';
+        resultDiv.classList.remove('hidden');
+        
+        try {
+          const response = await fetch('/api/admin/telegram/validate-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.valid) {
+            telegramBotInfo = { token, ...data.bot };
+            resultDiv.innerHTML = \`<span class="text-green-400"><i class="fas fa-check mr-1"></i> Valid - @\${data.bot.username}</span>\`;
+            
+            // Enable step 2
+            const step2 = document.getElementById('telegramModalStep2');
+            if (step2) {
+              step2.classList.remove('opacity-50', 'pointer-events-none');
+              const badge = document.getElementById('step2Badge');
+              if (badge) badge.classList.replace('bg-gray-700', 'bg-blue-600');
+            }
+          } else {
+            resultDiv.innerHTML = \`<span class="text-red-400"><i class="fas fa-times mr-1"></i> Invalid token: \${data.error || 'Unknown error'}</span>\`;
+          }
+        } catch (error) {
+          console.error('Error validating token:', error);
+          resultDiv.innerHTML = '<span class="text-red-400">Error validating token</span>';
+        }
+      }
+      
+      async function detectTelegramGroups() {
+        if (!telegramBotInfo?.token) {
+          showToast('Please validate your bot token first', 'error');
+          return;
+        }
+        
+        const selectEl = document.getElementById('telegramGroupSelect');
+        const resultDiv = document.getElementById('groupSelectResult');
+        
+        resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin text-gray-400"></i> Detecting groups...';
+        resultDiv.classList.remove('hidden');
+        
+        try {
+          const response = await fetch('/api/admin/telegram/detect-groups', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: telegramBotInfo.token }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.groups && data.groups.length > 0) {
+            selectEl.innerHTML = '<option value="">Select a group...</option>' +
+              data.groups.map(g => \`<option value="\${g.id}" data-title="\${g.title}" data-forum="\${g.isForum}">\${g.title} (\${g.id})</option>\`).join('');
+            selectEl.classList.remove('hidden');
+            selectEl.onchange = onGroupSelected;
+            resultDiv.innerHTML = \`<span class="text-green-400"><i class="fas fa-check mr-1"></i> Found \${data.groups.length} group(s)</span>\`;
+          } else {
+            resultDiv.innerHTML = '<span class="text-yellow-400"><i class="fas fa-exclamation-triangle mr-1"></i> No groups found. Add the bot to a group and send a message.</span>';
+          }
+        } catch (error) {
+          console.error('Error detecting groups:', error);
+          resultDiv.innerHTML = '<span class="text-red-400">Error detecting groups</span>';
+        }
+      }
+      
+      async function onGroupSelected() {
+        const selectEl = document.getElementById('telegramGroupSelect');
+        const selectedOption = selectEl.options[selectEl.selectedIndex];
+        
+        if (!selectedOption.value) {
+          telegramSelectedGroup = null;
+          return;
+        }
+        
+        telegramSelectedGroup = {
+          id: parseInt(selectedOption.value),
+          title: selectedOption.dataset.title,
+          isForum: selectedOption.dataset.forum === 'true'
+        };
+        
+        const step3 = document.getElementById('telegramModalStep3');
+        const step4 = document.getElementById('telegramModalStep4');
+        
+        if (telegramSelectedGroup.isForum) {
+          if (step3) step3.classList.remove('hidden', 'opacity-50', 'pointer-events-none');
+          await loadGroupTopics();
+        } else {
+          if (step3) step3.classList.add('hidden');
+        }
+        
+        if (step4) {
+          step4.classList.remove('opacity-50', 'pointer-events-none');
+          const badge = document.getElementById('step4Badge');
+          if (badge) badge.classList.replace('bg-gray-700', 'bg-blue-600');
+        }
+      }
+      
+      async function loadGroupTopics() {
+        if (!telegramBotInfo?.token || !telegramSelectedGroup) return;
+        
+        try {
+          const response = await fetch('/api/admin/telegram/group-info', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              token: telegramBotInfo.token, 
+              chatId: telegramSelectedGroup.id 
+            }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.topics && data.topics.length > 0) {
+            const selectEl = document.getElementById('telegramTopicSelect');
+            if (selectEl) {
+              selectEl.innerHTML = data.topics.map(t => 
+                \`<option value="\${t.id || ''}">\${t.name}\${t.isGeneral ? ' (default)' : ''}</option>\`
+              ).join('');
+            }
+          }
+        } catch (error) {
+          console.error('Error loading topics:', error);
+        }
+      }
+      
+      async function sendTelegramTest() {
+        try {
+          const response = await fetch('/api/admin/telegram/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Test message sent! Check your Telegram group.');
+          } else {
+            showToast(data.error || 'Failed to send test message', 'error');
+          }
+        } catch (error) {
+          console.error('Error sending test:', error);
+          showToast('Error sending test message', 'error');
+        }
+      }
+      
+      async function sendTelegramTestFromModal() {
+        if (!telegramBotInfo?.token || !telegramSelectedGroup) {
+          showToast('Please complete setup first', 'error');
+          return;
+        }
+        
+        const topicSelect = document.getElementById('telegramTopicSelect');
+        const threadId = topicSelect?.value ? parseInt(topicSelect.value) : null;
+        
+        try {
+          const response = await fetch('/api/admin/telegram/test-preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              token: telegramBotInfo.token,
+              chatId: telegramSelectedGroup.id,
+              threadId: threadId
+            }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Test message sent! Check your Telegram group.');
+          } else {
+            showToast(data.error || 'Failed to send test message', 'error');
+          }
+        } catch (error) {
+          console.error('Error sending test:', error);
+          showToast('Error sending test message', 'error');
+        }
+      }
+      
+      async function saveTelegramConfig() {
+        if (!telegramBotInfo?.token || !telegramSelectedGroup) {
+          showToast('Please complete all steps first', 'error');
+          return;
+        }
+        
+        const topicSelect = document.getElementById('telegramTopicSelect');
+        const threadId = topicSelect?.value ? parseInt(topicSelect.value) : null;
+        const topicName = topicSelect?.options[topicSelect.selectedIndex]?.text || null;
+        
+        const resultDiv = document.getElementById('telegramSaveResult');
+        if (resultDiv) {
+          resultDiv.innerHTML = '<i class="fas fa-spinner fa-spin text-gray-400"></i> Saving...';
+          resultDiv.classList.remove('hidden');
+        }
+        
+        try {
+          const response = await fetch('/api/admin/telegram/save-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              botToken: telegramBotInfo.token,
+              chatId: telegramSelectedGroup.id,
+              threadId: threadId,
+              chatTitle: telegramSelectedGroup.title,
+              topicName: threadId ? topicName : null
+            }),
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Telegram notifications enabled!');
+            if (resultDiv) {
+              resultDiv.innerHTML = '<span class="text-green-400"><i class="fas fa-check mr-1"></i> Saved successfully!</span>';
+            }
+            setTimeout(() => {
+              closeTelegramModal();
+              loadTelegramStatus();
+            }, 1000);
+          } else {
+            if (resultDiv) {
+              resultDiv.innerHTML = \`<span class="text-red-400"><i class="fas fa-times mr-1"></i> \${data.error}</span>\`;
+            }
+          }
+        } catch (error) {
+          console.error('Error saving config:', error);
+          if (resultDiv) {
+            resultDiv.innerHTML = '<span class="text-red-400">Error saving configuration</span>';
+          }
+        }
+      }
+      
+      async function disconnectTelegram() {
+        if (!confirm('Disconnect Telegram notifications?')) return;
+        
+        try {
+          const response = await fetch('/api/admin/telegram/disconnect', {
+            method: 'DELETE',
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            showToast('Telegram disconnected');
+            telegramBotInfo = null;
+            telegramSelectedGroup = null;
+            telegramConfigData = null;
+            loadTelegramStatus();
+          } else {
+            showToast(data.error || 'Error disconnecting', 'error');
+          }
+        } catch (error) {
+          console.error('Error disconnecting:', error);
+          showToast('Error disconnecting Telegram', 'error');
+        }
+      }
+      
+      // Load Telegram status on page load
+      loadTelegramStatus();
     `
         : ''
     }
