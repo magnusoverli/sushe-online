@@ -4502,12 +4502,26 @@ module.exports = (app, deps) => {
             callbackQuery.id,
             `✓ ${result.message}`
           );
+
+          // Send a confirmation message in the topic thread
+          const confirmText =
+            `✅ *Action Completed*\n\n` +
+            `*${parsed.action.charAt(0).toUpperCase() + parsed.action.slice(1)}* by @${adminUser.username}\n` +
+            `${result.message}`;
+          await telegramNotifier.sendMessage(confirmText);
         } else {
           await telegramNotifier.answerCallbackQuery(
             callbackQuery.id,
             `✗ ${result.message}`,
             true
           );
+
+          // Send a failure message in the topic thread
+          const failText =
+            `❌ *Action Failed*\n\n` +
+            `Attempted *${parsed.action}* by @${adminUser.username}\n` +
+            `Error: ${result.message}`;
+          await telegramNotifier.sendMessage(failText);
         }
       } else {
         // Unknown callback data
