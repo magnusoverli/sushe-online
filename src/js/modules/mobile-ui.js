@@ -880,10 +880,6 @@ export function createMobileUI(deps = {}) {
       return;
     }
 
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/b64ba098-bf5b-4ecd-9355-3711c277b1c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'mobile-ui.js:showMobileEditForm',message:'Edit form opened - checking album cover state',data:{artist:album.artist,albumName:album.album,hasCoverImage:!!album.cover_image,coverImageLength:album.cover_image?.length||0,coverImageFormat:album.cover_image_format||'none'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'A,B'})}).catch(()=>{});
-    // #endregion
-
     const originalReleaseDate = album.release_date || '';
     const inputReleaseDate = originalReleaseDate
       ? normalizeDateForInput(originalReleaseDate) ||
@@ -1126,54 +1122,54 @@ export function createMobileUI(deps = {}) {
 
     // Cover art editing state
     let pendingCoverData = null; // { base64: string, format: string }
-    
+
     // Cover art button click handler
     const editCoverBtn = document.getElementById('editCoverBtn');
     const editCoverInput = document.getElementById('editCoverArt');
     const editCoverPreview = document.getElementById('editCoverPreview');
-    
+
     if (editCoverBtn && editCoverInput) {
       editCoverBtn.addEventListener('click', () => {
         editCoverInput.click();
       });
-      
+
       editCoverInput.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        
+
         // Validate file size (5MB max)
         if (file.size > 5 * 1024 * 1024) {
           showToast('Image file size must be less than 5MB', 'error');
           e.target.value = '';
           return;
         }
-        
+
         // Validate file type
         if (!file.type.startsWith('image/')) {
           showToast('Please select a valid image file', 'error');
           e.target.value = '';
           return;
         }
-        
+
         // Read and preview the file
         const reader = new FileReader();
-        reader.onload = function(event) {
+        reader.onload = function (event) {
           // Show preview immediately
           if (editCoverPreview) {
             editCoverPreview.innerHTML = `<img src="${event.target.result}" alt="Cover preview" class="w-full h-full object-cover">`;
           }
-          
+
           // Process and resize to 256x256
           const img = new Image();
-          img.onload = function() {
+          img.onload = function () {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            
+
             // Calculate dimensions to maintain aspect ratio (fit inside 256x256)
             let width = img.width;
             let height = img.height;
             const maxSize = 256;
-            
+
             if (width > height) {
               if (width > maxSize) {
                 height = (height * maxSize) / width;
@@ -1185,39 +1181,36 @@ export function createMobileUI(deps = {}) {
                 height = maxSize;
               }
             }
-            
+
             canvas.width = width;
             canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
-            
+
             // Convert to base64 JPEG
             const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.85);
             pendingCoverData = {
               base64: resizedDataUrl.split(',')[1],
-              format: 'JPEG'
+              format: 'JPEG',
             };
-            
+
             // Update button text
             if (editCoverBtn) {
-              editCoverBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Image Selected';
+              editCoverBtn.innerHTML =
+                '<i class="fas fa-check mr-2"></i>Image Selected';
             }
-            
-            // #region agent log
-            fetch('http://127.0.0.1:7243/ingest/b64ba098-bf5b-4ecd-9355-3711c277b1c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'mobile-ui.js:coverImageProcessed',message:'Cover image processed and ready',data:{originalWidth:img.width,originalHeight:img.height,resizedWidth:width,resizedHeight:height,base64Length:pendingCoverData.base64.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'fix-verification'})}).catch(()=>{});
-            // #endregion
           };
-          
-          img.onerror = function() {
+
+          img.onerror = function () {
             showToast('Error processing image', 'error');
           };
-          
+
           img.src = event.target.result;
         };
-        
-        reader.onerror = function() {
+
+        reader.onerror = function () {
           showToast('Error reading image file', 'error');
         };
-        
+
         reader.readAsDataURL(file);
       });
     }
@@ -1330,16 +1323,12 @@ export function createMobileUI(deps = {}) {
         comments: document.getElementById('editComments').value.trim(),
         comment: document.getElementById('editComments').value.trim(),
       };
-      
+
       // Apply pending cover image if user selected a new one
       if (pendingCoverData) {
         updatedAlbum.cover_image = pendingCoverData.base64;
         updatedAlbum.cover_image_format = pendingCoverData.format;
       }
-
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/b64ba098-bf5b-4ecd-9355-3711c277b1c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'mobile-ui.js:mobileEditSave',message:'Save clicked - checking updated album data',data:{artist:updatedAlbum.artist,albumName:updatedAlbum.album,hasCoverImage:!!updatedAlbum.cover_image,coverImageLength:updatedAlbum.cover_image?.length||0,originalHadCover:!!album.cover_image,hasPendingCover:!!pendingCoverData,coverImageFormat:updatedAlbum.cover_image_format||'none'},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'fix-verification'})}).catch(()=>{});
-      // #endregion
 
       if (!updatedAlbum.artist || !updatedAlbum.album) {
         showToast('Artist and Album are required', 'error');
