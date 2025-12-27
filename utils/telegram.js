@@ -48,77 +48,66 @@ function decrypt(encryptedText, key) {
   return decrypted;
 }
 
+// ============================================
+// SETUP HELPER FUNCTIONS
+// ============================================
+
 /**
- * Create Telegram notifier with injected dependencies
- * @param {Object} deps - Dependencies
- * @param {Object} deps.pool - PostgreSQL connection pool
- * @param {Object} deps.logger - Logger instance
- * @param {Function} deps.fetch - Fetch function
- * @param {string} deps.encryptionKey - Key for encrypting bot token
- * @param {string} deps.baseUrl - Base URL for webhook
+ * Extract chat from a Telegram update object
+ * @param {Object} update - Telegram update
+ * @param {Object} log - Logger instance
+ * @returns {Object|null} - Chat object or null
  */
-function createTelegramNotifier(deps = {}) {
-  const log = deps.logger || logger;
-  const pool = deps.pool;
-  const fetchFn = deps.fetch || global.fetch;
-  const encryptionKey = deps.encryptionKey || process.env.SESSION_SECRET;
-  const baseUrl = deps.baseUrl || process.env.BASE_URL;
-
-  const TELEGRAM_API = 'https://api.telegram.org/bot';
-
-  // Cache for config to avoid repeated DB queries
-  let configCache = null;
-  let configCacheTime = 0;
-  const CONFIG_CACHE_TTL = 60000; // 1 minute
-
-  /**
-   * Make a request to the Telegram Bot API
-   * @param {string} token - Bot token
-   * @param {string} method - API method
-   * @param {Object} params - Request parameters
-   * @returns {Object} - API response
-   */
-  async function apiRequest(token, method, params = {}) {
-    const url = `${TELEGRAM_API}${token}/${method}`;
-
-    const response = await fetchFn(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
-    });
-
-    const data = await response.json();
-
-    if (!data.ok) {
-      log.error(`Telegram API error: ${method}`, {
-        error_code: data.error_code,
-        description: data.description,
-      });
-      throw new Error(data.description || 'Telegram API error');
-    }
-
-    return data.result;
+function extractChatFromUpdate(update, log) {
+  if (update.message?.chat) {
+    log.info(
+      `detectGroups: found message.chat: ${JSON.stringify(update.message.chat)}`
+    );
+    return update.message.chat;
   }
+  if (update.edited_message?.chat) {
+    log.info(
+      `detectGroups: found edited_message.chat: ${JSON.stringify(update.edited_message.chat)}`
+    );
+    return update.edited_message.chat;
+  }
+  if (update.channel_post?.chat) {
+    log.info(
+      `detectGroups: found channel_post.chat: ${JSON.stringify(update.channel_post.chat)}`
+    );
+    return update.channel_post.chat;
+  }
+  if (update.my_chat_member?.chat) {
+    log.info(
+      `detectGroups: found my_chat_member.chat: ${JSON.stringify(update.my_chat_member.chat)}`
+    );
+    return update.my_chat_member.chat;
+  }
+  if (update.chat_member?.chat) {
+    log.info(
+      `detectGroups: found chat_member.chat: ${JSON.stringify(update.chat_member.chat)}`
+    );
+    return update.chat_member.chat;
+  }
+  log.info(
+    `detectGroups: no recognized chat in update: ${JSON.stringify(update).substring(0, 500)}`
+  );
+  return null;
+}
 
-  // ============================================
-  // SETUP FUNCTIONS (used during configuration)
-  // ============================================
-
+/**
+ * Create setup functions for bot configuration
+ */
+function createSetupHelpers(apiRequest, log) {
   /**
    * Validate a bot token by calling getMe
-   * @param {string} token - Bot token to validate
-   * @returns {Object} - { valid, bot } where bot has id, username, first_name
    */
   async function validateToken(token) {
     try {
       const bot = await apiRequest(token, 'getMe');
       return {
         valid: true,
-        bot: {
-          id: bot.id,
-          username: bot.username,
-          firstName: bot.first_name,
-        },
+        bot: { id: bot.id, username: bot.username, firstName: bot.first_name },
       };
     } catch (err) {
       log.warn('Invalid Telegram bot token:', err.message);
@@ -128,12 +117,9 @@ function createTelegramNotifier(deps = {}) {
 
   /**
    * Get recent updates to detect groups the bot has been added to
-   * @param {string} token - Bot token
-   * @returns {Array} - Array of unique groups
    */
   async function detectGroups(token) {
     try {
-      // Delete any existing webhook first - getUpdates won't work if webhook is set
       try {
         await apiRequest(token, 'deleteWebhook', {
           drop_pending_updates: false,
@@ -149,53 +135,11 @@ function createTelegramNotifier(deps = {}) {
       log.info(`detectGroups: received ${updates.length} updates`);
 
       for (const update of updates) {
-        // Log the update structure for debugging
         log.info(
           `detectGroups: update keys: ${Object.keys(update).join(', ')}`
         );
+        const chat = extractChatFromUpdate(update, log);
 
-        // Extract chat from various update types
-        let chat = null;
-
-        // Regular messages have chat at update.message.chat
-        if (update.message?.chat) {
-          chat = update.message.chat;
-          log.info(`detectGroups: found message.chat: ${JSON.stringify(chat)}`);
-        }
-        // Edited messages
-        else if (update.edited_message?.chat) {
-          chat = update.edited_message.chat;
-          log.info(
-            `detectGroups: found edited_message.chat: ${JSON.stringify(chat)}`
-          );
-        }
-        // Channel posts
-        else if (update.channel_post?.chat) {
-          chat = update.channel_post.chat;
-          log.info(
-            `detectGroups: found channel_post.chat: ${JSON.stringify(chat)}`
-          );
-        }
-        // my_chat_member updates (when bot is added/removed from chat)
-        else if (update.my_chat_member?.chat) {
-          chat = update.my_chat_member.chat;
-          log.info(
-            `detectGroups: found my_chat_member.chat: ${JSON.stringify(chat)}`
-          );
-        }
-        // chat_member updates
-        else if (update.chat_member?.chat) {
-          chat = update.chat_member.chat;
-          log.info(
-            `detectGroups: found chat_member.chat: ${JSON.stringify(chat)}`
-          );
-        } else {
-          log.info(
-            `detectGroups: no recognized chat in update: ${JSON.stringify(update).substring(0, 500)}`
-          );
-        }
-
-        // Check if this is a group/supergroup
         if (chat && ['group', 'supergroup'].includes(chat.type)) {
           if (!groups.has(chat.id)) {
             log.info(`detectGroups: found group "${chat.title}" (${chat.id})`);
@@ -219,16 +163,11 @@ function createTelegramNotifier(deps = {}) {
 
   /**
    * Detect topics from updates for a specific forum group
-   * @param {string} token - Bot token
-   * @param {number} chatId - Chat ID to filter for
-   * @returns {Array} - Array of detected topics
    */
   async function detectTopicsFromUpdates(token, chatId) {
     try {
       const updates = await apiRequest(token, 'getUpdates', { limit: 100 });
       const topics = new Map();
-
-      // Always include General topic
       topics.set(null, { id: null, name: 'General', isGeneral: true });
 
       log.info(
@@ -237,11 +176,8 @@ function createTelegramNotifier(deps = {}) {
 
       for (const update of updates) {
         const message = update.message || update.edited_message;
-
-        // Only process messages from the target chat
         if (!message || message.chat?.id !== chatId) continue;
 
-        // Log the message structure for debugging
         log.info(
           `detectTopicsFromUpdates: message keys: ${Object.keys(message).join(', ')}`
         );
@@ -249,20 +185,14 @@ function createTelegramNotifier(deps = {}) {
           `detectTopicsFromUpdates: message_thread_id: ${message.message_thread_id}, is_topic_message: ${message.is_topic_message}`
         );
 
-        // Check if message has a thread_id (topic)
         if (
           message.message_thread_id &&
           !topics.has(message.message_thread_id)
         ) {
-          // Try to get topic name from forum_topic_created event
           let topicName = `Topic ${message.message_thread_id}`;
-
-          // If this is a forum_topic_created message, get the name
           if (message.forum_topic_created) {
             topicName = message.forum_topic_created.name;
-          }
-          // If reply_to_message has forum_topic_created, get name from there
-          else if (message.reply_to_message?.forum_topic_created) {
+          } else if (message.reply_to_message?.forum_topic_created) {
             topicName = message.reply_to_message.forum_topic_created.name;
           }
 
@@ -271,7 +201,6 @@ function createTelegramNotifier(deps = {}) {
             name: topicName,
             isGeneral: false,
           });
-
           log.info(
             `detectTopicsFromUpdates: found topic "${topicName}" (${message.message_thread_id})`
           );
@@ -287,14 +216,10 @@ function createTelegramNotifier(deps = {}) {
 
   /**
    * Get chat info and check if it's a forum with topics
-   * @param {string} token - Bot token
-   * @param {number} chatId - Chat ID
-   * @returns {Object} - Chat info including topics if forum
    */
   async function getChatInfo(token, chatId) {
     try {
       const chat = await apiRequest(token, 'getChat', { chat_id: chatId });
-
       const info = {
         id: chat.id,
         title: chat.title,
@@ -303,7 +228,6 @@ function createTelegramNotifier(deps = {}) {
         topics: [],
       };
 
-      // If it's a forum, detect topics from recent updates
       if (info.isForum) {
         info.topics = await detectTopicsFromUpdates(token, chatId);
         log.info(
@@ -320,11 +244,8 @@ function createTelegramNotifier(deps = {}) {
 
   /**
    * Set webhook for receiving callbacks
-   * @param {string} token - Bot token
-   * @param {string} webhookSecret - Secret for webhook URL
-   * @returns {Object} - { success, skipped, error }
    */
-  async function setWebhook(token, webhookSecret) {
+  async function setWebhook(token, webhookSecret, baseUrl) {
     if (!baseUrl) {
       log.warn('BASE_URL not configured, skipping webhook setup');
       return {
@@ -334,7 +255,6 @@ function createTelegramNotifier(deps = {}) {
       };
     }
 
-    // Telegram requires HTTPS for webhooks
     if (!baseUrl.startsWith('https://')) {
       log.warn(
         'BASE_URL is not HTTPS, skipping webhook setup. Callbacks from Telegram buttons will not work.'
@@ -358,15 +278,12 @@ function createTelegramNotifier(deps = {}) {
       return { success: true, skipped: false };
     } catch (err) {
       log.error('Error setting webhook:', err);
-      // Don't throw - allow config to be saved even if webhook fails
       return { success: false, skipped: false, error: err.message };
     }
   }
 
   /**
    * Remove webhook
-   * @param {string} token - Bot token
-   * @returns {boolean} - Success
    */
   async function removeWebhook(token) {
     try {
@@ -379,30 +296,33 @@ function createTelegramNotifier(deps = {}) {
     }
   }
 
-  // ============================================
-  // CONFIGURATION MANAGEMENT
-  // ============================================
+  return {
+    validateToken,
+    detectGroups,
+    getChatInfo,
+    setWebhook,
+    removeWebhook,
+  };
+}
 
-  /**
-   * Save Telegram configuration to database
-   * @param {Object} config - Configuration object
-   * @param {string} config.botToken - Bot token (will be encrypted)
-   * @param {number} config.chatId - Chat ID
-   * @param {number} config.threadId - Topic thread ID (optional)
-   * @param {string} config.chatTitle - Chat title for display
-   * @param {string} config.topicName - Topic name for display
-   * @param {string} config.configuredBy - Admin user ID
-   * @returns {Object} - Saved config (without token)
-   */
+// ============================================
+// CONFIG MANAGER HELPER
+// ============================================
+
+/**
+ * Create configuration management functions
+ */
+function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
+  let configCache = null;
+  let configCacheTime = 0;
+  const CONFIG_CACHE_TTL = 60000;
+
   async function saveConfig(config) {
-    if (!pool) {
-      throw new Error('Database pool not configured');
-    }
+    if (!pool) throw new Error('Database pool not configured');
 
     const encryptedToken = encrypt(config.botToken, encryptionKey);
     const webhookSecret = crypto.randomUUID();
 
-    // Delete existing config and insert new one
     await pool.query('DELETE FROM telegram_config');
 
     const result = await pool.query(
@@ -423,8 +343,11 @@ function createTelegramNotifier(deps = {}) {
       ]
     );
 
-    // Try to set webhook (not required for basic functionality)
-    const webhookResult = await setWebhook(config.botToken, webhookSecret);
+    const webhookResult = await setupHelpers.setWebhook(
+      config.botToken,
+      webhookSecret,
+      baseUrl
+    );
     if (webhookResult.skipped) {
       log.info(
         'Webhook setup skipped - notifications will work but button callbacks will not'
@@ -433,25 +356,15 @@ function createTelegramNotifier(deps = {}) {
       log.warn('Webhook setup failed:', webhookResult.error);
     }
 
-    // Clear cache
     configCache = null;
-
     const savedConfig = result.rows[0];
     savedConfig.webhookActive = webhookResult.success;
     return savedConfig;
   }
 
-  /**
-   * Get current Telegram configuration
-   * @param {boolean} includeToken - Whether to include decrypted token
-   * @returns {Object|null} - Config or null if not configured
-   */
   async function getConfig(includeToken = false) {
-    if (!pool) {
-      return null;
-    }
+    if (!pool) return null;
 
-    // Check cache
     if (
       configCache &&
       Date.now() - configCacheTime < CONFIG_CACHE_TTL &&
@@ -461,10 +374,7 @@ function createTelegramNotifier(deps = {}) {
     }
 
     const result = await pool.query('SELECT * FROM telegram_config LIMIT 1');
-
-    if (result.rows.length === 0) {
-      return null;
-    }
+    if (result.rows.length === 0) return null;
 
     const config = result.rows[0];
     const sanitized = {
@@ -482,7 +392,6 @@ function createTelegramNotifier(deps = {}) {
       sanitized.botToken = decrypt(config.bot_token_encrypted, encryptionKey);
     }
 
-    // Update cache (without token)
     if (!includeToken) {
       configCache = sanitized;
       configCacheTime = Date.now();
@@ -491,28 +400,18 @@ function createTelegramNotifier(deps = {}) {
     return sanitized;
   }
 
-  /**
-   * Check if Telegram is configured and enabled
-   * @returns {boolean}
-   */
   async function isConfigured() {
     const config = await getConfig();
     return config?.enabled || false;
   }
 
-  /**
-   * Disconnect Telegram (remove config and webhook)
-   * @returns {boolean}
-   */
   async function disconnect() {
-    if (!pool) {
-      return false;
-    }
+    if (!pool) return false;
 
     const config = await getConfig(true);
     if (config?.botToken) {
       try {
-        await removeWebhook(config.botToken);
+        await setupHelpers.removeWebhook(config.botToken);
       } catch (err) {
         log.warn('Error removing webhook during disconnect:', err);
       }
@@ -520,44 +419,31 @@ function createTelegramNotifier(deps = {}) {
 
     await pool.query('DELETE FROM telegram_config');
     configCache = null;
-
     log.info('Telegram disconnected');
     return true;
   }
 
-  // ============================================
-  // MESSAGING FUNCTIONS
-  // ============================================
+  return { saveConfig, getConfig, isConfigured, disconnect };
+}
 
-  /**
-   * Send a message to the configured chat
-   * @param {string} text - Message text (Markdown supported)
-   * @param {Array} inlineKeyboard - Optional inline keyboard buttons
-   * @returns {Object} - { success, messageId, chatId }
-   */
+// ============================================
+// MESSAGING HELPER
+// ============================================
+
+/**
+ * Create messaging functions
+ */
+function createMessenger(apiRequest, configManager, log) {
   async function sendMessage(text, inlineKeyboard = null) {
-    const config = await getConfig(true);
+    const config = await configManager.getConfig(true);
     if (!config?.enabled || !config.botToken) {
       return { success: false, error: 'Telegram not configured' };
     }
 
-    const params = {
-      chat_id: config.chatId,
-      text,
-      parse_mode: 'Markdown',
-    };
-
-    // Add thread_id for forum topics
-    if (config.threadId) {
-      params.message_thread_id = config.threadId;
-    }
-
-    // Add inline keyboard if provided
-    if (inlineKeyboard && inlineKeyboard.length > 0) {
-      params.reply_markup = {
-        inline_keyboard: inlineKeyboard,
-      };
-    }
+    const params = { chat_id: config.chatId, text, parse_mode: 'Markdown' };
+    if (config.threadId) params.message_thread_id = config.threadId;
+    if (inlineKeyboard?.length > 0)
+      params.reply_markup = { inline_keyboard: inlineKeyboard };
 
     try {
       const result = await apiRequest(config.botToken, 'sendMessage', params);
@@ -572,61 +458,35 @@ function createTelegramNotifier(deps = {}) {
     }
   }
 
-  /**
-   * Edit an existing message
-   * @param {number} messageId - Message ID to edit
-   * @param {string} text - New message text
-   * @param {Array} inlineKeyboard - Optional new inline keyboard
-   * @returns {boolean} - Success
-   */
   async function editMessage(messageId, text, inlineKeyboard = null) {
-    const config = await getConfig(true);
-    if (!config?.enabled || !config.botToken) {
-      return false;
-    }
+    const config = await configManager.getConfig(true);
+    if (!config?.enabled || !config.botToken) return false;
 
     const params = {
       chat_id: config.chatId,
       message_id: messageId,
       text,
       parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: inlineKeyboard || [] },
     };
-
-    if (inlineKeyboard) {
-      params.reply_markup = { inline_keyboard: inlineKeyboard };
-    } else {
-      params.reply_markup = { inline_keyboard: [] };
-    }
 
     try {
       await apiRequest(config.botToken, 'editMessageText', params);
       return true;
     } catch (err) {
-      // Ignore "message not modified" errors
-      if (err.message.includes('message is not modified')) {
-        return true;
-      }
+      if (err.message.includes('message is not modified')) return true;
       log.error('Error editing Telegram message:', err);
       return false;
     }
   }
 
-  /**
-   * Answer a callback query (button click)
-   * @param {string} callbackQueryId - Callback query ID
-   * @param {string} text - Optional toast text to show user
-   * @param {boolean} showAlert - Show as alert popup instead of toast
-   * @returns {boolean} - Success
-   */
   async function answerCallbackQuery(
     callbackQueryId,
     text = null,
     showAlert = false
   ) {
-    const config = await getConfig(true);
-    if (!config?.enabled || !config.botToken) {
-      return false;
-    }
+    const config = await configManager.getConfig(true);
+    if (!config?.enabled || !config.botToken) return false;
 
     const params = { callback_query_id: callbackQueryId };
     if (text) {
@@ -643,47 +503,34 @@ function createTelegramNotifier(deps = {}) {
     }
   }
 
-  // ============================================
-  // HIGH-LEVEL NOTIFICATION FUNCTIONS
-  // ============================================
+  return { sendMessage, editMessage, answerCallbackQuery };
+}
 
-  /**
-   * Format priority as emoji
-   * @param {string} priority - Priority level
-   * @returns {string} - Emoji
-   */
-  function priorityEmoji(priority) {
-    const emojis = {
-      urgent: '🔴',
-      high: '🟠',
-      normal: '🟡',
-      low: '⚪',
-    };
-    return emojis[priority] || '🟡';
-  }
+// ============================================
+// NOTIFICATION HELPER
+// ============================================
 
-  /**
-   * Notify admins of a new event
-   * @param {Object} event - Admin event from database
-   * @param {Array} actions - Available actions [{id, label}]
-   * @returns {Object} - { messageId, chatId } or null
-   */
+/**
+ * Format priority as emoji
+ */
+function priorityEmoji(priority) {
+  const emojis = { urgent: '🔴', high: '🟠', normal: '🟡', low: '⚪' };
+  return emojis[priority] || '🟡';
+}
+
+/**
+ * Create notification functions
+ */
+function createNotificationHelpers(apiRequest, configManager, messenger, log) {
   async function notifyNewEvent(event, actions = []) {
-    const config = await getConfig();
-    if (!config?.enabled) {
-      return null;
-    }
+    const config = await configManager.getConfig();
+    if (!config?.enabled) return null;
 
-    // Build message text
     const emoji = priorityEmoji(event.priority);
-    const priorityLabel = event.priority.toUpperCase();
-    let text = `${emoji} *${priorityLabel}* — ${event.title}\n\n`;
+    let text = `${emoji} *${event.priority.toUpperCase()}* — ${event.title}\n\n`;
 
-    if (event.description) {
-      text += `${event.description}\n\n`;
-    }
+    if (event.description) text += `${event.description}\n\n`;
 
-    // Add event data summary if present
     if (event.data && typeof event.data === 'object') {
       const data =
         typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
@@ -693,75 +540,43 @@ function createTelegramNotifier(deps = {}) {
 
     text += `\n🆔 Event: \`${event.id.slice(0, 8)}\``;
 
-    // Build inline keyboard from actions
     const keyboard = [];
     if (actions.length > 0) {
-      const row = actions.map((action) => ({
-        text: action.label,
-        callback_data: `event:${event.id}:${action.id}`,
-      }));
-      keyboard.push(row);
+      keyboard.push(
+        actions.map((a) => ({
+          text: a.label,
+          callback_data: `event:${event.id}:${a.id}`,
+        }))
+      );
     }
 
-    const result = await sendMessage(text, keyboard);
-
-    if (result.success) {
-      return { messageId: result.messageId, chatId: result.chatId };
-    }
-
-    return null;
+    const result = await messenger.sendMessage(text, keyboard);
+    return result.success
+      ? { messageId: result.messageId, chatId: result.chatId }
+      : null;
   }
 
-  /**
-   * Update a Telegram message after an action is taken
-   * @param {Object} event - Updated event from database
-   * @param {string} action - Action that was taken
-   * @param {string} adminUsername - Username of admin who took action
-   * @returns {boolean} - Success
-   */
   async function updateEventMessage(event, action, adminUsername) {
-    if (!event.telegram_message_id) {
-      return false;
-    }
+    if (!event.telegram_message_id) return false;
 
-    const statusEmoji = {
-      approved: '✅',
-      rejected: '❌',
-      dismissed: '🗑️',
-    };
-
+    const statusEmoji = { approved: '✅', rejected: '❌', dismissed: '🗑️' };
     const emoji = statusEmoji[event.status] || '✓';
     let text = `${emoji} *${event.status.toUpperCase()}* — ${event.title}\n\n`;
 
-    if (event.description) {
-      text += `~${event.description}~\n\n`;
-    }
-
+    if (event.description) text += `~${event.description}~\n\n`;
     text += `${emoji} ${action.charAt(0).toUpperCase() + action.slice(1)} by *${adminUsername}*`;
 
-    return await editMessage(event.telegram_message_id, text, []);
+    return await messenger.editMessage(event.telegram_message_id, text, []);
   }
 
-  /**
-   * Send a test message to verify configuration
-   * @returns {Object} - { success, error }
-   */
   async function sendTestMessage() {
     const text =
       '✅ *SuShe Admin Notifications*\n\n' +
       'This is a test message. Telegram notifications are working correctly!\n\n' +
       `🕐 Sent at: ${new Date().toISOString()}`;
-
-    return await sendMessage(text);
+    return await messenger.sendMessage(text);
   }
 
-  /**
-   * Send a test message using provided credentials (before config is saved)
-   * @param {string} token - Bot token
-   * @param {number} chatId - Chat ID
-   * @param {number|null} threadId - Thread/topic ID
-   * @returns {Object} - { success, messageId, error }
-   */
   async function sendTestMessageWithCredentials(token, chatId, threadId) {
     const text =
       '✅ *SuShe Admin Notifications*\n\n' +
@@ -769,87 +584,59 @@ function createTelegramNotifier(deps = {}) {
       `🕐 Sent at: ${new Date().toISOString()}`;
 
     try {
-      const params = {
-        chat_id: chatId,
-        text: text,
-        parse_mode: 'Markdown',
-      };
-
-      if (threadId) {
-        params.message_thread_id = threadId;
-      }
-
+      const params = { chat_id: chatId, text, parse_mode: 'Markdown' };
+      if (threadId) params.message_thread_id = threadId;
       const result = await apiRequest(token, 'sendMessage', params);
-
-      return {
-        success: true,
-        messageId: result.message_id,
-      };
+      return { success: true, messageId: result.message_id };
     } catch (err) {
       log.error('Error sending test message with credentials:', err);
-      return {
-        success: false,
-        error: err.message || 'Failed to send message',
-      };
+      return { success: false, error: err.message || 'Failed to send message' };
     }
   }
 
-  // ============================================
-  // WEBHOOK HANDLING
-  // ============================================
+  return {
+    notifyNewEvent,
+    updateEventMessage,
+    sendTestMessage,
+    sendTestMessageWithCredentials,
+  };
+}
 
-  /**
-   * Verify webhook secret matches
-   * @param {string} secret - Secret from URL
-   * @returns {boolean} - Valid
-   */
+// ============================================
+// WEBHOOK HELPER
+// ============================================
+
+/**
+ * Create webhook handling functions
+ */
+function createWebhookHandler(pool, configManager, log) {
   async function verifyWebhookSecret(secret) {
-    const config = await getConfig();
+    const config = await configManager.getConfig();
     return config?.webhookSecret === secret;
   }
 
-  /**
-   * Parse callback data from button click
-   * @param {string} callbackData - Callback data string
-   * @returns {Object|null} - { type, eventId, action } or null
-   */
   function parseCallbackData(callbackData) {
     if (!callbackData) return null;
-
     const parts = callbackData.split(':');
     if (parts[0] === 'event' && parts.length >= 3) {
-      return {
-        type: 'event_action',
-        eventId: parts[1],
-        action: parts[2],
-      };
+      return { type: 'event_action', eventId: parts[1], action: parts[2] };
     }
-
     return null;
   }
 
-  /**
-   * Get Telegram user info mapped to app admin
-   * @param {number} telegramUserId - Telegram user ID
-   * @returns {Object|null} - App user or null
-   */
   async function getLinkedAdmin(telegramUserId) {
-    // #region agent log
     log.warn('[DEBUG-TELEGRAM-LINK] getLinkedAdmin called', {
       telegramUserId,
       telegramUserIdType: typeof telegramUserId,
       poolExists: !!pool,
     });
-    // #endregion
+
     if (!pool) {
-      // #region agent log
       log.warn('[DEBUG-TELEGRAM-LINK] pool is null, returning null');
-      // #endregion
       return null;
     }
 
     try {
-      // #region agent log - Check if telegram_admins table has any entries
       const countResult = await pool.query(
         'SELECT COUNT(*) as count FROM telegram_admins'
       );
@@ -857,14 +644,12 @@ function createTelegramNotifier(deps = {}) {
         count: countResult.rows[0]?.count,
       });
 
-      // Also check what entries exist
       const allAdmins = await pool.query(
         'SELECT telegram_user_id, telegram_username, user_id FROM telegram_admins'
       );
       log.warn('[DEBUG-TELEGRAM-LINK] all telegram_admins entries', {
         entries: allAdmins.rows,
       });
-      // #endregion
 
       const result = await pool.query(
         `SELECT u.* FROM users u
@@ -873,32 +658,21 @@ function createTelegramNotifier(deps = {}) {
         [telegramUserId]
       );
 
-      // #region agent log
       log.warn('[DEBUG-TELEGRAM-LINK] query result', {
         rowCount: result.rows.length,
         foundUser: result.rows[0]?.username || null,
       });
-      // #endregion
 
       return result.rows[0] || null;
     } catch (err) {
-      // #region agent log
       log.error('[DEBUG-TELEGRAM-LINK] query error', {
         error: err.message,
         stack: err.stack,
       });
-      // #endregion
       return null;
     }
   }
 
-  /**
-   * Link a Telegram user to an app admin
-   * @param {number} telegramUserId - Telegram user ID
-   * @param {string} telegramUsername - Telegram username
-   * @param {string} appUserId - App user _id
-   * @returns {boolean} - Success
-   */
   async function linkAdmin(telegramUserId, telegramUsername, appUserId) {
     if (!pool) return false;
 
@@ -917,36 +691,105 @@ function createTelegramNotifier(deps = {}) {
     }
   }
 
+  return { verifyWebhookSecret, parseCallbackData, getLinkedAdmin, linkAdmin };
+}
+
+// ============================================
+// MAIN FACTORY
+// ============================================
+
+/**
+ * Create Telegram notifier with injected dependencies
+ * @param {Object} deps - Dependencies
+ * @param {Object} deps.pool - PostgreSQL connection pool
+ * @param {Object} deps.logger - Logger instance
+ * @param {Function} deps.fetch - Fetch function
+ * @param {string} deps.encryptionKey - Key for encrypting bot token
+ * @param {string} deps.baseUrl - Base URL for webhook
+ */
+function createTelegramNotifier(deps = {}) {
+  const log = deps.logger || logger;
+  const pool = deps.pool;
+  const fetchFn = deps.fetch || global.fetch;
+  const encryptionKey = deps.encryptionKey || process.env.SESSION_SECRET;
+  const baseUrl = deps.baseUrl || process.env.BASE_URL;
+
+  const TELEGRAM_API = 'https://api.telegram.org/bot';
+
+  /**
+   * Make a request to the Telegram Bot API
+   */
+  async function apiRequest(token, method, params = {}) {
+    const url = `${TELEGRAM_API}${token}/${method}`;
+    const response = await fetchFn(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+
+    const data = await response.json();
+
+    if (!data.ok) {
+      log.error(`Telegram API error: ${method}`, {
+        error_code: data.error_code,
+        description: data.description,
+      });
+      throw new Error(data.description || 'Telegram API error');
+    }
+
+    return data.result;
+  }
+
+  // Create helper modules
+  const setupHelpers = createSetupHelpers(apiRequest, log);
+  const configManager = createConfigManager(
+    pool,
+    encryptionKey,
+    log,
+    setupHelpers,
+    baseUrl
+  );
+  const messenger = createMessenger(apiRequest, configManager, log);
+  const notifications = createNotificationHelpers(
+    apiRequest,
+    configManager,
+    messenger,
+    log
+  );
+  const webhook = createWebhookHandler(pool, configManager, log);
+
   return {
     // Setup functions
-    validateToken,
-    detectGroups,
-    getChatInfo,
-    setWebhook,
-    removeWebhook,
+    validateToken: setupHelpers.validateToken,
+    detectGroups: setupHelpers.detectGroups,
+    getChatInfo: setupHelpers.getChatInfo,
+    setWebhook: (token, webhookSecret) =>
+      setupHelpers.setWebhook(token, webhookSecret, baseUrl),
+    removeWebhook: setupHelpers.removeWebhook,
 
     // Configuration
-    saveConfig,
-    getConfig,
-    isConfigured,
-    disconnect,
+    saveConfig: configManager.saveConfig,
+    getConfig: configManager.getConfig,
+    isConfigured: configManager.isConfigured,
+    disconnect: configManager.disconnect,
 
     // Messaging
-    sendMessage,
-    editMessage,
-    answerCallbackQuery,
+    sendMessage: messenger.sendMessage,
+    editMessage: messenger.editMessage,
+    answerCallbackQuery: messenger.answerCallbackQuery,
 
     // High-level notifications
-    notifyNewEvent,
-    updateEventMessage,
-    sendTestMessage,
-    sendTestMessageWithCredentials,
+    notifyNewEvent: notifications.notifyNewEvent,
+    updateEventMessage: notifications.updateEventMessage,
+    sendTestMessage: notifications.sendTestMessage,
+    sendTestMessageWithCredentials:
+      notifications.sendTestMessageWithCredentials,
 
     // Webhook
-    verifyWebhookSecret,
-    parseCallbackData,
-    getLinkedAdmin,
-    linkAdmin,
+    verifyWebhookSecret: webhook.verifyWebhookSecret,
+    parseCallbackData: webhook.parseCallbackData,
+    getLinkedAdmin: webhook.getLinkedAdmin,
+    linkAdmin: webhook.linkAdmin,
 
     // Utilities
     encrypt,

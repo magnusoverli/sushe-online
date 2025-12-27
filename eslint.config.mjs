@@ -179,7 +179,15 @@ export default [
     },
   },
   {
-    files: ['test/**/*.js', 'utils/**/*.js'],
+    files: ['test/**/*.js'],
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+      'max-lines-per-function': 'off', // Test describe blocks are naturally large
+      complexity: 'off', // Test setup can be complex
+    },
+  },
+  {
+    files: ['utils/**/*.js'],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
     },

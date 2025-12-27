@@ -13,6 +13,320 @@ const DEFAULT_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
 const RATE_LIMIT_DELAY_MS = 2000; // 2 seconds between users
 const STARTUP_DELAY_MS = 30000; // 30 seconds after startup
 
+// ============================================
+// SPOTIFY SYNC HELPER
+// ============================================
+
+/**
+ * Create a mock usersDb interface for token refresh
+ */
+function createMockUsersDb(pool) {
+  return {
+    update: (query, update, options, callback) => {
+      const updateQuery = `
+        UPDATE users 
+        SET spotify_auth = $1, updated_at = NOW()
+        WHERE _id = $2
+      `;
+      pool
+        .query(updateQuery, [
+          JSON.stringify(update.$set.spotifyAuth),
+          query._id,
+        ])
+        .then(() => callback(null))
+        .catch((err) => callback(err));
+    },
+  };
+}
+
+/**
+ * Sync Spotify data for a user
+ */
+async function syncSpotifyDataForUser(user, pool, spotifyAuth, log) {
+  if (!user.spotify_auth?.access_token) {
+    return null;
+  }
+
+  const usersDb = createMockUsersDb(pool);
+
+  const tokenResult = await spotifyAuth.ensureValidSpotifyToken(
+    { _id: user._id, spotifyAuth: user.spotify_auth },
+    usersDb
+  );
+
+  if (!tokenResult.success) {
+    log.warn('Spotify token invalid for user', {
+      userId: user._id,
+      error: tokenResult.error,
+    });
+    return null;
+  }
+
+  const accessToken = tokenResult.spotifyAuth.access_token;
+
+  const [topArtists, topTracks, savedAlbumsRaw] = await Promise.all([
+    spotifyAuth.getAllTopArtists(accessToken, 50),
+    spotifyAuth.getAllTopTracks(accessToken, 50),
+    spotifyAuth.fetchAllPages(
+      (offset) => spotifyAuth.getSavedAlbums(accessToken, 50, offset),
+      200
+    ),
+  ]);
+
+  const savedAlbums = savedAlbumsRaw.map((item) => ({
+    id: item.album.id,
+    name: item.album.name,
+    artist: item.album.artist,
+    added_at: item.added_at,
+  }));
+
+  return { topArtists, topTracks, savedAlbums, syncedAt: new Date() };
+}
+
+// ============================================
+// LASTFM SYNC HELPER
+// ============================================
+
+/**
+ * Sync Last.fm data for a user (including artist tags)
+ */
+async function syncLastfmDataForUser(user, lastfmAuth, log) {
+  if (!user.lastfm_auth?.session_key || !user.lastfm_username) {
+    return null;
+  }
+
+  const username = user.lastfm_username;
+
+  const [topArtists, topAlbums, userInfo] = await Promise.all([
+    lastfmAuth.getAllTopArtists(username, 50),
+    lastfmAuth.getAllTopAlbums(username, 50),
+    lastfmAuth.getUserInfo(username),
+  ]);
+
+  let artistTags = new Map();
+  const overallArtists = topArtists?.overall || [];
+
+  if (overallArtists.length > 0) {
+    const topArtistNames = overallArtists.slice(0, 30).map((a) => a.name);
+
+    log.info('Fetching tags for Last.fm top artists', {
+      username,
+      artistCount: topArtistNames.length,
+    });
+
+    try {
+      artistTags = await lastfmAuth.getArtistTagsBatch(
+        topArtistNames,
+        5,
+        null,
+        200
+      );
+      log.info('Fetched artist tags', {
+        username,
+        artistsWithTags: artistTags.size,
+      });
+    } catch (err) {
+      log.warn('Failed to fetch artist tags, continuing without them', {
+        username,
+        error: err.message,
+      });
+    }
+  }
+
+  const artistTagsObj = {};
+  for (const [name, tags] of artistTags) {
+    artistTagsObj[name] = tags;
+  }
+
+  return {
+    topArtists,
+    topAlbums,
+    totalScrobbles: userInfo.playcount,
+    artistTags: artistTagsObj,
+    syncedAt: new Date(),
+  };
+}
+
+// ============================================
+// MUSICBRAINZ COUNTRY HELPER
+// ============================================
+
+/**
+ * Fetch artist countries from MusicBrainz
+ */
+async function fetchArtistCountries(updates, musicBrainz, log, userId) {
+  const artistCountries = {};
+  const uniqueArtists = new Set();
+
+  // From Spotify (all time ranges)
+  if (updates.spotifyTopArtists) {
+    for (const range of ['short_term', 'medium_term', 'long_term']) {
+      const artists = updates.spotifyTopArtists[range] || [];
+      artists.slice(0, 20).forEach((a) => uniqueArtists.add(a.name));
+    }
+  }
+
+  // From Last.fm overall
+  if (updates.lastfmTopArtists?.overall) {
+    updates.lastfmTopArtists.overall
+      .slice(0, 20)
+      .forEach((a) => uniqueArtists.add(a.name));
+  }
+
+  // From internal lists
+  if (updates.topArtists) {
+    updates.topArtists.slice(0, 20).forEach((a) => uniqueArtists.add(a.name));
+  }
+
+  const artistList = Array.from(uniqueArtists).slice(0, 30);
+
+  if (artistList.length > 0) {
+    log.info('Fetching artist countries from MusicBrainz', {
+      userId,
+      artistCount: artistList.length,
+    });
+
+    const countriesMap = await musicBrainz.getArtistCountriesBatch(artistList);
+
+    for (const [name, data] of countriesMap) {
+      if (data?.country) {
+        artistCountries[name] = data;
+      }
+    }
+
+    log.info('Fetched artist countries', {
+      userId,
+      artistsWithCountry: Object.keys(artistCountries).length,
+    });
+  }
+
+  return artistCountries;
+}
+
+// ============================================
+// USER SYNC HELPERS
+// ============================================
+
+/**
+ * Sync internal, Spotify, and Last.fm data sources for a user
+ * @returns {Object} - { updates, errors }
+ */
+async function syncAllDataSources(user, syncHelpers, log) {
+  const { syncInternalFn, syncSpotifyFn, syncLastfmFn } = syncHelpers;
+  const userId = user._id;
+  const updates = {};
+  const errors = [];
+
+  // 1. Internal list data
+  try {
+    const internalData = await syncInternalFn(userId);
+    updates.topGenres = internalData.topGenres;
+    updates.topArtists = internalData.topArtists;
+    updates.topCountries = internalData.topCountries;
+    updates.totalAlbums = internalData.totalAlbums;
+  } catch (err) {
+    log.error('Failed to aggregate internal data', {
+      userId,
+      error: err.message,
+    });
+    errors.push({ source: 'internal', error: err.message });
+  }
+
+  // 2. Spotify data
+  if (user.spotify_auth?.access_token) {
+    try {
+      const spotifyData = await syncSpotifyFn(user);
+      if (spotifyData) {
+        updates.spotifyTopArtists = spotifyData.topArtists;
+        updates.spotifyTopTracks = spotifyData.topTracks;
+        updates.spotifySavedAlbums = spotifyData.savedAlbums;
+        updates.spotifySyncedAt = spotifyData.syncedAt;
+      }
+    } catch (err) {
+      log.error('Failed to sync Spotify data', { userId, error: err.message });
+      errors.push({ source: 'spotify', error: err.message });
+    }
+  }
+
+  // 3. Last.fm data
+  if (user.lastfm_auth?.session_key && user.lastfm_username) {
+    try {
+      const lastfmData = await syncLastfmFn(user);
+      if (lastfmData) {
+        updates.lastfmTopArtists = lastfmData.topArtists;
+        updates.lastfmTopAlbums = lastfmData.topAlbums;
+        updates.lastfmTotalScrobbles = lastfmData.totalScrobbles;
+        updates.lastfmArtistTags = lastfmData.artistTags;
+        updates.lastfmSyncedAt = lastfmData.syncedAt;
+      }
+    } catch (err) {
+      log.error('Failed to sync Last.fm data', { userId, error: err.message });
+      errors.push({ source: 'lastfm', error: err.message });
+    }
+  }
+
+  return { updates, errors };
+}
+
+/**
+ * Calculate and save affinity scores for a user
+ */
+async function calculateAndSaveAffinity(
+  userId,
+  updates,
+  artistCountries,
+  userPrefs,
+  log
+) {
+  const errors = [];
+
+  try {
+    const spotifyArtists = updates.spotifyTopArtists || null;
+    const lastfmArtists = updates.lastfmTopArtists
+      ? {
+          overall: updates.lastfmTopArtists.overall || [],
+          artistTags: updates.lastfmArtistTags || {},
+        }
+      : null;
+
+    const { genreAffinity, artistAffinity, countryAffinity } =
+      userPrefs.calculateAffinity(
+        {
+          topGenres: updates.topGenres || [],
+          topArtists: updates.topArtists || [],
+          topCountries: updates.topCountries || [],
+        },
+        spotifyArtists,
+        lastfmArtists,
+        { internal: 0.4, spotify: 0.35, lastfm: 0.25 },
+        artistCountries
+      );
+
+    updates.genreAffinity = genreAffinity;
+    updates.artistAffinity = artistAffinity;
+    updates.countryAffinity = countryAffinity;
+  } catch (err) {
+    log.error('Failed to calculate affinity', { userId, error: err.message });
+    errors.push({ source: 'affinity', error: err.message });
+  }
+
+  // Save to database
+  if (Object.keys(updates).length > 0) {
+    try {
+      await userPrefs.savePreferences(userId, updates);
+    } catch (err) {
+      log.error('Failed to save preferences', { userId, error: err.message });
+      errors.push({ source: 'save', error: err.message });
+    }
+  }
+
+  return errors;
+}
+
+// ============================================
+// MAIN FACTORY
+// ============================================
+
 /**
  * Create preference sync service with injected dependencies
  * @param {Object} deps - Dependencies
@@ -32,26 +346,20 @@ function createPreferenceSyncService(deps = {}) {
     throw new Error('Database pool is required for preference sync service');
   }
 
-  // Create or use injected utilities
   const spotifyAuth = deps.spotifyAuth || createSpotifyAuth({ logger: log });
   const lastfmAuth = deps.lastfmAuth || createLastfmAuth({ logger: log });
   const userPrefs =
     deps.userPrefs || createUserPreferences({ pool, logger: log });
   const musicBrainz = deps.musicBrainz || createMusicBrainz({ logger: log });
 
-  // Configuration
   const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;
   const staleThresholdMs = deps.staleThresholdMs || DEFAULT_STALE_THRESHOLD_MS;
 
-  // State
   let syncInterval = null;
   let isRunning = false;
 
   /**
    * Get users who need preference sync
-   * Prioritizes users who have never been synced or are most stale
-   * @param {number} limit - Max users to return
-   * @returns {Array} - Users needing sync
    */
   async function getUsersNeedingSync(limit = 50) {
     const staleInterval = `${Math.floor(staleThresholdMs / 1000)} seconds`;
@@ -85,8 +393,6 @@ function createPreferenceSyncService(deps = {}) {
 
   /**
    * Sync internal list data for a user
-   * @param {string} userId - User ID
-   * @returns {Object} - Aggregated data
    */
   async function syncInternalData(userId) {
     return userPrefs.aggregateFromLists(userId);
@@ -94,149 +400,20 @@ function createPreferenceSyncService(deps = {}) {
 
   /**
    * Sync Spotify data for a user
-   * @param {Object} user - User object with spotify_auth
-   * @returns {Object|null} - Spotify data or null if failed
    */
   async function syncSpotifyData(user) {
-    if (!user.spotify_auth?.access_token) {
-      return null;
-    }
-
-    // Create a mock usersDb for ensureValidSpotifyToken
-    // This allows token refresh to persist to database
-    const usersDb = {
-      update: (query, update, options, callback) => {
-        const updateQuery = `
-          UPDATE users 
-          SET spotify_auth = $1, updated_at = NOW()
-          WHERE _id = $2
-        `;
-        pool
-          .query(updateQuery, [
-            JSON.stringify(update.$set.spotifyAuth),
-            query._id,
-          ])
-          .then(() => callback(null))
-          .catch((err) => callback(err));
-      },
-    };
-
-    // Ensure token is valid
-    const tokenResult = await spotifyAuth.ensureValidSpotifyToken(
-      { _id: user._id, spotifyAuth: user.spotify_auth },
-      usersDb
-    );
-
-    if (!tokenResult.success) {
-      log.warn('Spotify token invalid for user', {
-        userId: user._id,
-        error: tokenResult.error,
-      });
-      return null;
-    }
-
-    const accessToken = tokenResult.spotifyAuth.access_token;
-
-    // Fetch all Spotify data in parallel
-    const [topArtists, topTracks, savedAlbumsRaw] = await Promise.all([
-      spotifyAuth.getAllTopArtists(accessToken, 50),
-      spotifyAuth.getAllTopTracks(accessToken, 50),
-      spotifyAuth.fetchAllPages(
-        (offset) => spotifyAuth.getSavedAlbums(accessToken, 50, offset),
-        200
-      ),
-    ]);
-
-    // Transform saved albums to simpler format
-    const savedAlbums = savedAlbumsRaw.map((item) => ({
-      id: item.album.id,
-      name: item.album.name,
-      artist: item.album.artist,
-      added_at: item.added_at,
-    }));
-
-    return {
-      topArtists,
-      topTracks,
-      savedAlbums,
-      syncedAt: new Date(),
-    };
+    return syncSpotifyDataForUser(user, pool, spotifyAuth, log);
   }
 
   /**
    * Sync Last.fm data for a user
-   * Now also fetches artist tags to enable genre consolidation
-   * @param {Object} user - User object with lastfm_auth and lastfm_username
-   * @returns {Object|null} - Last.fm data or null if failed
    */
   async function syncLastfmData(user) {
-    if (!user.lastfm_auth?.session_key || !user.lastfm_username) {
-      return null;
-    }
-
-    const username = user.lastfm_username;
-
-    // Fetch all Last.fm data in parallel
-    const [topArtists, topAlbums, userInfo] = await Promise.all([
-      lastfmAuth.getAllTopArtists(username, 50),
-      lastfmAuth.getAllTopAlbums(username, 50),
-      lastfmAuth.getUserInfo(username),
-    ]);
-
-    // Fetch tags for top 30 overall artists (for genre consolidation)
-    // We limit to 30 to avoid rate limiting while still getting good coverage
-    let artistTags = new Map();
-    const overallArtists = topArtists?.overall || [];
-
-    if (overallArtists.length > 0) {
-      const topArtistNames = overallArtists.slice(0, 30).map((a) => a.name);
-
-      log.info('Fetching tags for Last.fm top artists', {
-        username,
-        artistCount: topArtistNames.length,
-      });
-
-      try {
-        // Use batch function with rate limiting (200ms between requests)
-        artistTags = await lastfmAuth.getArtistTagsBatch(
-          topArtistNames,
-          5, // 5 tags per artist
-          null, // Use default API key
-          200 // 200ms delay between requests
-        );
-
-        log.info('Fetched artist tags', {
-          username,
-          artistsWithTags: artistTags.size,
-        });
-      } catch (err) {
-        log.warn('Failed to fetch artist tags, continuing without them', {
-          username,
-          error: err.message,
-        });
-        // Don't fail the whole sync, just continue without tags
-      }
-    }
-
-    // Convert Map to plain object for JSON storage
-    const artistTagsObj = {};
-    for (const [name, tags] of artistTags) {
-      artistTagsObj[name] = tags;
-    }
-
-    return {
-      topArtists,
-      topAlbums,
-      totalScrobbles: userInfo.playcount,
-      artistTags: artistTagsObj,
-      syncedAt: new Date(),
-    };
+    return syncLastfmDataForUser(user, lastfmAuth, log);
   }
 
   /**
    * Sync all preferences for a single user
-   * @param {Object} user - User object from database
-   * @returns {Object} - Sync result
    */
   async function syncUserPreferences(user) {
     const userId = user._id;
@@ -247,169 +424,46 @@ function createPreferenceSyncService(deps = {}) {
       email: user.email,
     });
 
-    const updates = {};
-    const errors = [];
+    // Sync all data sources
+    const syncHelpers = {
+      syncInternalFn: syncInternalData,
+      syncSpotifyFn: syncSpotifyData,
+      syncLastfmFn: syncLastfmData,
+    };
+    const { updates, errors } = await syncAllDataSources(
+      user,
+      syncHelpers,
+      log
+    );
 
-    // 1. Aggregate from internal lists
+    // Fetch artist countries from MusicBrainz
+    let artistCountries = {};
     try {
-      const internalData = await syncInternalData(userId);
-      updates.topGenres = internalData.topGenres;
-      updates.topArtists = internalData.topArtists;
-      updates.topCountries = internalData.topCountries;
-      updates.totalAlbums = internalData.totalAlbums;
-    } catch (err) {
-      log.error('Failed to aggregate internal data', {
-        userId,
-        error: err.message,
-      });
-      errors.push({ source: 'internal', error: err.message });
-    }
-
-    // 2. Sync Spotify data
-    if (user.spotify_auth?.access_token) {
-      try {
-        const spotifyData = await syncSpotifyData(user);
-        if (spotifyData) {
-          updates.spotifyTopArtists = spotifyData.topArtists;
-          updates.spotifyTopTracks = spotifyData.topTracks;
-          updates.spotifySavedAlbums = spotifyData.savedAlbums;
-          updates.spotifySyncedAt = spotifyData.syncedAt;
-        }
-      } catch (err) {
-        log.error('Failed to sync Spotify data', {
-          userId,
-          error: err.message,
-        });
-        errors.push({ source: 'spotify', error: err.message });
-      }
-    }
-
-    // 3. Sync Last.fm data (including artist tags for genre consolidation)
-    if (user.lastfm_auth?.session_key && user.lastfm_username) {
-      try {
-        const lastfmData = await syncLastfmData(user);
-        if (lastfmData) {
-          updates.lastfmTopArtists = lastfmData.topArtists;
-          updates.lastfmTopAlbums = lastfmData.topAlbums;
-          updates.lastfmTotalScrobbles = lastfmData.totalScrobbles;
-          updates.lastfmArtistTags = lastfmData.artistTags;
-          updates.lastfmSyncedAt = lastfmData.syncedAt;
-        }
-      } catch (err) {
-        log.error('Failed to sync Last.fm data', {
-          userId,
-          error: err.message,
-        });
-        errors.push({ source: 'lastfm', error: err.message });
-      }
-    }
-
-    // 4. Fetch artist countries from MusicBrainz for top artists across all sources
-    const artistCountries = {};
-    try {
-      // Collect unique artists from all sources (top 20 from each)
-      const uniqueArtists = new Set();
-
-      // From Spotify (all time ranges)
-      if (updates.spotifyTopArtists) {
-        for (const range of ['short_term', 'medium_term', 'long_term']) {
-          const artists = updates.spotifyTopArtists[range] || [];
-          artists.slice(0, 20).forEach((a) => uniqueArtists.add(a.name));
-        }
-      }
-
-      // From Last.fm overall
-      if (updates.lastfmTopArtists?.overall) {
-        updates.lastfmTopArtists.overall
-          .slice(0, 20)
-          .forEach((a) => uniqueArtists.add(a.name));
-      }
-
-      // From internal lists (already have countries, but good to verify/enrich)
-      if (updates.topArtists) {
-        updates.topArtists
-          .slice(0, 20)
-          .forEach((a) => uniqueArtists.add(a.name));
-      }
-
-      const artistList = Array.from(uniqueArtists).slice(0, 30); // Limit to 30 total
-
-      if (artistList.length > 0) {
-        log.info('Fetching artist countries from MusicBrainz', {
-          userId,
-          artistCount: artistList.length,
-        });
-
-        const countriesMap =
-          await musicBrainz.getArtistCountriesBatch(artistList);
-
-        // Convert Map to plain object
-        for (const [name, data] of countriesMap) {
-          if (data?.country) {
-            artistCountries[name] = data;
-          }
-        }
-
-        log.info('Fetched artist countries', {
-          userId,
-          artistsWithCountry: Object.keys(artistCountries).length,
-        });
+      artistCountries = await fetchArtistCountries(
+        updates,
+        musicBrainz,
+        log,
+        userId
+      );
+      if (Object.keys(artistCountries).length > 0) {
+        updates.artistCountries = artistCountries;
       }
     } catch (err) {
       log.warn('Failed to fetch artist countries, continuing without them', {
         userId,
         error: err.message,
       });
-      // Don't fail the whole sync, just continue without country data
     }
 
-    // Store artist countries for caching
-    if (Object.keys(artistCountries).length > 0) {
-      updates.artistCountries = artistCountries;
-    }
-
-    // 5. Calculate affinity scores (with proper data consolidation)
-    try {
-      const spotifyArtists = updates.spotifyTopArtists || null;
-
-      // Build Last.fm data with artist tags for genre consolidation
-      const lastfmArtists = updates.lastfmTopArtists
-        ? {
-            overall: updates.lastfmTopArtists.overall || [],
-            artistTags: updates.lastfmArtistTags || {},
-          }
-        : null;
-
-      const { genreAffinity, artistAffinity, countryAffinity } =
-        userPrefs.calculateAffinity(
-          {
-            topGenres: updates.topGenres || [],
-            topArtists: updates.topArtists || [],
-            topCountries: updates.topCountries || [],
-          },
-          spotifyArtists,
-          lastfmArtists,
-          { internal: 0.4, spotify: 0.35, lastfm: 0.25 },
-          artistCountries // Pass artist countries for cross-source country consolidation
-        );
-
-      updates.genreAffinity = genreAffinity;
-      updates.artistAffinity = artistAffinity;
-      updates.countryAffinity = countryAffinity;
-    } catch (err) {
-      log.error('Failed to calculate affinity', { userId, error: err.message });
-      errors.push({ source: 'affinity', error: err.message });
-    }
-
-    // 6. Save to database (only if we have some data)
-    if (Object.keys(updates).length > 0) {
-      try {
-        await userPrefs.savePreferences(userId, updates);
-      } catch (err) {
-        log.error('Failed to save preferences', { userId, error: err.message });
-        errors.push({ source: 'save', error: err.message });
-      }
-    }
+    // Calculate and save affinity
+    const affinityErrors = await calculateAndSaveAffinity(
+      userId,
+      updates,
+      artistCountries,
+      userPrefs,
+      log
+    );
+    errors.push(...affinityErrors);
 
     const duration = Date.now() - startTime;
     log.info('Preference sync complete for user', {
@@ -418,17 +472,11 @@ function createPreferenceSyncService(deps = {}) {
       errors: errors.length,
     });
 
-    return {
-      userId,
-      success: errors.length === 0,
-      errors,
-      duration,
-    };
+    return { userId, success: errors.length === 0, errors, duration };
   }
 
   /**
    * Run a complete sync cycle for all users needing updates
-   * @returns {Object} - Cycle results
    */
   async function runSyncCycle() {
     if (isRunning) {
@@ -441,12 +489,7 @@ function createPreferenceSyncService(deps = {}) {
 
     log.info('Starting preference sync cycle');
 
-    const results = {
-      total: 0,
-      success: 0,
-      failed: 0,
-      errors: [],
-    };
+    const results = { total: 0, success: 0, failed: 0, errors: [] };
 
     try {
       const users = await getUsersNeedingSync();
@@ -461,13 +504,9 @@ function createPreferenceSyncService(deps = {}) {
             results.success++;
           } else {
             results.failed++;
-            results.errors.push({
-              userId: user._id,
-              errors: result.errors,
-            });
+            results.errors.push({ userId: user._id, errors: result.errors });
           }
 
-          // Rate limiting between users
           if (users.indexOf(user) < users.length - 1) {
             await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
           }
@@ -503,8 +542,6 @@ function createPreferenceSyncService(deps = {}) {
 
   /**
    * Start the sync service
-   * @param {Object} options - Start options
-   * @param {boolean} options.immediate - Run immediately (default: false, waits 30s)
    */
   function start(options = {}) {
     if (syncInterval) {
@@ -517,7 +554,6 @@ function createPreferenceSyncService(deps = {}) {
       staleThreshold: `${staleThresholdMs / 1000 / 60 / 60} hours`,
     });
 
-    // Run first cycle after startup delay (or immediately if requested)
     const initialDelay = options.immediate ? 0 : STARTUP_DELAY_MS;
     setTimeout(() => {
       runSyncCycle().catch((err) => {
@@ -525,7 +561,6 @@ function createPreferenceSyncService(deps = {}) {
       });
     }, initialDelay);
 
-    // Schedule periodic sync cycles
     syncInterval = setInterval(() => {
       runSyncCycle().catch((err) => {
         log.error('Scheduled sync cycle failed', { error: err.message });
@@ -544,31 +579,22 @@ function createPreferenceSyncService(deps = {}) {
     }
   }
 
-  /**
-   * Check if the sync service is currently running a cycle
-   */
   function isSyncing() {
     return isRunning;
   }
 
-  /**
-   * Check if the sync service is started
-   */
   function isStarted() {
     return syncInterval !== null;
   }
 
   return {
-    // Lifecycle
     start,
     stop,
     isStarted,
     isSyncing,
-    // Operations
     runSyncCycle,
     syncUserPreferences,
     getUsersNeedingSync,
-    // Individual sync functions (for testing/manual use)
     syncInternalData,
     syncSpotifyData,
     syncLastfmData,

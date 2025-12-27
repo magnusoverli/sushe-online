@@ -6,7 +6,6 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 
-// eslint-disable-next-line max-lines-per-function -- Test suite with many test cases
 describe('templates utilities', () => {
   let templates;
   let originalAssetVersion;

@@ -39,7 +39,6 @@ function createTestCache(options = {}) {
   return cache;
 }
 
-// eslint-disable-next-line max-lines-per-function -- Test suite with many test cases
 test.describe('ResponseCache Class', () => {
   test.describe('Basic Cache Operations', () => {
     test('should store and retrieve cached data', () => {
@@ -380,7 +379,6 @@ test.describe('ResponseCache Class', () => {
   });
 });
 
-// eslint-disable-next-line max-lines-per-function -- Test suite with many test cases
 test.describe('Cache Middleware', () => {
   // Clear the global cache before each test
   test.beforeEach(() => {

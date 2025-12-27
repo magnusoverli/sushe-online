@@ -11,7 +11,6 @@ const {
   warmConnections,
 } = require('../db/postgres.js');
 
-// eslint-disable-next-line max-lines-per-function -- Test suite with many test cases
 describe('PgDatastore', () => {
   let mockPool;
   let datastore;
