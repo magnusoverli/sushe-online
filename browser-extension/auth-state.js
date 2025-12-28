@@ -60,50 +60,6 @@
   }
 
   /**
-   * Check if user is authenticated with optional API validation
-   * @param {Object} options - Options for authentication check
-   * @param {boolean} options.validateWithApi - If true, validates token with server (slower but more accurate)
-   * @returns {Promise<{authenticated: boolean, reason?: string, token?: string}>}
-   */
-  async function isAuthenticated(options = { validateWithApi: false }) {
-    const state = await getAuthState();
-
-    // Step 1: Token exists?
-    if (!state.token) {
-      return { authenticated: false, reason: 'no_token' };
-    }
-
-    // Step 2: Token not expired?
-    if (state.isExpired) {
-      // Proactively clear expired token
-      await clearAllAuthData();
-      return { authenticated: false, reason: 'expired' };
-    }
-
-    // Step 3: API validation (optional, for high-stakes operations)
-    if (options.validateWithApi && state.apiUrl) {
-      try {
-        const response = await fetch(`${state.apiUrl}/api/lists`, {
-          headers: {
-            Authorization: `Bearer ${state.token}`,
-            Accept: 'application/json',
-          },
-        });
-
-        if (response.status === 401) {
-          await clearAllAuthData();
-          return { authenticated: false, reason: 'invalid_token' };
-        }
-      } catch (e) {
-        // Network error - trust local state, don't clear auth
-        console.warn('Could not validate token with API:', e.message);
-      }
-    }
-
-    return { authenticated: true, token: state.token };
-  }
-
-  /**
    * Validate token and clean up if expired
    * Call this before any API operation
    * @returns {Promise<{valid: boolean, token?: string, reason?: string}>}
@@ -132,27 +88,6 @@
   async function clearAllAuthData() {
     console.log('Clearing all auth data');
     await chrome.storage.local.remove(AUTH_STORAGE_KEYS);
-  }
-
-  /**
-   * Get authorization headers for API requests
-   * Checks token validity before returning headers
-   * @returns {Promise<{headers: Object, valid: boolean, reason?: string}>}
-   */
-  async function getAuthHeaders() {
-    const validation = await validateAndCleanToken();
-
-    const headers = {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    };
-
-    if (validation.valid && validation.token) {
-      headers['Authorization'] = `Bearer ${validation.token}`;
-      return { headers, valid: true };
-    }
-
-    return { headers, valid: false, reason: validation.reason };
   }
 
   /**
@@ -207,10 +142,8 @@
   // Export to globalThis for use by other scripts
   globalThis.AuthState = {
     getAuthState,
-    isAuthenticated,
     validateAndCleanToken,
     clearAllAuthData,
-    getAuthHeaders,
     handleUnauthorized,
     loadFullState,
   };
