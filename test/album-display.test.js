@@ -236,9 +236,7 @@ describe('album-display module', () => {
       // In practice, cover_image-only changes are also caught by the fingerprint
       // comparison at the displayAlbums level before detectUpdateType is called.
       const module = createAlbumDisplay({});
-      const oldState = [
-        { artist: 'A', album: '1', release_date: '' },
-      ];
+      const oldState = [{ artist: 'A', album: '1', release_date: '' }];
       const newAlbums = [
         { artist: 'A', album: '1', release_date: '', cover_image: 'new' },
       ];
