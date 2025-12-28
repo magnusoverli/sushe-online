@@ -158,49 +158,54 @@ function extractGenresFromContext(context) {
   console.log('Looking for album link with path:', albumPath);
 
   // Find the link element that was clicked (or near where user clicked)
-  const albumLink = document.querySelector(`a[href*="${albumPath}"]`);
-  if (!albumLink) {
-    console.log('Album link not found on page');
-    return null;
-  }
+  try {
+    const albumLink = document.querySelector(`a[href*="${albumPath}"]`);
+    if (!albumLink) {
+      console.log('Album link not found on page');
+      return null;
+    }
 
-  // Find the container that holds this album entry
-  // Try various container selectors used by RYM on different page types
-  const container =
-    albumLink.closest('.page_section_charts_item_wrapper') || // Chart pages
-    albumLink.closest('.page_charts_section_charts_item_wrapper') || // Alternative chart structure
-    albumLink.closest('[class*="chart_item"]') || // Generic chart items
-    albumLink.closest('tr') || // Table-based layouts
-    albumLink.closest('[class*="release_row"]'); // Release list pages
+    // Find the container that holds this album entry
+    // Try various container selectors used by RYM on different page types
+    const container =
+      albumLink.closest('.page_section_charts_item_wrapper') || // Chart pages
+      albumLink.closest('.page_charts_section_charts_item_wrapper') || // Alternative chart structure
+      albumLink.closest('[class*="chart_item"]') || // Generic chart items
+      albumLink.closest('tr') || // Table-based layouts
+      albumLink.closest('[class*="release_row"]'); // Release list pages
 
-  if (!container) {
-    console.log(
-      'No container found for album, falling back to page extraction'
+    if (!container) {
+      console.log(
+        'No container found for album, falling back to page extraction'
+      );
+      return null;
+    }
+
+    console.log('Found album container:', container.className);
+
+    // Extract genres from this container
+    const genreElements = container.querySelectorAll('.genre');
+    if (genreElements.length === 0) {
+      console.log('No genres found in container');
+      return null;
+    }
+
+    const allGenres = Array.from(genreElements).map((el) =>
+      el.textContent.trim()
     );
+    console.log('Genres found in container:', allGenres);
+
+    // Apply the same logic as page extraction:
+    // RYM shows primary genres first, then secondary
+    // We take the first two genres
+    return {
+      genre_1: allGenres[0] || '',
+      genre_2: allGenres[1] || '',
+    };
+  } catch (error) {
+    console.error('Error finding album link:', error);
     return null;
   }
-
-  console.log('Found album container:', container.className);
-
-  // Extract genres from this container
-  const genreElements = container.querySelectorAll('.genre');
-  if (genreElements.length === 0) {
-    console.log('No genres found in container');
-    return null;
-  }
-
-  const allGenres = Array.from(genreElements).map((el) =>
-    el.textContent.trim()
-  );
-  console.log('Genres found in container:', allGenres);
-
-  // Apply the same logic as page extraction:
-  // RYM shows primary genres first, then secondary
-  // We take the first two genres
-  return {
-    genre_1: allGenres[0] || '',
-    genre_2: allGenres[1] || '',
-  };
 }
 
 // Extract genres from RateYourMusic album page

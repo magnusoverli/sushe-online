@@ -396,11 +396,16 @@ async function fetchUserLists(forceRefresh = false) {
     listsLastFetched = now;
 
     // Store in chrome.storage for persistence
-    await chrome.storage.local.set({
-      userLists,
-      userListsByYear,
-      listsLastFetched,
-    });
+    try {
+      await chrome.storage.local.set({
+        userLists,
+        userListsByYear,
+        listsLastFetched,
+      });
+    } catch (error) {
+      console.error('[fetchUserLists] Failed to store lists in storage:', error);
+      // Continue anyway - lists are in memory
+    }
 
     updateContextMenuWithLists();
   } catch (error) {
