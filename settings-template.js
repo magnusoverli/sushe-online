@@ -2448,7 +2448,8 @@ const settingsTemplate = (req, options) => {
         actionsHtml += \`<button onclick="showContributorManager(\${year})" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-users"></i>Manage Contributors</button> \`;
         
         if (isRevealed) {
-          actionsHtml += \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a>\`;
+          actionsHtml += \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a> \`;
+          actionsHtml += \`<button onclick="resetRevealExperience(\${year})" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm transition inline-flex items-center gap-2" title="Reset your reveal view status to experience the dramatic reveal again"><i class="fas fa-undo"></i>Reset Reveal</button>\`;
         } else {
           const hasConfirmed = status.confirmations && status.confirmations.some(c => c.username === '${user.username}');
           if (hasConfirmed) {
@@ -2524,6 +2525,34 @@ const settingsTemplate = (req, options) => {
         } catch (error) {
           console.error('Error:', error);
           showToast('Error revoking confirmation', 'error');
+        }
+      }
+      
+      // Reset reveal experience (for testing the dramatic fog reveal)
+      async function resetRevealExperience(year) {
+        if (!confirm(\`Reset your reveal experience for \${year}? You will see the dramatic fog reveal again when you visit the aggregate list page.\`)) return;
+        
+        try {
+          const response = await fetch(\`/api/aggregate-list/\${year}/reset-seen\`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin'
+          });
+          
+          const data = await response.json();
+          
+          if (data.success) {
+            if (data.deleted) {
+              showToast(\`Reveal experience reset for \${year}. Visit the aggregate list page to see the dramatic reveal!\`);
+            } else {
+              showToast(\`No view record found for \${year} - you haven't seen the reveal yet.\`);
+            }
+          } else {
+            showToast(data.error || 'Error resetting reveal experience', 'error');
+          }
+        } catch (error) {
+          console.error('Error:', error);
+          showToast('Error resetting reveal experience', 'error');
         }
       }
       

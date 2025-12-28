@@ -399,6 +399,65 @@ async function setContributorsTransaction(pool, year, userIds, addedBy, log) {
 }
 
 // ============================================
+// REVEAL VIEW TRACKING (extracted for line count)
+// ============================================
+
+/**
+ * Check if a user has seen the dramatic reveal for a year
+ */
+async function checkHasSeen(pool, year, userId) {
+  const result = await pool.query(
+    'SELECT 1 FROM aggregate_list_views WHERE year = $1 AND user_id = $2',
+    [year, userId]
+  );
+  return result.rows.length > 0;
+}
+
+/**
+ * Mark that a user has seen the dramatic reveal for a year
+ */
+async function markAsSeen(pool, log, year, userId) {
+  log.info(`Marking user ${userId} as having seen reveal for year ${year}`);
+  await pool.query(
+    `
+    INSERT INTO aggregate_list_views (year, user_id, viewed_at)
+    VALUES ($1, $2, NOW())
+    ON CONFLICT (user_id, year) DO NOTHING
+  `,
+    [year, userId]
+  );
+  return { success: true };
+}
+
+/**
+ * Reset a user's reveal view status for a year (admin testing)
+ */
+async function resetSeenStatus(pool, log, year, userId) {
+  log.info(`Resetting reveal view status for user ${userId}, year ${year}`);
+  const result = await pool.query(
+    'DELETE FROM aggregate_list_views WHERE year = $1 AND user_id = $2',
+    [year, userId]
+  );
+  return { success: true, deleted: result.rowCount > 0 };
+}
+
+/**
+ * Get all years a user has viewed the reveal for
+ */
+async function queryViewedYears(pool, userId) {
+  const result = await pool.query(
+    `
+    SELECT year, viewed_at 
+    FROM aggregate_list_views 
+    WHERE user_id = $1 
+    ORDER BY year DESC
+  `,
+    [userId]
+  );
+  return result.rows;
+}
+
+// ============================================
 // MAIN FACTORY
 // ============================================
 
@@ -627,6 +686,12 @@ function createAggregateList(deps = {}) {
     return setContributorsTransaction(pool, year, userIds, addedBy, log);
   }
 
+  // Reveal view tracking (delegating to extracted functions)
+  const hasSeen = (year, userId) => checkHasSeen(pool, year, userId);
+  const markSeen = (year, userId) => markAsSeen(pool, log, year, userId);
+  const resetSeen = (year, userId) => resetSeenStatus(pool, log, year, userId);
+  const getViewedYears = (userId) => queryViewedYears(pool, userId);
+
   return {
     aggregateForYear,
     recompute,
@@ -643,6 +708,11 @@ function createAggregateList(deps = {}) {
     setContributors,
     getPositionPoints,
     POSITION_POINTS,
+    // Reveal view tracking
+    hasSeen,
+    markSeen,
+    resetSeen,
+    getViewedYears,
   };
 }
 

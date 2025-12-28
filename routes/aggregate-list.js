@@ -273,6 +273,103 @@ module.exports = (app, deps) => {
     }
   );
 
+  // ============ REVEAL VIEW TRACKING ENDPOINTS ============
+
+  /**
+   * GET /api/aggregate-list/:year/has-seen
+   * Check if current user has seen the dramatic reveal for this year
+   */
+  app.get(
+    '/api/aggregate-list/:year/has-seen',
+    ensureAuthAPI,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const hasSeen = await aggregateList.hasSeen(year, req.user._id);
+        res.json({ hasSeen, year });
+      } catch (err) {
+        logger.error('Error checking reveal view status:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * POST /api/aggregate-list/:year/mark-seen
+   * Mark that the current user has seen the dramatic reveal
+   */
+  app.post(
+    '/api/aggregate-list/:year/mark-seen',
+    ensureAuthAPI,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        await aggregateList.markSeen(year, req.user._id);
+        res.json({ success: true, year });
+      } catch (err) {
+        logger.error('Error marking reveal as seen:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * DELETE /api/aggregate-list/:year/reset-seen
+   * Reset reveal view status for current admin (for testing)
+   */
+  app.delete(
+    '/api/aggregate-list/:year/reset-seen',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const result = await aggregateList.resetSeen(year, req.user._id);
+        res.json({
+          success: true,
+          deleted: result.deleted,
+          message: result.deleted
+            ? `Reveal view status reset for ${year}`
+            : 'No view record found to reset',
+        });
+      } catch (err) {
+        logger.error('Error resetting reveal view status:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * GET /api/aggregate-list/viewed-years
+   * Get all years the current user has seen the reveal for (admin only, for reset UI)
+   */
+  app.get(
+    '/api/aggregate-list/viewed-years',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const viewedYears = await aggregateList.getViewedYears(req.user._id);
+        res.json({ viewedYears });
+      } catch (err) {
+        logger.error('Error fetching viewed years:', err);
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
   // ============ CONTRIBUTOR MANAGEMENT ENDPOINTS ============
 
   /**

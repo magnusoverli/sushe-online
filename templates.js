@@ -1534,11 +1534,184 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         #111827 20px
       );
     }
+    
+    /* ========== FOG REVEAL STYLES ========== */
+    
+    .fog-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      background: linear-gradient(
+        to bottom,
+        rgba(0, 0, 0, 0.95) 0%,
+        rgba(17, 24, 39, 0.9) 20%,
+        rgba(17, 24, 39, 0.7) 40%,
+        rgba(17, 24, 39, 0.3) 70%,
+        transparent 100%
+      );
+      transition: opacity 1s ease-out;
+    }
+    
+    .fog-overlay.cleared {
+      opacity: 0;
+    }
+    
+    /* Floating mist particles */
+    .fog-particle {
+      position: fixed;
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(100, 116, 139, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 11;
+      animation: floatMist 8s ease-in-out infinite;
+    }
+    
+    .fog-particle:nth-child(2) {
+      animation-delay: -2s;
+      animation-duration: 10s;
+    }
+    
+    .fog-particle:nth-child(3) {
+      animation-delay: -4s;
+      animation-duration: 12s;
+    }
+    
+    @keyframes floatMist {
+      0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.5; }
+      50% { transform: translateY(-30px) translateX(20px) scale(1.1); opacity: 0.3; }
+    }
+    
+    /* Album cards in fog mode */
+    .album-card.fog-hidden {
+      filter: blur(12px);
+      opacity: 0.15;
+      transform: scale(0.97);
+      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .album-card.fog-revealing {
+      filter: blur(4px);
+      opacity: 0.5;
+      transform: scale(0.99);
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .album-card.fog-revealed {
+      filter: blur(0);
+      opacity: 1;
+      transform: scale(1);
+      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    /* Top 3 special glow effects */
+    .album-card.fog-revealed.top-3 {
+      box-shadow: 0 0 30px var(--accent-shadow), 0 0 60px rgba(251, 191, 36, 0.2);
+    }
+    
+    .album-card.fog-revealed.rank-1 {
+      box-shadow: 0 0 40px rgba(251, 191, 36, 0.5), 0 0 80px rgba(251, 191, 36, 0.3);
+    }
+    
+    @keyframes celebrationPulse {
+      0%, 100% { box-shadow: 0 0 40px rgba(251, 191, 36, 0.5); }
+      50% { box-shadow: 0 0 60px rgba(251, 191, 36, 0.8), 0 0 100px rgba(251, 191, 36, 0.4); }
+    }
+    
+    .album-card.celebration {
+      animation: celebrationPulse 1.5s ease-in-out 3;
+    }
+    
+    /* Scroll hint indicator */
+    .scroll-hint {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.5rem;
+      color: #9ca3af;
+      animation: bounceHint 2s ease-in-out infinite;
+      transition: opacity 0.5s;
+    }
+    
+    .scroll-hint.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    
+    @keyframes bounceHint {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-10px); }
+    }
+    
+    /* Reveal progress bar */
+    .reveal-progress {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: #1f2937;
+      z-index: 100;
+    }
+    
+    .reveal-progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-color), #fbbf24);
+      transition: width 0.3s ease-out;
+      box-shadow: 0 0 10px var(--accent-shadow);
+    }
+    
+    /* Completion celebration overlay */
+    .celebration-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 50;
+      opacity: 0;
+      transition: opacity 0.5s;
+    }
+    
+    .celebration-overlay.active {
+      opacity: 1;
+      animation: celebrationFlash 1s ease-out;
+    }
+    
+    @keyframes celebrationFlash {
+      0% { background: radial-gradient(circle at center top, rgba(251, 191, 36, 0.3) 0%, transparent 50%); }
+      100% { background: transparent; }
+    }
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body class="bg-black text-gray-200 min-h-screen">
   <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
+  
+  <!-- Fog reveal overlay (hidden by default) -->
+  <div id="fogOverlay" class="fog-overlay hidden"></div>
+  <div id="fogParticle1" class="fog-particle hidden" style="top: 10%; left: 20%;"></div>
+  <div id="fogParticle2" class="fog-particle hidden" style="top: 30%; right: 10%;"></div>
+  <div id="fogParticle3" class="fog-particle hidden" style="top: 60%; left: 40%;"></div>
+  
+  <!-- Scroll hint (hidden by default) -->
+  <div id="scrollHint" class="scroll-hint hidden">
+    <i class="fas fa-chevron-up text-2xl"></i>
+    <span class="text-sm">Scroll up to reveal</span>
+  </div>
+  
+  <!-- Reveal progress bar (hidden by default) -->
+  <div id="revealProgress" class="reveal-progress hidden">
+    <div id="revealProgressBar" class="reveal-progress-bar" style="width: 0%"></div>
+  </div>
+  
+  <!-- Celebration overlay -->
+  <div id="celebrationOverlay" class="celebration-overlay"></div>
   
   ${headerComponent(user, 'aggregate')}
   
@@ -1602,7 +1775,42 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       return pos + (s[(v - 20) % 10] || s[v] || s[0]);
     }
     
-    // Render revealed aggregate list
+    // Build album card HTML (shared between normal and fog mode)
+    function buildAlbumCardHtml(album, index, fogMode = false) {
+      const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+      const delay = fogMode ? 0 : Math.min(index * 50, 500);
+      const fogClass = fogMode ? ' fog-hidden' : '';
+      const top3Class = index < 3 ? ' top-3' : '';
+      const rank1Class = index === 0 ? ' rank-1' : '';
+      
+      const votersHtml = album.voters.map(v => 
+        '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-1">#' + v.position + '</span></span>'
+      ).join('');
+      
+      return '<div class="album-card bg-gray-800/50 rounded-lg p-4' + (fogMode ? fogClass + top3Class + rank1Class : ' animate-fade-in') + '" data-rank="' + album.rank + '" style="' + (fogMode ? '' : 'animation-delay: ' + delay + 'ms; opacity: 0;') + '">' +
+        '<div class="flex items-start gap-4">' +
+          '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
+          '<div class="flex-shrink-0">' +
+            (album.coverImage ? 
+              '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-16 h-16 md:w-20 md:h-20 rounded object-cover">' :
+              '<div class="w-16 h-16 md:w-20 md:h-20 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-2xl"></i></div>'
+            ) +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<h3 class="font-bold text-white truncate">' + (album.album || 'Unknown Album') + '</h3>' +
+            '<p class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</p>' +
+            '<div class="flex items-center gap-4 mt-2 text-sm">' +
+              '<span class="text-red-500 font-bold">' + album.totalPoints + ' pts</span>' +
+              '<span class="text-gray-500">' + album.voterCount + ' voter' + (album.voterCount !== 1 ? 's' : '') + '</span>' +
+              '<span class="text-gray-500">avg: ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+            '</div>' +
+            '<div class="mt-2 flex flex-wrap">' + votersHtml + '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    }
+    
+    // Render revealed aggregate list (normal mode)
     function renderAggregateList(data) {
       const container = document.getElementById('aggregateListContent');
       
@@ -1611,38 +1819,146 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         return;
       }
       
-      const html = data.albums.map((album, index) => {
-        const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
-        const delay = Math.min(index * 50, 500);
-        
-        const votersHtml = album.voters.map(v => 
-          '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-1">#' + v.position + '</span></span>'
-        ).join('');
-        
-        return '<div class="album-card bg-gray-800/50 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
-          '<div class="flex items-start gap-4">' +
-            '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
-            '<div class="flex-shrink-0">' +
-              (album.coverImage ? 
-                '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-16 h-16 md:w-20 md:h-20 rounded object-cover">' :
-                '<div class="w-16 h-16 md:w-20 md:h-20 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-2xl"></i></div>'
-              ) +
-            '</div>' +
-            '<div class="flex-1 min-w-0">' +
-              '<h3 class="font-bold text-white truncate">' + (album.album || 'Unknown Album') + '</h3>' +
-              '<p class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</p>' +
-              '<div class="flex items-center gap-4 mt-2 text-sm">' +
-                '<span class="text-red-500 font-bold">' + album.totalPoints + ' pts</span>' +
-                '<span class="text-gray-500">' + album.voterCount + ' voter' + (album.voterCount !== 1 ? 's' : '') + '</span>' +
-                '<span class="text-gray-500">avg: ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
-              '</div>' +
-              '<div class="mt-2 flex flex-wrap">' + votersHtml + '</div>' +
-            '</div>' +
-          '</div>' +
-        '</div>';
-      }).join('');
-      
+      const html = data.albums.map((album, index) => buildAlbumCardHtml(album, index, false)).join('');
       container.innerHTML = html;
+    }
+    
+    // ========== FOG REVEAL MODE ==========
+    
+    let fogRevealState = {
+      active: false,
+      observer: null,
+      revealedCount: 0,
+      totalAlbums: 0,
+      hasMarkedSeen: false
+    };
+    
+    // Render aggregate list in fog mode
+    function renderAggregateListFogMode(data) {
+      const container = document.getElementById('aggregateListContent');
+      
+      if (!data.albums || data.albums.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 text-gray-400">No albums in the aggregate list yet.</div>';
+        return;
+      }
+      
+      fogRevealState.totalAlbums = data.albums.length;
+      fogRevealState.active = true;
+      
+      // Render all albums with fog-hidden class
+      const html = data.albums.map((album, index) => buildAlbumCardHtml(album, index, true)).join('');
+      container.innerHTML = html;
+      
+      // Show fog UI elements
+      document.getElementById('fogOverlay').classList.remove('hidden');
+      document.getElementById('fogParticle1').classList.remove('hidden');
+      document.getElementById('fogParticle2').classList.remove('hidden');
+      document.getElementById('fogParticle3').classList.remove('hidden');
+      document.getElementById('scrollHint').classList.remove('hidden');
+      document.getElementById('revealProgress').classList.remove('hidden');
+      
+      // Scroll to bottom of the list (album #40 or last album)
+      setTimeout(() => {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' });
+        
+        // Initialize Intersection Observer for reveal
+        initFogRevealObserver();
+      }, 100);
+    }
+    
+    // Initialize Intersection Observer for fog reveal
+    function initFogRevealObserver() {
+      const options = {
+        root: null,
+        rootMargin: '-10% 0px -30% 0px', // Reveal zone in middle-upper area
+        threshold: [0, 0.25, 0.5, 0.75, 1]
+      };
+      
+      fogRevealState.observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          const card = entry.target;
+          const rank = parseInt(card.dataset.rank);
+          
+          if (entry.intersectionRatio >= 0.5) {
+            // Fully revealed
+            if (card.classList.contains('fog-hidden') || card.classList.contains('fog-revealing')) {
+              card.classList.remove('fog-hidden', 'fog-revealing');
+              card.classList.add('fog-revealed');
+              fogRevealState.revealedCount++;
+              updateRevealProgress();
+              
+              // Check for #1 reveal (celebration!)
+              if (rank === 1) {
+                triggerCelebration(card);
+              }
+            }
+          } else if (entry.intersectionRatio > 0) {
+            // Partially in view - revealing state
+            if (card.classList.contains('fog-hidden')) {
+              card.classList.remove('fog-hidden');
+              card.classList.add('fog-revealing');
+            }
+          }
+        });
+      }, options);
+      
+      // Observe all album cards
+      document.querySelectorAll('.album-card').forEach(card => {
+        fogRevealState.observer.observe(card);
+      });
+    }
+    
+    // Update reveal progress bar
+    function updateRevealProgress() {
+      const progress = (fogRevealState.revealedCount / fogRevealState.totalAlbums) * 100;
+      document.getElementById('revealProgressBar').style.width = progress + '%';
+      
+      // Hide scroll hint once we've scrolled a bit
+      if (fogRevealState.revealedCount > 3) {
+        document.getElementById('scrollHint').classList.add('hidden');
+      }
+    }
+    
+    // Trigger celebration when #1 is revealed
+    async function triggerCelebration(card) {
+      // Add celebration animation to #1 card
+      card.classList.add('celebration');
+      
+      // Flash the celebration overlay
+      const overlay = document.getElementById('celebrationOverlay');
+      overlay.classList.add('active');
+      
+      // Clear the fog completely
+      document.getElementById('fogOverlay').classList.add('cleared');
+      document.querySelectorAll('.fog-particle').forEach(p => p.classList.add('hidden'));
+      
+      // Hide progress bar after a moment
+      setTimeout(() => {
+        document.getElementById('revealProgress').classList.add('hidden');
+      }, 1500);
+      
+      // Mark as seen in database (only once)
+      if (!fogRevealState.hasMarkedSeen) {
+        fogRevealState.hasMarkedSeen = true;
+        try {
+          await apiFetch('/api/aggregate-list/' + YEAR + '/mark-seen', { method: 'POST' });
+        } catch (err) {
+          console.error('Failed to mark reveal as seen:', err);
+        }
+      }
+      
+      // Remove celebration effects after animation
+      setTimeout(() => {
+        overlay.classList.remove('active');
+        card.classList.remove('celebration');
+        fogRevealState.active = false;
+        
+        // Reveal any remaining hidden cards
+        document.querySelectorAll('.album-card.fog-hidden, .album-card.fog-revealing').forEach(c => {
+          c.classList.remove('fog-hidden', 'fog-revealing');
+          c.classList.add('fog-revealed');
+        });
+      }, 4500);
     }
     
     // Render pre-reveal status with position placeholders
@@ -1773,7 +2089,17 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         if (status.revealed) {
           // Load full data
           const data = await apiFetch('/api/aggregate-list/' + YEAR);
-          renderAggregateList(data.data);
+          
+          // Check if user has seen the dramatic reveal before
+          const hasSeenRes = await apiFetch('/api/aggregate-list/' + YEAR + '/has-seen');
+          
+          if (hasSeenRes.hasSeen) {
+            // User has seen it before - render normally
+            renderAggregateList(data.data);
+          } else {
+            // First time viewing! Show the dramatic fog reveal
+            renderAggregateListFogMode(data.data);
+          }
         } else {
           // Show pending state
           renderPendingReveal(status);
