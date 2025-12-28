@@ -116,17 +116,14 @@ document.addEventListener('DOMContentLoaded', () => {
     console.log('Detected standalone/PWA mode - adjusting safe area handling');
   }
 
-  // Small delay to ensure the main app has initialized
-  setTimeout(() => {
-    const isMobile = window.innerWidth < 1024;
+  const isMobile = window.innerWidth < 1024;
 
-    // Initialize the appropriate sidebar widget based on user preference
-    initSidebarWidget(isMobile);
+  // Initialize the appropriate sidebar widget based on user preference
+  initSidebarWidget(isMobile);
 
-    // Initialize discovery module (Last.fm recommendations)
-    // Only if user has Last.fm connected
-    if (window.currentUser?.lastfmUsername) {
-      initDiscovery();
-    }
-  }, 100);
+  // Initialize discovery module (Last.fm recommendations)
+  // Only if user has Last.fm connected
+  if (window.currentUser?.lastfmUsername) {
+    initDiscovery();
+  }
 });

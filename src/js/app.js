@@ -746,6 +746,96 @@ window.updatePlaylist = updatePlaylist;
 // Make showToast globally available
 window.showToast = showToast;
 
+// Link preview caching and request deduplication
+const linkPreviewCache = new Map(); // URL -> preview data
+const pendingLinkPreviews = new Map(); // URL -> Promise (for deduplication)
+let linkPreviewObserver = null;
+
+/**
+ * Initialize the IntersectionObserver for lazy loading link previews
+ */
+function initLinkPreviewObserver() {
+  if (linkPreviewObserver) return linkPreviewObserver;
+
+  linkPreviewObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const el = entry.target;
+          const url = el.dataset.previewUrl;
+          if (url) {
+            fetchAndRenderLinkPreview(el, url);
+          }
+          linkPreviewObserver.unobserve(el);
+        }
+      });
+    },
+    {
+      rootMargin: '100px', // Pre-load previews 100px before they enter viewport
+      threshold: 0,
+    }
+  );
+
+  return linkPreviewObserver;
+}
+
+/**
+ * Fetch link preview with caching and request deduplication
+ * @param {string} url - URL to unfurl
+ * @returns {Promise<Object|null>} Preview data or null
+ */
+async function fetchLinkPreviewCached(url) {
+  // Check cache first
+  if (linkPreviewCache.has(url)) {
+    return linkPreviewCache.get(url);
+  }
+
+  // Check if there's already a pending request for this URL
+  if (pendingLinkPreviews.has(url)) {
+    return pendingLinkPreviews.get(url);
+  }
+
+  // Create new request and store promise for deduplication
+  const promise = apiCall(`/api/unfurl?url=${encodeURIComponent(url)}`)
+    .then((data) => {
+      linkPreviewCache.set(url, data);
+      pendingLinkPreviews.delete(url);
+      return data;
+    })
+    .catch((err) => {
+      console.error('Link preview error:', err);
+      pendingLinkPreviews.delete(url);
+      // Cache null to prevent retrying failed URLs
+      linkPreviewCache.set(url, null);
+      return null;
+    });
+
+  pendingLinkPreviews.set(url, promise);
+  return promise;
+}
+
+/**
+ * Fetch and render a link preview
+ * @param {HTMLElement} previewEl - Container element for the preview
+ * @param {string} url - URL to unfurl
+ */
+async function fetchAndRenderLinkPreview(previewEl, url) {
+  const data = await fetchLinkPreviewCached(url);
+
+  if (!data) {
+    previewEl.remove();
+    return;
+  }
+
+  const img = data.image
+    ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded flex-shrink-0" alt="">`
+    : '';
+  const desc = data.description
+    ? `<div class="text-gray-400 truncate">${data.description}</div>`
+    : '';
+  previewEl.innerHTML = `<a href="${url}" target="_blank" class="flex gap-2 p-2 items-center">${img}<div class="min-w-0"><div class="font-semibold text-gray-100 truncate">${data.title || url}</div>${desc}</div></a>`;
+}
+
 // API helper functions
 export async function apiCall(url, options = {}) {
   try {
@@ -806,39 +896,47 @@ export async function apiCall(url, options = {}) {
 }
 window.apiCall = apiCall;
 
-// Fetch link preview metadata
-async function fetchLinkPreview(url) {
-  try {
-    return await apiCall(`/api/unfurl?url=${encodeURIComponent(url)}`);
-  } catch (err) {
-    console.error('Link preview error:', err);
-    return null;
-  }
-}
-
+/**
+ * Attach a deferred link preview to a container
+ * Uses IntersectionObserver to only fetch when visible
+ * @param {HTMLElement} container - Container element
+ * @param {string} comment - Comment text that may contain URLs
+ */
 function attachLinkPreview(container, comment) {
   const urlMatch = comment && comment.match(/https?:\/\/\S+/);
   if (!urlMatch) return;
+
   const url = urlMatch[0];
+
+  // Check if we already have cached data - render immediately if so
+  if (linkPreviewCache.has(url)) {
+    const data = linkPreviewCache.get(url);
+    if (!data) return; // Previously failed URL
+
+    const previewEl = document.createElement('div');
+    previewEl.className = 'mt-2 text-xs bg-gray-800 rounded';
+    container.appendChild(previewEl);
+
+    const img = data.image
+      ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded flex-shrink-0" alt="">`
+      : '';
+    const desc = data.description
+      ? `<div class="text-gray-400 truncate">${data.description}</div>`
+      : '';
+    previewEl.innerHTML = `<a href="${url}" target="_blank" class="flex gap-2 p-2 items-center">${img}<div class="min-w-0"><div class="font-semibold text-gray-100 truncate">${data.title || url}</div>${desc}</div></a>`;
+    return;
+  }
+
+  // Create placeholder element and defer loading via IntersectionObserver
   const previewEl = document.createElement('div');
   previewEl.className = 'mt-2 text-xs bg-gray-800 rounded';
+  previewEl.dataset.previewUrl = url;
   previewEl.textContent = 'Loading preview...';
   container.appendChild(previewEl);
-  fetchLinkPreview(url)
-    .then((data) => {
-      if (!data) {
-        previewEl.remove();
-        return;
-      }
-      const img = data.image
-        ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded flex-shrink-0" alt="">`
-        : '';
-      const desc = data.description
-        ? `<div class="text-gray-400 truncate">${data.description}</div>`
-        : '';
-      previewEl.innerHTML = `<a href="${url}" target="_blank" class="flex gap-2 p-2 items-center">${img}<div class="min-w-0"><div class="font-semibold text-gray-100 truncate">${data.title || url}</div>${desc}</div></a>`;
-    })
-    .catch(() => previewEl.remove());
+
+  // Initialize and observe with IntersectionObserver
+  const observer = initLinkPreviewObserver();
+  observer.observe(previewEl);
 }
 
 // Load lists from server

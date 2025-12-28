@@ -229,16 +229,23 @@ describe('album-display module', () => {
       assert.strictEqual(result, 'FIELD_UPDATE');
     });
 
-    it('should return FULL_REBUILD for cover image changes', () => {
+    it('should not track cover_image changes (handled by batch fetch)', () => {
+      // Note: cover_image is intentionally NOT tracked in detectUpdateType
+      // because storing it in the lightweight mutable state would be expensive.
+      // Cover image changes are handled by the fetchAndApplyCovers batch pattern.
+      // In practice, cover_image-only changes are also caught by the fingerprint
+      // comparison at the displayAlbums level before detectUpdateType is called.
       const module = createAlbumDisplay({});
-      const oldAlbums = [
-        { artist: 'A', album: '1', release_date: '', cover_image: 'old' },
+      const oldState = [
+        { artist: 'A', album: '1', release_date: '' },
       ];
       const newAlbums = [
         { artist: 'A', album: '1', release_date: '', cover_image: 'new' },
       ];
-      const result = module.detectUpdateType(oldAlbums, newAlbums);
-      assert.strictEqual(result, 'FULL_REBUILD');
+      const result = module.detectUpdateType(oldState, newAlbums);
+      // No tracked field changes, no position changes = falls through to HYBRID_UPDATE
+      // (0 + 0 <= 15 is true, so HYBRID_UPDATE is returned)
+      assert.strictEqual(result, 'HYBRID_UPDATE');
     });
 
     it('should return POSITION_UPDATE when only positions change', () => {

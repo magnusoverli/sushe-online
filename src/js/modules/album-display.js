@@ -17,8 +17,176 @@ import {
 const ENABLE_INCREMENTAL_UPDATES = true;
 
 // Module-level state
-let lastRenderedAlbums = null;
+// Store lightweight fingerprint instead of deep-cloned array for performance
+let lastRenderedFingerprint = null;
+// Store only mutable fields needed for detectUpdateType (no cover_image)
+let lastRenderedMutableState = null;
 let positionElementCache = new WeakMap();
+
+// Cache all frequently-updated DOM elements per row for faster incremental updates
+// Structure: WeakMap<row, { position, artist, country, genre1, genre2, comment, track, releaseDate }>
+let rowElementsCache = new WeakMap();
+
+// Lazy loading observer for album cover images
+let coverImageObserver = null;
+
+// 1x1 transparent GIF placeholder for lazy loading
+const PLACEHOLDER_GIF =
+  'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+
+/**
+ * Initialize the IntersectionObserver for lazy loading cover images
+ * Images with data-lazy-src will have their src swapped when visible
+ */
+function initCoverImageObserver() {
+  if (coverImageObserver) return;
+
+  coverImageObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const img = entry.target;
+          const lazySrc = img.dataset.lazySrc;
+          if (lazySrc) {
+            img.src = lazySrc;
+            delete img.dataset.lazySrc;
+          }
+          coverImageObserver.unobserve(img);
+        }
+      });
+    },
+    {
+      rootMargin: '200px', // Pre-load images 200px before they enter viewport
+      threshold: 0,
+    }
+  );
+}
+
+/**
+ * Observe all lazy-load images in the container
+ * @param {HTMLElement} container - Container with album items
+ */
+function observeLazyImages(container) {
+  if (!coverImageObserver) {
+    initCoverImageObserver();
+  }
+
+  const lazyImages = container.querySelectorAll('img[data-lazy-src]');
+  lazyImages.forEach((img) => {
+    coverImageObserver.observe(img);
+  });
+}
+
+/**
+ * Cache DOM element references for a desktop row
+ * @param {HTMLElement} row - Row element
+ */
+function cacheDesktopRowElements(row) {
+  const cache = {
+    position:
+      row.querySelector('[data-position-element="true"]') ||
+      row.querySelector('.position-display'),
+    albumName: row.querySelector('.font-semibold.text-gray-100'),
+    releaseDate: row.querySelector('.release-date-display'),
+    artist: row.querySelectorAll('.flex.items-center > span')[0],
+    countryCell: row.querySelector('.country-cell'),
+    genre1Cell: row.querySelector('.genre-1-cell'),
+    genre2Cell: row.querySelector('.genre-2-cell'),
+    commentCell: row.querySelector('.comment-cell'),
+    trackCell: row.querySelector('.track-cell'),
+  };
+
+  // Cache the spans inside cells
+  if (cache.countryCell) {
+    cache.countrySpan = cache.countryCell.querySelector('span');
+  }
+  if (cache.genre1Cell) {
+    cache.genre1Span = cache.genre1Cell.querySelector('span');
+  }
+  if (cache.genre2Cell) {
+    cache.genre2Span = cache.genre2Cell.querySelector('span');
+  }
+  if (cache.commentCell) {
+    cache.commentSpan = cache.commentCell.querySelector('span');
+  }
+  if (cache.trackCell) {
+    cache.trackSpan = cache.trackCell.querySelector('span');
+  }
+
+  rowElementsCache.set(row, cache);
+  return cache;
+}
+
+/**
+ * Cache DOM element references for a mobile card
+ * @param {HTMLElement} card - Card element (the inner .album-card, not the wrapper)
+ */
+function cacheMobileCardElements(card) {
+  const cache = {
+    position: card.querySelector('[data-position-element="true"]'),
+    releaseDate: card.querySelector('.release-date-display'),
+    artistText: card.querySelector('[data-field="artist-mobile-text"]'),
+    countryText: card.querySelector('[data-field="country-mobile-text"]'),
+    genreText: card.querySelector('[data-field="genre-mobile-text"]'),
+    trackText: card.querySelector('[data-field="track-mobile-text"]'),
+  };
+
+  rowElementsCache.set(card, cache);
+  return cache;
+}
+
+/**
+ * Get cached elements for a row, or create cache if missing
+ * @param {HTMLElement} row - Row or card element
+ * @param {boolean} isMobile - Whether this is a mobile card
+ * @returns {Object} Cached element references
+ */
+function getCachedElements(row, isMobile) {
+  let cache = rowElementsCache.get(row);
+  if (!cache) {
+    cache = isMobile
+      ? cacheMobileCardElements(row)
+      : cacheDesktopRowElements(row);
+  }
+  return cache;
+}
+
+/**
+ * Generate a lightweight fingerprint string for change detection
+ * Only includes mutable fields that trigger UI updates
+ * @param {Array} albums - Album array
+ * @returns {string} Fingerprint string
+ */
+function generateAlbumFingerprint(albums) {
+  if (!albums || albums.length === 0) return '';
+  return albums
+    .map(
+      (a) =>
+        `${a._id || ''}|${a.track_pick || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}`
+    )
+    .join('::');
+}
+
+/**
+ * Extract lightweight mutable state for detectUpdateType comparisons
+ * Excludes heavy fields like cover_image to avoid expensive cloning
+ * @param {Array} albums - Album array
+ * @returns {Array} Array of lightweight album objects
+ */
+function extractMutableState(albums) {
+  if (!albums || albums.length === 0) return null;
+  return albums.map((a) => ({
+    _id: a._id,
+    artist: a.artist,
+    album: a.album,
+    release_date: a.release_date,
+    country: a.country,
+    genre_1: a.genre_1,
+    genre_2: a.genre_2,
+    comments: a.comments,
+    track_pick: a.track_pick,
+  }));
+}
 
 // Last.fm playcount cache: { listItemId: playcount }
 let playcountCache = {};
@@ -262,19 +430,22 @@ export function createAlbumDisplay(deps = {}) {
           ${
             data.coverImage
               ? `
-            <img src="data:image/${data.imageFormat};base64,${data.coverImage}" 
+            <img src="${PLACEHOLDER_GIF}" 
+                data-lazy-src="data:image/${data.imageFormat};base64,${data.coverImage}"
                 alt="${data.albumName}" 
                 class="album-cover rounded shadow-lg"
+                loading="lazy"
                 decoding="async"
                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
             >
           `
               : data.albumId
                 ? `
-            <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+            <img src="${PLACEHOLDER_GIF}" 
                 alt="${data.albumName}" 
                 class="album-cover rounded shadow-lg"
                 data-album-id="${data.albumId}"
+                loading="lazy"
                 decoding="async"
                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
             >
@@ -529,19 +700,22 @@ export function createAlbumDisplay(deps = {}) {
                 data.coverImage
                   ? `
                 <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
-                  <img src="data:image/${data.imageFormat};base64,${data.coverImage}"
+                  <img src="${PLACEHOLDER_GIF}"
+                      data-lazy-src="data:image/${data.imageFormat};base64,${data.coverImage}"
                       alt="${data.albumName}"
                       class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
+                      loading="lazy"
                       decoding="async">
                 </div>
               `
                   : data.albumId
                     ? `
                 <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
-                  <img src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"
+                  <img src="${PLACEHOLDER_GIF}"
                       alt="${data.albumName}"
                       class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
                       data-album-id="${data.albumId}"
+                      loading="lazy"
                       decoding="async">
                 </div>
               `
@@ -714,25 +888,25 @@ export function createAlbumDisplay(deps = {}) {
 
   /**
    * Detect what type of update is needed
-   * @param {Array} oldAlbums - Previous album array
+   * Uses lightweight mutable state instead of full album objects
+   * @param {Array} oldState - Previous lightweight state (from extractMutableState)
    * @param {Array} newAlbums - New album array
    * @returns {string} Update type
    */
-  function detectUpdateType(oldAlbums, newAlbums) {
-    if (!ENABLE_INCREMENTAL_UPDATES || !oldAlbums) {
+  function detectUpdateType(oldState, newAlbums) {
+    if (!ENABLE_INCREMENTAL_UPDATES || !oldState) {
       return 'FULL_REBUILD';
     }
 
-    if (oldAlbums.length !== newAlbums.length) {
+    if (oldState.length !== newAlbums.length) {
       return 'FULL_REBUILD';
     }
 
     let positionChanges = 0;
     let fieldChanges = 0;
-    let complexChanges = 0;
 
     for (let i = 0; i < newAlbums.length; i++) {
-      const oldAlbum = oldAlbums[i];
+      const oldAlbum = oldState[i];
       const newAlbum = newAlbums[i];
 
       const oldId =
@@ -757,16 +931,11 @@ export function createAlbumDisplay(deps = {}) {
         ) {
           fieldChanges++;
         }
-
-        if (oldAlbum.cover_image !== newAlbum.cover_image) {
-          complexChanges++;
-        }
       }
     }
 
-    if (complexChanges > 0) {
-      return 'FULL_REBUILD';
-    }
+    // Note: cover_image changes now always trigger full rebuild via fingerprint mismatch
+    // since we don't track cover_image in mutable state (too expensive)
     if (positionChanges === 0 && fieldChanges > 0 && fieldChanges <= 10) {
       return 'FIELD_UPDATE';
     }
@@ -782,6 +951,7 @@ export function createAlbumDisplay(deps = {}) {
 
   /**
    * Update only changed fields in existing DOM elements
+   * Uses cached element references for performance
    * @param {Array} albums - Album array
    * @param {boolean} isMobile - Whether mobile view
    * @returns {boolean} Success
@@ -811,152 +981,106 @@ export function createAlbumDisplay(deps = {}) {
         row.dataset.index = index;
         const data = processAlbumData(album, index);
 
+        // Get cached element references (creates cache if missing)
+        const cache = getCachedElements(row, isMobile);
+
         // Update position number
-        const positionEl =
-          row.querySelector('[data-position-element="true"]') ||
-          row.querySelector('.position-display');
-        if (positionEl && positionEl.textContent !== data.position.toString()) {
-          positionEl.textContent = data.position;
+        if (
+          cache.position &&
+          cache.position.textContent !== data.position.toString()
+        ) {
+          cache.position.textContent = data.position;
         }
 
         // Update artist
         if (!isMobile) {
-          const artistSpan = row.querySelectorAll(
-            '.flex.items-center > span'
-          )[0];
-          if (artistSpan) {
-            artistSpan.textContent = data.artist;
-            artistSpan.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
+          if (cache.artist) {
+            cache.artist.textContent = data.artist;
+            cache.artist.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
           }
         } else {
-          const artistSpan = row.querySelector(
-            '[data-field="artist-mobile-text"]'
-          );
-          if (artistSpan) {
-            artistSpan.textContent = data.artist;
+          if (cache.artistText) {
+            cache.artistText.textContent = data.artist;
           }
         }
 
         // Update album name and release date
         if (!isMobile) {
-          const albumNameDiv = row.querySelector(
-            '.font-semibold.text-gray-100'
-          );
-          if (albumNameDiv) albumNameDiv.textContent = data.albumName;
+          if (cache.albumName) cache.albumName.textContent = data.albumName;
 
-          const releaseDateDiv = row.querySelector('.release-date-display');
-          if (releaseDateDiv) {
-            releaseDateDiv.textContent = data.releaseDate;
-            releaseDateDiv.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}`;
+          if (cache.releaseDate) {
+            cache.releaseDate.textContent = data.releaseDate;
+            cache.releaseDate.className = `text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}`;
             if (data.yearMismatch) {
-              releaseDateDiv.title = data.yearMismatchTooltip;
+              cache.releaseDate.title = data.yearMismatchTooltip;
             } else {
-              releaseDateDiv.removeAttribute('title');
+              cache.releaseDate.removeAttribute('title');
             }
           }
         } else {
-          const albumNameEl = row.querySelector('.font-semibold.text-white');
-          if (albumNameEl) albumNameEl.textContent = data.albumName;
-
-          const releaseDateEl = row.querySelector('.release-date-display');
-          if (releaseDateEl) {
-            releaseDateEl.textContent = data.releaseDate;
-            releaseDateEl.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
+          if (cache.releaseDate) {
+            cache.releaseDate.textContent = data.releaseDate;
+            cache.releaseDate.className = `text-xs mt-1 whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}`;
             if (data.yearMismatch) {
-              releaseDateEl.title = data.yearMismatchTooltip;
+              cache.releaseDate.title = data.yearMismatchTooltip;
             } else {
-              releaseDateEl.removeAttribute('title');
+              cache.releaseDate.removeAttribute('title');
             }
           }
         }
 
         if (!isMobile) {
-          // Update country
-          const countryCell =
-            row.querySelector('.country-cell') ||
-            row.querySelector('[data-field="country"]');
-          if (countryCell) {
-            const countrySpan = countryCell.querySelector('span');
-            if (countrySpan) {
-              countrySpan.textContent = data.countryDisplay;
-              countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
+          // Update country using cached span
+          if (cache.countrySpan) {
+            cache.countrySpan.textContent = data.countryDisplay;
+            cache.countrySpan.className = `text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100`;
+          }
+
+          // Update genre 1 using cached span
+          if (cache.genre1Span) {
+            cache.genre1Span.textContent = data.genre1Display;
+            cache.genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
+          }
+
+          // Update genre 2 using cached span
+          if (cache.genre2Span) {
+            cache.genre2Span.textContent = data.genre2Display;
+            cache.genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
+          }
+
+          // Update comment using cached span
+          if (cache.commentSpan) {
+            cache.commentSpan.textContent = data.comment || 'Comment';
+            cache.commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
+
+            if (data.comment) {
+              cache.commentSpan.setAttribute('data-comment', data.comment);
+            } else {
+              cache.commentSpan.removeAttribute('data-comment');
             }
           }
 
-          // Update genre 1
-          const genre1Cell =
-            row.querySelector('.genre-1-cell') ||
-            row.querySelector('[data-field="genre1"]');
-          if (genre1Cell) {
-            const genre1Span = genre1Cell.querySelector('span');
-            if (genre1Span) {
-              genre1Span.textContent = data.genre1Display;
-              genre1Span.className = `text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100`;
-            }
-          }
-
-          // Update genre 2
-          const genre2Cell =
-            row.querySelector('.genre-2-cell') ||
-            row.querySelector('[data-field="genre2"]');
-          if (genre2Cell) {
-            const genre2Span = genre2Cell.querySelector('span');
-            if (genre2Span) {
-              genre2Span.textContent = data.genre2Display;
-              genre2Span.className = `text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100`;
-            }
-          }
-
-          // Update comment
-          const commentCell =
-            row.querySelector('.comment-cell') ||
-            row.querySelector('[data-field="comment"]');
-          if (commentCell) {
-            const commentSpan = commentCell.querySelector('span');
-            if (commentSpan) {
-              commentSpan.textContent = data.comment || 'Comment';
-              commentSpan.className = `text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text`;
-
-              if (data.comment) {
-                commentSpan.setAttribute('data-comment', data.comment);
-              } else {
-                commentSpan.removeAttribute('data-comment');
-              }
-            }
-          }
-
-          // Update track pick
-          const trackCell = row.querySelector('.track-cell');
-          if (trackCell) {
-            const trackSpan = trackCell.querySelector('span');
-            if (trackSpan) {
-              trackSpan.textContent = data.trackPickDisplay;
-              trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
-              trackSpan.title = data.trackPick || 'Click to select track';
-            }
+          // Update track pick using cached span
+          if (cache.trackSpan) {
+            cache.trackSpan.textContent = data.trackPickDisplay;
+            cache.trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
+            cache.trackSpan.title = data.trackPick || 'Click to select track';
           }
         } else {
-          const countryMobile = row.querySelector(
-            '[data-field="country-mobile-text"]'
-          );
-          if (countryMobile) {
-            countryMobile.textContent = data.country || '';
+          // Mobile: use cached elements
+          if (cache.countryText) {
+            cache.countryText.textContent = data.country || '';
           }
 
-          const genreMobile = row.querySelector(
-            '[data-field="genre-mobile-text"]'
-          );
-          if (genreMobile) {
+          if (cache.genreText) {
             const genreDisplay =
               data.genre1 && data.genre2
                 ? `${data.genre1} / ${data.genre2}`
                 : data.genre1 || data.genre2 || '';
-            genreMobile.textContent = genreDisplay;
+            cache.genreText.textContent = genreDisplay;
           }
 
-          const trackMobile = row.querySelector(
-            '[data-field="track-mobile-text"]'
-          );
+          const trackMobile = cache.trackText;
           if (trackMobile) {
             const trackDisplay =
               data.trackPick && data.trackPickDisplay !== 'Select Track'
@@ -1159,18 +1283,25 @@ export function createAlbumDisplay(deps = {}) {
       return;
     }
 
-    // Try incremental update first
+    // Try incremental update first using fingerprint comparison
     if (!forceFullRebuild) {
-      const updateType = detectUpdateType(lastRenderedAlbums, albums);
+      const newFingerprint = generateAlbumFingerprint(albums);
+
+      // Quick fingerprint check - if unchanged, no update needed at all
+      if (newFingerprint === lastRenderedFingerprint) {
+        return; // No changes detected
+      }
+
+      const updateType = detectUpdateType(lastRenderedMutableState, albums);
 
       if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
         const success = updateAlbumFields(albums, isMobile);
 
         if (success && verifyDOMIntegrity(albums, isMobile)) {
+          // Update lightweight state instead of expensive deep clone
           requestAnimationFrame(() => {
-            lastRenderedAlbums = albums
-              ? JSON.parse(JSON.stringify(albums))
-              : null;
+            lastRenderedFingerprint = newFingerprint;
+            lastRenderedMutableState = extractMutableState(albums);
           });
 
           const albumContainer = isMobile
@@ -1189,8 +1320,9 @@ export function createAlbumDisplay(deps = {}) {
       }
     }
 
-    // Full rebuild path
+    // Full rebuild path - clear element caches
     positionElementCache = new WeakMap();
+    rowElementsCache = new WeakMap();
 
     let albumContainer;
 
@@ -1256,8 +1388,13 @@ export function createAlbumDisplay(deps = {}) {
     prePopulatePositionCache(albumContainer, isMobile);
     initializeUnifiedSorting(container, isMobile);
 
+    // Initialize lazy loading for album cover images
+    observeLazyImages(albumContainer);
+
+    // Update lightweight state instead of expensive deep clone
     requestAnimationFrame(() => {
-      lastRenderedAlbums = albums ? JSON.parse(JSON.stringify(albums)) : null;
+      lastRenderedFingerprint = generateAlbumFingerprint(albums);
+      lastRenderedMutableState = extractMutableState(albums);
     });
 
     reapplyNowPlayingBorder();
@@ -1333,7 +1470,8 @@ export function createAlbumDisplay(deps = {}) {
    * Used when switching lists
    */
   function clearLastRenderedCache() {
-    lastRenderedAlbums = null;
+    lastRenderedFingerprint = null;
+    lastRenderedMutableState = null;
   }
 
   /**
