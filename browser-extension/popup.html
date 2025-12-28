@@ -4,147 +4,248 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SuShe Online</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-      body {
-        width: 320px;
-        min-height: 240px;
+      :root {
+        --accent-color: #dc2626;
+        --accent-hover: #b91c1c;
+        --accent-glow: rgba(220, 38, 38, 0.5);
+      }
+
+      * {
+        box-sizing: border-box;
         margin: 0;
         padding: 0;
-        font-family:
-          -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        background: #000;
+      }
+
+      body {
+        width: 320px;
+        min-height: 280px;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: linear-gradient(to bottom right, #000, #111827, #000);
         color: #e5e7eb;
       }
 
+      /* Header */
       .header {
-        background: #111827;
+        background: rgba(17, 24, 39, 0.9);
         border-bottom: 1px solid #1f2937;
         padding: 16px;
+        text-align: center;
       }
 
-      h1 {
-        font-size: 20px;
-        margin: 0;
-        color: #dc2626;
-        font-weight: 700;
+      .metal-title {
+        font-family: 'Cinzel', serif;
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: var(--accent-color);
+        text-shadow: 0 0 20px var(--accent-glow);
+        animation: glow 2s ease-in-out infinite alternate;
       }
 
+      @keyframes glow {
+        from { text-shadow: 0 0 10px var(--accent-color), 0 0 20px var(--accent-color); }
+        to { text-shadow: 0 0 15px var(--accent-color), 0 0 25px var(--accent-color); }
+      }
+
+      /* Content */
       .content {
         padding: 16px;
       }
 
       p {
-        font-size: 14px;
+        font-size: 13px;
         line-height: 1.5;
         margin: 0 0 16px 0;
         color: #9ca3af;
       }
 
+      /* Buttons */
       button {
         width: 100%;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
         padding: 10px 16px;
-        background: #dc2626;
-        color: white;
         border: none;
         border-radius: 6px;
-        font-size: 14px;
-        font-weight: 600;
         cursor: pointer;
-        transition: all 0.2s;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
       }
 
-      button:hover {
-        background: #b91c1c;
+      .btn-primary {
+        background: #374151;
+        color: #fff;
       }
 
-      button:active {
+      .btn-primary:hover {
+        background: #4b5563;
+        transform: scale(1.02);
+      }
+
+      .btn-primary:active {
+        transform: scale(0.98);
+      }
+
+      .btn-secondary {
+        background: #1f2937;
+        color: #d1d5db;
+        border: 1px solid #374151;
+        margin-top: 8px;
+      }
+
+      .btn-secondary:hover {
+        background: #374151;
+        color: #fff;
+      }
+
+      .btn-accent {
+        background: var(--accent-color);
+        color: #fff;
+        margin-top: 8px;
+      }
+
+      .btn-accent:hover {
+        background: var(--accent-hover);
+        transform: scale(1.02);
+      }
+
+      .btn-danger {
+        background: #7f1d1d;
+        color: #fecaca;
+        margin-top: 8px;
+        font-size: 12px;
+        padding: 8px 12px;
+      }
+
+      .btn-danger:hover {
         background: #991b1b;
       }
 
+      /* Status messages */
       .status {
         padding: 12px;
         border-radius: 6px;
         font-size: 13px;
         margin-bottom: 16px;
-        border-left: 3px solid;
+        display: flex;
+        align-items: center;
+        gap: 8px;
       }
 
       .status.success {
-        background: rgba(6, 95, 70, 0.1);
-        border-left-color: #059669;
-        color: #d1fae5;
+        background: rgba(6, 78, 59, 0.2);
+        border: 1px solid #065f46;
+        color: #6ee7b7;
       }
 
       .status.error {
-        background: rgba(127, 29, 29, 0.1);
-        border-left-color: #dc2626;
-        color: #fecaca;
+        background: rgba(127, 29, 29, 0.2);
+        border: 1px solid #7f1d1d;
+        color: #fca5a5;
       }
 
       .status.info {
-        background: rgba(30, 58, 138, 0.1);
-        border-left-color: #3b82f6;
-        color: #dbeafe;
+        background: rgba(30, 58, 138, 0.2);
+        border: 1px solid #1e3a8a;
+        color: #93c5fd;
       }
 
+      /* Lists section */
       .lists {
         margin-top: 16px;
-        padding: 12px;
-        background: #111827;
-        border: 1px solid #1f2937;
-        border-radius: 6px;
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 8px;
         max-height: 200px;
         overflow-y: auto;
       }
 
-      .lists strong {
-        display: block;
-        font-size: 13px;
+      .lists-header {
+        padding: 10px 12px;
+        font-size: 11px;
+        font-weight: 600;
         color: #9ca3af;
-        margin-bottom: 8px;
         text-transform: uppercase;
         letter-spacing: 0.05em;
+        border-bottom: 1px solid #374151;
+        position: sticky;
+        top: 0;
+        background: #1f2937;
       }
 
       .list-item {
-        padding: 8px 0;
+        padding: 10px 12px;
         font-size: 13px;
         color: #e5e7eb;
-        border-bottom: 1px solid #1f2937;
+        border-bottom: 1px solid #374151;
+        transition: background 0.15s ease;
       }
 
       .list-item:last-child {
         border-bottom: none;
       }
 
+      .list-item:hover {
+        background: #374151;
+      }
+
+      /* Loading */
       .loading {
         text-align: center;
         padding: 20px;
         color: #6b7280;
+        font-size: 13px;
       }
 
-      .button-secondary {
-        background: #374151;
+      .loading-spinner {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 2px solid #374151;
+        border-top-color: var(--accent-color);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 8px;
       }
 
-      .button-secondary:hover {
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* Icons (simple CSS icons) */
+      .icon {
+        display: inline-block;
+        width: 16px;
+        text-align: center;
+      }
+
+      /* Scrollbar styling */
+      .lists::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .lists::-webkit-scrollbar-track {
+        background: #1f2937;
+      }
+
+      .lists::-webkit-scrollbar-thumb {
         background: #4b5563;
+        border-radius: 3px;
       }
 
-      .button-danger {
-        background: #7f1d1d;
-        font-size: 12px;
-        padding: 8px 12px;
-      }
-
-      .button-danger:hover {
-        background: #991b1b;
+      .lists::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
       }
     </style>
   </head>
   <body>
     <div class="header">
-      <h1>🤘 SuShe Online</h1>
+      <h1 class="metal-title">SuShe Online</h1>
     </div>
 
     <div class="content">
@@ -155,28 +256,22 @@
           Right-click on album images on RateYourMusic to add them to your
           lists.
         </p>
-        <button id="refreshBtn">Refresh Lists</button>
-        <button
-          id="optionsBtn"
-          class="button-secondary"
-          style="margin-top: 8px"
-        >
-          ⚙️ Settings
+        <button id="refreshBtn" class="btn-primary">
+          <span class="icon">↻</span> Refresh Lists
         </button>
-        <button id="loginBtn" class="button-secondary" style="margin-top: 8px">
-          Login to SuShe
+        <button id="optionsBtn" class="btn-secondary">
+          <span class="icon">⚙</span> Settings
         </button>
-        <button
-          id="logoutBtn"
-          class="button-danger"
-          style="margin-top: 8px; display: none"
-        >
-          Logout
+        <button id="loginBtn" class="btn-accent">
+          <span class="icon">→</span> Login to SuShe
+        </button>
+        <button id="logoutBtn" class="btn-danger" style="display: none;">
+          <span class="icon">←</span> Logout
         </button>
       </div>
 
-      <div id="lists" class="lists" style="display: none">
-        <strong>Your Lists</strong>
+      <div id="lists" class="lists" style="display: none;">
+        <div class="lists-header">Your Lists</div>
         <div id="listItems"></div>
       </div>
     </div>

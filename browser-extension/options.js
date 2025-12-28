@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     btn.disabled = false;
-    btn.textContent = 'Test Connection to SuShe Online';
+    btn.textContent = 'Test Connection';
   });
 
   // Login button handler
@@ -163,7 +163,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 function showStatus(message, type) {
   const statusEl = document.getElementById('status');
-  statusEl.textContent = message;
+
+  // Add icon based on type
+  const icons = {
+    success: '✓',
+    error: '✕',
+    info: 'ℹ',
+  };
+  const icon = icons[type] || '';
+
+  statusEl.innerHTML = `<span style="font-weight: 600;">${icon}</span> ${message}`;
   statusEl.className = 'status ' + type;
 
   // Auto-hide success messages after 3 seconds
@@ -187,7 +196,7 @@ async function updateAuthStatus() {
   // Check if token is expired (client-side check - fixes Issue #3)
   if (authState.token && authState.isExpired) {
     authStatusEl.innerHTML =
-      '<span style="color: #f59e0b;">Session expired - please login again</span>';
+      '<span style="color: #f59e0b;">⚠ Session expired - please login again</span>';
     loginBtn.style.display = 'inline-block';
     logoutBtn.style.display = 'none';
 
@@ -198,7 +207,7 @@ async function updateAuthStatus() {
 
   if (!authState.token) {
     authStatusEl.innerHTML =
-      '<span style="color: #f59e0b;">Not logged in</span>';
+      '<span style="color: #f59e0b;">○ Not logged in</span>';
     loginBtn.style.display = 'inline-block';
     logoutBtn.style.display = 'none';
     return;
@@ -206,7 +215,7 @@ async function updateAuthStatus() {
 
   if (!authState.apiUrl) {
     authStatusEl.innerHTML =
-      '<span style="color: #6b7280;">Configure URL above first</span>';
+      '<span style="color: #6b7280;">○ Configure URL above first</span>';
     loginBtn.style.display = 'none';
     logoutBtn.style.display = 'none';
     return;
@@ -228,24 +237,24 @@ async function updateAuthStatus() {
     if (response.ok) {
       const data = await response.json();
       const listCount = Object.keys(data).length;
-      authStatusEl.innerHTML = `<span style="color: #10b981;">Logged in</span> <span style="color: #6b7280;">(${listCount} list${listCount !== 1 ? 's' : ''})</span>`;
+      authStatusEl.innerHTML = `<span style="color: #10b981;">● Logged in</span> <span style="color: #6b7280;">(${listCount} list${listCount !== 1 ? 's' : ''})</span>`;
       loginBtn.style.display = 'none';
       logoutBtn.style.display = 'inline-block';
     } else if (response.status === 401) {
       authStatusEl.innerHTML =
-        '<span style="color: #f59e0b;">Session expired</span>';
+        '<span style="color: #f59e0b;">⚠ Session expired</span>';
       loginBtn.style.display = 'inline-block';
       logoutBtn.style.display = 'none';
 
       // Trigger cleanup via centralized logout
       await chrome.runtime.sendMessage({ action: 'logout' });
     } else {
-      authStatusEl.innerHTML = `<span style="color: #6b7280;">Unable to verify (HTTP ${response.status})</span>`;
+      authStatusEl.innerHTML = `<span style="color: #6b7280;">○ Unable to verify (HTTP ${response.status})</span>`;
       loginBtn.style.display = 'inline-block';
       logoutBtn.style.display = 'none';
     }
   } catch (error) {
-    authStatusEl.innerHTML = `<span style="color: #6b7280;">Unable to verify (${error.message})</span>`;
+    authStatusEl.innerHTML = `<span style="color: #6b7280;">○ Unable to verify (${error.message})</span>`;
     // On network error, show both buttons - user might need to login or might already be logged in
     loginBtn.style.display = 'inline-block';
     logoutBtn.style.display = 'none';

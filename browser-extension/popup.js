@@ -140,12 +140,12 @@ async function loadLists() {
 async function refreshLists() {
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true;
-  btn.textContent = 'Refreshing...';
+  btn.innerHTML = '<span class="icon">↻</span> Refreshing...';
 
   // Tell background script to refresh
   chrome.runtime.sendMessage({ action: 'refreshLists' }, (_response) => {
     btn.disabled = false;
-    btn.textContent = 'Refresh Lists';
+    btn.innerHTML = '<span class="icon">↻</span> Refresh Lists';
     loadLists();
   });
 }
