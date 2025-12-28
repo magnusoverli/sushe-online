@@ -394,25 +394,78 @@ module.exports = (app, deps) => {
       let stats = null;
 
       if (req.user.role === 'admin') {
-        const allUsers = await usersAsync.find({});
-        const usersWithCounts = await Promise.all(
-          allUsers.map(async (user) => ({
-            ...user,
-            listCount: await listsAsync.count({ userId: user._id }),
-          }))
-        );
-        const allLists = await listsAsync.find({});
-
-        const uniqueAlbumIds = new Set();
-        const genreCounts = new Map();
-
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        let activeUsers = 0;
 
         const twoWeeksAgo = new Date();
         twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
 
+        // OPTIMIZATION: Parallel fetch of all independent data
+        // Reduces N+1 queries to 4 parallel queries using aggregates
+        const [allUsers, allLists, userListCountsResult, adminStatsResult] =
+          await Promise.all([
+            usersAsync.find({}),
+            listsAsync.find({}),
+            // Single query for user list counts (replaces N async count calls)
+            pool.query(
+              'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
+            ),
+            // OPTIMIZATION: Single aggregate query for album/genre stats
+            // Replaces N+1 loop through all lists
+            pool.query(
+              `
+            WITH album_genres AS (
+              SELECT DISTINCT li.album_id, li.genre_1, li.genre_2 
+              FROM list_items li
+            ),
+            unique_albums AS (
+              SELECT COUNT(DISTINCT album_id) as total 
+              FROM album_genres 
+              WHERE album_id IS NOT NULL AND album_id != ''
+            ),
+            genre_counts AS (
+              SELECT genre, SUM(cnt)::int as count FROM (
+                SELECT genre_1 as genre, COUNT(*) as cnt FROM album_genres 
+                WHERE genre_1 IS NOT NULL AND genre_1 NOT IN ('', 'Genre 1') 
+                GROUP BY genre_1
+                UNION ALL
+                SELECT genre_2 as genre, COUNT(*) as cnt FROM album_genres 
+                WHERE genre_2 IS NOT NULL AND genre_2 NOT IN ('', 'Genre 2', '-') 
+                GROUP BY genre_2
+              ) g GROUP BY genre ORDER BY count DESC LIMIT 5
+            ),
+            active_users AS (
+              SELECT COUNT(DISTINCT user_id) as count FROM lists WHERE updated_at >= $1
+            )
+            SELECT 
+              (SELECT total FROM unique_albums) as total_albums,
+              (SELECT count FROM active_users) as active_users,
+              COALESCE((SELECT json_agg(json_build_object('name', genre, 'count', count)) FROM genre_counts), '[]'::json) as top_genres
+          `,
+              [sevenDaysAgo]
+            ),
+          ]);
+
+        // Build Map for O(1) list count lookup
+        const listCountMap = new Map(
+          userListCountsResult.rows.map((r) => [
+            r.user_id,
+            parseInt(r.list_count, 10),
+          ])
+        );
+
+        const usersWithCounts = allUsers.map((user) => ({
+          ...user,
+          listCount: listCountMap.get(user._id) || 0,
+        }));
+
+        // Extract stats from aggregate query
+        const aggregateStats = adminStatsResult.rows[0] || {};
+        const totalAlbums = parseInt(aggregateStats.total_albums, 10) || 0;
+        const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
+        const topGenres = aggregateStats.top_genres || [];
+
+        // Calculate user growth
         const usersThisWeek = allUsers.filter(
           (u) => new Date(u.createdAt) >= sevenDaysAgo
         ).length;
@@ -429,50 +482,6 @@ module.exports = (app, deps) => {
             : usersThisWeek > 0
               ? 100
               : 0;
-
-        for (const list of allLists) {
-          const items = await listItemsAsync.find({ listId: list._id });
-
-          if (list.updatedAt && new Date(list.updatedAt) >= sevenDaysAgo) {
-            const userIndex = allUsers.findIndex((u) => u._id === list.userId);
-            if (userIndex !== -1 && !allUsers[userIndex].counted) {
-              allUsers[userIndex].counted = true;
-              activeUsers++;
-            }
-          }
-
-          for (const album of items) {
-            // Track unique albums by album_id
-            if (album.albumId && album.albumId !== '') {
-              uniqueAlbumIds.add(album.albumId);
-            }
-
-            const genre = album.genre1;
-            if (genre && genre !== '' && genre !== 'Genre 1') {
-              genreCounts.set(genre, (genreCounts.get(genre) || 0) + 1);
-            }
-
-            if (
-              album.genre2 &&
-              album.genre2 !== '' &&
-              album.genre2 !== 'Genre 2' &&
-              album.genre2 !== '-'
-            ) {
-              genreCounts.set(
-                album.genre2,
-                (genreCounts.get(album.genre2) || 0) + 1
-              );
-            }
-          }
-        }
-
-        const totalAlbums = uniqueAlbumIds.size;
-
-        // Get top genres
-        const topGenres = Array.from(genreCounts.entries())
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 5);
 
         // Get top users by list count
         const topUsers = usersWithCounts

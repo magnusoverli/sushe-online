@@ -276,42 +276,83 @@ module.exports = (app, deps) => {
 
         if (full === 'true') {
           // FULL MODE: Return all album data (backward compatibility)
-          for (const list of userLists) {
-            const items = await listItemsAsync.find({ listId: list._id });
-            items.sort((a, b) => a.position - b.position);
-
-            // Batch load album data to avoid N+1 queries
-            const albumIds = items.map((item) => item.albumId).filter(Boolean);
-            const albumsData =
-              albumIds.length > 0
-                ? await albumsAsync.findByAlbumIds(albumIds)
-                : [];
-            const albumsMap = new Map(
-              albumsData.map((album) => [album.albumId, album])
+          // OPTIMIZATION: Single JOIN query instead of N*2 sequential queries
+          if (typeof listsAsync.findAllUserListsWithItems === 'function') {
+            const allRows = await listsAsync.findAllUserListsWithItems(
+              req.user._id
             );
 
-            const mapped = [];
-            for (const item of items) {
-              const albumData = item.albumId
-                ? albumsMap.get(item.albumId)
-                : null;
-              mapped.push({
-                artist: item.artist || albumData?.artist,
-                album: item.album || albumData?.album,
-                album_id: item.albumId,
-                release_date: item.releaseDate || albumData?.releaseDate,
-                country: item.country || albumData?.country,
-                genre_1: item.genre1 || albumData?.genre1,
-                genre_2: item.genre2 || albumData?.genre2,
-                track_pick: item.trackPick,
-                comments: item.comments,
-                tracks: item.tracks || albumData?.tracks,
-                cover_image: item.coverImage || albumData?.coverImage,
-                cover_image_format:
-                  item.coverImageFormat || albumData?.coverImageFormat,
-              });
+            // Group rows by list name
+            for (const row of allRows) {
+              if (!listsObj[row.list_name]) {
+                listsObj[row.list_name] = [];
+              }
+              // Only add items (not empty lists)
+              if (row.position !== null && row.item_id !== null) {
+                listsObj[row.list_name].push({
+                  artist: row.artist || '',
+                  album: row.album || '',
+                  album_id: row.album_id || '',
+                  release_date: row.release_date || '',
+                  country: row.country || '',
+                  genre_1: row.genre_1 || '',
+                  genre_2: row.genre_2 || '',
+                  track_pick: row.track_pick || '',
+                  comments: row.comments || '',
+                  tracks: row.tracks || null,
+                  cover_image: row.cover_image || '',
+                  cover_image_format: row.cover_image_format || '',
+                });
+              }
             }
-            listsObj[list.name] = mapped;
+
+            // Ensure empty lists are included
+            for (const list of userLists) {
+              if (!listsObj[list.name]) {
+                listsObj[list.name] = [];
+              }
+            }
+          } else {
+            // Fallback to original N+1 pattern
+            for (const list of userLists) {
+              const items = await listItemsAsync.find({ listId: list._id });
+              items.sort((a, b) => a.position - b.position);
+
+              // Batch load album data to avoid N+1 queries
+              const albumIds = items
+                .map((item) => item.albumId)
+                .filter(Boolean);
+              const albumsData =
+                albumIds.length > 0
+                  ? await albumsAsync.findByAlbumIds(albumIds)
+                  : [];
+              const albumsMap = new Map(
+                albumsData.map((album) => [album.albumId, album])
+              );
+
+              const mapped = [];
+              for (const item of items) {
+                const albumData = item.albumId
+                  ? albumsMap.get(item.albumId)
+                  : null;
+                mapped.push({
+                  artist: item.artist || albumData?.artist,
+                  album: item.album || albumData?.album,
+                  album_id: item.albumId,
+                  release_date: item.releaseDate || albumData?.releaseDate,
+                  country: item.country || albumData?.country,
+                  genre_1: item.genre1 || albumData?.genre1,
+                  genre_2: item.genre2 || albumData?.genre2,
+                  track_pick: item.trackPick,
+                  comments: item.comments,
+                  tracks: item.tracks || albumData?.tracks,
+                  cover_image: item.coverImage || albumData?.coverImage,
+                  cover_image_format:
+                    item.coverImageFormat || albumData?.coverImageFormat,
+                });
+              }
+              listsObj[list.name] = mapped;
+            }
           }
         } else {
           // METADATA MODE (default): Return only list metadata for fast loading

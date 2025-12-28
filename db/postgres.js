@@ -396,6 +396,51 @@ class PgDatastore {
       coverImageFormat: row.cover_image_format || '',
     }));
   }
+
+  /**
+   * Find all lists with items for a user in a single JOIN query
+   * OPTIMIZATION: Replaces N+1 pattern when fetching all lists in full mode
+   * @param {string} userId - The user ID to fetch lists for
+   * @returns {Promise<Array>} Array of rows with list and item data
+   */
+  async findAllUserListsWithItems(userId) {
+    if (this.table !== 'lists') {
+      throw new Error(
+        'findAllUserListsWithItems only available for lists table'
+      );
+    }
+
+    const queryName = 'findAllUserListsWithItems';
+    const queryText = `
+      SELECT 
+        l._id as list_id,
+        l.name as list_name,
+        l.year,
+        l.is_main,
+        li._id as item_id,
+        li.position,
+        li.album_id,
+        li.track_pick,
+        li.comments,
+        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
+        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        COALESCE(NULLIF(li.release_date, ''), a.release_date) as release_date,
+        COALESCE(NULLIF(li.country, ''), a.country) as country,
+        COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
+        COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
+        COALESCE(li.tracks, a.tracks) as tracks,
+        COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
+        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format
+      FROM lists l
+      LEFT JOIN list_items li ON li.list_id = l._id
+      LEFT JOIN albums a ON li.album_id = a.album_id
+      WHERE l.user_id = $1
+      ORDER BY l.name, li.position
+    `;
+
+    const res = await this._preparedQuery(queryName, queryText, [userId]);
+    return res.rows;
+  }
 }
 
 module.exports = { PgDatastore, Pool, waitForPostgres, warmConnections };
