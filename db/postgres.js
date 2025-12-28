@@ -258,7 +258,7 @@ class PgDatastore {
   /**
    * Update a single field by _id using a prepared statement
    * Optimized for frequent updates like last_activity where query plan caching helps
-   * 
+   *
    * @param {string} id - The _id value to match
    * @param {string} field - The field name to update (in app naming, e.g., 'lastActivity')
    * @param {*} value - The new value
@@ -283,7 +283,7 @@ class PgDatastore {
    * Find lists with item counts in a single query
    * Replaces N+1 pattern of find() + N count() calls
    * Only available for lists table
-   * 
+   *
    * @param {Object} query - Query filter (e.g., { userId: 'xxx' })
    * @returns {Promise<Array>} - Lists with itemCount property
    */

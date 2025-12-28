@@ -59,16 +59,14 @@ function createDeduplicationHelpers(deps = {}) {
   /**
    * Pre-fetch all album data for a batch of album IDs in a single query
    * Populates the cache so subsequent getStorableValue calls are instant
-   * 
+   *
    * @param {Array<string>} albumIds - Array of album IDs to prefetch
    * @param {Object} pool - Database pool
    * @returns {Promise<number>} - Number of albums fetched
    */
   async function prefetchAlbums(albumIds, pool) {
     // Filter out empty/null IDs and already-cached IDs
-    const idsToFetch = albumIds.filter(
-      (id) => id && !albumCache.has(id)
-    );
+    const idsToFetch = albumIds.filter((id) => id && !albumCache.has(id));
 
     if (idsToFetch.length === 0) {
       return 0;

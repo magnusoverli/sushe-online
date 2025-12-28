@@ -317,7 +317,9 @@ module.exports = (app, deps) => {
           // METADATA MODE (default): Return only list metadata for fast loading
           // OPTIMIZED: Use single aggregate query instead of N+1 count queries
           if (typeof listsAsync.findWithCounts === 'function') {
-            const listsWithCounts = await listsAsync.findWithCounts({ userId: req.user._id });
+            const listsWithCounts = await listsAsync.findWithCounts({
+              userId: req.user._id,
+            });
             for (const list of listsWithCounts) {
               listsObj[list.name] = {
                 _id: list._id,
