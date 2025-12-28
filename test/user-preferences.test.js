@@ -290,15 +290,15 @@ describe('aggregateFromLists', () => {
     assert.strictEqual(result.topArtists.length, 10);
   });
 
-  it('should include officialOnly filter in query when specified', async () => {
+  it('should include mainOnly filter in query when specified', async () => {
     const logger = createMockLogger();
     const pool = createMockPool([{ rows: [] }]);
     const { aggregateFromLists } = createUserPreferences({ logger, pool });
 
-    await aggregateFromLists('user123', { officialOnly: true });
+    await aggregateFromLists('user123', { mainOnly: true });
 
     const queryCall = pool.query.mock.calls[0];
-    assert.ok(queryCall.arguments[0].includes('is_official = true'));
+    assert.ok(queryCall.arguments[0].includes('is_main = true'));
   });
 });
 

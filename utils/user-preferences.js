@@ -696,12 +696,12 @@ function createUserPreferences(deps = {}) {
    * Calculates top genres, artists, and countries with weighted scores
    * @param {string} userId - User ID
    * @param {Object} options - Aggregation options
-   * @param {boolean} options.officialOnly - Only include official lists
+   * @param {boolean} options.mainOnly - Only include main lists
    * @param {number} options.limit - Max items per category (default 50)
    * @returns {Object} - { topGenres, topArtists, topCountries, totalAlbums }
    */
   async function aggregateFromLists(userId, options = {}) {
-    const { officialOnly = false, limit = 50 } = options;
+    const { mainOnly = false, limit = 50 } = options;
 
     if (!pool) {
       throw new Error('Database pool not provided');
@@ -714,7 +714,7 @@ function createUserPreferences(deps = {}) {
       SELECT 
         l.name as list_name,
         l.year as list_year,
-        l.is_official,
+        l.is_main,
         li.position,
         COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
         COALESCE(NULLIF(li.country, ''), a.country) as country,
@@ -724,7 +724,7 @@ function createUserPreferences(deps = {}) {
       JOIN list_items li ON li.list_id = l._id
       LEFT JOIN albums a ON li.album_id = a.album_id
       WHERE l.user_id = $1
-      ${officialOnly ? 'AND l.is_official = true' : ''}
+      ${mainOnly ? 'AND l.is_main = true' : ''}
       ORDER BY l.year DESC, l.name, li.position
     `;
 

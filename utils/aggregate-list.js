@@ -196,30 +196,30 @@ function createEmptyResult(year) {
 // ============================================
 
 /**
- * Fetch official lists and build user map for a year
+ * Fetch main lists and build user map for a year
  */
-async function fetchOfficialListsForYear(pool, year) {
+async function fetchMainListsForYear(pool, year) {
   const listsResult = await pool.query(
     `
     SELECT l._id as list_id, l.user_id, u.username
     FROM lists l
     JOIN users u ON l.user_id = u._id
-    WHERE l.year = $1 AND l.is_official = TRUE
+    WHERE l.year = $1 AND l.is_main = TRUE
       AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
   `,
     [year]
   );
 
-  const officialLists = listsResult.rows;
+  const mainLists = listsResult.rows;
   const userMap = new Map();
-  for (const list of officialLists) {
+  for (const list of mainLists) {
     userMap.set(list.user_id, list.username);
   }
 
   return {
-    officialLists,
+    mainLists,
     userMap,
-    listIds: officialLists.map((l) => l.list_id),
+    listIds: mainLists.map((l) => l.list_id),
   };
 }
 
@@ -356,7 +356,7 @@ async function queryEligibleUsers(pool, year) {
       ) as is_contributor
     FROM lists l
     JOIN users u ON l.user_id = u._id
-    WHERE l.year = $1 AND l.is_official = TRUE
+    WHERE l.year = $1 AND l.is_main = TRUE
     ORDER BY u.username
   `,
     [year]
@@ -417,35 +417,35 @@ function createAggregateList(deps = {}) {
   }
 
   /**
-   * Aggregate all official lists for a year into an aggregate list
+   * Aggregate all main lists for a year into an aggregate list
    */
   async function aggregateForYear(year) {
     log.info(`Aggregating list for year ${year}`);
 
-    const { officialLists, userMap, listIds } = await fetchOfficialListsForYear(
+    const { mainLists, userMap, listIds } = await fetchMainListsForYear(
       pool,
       year
     );
-    log.info(`Found ${officialLists.length} official lists for year ${year}`);
+    log.info(`Found ${mainLists.length} main lists for year ${year}`);
 
-    if (officialLists.length === 0) {
+    if (mainLists.length === 0) {
       return createEmptyResult(year);
     }
 
     const items = await fetchListItemsForLists(pool, listIds);
     const albumMap = buildAlbumMap(items, userMap);
     const albums = sortAndRankAlbums(albumMap);
-    const stats = computeStats(albums, officialLists.length, year);
+    const stats = computeStats(albums, mainLists.length, year);
 
     const data = {
       year,
       generatedAt: new Date().toISOString(),
-      participantCount: officialLists.length,
+      participantCount: mainLists.length,
       albums,
     };
 
     log.info(
-      `Aggregate list for ${year}: ${albums.length} albums from ${officialLists.length} participants`
+      `Aggregate list for ${year}: ${albums.length} albums from ${mainLists.length} participants`
     );
 
     return { data, stats };
@@ -577,7 +577,7 @@ function createAggregateList(deps = {}) {
   }
 
   /**
-   * Get all users who have official lists for a year (eligible for contribution)
+   * Get all users who have main lists for a year (eligible for contribution)
    */
   async function getEligibleUsers(year) {
     return queryEligibleUsers(pool, year);

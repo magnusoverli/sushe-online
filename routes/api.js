@@ -322,7 +322,7 @@ module.exports = (app, deps) => {
               _id: list._id, // List ID - needed for playcount API
               name: list.name,
               year: list.year || null,
-              isOfficial: list.isOfficial || false,
+              isMain: list.isMain || false,
               count: count,
               updatedAt: list.updatedAt,
               createdAt: list.createdAt,
@@ -338,12 +338,12 @@ module.exports = (app, deps) => {
     }
   );
 
-  // Check if user needs to complete list setup (year assignment + official designation)
+  // Check if user needs to complete list setup (year assignment + main list designation)
   app.get('/api/lists/setup-status', ensureAuthAPI, async (req, res) => {
     try {
       // Get all user's lists
       const result = await pool.query(
-        `SELECT _id, name, year, is_official FROM lists WHERE user_id = $1`,
+        `SELECT _id, name, year, is_main FROM lists WHERE user_id = $1`,
         [req.user._id]
       );
 
@@ -353,17 +353,17 @@ module.exports = (app, deps) => {
         ...new Set(lists.filter((l) => l.year !== null).map((l) => l.year)),
       ];
 
-      // Check which years have an official list
-      const yearsWithOfficialList = lists
-        .filter((l) => l.is_official && l.year !== null)
+      // Check which years have a main list
+      const yearsWithMainList = lists
+        .filter((l) => l.is_main && l.year !== null)
         .map((l) => l.year);
 
-      const yearsNeedingOfficial = yearsWithLists.filter(
-        (year) => !yearsWithOfficialList.includes(year)
+      const yearsNeedingMain = yearsWithLists.filter(
+        (year) => !yearsWithMainList.includes(year)
       );
 
       const needsSetup =
-        listsWithoutYear.length > 0 || yearsNeedingOfficial.length > 0;
+        listsWithoutYear.length > 0 || yearsNeedingMain.length > 0;
 
       res.json({
         needsSetup,
@@ -371,16 +371,16 @@ module.exports = (app, deps) => {
           id: l._id,
           name: l.name,
         })),
-        yearsNeedingOfficial,
+        yearsNeedingMain,
         yearsSummary: yearsWithLists.map((year) => ({
           year,
-          hasOfficial: yearsWithOfficialList.includes(year),
+          hasMain: yearsWithMainList.includes(year),
           lists: lists
             .filter((l) => l.year === year)
             .map((l) => ({
               id: l._id,
               name: l.name,
-              isOfficial: l.is_official,
+              isMain: l.is_main,
             })),
         })),
         // Include the dismissed timestamp if user has dismissed the wizard
@@ -392,7 +392,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Bulk update lists (year assignment and official designation)
+  // Bulk update lists (year assignment and main list designation)
   app.post('/api/lists/bulk-update', ensureAuthAPI, async (req, res) => {
     const { updates } = req.body;
 
@@ -408,7 +408,7 @@ module.exports = (app, deps) => {
       const yearsToRecompute = new Set();
 
       for (const update of updates) {
-        const { listId, year, isOfficial } = update;
+        const { listId, year, isMain } = update;
 
         if (!listId) {
           results.push({ listId, success: false, error: 'Missing listId' });
@@ -417,7 +417,7 @@ module.exports = (app, deps) => {
 
         // Verify the list belongs to this user
         const listCheck = await client.query(
-          'SELECT _id, year, is_official FROM lists WHERE _id = $1 AND user_id = $2',
+          'SELECT _id, year, is_main FROM lists WHERE _id = $1 AND user_id = $2',
           [listId, req.user._id]
         );
 
@@ -429,8 +429,8 @@ module.exports = (app, deps) => {
         const oldList = listCheck.rows[0];
         const oldYear = oldList.year;
         const newYear = year !== undefined ? year : oldList.year;
-        const newIsOfficial =
-          isOfficial !== undefined ? isOfficial : oldList.is_official;
+        const newIsMain =
+          isMain !== undefined ? isMain : oldList.is_main;
 
         // Validate year if provided
         if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
@@ -438,26 +438,26 @@ module.exports = (app, deps) => {
           continue;
         }
 
-        // If setting as official, unset any other official list for that year
-        if (newIsOfficial && newYear !== null) {
+        // If setting as main, unset any other main list for that year
+        if (newIsMain && newYear !== null) {
           await client.query(
-            `UPDATE lists SET is_official = FALSE, updated_at = NOW() 
-             WHERE user_id = $1 AND year = $2 AND is_official = TRUE AND _id != $3`,
+            `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
+             WHERE user_id = $1 AND year = $2 AND is_main = TRUE AND _id != $3`,
             [req.user._id, newYear, listId]
           );
         }
 
         // Update the list
         await client.query(
-          `UPDATE lists SET year = $1, is_official = $2, updated_at = NOW() WHERE _id = $3`,
-          [newYear, newIsOfficial, listId]
+          `UPDATE lists SET year = $1, is_main = $2, updated_at = NOW() WHERE _id = $3`,
+          [newYear, newIsMain, listId]
         );
 
         results.push({ listId, success: true });
 
         // Track years that need aggregate list recomputation
         if (oldYear !== null) yearsToRecompute.add(oldYear);
-        if (newYear !== null && newIsOfficial) yearsToRecompute.add(newYear);
+        if (newYear !== null && newIsMain) yearsToRecompute.add(newYear);
       }
 
       await client.query('COMMIT');
@@ -804,8 +804,8 @@ module.exports = (app, deps) => {
           )
         ).catch((err) => logger.warn('Album cache invalidation failed:', err));
 
-        // If this is an official list, trigger aggregate list recomputation
-        if (existingList && existingList.isOfficial) {
+        // If this is a main list, trigger aggregate list recomputation
+        if (existingList && existingList.isMain) {
           const listYear = yearValidation.value || existingList.year;
           if (listYear) {
             triggerAggregateListRecompute(listYear);
@@ -925,10 +925,10 @@ module.exports = (app, deps) => {
       }
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
-      // If year changed on an official list, trigger aggregate list recomputation
+      // If year changed on a main list, trigger aggregate list recomputation
       const yearValidation =
         year !== undefined ? validateYear(year) : { value: existingList.year };
-      if (existingList.isOfficial && year !== undefined) {
+      if (existingList.isMain && year !== undefined) {
         // Recompute for both old and new year if they differ
         if (existingList.year && existingList.year !== yearValidation.value) {
           triggerAggregateListRecompute(existingList.year);
@@ -951,14 +951,14 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Toggle official status for a list
-  app.post('/api/lists/:name/official', ensureAuthAPI, async (req, res) => {
+  // Toggle main status for a list
+  app.post('/api/lists/:name/main', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
-    const { isOfficial } = req.body;
+    const { isMain } = req.body;
 
-    // isOfficial must be a boolean
-    if (typeof isOfficial !== 'boolean') {
-      return res.status(400).json({ error: 'isOfficial must be a boolean' });
+    // isMain must be a boolean
+    if (typeof isMain !== 'boolean') {
+      return res.status(400).json({ error: 'isMain must be a boolean' });
     }
 
     try {
@@ -972,36 +972,36 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      // A list must have a year to be marked as official
-      if (isOfficial && !existingList.year) {
+      // A list must have a year to be marked as main
+      if (isMain && !existingList.year) {
         return res.status(400).json({
-          error: 'Cannot mark as official: list must have a year assigned',
+          error: 'Cannot mark as main: list must have a year assigned',
         });
       }
 
-      let previousOfficialList = null;
+      let previousMainList = null;
 
-      // If setting as official, first remove official status from any other list for this year
-      if (isOfficial) {
-        const currentOfficial = await listsAsync.findOne({
+      // If setting as main, first remove main status from any other list for this year
+      if (isMain) {
+        const currentMain = await listsAsync.findOne({
           userId: req.user._id,
           year: existingList.year,
-          isOfficial: true,
+          isMain: true,
         });
 
-        if (currentOfficial && currentOfficial._id !== existingList._id) {
-          previousOfficialList = currentOfficial.name;
+        if (currentMain && currentMain._id !== existingList._id) {
+          previousMainList = currentMain.name;
           await pool.query(
-            'UPDATE lists SET is_official = FALSE, updated_at = $1 WHERE _id = $2',
-            [new Date(), currentOfficial._id]
+            'UPDATE lists SET is_main = FALSE, updated_at = $1 WHERE _id = $2',
+            [new Date(), currentMain._id]
           );
         }
       }
 
-      // Update the list's official status
+      // Update the list's main status
       await pool.query(
-        'UPDATE lists SET is_official = $1, updated_at = $2 WHERE _id = $3',
-        [isOfficial, new Date(), existingList._id]
+        'UPDATE lists SET is_main = $1, updated_at = $2 WHERE _id = $3',
+        [isMain, new Date(), existingList._id]
       );
 
       // Invalidate caches
@@ -1019,12 +1019,12 @@ module.exports = (app, deps) => {
         success: true,
         name: name,
         year: existingList.year,
-        isOfficial: isOfficial,
-        previousOfficialList: previousOfficialList,
+        isMain: isMain,
+        previousMainList: previousMainList,
         updatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      logger.error('Error updating official status:', err);
+      logger.error('Error updating main status:', err);
       return res.status(500).json({ error: 'Database error' });
     }
   });
@@ -1034,7 +1034,7 @@ module.exports = (app, deps) => {
     const { name } = req.params;
 
     try {
-      // First, check if the list is official (need to recompute aggregate list if so)
+      // First, check if the list is main (need to recompute aggregate list if so)
       const existingList = await listsAsync.findOne({
         userId: req.user._id,
         name,
@@ -1045,7 +1045,7 @@ module.exports = (app, deps) => {
       }
 
       // Store info for aggregate list recomputation before deleting
-      const wasOfficial = existingList.isOfficial;
+      const wasMain = existingList.isMain;
       const listYear = existingList.year;
 
       // Delete the list
@@ -1073,8 +1073,8 @@ module.exports = (app, deps) => {
         );
       }
 
-      // If this was an official list, trigger aggregate list recomputation
-      if (wasOfficial && listYear) {
+      // If this was a main list, trigger aggregate list recomputation
+      if (wasMain && listYear) {
         triggerAggregateListRecompute(listYear);
       }
 

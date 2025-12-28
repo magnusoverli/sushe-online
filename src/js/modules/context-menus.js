@@ -199,11 +199,11 @@ export function createContextMenus(deps = {}) {
 
     return {
       hasYear: !!meta?.year,
-      isOfficial: !!meta?.isOfficial,
-      officialToggleText: meta?.isOfficial
-        ? 'Remove Official Status'
-        : 'Mark as Official',
-      officialIconClass: meta?.isOfficial ? 'fa-star' : 'fa-star',
+      isMain: !!meta?.isMain,
+      mainToggleText: meta?.isMain
+        ? 'Remove Main Status'
+        : 'Set as Main',
+      mainIconClass: meta?.isMain ? 'fa-star' : 'fa-star',
       musicServiceText,
       hasSpotify,
       hasTidal,
@@ -607,8 +607,8 @@ export function createContextMenus(deps = {}) {
     const contextMenu = document.getElementById('contextMenu');
     const downloadOption = document.getElementById('downloadListOption');
     const renameOption = document.getElementById('renameListOption');
-    const toggleOfficialOption = document.getElementById(
-      'toggleOfficialOption'
+    const toggleMainOption = document.getElementById(
+      'toggleMainOption'
     );
     const updatePlaylistOption = document.getElementById(
       'updatePlaylistOption'
@@ -621,7 +621,7 @@ export function createContextMenus(deps = {}) {
       !renameOption ||
       !downloadOption ||
       !updatePlaylistOption ||
-      !toggleOfficialOption
+      !toggleMainOption
     )
       return;
 
@@ -667,8 +667,8 @@ export function createContextMenus(deps = {}) {
       openRenameModal(currentContextList);
     };
 
-    // Handle toggle official option click
-    toggleOfficialOption.onclick = async () => {
+    // Handle toggle main option click
+    toggleMainOption.onclick = async () => {
       const { list: currentContextList } = getContextState();
       contextMenu.classList.add('hidden');
 
@@ -679,31 +679,31 @@ export function createContextMenus(deps = {}) {
 
       // Check if list has a year assigned
       if (!meta.year) {
-        showToast('List must have a year to be marked as official', 'error');
+        showToast('List must have a year to be marked as main', 'error');
         setContextState({ list: null });
         return;
       }
 
-      const newOfficialStatus = !meta.isOfficial;
+      const newMainStatus = !meta.isMain;
 
       try {
         const response = await apiCall(
-          `/api/lists/${encodeURIComponent(currentContextList)}/official`,
+          `/api/lists/${encodeURIComponent(currentContextList)}/main`,
           {
             method: 'POST',
-            body: JSON.stringify({ isOfficial: newOfficialStatus }),
+            body: JSON.stringify({ isMain: newMainStatus }),
           }
         );
 
         // Update local metadata
         updateListMetadata(currentContextList, {
-          isOfficial: newOfficialStatus,
+          isMain: newMainStatus,
         });
 
-        // If another list lost its official status, update it too
-        if (response.previousOfficialList) {
-          updateListMetadata(response.previousOfficialList, {
-            isOfficial: false,
+        // If another list lost its main status, update it too
+        if (response.previousMainList) {
+          updateListMetadata(response.previousMainList, {
+            isMain: false,
           });
         }
 
@@ -711,22 +711,22 @@ export function createContextMenus(deps = {}) {
         updateListNav();
 
         // Show appropriate message
-        if (newOfficialStatus) {
-          if (response.previousOfficialList) {
+        if (newMainStatus) {
+          if (response.previousMainList) {
             showToast(
-              `"${currentContextList}" is now your official ${meta.year} list (replaced "${response.previousOfficialList}")`
+              `"${currentContextList}" is now your main ${meta.year} list (replaced "${response.previousMainList}")`
             );
           } else {
             showToast(
-              `"${currentContextList}" is now your official ${meta.year} list`
+              `"${currentContextList}" is now your main ${meta.year} list`
             );
           }
         } else {
-          showToast(`"${currentContextList}" is no longer marked as official`);
+          showToast(`"${currentContextList}" is no longer marked as main`);
         }
       } catch (error) {
-        console.error('Error toggling official status:', error);
-        showToast('Error updating official status', 'error');
+        console.error('Error toggling main status:', error);
+        showToast('Error updating main status', 'error');
       }
 
       setContextState({ list: null });

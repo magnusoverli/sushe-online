@@ -114,7 +114,7 @@ module.exports = (app, deps) => {
         if (!record) {
           return res
             .status(404)
-            .json({ error: 'No official lists found for this year' });
+            .json({ error: 'No main lists found for this year' });
         }
 
         // Return only anonymous stats
@@ -220,11 +220,11 @@ module.exports = (app, deps) => {
   });
 
   /**
-   * GET /api/aggregate-list-years/with-official-lists
-   * Get list of years that have at least one official list (for admin panel)
+   * GET /api/aggregate-list-years/with-main-lists
+   * Get list of years that have at least one main list (for admin panel)
    */
   app.get(
-    '/api/aggregate-list-years/with-official-lists',
+    '/api/aggregate-list-years/with-main-lists',
     ensureAuthAPI,
     ensureAdmin,
     async (req, res) => {
@@ -232,12 +232,12 @@ module.exports = (app, deps) => {
         const result = await pool.query(`
           SELECT DISTINCT year 
           FROM lists 
-          WHERE is_official = TRUE AND year IS NOT NULL
+          WHERE is_main = TRUE AND year IS NOT NULL
           ORDER BY year DESC
         `);
         res.json({ years: result.rows.map((r) => r.year) });
       } catch (err) {
-        logger.error('Error fetching years with official lists:', err);
+        logger.error('Error fetching years with main lists:', err);
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -301,7 +301,7 @@ module.exports = (app, deps) => {
 
   /**
    * GET /api/aggregate-list/:year/eligible-users
-   * Get all users with official lists for a year (for contributor selection UI)
+   * Get all users with main lists for a year (for contributor selection UI)
    */
   app.get(
     '/api/aggregate-list/:year/eligible-users',

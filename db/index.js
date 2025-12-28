@@ -217,7 +217,7 @@ if (process.env.DATABASE_URL) {
     name: 'name',
     data: 'data',
     year: 'year',
-    isOfficial: 'is_official',
+    isMain: 'is_main',
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };

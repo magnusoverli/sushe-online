@@ -1,6 +1,6 @@
 /**
  * List Setup Wizard Module
- * Prompts users to complete list setup (year assignment + official designation)
+ * Prompts users to complete list setup (year assignment + main list designation)
  */
 
 import { apiCall } from './utils.js';
@@ -100,19 +100,19 @@ function renderWizardContent(container) {
     `;
   }
 
-  // Section 2: Years needing official list designation
-  const yearsNeedingOfficial = yearsSummary.filter((y) => !y.hasOfficial);
+  // Section 2: Years needing main list designation
+  const yearsNeedingMain = yearsSummary.filter((y) => !y.hasMain);
 
-  if (yearsNeedingOfficial.length > 0) {
+  if (yearsNeedingMain.length > 0) {
     html += `
       <div class="mb-6">
         <h4 class="text-sm font-semibold text-gray-400 uppercase tracking-wide mb-3">
           <i class="fas fa-star mr-2 text-amber-500"></i>
-          Choose official list for each year
+          Choose main list for each year
         </h4>
-        <p class="text-xs text-gray-500 mb-3">Your official list represents your definitive ranking for that year and contributes to the collaborative Album of the Year list.</p>
+        <p class="text-xs text-gray-500 mb-3">Your main list represents your definitive ranking for that year and contributes to the collaborative Album of the Year list.</p>
         <div class="space-y-4">
-          ${yearsNeedingOfficial
+          ${yearsNeedingMain
             .map(
               (yearData) => `
             <div class="bg-gray-800/50 rounded p-3">
@@ -122,12 +122,12 @@ function renderWizardContent(container) {
                   .map(
                     (list) => `
                   <label class="flex items-center gap-3 p-2 hover:bg-gray-700/50 rounded cursor-pointer group">
-                    <input type="radio" name="official-${yearData.year}" value="${list.id}" 
-                           class="official-radio text-red-600 focus:ring-red-500 focus:ring-offset-gray-800"
+                    <input type="radio" name="main-${yearData.year}" value="${list.id}" 
+                           class="main-radio text-red-600 focus:ring-red-500 focus:ring-offset-gray-800"
                            data-year="${yearData.year}" data-list-id="${list.id}"
-                           ${list.isOfficial ? 'checked' : ''}>
+                           ${list.isMain ? 'checked' : ''}>
                     <span class="text-gray-200 group-hover:text-white">${escapeHtml(list.name)}</span>
-                    ${list.isOfficial ? '<span class="text-xs text-green-500 ml-auto"><i class="fas fa-check"></i> Current</span>' : ''}
+                    ${list.isMain ? '<span class="text-xs text-green-500 ml-auto"><i class="fas fa-check"></i> Current</span>' : ''}
                   </label>
                 `
                   )
@@ -159,8 +159,8 @@ function renderWizardContent(container) {
     select.addEventListener('change', handleYearChange);
   });
 
-  container.querySelectorAll('.official-radio').forEach((radio) => {
-    radio.addEventListener('change', handleOfficialChange);
+  container.querySelectorAll('.main-radio').forEach((radio) => {
+    radio.addEventListener('change', handleMainChange);
   });
 
   updateSaveButton();
@@ -202,25 +202,25 @@ function handleYearChange(e) {
 }
 
 /**
- * Handle official list radio change
+ * Handle main list radio change
  */
-function handleOfficialChange(e) {
+function handleMainChange(e) {
   const listId = e.target.dataset.listId;
   const year = parseInt(e.target.dataset.year, 10);
 
-  // Mark this list as official
+  // Mark this list as main
   const existing = pendingUpdates.get(listId) || {};
-  pendingUpdates.set(listId, { ...existing, listId, isOfficial: true });
+  pendingUpdates.set(listId, { ...existing, listId, isMain: true });
 
-  // Mark other lists in the same year as not official
+  // Mark other lists in the same year as not main
   document
-    .querySelectorAll(`input[name="official-${year}"]`)
+    .querySelectorAll(`input[name="main-${year}"]`)
     .forEach((radio) => {
       if (radio.dataset.listId !== listId) {
         const otherId = radio.dataset.listId;
         const otherExisting = pendingUpdates.get(otherId) || {};
-        if (otherExisting.isOfficial) {
-          delete otherExisting.isOfficial;
+        if (otherExisting.isMain) {
+          delete otherExisting.isMain;
           if (Object.keys(otherExisting).length <= 1) {
             pendingUpdates.delete(otherId);
           } else {
@@ -247,18 +247,18 @@ function updateSaveButton() {
     return update && update.year;
   });
 
-  // Check if all years needing official have one selected
-  const yearsNeedingOfficial =
-    setupData?.yearsSummary?.filter((y) => !y.hasOfficial) || [];
-  const allOfficialsSet = yearsNeedingOfficial.every((yearData) => {
+  // Check if all years needing main have one selected
+  const yearsNeedingMain =
+    setupData?.yearsSummary?.filter((y) => !y.hasMain) || [];
+  const allMainsSet = yearsNeedingMain.every((yearData) => {
     const radios = document.querySelectorAll(
-      `input[name="official-${yearData.year}"]:checked`
+      `input[name="main-${yearData.year}"]:checked`
     );
     return radios.length > 0;
   });
 
   // Enable save if all required fields are set
-  saveBtn.disabled = !(allYearsAssigned && allOfficialsSet);
+  saveBtn.disabled = !(allYearsAssigned && allMainsSet);
 
   // Update button text
   if (pendingUpdates.size > 0) {
@@ -283,17 +283,17 @@ async function handleSave() {
     updates.push(update);
   });
 
-  // Also add official selections that weren't already in pendingUpdates
-  const yearsNeedingOfficial =
-    setupData?.yearsSummary?.filter((y) => !y.hasOfficial) || [];
-  yearsNeedingOfficial.forEach((yearData) => {
+  // Also add main selections that weren't already in pendingUpdates
+  const yearsNeedingMain =
+    setupData?.yearsSummary?.filter((y) => !y.hasMain) || [];
+  yearsNeedingMain.forEach((yearData) => {
     const checked = document.querySelector(
-      `input[name="official-${yearData.year}"]:checked`
+      `input[name="main-${yearData.year}"]:checked`
     );
     if (checked) {
       const listId = checked.dataset.listId;
       if (!pendingUpdates.has(listId)) {
-        updates.push({ listId, isOfficial: true });
+        updates.push({ listId, isMain: true });
       }
     }
   });

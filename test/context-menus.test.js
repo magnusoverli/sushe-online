@@ -40,7 +40,7 @@ describe('context-menus module', () => {
         loadLists: mock.fn(),
         getContextState: mock.fn(() => ({})),
         setContextState: mock.fn(),
-        toggleOfficialStatus: mock.fn(),
+        toggleMainStatus: mock.fn(),
       };
 
       const module = createContextMenus(mockDeps);
@@ -133,7 +133,7 @@ describe('context-menus module', () => {
       const mockDeps = {
         getListMetadata: mock.fn(() => ({
           year: 2024,
-          isOfficial: false,
+          isMain: false,
         })),
       };
 
@@ -141,14 +141,14 @@ describe('context-menus module', () => {
       const config = module.getListMenuConfig('My List');
 
       assert.strictEqual(config.hasYear, true);
-      assert.strictEqual(config.isOfficial, false);
-      assert.strictEqual(config.officialToggleText, 'Mark as Official');
+      assert.strictEqual(config.isMain, false);
+      assert.strictEqual(config.mainToggleText, 'Set as Main');
       assert.strictEqual(config.musicServiceText, 'Send to Spotify');
       assert.strictEqual(config.hasSpotify, true);
       assert.strictEqual(config.hasTidal, false);
     });
 
-    it('should return correct config for official list', () => {
+    it('should return correct config for main list', () => {
       global.window = {
         currentUser: {
           spotifyAuth: false,
@@ -160,15 +160,15 @@ describe('context-menus module', () => {
       const mockDeps = {
         getListMetadata: mock.fn(() => ({
           year: 2023,
-          isOfficial: true,
+          isMain: true,
         })),
       };
 
       const module = createContextMenus(mockDeps);
-      const config = module.getListMenuConfig('Official List');
+      const config = module.getListMenuConfig('Main List');
 
-      assert.strictEqual(config.isOfficial, true);
-      assert.strictEqual(config.officialToggleText, 'Remove Official Status');
+      assert.strictEqual(config.isMain, true);
+      assert.strictEqual(config.mainToggleText, 'Remove Main Status');
       assert.strictEqual(config.musicServiceText, 'Send to Tidal');
     });
 
@@ -180,7 +180,7 @@ describe('context-menus module', () => {
       const mockDeps = {
         getListMetadata: mock.fn(() => ({
           year: null,
-          isOfficial: false,
+          isMain: false,
         })),
       };
 

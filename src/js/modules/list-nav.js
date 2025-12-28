@@ -145,23 +145,23 @@ export function createListNav(deps = {}) {
    * Generate HTML for list button
    * @param {string} listName - List name
    * @param {boolean} isActive - Whether list is currently selected
-   * @param {boolean} isOfficial - Whether list is marked as official
+   * @param {boolean} isMain - Whether list is marked as main
    * @param {boolean} isMobile - Whether rendering for mobile
    * @returns {string} HTML string
    */
-  function createListButtonHTML(listName, isActive, isOfficial, isMobile) {
+  function createListButtonHTML(listName, isActive, isMain, isMobile) {
     const paddingClass = isMobile ? 'py-3' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
-    const officialBadge = isOfficial
-      ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>'
+    const mainBadge = isMain
+      ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Main list"></i>'
       : '';
 
     const buttonHTML = `
       <button data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
         <i class="fas fa-list mr-2 flex-shrink-0"></i>
         <span class="truncate flex-1">${listName}</span>
-        ${officialBadge}
+        ${mainBadge}
       </button>
     `;
 
@@ -188,7 +188,7 @@ export function createListNav(deps = {}) {
    */
   function createListButton(listName, isMobile, _container) {
     const meta = getListMetadata(listName);
-    const isOfficial = meta?.isOfficial || false;
+    const isMain = meta?.isMain || false;
     const currentList = getCurrentList();
     const isActive = currentList === listName;
     const li = document.createElement('li');
@@ -199,7 +199,7 @@ export function createListNav(deps = {}) {
     li.innerHTML = createListButtonHTML(
       listName,
       isActive,
-      isOfficial,
+      isMain,
       isMobile
     );
 
@@ -248,22 +248,22 @@ export function createListNav(deps = {}) {
         updatePlaylistText.textContent = menuConfig.musicServiceText;
       }
 
-      // Update the toggle official option text based on current status
-      const toggleOfficialText = document.getElementById('toggleOfficialText');
-      const toggleOfficialOption = document.getElementById(
-        'toggleOfficialOption'
+      // Update the toggle main option text based on current status
+      const toggleMainText = document.getElementById('toggleMainText');
+      const toggleMainOption = document.getElementById(
+        'toggleMainOption'
       );
-      if (toggleOfficialText && toggleOfficialOption) {
-        toggleOfficialText.textContent = menuConfig.officialToggleText;
-        const icon = toggleOfficialOption.querySelector('i');
+      if (toggleMainText && toggleMainOption) {
+        toggleMainText.textContent = menuConfig.mainToggleText;
+        const icon = toggleMainOption.querySelector('i');
         icon.classList.remove('fa-star', 'fa-star-half-alt');
-        icon.classList.add(menuConfig.officialIconClass);
+        icon.classList.add(menuConfig.mainIconClass);
 
-        // Hide option if list has no year (can't be official)
+        // Hide option if list has no year (can't be main)
         if (!menuConfig.hasYear) {
-          toggleOfficialOption.classList.add('hidden');
+          toggleMainOption.classList.add('hidden');
         } else {
-          toggleOfficialOption.classList.remove('hidden');
+          toggleMainOption.classList.remove('hidden');
         }
       }
 

@@ -812,7 +812,7 @@ apiRoutes(app, deps);
 preferencesRoutes(app, deps);
 const { aggregateList } = aggregateListRoutes(app, deps);
 
-// Store aggregateList instance for use in triggers (e.g., official list updates)
+// Store aggregateList instance for use in triggers (e.g., main list updates)
 app.locals.aggregateList = aggregateList;
 
 // Icon routes for iOS/Safari compatibility

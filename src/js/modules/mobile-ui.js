@@ -32,7 +32,7 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
  * @param {Function} deps.openRenameModal - Open rename modal
  * @param {Function} deps.downloadListAsJSON - Download list as JSON
  * @param {Function} deps.updatePlaylist - Update playlist on music service
- * @param {Function} deps.toggleOfficialStatus - Toggle official status
+ * @param {Function} deps.toggleMainStatus - Toggle main status
  * @param {Function} deps.getDeviceIcon - Get icon for device type
  * @param {Function} deps.getListMenuConfig - Get list menu configuration
  * @param {Function} deps.getAvailableCountries - Get available countries list
@@ -64,7 +64,7 @@ export function createMobileUI(deps = {}) {
     openRenameModal,
     downloadListAsJSON,
     updatePlaylist,
-    toggleOfficialStatus,
+    toggleMainStatus,
     getDeviceIcon,
     getListMenuConfig,
     getAvailableCountries,
@@ -718,9 +718,9 @@ export function createMobileUI(deps = {}) {
           ${
             menuConfig.hasYear
               ? `
-          <button data-action="toggle-official"
+          <button data-action="toggle-main"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-            <i class="fas ${menuConfig.officialIconClass} mr-3 text-yellow-500"></i>${menuConfig.officialToggleText}
+            <i class="fas ${menuConfig.mainIconClass} mr-3 text-yellow-500"></i>${menuConfig.mainToggleText}
           </button>
           `
               : ''
@@ -749,8 +749,8 @@ export function createMobileUI(deps = {}) {
     const backdrop = actionSheet.querySelector('[data-backdrop]');
     const downloadBtn = actionSheet.querySelector('[data-action="download"]');
     const editBtn = actionSheet.querySelector('[data-action="edit"]');
-    const toggleOfficialBtn = actionSheet.querySelector(
-      '[data-action="toggle-official"]'
+    const toggleMainBtn = actionSheet.querySelector(
+      '[data-action="toggle-main"]'
     );
     const sendToServiceBtn = actionSheet.querySelector(
       '[data-action="send-to-service"]'
@@ -783,12 +783,12 @@ export function createMobileUI(deps = {}) {
       openRenameModal(listName);
     });
 
-    if (toggleOfficialBtn) {
-      toggleOfficialBtn.addEventListener('click', (e) => {
+    if (toggleMainBtn) {
+      toggleMainBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         closeSheet();
-        toggleOfficialStatus(listName);
+        toggleMainStatus(listName);
       });
     }
 

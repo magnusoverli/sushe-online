@@ -377,8 +377,8 @@ const contextMenusComponent = () => `
     <button id="renameListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>
-    <button id="toggleOfficialOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-star mr-2 w-4 text-center"></i><span id="toggleOfficialText">Set as Official</span>
+    <button id="toggleMainOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-star mr-2 w-4 text-center"></i><span id="toggleMainText">Set as Main</span>
     </button>
     <button id="updatePlaylistOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-paper-plane mr-2 w-4 text-center"></i><span id="updatePlaylistText">Send to Music Service</span>
@@ -852,7 +852,7 @@ const listSetupWizardComponent = () => `
           </div>
           <div>
             <h3 class="text-xl font-bold text-white">Complete Your Lists</h3>
-            <p class="text-sm text-gray-400">Set years and designate your official lists</p>
+            <p class="text-sm text-gray-400">Set years and designate your main lists</p>
           </div>
         </div>
       </div>
@@ -1675,7 +1675,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
             '</div>';
         }
       } else {
-        placeholdersHtml = '<div class="text-center py-8 text-gray-500">No official lists submitted yet.</div>';
+        placeholdersHtml = '<div class="text-center py-8 text-gray-500">No main lists submitted yet.</div>';
       }
       
       // Confirmations section for bottom

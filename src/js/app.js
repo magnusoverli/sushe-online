@@ -153,7 +153,7 @@ function getContextMenusModule() {
           window.refreshMobileBarVisibility();
         }
       },
-      toggleOfficialStatus,
+      toggleMainStatus,
     });
   }
   return contextMenusModule;
@@ -198,7 +198,7 @@ function getMobileUIModule() {
       openRenameModal,
       downloadListAsJSON,
       updatePlaylist,
-      toggleOfficialStatus,
+      toggleMainStatus,
       getDeviceIcon,
       getListMenuConfig,
       getAvailableCountries: () => availableCountries,
@@ -491,7 +491,7 @@ function setListData(listName, albums) {
     lists[listName] = {
       name: listName,
       year: null,
-      isOfficial: false,
+      isMain: false,
       count: albums ? albums.length : 0,
       _data: albums || [],
       updatedAt: new Date().toISOString(),
@@ -505,7 +505,7 @@ function setListData(listName, albums) {
     lists[listName] = {
       name: listName,
       year: null,
-      isOfficial: false,
+      isMain: false,
       count: albums ? albums.length : 0,
       _data: albums || [],
       updatedAt: new Date().toISOString(),
@@ -535,7 +535,7 @@ function getListMetadata(listName) {
     return {
       name: listName,
       year: null,
-      isOfficial: false,
+      isMain: false,
       count: listEntry.length,
       _data: listEntry,
       updatedAt: null,
@@ -561,7 +561,7 @@ function updateListMetadata(listName, updates) {
     lists[listName] = {
       name: listName,
       year: null,
-      isOfficial: false,
+      isMain: false,
       count: listEntry.length,
       _data: listEntry,
       updatedAt: new Date().toISOString(),
@@ -594,56 +594,56 @@ function isListDataLoaded(listName) {
 }
 
 /**
- * Toggle official status for a list
+ * Toggle main status for a list
  * @param {string} listName - The name of the list
  */
-async function toggleOfficialStatus(listName) {
+async function toggleMainStatus(listName) {
   const meta = getListMetadata(listName);
   if (!meta) return;
 
   // Check if list has a year assigned
   if (!meta.year) {
-    showToast('List must have a year to be marked as official', 'error');
+    showToast('List must have a year to be marked as main', 'error');
     return;
   }
 
-  const newOfficialStatus = !meta.isOfficial;
+  const newMainStatus = !meta.isMain;
 
   try {
     const response = await apiCall(
-      `/api/lists/${encodeURIComponent(listName)}/official`,
+      `/api/lists/${encodeURIComponent(listName)}/main`,
       {
         method: 'POST',
-        body: JSON.stringify({ isOfficial: newOfficialStatus }),
+        body: JSON.stringify({ isMain: newMainStatus }),
       }
     );
 
     // Update local metadata
-    updateListMetadata(listName, { isOfficial: newOfficialStatus });
+    updateListMetadata(listName, { isMain: newMainStatus });
 
-    // If another list lost its official status, update it too
-    if (response.previousOfficialList) {
-      updateListMetadata(response.previousOfficialList, { isOfficial: false });
+    // If another list lost its main status, update it too
+    if (response.previousMainList) {
+      updateListMetadata(response.previousMainList, { isMain: false });
     }
 
     // Refresh sidebar to show updated star icons
     updateListNav();
 
     // Show appropriate message
-    if (newOfficialStatus) {
-      if (response.previousOfficialList) {
+    if (newMainStatus) {
+      if (response.previousMainList) {
         showToast(
-          `"${listName}" is now your official ${meta.year} list (replaced "${response.previousOfficialList}")`
+          `"${listName}" is now your main ${meta.year} list (replaced "${response.previousMainList}")`
         );
       } else {
-        showToast(`"${listName}" is now your official ${meta.year} list`);
+        showToast(`"${listName}" is now your main ${meta.year} list`);
       }
     } else {
-      showToast(`"${listName}" is no longer marked as official`);
+      showToast(`"${listName}" is no longer marked as main`);
     }
   } catch (error) {
-    console.error('Error toggling official status:', error);
-    showToast('Error updating official status', 'error');
+    console.error('Error toggling main status:', error);
+    showToast('Error updating main status', 'error');
   }
 }
 
@@ -653,7 +653,7 @@ window.setListData = setListData;
 window.getListMetadata = getListMetadata;
 window.updateListMetadata = updateListMetadata;
 window.isListDataLoaded = isListDataLoaded;
-window.toggleOfficialStatus = toggleOfficialStatus;
+window.toggleMainStatus = toggleMainStatus;
 
 // Track loading performance optimization variables
 let trackAbortController = null;
@@ -862,7 +862,7 @@ async function loadLists() {
     const fetchedLists = await metadataPromise;
 
     // Initialize lists object with metadata objects (not arrays)
-    // Structure: { _id, name, year, isOfficial, count, _data, updatedAt, createdAt }
+    // Structure: { _id, name, year, isMain, count, _data, updatedAt, createdAt }
     lists = {};
     Object.keys(fetchedLists).forEach((name) => {
       const meta = fetchedLists[name];
@@ -870,7 +870,7 @@ async function loadLists() {
         _id: meta._id || null, // List ID - needed for playcount API
         name: meta.name || name,
         year: meta.year || null,
-        isOfficial: meta.isOfficial || false,
+        isMain: meta.isMain || false,
         count: meta.count || 0,
         _data: null, // Data not loaded yet (lazy load)
         updatedAt: meta.updatedAt || null,
@@ -2743,7 +2743,7 @@ document.addEventListener('DOMContentLoaded', () => {
           lists[name] = {
             name: name,
             year: null,
-            isOfficial: false,
+            isMain: false,
             count: 0,
             _data: null,
             updatedAt: null,
@@ -2940,7 +2940,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Confirmation modal handlers are managed by showConfirmation function
       // No static handlers needed since we use the Promise-based approach
 
-      // Check if user needs to complete list setup (year + official designation)
+      // Check if user needs to complete list setup (year + main list designation)
       // Delay slightly to let the main UI render first
       setTimeout(() => {
         checkListSetupStatus().catch((err) => {

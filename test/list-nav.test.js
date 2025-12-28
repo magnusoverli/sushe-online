@@ -136,23 +136,23 @@ describe('List Navigation Module - Unit Tests', () => {
       assert.strictEqual(activeClass, '');
     });
 
-    it('should include official badge for official lists', () => {
-      const isOfficial = true;
-      const officialBadge = isOfficial
-        ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Official list"></i>'
+    it('should include main badge for main lists', () => {
+      const isMain = true;
+      const mainBadge = isMain
+        ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Main list"></i>'
         : '';
 
-      assert.ok(officialBadge.includes('fa-star'));
-      assert.ok(officialBadge.includes('text-yellow-500'));
+      assert.ok(mainBadge.includes('fa-star'));
+      assert.ok(mainBadge.includes('text-yellow-500'));
     });
 
-    it('should not include official badge for non-official lists', () => {
-      const isOfficial = false;
-      const officialBadge = isOfficial
+    it('should not include main badge for non-main lists', () => {
+      const isMain = false;
+      const mainBadge = isMain
         ? '<i class="fas fa-star text-yellow-500"></i>'
         : '';
 
-      assert.strictEqual(officialBadge, '');
+      assert.strictEqual(mainBadge, '');
     });
 
     it('should use mobile padding class for mobile', () => {
@@ -256,24 +256,24 @@ describe('List Navigation Module - Unit Tests', () => {
   });
 
   describe('List sorting logic', () => {
-    it('should sort year lists with official lists first', () => {
+    it('should sort year lists with main lists first', () => {
       const yearLists = [
-        { name: 'List C', meta: { isOfficial: false } },
-        { name: 'List A', meta: { isOfficial: true } },
-        { name: 'List B', meta: { isOfficial: false } },
+        { name: 'List C', meta: { isMain: false } },
+        { name: 'List A', meta: { isMain: true } },
+        { name: 'List B', meta: { isMain: false } },
       ];
 
-      // Sort: official first, then alphabetically
+      // Sort: main first, then alphabetically
       yearLists.sort((a, b) => {
-        const aOfficial = a.meta?.isOfficial || false;
-        const bOfficial = b.meta?.isOfficial || false;
+        const aMain = a.meta?.isMain || false;
+        const bMain = b.meta?.isMain || false;
 
-        if (aOfficial && !bOfficial) return -1;
-        if (!aOfficial && bOfficial) return 1;
+        if (aMain && !bMain) return -1;
+        if (!aMain && bMain) return 1;
         return a.name.localeCompare(b.name);
       });
 
-      assert.strictEqual(yearLists[0].name, 'List A'); // Official
+      assert.strictEqual(yearLists[0].name, 'List A'); // Main
       assert.strictEqual(yearLists[1].name, 'List B'); // Alphabetically first
       assert.strictEqual(yearLists[2].name, 'List C'); // Alphabetically last
     });

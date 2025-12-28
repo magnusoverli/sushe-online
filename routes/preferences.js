@@ -710,15 +710,15 @@ module.exports = (app, deps) => {
   app.post('/api/preferences/aggregate', ensureAuthAPI, async (req, res) => {
     try {
       const userId = req.user._id;
-      const { officialOnly = false } = req.body;
+      const { mainOnly = false } = req.body;
 
       logger.info('Re-aggregating internal preferences', {
         userId,
-        officialOnly,
+        mainOnly,
       });
 
       const aggregated = await userPrefs.aggregateFromLists(userId, {
-        officialOnly,
+        mainOnly,
       });
 
       // Save just the internal data

@@ -2339,13 +2339,13 @@ const settingsTemplate = (req, options) => {
         if (!container) return;
         
         try {
-          // Get years that have official lists
-          const yearsRes = await fetch('/api/aggregate-list-years/with-official-lists', {
+          // Get years that have main lists
+          const yearsRes = await fetch('/api/aggregate-list-years/with-main-lists', {
             credentials: 'same-origin'
           });
           
           if (!yearsRes.ok) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No official lists found. Users need to mark their lists as "official" for a specific year.</p>';
+            container.innerHTML = '<p class="text-gray-500 text-sm">No main lists found. Users need to mark their lists as "main" for a specific year.</p>';
             return;
           }
           
@@ -2353,7 +2353,7 @@ const settingsTemplate = (req, options) => {
           const years = yearsData.years || [];
           
           if (years.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No official lists found. Users need to mark their lists as "official" for a specific year.</p>';
+            container.innerHTML = '<p class="text-gray-500 text-sm">No main lists found. Users need to mark their lists as "main" for a specific year.</p>';
             return;
           }
           
@@ -2555,7 +2555,7 @@ const settingsTemplate = (req, options) => {
           const eligibleUsers = data.eligibleUsers || [];
           
           if (eligibleUsers.length === 0) {
-            container.innerHTML = '<p class="text-gray-500 text-sm">No users have official lists for this year.</p>';
+            container.innerHTML = '<p class="text-gray-500 text-sm">No users have main lists for this year.</p>';
             return;
           }
           

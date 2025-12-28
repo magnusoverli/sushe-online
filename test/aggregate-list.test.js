@@ -117,9 +117,9 @@ describe('aggregate-list', () => {
   // ===========================================================================
 
   describe('aggregateForYear', () => {
-    it('should return empty result when no official lists exist', async () => {
+    it('should return empty result when no main lists exist', async () => {
       const pool = createMockPool([
-        { rows: [] }, // No official lists
+        { rows: [] }, // No main lists
       ]);
       const logger = createMockLogger();
       const aggregateList = createAggregateList({ pool, logger });
@@ -132,9 +132,9 @@ describe('aggregate-list', () => {
       assert.strictEqual(result.stats.totalAlbums, 0);
     });
 
-    it('should aggregate albums from multiple official lists', async () => {
+    it('should aggregate albums from multiple main lists', async () => {
       const pool = createMockPool([
-        // Official lists query
+        // Main lists query
         {
           rows: [
             { list_id: 'list1', user_id: 'user1', username: 'alice' },
@@ -704,7 +704,7 @@ describe('aggregate-list', () => {
   describe('recompute', () => {
     it('should aggregate and store aggregate list', async () => {
       const pool = createMockPool([
-        // aggregateForYear - official lists
+        // aggregateForYear - main lists
         { rows: [{ list_id: 'list1', user_id: 'user1', username: 'alice' }] },
         // aggregateForYear - list items
         {
@@ -779,7 +779,7 @@ describe('aggregate-list', () => {
   });
 
   describe('getEligibleUsers', () => {
-    it('should return empty array when no users have official lists', async () => {
+    it('should return empty array when no users have main lists', async () => {
       const pool = createMockPool([{ rows: [] }]);
       const aggregateList = createAggregateList({ pool });
 

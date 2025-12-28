@@ -530,10 +530,10 @@ describe('Preferences Routes', () => {
       assert.ok(res.jsonData.message.includes('re-aggregated'));
     });
 
-    it('should respect officialOnly option', async () => {
+    it('should respect mainOnly option', async () => {
       // This tests that the option is passed through
-      const body = { officialOnly: true };
-      assert.strictEqual(body.officialOnly, true);
+      const body = { mainOnly: true };
+      assert.strictEqual(body.mainOnly, true);
     });
   });
 
