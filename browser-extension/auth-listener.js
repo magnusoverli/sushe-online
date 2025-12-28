@@ -11,17 +11,22 @@ window.addEventListener('sushe-auth-complete', async (event) => {
 
   if (token) {
     try {
+      // Convert ISO string to milliseconds for proper expiry comparison
+      // Server sends ISO string (e.g., "2026-03-28T12:17:58.718Z")
+      // We need to store as milliseconds for Date.now() comparison
+      const expiresAtMs = new Date(expiresAt).getTime();
+
       // Store token in chrome.storage
       // Token expiry is checked client-side by auth-state.js before any API operation
       // If expired, auth will be cleared automatically
       await chrome.storage.local.set({
         authToken: token,
-        tokenExpiresAt: expiresAt,
+        tokenExpiresAt: expiresAtMs,
       });
 
       console.log(
         'Token stored successfully, expires at:',
-        new Date(expiresAt).toISOString()
+        new Date(expiresAtMs).toISOString()
       );
     } catch (error) {
       console.error('Error storing token:', error);
