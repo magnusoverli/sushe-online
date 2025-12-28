@@ -64,4 +64,3 @@ async function down(pool) {
 }
 
 module.exports = { up, down };
-

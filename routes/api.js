@@ -429,8 +429,7 @@ module.exports = (app, deps) => {
         const oldList = listCheck.rows[0];
         const oldYear = oldList.year;
         const newYear = year !== undefined ? year : oldList.year;
-        const newIsMain =
-          isMain !== undefined ? isMain : oldList.is_main;
+        const newIsMain = isMain !== undefined ? isMain : oldList.is_main;
 
         // Validate year if provided
         if (newYear !== null && (newYear < 1000 || newYear > 9999)) {

@@ -200,9 +200,7 @@ export function createContextMenus(deps = {}) {
     return {
       hasYear: !!meta?.year,
       isMain: !!meta?.isMain,
-      mainToggleText: meta?.isMain
-        ? 'Remove Main Status'
-        : 'Set as Main',
+      mainToggleText: meta?.isMain ? 'Remove Main Status' : 'Set as Main',
       mainIconClass: meta?.isMain ? 'fa-star' : 'fa-star',
       musicServiceText,
       hasSpotify,
@@ -607,9 +605,7 @@ export function createContextMenus(deps = {}) {
     const contextMenu = document.getElementById('contextMenu');
     const downloadOption = document.getElementById('downloadListOption');
     const renameOption = document.getElementById('renameListOption');
-    const toggleMainOption = document.getElementById(
-      'toggleMainOption'
-    );
+    const toggleMainOption = document.getElementById('toggleMainOption');
     const updatePlaylistOption = document.getElementById(
       'updatePlaylistOption'
     );

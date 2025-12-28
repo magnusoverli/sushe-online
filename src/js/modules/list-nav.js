@@ -196,12 +196,7 @@ export function createListNav(deps = {}) {
     if (isMobile) {
       li.className = 'flex items-center';
     }
-    li.innerHTML = createListButtonHTML(
-      listName,
-      isActive,
-      isMain,
-      isMobile
-    );
+    li.innerHTML = createListButtonHTML(listName, isActive, isMain, isMobile);
 
     const button = li.querySelector('[data-list-name]');
     const menuButton = li.querySelector('[data-list-menu-btn]');
@@ -250,9 +245,7 @@ export function createListNav(deps = {}) {
 
       // Update the toggle main option text based on current status
       const toggleMainText = document.getElementById('toggleMainText');
-      const toggleMainOption = document.getElementById(
-        'toggleMainOption'
-      );
+      const toggleMainOption = document.getElementById('toggleMainOption');
       if (toggleMainText && toggleMainOption) {
         toggleMainText.textContent = menuConfig.mainToggleText;
         const icon = toggleMainOption.querySelector('i');

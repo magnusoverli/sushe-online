@@ -403,7 +403,10 @@ async function fetchUserLists(forceRefresh = false) {
         listsLastFetched,
       });
     } catch (error) {
-      console.error('[fetchUserLists] Failed to store lists in storage:', error);
+      console.error(
+        '[fetchUserLists] Failed to store lists in storage:',
+        error
+      );
       // Continue anyway - lists are in memory
     }
 

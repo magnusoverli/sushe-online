@@ -213,22 +213,20 @@ function handleMainChange(e) {
   pendingUpdates.set(listId, { ...existing, listId, isMain: true });
 
   // Mark other lists in the same year as not main
-  document
-    .querySelectorAll(`input[name="main-${year}"]`)
-    .forEach((radio) => {
-      if (radio.dataset.listId !== listId) {
-        const otherId = radio.dataset.listId;
-        const otherExisting = pendingUpdates.get(otherId) || {};
-        if (otherExisting.isMain) {
-          delete otherExisting.isMain;
-          if (Object.keys(otherExisting).length <= 1) {
-            pendingUpdates.delete(otherId);
-          } else {
-            pendingUpdates.set(otherId, otherExisting);
-          }
+  document.querySelectorAll(`input[name="main-${year}"]`).forEach((radio) => {
+    if (radio.dataset.listId !== listId) {
+      const otherId = radio.dataset.listId;
+      const otherExisting = pendingUpdates.get(otherId) || {};
+      if (otherExisting.isMain) {
+        delete otherExisting.isMain;
+        if (Object.keys(otherExisting).length <= 1) {
+          pendingUpdates.delete(otherId);
+        } else {
+          pendingUpdates.set(otherId, otherExisting);
         }
       }
-    });
+    }
+  });
 
   updateSaveButton();
 }
