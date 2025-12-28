@@ -281,9 +281,11 @@ module.exports = (app, deps) => {
       const rememberMs = 30 * oneDayMs;
       req.session.cookie.maxAge = remember ? rememberMs : oneDayMs;
 
-      // Record last activity
+      // Record last activity (always update on login)
       const timestamp = new Date();
       req.user.lastActivity = timestamp;
+      // Set debounce timestamp so subsequent requests don't immediately re-update
+      req.session.lastActivityUpdatedAt = Date.now();
       await usersAsync.update(
         { _id: req.user._id },
         { $set: { lastActivity: timestamp } }

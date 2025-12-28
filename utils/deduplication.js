@@ -57,6 +57,51 @@ function createDeduplicationHelpers(deps = {}) {
   }
 
   /**
+   * Pre-fetch all album data for a batch of album IDs in a single query
+   * Populates the cache so subsequent getStorableValue calls are instant
+   * 
+   * @param {Array<string>} albumIds - Array of album IDs to prefetch
+   * @param {Object} pool - Database pool
+   * @returns {Promise<number>} - Number of albums fetched
+   */
+  async function prefetchAlbums(albumIds, pool) {
+    // Filter out empty/null IDs and already-cached IDs
+    const idsToFetch = albumIds.filter(
+      (id) => id && !albumCache.has(id)
+    );
+
+    if (idsToFetch.length === 0) {
+      return 0;
+    }
+
+    // Deduplicate
+    const uniqueIds = [...new Set(idsToFetch)];
+
+    // Single batch query for all albums
+    const placeholders = uniqueIds.map((_, i) => `$${i + 1}`).join(',');
+    const result = await pool.query(
+      `SELECT album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format 
+       FROM albums WHERE album_id IN (${placeholders})`,
+      uniqueIds
+    );
+
+    // Populate cache with results
+    for (const row of result.rows) {
+      albumCache.set(row.album_id, row);
+    }
+
+    // Also cache nulls for IDs not found (prevents re-querying)
+    const foundIds = new Set(result.rows.map((r) => r.album_id));
+    for (const id of uniqueIds) {
+      if (!foundIds.has(id)) {
+        albumCache.set(id, null);
+      }
+    }
+
+    return result.rows.length;
+  }
+
+  /**
    * Compare list_item value with albums table value
    * Returns NULL if they match (to save storage), or the value if different (custom override)
    *
@@ -122,6 +167,7 @@ function createDeduplicationHelpers(deps = {}) {
     getAlbumData,
     clearAlbumCache,
     getCacheSize,
+    prefetchAlbums,
     getStorableValue,
     getStorableTracksValue,
   };

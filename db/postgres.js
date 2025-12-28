@@ -255,6 +255,63 @@ class PgDatastore {
     return this._callbackify(promise, cb);
   }
 
+  /**
+   * Update a single field by _id using a prepared statement
+   * Optimized for frequent updates like last_activity where query plan caching helps
+   * 
+   * @param {string} id - The _id value to match
+   * @param {string} field - The field name to update (in app naming, e.g., 'lastActivity')
+   * @param {*} value - The new value
+   * @param {Function} cb - Optional callback
+   * @returns {Promise<number>} - Number of rows updated
+   */
+  updateFieldById(id, field, value, cb) {
+    const promise = (async () => {
+      const col = this._mapField(field);
+      const queryName = `updateField_${this.table}_${col}`;
+      const queryText = `UPDATE ${this.table} SET ${col} = $1 WHERE _id = $2`;
+      const res = await this._preparedQuery(queryName, queryText, [
+        this._prepareValue(value),
+        id,
+      ]);
+      return res.rowCount;
+    })();
+    return this._callbackify(promise, cb);
+  }
+
+  /**
+   * Find lists with item counts in a single query
+   * Replaces N+1 pattern of find() + N count() calls
+   * Only available for lists table
+   * 
+   * @param {Object} query - Query filter (e.g., { userId: 'xxx' })
+   * @returns {Promise<Array>} - Lists with itemCount property
+   */
+  async findWithCounts(query) {
+    if (this.table !== 'lists') {
+      throw new Error('findWithCounts only available for lists table');
+    }
+
+    const { text, values } = this._buildWhere(query);
+    const queryName = `findWithCounts_lists_${Object.keys(query).join('_')}`;
+    const queryText = `
+      SELECT l.*, COUNT(li._id) as item_count
+      FROM lists l
+      LEFT JOIN list_items li ON li.list_id = l._id
+      ${text}
+      GROUP BY l.id
+      ORDER BY l.name
+    `;
+
+    const res = await this._preparedQuery(queryName, queryText, values);
+    return res.rows.map((row) => {
+      const mapped = this._mapRow(row);
+      // Add itemCount as a number (COUNT returns string in some drivers)
+      mapped.itemCount = parseInt(row.item_count, 10) || 0;
+      return mapped;
+    });
+  }
+
   // Find albums by album_id (MusicBrainz IDs)
   async findByAlbumIds(albumIds, cb) {
     const promise = (async () => {

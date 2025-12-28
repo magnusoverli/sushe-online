@@ -32,20 +32,47 @@ function sanitizeUser(user) {
 }
 
 /**
- * Record user activity timestamp
+ * Record user activity timestamp with debouncing
+ * Only updates database if more than ACTIVITY_UPDATE_INTERVAL has passed
+ * This dramatically reduces DB writes (from every request to ~once per 5 min)
  *
  * @param {Object} req - Express request object
  * @param {Object} users - Users datastore
  */
+const ACTIVITY_UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 function recordActivity(req, users) {
-  if (req.user) {
-    const timestamp = new Date();
-    req.user.lastActivity = timestamp;
-    users.update(
-      { _id: req.user._id },
-      { $set: { lastActivity: timestamp } },
-      () => {}
-    );
+  if (!req.user) return;
+
+  const now = Date.now();
+  const lastUpdate = req.session?.lastActivityUpdatedAt || 0;
+
+  // Always update in-memory timestamp for current request context
+  req.user.lastActivity = new Date(now);
+
+  // Only write to database if debounce interval has passed
+  if (now - lastUpdate > ACTIVITY_UPDATE_INTERVAL) {
+    // Update session timestamp (in-memory, no DB write)
+    if (req.session) {
+      req.session.lastActivityUpdatedAt = now;
+    }
+
+    // Fire-and-forget DB update using prepared statement (non-blocking)
+    // Use updateFieldById if available (prepared statement), fallback to update
+    if (typeof users.updateFieldById === 'function') {
+      users.updateFieldById(
+        req.user._id,
+        'lastActivity',
+        new Date(now),
+        () => {} // Ignore result - non-critical operation
+      );
+    } else {
+      users.update(
+        { _id: req.user._id },
+        { $set: { lastActivity: new Date(now) } },
+        () => {} // Ignore result - non-critical operation
+      );
+    }
   }
 }
 

@@ -17,6 +17,7 @@ const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
 // Import deduplication helpers
 const {
   clearAlbumCache,
+  prefetchAlbums,
   getStorableValue,
   getStorableTracksValue,
 } = require('../utils/deduplication');
@@ -314,19 +315,34 @@ module.exports = (app, deps) => {
           }
         } else {
           // METADATA MODE (default): Return only list metadata for fast loading
-          // This dramatically improves page refresh performance by avoiding
-          // loading all album data when we only need list names for the sidebar
-          for (const list of userLists) {
-            const count = await listItemsAsync.count({ listId: list._id });
-            listsObj[list.name] = {
-              _id: list._id, // List ID - needed for playcount API
-              name: list.name,
-              year: list.year || null,
-              isMain: list.isMain || false,
-              count: count,
-              updatedAt: list.updatedAt,
-              createdAt: list.createdAt,
-            };
+          // OPTIMIZED: Use single aggregate query instead of N+1 count queries
+          if (typeof listsAsync.findWithCounts === 'function') {
+            const listsWithCounts = await listsAsync.findWithCounts({ userId: req.user._id });
+            for (const list of listsWithCounts) {
+              listsObj[list.name] = {
+                _id: list._id,
+                name: list.name,
+                year: list.year || null,
+                isMain: list.isMain || false,
+                count: list.itemCount,
+                updatedAt: list.updatedAt,
+                createdAt: list.createdAt,
+              };
+            }
+          } else {
+            // Fallback to N+1 pattern
+            for (const list of userLists) {
+              const count = await listItemsAsync.count({ listId: list._id });
+              listsObj[list.name] = {
+                _id: list._id,
+                name: list.name,
+                year: list.year || null,
+                isMain: list.isMain || false,
+                count: count,
+                updatedAt: list.updatedAt,
+                createdAt: list.createdAt,
+              };
+            }
           }
         }
 
@@ -697,6 +713,13 @@ module.exports = (app, deps) => {
 
         // Track album IDs that were upserted for cache invalidation
         const upsertedAlbumIds = [];
+
+        // OPTIMIZATION: Pre-fetch all album data in a single query
+        // This populates the cache so getStorableValue calls are instant (no DB hits)
+        const albumIdsToFetch = data.map((a) => a.album_id).filter(Boolean);
+        if (albumIdsToFetch.length > 0) {
+          await prefetchAlbums(albumIdsToFetch, client);
+        }
 
         for (let i = 0; i < data.length; i++) {
           const album = data[i];
