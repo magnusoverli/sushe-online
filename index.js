@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const session = require('express-session');
 const pgSession = require('connect-pg-simple')(session);
@@ -18,6 +19,11 @@ const os = require('os');
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const { createPreferenceSyncService } = require('./utils/preference-sync');
+const {
+  setup: setupWebSocket,
+  broadcast,
+  shutdown: shutdownWebSocket,
+} = require('./utils/websocket');
 const {
   SessionCache,
   wrapSessionStore,
@@ -48,6 +54,9 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down gracefully');
   await logger.shutdown();
 
+  // Shutdown WebSocket server
+  shutdownWebSocket();
+
   // Shutdown response cache if it exists
   try {
     const { responseCache } = require('./middleware/response-cache');
@@ -62,6 +71,9 @@ process.on('SIGTERM', async () => {
 process.on('SIGINT', async () => {
   logger.info('SIGINT received, shutting down gracefully');
   await logger.shutdown();
+
+  // Shutdown WebSocket server
+  shutdownWebSocket();
 
   // Shutdown response cache if it exists
   try {
@@ -592,23 +604,24 @@ const pgStore = new pgSession({
     logger.error('Session store error', { error: err.message }),
 });
 
-app.use(
-  session({
-    store: wrapSessionStore(pgStore, sessionCache),
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: false,
-      httpOnly: true,
-      maxAge: 1000 * 60 * 60 * 24, // 24 hours
-      sameSite: 'lax',
-    },
-    genid: function (_req) {
-      return require('crypto').randomBytes(16).toString('hex');
-    },
-  })
-);
+// Create named session middleware for sharing with Socket.io
+const sessionMiddleware = session({
+  store: wrapSessionStore(pgStore, sessionCache),
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: false,
+    httpOnly: true,
+    maxAge: 1000 * 60 * 60 * 24, // 24 hours
+    sameSite: 'lax',
+  },
+  genid: function (_req) {
+    return require('crypto').randomBytes(16).toString('hex');
+  },
+});
+
+app.use(sessionMiddleware);
 
 // Custom flash middleware
 app.use((req, res, next) => {
@@ -904,6 +917,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 const MigrationManager = require('./db/migrations');
 
+// Create HTTP server for Express and Socket.io
+const httpServer = http.createServer(app);
+
 ready
   .then(async () => {
     // Run pending migrations automatically on startup
@@ -918,11 +934,18 @@ ready
       // This prevents downtime if a migration has issues
     }
 
-    app.listen(PORT, () => {
+    // Set up WebSocket server with session middleware
+    setupWebSocket(httpServer, sessionMiddleware);
+
+    // Store broadcast service on app.locals for access in routes
+    app.locals.broadcast = broadcast;
+
+    httpServer.listen(PORT, () => {
       logger.info('Server started', {
         port: PORT,
         environment: process.env.NODE_ENV || 'development',
         url: `http://localhost:${PORT}`,
+        websocket: 'enabled',
       });
 
       // Start preference sync service (only in production or if explicitly enabled)

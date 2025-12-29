@@ -877,6 +877,16 @@ module.exports = (app, deps) => {
           }
         }
 
+        // Broadcast real-time update to other clients
+        const broadcast = req.app.locals.broadcast;
+        if (broadcast) {
+          if (existingList) {
+            broadcast.listUpdated(req.user._id, name);
+          } else {
+            broadcast.listCreated(req.user._id, name, yearValidation.value);
+          }
+        }
+
         res.json({
           success: true,
           message: existingList ? 'List updated' : 'List created',
@@ -1003,6 +1013,16 @@ module.exports = (app, deps) => {
         }
       }
 
+      // Broadcast real-time update to other clients
+      const broadcast = req.app.locals.broadcast;
+      if (broadcast) {
+        if (newName && newName !== name) {
+          broadcast.listRenamed(req.user._id, name, newName);
+        } else {
+          broadcast.listUpdated(req.user._id, newName || name);
+        }
+      }
+
       // Return updated metadata
       res.json({
         success: true,
@@ -1080,6 +1100,16 @@ module.exports = (app, deps) => {
         triggerAggregateListRecompute(existingList.year);
       }
 
+      // Broadcast real-time update to other clients
+      const broadcast = req.app.locals.broadcast;
+      if (broadcast) {
+        broadcast.listMainChanged(req.user._id, name, isMain);
+        // Also notify about the previous main list if it changed
+        if (previousMainList) {
+          broadcast.listMainChanged(req.user._id, previousMainList, false);
+        }
+      }
+
       res.json({
         success: true,
         name: name,
@@ -1141,6 +1171,12 @@ module.exports = (app, deps) => {
       // If this was a main list, trigger aggregate list recomputation
       if (wasMain && listYear) {
         triggerAggregateListRecompute(listYear);
+      }
+
+      // Broadcast real-time update to other clients
+      const broadcast = req.app.locals.broadcast;
+      if (broadcast) {
+        broadcast.listDeleted(req.user._id, name);
       }
 
       res.json({ success: true, message: 'List deleted' });

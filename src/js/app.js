@@ -10,6 +10,7 @@ import { createSorting } from './modules/sorting.js';
 import { createImportConflictHandler } from './modules/import-export.js';
 // Date utilities are imported directly by modules that need them
 import { createNowPlaying } from './modules/now-playing.js';
+import { createRealtimeSync } from './modules/realtime-sync.js';
 import {
   positionContextMenu,
   showToast,
@@ -48,6 +49,9 @@ let importConflictModule = null;
 
 // Now playing module instance (initialized lazily when first needed)
 let nowPlayingModule = null;
+
+// Realtime sync module instance (initialized on page load)
+let realtimeSyncModule = null;
 
 /**
  * Get or initialize the album display module
@@ -406,6 +410,94 @@ function getNowPlayingModule() {
 // Wrapper function for now-playing module (reapplyNowPlayingBorder is passed to album-display)
 function reapplyNowPlayingBorder() {
   return getNowPlayingModule().reapplyNowPlayingBorder();
+}
+
+// Track recent local saves to avoid showing "updated from another device" for our own changes
+const recentLocalSaves = new Map();
+const LOCAL_SAVE_GRACE_PERIOD = 5000; // 5 seconds
+
+/**
+ * Mark a list as recently saved locally
+ * @param {string} listName - Name of the list that was saved
+ */
+function markLocalSave(listName) {
+  recentLocalSaves.set(listName, Date.now());
+  // Clean up old entries
+  setTimeout(() => {
+    recentLocalSaves.delete(listName);
+  }, LOCAL_SAVE_GRACE_PERIOD + 1000);
+}
+
+/**
+ * Check if a list was recently saved locally (within grace period)
+ * @param {string} listName - Name of the list to check
+ * @returns {boolean} True if this was a local save
+ */
+function wasRecentLocalSave(listName) {
+  const saveTime = recentLocalSaves.get(listName);
+  if (!saveTime) return false;
+  const elapsed = Date.now() - saveTime;
+  if (elapsed < LOCAL_SAVE_GRACE_PERIOD) {
+    // Clear it so we only skip once
+    recentLocalSaves.delete(listName);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Get or initialize the realtime sync module
+ * Uses lazy initialization to avoid dependency ordering issues
+ */
+function getRealtimeSyncModule() {
+  if (!realtimeSyncModule) {
+    realtimeSyncModule = createRealtimeSync({
+      getCurrentList: () => currentList,
+      refreshListData: async (listName) => {
+        // Check if this was our own save - skip refresh and notification
+        if (wasRecentLocalSave(listName)) {
+          console.log(
+            '[RealtimeSync] Skipping refresh for local save:',
+            listName
+          );
+          return { wasLocalSave: true };
+        }
+
+        // Fetch fresh data and update the display
+        const data = await apiCall(
+          `/api/lists/${encodeURIComponent(listName)}`
+        );
+        setListData(listName, data);
+        if (currentList === listName) {
+          displayAlbums(data, { forceFullRebuild: true });
+          // Also fetch and apply album covers (fixes missing images issue)
+          fetchAndApplyCovers(data).catch((err) => {
+            console.warn('Background cover fetch failed:', err);
+          });
+        }
+        return { wasLocalSave: false };
+      },
+      refreshListNav: () => {
+        // Re-fetch list metadata and update sidebar
+        loadLists();
+      },
+      showToast,
+    });
+  }
+  return realtimeSyncModule;
+}
+
+/**
+ * Initialize realtime sync for cross-device list updates
+ */
+function initializeRealtimeSync() {
+  const sync = getRealtimeSyncModule();
+  sync.connect();
+
+  // Clean up on page unload
+  window.addEventListener('beforeunload', () => {
+    sync.disconnect();
+  });
 }
 
 // Global variables
@@ -1035,6 +1127,10 @@ async function saveList(name, data, year = undefined) {
         body.year = existingMeta.year;
       }
     }
+
+    // Mark this as a local save BEFORE the API call to prevent race condition
+    // The WebSocket broadcast can arrive before the HTTP response
+    markLocalSave(name);
 
     await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
       method: 'POST',
@@ -2333,8 +2429,21 @@ function showLoadingSpinner(container) {
 // Select and display a list
 async function selectList(listName) {
   try {
+    // Track previous list for realtime sync unsubscription
+    const previousList = currentList;
+
     currentList = listName;
     window.currentList = currentList;
+
+    // Update realtime sync subscriptions
+    if (realtimeSyncModule) {
+      if (previousList && previousList !== listName) {
+        realtimeSyncModule.unsubscribeFromList(previousList);
+      }
+      if (listName) {
+        realtimeSyncModule.subscribeToList(listName);
+      }
+    }
 
     // Clear playcount cache when switching lists (playcounts are list-item specific)
     clearPlaycountCache();
@@ -2865,6 +2974,9 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeCreateList();
       initializeRenameList();
       initializeImportConflictHandling();
+
+      // Initialize real-time sync for cross-device list updates
+      initializeRealtimeSync();
 
       // Handle discovery module's album add requests
       window.addEventListener('discovery-add-album', async (e) => {
