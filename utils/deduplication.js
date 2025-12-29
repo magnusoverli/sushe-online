@@ -112,6 +112,12 @@ function createDeduplicationHelpers(deps = {}) {
   async function getStorableValue(listItemValue, albumId, field, pool) {
     // No album reference or no value - store as-is
     if (!albumId || listItemValue === null || listItemValue === undefined) {
+      // Special handling for cover_image: convert base64 string to Buffer for BYTEA
+      if (field === 'cover_image' && listItemValue) {
+        return Buffer.isBuffer(listItemValue)
+          ? listItemValue
+          : Buffer.from(listItemValue, 'base64');
+      }
       return listItemValue || null;
     }
 
@@ -119,6 +125,12 @@ function createDeduplicationHelpers(deps = {}) {
     const albumData = await getAlbumData(albumId, pool);
     if (!albumData) {
       // No matching album in database - store the value
+      // Special handling for cover_image: convert base64 string to Buffer for BYTEA
+      if (field === 'cover_image' && listItemValue) {
+        return Buffer.isBuffer(listItemValue)
+          ? listItemValue
+          : Buffer.from(listItemValue, 'base64');
+      }
       return listItemValue || null;
     }
 
@@ -127,6 +139,31 @@ function createDeduplicationHelpers(deps = {}) {
     const albumValue = albumData[field];
     const normalizedListValue = listItemValue === '' ? null : listItemValue;
     const normalizedAlbumValue = albumValue === '' ? null : albumValue;
+
+    // Special handling for cover_image: compare Buffer contents
+    // Handles both BYTEA (Buffer) and legacy TEXT (base64 string) formats
+    if (field === 'cover_image') {
+      // If album has the same image, don't store in list_item
+      if (albumValue && listItemValue) {
+        const listBuffer = Buffer.isBuffer(listItemValue)
+          ? listItemValue
+          : Buffer.from(listItemValue, 'base64');
+        // Handle both Buffer (BYTEA) and string (legacy TEXT) album values
+        const albumBuffer = Buffer.isBuffer(albumValue)
+          ? albumValue
+          : Buffer.from(albumValue, 'base64');
+        if (albumBuffer.equals(listBuffer)) {
+          return null; // Duplicate - don't store
+        }
+      }
+      // Different image - convert to Buffer and store
+      if (listItemValue) {
+        return Buffer.isBuffer(listItemValue)
+          ? listItemValue
+          : Buffer.from(listItemValue, 'base64');
+      }
+      return null;
+    }
 
     if (normalizedListValue === normalizedAlbumValue) {
       return null; // Duplicate - don't store

@@ -1326,6 +1326,8 @@ export function createMobileUI(deps = {}) {
       if (pendingCoverData) {
         updatedAlbum.cover_image = pendingCoverData.base64;
         updatedAlbum.cover_image_format = pendingCoverData.format;
+        // Clear the URL to ensure base64 takes priority
+        delete updatedAlbum.cover_image_url;
       }
 
       if (!updatedAlbum.artist || !updatedAlbum.album) {
@@ -1344,7 +1346,9 @@ export function createMobileUI(deps = {}) {
       window.scrollTo(0, 0);
       document.body.scrollTop = 0;
 
-      displayAlbums(albumsToSave);
+      // Force full rebuild to ensure cover image changes are displayed
+      // (incremental updates don't update cover images)
+      displayAlbums(albumsToSave, { forceFullRebuild: true });
 
       try {
         await saveList(currentList, albumsToSave);

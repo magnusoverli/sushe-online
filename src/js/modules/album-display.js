@@ -423,15 +423,25 @@ export function createAlbumDisplay(deps = {}) {
     row.className = 'album-row album-grid gap-4 py-2';
     row.dataset.index = index;
 
+    // Determine cover image source:
+    // 1. Base64 cover (takes priority - may be locally edited or custom cover)
+    // 2. URL-based loading - uses coverImageUrl from API (efficient for unmodified covers)
+    // 3. Placeholder if no cover available
+    const coverImageSrc = data.coverImage
+      ? `data:image/${data.imageFormat};base64,${data.coverImage}`
+      : data.coverImageUrl
+        ? data.coverImageUrl
+        : null;
+
     row.innerHTML = `
       <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
       <div class="flex items-center">
         <div class="album-cover-container">
           ${
-            data.coverImage
+            coverImageSrc
               ? `
             <img src="${PLACEHOLDER_GIF}" 
-                data-lazy-src="data:image/${data.imageFormat};base64,${data.coverImage}"
+                data-lazy-src="${coverImageSrc}"
                 alt="${data.albumName}" 
                 class="album-cover rounded shadow-lg"
                 loading="lazy"
@@ -439,18 +449,7 @@ export function createAlbumDisplay(deps = {}) {
                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
             >
           `
-              : data.albumId
-                ? `
-            <img src="${PLACEHOLDER_GIF}" 
-                alt="${data.albumName}" 
-                class="album-cover rounded shadow-lg"
-                data-album-id="${data.albumId}"
-                loading="lazy"
-                decoding="async"
-                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
-            >
-          `
-                : `
+              : `
             <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -683,6 +682,16 @@ export function createAlbumDisplay(deps = {}) {
       'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[110px]';
     card.dataset.index = index;
 
+    // Determine cover image source:
+    // 1. Base64 cover (takes priority - may be locally edited or custom cover)
+    // 2. URL-based loading - uses coverImageUrl from API (efficient for unmodified covers)
+    // 3. Placeholder if no cover available
+    const mobileCoverSrc = data.coverImage
+      ? `data:image/${data.imageFormat};base64,${data.coverImage}`
+      : data.coverImageUrl
+        ? data.coverImageUrl
+        : null;
+
     card.innerHTML = `
       <!-- Position badge (upper right, above action column) -->
       <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
@@ -697,29 +706,18 @@ export function createAlbumDisplay(deps = {}) {
           <div class="flex flex-col items-center pl-[4px] pt-2 self-stretch">
             <div class="flex-shrink-0">
               ${
-                data.coverImage
+                mobileCoverSrc
                   ? `
                 <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
                   <img src="${PLACEHOLDER_GIF}"
-                      data-lazy-src="data:image/${data.imageFormat};base64,${data.coverImage}"
+                      data-lazy-src="${mobileCoverSrc}"
                       alt="${data.albumName}"
                       class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
                       loading="lazy"
                       decoding="async">
                 </div>
               `
-                  : data.albumId
-                    ? `
-                <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
-                  <img src="${PLACEHOLDER_GIF}"
-                      alt="${data.albumName}"
-                      class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
-                      data-album-id="${data.albumId}"
-                      loading="lazy"
-                      decoding="async">
-                </div>
-              `
-                    : `
+                  : `
                 <div class="mobile-album-cover w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center relative">
                   <i class="fas fa-compact-disc text-xl text-gray-600"></i>
                 </div>
@@ -1275,7 +1273,7 @@ export function createAlbumDisplay(deps = {}) {
    * @param {boolean} options.skipCoverFetch - Skip fetching covers (useful for field-only updates)
    */
   function displayAlbums(albums, options = {}) {
-    const { forceFullRebuild = false, skipCoverFetch = false } = options;
+    const { forceFullRebuild = false, _skipCoverFetch = false } = options;
     const isMobile = window.innerWidth < 1024;
     const container = document.getElementById('albumContainer');
 
@@ -1322,19 +1320,9 @@ export function createAlbumDisplay(deps = {}) {
       }
     }
 
-    // OPTIMIZATION: Start cover fetch early (before DOM work) for parallelism
-    // Only fetch for albums that need it (have album_id but no cached cover_image)
-    if (!skipCoverFetch && albums && albums.length > 0) {
-      const albumsNeedingCovers = albums.filter(
-        (a) => a.album_id && !a.cover_image
-      );
-      if (albumsNeedingCovers.length > 0) {
-        // Fire and forget - runs in parallel with DOM building below
-        fetchAndApplyCovers(albumsNeedingCovers).catch((err) => {
-          console.warn('Background cover fetch failed:', err);
-        });
-      }
-    }
+    // NOTE: fetchAndApplyCovers is no longer needed - images are now loaded via URL
+    // (cover_image_url) with browser-native lazy loading and HTTP caching.
+    // The data-lazy-src attribute triggers IntersectionObserver loading.
 
     // Full rebuild path - clear element caches
     positionElementCache = new WeakMap();
@@ -1417,68 +1405,17 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Batch fetch and apply album covers
-   * @param {Array} albums - Album array
+   * @deprecated No longer used - images are now loaded via URL with browser caching.
+   * Kept for backwards compatibility but does nothing.
+   * @param {Array} _albums - Album array (unused)
    */
-  async function fetchAndApplyCovers(albums) {
-    if (!albums || albums.length === 0) return;
-
-    const albumIds = albums.map((a) => a.album_id).filter((id) => id);
-
-    if (albumIds.length === 0) return;
-
-    try {
-      const response = await apiCall(
-        `/api/albums/covers?ids=${albumIds.join(',')}`
-      );
-      const { covers } = response;
-
-      if (!covers || Object.keys(covers).length === 0) return;
-
-      const imgElements = document.querySelectorAll('img[data-album-id]');
-      const imgMap = new Map();
-      imgElements.forEach((img) => {
-        const id = img.dataset.albumId;
-        if (!imgMap.has(id)) {
-          imgMap.set(id, []);
-        }
-        imgMap.get(id).push(img);
-      });
-
-      const decodePromises = [];
-      const updates = [];
-
-      for (const [albumId, dataUri] of Object.entries(covers)) {
-        const imgs = imgMap.get(albumId);
-        if (!imgs) continue;
-
-        for (const img of imgs) {
-          const tempImg = new Image();
-          tempImg.src = dataUri;
-
-          const decodePromise = tempImg
-            .decode()
-            .then(() => {
-              updates.push({ img, dataUri });
-            })
-            .catch(() => {
-              updates.push({ img, dataUri });
-            });
-
-          decodePromises.push(decodePromise);
-        }
-      }
-
-      await Promise.all(decodePromises);
-
-      requestAnimationFrame(() => {
-        for (const { img, dataUri } of updates) {
-          img.src = dataUri;
-        }
-      });
-    } catch (err) {
-      console.warn('Failed to batch fetch covers:', err);
-    }
+  async function fetchAndApplyCovers(_albums) {
+    // No-op: Images are now loaded via URL (cover_image_url) with:
+    // - IntersectionObserver for lazy loading (data-lazy-src)
+    // - Browser HTTP caching (Cache-Control: 1 year, immutable)
+    // - Individual /api/albums/:id/cover endpoints
+    // This eliminates the need for batch fetching data URIs.
+    return;
   }
 
   /**

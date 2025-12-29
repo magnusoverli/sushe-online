@@ -76,6 +76,15 @@ module.exports = (app, deps) => {
   }
 
   async function upsertAlbumRecord(album, timestamp) {
+    // Convert base64 cover_image to Buffer for BYTEA storage
+    let coverImageBuffer = null;
+    if (album.cover_image) {
+      // Handle both Buffer (already binary) and string (base64)
+      coverImageBuffer = Buffer.isBuffer(album.cover_image)
+        ? album.cover_image
+        : Buffer.from(album.cover_image, 'base64');
+    }
+
     const values = [
       album.album_id,
       album.artist || '',
@@ -85,7 +94,7 @@ module.exports = (app, deps) => {
       album.genre_1 || album.genre || '',
       album.genre_2 || '',
       Array.isArray(album.tracks) ? JSON.stringify(album.tracks) : null,
-      album.cover_image || '',
+      coverImageBuffer,
       album.cover_image_format || '',
       timestamp,
       timestamp,
@@ -115,7 +124,7 @@ module.exports = (app, deps) => {
         genre_1 = COALESCE(NULLIF(EXCLUDED.genre_1, ''), albums.genre_1),
         genre_2 = COALESCE(NULLIF(EXCLUDED.genre_2, ''), albums.genre_2),
         tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
-        cover_image = COALESCE(NULLIF(EXCLUDED.cover_image, ''), albums.cover_image),
+        cover_image = COALESCE(EXCLUDED.cover_image, albums.cover_image),
         cover_image_format = COALESCE(NULLIF(EXCLUDED.cover_image_format, ''), albums.cover_image_format),
         updated_at = EXCLUDED.updated_at`,
       values
@@ -180,8 +189,11 @@ module.exports = (app, deps) => {
 
       const { cover_image, cover_image_format } = result.rows[0];
 
-      // Convert base64 to buffer
-      const imageBuffer = Buffer.from(cover_image, 'base64');
+      // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
+      // This ensures compatibility with database backups from before migration 024
+      const imageBuffer = Buffer.isBuffer(cover_image)
+        ? cover_image
+        : Buffer.from(cover_image, 'base64');
 
       // Determine content type
       const contentType = cover_image_format
@@ -193,7 +205,7 @@ module.exports = (app, deps) => {
         'Content-Type': contentType,
         'Content-Length': imageBuffer.length,
         'Cache-Control': 'public, max-age=31536000, immutable', // 1 year
-        ETag: `"${album_id}-${cover_image.length}"`,
+        ETag: `"${album_id}-${imageBuffer.length}"`,
       });
 
       res.send(imageBuffer);
@@ -206,7 +218,10 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Batch fetch multiple album covers - reduces N requests to 1
+  // @deprecated - Batch fetch multiple album covers
+  // This endpoint is deprecated. Frontend now uses URL-based loading with
+  // individual /api/albums/:id/cover endpoints, which enables browser caching.
+  // Kept for backwards compatibility but consider removing in future versions.
   app.get('/api/albums/covers', ensureAuthAPI, async (req, res) => {
     try {
       const { ids } = req.query;
@@ -239,12 +254,16 @@ module.exports = (app, deps) => {
       );
 
       // Build response object with data URIs
+      // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
       const covers = {};
       for (const row of result.rows) {
         if (row.cover_image) {
           const format = (row.cover_image_format || 'jpeg').toLowerCase();
-          covers[row.album_id] =
-            `data:image/${format};base64,${row.cover_image}`;
+          // Support both Buffer (BYTEA) and string (legacy TEXT) formats
+          const base64 = Buffer.isBuffer(row.cover_image)
+            ? row.cover_image.toString('base64')
+            : row.cover_image;
+          covers[row.album_id] = `data:image/${format};base64,${base64}`;
         }
       }
 
@@ -654,19 +673,37 @@ module.exports = (app, deps) => {
           // Normal mode: return URLs for fast parallel loading & caching
           ...(isExport
             ? {
-                cover_image: item.coverImage || '',
+                // coverImage is BYTEA (Buffer) - convert to base64 for JSON export
+                cover_image: item.coverImage
+                  ? Buffer.isBuffer(item.coverImage)
+                    ? item.coverImage.toString('base64')
+                    : item.coverImage
+                  : '',
                 rank: index + 1,
                 points: getPointsForPosition(index + 1),
               }
-            : {
-                cover_image_url: item.albumId
-                  ? `/api/albums/${item.albumId}/cover`
-                  : null,
-                // Keep base64 as fallback for custom images (not in albums table)
-                ...(item.coverImage && !item.albumId
-                  ? { cover_image: item.coverImage }
-                  : {}),
-              }),
+            : (() => {
+                // Priority: custom cover (stored in list_items) > canonical cover (via URL)
+                // If coverImage exists, it means deduplication detected a DIFFERENT cover
+                // than the canonical album cover, so we must use the custom one.
+                if (item.coverImage) {
+                  // Custom cover - return inline base64
+                  return {
+                    cover_image: Buffer.isBuffer(item.coverImage)
+                      ? item.coverImage.toString('base64')
+                      : item.coverImage,
+                    cover_image_format: item.coverImageFormat || 'jpeg',
+                  };
+                } else if (item.albumId) {
+                  // No custom cover, but has albumId - use URL for canonical cover
+                  return {
+                    cover_image_url: `/api/albums/${item.albumId}/cover`,
+                  };
+                } else {
+                  // No cover at all
+                  return {};
+                }
+              })()),
         }));
 
         res.json(data);

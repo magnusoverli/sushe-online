@@ -69,6 +69,10 @@ class PgDatastore {
   _sanitizeParams(params) {
     if (!params || !Array.isArray(params)) return params;
     return params.map((param) => {
+      // Handle Buffer (BYTEA) - show size instead of binary content
+      if (Buffer.isBuffer(param)) {
+        return `[BYTEA: ${param.length} bytes]`;
+      }
       if (
         typeof param === 'string' &&
         param.length > 100 &&
@@ -367,7 +371,9 @@ class PgDatastore {
         COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
         COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
         COALESCE(li.tracks, a.tracks) as tracks,
-        COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
+        -- For cover_image: if list_item has a custom cover (NOT NULL), use it
+        -- Otherwise fall back to album's cover. BYTEA can't be empty string.
+        COALESCE(li.cover_image, a.cover_image) as cover_image,
         COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format
       FROM list_items li
       LEFT JOIN albums a ON li.album_id = a.album_id

@@ -147,6 +147,16 @@ describe('PgDatastore', () => {
       const result = datastore._sanitizeParams(params);
       assert.deepStrictEqual(result, params);
     });
+
+    it('should sanitize Buffer params (BYTEA)', () => {
+      const buffer = Buffer.from('test image binary data');
+      const result = datastore._sanitizeParams([buffer, 'other', 123]);
+      assert.strictEqual(result.length, 3);
+      assert.ok(result[0].includes('[BYTEA:'));
+      assert.ok(result[0].includes('bytes]'));
+      assert.strictEqual(result[1], 'other');
+      assert.strictEqual(result[2], 123);
+    });
   });
 
   describe('_mapField', () => {

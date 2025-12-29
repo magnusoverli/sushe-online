@@ -83,6 +83,23 @@ class MigrationManager {
       await this.pool.query('COMMIT');
 
       logger.info(`Migration ${version} executed successfully`);
+
+      // Run post-migration hook outside transaction (for VACUUM, etc.)
+      if (typeof migrationModule.postMigrate === 'function') {
+        try {
+          logger.info(`Running post-migration hook for ${version}...`);
+          await migrationModule.postMigrate(this.pool);
+          logger.info(`Post-migration hook for ${version} completed`);
+        } catch (postError) {
+          // Log but don't fail - the migration itself succeeded
+          logger.warn(
+            `Post-migration hook for ${version} failed (non-fatal):`,
+            {
+              error: postError.message,
+            }
+          );
+        }
+      }
     } catch (error) {
       // Rollback transaction
       await this.pool.query('ROLLBACK');
