@@ -24,7 +24,6 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
  * @param {Function} deps.showConfirmation - Show confirmation dialog
  * @param {Function} deps.apiCall - Make API call
  * @param {Function} deps.displayAlbums - Display albums in container
- * @param {Function} deps.fetchAndApplyCovers - Fetch and apply album covers
  * @param {Function} deps.updateListNav - Update list navigation
  * @param {Function} deps.fetchTracksForAlbum - Fetch tracks for an album
  * @param {Function} deps.playAlbum - Play album by index
@@ -56,7 +55,6 @@ export function createMobileUI(deps = {}) {
     showConfirmation,
     apiCall,
     displayAlbums,
-    fetchAndApplyCovers,
     updateListNav,
     fetchTracksForAlbum,
     playAlbum,
@@ -1347,7 +1345,6 @@ export function createMobileUI(deps = {}) {
       document.body.scrollTop = 0;
 
       displayAlbums(albumsToSave);
-      fetchAndApplyCovers(albumsToSave);
 
       try {
         await saveList(currentList, albumsToSave);
@@ -1357,7 +1354,6 @@ export function createMobileUI(deps = {}) {
         showToast('Error saving changes', 'error');
         albumsToSave[index] = album;
         displayAlbums(albumsToSave);
-        fetchAndApplyCovers(albumsToSave);
       }
     };
 

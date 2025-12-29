@@ -91,10 +91,6 @@ function displayAlbums(albums, options = {}) {
   return getAlbumDisplayModule().displayAlbums(albums, options);
 }
 
-function fetchAndApplyCovers(albums) {
-  return getAlbumDisplayModule().fetchAndApplyCovers(albums);
-}
-
 function fetchAndDisplayPlaycounts(listId, forceRefresh = false) {
   return getAlbumDisplayModule().fetchAndDisplayPlaycounts(
     listId,
@@ -194,7 +190,6 @@ function getMobileUIModule() {
       showConfirmation,
       apiCall,
       displayAlbums,
-      fetchAndApplyCovers,
       updateListNav,
       fetchTracksForAlbum,
       playAlbum,
@@ -470,10 +465,6 @@ function getRealtimeSyncModule() {
         setListData(listName, data);
         if (currentList === listName) {
           displayAlbums(data, { forceFullRebuild: true });
-          // Also fetch and apply album covers (fixes missing images issue)
-          fetchAndApplyCovers(data).catch((err) => {
-            console.warn('Background cover fetch failed:', err);
-          });
         }
         return { wasLocalSave: false };
       },
@@ -2505,10 +2496,6 @@ async function selectList(listName) {
         // Pass forceFullRebuild flag to skip incremental update checks when switching lists
         if (currentList === listName) {
           displayAlbums(data, { forceFullRebuild: true });
-          // Batch fetch all album covers in a single request (non-blocking)
-          fetchAndApplyCovers(data).catch((err) => {
-            console.warn('Background cover fetch failed:', err);
-          });
           // Fetch Last.fm playcounts in background (non-blocking)
           const listMeta = getListMetadata(listName);
           if (listMeta?._id) {

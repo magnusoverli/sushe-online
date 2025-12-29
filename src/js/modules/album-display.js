@@ -1272,9 +1272,10 @@ export function createAlbumDisplay(deps = {}) {
    * @param {Array} albums - Album array to display
    * @param {Object} options - Display options
    * @param {boolean} options.forceFullRebuild - Force full rebuild
+   * @param {boolean} options.skipCoverFetch - Skip fetching covers (useful for field-only updates)
    */
   function displayAlbums(albums, options = {}) {
-    const { forceFullRebuild = false } = options;
+    const { forceFullRebuild = false, skipCoverFetch = false } = options;
     const isMobile = window.innerWidth < 1024;
     const container = document.getElementById('albumContainer');
 
@@ -1294,6 +1295,7 @@ export function createAlbumDisplay(deps = {}) {
 
       const updateType = detectUpdateType(lastRenderedMutableState, albums);
 
+      // FIELD_UPDATE and HYBRID_UPDATE don't need cover refetch - covers don't change
       if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
         const success = updateAlbumFields(albums, isMobile);
 
@@ -1317,6 +1319,20 @@ export function createAlbumDisplay(deps = {}) {
         console.warn(
           `Incremental update (${updateType}) failed, falling back to full rebuild`
         );
+      }
+    }
+
+    // OPTIMIZATION: Start cover fetch early (before DOM work) for parallelism
+    // Only fetch for albums that need it (have album_id but no cached cover_image)
+    if (!skipCoverFetch && albums && albums.length > 0) {
+      const albumsNeedingCovers = albums.filter(
+        (a) => a.album_id && !a.cover_image
+      );
+      if (albumsNeedingCovers.length > 0) {
+        // Fire and forget - runs in parallel with DOM building below
+        fetchAndApplyCovers(albumsNeedingCovers).catch((err) => {
+          console.warn('Background cover fetch failed:', err);
+        });
       }
     }
 
