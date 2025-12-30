@@ -96,7 +96,10 @@ function buildAlbumMap(items, userMap) {
         artist: item.artist || '',
         album: item.album || '',
         // Convert BYTEA Buffer to base64 data URL for JSON serialization
-        coverImage: convertCoverToDataUrl(item.cover_image, item.cover_image_format),
+        coverImage: convertCoverToDataUrl(
+          item.cover_image,
+          item.cover_image_format
+        ),
         releaseDate: item.release_date || '',
         country: item.country || '',
         genre1: item.genre_1 || '',
