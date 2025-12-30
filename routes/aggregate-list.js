@@ -20,8 +20,7 @@ module.exports = (app, deps) => {
       return res.status(400).send('Invalid year');
     }
 
-    const isAdmin = req.user && req.user.role === 'admin';
-    res.send(aggregateListTemplate(req.user, year, isAdmin));
+    res.send(aggregateListTemplate(req.user, year));
   });
 
   // ============ AGGREGATE LIST API ENDPOINTS ============

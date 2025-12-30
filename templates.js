@@ -1441,7 +1441,7 @@ const spotifyTemplate = (user) => `
 `;
 
 // Aggregate List template - collaborative album of the year page
-const aggregateListTemplate = (user, year, isAdmin = false) => `
+const aggregateListTemplate = (user, year) => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -2015,7 +2015,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body class="bg-black text-gray-200 min-h-screen">
-  <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
+  <div class="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
   
   
   ${headerComponent(user, 'aggregate')}
@@ -2035,28 +2035,11 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       </div>
     </div>
     
-    <!-- Admin panel (hidden by default, shown via JS if admin) -->
-    ${
-      isAdmin
-        ? `
-    <div id="adminPanel" class="mt-12 p-6 confirmation-card rounded-lg hidden">
-      <h2 class="text-xl font-bold text-gray-200 mb-4">
-        <i class="fas fa-shield-alt mr-2"></i>Admin Controls
-      </h2>
-      <div id="adminContent">
-        <!-- Populated by JavaScript -->
-      </div>
-    </div>
-    `
-        : ''
-    }
   </main>
   
   <script>
     const YEAR = ${year};
-    const IS_ADMIN = ${isAdmin};
     const USER_ID = '${user?._id || ''}';
-    const CURRENT_USERNAME = ${JSON.stringify(user?.username || '')};
     
     // HTML escape function to prevent XSS
     function escapeHtml(str) {
@@ -2858,12 +2841,12 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         }
         
         function getAnimationDuration(rank) {
-          if (rank === 1) return 10500; // Extended 10-second celebration
-          if (rank === 2) return 1800;
-          if (rank === 3) return 1500;
-          if (rank === 4) return 1200;
-          if (rank === 5) return 1000;
-          return 800; // regular albums
+          if (rank === 1) return 2800;  // 800ms delay + 2s burnAwayDelayed
+          if (rank === 2) return 1300;  // matches glowBorderSilver (1.3s)
+          if (rank === 3) return 1100;  // matches glowBorderBronze (1.1s)
+          if (rank === 4) return 1100;  // matches glowBorderRank4 (1.1s)
+          if (rank === 5) return 1000;  // matches glowBorderRank5 (1s)
+          return 800;                   // matches burnAway (0.8s)
         }
         
         // Animate overlays with stagger
@@ -2931,7 +2914,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         });
         
         // Calculate total phase duration
-        const phaseDuration = maxDuration + 200; // Add buffer
+        const phaseDuration = maxDuration + 50; // Minimal buffer
         
         setTimeout(() => {
           currentPhase++;
@@ -3021,70 +3004,6 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         '</div>';
     }
     
-    // Render admin panel
-    function renderAdminPanel(status, stats) {
-      if (!IS_ADMIN) return;
-      
-      const panel = document.getElementById('adminPanel');
-      const content = document.getElementById('adminContent');
-      panel.classList.remove('hidden');
-      
-      const hasConfirmed = status.confirmations.some(c => c.username === CURRENT_USERNAME);
-      
-      let html = '';
-      
-      if (status.revealed) {
-        html = '<p class="text-green-400"><i class="fas fa-check-circle mr-2"></i>Aggregate list has been revealed</p>';
-      } else {
-        // Stats preview (anonymous)
-        if (stats) {
-          html += '<div class="mb-6">' +
-            '<h3 class="text-sm text-gray-500 uppercase tracking-wide mb-2">Anonymous Stats Preview</h3>' +
-            '<div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">' +
-              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.participantCount + '</div><div class="text-xs text-gray-500">Participants</div></div>' +
-              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.totalAlbums + '</div><div class="text-xs text-gray-500">Total Albums</div></div>' +
-              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.albumsWith3PlusVoters + '</div><div class="text-xs text-gray-500">3+ Voters</div></div>' +
-              '<div class="bg-gray-800 rounded p-3"><div class="text-2xl font-bold text-gray-200">' + stats.albumsWith2Voters + '</div><div class="text-xs text-gray-500">2 Voters</div></div>' +
-            '</div>' +
-          '</div>';
-        }
-        
-        // Confirmation button
-        html += '<div class="flex items-center gap-4">' +
-          (hasConfirmed ? 
-            '<button onclick="revokeConfirmation()" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition"><i class="fas fa-times mr-2"></i>Revoke Confirmation</button>' :
-            '<button onclick="confirmReveal()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition"><i class="fas fa-check mr-2"></i>Confirm Reveal</button>'
-          ) +
-          '<span class="text-gray-500">' + status.confirmationCount + '/' + status.requiredConfirmations + ' confirmations</span>' +
-        '</div>';
-      }
-      
-      content.innerHTML = html;
-    }
-    
-    // Admin actions
-    async function confirmReveal() {
-      try {
-        const result = await apiFetch('/api/aggregate-list/' + YEAR + '/confirm', { method: 'POST' });
-        if (result.revealed) {
-          window.location.reload();
-        } else {
-          loadAggregateList();
-        }
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-    
-    async function revokeConfirmation() {
-      try {
-        await apiFetch('/api/aggregate-list/' + YEAR + '/confirm', { method: 'DELETE' });
-        loadAggregateList();
-      } catch (err) {
-        alert('Error: ' + err.message);
-      }
-    }
-    
     // Main load function
     async function loadAggregateList() {
       try {
@@ -3114,16 +3033,6 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         } else {
           // Show pending state
           renderPendingReveal(status);
-        }
-        
-        // Load admin panel if admin
-        if (IS_ADMIN) {
-          try {
-            const statsRes = await apiFetch('/api/aggregate-list/' + YEAR + '/stats');
-            renderAdminPanel(status, statsRes.stats);
-          } catch (e) {
-            renderAdminPanel(status, null);
-          }
         }
       } catch (err) {
         document.getElementById('aggregateListContent').innerHTML = 

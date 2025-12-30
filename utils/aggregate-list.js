@@ -182,7 +182,6 @@ function sortAndRankAlbums(albumMap) {
     }
   }
 
-
   return albums;
 }
 
@@ -590,7 +589,6 @@ function createAggregateList(deps = {}) {
    */
   async function addConfirmation(year, adminUserId) {
     log.info(`Admin ${adminUserId} confirming reveal for year ${year}`);
-
 
     let aggregateList = await get(year);
     if (!aggregateList) {
