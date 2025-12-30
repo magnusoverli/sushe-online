@@ -59,6 +59,24 @@ function getPositionPoints(position) {
 // ============================================
 
 /**
+ * Convert BYTEA cover image to base64 data URL
+ * @param {Buffer|string|null} coverImage - Cover image data (Buffer from BYTEA or legacy string)
+ * @param {string} format - Image format (e.g., 'JPEG', 'PNG')
+ * @returns {string} - Base64 data URL or empty string
+ */
+function convertCoverToDataUrl(coverImage, format) {
+  if (!coverImage) return '';
+
+  // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
+  const base64 = Buffer.isBuffer(coverImage)
+    ? coverImage.toString('base64')
+    : coverImage;
+
+  const imageFormat = (format || 'jpeg').toLowerCase();
+  return `data:image/${imageFormat};base64,${base64}`;
+}
+
+/**
  * Build album map from list items
  * @param {Array} items - List items from database
  * @param {Map} userMap - Map of user_id -> username
@@ -77,7 +95,8 @@ function buildAlbumMap(items, userMap) {
         albumId: item.album_id || null,
         artist: item.artist || '',
         album: item.album || '',
-        coverImage: item.cover_image || '',
+        // Convert BYTEA Buffer to base64 data URL for JSON serialization
+        coverImage: convertCoverToDataUrl(item.cover_image, item.cover_image_format),
         releaseDate: item.release_date || '',
         country: item.country || '',
         genre1: item.genre_1 || '',
@@ -239,7 +258,8 @@ async function fetchListItemsForLists(pool, listIds) {
       COALESCE(NULLIF(li.country, ''), a.country) as country,
       COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
       COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
-      COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
+      COALESCE(li.cover_image, a.cover_image) as cover_image,
+      COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
       l.user_id
     FROM list_items li
     JOIN lists l ON li.list_id = l._id

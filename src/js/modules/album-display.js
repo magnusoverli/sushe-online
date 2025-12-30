@@ -1320,10 +1320,6 @@ export function createAlbumDisplay(deps = {}) {
       }
     }
 
-    // NOTE: fetchAndApplyCovers is no longer needed - images are now loaded via URL
-    // (cover_image_url) with browser-native lazy loading and HTTP caching.
-    // The data-lazy-src attribute triggers IntersectionObserver loading.
-
     // Full rebuild path - clear element caches
     positionElementCache = new WeakMap();
     rowElementsCache = new WeakMap();
@@ -1402,20 +1398,6 @@ export function createAlbumDisplay(deps = {}) {
     });
 
     reapplyNowPlayingBorder();
-  }
-
-  /**
-   * @deprecated No longer used - images are now loaded via URL with browser caching.
-   * Kept for backwards compatibility but does nothing.
-   * @param {Array} _albums - Album array (unused)
-   */
-  async function fetchAndApplyCovers(_albums) {
-    // No-op: Images are now loaded via URL (cover_image_url) with:
-    // - IntersectionObserver for lazy loading (data-lazy-src)
-    // - Browser HTTP caching (Cache-Control: 1 year, immutable)
-    // - Individual /api/albums/:id/cover endpoints
-    // This eliminates the need for batch fetching data URIs.
-    return;
   }
 
   /**
@@ -1578,7 +1560,6 @@ export function createAlbumDisplay(deps = {}) {
   // Return public API
   return {
     displayAlbums,
-    fetchAndApplyCovers,
     fetchAndDisplayPlaycounts,
     updatePositionNumbers,
     clearLastRenderedCache,

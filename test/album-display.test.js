@@ -51,7 +51,6 @@ describe('album-display module', () => {
 
       // Check all public methods exist
       assert.strictEqual(typeof module.displayAlbums, 'function');
-      assert.strictEqual(typeof module.fetchAndApplyCovers, 'function');
       assert.strictEqual(typeof module.updatePositionNumbers, 'function');
       assert.strictEqual(typeof module.clearLastRenderedCache, 'function');
       assert.strictEqual(typeof module.processAlbumData, 'function');
@@ -229,10 +228,10 @@ describe('album-display module', () => {
       assert.strictEqual(result, 'FIELD_UPDATE');
     });
 
-    it('should not track cover_image changes (handled by batch fetch)', () => {
+    it('should not track cover_image changes (handled by URL-based loading)', () => {
       // Note: cover_image is intentionally NOT tracked in detectUpdateType
       // because storing it in the lightweight mutable state would be expensive.
-      // Cover image changes are handled by the fetchAndApplyCovers batch pattern.
+      // Cover images are now loaded via URL with IntersectionObserver lazy loading.
       // In practice, cover_image-only changes are also caught by the fingerprint
       // comparison at the displayAlbums level before detectUpdateType is called.
       const module = createAlbumDisplay({});
