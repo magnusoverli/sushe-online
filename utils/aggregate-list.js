@@ -16,42 +16,42 @@ const POSITION_POINTS = {
   9: 34,
   10: 32,
   11: 30,
-  12: 28,
-  13: 26,
-  14: 24,
-  15: 22,
-  16: 20,
-  17: 18,
-  18: 16,
-  19: 14,
-  20: 12,
-  21: 11,
-  22: 10,
-  23: 9,
-  24: 8,
-  25: 7,
-  26: 6,
-  27: 5,
-  28: 4,
-  29: 3,
-  30: 2,
-  31: 2,
-  32: 2,
-  33: 2,
-  34: 2,
-  35: 2,
-  36: 1,
-  37: 1,
-  38: 1,
-  39: 1,
+  12: 29,
+  13: 28,
+  14: 27,
+  15: 26,
+  16: 25,
+  17: 24,
+  18: 23,
+  19: 22,
+  20: 21,
+  21: 20,
+  22: 19,
+  23: 18,
+  24: 17,
+  25: 16,
+  26: 15,
+  27: 14,
+  28: 13,
+  29: 12,
+  30: 11,
+  31: 10,
+  32: 9,
+  33: 8,
+  34: 7,
+  35: 6,
+  36: 5,
+  37: 4,
+  38: 3,
+  39: 2,
   40: 1,
 };
 
 /**
- * Get points for a position (0 for positions beyond 40)
+ * Get points for a position (1 point for positions beyond 40)
  */
 function getPositionPoints(position) {
-  return POSITION_POINTS[position] || 0;
+  return POSITION_POINTS[position] || 1;
 }
 
 // ============================================
@@ -154,12 +154,32 @@ function sortAndRankAlbums(albumMap) {
       if (b.totalPoints !== a.totalPoints) {
         return b.totalPoints - a.totalPoints;
       }
-      return b.voterCount - a.voterCount;
+      // Tiebreaker: highest position (lower number wins)
+      return a.highestPosition - b.highestPosition;
     });
 
-  albums.forEach((album, index) => {
-    album.rank = index + 1;
-  });
+  // Assign ranks with shared positions for ties
+  let currentRank = 1;
+  for (let i = 0; i < albums.length; i++) {
+    if (i > 0) {
+      const prev = albums[i - 1];
+      const curr = albums[i];
+      // Check if this album is tied with the previous one (same points and highest position)
+      if (
+        prev.totalPoints === curr.totalPoints &&
+        prev.highestPosition === curr.highestPosition
+      ) {
+        // Same rank as previous
+        albums[i].rank = albums[i - 1].rank;
+      } else {
+        // New rank (skip positions for ties)
+        currentRank = i + 1;
+        albums[i].rank = currentRank;
+      }
+    } else {
+      albums[0].rank = 1;
+    }
+  }
 
   return albums;
 }

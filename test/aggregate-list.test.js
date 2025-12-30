@@ -49,7 +49,7 @@ describe('aggregate-list', () => {
     });
 
     it('should have correct points for position 20', () => {
-      assert.strictEqual(POSITION_POINTS[20], 12);
+      assert.strictEqual(POSITION_POINTS[20], 21);
     });
 
     it('should have correct points for position 40', () => {
@@ -65,17 +65,17 @@ describe('aggregate-list', () => {
     it('should return correct points for valid positions', () => {
       assert.strictEqual(getPositionPoints(1), 60);
       assert.strictEqual(getPositionPoints(5), 43);
-      assert.strictEqual(getPositionPoints(15), 22);
+      assert.strictEqual(getPositionPoints(15), 26);
     });
 
-    it('should return 0 for positions beyond 40', () => {
-      assert.strictEqual(getPositionPoints(41), 0);
-      assert.strictEqual(getPositionPoints(100), 0);
+    it('should return 1 for positions beyond 40', () => {
+      assert.strictEqual(getPositionPoints(41), 1);
+      assert.strictEqual(getPositionPoints(100), 1);
     });
 
-    it('should return 0 for invalid positions', () => {
-      assert.strictEqual(getPositionPoints(0), 0);
-      assert.strictEqual(getPositionPoints(-1), 0);
+    it('should return 1 for invalid positions', () => {
+      assert.strictEqual(getPositionPoints(0), 1);
+      assert.strictEqual(getPositionPoints(-1), 1);
     });
   });
 
@@ -208,17 +208,18 @@ describe('aggregate-list', () => {
       assert.strictEqual(albumB.voterCount, 1);
     });
 
-    it('should use voterCount as tiebreaker when points are equal', async () => {
+    it('should use highestPosition as tiebreaker when points are equal', async () => {
       const pool = createMockPool([
         {
           rows: [
             { list_id: 'list1', user_id: 'user1', username: 'alice' },
             { list_id: 'list2', user_id: 'user2', username: 'bob' },
+            { list_id: 'list3', user_id: 'user3', username: 'carol' },
           ],
         },
         {
           rows: [
-            // Album A: 60 points from 1 voter (position 1)
+            // Album A: positions [1, 20] = 60 + 21 = 81 points, highest = 1
             {
               list_id: 'list1',
               user_id: 'user1',
@@ -232,20 +233,24 @@ describe('aggregate-list', () => {
               genre_1: '',
               genre_2: '',
             },
-            // Album B: 60 points from 2 voters (position 10 + position 11 = 32 + 30 = 62... let's adjust)
-            // Actually let's make it: position 5 (43) + position 6 (40) = 83...
-            // We need equal points. Let's use position 2 (54) + position 40 (1) = 55... not 60
-            // Let's try: Album B at position 3 from user1 (50) and position 10 from user2 (32) = 82
-            // vs Album C at position 2 from user1 (54) only = 54
-            // Let's simplify: both have 60 points but different voter counts
-            // Album B: position 10 (32) + position 11 (30) = 62 from 2 voters
-            // vs Album A: position 1 (60) from 1 voter
-            // They're not equal... let me recalculate
-            // Actually for tiebreaker test, let's just verify the sorting logic
             {
-              list_id: 'list1',
-              user_id: 'user1',
-              position: 10,
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 20,
+              album_id: 'albumA',
+              artist: 'Artist A',
+              album: 'Album A',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album B: positions [2, 14] = 54 + 27 = 81 points, highest = 2
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 2,
               album_id: 'albumB',
               artist: 'Artist B',
               album: 'Album B',
@@ -256,9 +261,9 @@ describe('aggregate-list', () => {
               genre_2: '',
             },
             {
-              list_id: 'list2',
-              user_id: 'user2',
-              position: 11,
+              list_id: 'list3',
+              user_id: 'user3',
+              position: 14,
               album_id: 'albumB',
               artist: 'Artist B',
               album: 'Album B',
@@ -276,16 +281,18 @@ describe('aggregate-list', () => {
 
       const result = await aggregateList.aggregateForYear(2024);
 
-      // Album B has more voters (2) than Album A (1), but Album A has more points (60 > 62)
-      // Wait, Album B has 32+30=62 points, Album A has 60 points
-      // So Album B should be ranked higher due to more points
       const albumA = result.data.albums.find((a) => a.albumId === 'albumA');
       const albumB = result.data.albums.find((a) => a.albumId === 'albumB');
 
-      assert.strictEqual(albumB.totalPoints, 62);
-      assert.strictEqual(albumA.totalPoints, 60);
-      assert.strictEqual(albumB.rank, 1); // Higher points
-      assert.strictEqual(albumA.rank, 2);
+      // Both albums have 81 points
+      assert.strictEqual(albumA.totalPoints, 81); // 60 + 21
+      assert.strictEqual(albumB.totalPoints, 81); // 54 + 27
+      assert.strictEqual(albumA.highestPosition, 1);
+      assert.strictEqual(albumB.highestPosition, 2);
+
+      // Album A ranks higher due to better highest position (1 vs 2)
+      assert.strictEqual(albumA.rank, 1);
+      assert.strictEqual(albumB.rank, 2);
     });
 
     it('should calculate average, highest, and lowest positions correctly', async () => {
@@ -351,6 +358,128 @@ describe('aggregate-list', () => {
       assert.strictEqual(album.lowestPosition, 9);
       assert.strictEqual(album.averagePosition, 5); // (1+5+9)/3 = 5
       assert.strictEqual(album.totalPoints, 60 + 43 + 34); // 137
+    });
+
+    it('should share ranks for albums with same points and highest position', async () => {
+      const pool = createMockPool([
+        {
+          rows: [
+            { list_id: 'list1', user_id: 'user1', username: 'alice' },
+            { list_id: 'list2', user_id: 'user2', username: 'bob' },
+            { list_id: 'list3', user_id: 'user3', username: 'carol' },
+          ],
+        },
+        {
+          rows: [
+            // Album A: positions [1, 20] = 60 + 21 = 81 points, highest = 1
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 1,
+              album_id: 'albumA',
+              artist: 'Artist A',
+              album: 'Album A',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 20,
+              album_id: 'albumA',
+              artist: 'Artist A',
+              album: 'Album A',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album B: positions [1, 20] = 60 + 21 = 81 points, highest = 1 - TIED with A
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 1,
+              album_id: 'albumB',
+              artist: 'Artist B',
+              album: 'Album B',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            {
+              list_id: 'list3',
+              user_id: 'user3',
+              position: 20,
+              album_id: 'albumB',
+              artist: 'Artist B',
+              album: 'Album B',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album C: positions [2] = 54 points, highest = 2
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 2,
+              album_id: 'albumC',
+              artist: 'Artist C',
+              album: 'Album C',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+          ],
+        },
+      ]);
+      const logger = createMockLogger();
+      const aggregateList = createAggregateList({ pool, logger });
+
+      const result = await aggregateList.aggregateForYear(2024);
+
+      // Albums A and B should both be rank 1 (tied on points and highest position)
+      const albumA = result.data.albums.find((a) => a.albumId === 'albumA');
+      const albumB = result.data.albums.find((a) => a.albumId === 'albumB');
+      const albumC = result.data.albums.find((a) => a.albumId === 'albumC');
+
+      assert.strictEqual(
+        albumA.totalPoints,
+        81,
+        'Album A should have 81 points'
+      );
+      assert.strictEqual(
+        albumB.totalPoints,
+        81,
+        'Album B should have 81 points'
+      );
+      assert.strictEqual(
+        albumA.highestPosition,
+        1,
+        'Album A highest position should be 1'
+      );
+      assert.strictEqual(
+        albumB.highestPosition,
+        1,
+        'Album B highest position should be 1'
+      );
+
+      assert.strictEqual(albumA.rank, 1, 'Album A should be rank 1');
+      assert.strictEqual(albumB.rank, 1, 'Album B should be rank 1 (tied)');
+      assert.strictEqual(
+        albumC.rank,
+        3,
+        'Album C should be rank 3 (skips rank 2)'
+      );
     });
 
     it('should generate correct anonymous stats', async () => {
