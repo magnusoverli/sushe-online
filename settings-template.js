@@ -2530,7 +2530,7 @@ const settingsTemplate = (req, options) => {
       
       // Reset reveal experience (for testing the dramatic fog reveal)
       async function resetRevealExperience(year) {
-        if (!confirm(\`Reset your reveal experience for \${year}? You will see the dramatic fog reveal again when you visit the aggregate list page.\`)) return;
+        if (!confirm(\`Reset your reveal experience for \${year}? You will see the dramatic burning reveal again when you visit the aggregate list page.\`)) return;
         
         try {
           const response = await fetch(\`/api/aggregate-list/\${year}/reset-seen\`, {

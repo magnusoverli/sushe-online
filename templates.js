@@ -1503,11 +1503,55 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
     .voter-chip {
       display: inline-flex;
       align-items: center;
-      padding: 0.25rem 0.5rem;
+      padding: 0.125rem 0.375rem;
       background: #374151;
       border-radius: 9999px;
+      font-size: 0.65rem;
+      margin: 0.0625rem;
+      white-space: nowrap;
+    }
+    
+    /* Compact card layout */
+    .album-card-compact {
+      position: relative;
+    }
+    
+    .album-card-compact .card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    
+    .album-card-compact .card-title-area {
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .album-card-compact .card-voters {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      max-width: 45%;
+      gap: 0.125rem;
+    }
+    
+    .album-card-compact .card-stats {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       font-size: 0.75rem;
-      margin: 0.125rem;
+      color: #9ca3af;
+      margin-top: 0.25rem;
+    }
+    
+    .album-card-compact .card-stats .stat-divider {
+      color: #4b5563;
+    }
+    
+    .album-card-compact .card-stats .points {
+      color: var(--accent-color);
+      font-weight: 600;
     }
     
     .confirmation-card {
@@ -1535,183 +1579,444 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       );
     }
     
-    /* ========== FOG REVEAL STYLES ========== */
+    /* ============ BURNING REVEAL STYLES ============ */
     
-    .fog-overlay {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 10;
-      background: linear-gradient(
-        to bottom,
-        rgba(0, 0, 0, 0.95) 0%,
-        rgba(17, 24, 39, 0.9) 20%,
-        rgba(17, 24, 39, 0.7) 40%,
-        rgba(17, 24, 39, 0.3) 70%,
-        transparent 100%
-      );
-      transition: opacity 1s ease-out;
+    /* Album card wrapper for reveal mode */
+    .reveal-card-wrapper {
+      position: relative;
+      overflow: visible;
     }
     
-    .fog-overlay.cleared {
+    /* Dark overlay covering unrevealed albums */
+    .burn-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #0a0a0a 100%);
+      border-radius: 0.5rem;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.6s ease-out;
+    }
+    
+    .burn-overlay::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 0.5rem;
+      border: 1px solid #333;
+      pointer-events: none;
+    }
+    
+    .burn-overlay .rank-preview {
+      font-size: 2rem;
+      font-weight: bold;
+      color: #444;
+      text-shadow: 0 0 10px rgba(0,0,0,0.8);
+    }
+    
+    /* Burn animation - glow border intensifies then overlay fades */
+    .burn-overlay.burning {
+      animation: burnAway 0.8s ease-out forwards;
+    }
+    
+    .burn-overlay.burning::before {
+      animation: glowBorder 0.8s ease-out forwards;
+    }
+    
+    @keyframes burnAway {
+      0% { opacity: 1; }
+      30% { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+    
+    @keyframes glowBorder {
+      0% { border-color: #333; box-shadow: none; }
+      20% { border-color: #f97316; box-shadow: 0 0 20px rgba(249, 115, 22, 0.5), inset 0 0 20px rgba(249, 115, 22, 0.1); }
+      50% { border-color: #fbbf24; box-shadow: 0 0 40px rgba(251, 191, 36, 0.6), inset 0 0 30px rgba(251, 191, 36, 0.2); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    /* Special glow colors for top 3 */
+    .burn-overlay.burning.bronze::before {
+      animation: glowBorderBronze 1s ease-out forwards;
+    }
+    
+    .burn-overlay.burning.silver::before {
+      animation: glowBorderSilver 1s ease-out forwards;
+    }
+    
+    .burn-overlay.burning.gold::before {
+      animation: glowBorderGold 1.2s ease-out forwards;
+    }
+    
+    /* Intensity level 5 - intro with purple glow */
+    @keyframes glowBorderRank5 {
+      0% { border-color: #333; box-shadow: none; }
+      20% { border-color: #6d28d9; box-shadow: 0 0 20px rgba(109, 40, 217, 0.5), inset 0 0 10px rgba(109, 40, 217, 0.1); }
+      40% { border-color: #7c3aed; box-shadow: 0 0 30px rgba(124, 58, 237, 0.6), inset 0 0 15px rgba(124, 58, 237, 0.15); }
+      60% { border-color: #8b5cf6; box-shadow: 0 0 35px rgba(139, 92, 246, 0.5), inset 0 0 12px rgba(139, 92, 246, 0.1); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.rank-5::before {
+      animation: glowBorderRank5 1s ease-out forwards;
+    }
+    
+    /* Intensity level 4 - building with brighter purple */
+    @keyframes glowBorderRank4 {
+      0% { border-color: #333; box-shadow: none; }
+      15% { border-color: #7c3aed; box-shadow: 0 0 25px rgba(124, 58, 237, 0.5), inset 0 0 12px rgba(124, 58, 237, 0.1); }
+      30% { border-color: #8b5cf6; box-shadow: 0 0 35px rgba(139, 92, 246, 0.65), inset 0 0 18px rgba(139, 92, 246, 0.15); }
+      50% { border-color: #a78bfa; box-shadow: 0 0 45px rgba(167, 139, 250, 0.75), inset 0 0 25px rgba(167, 139, 250, 0.2); }
+      70% { border-color: #c4b5fd; box-shadow: 0 0 50px rgba(196, 181, 253, 0.65), inset 0 0 20px rgba(196, 181, 253, 0.15); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.rank-4::before {
+      animation: glowBorderRank4 1.1s ease-out forwards;
+    }
+    
+    /* Intensity level 3 - bronze (intense) */
+    @keyframes glowBorderBronze {
+      0% { border-color: #333; box-shadow: none; }
+      20% { border-color: #b45309; box-shadow: 0 0 30px rgba(180, 83, 9, 0.6), inset 0 0 25px rgba(180, 83, 9, 0.2); }
+      40% { border-color: #d97706; box-shadow: 0 0 50px rgba(217, 119, 6, 0.8), inset 0 0 40px rgba(217, 119, 6, 0.3); }
+      60% { border-color: #f59e0b; box-shadow: 0 0 60px rgba(245, 158, 11, 0.7), inset 0 0 45px rgba(245, 158, 11, 0.25); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.bronze::before {
+      animation: glowBorderBronze 1.1s ease-out forwards;
+    }
+    
+    /* Intensity level 2 - silver (very intense) */
+    @keyframes glowBorderSilver {
+      0% { border-color: #333; box-shadow: none; }
+      15% { border-color: #6b7280; box-shadow: 0 0 25px rgba(156, 163, 175, 0.5); }
+      30% { border-color: #9ca3af; box-shadow: 0 0 40px rgba(156, 163, 175, 0.7), inset 0 0 30px rgba(156, 163, 175, 0.2); }
+      50% { border-color: #d1d5db; box-shadow: 0 0 70px rgba(209, 213, 219, 1), inset 0 0 50px rgba(209, 213, 219, 0.35); }
+      70% { border-color: #e5e7eb; box-shadow: 0 0 80px rgba(229, 231, 235, 1), inset 0 0 55px rgba(229, 231, 235, 0.4); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.silver::before {
+      animation: glowBorderSilver 1.3s ease-out forwards;
+    }
+    
+    /* Intensity level 1 - gold (maximum intensity, delayed reveal) */
+    @keyframes glowBorderGold {
+      0% { border-color: #333; box-shadow: none; }
+      10% { border-color: #92400e; box-shadow: 0 0 20px rgba(146, 64, 14, 0.5); }
+      25% { border-color: #b45309; box-shadow: 0 0 40px rgba(180, 83, 9, 0.7), inset 0 0 25px rgba(180, 83, 9, 0.2); }
+      40% { border-color: #d97706; box-shadow: 0 0 60px rgba(217, 119, 6, 0.85), inset 0 0 40px rgba(217, 119, 6, 0.3); }
+      55% { border-color: #f59e0b; box-shadow: 0 0 80px rgba(245, 158, 11, 0.95), inset 0 0 55px rgba(245, 158, 11, 0.4); }
+      70% { border-color: #fbbf24; box-shadow: 0 0 100px rgba(251, 191, 36, 1), inset 0 0 70px rgba(251, 191, 36, 0.5); }
+      85% { border-color: #fcd34d; box-shadow: 0 0 120px rgba(252, 211, 77, 1), inset 0 0 80px rgba(252, 211, 77, 0.55); }
+      100% { border-color: transparent; box-shadow: none; }
+    }
+    
+    .burn-overlay.burning.gold::before {
+      animation: glowBorderGold 2s ease-out forwards;
+    }
+    
+    /* Gold overlay has delayed fade for suspense */
+    .burn-overlay.burning.gold {
+      animation: burnAwayDelayed 2s ease-out forwards;
+    }
+    
+    @keyframes burnAwayDelayed {
+      0% { opacity: 1; }
+      60% { opacity: 1; }
+      100% { opacity: 0; pointer-events: none; }
+    }
+    
+    /* Ember particles */
+    .ember-container {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: visible;
+      z-index: 11;
+    }
+    
+    .ember {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #f97316;
+      box-shadow: 0 0 6px 2px rgba(249, 115, 22, 0.8);
       opacity: 0;
     }
     
-    /* Floating mist particles */
-    .fog-particle {
-      position: fixed;
-      width: 300px;
-      height: 300px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(100, 116, 139, 0.15) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: 11;
-      animation: floatMist 8s ease-in-out infinite;
+    .ember.active {
+      animation: emberFloat 1.2s ease-out forwards;
     }
     
-    .fog-particle:nth-child(2) {
-      animation-delay: -2s;
-      animation-duration: 10s;
+    @keyframes emberFloat {
+      0% { opacity: 0; transform: translateY(0) scale(1); }
+      10% { opacity: 1; }
+      50% { opacity: 0.8; transform: translateY(-30px) scale(0.8); }
+      100% { opacity: 0; transform: translateY(-80px) scale(0.3); }
     }
     
-    .fog-particle:nth-child(3) {
-      animation-delay: -4s;
-      animation-duration: 12s;
-    }
-    
-    @keyframes floatMist {
-      0%, 100% { transform: translateY(0) translateX(0) scale(1); opacity: 0.5; }
-      50% { transform: translateY(-30px) translateX(20px) scale(1.1); opacity: 0.3; }
-    }
-    
-    /* Album cards in fog mode */
-    .album-card.fog-hidden {
-      filter: blur(12px);
-      opacity: 0.15;
-      transform: scale(0.97);
-      transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .album-card.fog-revealing {
-      filter: blur(4px);
-      opacity: 0.5;
-      transform: scale(0.99);
-      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    .album-card.fog-revealed {
-      filter: blur(0);
-      opacity: 1;
-      transform: scale(1);
-      transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-    
-    /* Top 3 special glow effects */
-    .album-card.fog-revealed.top-3 {
-      box-shadow: 0 0 30px var(--accent-shadow), 0 0 60px rgba(251, 191, 36, 0.2);
-    }
-    
-    .album-card.fog-revealed.rank-1 {
-      box-shadow: 0 0 40px rgba(251, 191, 36, 0.5), 0 0 80px rgba(251, 191, 36, 0.3);
-    }
-    
-    @keyframes celebrationPulse {
-      0%, 100% { box-shadow: 0 0 40px rgba(251, 191, 36, 0.5); }
-      50% { box-shadow: 0 0 60px rgba(251, 191, 36, 0.8), 0 0 100px rgba(251, 191, 36, 0.4); }
-    }
-    
-    .album-card.celebration {
-      animation: celebrationPulse 1.5s ease-in-out 3;
-    }
-    
-    /* Scroll hint indicator */
-    .scroll-hint {
+    /* Floating reveal button */
+    .reveal-button-container {
       position: fixed;
       bottom: 2rem;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 0.5rem;
-      color: #9ca3af;
-      animation: bounceHint 2s ease-in-out infinite;
-      transition: opacity 0.5s;
-    }
-    
-    .scroll-hint.hidden {
-      opacity: 0;
-      pointer-events: none;
-    }
-    
-    @keyframes bounceHint {
-      0%, 100% { transform: translateX(-50%) translateY(0); }
-      50% { transform: translateX(-50%) translateY(-10px); }
-    }
-    
-    /* Reveal progress bar */
-    .reveal-progress {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 3px;
-      background: #1f2937;
       z-index: 100;
     }
     
-    .reveal-progress-bar {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent-color), #fbbf24);
-      transition: width 0.3s ease-out;
-      box-shadow: 0 0 10px var(--accent-shadow);
+    .reveal-button {
+      padding: 1rem 2rem;
+      font-size: 1.125rem;
+      font-weight: bold;
+      color: white;
+      background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+      border: none;
+      border-radius: 9999px;
+      cursor: pointer;
+      box-shadow: 0 4px 20px rgba(220, 38, 38, 0.5), 0 0 40px rgba(220, 38, 38, 0.3);
+      transition: transform 0.2s, box-shadow 0.2s;
+      animation: buttonPulse 2s ease-in-out infinite;
     }
     
-    /* Completion celebration overlay */
-    .celebration-overlay {
+    .reveal-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 30px rgba(220, 38, 38, 0.7), 0 0 50px rgba(220, 38, 38, 0.4);
+    }
+    
+    .reveal-button:active {
+      transform: scale(0.98);
+    }
+    
+    .reveal-button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      animation: none;
+    }
+    
+    @keyframes buttonPulse {
+      0%, 100% { box-shadow: 0 4px 20px rgba(220, 38, 38, 0.5), 0 0 40px rgba(220, 38, 38, 0.3); }
+      50% { box-shadow: 0 4px 30px rgba(220, 38, 38, 0.7), 0 0 60px rgba(220, 38, 38, 0.5); }
+    }
+    
+    /* Screen flash for #1 reveal */
+    .screen-flash {
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(251, 191, 36, 0.6) 0%, rgba(251, 191, 36, 0.2) 40%, transparent 70%);
+      pointer-events: none;
+      z-index: 50;
+      animation: flashFade 1.5s ease-out forwards;
+    }
+    
+    @keyframes flashFade {
+      0% { opacity: 0; }
+      15% { opacity: 1; }
+      30% { opacity: 0.8; }
+      100% { opacity: 0; }
+    }
+    
+    /* Fireworks container for #1 */
+    .fireworks-container {
       position: fixed;
       inset: 0;
       pointer-events: none;
-      z-index: 50;
+      z-index: 52;
+      overflow: hidden;
+    }
+    
+    /* Individual firework burst */
+    .firework {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+    
+    .firework.launching {
+      animation: fireworkLaunch var(--launch-duration, 0.8s) ease-out forwards;
+    }
+    
+    .firework.exploding {
+      animation: fireworkExplode 0.1s ease-out forwards;
+    }
+    
+    @keyframes fireworkLaunch {
+      0% { transform: translateY(0) scale(1); opacity: 1; }
+      100% { transform: translateY(var(--launch-height, -300px)) scale(0.5); opacity: 0.8; }
+    }
+    
+    @keyframes fireworkExplode {
+      0% { transform: scale(1); }
+      100% { transform: scale(2); opacity: 0; }
+    }
+    
+    /* Firework particle (after explosion) */
+    .firework-particle {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
       opacity: 0;
-      transition: opacity 0.5s;
     }
     
-    .celebration-overlay.active {
-      opacity: 1;
-      animation: celebrationFlash 1s ease-out;
+    .firework-particle.active {
+      animation: particleFly var(--particle-duration, 1.2s) ease-out forwards;
     }
     
-    @keyframes celebrationFlash {
-      0% { background: radial-gradient(circle at center top, rgba(251, 191, 36, 0.3) 0%, transparent 50%); }
-      100% { background: transparent; }
+    @keyframes particleFly {
+      0% { opacity: 1; transform: translate(0, 0) scale(1); }
+      50% { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--px), var(--py)) scale(0.3); }
     }
+    
+    /* Sparkle trail effect */
+    .sparkle-trail {
+      position: absolute;
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 0 6px 2px currentColor;
+      opacity: 0;
+    }
+    
+    .sparkle-trail.active {
+      animation: sparkleTrail 0.6s ease-out forwards;
+    }
+    
+    @keyframes sparkleTrail {
+      0% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(0); }
+    }
+    
+    /* Celebration confetti burst for #1 */
+    .celebration-burst {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 53;
+    }
+    
+    .confetti {
+      position: absolute;
+      width: 12px;
+      height: 12px;
+      opacity: 0;
+    }
+    
+    .confetti.active {
+      animation: confettiBurst 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+    
+    @keyframes confettiBurst {
+      0% { opacity: 1; transform: translate(0, 0) rotate(0deg) scale(1); }
+      60% { opacity: 1; }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) rotate(1080deg) scale(0.3); }
+    }
+    
+    /* Golden rays radiating from center */
+    .golden-rays {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 150vmax;
+      height: 150vmax;
+      pointer-events: none;
+      z-index: 49;
+      opacity: 0;
+      animation: raysAppear 10s ease-out forwards;
+    }
+    
+    .golden-rays::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: conic-gradient(
+        from 0deg,
+        transparent 0deg,
+        rgba(251, 191, 36, 0.4) 3deg,
+        rgba(253, 224, 71, 0.2) 6deg,
+        transparent 9deg,
+        transparent 15deg,
+        rgba(251, 191, 36, 0.4) 18deg,
+        rgba(253, 224, 71, 0.2) 21deg,
+        transparent 24deg,
+        transparent 30deg,
+        rgba(251, 191, 36, 0.4) 33deg,
+        rgba(253, 224, 71, 0.2) 36deg,
+        transparent 39deg,
+        transparent 45deg,
+        rgba(251, 191, 36, 0.4) 48deg,
+        rgba(253, 224, 71, 0.2) 51deg,
+        transparent 54deg,
+        transparent 60deg,
+        rgba(251, 191, 36, 0.4) 63deg,
+        rgba(253, 224, 71, 0.2) 66deg,
+        transparent 69deg,
+        transparent 75deg,
+        rgba(251, 191, 36, 0.4) 78deg,
+        rgba(253, 224, 71, 0.2) 81deg,
+        transparent 84deg,
+        transparent 90deg
+      );
+      animation: raysRotate 10s linear forwards;
+    }
+    
+    .golden-rays::after {
+      content: '';
+      position: absolute;
+      inset: 20%;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(251, 191, 36, 0.3) 0%, transparent 70%);
+      animation: raysCenterPulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes raysAppear {
+      0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3); }
+      10% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      80% { opacity: 0.7; transform: translate(-50%, -50%) scale(1.3); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+    }
+    
+    @keyframes raysRotate {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(180deg); }
+    }
+    
+    @keyframes raysCenterPulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+    
+    /* Position pulse for #5-#2 */
+    @keyframes positionPulse {
+      0% { opacity: 0; transform: scale(0.8); }
+      30% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.2); }
+    }
+    
+    /* Mini burst particles for #3 and #2 */
+    @keyframes miniBurstParticle {
+      0% { opacity: 1; transform: translate(0, 0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
+    }
+    
   </style>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body class="bg-black text-gray-200 min-h-screen">
   <div class="absolute inset-0 bg-gradient-to-br from-black via-gray-900 to-black -z-10"></div>
   
-  <!-- Fog reveal overlay (hidden by default) -->
-  <div id="fogOverlay" class="fog-overlay hidden"></div>
-  <div id="fogParticle1" class="fog-particle hidden" style="top: 10%; left: 20%;"></div>
-  <div id="fogParticle2" class="fog-particle hidden" style="top: 30%; right: 10%;"></div>
-  <div id="fogParticle3" class="fog-particle hidden" style="top: 60%; left: 40%;"></div>
-  
-  <!-- Scroll hint (hidden by default) -->
-  <div id="scrollHint" class="scroll-hint hidden">
-    <i class="fas fa-chevron-up text-2xl"></i>
-    <span class="text-sm">Scroll up to reveal</span>
-  </div>
-  
-  <!-- Reveal progress bar (hidden by default) -->
-  <div id="revealProgress" class="reveal-progress hidden">
-    <div id="revealProgressBar" class="reveal-progress-bar" style="width: 0%"></div>
-  </div>
-  
-  <!-- Celebration overlay -->
-  <div id="celebrationOverlay" class="celebration-overlay"></div>
   
   ${headerComponent(user, 'aggregate')}
   
@@ -1775,36 +2080,38 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       return pos + (s[(v - 20) % 10] || s[v] || s[0]);
     }
     
-    // Build album card HTML (shared between normal and fog mode)
-    function buildAlbumCardHtml(album, index, fogMode = false) {
+    // Build album card HTML (compact layout)
+    function buildAlbumCardHtml(album, index) {
       const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
-      const delay = fogMode ? 0 : Math.min(index * 50, 500);
-      const fogClass = fogMode ? ' fog-hidden' : '';
-      const top3Class = index < 3 ? ' top-3' : '';
-      const rank1Class = index === 0 ? ' rank-1' : '';
+      const delay = Math.min(index * 50, 500);
       
       const votersHtml = album.voters.map(v => 
-        '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-1">#' + v.position + '</span></span>'
+        '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
       ).join('');
       
-      return '<div class="album-card bg-gray-800/50 rounded-lg p-4' + (fogMode ? fogClass + top3Class + rank1Class : ' animate-fade-in') + '" data-rank="' + album.rank + '" style="' + (fogMode ? '' : 'animation-delay: ' + delay + 'ms; opacity: 0;') + '">' +
-        '<div class="flex items-start gap-4">' +
+      return '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3 animate-fade-in" data-rank="' + album.rank + '" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+        '<div class="flex items-center gap-3">' +
           '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
           '<div class="flex-shrink-0">' +
             (album.coverImage ? 
-              '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-16 h-16 md:w-20 md:h-20 rounded object-cover">' :
-              '<div class="w-16 h-16 md:w-20 md:h-20 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-2xl"></i></div>'
+              '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
+              '<div class="w-14 h-14 md:w-16 md:h-16 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
             ) +
           '</div>' +
           '<div class="flex-1 min-w-0">' +
-            '<h3 class="font-bold text-white truncate">' + (album.album || 'Unknown Album') + '</h3>' +
-            '<p class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</p>' +
-            '<div class="flex items-center gap-4 mt-2 text-sm">' +
-              '<span class="text-red-500 font-bold">' + album.totalPoints + ' pts</span>' +
-              '<span class="text-gray-500">' + album.voterCount + ' voter' + (album.voterCount !== 1 ? 's' : '') + '</span>' +
-              '<span class="text-gray-500">avg: ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+            '<div class="card-header">' +
+              '<div class="card-title-area">' +
+                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + (album.album || 'Unknown Album') + '</h3>' +
+              '</div>' +
+              '<div class="card-voters">' + votersHtml + '</div>' +
             '</div>' +
-            '<div class="mt-2 flex flex-wrap">' + votersHtml + '</div>' +
+            '<div class="card-stats">' +
+              '<span class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span class="points">' + album.totalPoints + ' pts</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span>avg ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>';
@@ -1819,22 +2126,623 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         return;
       }
       
-      const html = data.albums.map((album, index) => buildAlbumCardHtml(album, index, false)).join('');
+      const html = data.albums.map((album, index) => buildAlbumCardHtml(album, index)).join('');
       container.innerHTML = html;
     }
     
-    // ========== FOG REVEAL MODE ==========
+    // ============ DRAMATIC BURNING REVEAL ============
     
-    let fogRevealState = {
-      active: false,
-      observer: null,
-      revealedCount: 0,
-      totalAlbums: 0,
-      hasMarkedSeen: false
-    };
+    // Build album card with burn overlay for reveal mode (compact layout)
+    function buildRevealCardHtml(album, index) {
+      const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
+      
+      const votersHtml = album.voters.map(v => 
+        '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
+      ).join('');
+      
+      // Card content (compact layout, no fade-in animation)
+      const cardContent = '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3" data-rank="' + album.rank + '">' +
+        '<div class="flex items-center gap-3">' +
+          '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
+          '<div class="flex-shrink-0">' +
+            (album.coverImage ? 
+              '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
+              '<div class="w-14 h-14 md:w-16 md:h-16 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
+            ) +
+          '</div>' +
+          '<div class="flex-1 min-w-0">' +
+            '<div class="card-header">' +
+              '<div class="card-title-area">' +
+                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + (album.album || 'Unknown Album') + '</h3>' +
+              '</div>' +
+              '<div class="card-voters">' + votersHtml + '</div>' +
+            '</div>' +
+            '<div class="card-stats">' +
+              '<span class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span class="points">' + album.totalPoints + ' pts</span>' +
+              '<span class="stat-divider">·</span>' +
+              '<span>avg ' + formatPosition(Math.round(album.averagePosition)) + '</span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+      
+      // Wrap with overlay
+      return '<div class="reveal-card-wrapper" data-reveal-rank="' + album.rank + '">' +
+        cardContent +
+        '<div class="burn-overlay" data-rank="' + album.rank + '">' +
+          '<span class="rank-preview">#' + album.rank + '</span>' +
+          '<div class="ember-container"></div>' +
+        '</div>' +
+      '</div>';
+    }
     
-    // Render aggregate list in fog mode
-    function renderAggregateListFogMode(data) {
+    // Create ember particles for an overlay (intensity 1-5, where 1 is #1 position)
+    function spawnEmbers(overlay, intensity) {
+      const container = overlay.querySelector('.ember-container');
+      if (!container) return;
+      
+      // More embers for higher intensity (lower rank number)
+      const baseCount = 8;
+      const emberCount = baseCount + (6 - intensity) * 6; // #5=8, #4=14, #3=20, #2=26, #1=32
+      
+      // Ember colors get more golden for top positions
+      const emberColors = {
+        5: ['#7c3aed', '#8b5cf6'], // purple
+        4: ['#8b5cf6', '#a78bfa'], // lighter purple
+        3: ['#d97706', '#f59e0b'], // bronze/orange
+        2: ['#9ca3af', '#d1d5db', '#e5e7eb'], // silver
+        1: ['#f59e0b', '#fbbf24', '#fcd34d', '#fef3c7'] // gold
+      };
+      
+      const colors = emberColors[intensity] || ['#f97316'];
+      
+      for (let i = 0; i < emberCount; i++) {
+        const ember = document.createElement('div');
+        ember.className = 'ember';
+        
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        ember.style.background = color;
+        ember.style.boxShadow = '0 0 6px 2px ' + color;
+        
+        // Random position along edges
+        const edge = Math.floor(Math.random() * 4);
+        let left, top;
+        
+        switch(edge) {
+          case 0: // top
+            left = Math.random() * 100;
+            top = 0;
+            break;
+          case 1: // right
+            left = 100;
+            top = Math.random() * 100;
+            break;
+          case 2: // bottom
+            left = Math.random() * 100;
+            top = 100;
+            break;
+          case 3: // left
+            left = 0;
+            top = Math.random() * 100;
+            break;
+        }
+        
+        ember.style.left = left + '%';
+        ember.style.top = top + '%';
+        
+        // Stagger ember spawning more for intense reveals
+        const maxDelay = 0.2 + (6 - intensity) * 0.15;
+        ember.style.animationDelay = (Math.random() * maxDelay) + 's';
+        
+        // Longer float duration for top positions
+        const floatDuration = 1 + (6 - intensity) * 0.2;
+        ember.style.animationDuration = floatDuration + 's';
+        
+        container.appendChild(ember);
+        
+        // Trigger animation
+        requestAnimationFrame(() => ember.classList.add('active'));
+      }
+    }
+    
+    // ============ RETRO SOUND EFFECTS (Web Audio API) ============
+    
+    let audioCtx = null;
+    
+    function getAudioContext() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+    
+    // Play a single 8-bit style note
+    function playNote(frequency, duration, type, volume, delay) {
+      const ctx = getAudioContext();
+      const startTime = ctx.currentTime + (delay || 0);
+      
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.type = type || 'square';
+      osc.frequency.setValueAtTime(frequency, startTime);
+      
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(volume || 0.15, startTime + 0.01);
+      gain.gain.linearRampToValueAtTime(volume || 0.15, startTime + duration - 0.02);
+      gain.gain.linearRampToValueAtTime(0, startTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    }
+    
+    // Drum roll sound (building intensity)
+    function playDrumRoll(intensity) {
+      const baseFreq = 80 + (6 - intensity) * 20; // Higher pitch for higher ranks
+      const speed = 0.08 - (6 - intensity) * 0.01; // Faster for higher ranks
+      const count = 6 + (6 - intensity) * 2;
+      
+      for (let i = 0; i < count; i++) {
+        playNote(baseFreq + Math.random() * 20, 0.05, 'triangle', 0.1, i * speed);
+      }
+    }
+    
+    // Coin/powerup sound for positions 5-2
+    function playCoinSound(rank) {
+      const baseFreq = 400 + (5 - rank) * 100; // Higher for better ranks
+      playNote(baseFreq, 0.1, 'square', 0.12, 0);
+      playNote(baseFreq * 1.5, 0.15, 'square', 0.1, 0.08);
+    }
+    
+    // Mario-style fanfare for #1
+    function playVictoryFanfare() {
+      const notes = [
+        // Opening flourish
+        { f: 392, d: 0.1, t: 0 },      // G4
+        { f: 523, d: 0.1, t: 0.1 },    // C5
+        { f: 659, d: 0.1, t: 0.2 },    // E5
+        { f: 784, d: 0.15, t: 0.3 },   // G5
+        { f: 1047, d: 0.2, t: 0.45 },  // C6
+        { f: 988, d: 0.1, t: 0.65 },   // B5
+        { f: 1047, d: 0.4, t: 0.75 },  // C6 (held)
+        
+        // Secondary melody
+        { f: 659, d: 0.1, t: 1.2 },    // E5
+        { f: 784, d: 0.1, t: 1.3 },    // G5
+        { f: 1047, d: 0.1, t: 1.4 },   // C6
+        { f: 1175, d: 0.15, t: 1.5 },  // D6
+        { f: 1319, d: 0.3, t: 1.65 },  // E6
+        
+        // Final triumphant notes
+        { f: 1047, d: 0.15, t: 2.0 },  // C6
+        { f: 1175, d: 0.15, t: 2.15 }, // D6
+        { f: 1319, d: 0.5, t: 2.3 },   // E6 (finale)
+      ];
+      
+      notes.forEach(n => {
+        playNote(n.f, n.d, 'square', 0.12, n.t);
+        // Add harmony
+        playNote(n.f * 0.5, n.d, 'triangle', 0.06, n.t);
+      });
+      
+      // Bass drum hits
+      [0, 0.45, 1.2, 2.0, 2.3].forEach(t => {
+        playNote(60, 0.15, 'triangle', 0.15, t);
+      });
+      
+      // Shimmer effect at end
+      for (let i = 0; i < 8; i++) {
+        playNote(1319 + i * 50, 0.08, 'sine', 0.04, 2.5 + i * 0.05);
+      }
+    }
+    
+    // Firework explosion sound
+    function playFireworkSound() {
+      const ctx = getAudioContext();
+      const now = ctx.currentTime;
+      
+      // White noise burst for explosion
+      const bufferSize = ctx.sampleRate * 0.3;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2);
+      }
+      
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(3000, now);
+      filter.frequency.exponentialRampToValueAtTime(200, now + 0.3);
+      
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+      
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      
+      noise.start(now);
+      noise.stop(now + 0.3);
+    }
+    
+    // Create position-specific screen effects (graduated intensity for #5-#2)
+    function triggerPositionEffect(rank) {
+      const effectColors = {
+        5: { color: 'rgba(124, 58, 237, 0.15)', duration: 400 },  // Subtle purple pulse
+        4: { color: 'rgba(139, 92, 246, 0.25)', duration: 500 },  // Purple pulse
+        3: { color: 'rgba(217, 119, 6, 0.35)', duration: 600 },   // Bronze pulse
+        2: { color: 'rgba(209, 213, 219, 0.4)', duration: 700 }   // Silver pulse
+      };
+      
+      const effect = effectColors[rank];
+      if (!effect) return;
+      
+      // Create screen pulse
+      const pulse = document.createElement('div');
+      pulse.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:45;' +
+        'background:radial-gradient(circle at center, ' + effect.color + ' 0%, transparent 70%);' +
+        'animation: positionPulse ' + effect.duration + 'ms ease-out forwards;';
+      document.body.appendChild(pulse);
+      setTimeout(() => pulse.remove(), effect.duration);
+      
+      // Add mini firework burst for #3 and #2
+      if (rank <= 3) {
+        const burstCount = rank === 2 ? 3 : 2;
+        for (let i = 0; i < burstCount; i++) {
+          setTimeout(() => {
+            triggerMiniBurst(rank);
+          }, i * 150);
+        }
+      }
+    }
+    
+    // Mini burst effect for positions 3 and 2
+    function triggerMiniBurst(rank) {
+      const colors = rank === 2 ? 
+        ['#9ca3af', '#d1d5db', '#e5e7eb'] : 
+        ['#d97706', '#f59e0b', '#fbbf24'];
+      
+      const burst = document.createElement('div');
+      burst.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:46;';
+      
+      const particleCount = rank === 2 ? 15 : 10;
+      
+      for (let i = 0; i < particleCount; i++) {
+        const particle = document.createElement('div');
+        const color = colors[Math.floor(Math.random() * colors.length)];
+        const angle = (i / particleCount) * Math.PI * 2;
+        const distance = 60 + Math.random() * 40;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance;
+        
+        particle.style.cssText = 'position:absolute;width:6px;height:6px;border-radius:50%;' +
+          'background:' + color + ';box-shadow:0 0 8px ' + color + ';' +
+          'animation: miniBurstParticle 0.8s ease-out forwards;' +
+          '--tx:' + tx + 'px;--ty:' + ty + 'px;';
+        
+        burst.appendChild(particle);
+      }
+      
+      document.body.appendChild(burst);
+      setTimeout(() => burst.remove(), 1000);
+    }
+    
+    // Create spectacular fireworks celebration for #1
+    function triggerCelebration() {
+      const colors = ['#fbbf24', '#f59e0b', '#dc2626', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#14b8a6'];
+      const goldColors = ['#fbbf24', '#f59e0b', '#fcd34d', '#fef3c7'];
+      
+      // Golden rays - larger and longer (10 seconds)
+      const rays = document.createElement('div');
+      rays.className = 'golden-rays';
+      document.body.appendChild(rays);
+      setTimeout(() => rays.remove(), 10000);
+      
+      // Multiple screen flashes
+      for (let f = 0; f < 3; f++) {
+        setTimeout(() => {
+          const flash = document.createElement('div');
+          flash.className = 'screen-flash';
+          flash.style.animationDuration = (1.5 - f * 0.3) + 's';
+          document.body.appendChild(flash);
+          setTimeout(() => flash.remove(), 1500);
+        }, f * 800);
+      }
+      
+      // Fireworks container
+      const fireworksContainer = document.createElement('div');
+      fireworksContainer.className = 'fireworks-container';
+      document.body.appendChild(fireworksContainer);
+      
+      // Wave 1: Initial burst - 8 fireworks
+      const wave1Positions = [
+        { x: 20, y: 100 }, { x: 80, y: 100 },
+        { x: 35, y: 100 }, { x: 65, y: 100 },
+        { x: 15, y: 100 }, { x: 85, y: 100 },
+        { x: 50, y: 100 }, { x: 45, y: 100 }
+      ];
+      
+      for (let i = 0; i < wave1Positions.length; i++) {
+        const delay = i * 150 + Math.random() * 100;
+        const pos = wave1Positions[i];
+        const launchHeight = 280 + Math.random() * 180;
+        const explodeY = 100 - (launchHeight / window.innerHeight * 100);
+        
+        setTimeout(() => {
+          launchFirework(fireworksContainer, pos.x, pos.y, explodeY, launchHeight, colors);
+          setTimeout(() => playFireworkSound(), 600); // Sound on explosion
+        }, delay);
+      }
+      
+      // Wave 2: Second burst at 1.5s - 6 more fireworks
+      const wave2Positions = [
+        { x: 25, y: 100 }, { x: 75, y: 100 },
+        { x: 40, y: 100 }, { x: 60, y: 100 },
+        { x: 10, y: 100 }, { x: 90, y: 100 }
+      ];
+      
+      for (let i = 0; i < wave2Positions.length; i++) {
+        const delay = 1500 + i * 180 + Math.random() * 120;
+        const pos = wave2Positions[i];
+        const launchHeight = 300 + Math.random() * 200;
+        const explodeY = 100 - (launchHeight / window.innerHeight * 100);
+        
+        setTimeout(() => {
+          launchFirework(fireworksContainer, pos.x, pos.y, explodeY, launchHeight, goldColors);
+          setTimeout(() => playFireworkSound(), 600);
+        }, delay);
+      }
+      
+      // Wave 3: Final golden burst at 3s - 4 big golden fireworks
+      const wave3Positions = [
+        { x: 30, y: 100 }, { x: 70, y: 100 },
+        { x: 50, y: 100 }, { x: 50, y: 100 }
+      ];
+      
+      for (let i = 0; i < wave3Positions.length; i++) {
+        const delay = 3000 + i * 250 + Math.random() * 100;
+        const pos = wave3Positions[i];
+        const launchHeight = 350 + Math.random() * 150;
+        const explodeY = 100 - (launchHeight / window.innerHeight * 100);
+        
+        setTimeout(() => {
+          launchFirework(fireworksContainer, pos.x, pos.y, explodeY, launchHeight, goldColors, true);
+          setTimeout(() => {
+            playFireworkSound();
+            // Extra bass boom for big bursts
+            playNote(50, 0.3, 'triangle', 0.2, 0);
+          }, 600);
+        }, delay);
+      }
+      
+      // Multiple confetti bursts throughout celebration
+      for (let burst = 0; burst < 5; burst++) {
+        setTimeout(() => {
+          triggerConfettiBurst(colors, burst === 4 ? 80 : 50);
+        }, burst * 1000);
+      }
+      
+      // Extended gold confetti bursts (lasting until 10 seconds)
+      const goldBurstTimes = [3500, 5000, 6500, 8000, 9000];
+      goldBurstTimes.forEach((time, i) => {
+        setTimeout(() => {
+          triggerConfettiBurst(goldColors, 40 + i * 10);
+          // Accompanying firework sounds
+          playFireworkSound();
+          if (i % 2 === 0) {
+            playNote(60 + i * 10, 0.2, 'triangle', 0.15, 0);
+          }
+        }, time);
+      });
+      
+      // Extra finale fireworks at 7s and 9s
+      [7000, 9000].forEach((time, idx) => {
+        setTimeout(() => {
+          const pos = { x: 30 + idx * 40, y: 100 };
+          launchFirework(fireworksContainer, pos.x, pos.y, 30, 400, goldColors, true);
+          setTimeout(() => {
+            playFireworkSound();
+            playNote(50, 0.3, 'triangle', 0.2, 0);
+          }, 600);
+        }, time);
+      });
+      
+      setTimeout(() => fireworksContainer.remove(), 11000);
+    }
+    
+    // Separate confetti burst function for reuse
+    function triggerConfettiBurst(colors, count) {
+      const burst = document.createElement('div');
+      burst.className = 'celebration-burst';
+      
+      for (let i = 0; i < count; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
+        
+        const angle = (Math.random() * 360) * (Math.PI / 180);
+        const distance = 150 + Math.random() * 350;
+        const tx = Math.cos(angle) * distance;
+        const ty = Math.sin(angle) * distance - 180;
+        
+        confetti.style.setProperty('--tx', tx + 'px');
+        confetti.style.setProperty('--ty', ty + 'px');
+        confetti.style.animationDelay = (Math.random() * 0.4) + 's';
+        
+        burst.appendChild(confetti);
+      }
+      
+      document.body.appendChild(burst);
+      
+      requestAnimationFrame(() => {
+        burst.querySelectorAll('.confetti').forEach(c => c.classList.add('active'));
+      });
+      
+      setTimeout(() => burst.remove(), 2500);
+    }
+    
+    // Launch a single firework (bigBurst = true for finale fireworks)
+    function launchFirework(container, startX, startY, explodeY, launchHeight, colors, bigBurst) {
+      const color = colors[Math.floor(Math.random() * colors.length)];
+      
+      // Create launch trail
+      const firework = document.createElement('div');
+      firework.className = 'firework';
+      firework.style.left = startX + '%';
+      firework.style.top = startY + '%';
+      firework.style.background = color;
+      firework.style.boxShadow = '0 0 ' + (bigBurst ? '12px 5px ' : '8px 3px ') + color;
+      firework.style.width = bigBurst ? '8px' : '6px';
+      firework.style.height = bigBurst ? '8px' : '6px';
+      firework.style.setProperty('--launch-height', '-' + launchHeight + 'px');
+      firework.style.setProperty('--launch-duration', (0.6 + Math.random() * 0.3) + 's');
+      
+      container.appendChild(firework);
+      
+      // Add sparkle trail during launch
+      const trailInterval = setInterval(() => {
+        const sparkle = document.createElement('div');
+        sparkle.className = 'sparkle-trail';
+        sparkle.style.left = firework.getBoundingClientRect().left + 'px';
+        sparkle.style.top = firework.getBoundingClientRect().top + 'px';
+        sparkle.style.color = color;
+        if (bigBurst) {
+          sparkle.style.width = '5px';
+          sparkle.style.height = '5px';
+        }
+        container.appendChild(sparkle);
+        requestAnimationFrame(() => sparkle.classList.add('active'));
+        setTimeout(() => sparkle.remove(), 600);
+      }, bigBurst ? 40 : 50);
+      
+      requestAnimationFrame(() => firework.classList.add('launching'));
+      
+      // Explode after launch
+      const launchDuration = parseFloat(firework.style.getPropertyValue('--launch-duration')) * 1000;
+      setTimeout(() => {
+        clearInterval(trailInterval);
+        firework.classList.remove('launching');
+        firework.classList.add('exploding');
+        
+        // Create explosion particles (more for big bursts)
+        const baseCount = bigBurst ? 35 : 20;
+        const particleCount = baseCount + Math.floor(Math.random() * (bigBurst ? 20 : 15));
+        const explodeX = startX;
+        
+        for (let i = 0; i < particleCount; i++) {
+          const particle = document.createElement('div');
+          particle.className = 'firework-particle';
+          particle.style.left = explodeX + '%';
+          particle.style.top = explodeY + '%';
+          
+          // Use multiple colors for big bursts
+          const particleColor = bigBurst ? colors[Math.floor(Math.random() * colors.length)] : color;
+          particle.style.background = particleColor;
+          particle.style.boxShadow = '0 0 ' + (bigBurst ? '10px 4px ' : '6px 2px ') + particleColor;
+          
+          if (bigBurst) {
+            particle.style.width = '6px';
+            particle.style.height = '6px';
+          }
+          
+          // Circular explosion pattern (larger for big bursts)
+          const angle = (i / particleCount) * Math.PI * 2 + Math.random() * 0.3;
+          const distance = (bigBurst ? 120 : 80) + Math.random() * (bigBurst ? 120 : 80);
+          const px = Math.cos(angle) * distance;
+          const py = Math.sin(angle) * distance + (bigBurst ? 50 : 30); // Gravity effect
+          
+          particle.style.setProperty('--px', px + 'px');
+          particle.style.setProperty('--py', py + 'px');
+          particle.style.setProperty('--particle-duration', (bigBurst ? 1.5 : 1) + Math.random() * (bigBurst ? 0.8 : 0.5) + 's');
+          particle.style.animationDelay = (Math.random() * 0.15) + 's';
+          
+          container.appendChild(particle);
+          requestAnimationFrame(() => particle.classList.add('active'));
+          
+          setTimeout(() => particle.remove(), bigBurst ? 2500 : 1800);
+        }
+        
+        // Secondary explosion ring for big bursts
+        if (bigBurst) {
+          setTimeout(() => {
+            for (let j = 0; j < 20; j++) {
+              const particle2 = document.createElement('div');
+              particle2.className = 'firework-particle';
+              particle2.style.left = explodeX + '%';
+              particle2.style.top = explodeY + '%';
+              const p2Color = colors[Math.floor(Math.random() * colors.length)];
+              particle2.style.background = p2Color;
+              particle2.style.boxShadow = '0 0 8px 3px ' + p2Color;
+              
+              const angle2 = (j / 20) * Math.PI * 2;
+              const dist2 = 60 + Math.random() * 60;
+              particle2.style.setProperty('--px', Math.cos(angle2) * dist2 + 'px');
+              particle2.style.setProperty('--py', Math.sin(angle2) * dist2 + 40 + 'px');
+              particle2.style.setProperty('--particle-duration', '1.2s');
+              
+              container.appendChild(particle2);
+              requestAnimationFrame(() => particle2.classList.add('active'));
+              setTimeout(() => particle2.remove(), 1500);
+            }
+          }, 150);
+        }
+        
+        setTimeout(() => firework.remove(), 100);
+      }, launchDuration);
+    }
+    
+    // Calculate reveal phases based on album count
+    function calculateRevealPhases(totalAlbums) {
+      const phases = [];
+      
+      if (totalAlbums <= 5) {
+        // All individual reveals
+        for (let i = totalAlbums; i >= 1; i--) {
+          phases.push({ start: i, end: i, label: 'Reveal #' + i + (i === 1 ? '!' : '') });
+        }
+      } else if (totalAlbums <= 10) {
+        // First group, then individual for top 5
+        phases.push({ start: totalAlbums, end: 6, label: 'Begin Reveal' });
+        for (let i = 5; i >= 1; i--) {
+          phases.push({ start: i, end: i, label: 'Reveal #' + i + (i === 1 ? '!' : '') });
+        }
+      } else {
+        // Multiple groups, then individual for top 5
+        const remaining = totalAlbums - 5;
+        const groupSize = Math.ceil(remaining / 2);
+        
+        // First group
+        phases.push({ start: totalAlbums, end: totalAlbums - groupSize + 1, label: 'Begin Reveal' });
+        
+        // Second group (if needed)
+        if (totalAlbums - groupSize > 5) {
+          phases.push({ start: totalAlbums - groupSize, end: 6, label: 'Continue...' });
+        }
+        
+        // Top 5 individual
+        for (let i = 5; i >= 1; i--) {
+          phases.push({ start: i, end: i, label: 'Reveal #' + i + (i === 1 ? '!' : '') });
+        }
+      }
+      
+      return phases;
+    }
+    
+    // Main dramatic reveal renderer
+    function renderDramaticReveal(data) {
       const container = document.getElementById('aggregateListContent');
       
       if (!data.albums || data.albums.length === 0) {
@@ -1842,123 +2750,163 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         return;
       }
       
-      fogRevealState.totalAlbums = data.albums.length;
-      fogRevealState.active = true;
+      const albums = data.albums;
+      const totalAlbums = albums.length;
+      const phases = calculateRevealPhases(totalAlbums);
+      let currentPhase = 0;
       
-      // Render all albums with fog-hidden class
-      const html = data.albums.map((album, index) => buildAlbumCardHtml(album, index, true)).join('');
-      container.innerHTML = html;
+      // Build all cards with overlays
+      const html = albums.map((album, index) => buildRevealCardHtml(album, index)).join('');
+      container.innerHTML = '<div class="space-y-4">' + html + '</div>';
       
-      // Show fog UI elements
-      document.getElementById('fogOverlay').classList.remove('hidden');
-      document.getElementById('fogParticle1').classList.remove('hidden');
-      document.getElementById('fogParticle2').classList.remove('hidden');
-      document.getElementById('fogParticle3').classList.remove('hidden');
-      document.getElementById('scrollHint').classList.remove('hidden');
-      document.getElementById('revealProgress').classList.remove('hidden');
+      // Create floating reveal button
+      const buttonContainer = document.createElement('div');
+      buttonContainer.className = 'reveal-button-container';
+      buttonContainer.innerHTML = '<button class="reveal-button"><i class="fas fa-fire mr-2"></i><span>' + phases[0].label + '</span></button>';
+      document.body.appendChild(buttonContainer);
       
-      // Scroll to bottom of the list (album #40 or last album)
+      const button = buttonContainer.querySelector('.reveal-button');
+      const buttonText = button.querySelector('span');
+      
+      // Scroll to bottom after a short delay
       setTimeout(() => {
-        window.scrollTo({ top: document.body.scrollHeight, behavior: 'instant' });
-        
-        // Initialize Intersection Observer for reveal
-        initFogRevealObserver();
-      }, 100);
-    }
-    
-    // Initialize Intersection Observer for fog reveal
-    function initFogRevealObserver() {
-      const options = {
-        root: null,
-        rootMargin: '-10% 0px -30% 0px', // Reveal zone in middle-upper area
-        threshold: [0, 0.25, 0.5, 0.75, 1]
-      };
+        const lastCard = container.querySelector('[data-reveal-rank="' + totalAlbums + '"]');
+        if (lastCard) {
+          lastCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 500);
       
-      fogRevealState.observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-          const card = entry.target;
-          const rank = parseInt(card.dataset.rank);
+      // Reveal function
+      function revealPhase() {
+        if (currentPhase >= phases.length) return;
+        
+        const phase = phases[currentPhase];
+        button.disabled = true;
+        
+        // Get overlays for this phase
+        const overlays = [];
+        for (let rank = phase.start; rank >= phase.end; rank--) {
+          const overlay = container.querySelector('.burn-overlay[data-rank="' + rank + '"]');
+          if (overlay) overlays.push({ overlay, rank });
+        }
+        
+        // Calculate intensity and animation duration based on rank
+        function getIntensity(rank) {
+          if (rank === 1) return 1;
+          if (rank === 2) return 2;
+          if (rank === 3) return 3;
+          if (rank === 4) return 4;
+          if (rank === 5) return 5;
+          return 6; // regular albums
+        }
+        
+        function getAnimationDuration(rank) {
+          if (rank === 1) return 10500; // Extended 10-second celebration
+          if (rank === 2) return 1800;
+          if (rank === 3) return 1500;
+          if (rank === 4) return 1200;
+          if (rank === 5) return 1000;
+          return 800; // regular albums
+        }
+        
+        // Animate overlays with stagger
+        let maxDuration = 0;
+        
+        overlays.forEach((item, idx) => {
+          const delay = idx * 150; // Stagger within group
+          const intensity = getIntensity(item.rank);
+          const animDuration = getAnimationDuration(item.rank);
           
-          if (entry.intersectionRatio >= 0.5) {
-            // Fully revealed
-            if (card.classList.contains('fog-hidden') || card.classList.contains('fog-revealing')) {
-              card.classList.remove('fog-hidden', 'fog-revealing');
-              card.classList.add('fog-revealed');
-              fogRevealState.revealedCount++;
-              updateRevealProgress();
+          maxDuration = Math.max(maxDuration, delay + animDuration);
+          
+          setTimeout(() => {
+            // Scroll to keep visible first
+            const wrapper = item.overlay.closest('.reveal-card-wrapper');
+            if (wrapper) {
+              wrapper.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            
+            // Special handling for #1 - trigger celebration FIRST, then reveal
+            if (item.rank === 1) {
+              // Play victory fanfare!
+              playVictoryFanfare();
               
-              // Check for #1 reveal (celebration!)
-              if (rank === 1) {
-                triggerCelebration(card);
+              // Start celebration immediately
+              triggerCelebration();
+              
+              // Spawn embers with max intensity
+              spawnEmbers(item.overlay, 1);
+              
+              // Delay the burn animation so effects play first
+              setTimeout(() => {
+                item.overlay.classList.add('gold');
+                item.overlay.classList.add('burning');
+              }, 800); // 800ms of pure celebration before reveal starts
+              
+            } else {
+              // Add intensity class for top 5
+              if (item.rank === 5) item.overlay.classList.add('rank-5');
+              if (item.rank === 4) item.overlay.classList.add('rank-4');
+              if (item.rank === 3) item.overlay.classList.add('bronze');
+              if (item.rank === 2) item.overlay.classList.add('silver');
+              
+              // Play sounds only for top 3 (excluding #1 which has its own fanfare)
+              if (item.rank === 3) {
+                playDrumRoll(3);
+                setTimeout(() => playCoinSound(3), 150);
+              } else if (item.rank === 2) {
+                playDrumRoll(2);
+                setTimeout(() => playCoinSound(2), 150);
+              }
+              
+              // Spawn embers with appropriate intensity
+              spawnEmbers(item.overlay, intensity);
+              
+              // Trigger burn animation
+              item.overlay.classList.add('burning');
+              
+              // Add screen effects for top 5 positions (building intensity)
+              if (item.rank <= 5 && item.rank >= 2) {
+                triggerPositionEffect(item.rank);
               }
             }
-          } else if (entry.intersectionRatio > 0) {
-            // Partially in view - revealing state
-            if (card.classList.contains('fog-hidden')) {
-              card.classList.remove('fog-hidden');
-              card.classList.add('fog-revealing');
-            }
-          }
+          }, delay);
         });
-      }, options);
-      
-      // Observe all album cards
-      document.querySelectorAll('.album-card').forEach(card => {
-        fogRevealState.observer.observe(card);
-      });
-    }
-    
-    // Update reveal progress bar
-    function updateRevealProgress() {
-      const progress = (fogRevealState.revealedCount / fogRevealState.totalAlbums) * 100;
-      document.getElementById('revealProgressBar').style.width = progress + '%';
-      
-      // Hide scroll hint once we've scrolled a bit
-      if (fogRevealState.revealedCount > 3) {
-        document.getElementById('scrollHint').classList.add('hidden');
-      }
-    }
-    
-    // Trigger celebration when #1 is revealed
-    async function triggerCelebration(card) {
-      // Add celebration animation to #1 card
-      card.classList.add('celebration');
-      
-      // Flash the celebration overlay
-      const overlay = document.getElementById('celebrationOverlay');
-      overlay.classList.add('active');
-      
-      // Clear the fog completely
-      document.getElementById('fogOverlay').classList.add('cleared');
-      document.querySelectorAll('.fog-particle').forEach(p => p.classList.add('hidden'));
-      
-      // Hide progress bar after a moment
-      setTimeout(() => {
-        document.getElementById('revealProgress').classList.add('hidden');
-      }, 1500);
-      
-      // Mark as seen in database (only once)
-      if (!fogRevealState.hasMarkedSeen) {
-        fogRevealState.hasMarkedSeen = true;
-        try {
-          await apiFetch('/api/aggregate-list/' + YEAR + '/mark-seen', { method: 'POST' });
-        } catch (err) {
-          console.error('Failed to mark reveal as seen:', err);
-        }
-      }
-      
-      // Remove celebration effects after animation
-      setTimeout(() => {
-        overlay.classList.remove('active');
-        card.classList.remove('celebration');
-        fogRevealState.active = false;
         
-        // Reveal any remaining hidden cards
-        document.querySelectorAll('.album-card.fog-hidden, .album-card.fog-revealing').forEach(c => {
-          c.classList.remove('fog-hidden', 'fog-revealing');
-          c.classList.add('fog-revealed');
-        });
-      }, 4500);
+        // Calculate total phase duration
+        const phaseDuration = maxDuration + 200; // Add buffer
+        
+        setTimeout(() => {
+          currentPhase++;
+          
+          if (currentPhase < phases.length) {
+            // Update button for next phase
+            buttonText.textContent = phases[currentPhase].label;
+            button.disabled = false;
+          } else {
+            // All revealed! Remove button and mark as seen
+            buttonContainer.style.opacity = '0';
+            buttonContainer.style.transition = 'opacity 0.5s';
+            setTimeout(() => buttonContainer.remove(), 500);
+            
+            // Mark as seen
+            markRevealAsSeen();
+          }
+        }, phaseDuration);
+      }
+      
+      // Button click handler
+      button.addEventListener('click', revealPhase);
+    }
+    
+    // Mark reveal as seen via API
+    async function markRevealAsSeen() {
+      try {
+        await apiFetch('/api/aggregate-list/' + YEAR + '/mark-seen', { method: 'POST' });
+        console.log('Reveal marked as seen');
+      } catch (err) {
+        console.error('Failed to mark reveal as seen:', err);
+      }
     }
     
     // Render pre-reveal status with position placeholders
@@ -2090,15 +3038,21 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
           // Load full data
           const data = await apiFetch('/api/aggregate-list/' + YEAR);
           
-          // Check if user has seen the dramatic reveal before
-          const hasSeenRes = await apiFetch('/api/aggregate-list/' + YEAR + '/has-seen');
-          
-          if (hasSeenRes.hasSeen) {
-            // User has seen it before - render normally
+          // Check if user has seen the dramatic reveal
+          try {
+            const seenStatus = await apiFetch('/api/aggregate-list/' + YEAR + '/has-seen');
+            
+            if (seenStatus.hasSeen) {
+              // Already seen - normal render
+              renderAggregateList(data.data);
+            } else {
+              // First time - dramatic burning reveal!
+              renderDramaticReveal(data.data);
+            }
+          } catch (seenErr) {
+            // If has-seen check fails, fall back to normal render
+            console.warn('Could not check reveal status, using normal render:', seenErr);
             renderAggregateList(data.data);
-          } else {
-            // First time viewing! Show the dramatic fog reveal
-            renderAggregateListFogMode(data.data);
           }
         } else {
           // Show pending state
