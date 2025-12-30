@@ -174,7 +174,6 @@ function createMbFetch(queue) {
 }
 
 module.exports = {
-  wait,
   MusicBrainzQueue,
   RequestQueue,
   createMbFetch,

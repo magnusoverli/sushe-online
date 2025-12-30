@@ -6,33 +6,13 @@
 const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const {
-  wait,
   MusicBrainzQueue,
   RequestQueue,
   createMbFetch,
 } = require('../utils/request-queue.js');
 
-// =============================================================================
-// wait() utility tests
-// =============================================================================
-
-describe('wait', () => {
-  it('should resolve after specified milliseconds', async () => {
-    const start = Date.now();
-    await wait(50);
-    const elapsed = Date.now() - start;
-    // Allow some tolerance for timing
-    assert.ok(elapsed >= 45, `Expected at least 45ms, got ${elapsed}ms`);
-    assert.ok(elapsed < 150, `Expected less than 150ms, got ${elapsed}ms`);
-  });
-
-  it('should resolve immediately for 0ms', async () => {
-    const start = Date.now();
-    await wait(0);
-    const elapsed = Date.now() - start;
-    assert.ok(elapsed < 50, `Expected less than 50ms, got ${elapsed}ms`);
-  });
-});
+// Local wait helper for tests (internal function not exported from module)
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // =============================================================================
 // MusicBrainzQueue tests

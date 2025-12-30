@@ -220,7 +220,7 @@ function generateAdminCode() {
       return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
     };
 
-    const leftAlignText = (label, value, _labelColor = '', valueColor = '') => {
+    const leftAlignText = (label, value, valueColor = '') => {
       const fullText = `  ${label}: ${value}`;
       const padding = INNER_WIDTH - fullText.length;
       return `  ${label}: ${valueColor}${value}${colors.reset}${' '.repeat(padding)}`;
@@ -252,7 +252,7 @@ function generateAdminCode() {
       colors.cyan +
         '║' +
         colors.reset +
-        leftAlignText('Code', adminCode, '', colors.bright + colors.green) +
+        leftAlignText('Code', adminCode, colors.bright + colors.green) +
         colors.cyan +
         '║' +
         colors.reset
@@ -261,7 +261,7 @@ function generateAdminCode() {
       colors.cyan +
         '║' +
         colors.reset +
-        leftAlignText('Valid until', timeString, '', colors.yellow) +
+        leftAlignText('Valid until', timeString, colors.yellow) +
         colors.cyan +
         '║' +
         colors.reset
@@ -281,12 +281,7 @@ function generateAdminCode() {
         colors.cyan +
           '║' +
           colors.reset +
-          leftAlignText(
-            'Previous code used by',
-            lastCodeUsedBy,
-            '',
-            colors.gray
-          ) +
+          leftAlignText('Previous code used by', lastCodeUsedBy, colors.gray) +
           colors.cyan +
           '║' +
           colors.reset
@@ -295,7 +290,7 @@ function generateAdminCode() {
         colors.cyan +
           '║' +
           colors.reset +
-          leftAlignText('Used', timeAgoStr, '', colors.gray) +
+          leftAlignText('Used', timeAgoStr, colors.gray) +
           colors.cyan +
           '║' +
           colors.reset

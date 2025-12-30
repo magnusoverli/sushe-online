@@ -162,12 +162,10 @@ let users,
   lists,
   listItems,
   albums,
-  aggregateLists,
   usersAsync,
   listsAsync,
   listItemsAsync,
   albumsAsync,
-  aggregateListsAsync,
   pool;
 let ready = Promise.resolve();
 
@@ -255,27 +253,14 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };
-  const aggregateListsMap = {
-    _id: 'id',
-    year: 'year',
-    revealed: 'revealed',
-    revealedAt: 'revealed_at',
-    computedAt: 'computed_at',
-    data: 'data',
-    stats: 'stats',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
   users = new PgDatastore(pool, 'users', usersMap);
   lists = new PgDatastore(pool, 'lists', listsMap);
   listItems = new PgDatastore(pool, 'list_items', listItemsMap);
   albums = new PgDatastore(pool, 'albums', albumsMap);
-  aggregateLists = new PgDatastore(pool, 'master_lists', aggregateListsMap);
   usersAsync = users;
   listsAsync = lists;
   listItemsAsync = listItems;
   albumsAsync = albums;
-  aggregateListsAsync = aggregateLists;
   async function migrateUsers() {
     try {
       // Run user migrations in parallel for better performance
@@ -492,12 +477,10 @@ module.exports = {
   lists,
   listItems,
   albums,
-  aggregateLists,
   usersAsync,
   listsAsync,
   listItemsAsync,
   albumsAsync,
-  aggregateListsAsync,
   dataDir,
   ready,
   pool,
