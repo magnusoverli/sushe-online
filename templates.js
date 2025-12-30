@@ -2056,6 +2056,18 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
     const YEAR = ${year};
     const IS_ADMIN = ${isAdmin};
     const USER_ID = '${user?._id || ''}';
+    const CURRENT_USERNAME = ${JSON.stringify(user?.username || '')};
+    
+    // HTML escape function to prevent XSS
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
     
     // Fetch wrapper with error handling
     async function apiFetch(url, options = {}) {
@@ -2086,7 +2098,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       const delay = Math.min(index * 50, 500);
       
       const votersHtml = album.voters.map(v => 
-        '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
+        '<span class="voter-chip"><span class="text-gray-300">' + escapeHtml(v.username) + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
       ).join('');
       
       return '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3 animate-fade-in" data-rank="' + album.rank + '" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
@@ -2094,19 +2106,19 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
           '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
           '<div class="flex-shrink-0">' +
             (album.coverImage ? 
-              '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
+              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
               '<div class="w-14 h-14 md:w-16 md:h-16 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
             ) +
           '</div>' +
           '<div class="flex-1 min-w-0">' +
             '<div class="card-header">' +
               '<div class="card-title-area">' +
-                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + (album.album || 'Unknown Album') + '</h3>' +
+                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + escapeHtml(album.album || 'Unknown Album') + '</h3>' +
               '</div>' +
               '<div class="card-voters">' + votersHtml + '</div>' +
             '</div>' +
             '<div class="card-stats">' +
-              '<span class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</span>' +
+              '<span class="text-gray-400 truncate">' + escapeHtml(album.artist || 'Unknown Artist') + '</span>' +
               '<span class="stat-divider">·</span>' +
               '<span class="points">' + album.totalPoints + ' pts</span>' +
               '<span class="stat-divider">·</span>' +
@@ -2137,7 +2149,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       const positionClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : '';
       
       const votersHtml = album.voters.map(v => 
-        '<span class="voter-chip"><span class="text-gray-300">' + v.username + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
+        '<span class="voter-chip"><span class="text-gray-300">' + escapeHtml(v.username) + '</span><span class="text-gray-500 ml-0.5">#' + v.position + '</span></span>'
       ).join('');
       
       // Card content (compact layout, no fade-in animation)
@@ -2146,19 +2158,19 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
           '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
           '<div class="flex-shrink-0">' +
             (album.coverImage ? 
-              '<img src="' + album.coverImage + '" alt="' + (album.album || '').replace(/"/g, '&quot;') + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
+              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
               '<div class="w-14 h-14 md:w-16 md:h-16 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
             ) +
           '</div>' +
           '<div class="flex-1 min-w-0">' +
             '<div class="card-header">' +
               '<div class="card-title-area">' +
-                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + (album.album || 'Unknown Album') + '</h3>' +
+                '<h3 class="font-bold text-white text-sm md:text-base truncate">' + escapeHtml(album.album || 'Unknown Album') + '</h3>' +
               '</div>' +
               '<div class="card-voters">' + votersHtml + '</div>' +
             '</div>' +
             '<div class="card-stats">' +
-              '<span class="text-gray-400 truncate">' + (album.artist || 'Unknown Artist') + '</span>' +
+              '<span class="text-gray-400 truncate">' + escapeHtml(album.artist || 'Unknown Artist') + '</span>' +
               '<span class="stat-divider">·</span>' +
               '<span class="points">' + album.totalPoints + ' pts</span>' +
               '<span class="stat-divider">·</span>' +
@@ -2704,37 +2716,75 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       }, launchDuration);
     }
     
-    // Calculate reveal phases based on album count
-    function calculateRevealPhases(totalAlbums) {
+    // Calculate reveal phases based on POSITIONS (ranks), not indices
+    // - Bulk reveal: all albums with rank > 5 (in groups, bottom-to-top)
+    // - Individual reveal: positions 5, 4, 3, 2, 1 - all albums sharing that rank together
+    // - Tied albums are NEVER split across bulk groups
+    function calculateRevealPhases(albums) {
       const phases = [];
+      const totalAlbums = albums.length;
       
-      if (totalAlbums <= 5) {
-        // All individual reveals
-        for (let i = totalAlbums; i >= 1; i--) {
-          phases.push({ start: i, end: i, label: 'Reveal #' + i + (i === 1 ? '!' : '') });
-        }
-      } else if (totalAlbums <= 10) {
-        // First group, then individual for top 5
-        phases.push({ start: totalAlbums, end: 6, label: 'Begin Reveal' });
-        for (let i = 5; i >= 1; i--) {
-          phases.push({ start: i, end: i, label: 'Reveal #' + i + (i === 1 ? '!' : '') });
-        }
-      } else {
-        // Multiple groups, then individual for top 5
-        const remaining = totalAlbums - 5;
-        const groupSize = Math.ceil(remaining / 2);
+      if (totalAlbums === 0) return phases;
+      
+      // Separate albums into bulk (rank > 5) and individual (rank <= 5)
+      const topRanks = [5, 4, 3, 2, 1]; // Positions to reveal individually
+      
+      // Get bulk items with their indices and ranks
+      const bulkItems = albums
+        .map((a, idx) => ({ album: a, idx, rank: a.rank }))
+        .filter(item => item.album.rank > 5);
+      
+      // Create bulk phases for albums with rank > 5 (in groups of ~5, from bottom)
+      // Ensure ties are never split across groups
+      if (bulkItems.length > 0) {
+        const batchSize = 5;
+        const batches = [];
+        let currentBatch = [];
         
-        // First group
-        phases.push({ start: totalAlbums, end: totalAlbums - groupSize + 1, label: 'Begin Reveal' });
-        
-        // Second group (if needed)
-        if (totalAlbums - groupSize > 5) {
-          phases.push({ start: totalAlbums - groupSize, end: 6, label: 'Continue...' });
+        // Process from bottom (highest index) to top (lowest index)
+        for (let i = bulkItems.length - 1; i >= 0; i--) {
+          const item = bulkItems[i];
+          currentBatch.push(item.idx);
+          
+          // Check if we've reached batch size
+          if (currentBatch.length >= batchSize) {
+            // Before closing batch, check if next item has same rank (tie)
+            // If so, include it in this batch to avoid splitting ties
+            while (i > 0 && bulkItems[i - 1].rank === item.rank) {
+              i--;
+              currentBatch.push(bulkItems[i].idx);
+            }
+            batches.push([...currentBatch]);
+            currentBatch = [];
+          }
         }
         
-        // Top 5 individual
-        for (let i = 5; i >= 1; i--) {
-          phases.push({ start: i, end: i, label: 'Reveal #' + i + (i === 1 ? '!' : '') });
+        // Don't forget remaining items
+        if (currentBatch.length > 0) {
+          batches.push(currentBatch);
+        }
+        
+        // Add bulk phases (already in bottom to top order)
+        batches.forEach((batchIndices, idx) => {
+          const label = idx === 0 ? 'Begin Reveal' : 'Continue...';
+          phases.push({ indices: batchIndices, label, isBulk: true });
+        });
+      }
+      
+      // Individual reveals for positions 5, 4, 3, 2, 1 (all albums sharing that rank)
+      for (const rank of topRanks) {
+        const albumsWithRank = albums
+          .map((a, idx) => ({ album: a, idx }))
+          .filter(item => item.album.rank === rank);
+        
+        if (albumsWithRank.length > 0) {
+          const indices = albumsWithRank.map(item => item.idx);
+          phases.push({ 
+            indices, 
+            label: 'Reveal #' + rank + (rank === 1 ? '!' : ''), 
+            isBulk: false,
+            rank 
+          });
         }
       }
       
@@ -2751,8 +2801,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       }
       
       const albums = data.albums;
-      const totalAlbums = albums.length;
-      const phases = calculateRevealPhases(totalAlbums);
+      const phases = calculateRevealPhases(albums);
       let currentPhase = 0;
       
       // Build all cards with overlays
@@ -2768,11 +2817,12 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       const button = buttonContainer.querySelector('.reveal-button');
       const buttonText = button.querySelector('span');
       
-      // Scroll to bottom after a short delay
+      // Scroll to bottom after a short delay - find last album by highest rank number
       setTimeout(() => {
-        const lastCard = container.querySelector('[data-reveal-rank="' + totalAlbums + '"]');
-        if (lastCard) {
-          lastCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const maxRank = Math.max(...albums.map(a => a.rank));
+        const lastCards = container.querySelectorAll('[data-reveal-rank="' + maxRank + '"]');
+        if (lastCards.length > 0) {
+          lastCards[lastCards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
       }, 500);
       
@@ -2783,12 +2833,19 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
         const phase = phases[currentPhase];
         button.disabled = true;
         
-        // Get overlays for this phase
+        // Get overlays by index (more reliable than rank for ties)
         const overlays = [];
-        for (let rank = phase.start; rank >= phase.end; rank--) {
-          const overlay = container.querySelector('.burn-overlay[data-rank="' + rank + '"]');
-          if (overlay) overlays.push({ overlay, rank });
+        for (const idx of phase.indices) {
+          const wrapper = container.querySelectorAll('.reveal-card-wrapper')[idx];
+          if (wrapper) {
+            const overlay = wrapper.querySelector('.burn-overlay');
+            const rank = parseInt(overlay.dataset.rank, 10);
+            overlays.push({ overlay, rank, idx });
+          }
         }
+        
+        // Sort overlays to reveal from bottom to top (highest index first)
+        overlays.sort((a, b) => b.idx - a.idx);
         
         // Calculate intensity and animation duration based on rank
         function getIntensity(rank) {
@@ -2972,7 +3029,7 @@ const aggregateListTemplate = (user, year, isAdmin = false) => `
       const content = document.getElementById('adminContent');
       panel.classList.remove('hidden');
       
-      const hasConfirmed = status.confirmations.some(c => c.username === '${user?.username || ''}');
+      const hasConfirmed = status.confirmations.some(c => c.username === CURRENT_USERNAME);
       
       let html = '';
       

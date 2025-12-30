@@ -128,6 +128,7 @@ function buildAlbumMap(items, userMap) {
  */
 function sortAndRankAlbums(albumMap) {
   const albums = Array.from(albumMap.values())
+    .filter((album) => album.positions && album.positions.length > 0) // Guard against empty positions
     .map((album) => {
       const positions = album.positions;
       return {
@@ -180,6 +181,7 @@ function sortAndRankAlbums(albumMap) {
       albums[0].rank = 1;
     }
   }
+
 
   return albums;
 }
@@ -588,6 +590,7 @@ function createAggregateList(deps = {}) {
    */
   async function addConfirmation(year, adminUserId) {
     log.info(`Admin ${adminUserId} confirming reveal for year ${year}`);
+
 
     let aggregateList = await get(year);
     if (!aggregateList) {

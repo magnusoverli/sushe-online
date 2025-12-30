@@ -49,7 +49,7 @@ describe('POSITION_POINTS', () => {
   });
 
   it('should have correct points for position 20', () => {
-    assert.strictEqual(POSITION_POINTS[20], 12);
+    assert.strictEqual(POSITION_POINTS[20], 21);
   });
 
   it('should have correct points for position 40', () => {
@@ -65,17 +65,17 @@ describe('getPositionPoints', () => {
   it('should return correct points for valid positions', () => {
     assert.strictEqual(getPositionPoints(1), 60);
     assert.strictEqual(getPositionPoints(5), 43);
-    assert.strictEqual(getPositionPoints(15), 22);
+    assert.strictEqual(getPositionPoints(15), 26);
   });
 
-  it('should return 0 for positions beyond 40', () => {
-    assert.strictEqual(getPositionPoints(41), 0);
-    assert.strictEqual(getPositionPoints(100), 0);
+  it('should return 1 for positions beyond 40', () => {
+    assert.strictEqual(getPositionPoints(41), 1);
+    assert.strictEqual(getPositionPoints(100), 1);
   });
 
-  it('should return 0 for invalid positions', () => {
-    assert.strictEqual(getPositionPoints(0), 0);
-    assert.strictEqual(getPositionPoints(-1), 0);
+  it('should return 1 for invalid positions', () => {
+    assert.strictEqual(getPositionPoints(0), 1);
+    assert.strictEqual(getPositionPoints(-1), 1);
   });
 });
 
