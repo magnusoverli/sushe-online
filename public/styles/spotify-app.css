@@ -185,9 +185,14 @@ body {
   min-height: 100%;
 }
 
-/* Ensure album list content fills the container */
-#albumContainer > div {
+/* Ensure album rows container fills remaining space */
+#albumContainer > .album-rows-container {
   flex: 1;
+}
+
+/* Header should not grow */
+#albumContainer > .album-header {
+  flex-shrink: 0;
 }
 
 .album-row {

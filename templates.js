@@ -1232,14 +1232,12 @@ const spotifyTemplate = (user) => `
     </aside>
       
       <!-- Album Display Area -->
-      <main class="flex-1 overflow-hidden">
-        <div class="h-full overflow-y-auto">
-          <div id="albumContainer" class="min-h-full">
-            <!-- Albums will be displayed here -->
-            <div class="text-center text-gray-500 mt-20">
-              <p class="text-xl mb-2">No list selected</p>
-              <p class="text-sm">Create or import a list to get started</p>
-            </div>
+      <main class="flex-1 overflow-hidden flex flex-col">
+        <div id="albumContainer" class="flex-1 overflow-y-auto flex flex-col min-h-0">
+          <!-- Albums will be displayed here -->
+          <div class="text-center text-gray-500 mt-20">
+            <p class="text-xl mb-2">No list selected</p>
+            <p class="text-sm">Create or import a list to get started</p>
           </div>
         </div>
       </main>

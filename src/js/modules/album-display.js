@@ -1339,12 +1339,10 @@ export function createAlbumDisplay(deps = {}) {
 
     if (!isMobile) {
       // Desktop: Table layout with header
-      albumContainer = document.createElement('div');
-      albumContainer.className = 'w-full relative';
-
+      // Create header as direct child of scrolling container
       const header = document.createElement('div');
       header.className =
-        'album-header album-grid gap-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10';
+        'album-header album-grid gap-4 py-2 text-sm font-semibold uppercase tracking-wider text-gray-300 border-b border-gray-800 sticky top-0 bg-black z-10 flex-shrink-0';
       header.style.alignItems = 'center';
       header.innerHTML = `
         <div class="text-center">#</div>
@@ -1357,10 +1355,10 @@ export function createAlbumDisplay(deps = {}) {
         <div>Comment</div>
         <div>Track</div>
       `;
-      albumContainer.appendChild(header);
 
+      // Create rows container
       const rowsContainer = document.createElement('div');
-      rowsContainer.className = 'album-rows-container relative';
+      rowsContainer.className = 'album-rows-container relative flex-1';
 
       const fragment = document.createDocumentFragment();
       albums.forEach((album, index) => {
@@ -1369,6 +1367,9 @@ export function createAlbumDisplay(deps = {}) {
       });
       rowsContainer.appendChild(fragment);
 
+      // Create a fragment to hold both header and rows
+      albumContainer = document.createDocumentFragment();
+      albumContainer.appendChild(header);
       albumContainer.appendChild(rowsContainer);
     } else {
       // Mobile: Card layout
