@@ -6,6 +6,8 @@ services:
       - '3000:3000'
     environment:
       - NODE_ENV=production
+      - NO_COLOR=1
+      - LOG_LEVEL=info
       - SESSION_SECRET=${SESSION_SECRET}
       - SENDGRID_API_KEY=${SENDGRID_API_KEY}
       - EMAIL_FROM=${EMAIL_FROM}

@@ -36,16 +36,22 @@ function createErrorHandler(log = logger) {
     error.message = err.message;
     error.stack = err.stack; // Stack is not enumerable, so copy explicitly
 
-    // Log error details
-    log.error('Error occurred:', {
-      message: error.message,
-      stack: error.stack,
-      url: req.originalUrl,
-      method: req.method,
-      ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      userId: req.user?._id,
-      timestamp: new Date().toISOString(),
+    // Log error details with structured format for Loki/Grafana
+    log.error('Error occurred', {
+      requestId: req.id,
+      error: {
+        name: err.name || 'Error',
+        message: error.message,
+        code: err.code,
+        stack: error.stack,
+      },
+      http: {
+        method: req.method,
+        url: req.originalUrl,
+        ip: req.ip,
+        userAgent: req.get('User-Agent'),
+      },
+      user: req.user?._id ? { id: req.user._id } : undefined,
     });
 
     // Handle specific error types

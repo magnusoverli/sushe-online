@@ -1386,11 +1386,13 @@ export function createAlbumDisplay(deps = {}) {
 
     container.replaceChildren(albumContainer);
 
-    prePopulatePositionCache(albumContainer, isMobile);
+    // Note: After replaceChildren, if albumContainer was a DocumentFragment,
+    // it's now empty - the children are in `container`. Use `container` for lookups.
+    prePopulatePositionCache(container, isMobile);
     initializeUnifiedSorting(container, isMobile);
 
     // Initialize lazy loading for album cover images
-    observeLazyImages(albumContainer);
+    observeLazyImages(container);
 
     // Update lightweight state instead of expensive deep clone
     requestAnimationFrame(() => {

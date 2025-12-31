@@ -18,6 +18,12 @@ const multer = require('multer');
 const os = require('os');
 const logger = require('./utils/logger');
 const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
+const requestIdMiddleware = require('./middleware/request-id');
+const {
+  metricsMiddleware,
+  getMetrics,
+  getContentType,
+} = require('./utils/metrics');
 const { createPreferenceSyncService } = require('./utils/preference-sync');
 const {
   setup: setupWebSocket,
@@ -171,7 +177,7 @@ function invalidateUserCache(userId) {
   userCache.delete(userId);
 }
 
-// Enhanced admin code generation
+// Admin code generation - outputs structured JSON log for Loki/Grafana parsing
 function generateAdminCode() {
   try {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -181,129 +187,22 @@ function generateAdminCode() {
     ).join('');
     adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
-    // ANSI color codes
-    const colors = {
-      reset: '\x1b[0m',
-      bright: '\x1b[1m',
-      red: '\x1b[31m',
-      green: '\x1b[32m',
-      yellow: '\x1b[33m',
-      blue: '\x1b[34m',
-      cyan: '\x1b[36m',
-      white: '\x1b[37m',
-      gray: '\x1b[90m',
+    // Log admin code using structured logging (parseable by Loki)
+    const logData = {
+      code: adminCode,
+      expiresAt: adminCodeExpiry.toISOString(),
+      ttlSeconds: 300,
     };
 
-    // Format time
-    const timeOptions = {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true,
-    };
-    const timeString = adminCodeExpiry.toLocaleTimeString('en-US', timeOptions);
-
-    // Box configuration
-    const BOX_WIDTH = 45;
-    const INNER_WIDTH = BOX_WIDTH - 2;
-
-    // Helper functions
-    const centerText = (text) => {
-      const ansiEscape = '\u001B';
-      const visibleLength = text.replace(
-        new RegExp(`${ansiEscape}\\[[0-9;]*m`, 'gu'),
-        ''
-      ).length;
-      const totalPadding = INNER_WIDTH - visibleLength;
-      const leftPad = Math.floor(totalPadding / 2);
-      const rightPad = totalPadding - leftPad;
-      return ' '.repeat(leftPad) + text + ' '.repeat(rightPad);
-    };
-
-    const leftAlignText = (label, value, valueColor = '') => {
-      const fullText = `  ${label}: ${value}`;
-      const padding = INNER_WIDTH - fullText.length;
-      return `  ${label}: ${valueColor}${value}${colors.reset}${' '.repeat(padding)}`;
-    };
-
-    // Build the box
-    const boxLines = [];
-    boxLines.push(
-      '\n' + colors.cyan + '╔' + '═'.repeat(INNER_WIDTH) + '╗' + colors.reset
-    );
-    boxLines.push(
-      colors.cyan +
-        '║' +
-        colors.reset +
-        centerText(
-          colors.bright +
-            colors.yellow +
-            '🔐 ADMIN ACCESS CODE 🔐' +
-            colors.reset
-        ) +
-        colors.cyan +
-        '║' +
-        colors.reset
-    );
-    boxLines.push(
-      colors.cyan + '╠' + '═'.repeat(INNER_WIDTH) + '╣' + colors.reset
-    );
-    boxLines.push(
-      colors.cyan +
-        '║' +
-        colors.reset +
-        leftAlignText('Code', adminCode, colors.bright + colors.green) +
-        colors.cyan +
-        '║' +
-        colors.reset
-    );
-    boxLines.push(
-      colors.cyan +
-        '║' +
-        colors.reset +
-        leftAlignText('Valid until', timeString, colors.yellow) +
-        colors.cyan +
-        '║' +
-        colors.reset
-    );
-
-    // Show last usage info if available
+    // Include previous usage info if available
     if (lastCodeUsedBy && lastCodeUsedAt) {
-      boxLines.push(
-        colors.cyan + '╟' + '─'.repeat(INNER_WIDTH) + '╢' + colors.reset
-      );
-      const usedTimeAgo = Math.floor((Date.now() - lastCodeUsedAt) / 1000);
-      const timeAgoStr =
-        usedTimeAgo < 60
-          ? `${usedTimeAgo}s ago`
-          : `${Math.floor(usedTimeAgo / 60)}m ago`;
-      boxLines.push(
-        colors.cyan +
-          '║' +
-          colors.reset +
-          leftAlignText('Previous code used by', lastCodeUsedBy, colors.gray) +
-          colors.cyan +
-          '║' +
-          colors.reset
-      );
-      boxLines.push(
-        colors.cyan +
-          '║' +
-          colors.reset +
-          leftAlignText('Used', timeAgoStr, colors.gray) +
-          colors.cyan +
-          '║' +
-          colors.reset
-      );
+      logData.previousUsage = {
+        usedBy: lastCodeUsedBy,
+        usedAt: new Date(lastCodeUsedAt).toISOString(),
+      };
     }
 
-    boxLines.push(
-      colors.cyan + '╚' + '═'.repeat(INNER_WIDTH) + '╝' + colors.reset + '\n'
-    );
-
-    // Output the admin code box to console (this is intentional UI output)
-    // eslint-disable-next-line no-console
-    console.log(boxLines.join('\n'));
+    logger.info('Admin access code generated', logData);
 
     // Reset tracking for new code
     lastCodeUsedBy = null;
@@ -585,6 +484,12 @@ app.use(compression());
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
+// Request ID middleware - must be early to ensure all logs have request ID
+app.use(requestIdMiddleware());
+
+// Prometheus metrics middleware
+app.use(metricsMiddleware());
+
 // Request logging is handled by logger.requestLogger() middleware
 
 // Session middleware with PostgreSQL store and caching layer
@@ -853,6 +758,37 @@ app.get('/api/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       error: 'Health check failed',
     });
+  }
+});
+
+// Prometheus metrics endpoint
+// Protected by IP whitelist: only localhost and private network IPs
+app.get('/metrics', async (req, res) => {
+  // Simple IP-based protection for metrics endpoint
+  const clientIp = req.ip || req.connection.remoteAddress || '';
+  const isLocalhost =
+    clientIp === '127.0.0.1' ||
+    clientIp === '::1' ||
+    clientIp === '::ffff:127.0.0.1';
+  const isPrivateNetwork =
+    /^(::ffff:)?(10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|192\.168\.|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.)/.test(
+      clientIp
+    );
+
+  // In development, allow all access
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+
+  if (!isLocalhost && !isPrivateNetwork && !isDevelopment) {
+    logger.warn('Metrics endpoint access denied', { ip: clientIp });
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    res.set('Content-Type', getContentType());
+    res.end(await getMetrics());
+  } catch (error) {
+    logger.error('Error generating metrics', { error: error.message });
+    res.status(500).json({ error: 'Failed to generate metrics' });
   }
 });
 

@@ -9,6 +9,8 @@ services:
       - '3000:3000'
     environment:
       - NODE_ENV=production
+      - NO_COLOR=1
+      - LOG_LEVEL=info
       - SESSION_SECRET=test-secret-change-in-production
       - EMAIL_FROM=${EMAIL_FROM:-noreply@example.com}
       - BASE_URL=${BASE_URL:-http://localhost:3000}

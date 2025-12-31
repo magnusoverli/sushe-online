@@ -475,12 +475,12 @@ test('errorHandler should log error details', () => {
 
   errorHandler(err, req, res, () => {});
 
-  assert.strictEqual(loggedData.msg, 'Error occurred:');
-  assert.strictEqual(loggedData.data.message, 'Logged error');
-  assert.strictEqual(loggedData.data.url, '/api/test');
-  assert.strictEqual(loggedData.data.method, 'POST');
-  assert.strictEqual(loggedData.data.ip, '192.168.1.1');
-  assert.strictEqual(loggedData.data.userId, 'user123');
+  assert.strictEqual(loggedData.msg, 'Error occurred');
+  assert.strictEqual(loggedData.data.error.message, 'Logged error');
+  assert.strictEqual(loggedData.data.http.url, '/api/test');
+  assert.strictEqual(loggedData.data.http.method, 'POST');
+  assert.strictEqual(loggedData.data.http.ip, '192.168.1.1');
+  assert.strictEqual(loggedData.data.user.id, 'user123');
 });
 
 test('errorHandler should handle error without message', () => {
