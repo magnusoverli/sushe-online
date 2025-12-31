@@ -4,6 +4,10 @@
  */
 
 const { Server } = require('socket.io');
+const {
+  incWebsocketConnections,
+  decWebsocketConnections,
+} = require('./metrics');
 
 /**
  * Create the WebSocket service with dependency injection
@@ -90,6 +94,9 @@ function createWebSocketService(deps = {}) {
       const userRoom = `user:${userId}`;
       socket.join(userRoom);
 
+      // Track connection metrics
+      incWebsocketConnections();
+
       logger.info('WebSocket client connected', {
         socketId: socket.id,
         userId,
@@ -119,6 +126,9 @@ function createWebSocketService(deps = {}) {
 
       // Handle disconnection
       socket.on('disconnect', (reason) => {
+        // Track connection metrics
+        decWebsocketConnections();
+
         logger.info('WebSocket client disconnected', {
           socketId: socket.id,
           userId,

@@ -1,5 +1,6 @@
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
+  const { recordAuthAttempt } = require('../utils/metrics');
   const {
     loginRateLimit,
     registerRateLimit,
@@ -162,6 +163,7 @@ module.exports = (app, deps) => {
           });
         }
 
+        recordAuthAttempt('register', 'success');
         req.flash(
           'success',
           'Registration successful! Your account is pending admin approval.'
@@ -171,11 +173,13 @@ module.exports = (app, deps) => {
         logger.error('Database error during registration', {
           error: err.message,
         });
+        recordAuthAttempt('register', 'failure');
         req.flash('error', 'Registration error. Please try again.');
         return res.redirect('/register');
       }
     } catch (error) {
       logger.error('Registration error', { error: error.message });
+      recordAuthAttempt('register', 'failure');
       req.flash('error', 'Registration error. Please try again.');
       res.redirect('/register');
     }
@@ -245,6 +249,7 @@ module.exports = (app, deps) => {
 
       if (!user) {
         logger.info('Authentication failed:', info);
+        recordAuthAttempt('login', 'failure');
         req.flash('error', info.message || 'Invalid credentials');
 
         // Force session save before redirect to ensure flash messages persist
@@ -268,6 +273,7 @@ module.exports = (app, deps) => {
       });
 
       logger.info('User logged in successfully', { email: user.email });
+      recordAuthAttempt('login', 'success');
 
       // "Remember me" support:
       // The login form sends `remember=on` (checkbox). If set, extend the session cookie.
@@ -318,6 +324,7 @@ module.exports = (app, deps) => {
 
   // Logout
   app.get('/logout', (req, res) => {
+    recordAuthAttempt('logout', 'success');
     req.logout(() => res.redirect('/login'));
   });
 

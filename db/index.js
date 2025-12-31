@@ -6,6 +6,7 @@ const {
   Pool,
   waitForPostgres,
   warmConnections,
+  reportPoolMetrics,
 } = require('./postgres');
 const logger = require('../utils/logger');
 
@@ -463,7 +464,15 @@ if (process.env.DATABASE_URL) {
       logger.info('Ensuring admin user...');
       return ensureAdminUser();
     })
-    .then(() => logger.info('Database ready'))
+    .then(() => {
+      logger.info('Database ready');
+      // Start periodic pool metrics reporting (every 15 seconds)
+      setInterval(() => {
+        reportPoolMetrics(pool);
+      }, 15000);
+      // Report initial metrics
+      reportPoolMetrics(pool);
+    })
     .catch((err) => {
       logger.error('Database initialization error:', err);
       throw err;
@@ -484,4 +493,5 @@ module.exports = {
   dataDir,
   ready,
   pool,
+  reportPoolMetrics: () => reportPoolMetrics(pool),
 };

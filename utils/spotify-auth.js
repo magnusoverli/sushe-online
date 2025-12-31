@@ -2,6 +2,7 @@
 // Spotify OAuth token refresh utilities
 
 const logger = require('./logger');
+const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
 
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
@@ -376,26 +377,52 @@ function createSpotifyAuth(deps = {}) {
       ? endpoint
       : `${SPOTIFY_API_BASE}${endpoint}`;
 
-    const response = await fetchFn(url, {
-      ...options,
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+    // Normalize endpoint for metrics (remove query params and dynamic parts)
+    const metricsEndpoint = endpoint
+      .split('?')[0]
+      .replace(/\/[a-zA-Z0-9]{22}\b/g, '/:id'); // Spotify IDs are 22 chars
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      log.error('Spotify API request failed:', {
-        endpoint,
-        status: response.status,
-        error: errorText,
+    const startTime = Date.now();
+    let response;
+    try {
+      response = await fetchFn(url, {
+        ...options,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
       });
-      throw new Error(`Spotify API error: ${response.status}`);
-    }
 
-    return response.json();
+      const duration = Date.now() - startTime;
+      observeExternalApiCall(
+        'spotify',
+        metricsEndpoint,
+        duration,
+        response.status
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        log.error('Spotify API request failed:', {
+          endpoint,
+          status: response.status,
+          error: errorText,
+        });
+        recordExternalApiError('spotify', `http_${response.status}`);
+        throw new Error(`Spotify API error: ${response.status}`);
+      }
+
+      return response.json();
+    } catch (error) {
+      // Record network/timeout errors
+      if (!response) {
+        const duration = Date.now() - startTime;
+        observeExternalApiCall('spotify', metricsEndpoint, duration, 0);
+        recordExternalApiError('spotify', 'network_error');
+      }
+      throw error;
+    }
   }
 
   // Create data fetcher methods

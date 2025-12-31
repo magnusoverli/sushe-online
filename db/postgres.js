@@ -1,6 +1,7 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { observeDbQuery, updateDbPoolMetrics } = require('../utils/metrics');
 
 async function waitForPostgres(pool, retries = 10, interval = 3000) {
   logger.info('Checking PostgreSQL connection...');
@@ -87,14 +88,24 @@ class PgDatastore {
     });
   }
 
-  _query(text, params) {
+  async _query(text, params) {
     if (this.logQueries) {
       logger.debug('SQL', {
         query: text,
         params: this._sanitizeParams(params),
       });
     }
-    return this.pool.query(text, params);
+    // Extract operation type from query for metrics
+    const operation = this._extractOperation(text);
+    const startTime = Date.now();
+    try {
+      const result = await this.pool.query(text, params);
+      observeDbQuery(operation, Date.now() - startTime);
+      return result;
+    } catch (error) {
+      observeDbQuery(operation, Date.now() - startTime);
+      throw error;
+    }
   }
 
   async _preparedQuery(name, text, params) {
@@ -105,8 +116,32 @@ class PgDatastore {
         params: this._sanitizeParams(params),
       });
     }
+    // Extract operation type from query for metrics
+    const operation = this._extractOperation(text);
+    const startTime = Date.now();
+    try {
+      const result = await this.pool.query({ name, text }, params);
+      observeDbQuery(operation, Date.now() - startTime);
+      return result;
+    } catch (error) {
+      observeDbQuery(operation, Date.now() - startTime);
+      throw error;
+    }
+  }
 
-    return this.pool.query({ name, text }, params);
+  /**
+   * Extract SQL operation type from query text
+   * @param {string} text - SQL query text
+   * @returns {string} Operation type (select, insert, update, delete, other)
+   */
+  _extractOperation(text) {
+    if (!text) return 'other';
+    const trimmed = text.trim().toLowerCase();
+    if (trimmed.startsWith('select')) return 'select';
+    if (trimmed.startsWith('insert')) return 'insert';
+    if (trimmed.startsWith('update')) return 'update';
+    if (trimmed.startsWith('delete')) return 'delete';
+    return 'other';
   }
 
   _mapField(field) {
@@ -449,4 +484,34 @@ class PgDatastore {
   }
 }
 
-module.exports = { PgDatastore, Pool, waitForPostgres, warmConnections };
+/**
+ * Get pool statistics for metrics
+ * @param {Pool} pool - pg Pool instance
+ * @returns {Object} Pool statistics
+ */
+function getPoolStats(pool) {
+  if (!pool) return { total: 0, idle: 0, waiting: 0 };
+  return {
+    total: pool.totalCount || 0,
+    idle: pool.idleCount || 0,
+    waiting: pool.waitingCount || 0,
+  };
+}
+
+/**
+ * Update pool metrics from a pool instance
+ * @param {Pool} pool - pg Pool instance
+ */
+function reportPoolMetrics(pool) {
+  const stats = getPoolStats(pool);
+  updateDbPoolMetrics(stats);
+}
+
+module.exports = {
+  PgDatastore,
+  Pool,
+  waitForPostgres,
+  warmConnections,
+  getPoolStats,
+  reportPoolMetrics,
+};

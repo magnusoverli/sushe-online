@@ -10,6 +10,43 @@ client.collectDefaultMetrics({
 });
 
 // ============================================
+// Application Info Metrics
+// ============================================
+
+// Read package.json for version info
+let appVersion = '0.0.0';
+try {
+  const pkg = require('../package.json');
+  appVersion = pkg.version || '0.0.0';
+} catch {
+  // Ignore if package.json can't be read
+}
+
+/**
+ * Application info gauge (set to 1, labels contain metadata)
+ */
+const appInfo = new client.Gauge({
+  name: 'sushe_app_info',
+  help: 'Application version and environment info',
+  labelNames: ['version', 'node_version', 'environment'],
+  registers: [register],
+});
+
+// Set app info once at module load
+appInfo
+  .labels(appVersion, process.version, process.env.NODE_ENV || 'development')
+  .set(1);
+
+/**
+ * Application uptime in seconds
+ */
+const appUptime = new client.Gauge({
+  name: 'sushe_app_uptime_seconds',
+  help: 'Application uptime in seconds',
+  registers: [register],
+});
+
+// ============================================
 // HTTP Metrics
 // ============================================
 
@@ -33,6 +70,18 @@ const httpRequestsTotal = new client.Counter({
   name: 'sushe_http_requests_total',
   help: 'Total number of HTTP requests',
   labelNames: ['method', 'route', 'status_code'],
+  registers: [register],
+});
+
+/**
+ * HTTP response size histogram
+ * Tracks the size of HTTP responses in bytes
+ */
+const httpResponseSize = new client.Histogram({
+  name: 'sushe_http_response_size_bytes',
+  help: 'Size of HTTP responses in bytes',
+  labelNames: ['method', 'route'],
+  buckets: [100, 1000, 10000, 100000, 1000000, 10000000], // 100B to 10MB
   registers: [register],
 });
 
@@ -87,6 +136,16 @@ const dbQueryDuration = new client.Histogram({
   help: 'Duration of database queries in seconds',
   labelNames: ['operation'],
   buckets: [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1, 5],
+  registers: [register],
+});
+
+/**
+ * Database connection pool size gauge
+ */
+const dbPoolSize = new client.Gauge({
+  name: 'sushe_db_pool_size',
+  help: 'Number of connections in the database pool',
+  labelNames: ['state'], // 'total', 'idle', 'waiting'
   registers: [register],
 });
 
@@ -153,6 +212,14 @@ function metricsMiddleware() {
       // Record metrics
       httpRequestDuration.labels(method, route, statusCode).observe(duration);
       httpRequestsTotal.labels(method, route, statusCode).inc();
+
+      // Record response size if available
+      const contentLength = res.get('Content-Length');
+      if (contentLength) {
+        httpResponseSize
+          .labels(method, route)
+          .observe(parseInt(contentLength, 10));
+      }
     });
 
     next();
@@ -232,10 +299,44 @@ function setActiveSessions(count) {
 }
 
 /**
+ * Update database pool metrics
+ * @param {Object} poolStats - Pool statistics
+ * @param {number} poolStats.total - Total connections
+ * @param {number} poolStats.idle - Idle connections
+ * @param {number} poolStats.waiting - Waiting clients
+ */
+function updateDbPoolMetrics(poolStats) {
+  if (poolStats) {
+    dbPoolSize.labels('total').set(poolStats.total || 0);
+    dbPoolSize.labels('idle').set(poolStats.idle || 0);
+    dbPoolSize.labels('waiting').set(poolStats.waiting || 0);
+  }
+}
+
+/**
+ * Observe HTTP response size
+ * @param {string} method - HTTP method
+ * @param {string} route - Route path
+ * @param {number} sizeBytes - Response size in bytes
+ */
+function observeResponseSize(method, route, sizeBytes) {
+  httpResponseSize.labels(method, normalizeRoute(route)).observe(sizeBytes);
+}
+
+/**
+ * Update application uptime metric
+ */
+function updateUptime() {
+  appUptime.set(process.uptime());
+}
+
+/**
  * Get metrics in Prometheus format
  * @returns {Promise<string>} Metrics in Prometheus text format
  */
 async function getMetrics() {
+  // Update uptime before returning metrics
+  updateUptime();
   return register.metrics();
 }
 
@@ -254,12 +355,16 @@ module.exports = {
   // Metrics
   httpRequestDuration,
   httpRequestsTotal,
+  httpResponseSize,
   websocketConnectionsActive,
   externalApiDuration,
   externalApiErrorsTotal,
   dbQueryDuration,
+  dbPoolSize,
   userSessionsActive,
   authAttemptsTotal,
+  appInfo,
+  appUptime,
 
   // Middleware
   metricsMiddleware,
@@ -274,6 +379,9 @@ module.exports = {
   incWebsocketConnections,
   decWebsocketConnections,
   setActiveSessions,
+  updateDbPoolMetrics,
+  observeResponseSize,
+  updateUptime,
   getMetrics,
   getContentType,
 };

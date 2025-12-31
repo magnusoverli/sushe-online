@@ -2,8 +2,36 @@
 // Last.fm API utilities for authentication, scrobbling, and data retrieval
 
 const logger = require('./logger');
+const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
 
 const API_URL = 'https://ws.audioscrobbler.com/2.0/';
+
+/**
+ * Wrap fetch function with metrics tracking
+ * @param {Function} fetchFn - Original fetch function
+ * @returns {Function} Wrapped fetch function with metrics
+ */
+function wrapFetchWithMetrics(fetchFn) {
+  return async (url, options) => {
+    // Extract method from URL params for metrics
+    const urlObj = new URL(url);
+    const method = urlObj.searchParams.get('method') || 'unknown';
+
+    const startTime = Date.now();
+    let response;
+    try {
+      response = await fetchFn(url, options);
+      const duration = Date.now() - startTime;
+      observeExternalApiCall('lastfm', method, duration, response.status);
+      return response;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      observeExternalApiCall('lastfm', method, duration, 0);
+      recordExternalApiError('lastfm', 'network_error');
+      throw error;
+    }
+  };
+}
 
 // ============================================
 // USER DATA API METHODS - CORE
@@ -552,7 +580,11 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
  */
 function createLastfmAuth(deps = {}) {
   const log = deps.logger || logger;
-  const fetchFn = deps.fetch || global.fetch;
+  const rawFetchFn = deps.fetch || global.fetch;
+  // Wrap fetch with metrics tracking (unless disabled for testing)
+  const fetchFn = deps.skipMetrics
+    ? rawFetchFn
+    : wrapFetchWithMetrics(rawFetchFn);
   const crypto = deps.crypto || require('crypto');
   const env = deps.env || process.env;
 
