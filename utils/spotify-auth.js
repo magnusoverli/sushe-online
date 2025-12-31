@@ -395,12 +395,9 @@ function createSpotifyAuth(deps = {}) {
       });
 
       const duration = Date.now() - startTime;
-      observeExternalApiCall(
-        'spotify',
-        metricsEndpoint,
-        duration,
-        response.status
-      );
+      // Handle mock responses that may not have status property
+      const statusCode = response.status ?? 200;
+      observeExternalApiCall('spotify', metricsEndpoint, duration, statusCode);
 
       if (!response.ok) {
         const errorText = await response.text();

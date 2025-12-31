@@ -22,7 +22,9 @@ function wrapFetchWithMetrics(fetchFn) {
     try {
       response = await fetchFn(url, options);
       const duration = Date.now() - startTime;
-      observeExternalApiCall('lastfm', method, duration, response.status);
+      // Handle mock responses that may not have status property
+      const statusCode = response.status ?? 200;
+      observeExternalApiCall('lastfm', method, duration, statusCode);
       return response;
     } catch (error) {
       const duration = Date.now() - startTime;
