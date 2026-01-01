@@ -242,10 +242,13 @@ function createLogger(options = {}) {
             username: req.user?.username,
           };
 
+          // Create descriptive log message with key information
+          const logMessage = `${req.method} ${req.originalUrl} ${res.statusCode} (${duration}ms)`;
+
           if (res.statusCode >= 400) {
-            pinoLogger.warn(logData, 'HTTP Request');
+            pinoLogger.warn(logData, logMessage);
           } else {
-            pinoLogger.info(logData, 'HTTP Request');
+            pinoLogger.info(logData, logMessage);
           }
         });
 
