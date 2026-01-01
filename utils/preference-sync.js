@@ -489,7 +489,6 @@ function createPreferenceSyncService(deps = {}) {
     const cycleStart = Date.now();
 
     log.info('Starting preference sync cycle');
-
     const results = { total: 0, success: 0, failed: 0, errors: [] };
 
     try {
