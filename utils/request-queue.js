@@ -24,13 +24,62 @@ class MusicBrainzQueue {
    * @param {Object} deps - Dependencies for testing
    * @param {Function} deps.fetch - Fetch implementation
    * @param {number} deps.minInterval - Minimum interval between requests (ms)
+   * @param {number} deps.timeout - Request timeout in milliseconds (default: 30000)
+   * @param {number} deps.maxRetries - Maximum number of retries (default: 2)
    */
   constructor(deps = {}) {
     this.fetch = deps.fetch || globalThis.fetch;
     this.minInterval = deps.minInterval !== undefined ? deps.minInterval : 1000;
+    this.timeout = deps.timeout !== undefined ? deps.timeout : 30000;
+    this.maxRetries = deps.maxRetries !== undefined ? deps.maxRetries : 2;
     this.queue = [];
     this.processing = false;
     this.lastRequestTime = 0;
+  }
+
+  /**
+   * Determine if an error is retryable (transient network error)
+   * @param {Error} error - The error to check
+   * @param {Response|null} response - The response if available
+   * @returns {boolean} - True if error is retryable
+   */
+  _isRetryableError(error, response) {
+    // Don't retry on HTTP errors (4xx, 5xx) unless specifically transient
+    if (response) {
+      // Don't retry on client errors (4xx)
+      if (response.status >= 400 && response.status < 500) {
+        return false;
+      }
+      // Don't retry on server errors (5xx) unless specifically transient
+      // 503 Service Unavailable and 504 Gateway Timeout are transient
+      if (response.status >= 500) {
+        return response.status === 503 || response.status === 504;
+      }
+    }
+
+    // Retry on network errors
+    const retryableCodes = [
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ENOTFOUND',
+      'ECONNREFUSED',
+      'EAI_AGAIN',
+    ];
+    if (error.code && retryableCodes.includes(error.code)) {
+      return true;
+    }
+
+    // Retry on timeout errors
+    if (error.name === 'TimeoutError' || error.name === 'AbortError') {
+      return true;
+    }
+
+    // Retry on network error types
+    if (error.type === 'network' || error.type === 'system') {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -73,11 +122,96 @@ class MusicBrainzQueue {
       const { url, options, resolve, reject } = this.queue.shift();
       this.lastRequestTime = Date.now();
 
-      try {
-        const response = await this.fetch(url, options);
-        resolve(response);
-      } catch (error) {
-        reject(error);
+      let retryCount = 0;
+      let lastError = null;
+      let lastResponse = null;
+
+      while (retryCount <= this.maxRetries) {
+        try {
+          // Create AbortController for timeout handling
+          const abortController = new AbortController();
+          const timeoutId = setTimeout(() => {
+            abortController.abort();
+          }, this.timeout);
+
+          // Merge abort signal with existing options
+          const fetchOptions = {
+            ...options,
+            signal: abortController.signal,
+          };
+
+          try {
+            const response = await this.fetch(url, fetchOptions);
+            clearTimeout(timeoutId);
+
+            // Check if response is OK
+            if (!response.ok) {
+              lastResponse = response;
+              // Check if we should retry
+              if (
+                retryCount < this.maxRetries &&
+                this._isRetryableError(
+                  new Error(`HTTP ${response.status}`),
+                  response
+                )
+              ) {
+                retryCount++;
+                // Exponential backoff: 1s, 2s delays
+                const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
+                await wait(backoffDelay);
+                continue;
+              }
+              // Not retryable or max retries reached
+              const error = new Error(
+                `MusicBrainz API responded with status ${response.status}`
+              );
+              error.status = response.status;
+              error.retries = retryCount;
+              reject(error);
+              return;
+            }
+
+            // Success - attach retry count for logging
+            if (retryCount > 0) {
+              response._retries = retryCount;
+            }
+            resolve(response);
+            return;
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            // Handle timeout specifically
+            if (fetchError.name === 'AbortError' && abortController.signal.aborted) {
+              const timeoutError = new Error(
+                `Request timeout after ${this.timeout}ms: ${url}`
+              );
+              timeoutError.name = 'TimeoutError';
+              timeoutError.code = 'ETIMEDOUT';
+              lastError = timeoutError;
+            } else {
+              lastError = fetchError;
+            }
+          }
+        } catch (error) {
+          lastError = error;
+        }
+
+        // Check if we should retry
+        if (retryCount < this.maxRetries && this._isRetryableError(lastError, lastResponse)) {
+          retryCount++;
+          // Exponential backoff: 1s, 2s delays
+          const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
+          await wait(backoffDelay);
+          continue;
+        }
+
+        // Not retryable or max retries reached
+        if (lastError) {
+          lastError.retries = retryCount;
+          reject(lastError);
+        } else {
+          reject(new Error('Unknown error occurred'));
+        }
+        return;
       }
     }
 

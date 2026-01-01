@@ -1508,6 +1508,9 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     cacheConfigs.public,
     async (req, res) => {
+      const startTime = Date.now();
+      let response = null;
+
       try {
         const { endpoint, priority } = req.query;
         if (!endpoint) {
@@ -1524,7 +1527,7 @@ module.exports = (app, deps) => {
 
         // Use the MusicBrainz rate-limited fetch function with priority
         const url = `https://musicbrainz.org/ws/2/${endpoint}`;
-        const response = await mbFetch(
+        response = await mbFetch(
           url,
           {
             headers: {
@@ -1536,23 +1539,92 @@ module.exports = (app, deps) => {
         );
 
         if (!response.ok) {
-          throw new Error(
+          const error = new Error(
             `MusicBrainz API responded with status ${response.status}`
           );
+          error.status = response.status;
+          throw error;
         }
 
-        const data = await response.json();
+        // Validate Content-Type before parsing
+        const contentType = response.headers.get('content-type') || '';
+        if (!contentType.includes('application/json')) {
+          const error = new Error(
+            `Unexpected Content-Type: ${contentType}. Expected application/json`
+          );
+          error.status = response.status;
+          error.contentType = contentType;
+          throw error;
+        }
+
+        // Parse JSON with error handling
+        let data;
+        try {
+          data = await response.json();
+        } catch (parseError) {
+          // Try to get response body for debugging
+          let bodyPreview = '';
+          try {
+            const text = await response.text();
+            bodyPreview = text.substring(0, 200);
+          } catch (_textError) {
+            // Ignore if we can't read body
+          }
+
+          const jsonError = new Error(
+            `Failed to parse JSON response: ${parseError.message}`
+          );
+          jsonError.name = parseError.name || 'SyntaxError';
+          jsonError.status = response.status;
+          jsonError.contentType = contentType;
+          jsonError.bodyPreview = bodyPreview;
+          throw jsonError;
+        }
+
         res.json(data);
       } catch (error) {
-        logger.error('MusicBrainz proxy error:', {
-          message: error.message,
-          stack: error.stack,
+        const duration = Date.now() - startTime;
+        const constructedUrl = req.query.endpoint
+          ? `https://musicbrainz.org/ws/2/${req.query.endpoint}`
+          : 'unknown';
+
+        // Build enhanced error log
+        const errorLog = {
+          message: error.message || 'Unknown error',
+          name: error.name,
+          type: error.type,
+          code: error.code, // ECONNRESET, ETIMEDOUT, etc.
+          status: error.status || response?.status,
+          duration_ms: duration,
           endpoint: req.query.endpoint,
-          url: req.query.endpoint
-            ? `https://musicbrainz.org/ws/2/${req.query.endpoint}`
-            : 'unknown',
+          url: constructedUrl,
+          retries: error.retries !== undefined ? error.retries : response?._retries,
+        };
+
+        // Add Content-Type and body preview for JSON parsing errors
+        if (error.contentType) {
+          errorLog.contentType = error.contentType;
+        }
+        if (error.bodyPreview) {
+          errorLog.bodyPreview = error.bodyPreview;
+        }
+
+        // Include stack trace for debugging
+        if (error.stack) {
+          errorLog.stack = error.stack;
+        }
+
+        logger.error('MusicBrainz proxy error:', errorLog);
+
+        // Return appropriate status code
+        const statusCode = error.status && error.status >= 400 && error.status < 600
+          ? error.status
+          : 500;
+
+        res.status(statusCode).json({
+          error: 'Failed to fetch from MusicBrainz API',
+          ...(process.env.NODE_ENV === 'development' && { details: error.message }),
         });
-        res.status(500).json({ error: 'Failed to fetch from MusicBrainz API' });
       }
     }
   );

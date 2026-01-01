@@ -34,6 +34,8 @@ describe('MusicBrainzQueue', () => {
     it('should initialize with default values', () => {
       const defaultQueue = new MusicBrainzQueue();
       assert.strictEqual(defaultQueue.minInterval, 1000);
+      assert.strictEqual(defaultQueue.timeout, 30000);
+      assert.strictEqual(defaultQueue.maxRetries, 2);
       assert.deepStrictEqual(defaultQueue.queue, []);
       assert.strictEqual(defaultQueue.processing, false);
       assert.strictEqual(defaultQueue.lastRequestTime, 0);
@@ -52,6 +54,16 @@ describe('MusicBrainzQueue', () => {
     it('should accept minInterval of 0', () => {
       const zeroIntervalQueue = new MusicBrainzQueue({ minInterval: 0 });
       assert.strictEqual(zeroIntervalQueue.minInterval, 0);
+    });
+
+    it('should accept custom timeout', () => {
+      const customTimeoutQueue = new MusicBrainzQueue({ timeout: 10000 });
+      assert.strictEqual(customTimeoutQueue.timeout, 10000);
+    });
+
+    it('should accept custom maxRetries', () => {
+      const customRetriesQueue = new MusicBrainzQueue({ maxRetries: 3 });
+      assert.strictEqual(customRetriesQueue.maxRetries, 3);
     });
   });
 
@@ -249,6 +261,386 @@ describe('MusicBrainzQueue', () => {
 
       assert.ok(queue.lastRequestTime > 0);
       assert.ok(queue.lastRequestTime <= Date.now());
+    });
+  });
+
+  describe('timeout handling', () => {
+    it('should timeout when request exceeds timeout duration', async () => {
+      const slowFetch = mock.fn(
+        () =>
+          new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200))
+      );
+      const timeoutQueue = new MusicBrainzQueue({
+        fetch: slowFetch,
+        minInterval: 0,
+        timeout: 50, // 50ms timeout
+      });
+
+      await assert.rejects(
+        async () => {
+          await timeoutQueue.add('https://example.com', {});
+        },
+        {
+          name: 'TimeoutError',
+          code: 'ETIMEDOUT',
+        }
+      );
+    });
+
+    it('should clear timeout on successful response', async () => {
+      const fastFetch = mock.fn(() =>
+        Promise.resolve({ ok: true, status: 200 })
+      );
+      const timeoutQueue = new MusicBrainzQueue({
+        fetch: fastFetch,
+        minInterval: 0,
+        timeout: 1000,
+      });
+
+      const response = await timeoutQueue.add('https://example.com', {});
+
+      assert.strictEqual(response.ok, true);
+      assert.strictEqual(response.status, 200);
+    });
+
+    it('should include timeout duration in error message', async () => {
+      const slowFetch = mock.fn(
+        () =>
+          new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200))
+      );
+      const timeoutQueue = new MusicBrainzQueue({
+        fetch: slowFetch,
+        minInterval: 0,
+        timeout: 100,
+      });
+
+      await assert.rejects(
+        async () => {
+          await timeoutQueue.add('https://example.com', {});
+        },
+        (error) => {
+          assert.ok(error.message.includes('100ms'));
+          assert.ok(error.message.includes('https://example.com'));
+          return true;
+        }
+      );
+    });
+
+    it('should handle timeout with dependency injection', async () => {
+      const slowFetch = mock.fn(
+        () =>
+          new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200))
+      );
+      const timeoutQueue = new MusicBrainzQueue({
+        fetch: slowFetch,
+        minInterval: 0,
+        timeout: 50,
+      });
+
+      await assert.rejects(
+        async () => {
+          await timeoutQueue.add('https://example.com', {});
+        },
+        {
+          name: 'TimeoutError',
+        }
+      );
+    });
+  });
+
+  describe('retry logic', () => {
+    it('should retry on timeout errors', async () => {
+      let attemptCount = 0;
+      const timeoutFetch = mock.fn(() => {
+        attemptCount++;
+        if (attemptCount < 2) {
+          // First attempt times out
+          return new Promise((resolve) =>
+            setTimeout(() => resolve({ ok: true }), 200)
+          );
+        }
+        // Second attempt succeeds
+        return Promise.resolve({ ok: true, status: 200 });
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: timeoutFetch,
+        minInterval: 0,
+        timeout: 50,
+        maxRetries: 2,
+      });
+
+      const response = await retryQueue.add('https://example.com', {});
+
+      assert.strictEqual(response.ok, true);
+      assert.strictEqual(attemptCount, 2);
+    });
+
+    it('should retry on connection reset errors', async () => {
+      let attemptCount = 0;
+      const resetFetch = mock.fn(() => {
+        attemptCount++;
+        if (attemptCount < 2) {
+          const error = new Error('Connection reset');
+          error.code = 'ECONNRESET';
+          return Promise.reject(error);
+        }
+        return Promise.resolve({ ok: true, status: 200 });
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: resetFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      const response = await retryQueue.add('https://example.com', {});
+
+      assert.strictEqual(response.ok, true);
+      assert.strictEqual(attemptCount, 2);
+    });
+
+    it('should respect max retry limit', async () => {
+      let attemptCount = 0;
+      const failingFetch = mock.fn(() => {
+        attemptCount++;
+        const error = new Error('Connection reset');
+        error.code = 'ECONNRESET';
+        return Promise.reject(error);
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: failingFetch,
+        minInterval: 0,
+        maxRetries: 2, // Max 2 retries = 3 total attempts
+      });
+
+      await assert.rejects(
+        async () => {
+          await retryQueue.add('https://example.com', {});
+        },
+        (error) => {
+          assert.strictEqual(error.code, 'ECONNRESET');
+          assert.strictEqual(error.retries, 2);
+          return true;
+        }
+      );
+
+      // Should have tried 3 times total (1 initial + 2 retries)
+      assert.strictEqual(attemptCount, 3);
+    });
+
+    it('should use exponential backoff for retries', async () => {
+      const backoffDelays = [];
+      let lastTime = Date.now();
+
+      const resetFetch = mock.fn(() => {
+        const now = Date.now();
+        if (backoffDelays.length > 0) {
+          backoffDelays.push(now - lastTime);
+        }
+        lastTime = now;
+
+        if (backoffDelays.length < 2) {
+          const error = new Error('Connection reset');
+          error.code = 'ECONNRESET';
+          return Promise.reject(error);
+        }
+        return Promise.resolve({ ok: true, status: 200 });
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: resetFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      await retryQueue.add('https://example.com', {});
+
+      // Should have 2 retry delays (1s, 2s)
+      assert.strictEqual(backoffDelays.length, 2);
+      // First delay should be ~1000ms (with some tolerance)
+      assert.ok(
+        backoffDelays[0] >= 900 && backoffDelays[0] <= 1100,
+        `First delay ${backoffDelays[0]}ms should be ~1000ms`
+      );
+      // Second delay should be ~2000ms (with some tolerance)
+      assert.ok(
+        backoffDelays[1] >= 1900 && backoffDelays[1] <= 2100,
+        `Second delay ${backoffDelays[1]}ms should be ~2000ms`
+      );
+    });
+
+    it('should not retry on 4xx client errors', async () => {
+      const errorFetch = mock.fn(() =>
+        Promise.resolve({ ok: false, status: 404 })
+      );
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: errorFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      await assert.rejects(
+        async () => {
+          await retryQueue.add('https://example.com', {});
+        },
+        (error) => {
+          assert.strictEqual(error.status, 404);
+          assert.strictEqual(error.retries, 0);
+          return true;
+        }
+      );
+
+      // Should only try once
+      assert.strictEqual(errorFetch.mock.calls.length, 1);
+    });
+
+    it('should not retry on 5xx server errors except 503/504', async () => {
+      const errorFetch = mock.fn(() =>
+        Promise.resolve({ ok: false, status: 500 })
+      );
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: errorFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      await assert.rejects(
+        async () => {
+          await retryQueue.add('https://example.com', {});
+        },
+        (error) => {
+          assert.strictEqual(error.status, 500);
+          assert.strictEqual(error.retries, 0);
+          return true;
+        }
+      );
+
+      // Should only try once
+      assert.strictEqual(errorFetch.mock.calls.length, 1);
+    });
+
+    it('should retry on 503 Service Unavailable', async () => {
+      let attemptCount = 0;
+      const serviceUnavailableFetch = mock.fn(() => {
+        attemptCount++;
+        if (attemptCount < 2) {
+          return Promise.resolve({ ok: false, status: 503 });
+        }
+        return Promise.resolve({ ok: true, status: 200 });
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: serviceUnavailableFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      const response = await retryQueue.add('https://example.com', {});
+
+      assert.strictEqual(response.ok, true);
+      assert.strictEqual(attemptCount, 2);
+    });
+
+    it('should retry on 504 Gateway Timeout', async () => {
+      let attemptCount = 0;
+      const gatewayTimeoutFetch = mock.fn(() => {
+        attemptCount++;
+        if (attemptCount < 2) {
+          return Promise.resolve({ ok: false, status: 504 });
+        }
+        return Promise.resolve({ ok: true, status: 200 });
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: gatewayTimeoutFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      const response = await retryQueue.add('https://example.com', {});
+
+      assert.strictEqual(response.ok, true);
+      assert.strictEqual(attemptCount, 2);
+    });
+
+    it('should attach retry count to successful response after retries', async () => {
+      let attemptCount = 0;
+      const retryFetch = mock.fn(() => {
+        attemptCount++;
+        if (attemptCount < 2) {
+          const error = new Error('Connection reset');
+          error.code = 'ECONNRESET';
+          return Promise.reject(error);
+        }
+        return Promise.resolve({ ok: true, status: 200 });
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: retryFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      const response = await retryQueue.add('https://example.com', {});
+
+      assert.strictEqual(response.ok, true);
+      assert.strictEqual(response._retries, 1);
+    });
+
+    it('should attach retry count to error after max retries', async () => {
+      const failingFetch = mock.fn(() => {
+        const error = new Error('ETIMEDOUT');
+        error.code = 'ETIMEDOUT';
+        return Promise.reject(error);
+      });
+
+      const retryQueue = new MusicBrainzQueue({
+        fetch: failingFetch,
+        minInterval: 0,
+        maxRetries: 2,
+      });
+
+      await assert.rejects(
+        async () => {
+          await retryQueue.add('https://example.com', {});
+        },
+        (error) => {
+          assert.strictEqual(error.code, 'ETIMEDOUT');
+          assert.strictEqual(error.retries, 2);
+          return true;
+        }
+      );
+    });
+
+    it('should retry on various network error codes', async () => {
+      const retryableCodes = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED'];
+      for (const code of retryableCodes) {
+        let attemptCount = 0;
+        const networkErrorFetch = mock.fn(() => {
+          attemptCount++;
+          if (attemptCount < 2) {
+            const error = new Error(`Network error: ${code}`);
+            error.code = code;
+            return Promise.reject(error);
+          }
+          return Promise.resolve({ ok: true, status: 200 });
+        });
+
+        const retryQueue = new MusicBrainzQueue({
+          fetch: networkErrorFetch,
+          minInterval: 0,
+          maxRetries: 2,
+        });
+
+        const response = await retryQueue.add('https://example.com', {});
+
+        assert.strictEqual(response.ok, true, `Should retry on ${code}`);
+        assert.strictEqual(attemptCount, 2, `Should have retried once for ${code}`);
+      }
     });
   });
 
