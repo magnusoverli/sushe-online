@@ -495,7 +495,6 @@ function createPreferenceSyncService(deps = {}) {
       const users = await getUsersNeedingSync();
       results.total = users.length;
       log.info(`Found ${users.length} users needing sync`);
-
       for (const user of users) {
         try {
           const result = await syncUserPreferences(user);
