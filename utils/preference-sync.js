@@ -69,7 +69,8 @@ async function syncSpotifyDataForUser(user, pool, spotifyAuth, log) {
     spotifyAuth.getAllTopArtists(accessToken, 50, userContext),
     spotifyAuth.getAllTopTracks(accessToken, 50, userContext),
     spotifyAuth.fetchAllPages(
-      (offset) => spotifyAuth.getSavedAlbums(accessToken, 50, offset, userContext),
+      (offset) =>
+        spotifyAuth.getSavedAlbums(accessToken, 50, offset, userContext),
       200
     ),
   ]);
@@ -355,7 +356,6 @@ function createPreferenceSyncService(deps = {}) {
 
   const syncIntervalMs = deps.syncIntervalMs || DEFAULT_SYNC_INTERVAL_MS;
   const staleThresholdMs = deps.staleThresholdMs || DEFAULT_STALE_THRESHOLD_MS;
-
   let syncInterval = null;
   let isRunning = false;
 

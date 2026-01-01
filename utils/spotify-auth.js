@@ -87,13 +87,22 @@ function createDataFetchers(spotifyApiRequest) {
     };
   }
 
-  async function getSavedAlbums(accessToken, limit = 50, offset = 0, userContext = {}) {
+  async function getSavedAlbums(
+    accessToken,
+    limit = 50,
+    offset = 0,
+    userContext = {}
+  ) {
     const params = new URLSearchParams({
       limit: String(Math.min(limit, 50)),
       offset: String(offset),
     });
 
-    const data = await spotifyApiRequest(`/me/albums?${params}`, accessToken, userContext);
+    const data = await spotifyApiRequest(
+      `/me/albums?${params}`,
+      accessToken,
+      userContext
+    );
 
     return {
       items: data.items.map((item) => ({
@@ -173,7 +182,11 @@ function createDataFetchers(spotifyApiRequest) {
     return allItems.slice(0, maxItems);
   }
 
-  async function getAllTopArtists(accessToken, limitPerRange = 50, userContext = {}) {
+  async function getAllTopArtists(
+    accessToken,
+    limitPerRange = 50,
+    userContext = {}
+  ) {
     const [shortTerm, mediumTerm, longTerm] = await Promise.all([
       getTopArtists(accessToken, 'short_term', limitPerRange, 0, userContext),
       getTopArtists(accessToken, 'medium_term', limitPerRange, 0, userContext),
@@ -187,7 +200,11 @@ function createDataFetchers(spotifyApiRequest) {
     };
   }
 
-  async function getAllTopTracks(accessToken, limitPerRange = 50, userContext = {}) {
+  async function getAllTopTracks(
+    accessToken,
+    limitPerRange = 50,
+    userContext = {}
+  ) {
     const [shortTerm, mediumTerm, longTerm] = await Promise.all([
       getTopTracks(accessToken, 'short_term', limitPerRange, 0, userContext),
       getTopTracks(accessToken, 'medium_term', limitPerRange, 0, userContext),
