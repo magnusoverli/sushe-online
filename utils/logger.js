@@ -239,6 +239,7 @@ function createLogger(options = {}) {
             ip: req.ip,
             userAgent: req.get('User-Agent'),
             userId: req.user?._id,
+            username: req.user?.username,
           };
 
           if (res.statusCode >= 400) {

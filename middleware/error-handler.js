@@ -51,7 +51,9 @@ function createErrorHandler(log = logger) {
         ip: req.ip,
         userAgent: req.get('User-Agent'),
       },
-      user: req.user?._id ? { id: req.user._id } : undefined,
+      user: req.user?._id
+        ? { id: req.user._id, username: req.user.username }
+        : undefined,
     });
 
     // Handle specific error types
