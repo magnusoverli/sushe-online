@@ -38,7 +38,10 @@ class ResponseCache {
     }
 
     if (cleaned > 0) {
-      logger.debug(`Response cache cleanup: removed ${cleaned} entries`);
+      logger.debug('Response cache cleanup', {
+        entriesRemoved: cleaned,
+        cacheSize: this.cache.size,
+      });
     }
   }
 
@@ -196,10 +199,10 @@ const cacheConfigs = {
       return req.path === '/api/proxy/image';
     },
     onHit: (req, key) => {
-      logger.debug(`Image cache hit: ${key}`);
+      logger.debug('Image cache hit', { key });
     },
     onMiss: (req, key) => {
-      logger.debug(`Image cache miss: ${key}`);
+      logger.debug('Image cache miss', { key });
     },
   }),
 };

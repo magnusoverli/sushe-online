@@ -303,7 +303,10 @@ if (process.env.DATABASE_URL) {
         ),
       ]);
     } catch (err) {
-      logger.error('User migration error:', err);
+      logger.error('User migration error', {
+        error: err.message,
+        stack: err.stack,
+      });
     }
   }
   async function migrateLists() {
@@ -361,7 +364,10 @@ if (process.env.DATABASE_URL) {
         }
       }
     } catch (err) {
-      logger.error('List migration error:', err);
+      logger.error('List migration error', {
+        error: err.message,
+        stack: err.stack,
+      });
     }
   }
 
@@ -395,7 +401,7 @@ if (process.env.DATABASE_URL) {
     try {
       logger.info('Checking for admin user...');
       const existingAdmin = await users.findOne({ username: 'admin' });
-      logger.info('Existing admin user found:', { exists: !!existingAdmin });
+      logger.info('Existing admin user check', { exists: !!existingAdmin });
 
       if (!existingAdmin) {
         logger.info('Creating admin user...');
@@ -413,25 +419,26 @@ if (process.env.DATABASE_URL) {
           updated_at: new Date(),
           last_activity: new Date(),
         });
-        logger.info('Created admin user successfully:', {
-          userId: newUser._id,
-        });
+        logger.info('Created admin user successfully', { userId: newUser._id });
         logger.info('Admin login: email=admin@localhost.com, password=admin');
 
         // Verify we can find the user by email
         const verifyUser = await users.findOne({
           email: 'admin@localhost.com',
         });
-        logger.info('Verification - can find admin by email:', {
+        logger.debug('Verification - can find admin by email', {
           found: !!verifyUser,
         });
       } else {
-        logger.info('Admin user already exists with email:', {
+        logger.debug('Admin user already exists', {
           email: existingAdmin.email,
         });
       }
     } catch (err) {
-      logger.error('Error creating admin user:', err);
+      logger.error('Error creating admin user', {
+        error: err.message,
+        stack: err.stack,
+      });
     }
   }
 
@@ -474,7 +481,10 @@ if (process.env.DATABASE_URL) {
       reportPoolMetrics(pool);
     })
     .catch((err) => {
-      logger.error('Database initialization error:', err);
+      logger.error('Database initialization error', {
+        error: err.message,
+        stack: err.stack,
+      });
       throw err;
     });
 } else {

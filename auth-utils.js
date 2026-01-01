@@ -2,6 +2,7 @@
 // Helper to validate OAuth tokens and extension tokens
 
 const crypto = require('crypto');
+const logger = require('./utils/logger');
 
 function isTokenValid(token) {
   if (!token || !token.access_token) return false;
@@ -86,8 +87,7 @@ async function validateExtensionToken(token, pool) {
 
     return tokenData.user_id;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error validating extension token:', error);
+    logger.error('Error validating extension token', { error: error.message });
     return null;
   }
 }
@@ -102,8 +102,7 @@ async function cleanupExpiredTokens(pool) {
     );
     return result.rowCount;
   } catch (error) {
-    // eslint-disable-next-line no-console
-    console.error('Error cleaning up expired tokens:', error);
+    logger.error('Error cleaning up expired tokens', { error: error.message });
     return 0;
   }
 }

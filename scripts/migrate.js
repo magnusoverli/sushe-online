@@ -60,7 +60,10 @@ async function main() {
         break;
     }
   } catch (error) {
-    logger.error('Migration command failed:', { error: error.message });
+    logger.error('Migration command failed', {
+      error: error.message,
+      stack: error.stack,
+    });
     process.exit(1);
   } finally {
     await pool.end();

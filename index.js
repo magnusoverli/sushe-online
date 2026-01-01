@@ -732,7 +732,7 @@ app.get('/health/db', async (req, res) => {
     const statusCode = health.status === 'healthy' ? 200 : 503;
     res.status(statusCode).json(health);
   } catch (error) {
-    logger.error('Health check endpoint error:', error);
+    logger.error('Health check endpoint error', { error: error.message });
     res.status(503).json({
       status: 'unhealthy',
       database: 'error',
@@ -763,7 +763,7 @@ app.get('/api/health', async (req, res) => {
     const statusCode = health.status === 'healthy' ? 200 : 503;
     res.status(statusCode).json(health);
   } catch (error) {
-    logger.error('General health check error:', error);
+    logger.error('General health check error', { error: error.message });
     res.status(503).json({
       status: 'unhealthy',
       timestamp: new Date().toISOString(),

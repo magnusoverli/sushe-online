@@ -26,7 +26,10 @@ async function warmConnections(pool) {
   for (let i = 0; i < (pool.options.min || 5); i++) {
     warmupPromises.push(
       pool.query('SELECT 1 as warmup').catch((err) => {
-        logger.warn(`Connection warmup ${i + 1} failed:`, err.message);
+        logger.warn('Connection warmup failed', {
+          attempt: i + 1,
+          error: err.message,
+        });
       })
     );
   }

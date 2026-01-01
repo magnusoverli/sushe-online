@@ -46,14 +46,17 @@ module.exports = (app, deps) => {
     // Delete user's lists first
     lists.remove({ userId }, { multi: true }, (err) => {
       if (err) {
-        logger.error('Error deleting user lists:', err);
+        logger.error('Error deleting user lists', {
+          error: err.message,
+          userId,
+        });
         return res.status(500).json({ error: 'Error deleting user data' });
       }
 
       // Then delete the user
       users.remove({ _id: userId }, {}, (err, numRemoved) => {
         if (err) {
-          logger.error('Error deleting user:', err);
+          logger.error('Error deleting user', { error: err.message, userId });
           return res.status(500).json({ error: 'Error deleting user' });
         }
 
@@ -70,7 +73,7 @@ module.exports = (app, deps) => {
   // ===== Music Service Authentication =====
   app.get('/auth/spotify', ensureAuth, (req, res) => {
     const state = crypto.randomBytes(8).toString('hex');
-    logger.info('Starting Spotify OAuth flow, state:', state);
+    logger.info('Starting Spotify OAuth flow', { state, userId: req.user._id });
     req.session.spotifyState = state;
 
     // Store returnTo path for after OAuth completes
@@ -101,12 +104,11 @@ module.exports = (app, deps) => {
       return res.redirect('/settings');
     }
     delete req.session.spotifyState;
-    logger.info(
-      'Spotify callback received. code:',
-      req.query.code,
-      'state:',
-      req.query.state
-    );
+    logger.info('Spotify callback received', {
+      hasCode: !!req.query.code,
+      state: req.query.state,
+      userId: req.user._id,
+    });
     try {
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
@@ -121,15 +123,16 @@ module.exports = (app, deps) => {
         body: params.toString(),
       });
       if (!resp.ok) {
-        logger.error(
-          'Spotify token request failed:',
-          resp.status,
-          await resp.text()
-        );
+        const respText = await resp.text();
+        logger.error('Spotify token request failed', {
+          status: resp.status,
+          response: respText.substring(0, 200),
+          userId: req.user._id,
+        });
         throw new Error('Token request failed');
       }
       const token = await resp.json();
-      logger.info('Spotify token response:', {
+      logger.info('Spotify token received', {
         access_token: token.access_token?.slice(0, 6) + '...',
         expires_in: token.expires_in,
         refresh: !!token.refresh_token,
@@ -142,13 +145,20 @@ module.exports = (app, deps) => {
         { $set: { spotifyAuth: token, updatedAt: new Date() } },
         {},
         (err) => {
-          if (err) logger.error('Spotify auth update error:', err);
+          if (err)
+            logger.error('Spotify auth update error', {
+              error: err.message,
+              userId: req.user._id,
+            });
         }
       );
       req.user.spotifyAuth = token;
       req.flash('success', 'Spotify connected');
     } catch (e) {
-      logger.error('Spotify auth error:', e);
+      logger.error('Spotify auth error', {
+        error: e.message,
+        userId: req.user._id,
+      });
       req.flash('error', 'Failed to authenticate with Spotify');
     }
 
@@ -159,13 +169,20 @@ module.exports = (app, deps) => {
   });
 
   app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
-    logger.info('Disconnecting Spotify for user:', req.user.email);
+    logger.info('Disconnecting Spotify', {
+      email: req.user.email,
+      userId: req.user._id,
+    });
     users.update(
       { _id: req.user._id },
       { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } },
       {},
       (err) => {
-        if (err) logger.error('Spotify disconnect error:', err);
+        if (err)
+          logger.error('Spotify disconnect error', {
+            error: err.message,
+            userId: req.user._id,
+          });
       }
     );
     delete req.user.spotifyAuth;
@@ -184,7 +201,7 @@ module.exports = (app, deps) => {
       .replace(/=/g, '')
       .replace(/\+/g, '-')
       .replace(/\//g, '_');
-    logger.info('Starting Tidal OAuth flow, state:', state);
+    logger.info('Starting Tidal OAuth flow', { state, userId: req.user._id });
     req.session.tidalState = state;
     req.session.tidalVerifier = verifier;
 
@@ -216,12 +233,11 @@ module.exports = (app, deps) => {
     const verifier = req.session.tidalVerifier;
     delete req.session.tidalState;
     delete req.session.tidalVerifier;
-    logger.info(
-      'Tidal callback received. code:',
-      req.query.code,
-      'state:',
-      req.query.state
-    );
+    logger.info('Tidal callback received', {
+      hasCode: !!req.query.code,
+      state: req.query.state,
+      userId: req.user._id,
+    });
     try {
       const params = new URLSearchParams({
         grant_type: 'authorization_code',
@@ -236,15 +252,16 @@ module.exports = (app, deps) => {
         body: params.toString(),
       });
       if (!resp.ok) {
-        logger.error(
-          'Tidal token request failed:',
-          resp.status,
-          await resp.text()
-        );
+        const respText = await resp.text();
+        logger.error('Tidal token request failed', {
+          status: resp.status,
+          response: respText.substring(0, 200),
+          userId: req.user._id,
+        });
         throw new Error('Token request failed');
       }
       const token = await resp.json();
-      logger.info('Tidal token response:', {
+      logger.info('Tidal token received', {
         access_token: token.access_token?.slice(0, 6) + '...',
         expires_in: token.expires_in,
         refresh: !!token.refresh_token,
@@ -269,10 +286,16 @@ module.exports = (app, deps) => {
           const profile = await profileResp.json();
           countryCode = profile.countryCode || null;
         } else {
-          logger.warn('Tidal profile request failed:', profileResp.status);
+          logger.warn('Tidal profile request failed', {
+            status: profileResp.status,
+            userId: req.user._id,
+          });
         }
       } catch (profileErr) {
-        logger.error('Tidal profile fetch error:', profileErr);
+        logger.error('Tidal profile fetch error', {
+          error: profileErr.message,
+          userId: req.user._id,
+        });
       }
 
       await new Promise((resolve, reject) => {
@@ -288,7 +311,10 @@ module.exports = (app, deps) => {
           {},
           (err) => {
             if (err) {
-              logger.error('Tidal auth update error:', err);
+              logger.error('Tidal auth update error', {
+                error: err.message,
+                userId: req.user._id,
+              });
               reject(err);
             } else {
               resolve();
@@ -300,7 +326,10 @@ module.exports = (app, deps) => {
       req.user.tidalCountry = countryCode;
       req.flash('success', 'Tidal connected');
     } catch (e) {
-      logger.error('Tidal auth error:', e);
+      logger.error('Tidal auth error', {
+        error: e.message,
+        userId: req.user._id,
+      });
       req.flash('error', 'Failed to authenticate with Tidal');
     }
 
@@ -319,7 +348,10 @@ module.exports = (app, deps) => {
           {},
           (err) => {
             if (err) {
-              logger.error('Tidal disconnect error:', err);
+              logger.error('Tidal disconnect error', {
+                error: err.message,
+                userId: req.user._id,
+              });
               reject(err);
             } else {
               resolve();
@@ -330,7 +362,10 @@ module.exports = (app, deps) => {
       delete req.user.tidalAuth;
       req.flash('success', 'Tidal disconnected');
     } catch (e) {
-      logger.error('Tidal disconnect error:', e);
+      logger.error('Tidal disconnect error', {
+        error: e.message,
+        userId: req.user._id,
+      });
       req.flash('error', 'Failed to disconnect Tidal');
     }
     res.redirect('/settings');
@@ -354,7 +389,10 @@ module.exports = (app, deps) => {
     const callbackUrl = `${process.env.BASE_URL}/auth/lastfm/callback`;
     const authUrl = `https://www.last.fm/api/auth/?api_key=${apiKey}&cb=${encodeURIComponent(callbackUrl)}`;
 
-    logger.info('Starting Last.fm auth flow for user:', req.user.email);
+    logger.info('Starting Last.fm auth flow', {
+      email: req.user.email,
+      userId: req.user._id,
+    });
     res.redirect(authUrl);
   });
 
@@ -395,15 +433,17 @@ module.exports = (app, deps) => {
         }
       );
 
-      logger.info(
-        'Last.fm connected for user:',
-        req.user.email,
-        'as:',
-        sessionData.username
-      );
+      logger.info('Last.fm connected', {
+        email: req.user.email,
+        lastfmUsername: sessionData.username,
+        userId: req.user._id,
+      });
       req.flash('success', `Connected to Last.fm as ${sessionData.username}`);
     } catch (error) {
-      logger.error('Last.fm auth error:', error);
+      logger.error('Last.fm auth error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       req.flash('error', `Last.fm connection failed: ${error.message}`);
     }
 
@@ -411,7 +451,10 @@ module.exports = (app, deps) => {
   });
 
   app.get('/auth/lastfm/disconnect', ensureAuth, async (req, res) => {
-    logger.info('Disconnecting Last.fm for user:', req.user.email);
+    logger.info('Disconnecting Last.fm', {
+      email: req.user.email,
+      userId: req.user._id,
+    });
 
     try {
       // Await the database update to ensure it completes before redirect
@@ -425,7 +468,10 @@ module.exports = (app, deps) => {
 
       req.flash('success', 'Disconnected from Last.fm');
     } catch (err) {
-      logger.error('Last.fm disconnect error:', err);
+      logger.error('Last.fm disconnect error', {
+        error: err.message,
+        userId: req.user._id,
+      });
       req.flash('error', 'Failed to disconnect from Last.fm');
     }
 
@@ -442,7 +488,11 @@ module.exports = (app, deps) => {
       {},
       (err, numUpdated) => {
         if (err) {
-          logger.error('Error granting admin:', err);
+          logger.error('Error granting admin', {
+            error: err.message,
+            targetUserId: userId,
+            adminId: req.user._id,
+          });
           return res
             .status(500)
             .json({ error: 'Error granting admin privileges' });
@@ -477,7 +527,11 @@ module.exports = (app, deps) => {
       {},
       (err, numUpdated) => {
         if (err) {
-          logger.error('Error revoking admin:', err);
+          logger.error('Error revoking admin', {
+            error: err.message,
+            targetUserId: userId,
+            adminId: req.user._id,
+          });
           return res
             .status(500)
             .json({ error: 'Error revoking admin privileges' });
@@ -518,7 +572,10 @@ module.exports = (app, deps) => {
 
         res.json({ lists: listsData });
       } catch (err) {
-        logger.error('Error fetching user lists:', err);
+        logger.error('Error fetching user lists', {
+          error: err.message,
+          targetUserId: userId,
+        });
         res.status(500).json({ error: 'Error fetching user lists' });
       }
     }
@@ -972,7 +1029,7 @@ module.exports = (app, deps) => {
       });
       res.json(result);
     } catch (error) {
-      logger.error('Error fetching admin events:', error);
+      logger.error('Error fetching admin events', { error: error.message });
       res.status(500).json({ error: 'Failed to fetch events' });
     }
   });
@@ -992,7 +1049,7 @@ module.exports = (app, deps) => {
         });
         res.json(result);
       } catch (error) {
-        logger.error('Error fetching event history:', error);
+        logger.error('Error fetching event history', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch event history' });
       }
     }
@@ -1008,7 +1065,7 @@ module.exports = (app, deps) => {
         const counts = await adminEventService.getPendingCountsByPriority();
         res.json(counts);
       } catch (error) {
-        logger.error('Error fetching event counts:', error);
+        logger.error('Error fetching event counts', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch counts' });
       }
     }
@@ -1027,7 +1084,10 @@ module.exports = (app, deps) => {
         }
         res.json(event);
       } catch (error) {
-        logger.error('Error fetching event:', error);
+        logger.error('Error fetching event', {
+          error: error.message,
+          eventId: req.params.eventId,
+        });
         res.status(500).json({ error: 'Failed to fetch event' });
       }
     }
@@ -1058,7 +1118,11 @@ module.exports = (app, deps) => {
           event: result.event,
         });
       } catch (error) {
-        logger.error('Error executing event action:', error);
+        logger.error('Error executing event action', {
+          error: error.message,
+          eventId: req.params.eventId,
+          action: req.params.action,
+        });
         res.status(500).json({ error: 'Failed to execute action' });
       }
     }
@@ -1116,7 +1180,7 @@ module.exports = (app, deps) => {
           configuredAt: config.configuredAt,
         });
       } catch (error) {
-        logger.error('Error getting Telegram status:', error);
+        logger.error('Error getting Telegram status', { error: error.message });
         res.status(500).json({ error: 'Failed to get status' });
       }
     }
@@ -1137,7 +1201,9 @@ module.exports = (app, deps) => {
         const result = await telegramNotifier.validateToken(token);
         res.json(result);
       } catch (error) {
-        logger.error('Error validating Telegram token:', error);
+        logger.error('Error validating Telegram token', {
+          error: error.message,
+        });
         res.status(500).json({ error: 'Failed to validate token' });
       }
     }
@@ -1158,7 +1224,9 @@ module.exports = (app, deps) => {
         const groups = await telegramNotifier.detectGroups(token);
         res.json({ groups });
       } catch (error) {
-        logger.error('Error detecting Telegram groups:', error);
+        logger.error('Error detecting Telegram groups', {
+          error: error.message,
+        });
         res.status(500).json({ error: 'Failed to detect groups' });
       }
     }
@@ -1181,7 +1249,9 @@ module.exports = (app, deps) => {
         const info = await telegramNotifier.getChatInfo(token, chatId);
         res.json(info);
       } catch (error) {
-        logger.error('Error getting Telegram group info:', error);
+        logger.error('Error getting Telegram group info', {
+          error: error.message,
+        });
         res.status(500).json({ error: 'Failed to get group info' });
       }
     }
@@ -1211,7 +1281,10 @@ module.exports = (app, deps) => {
           configuredBy: req.user._id,
         });
 
-        logger.info('Telegram configured by admin:', req.user.username);
+        logger.info('Telegram configured', {
+          adminUsername: req.user.username,
+          adminId: req.user._id,
+        });
 
         res.json({
           success: true,
@@ -1224,7 +1297,10 @@ module.exports = (app, deps) => {
           },
         });
       } catch (error) {
-        logger.error('Error saving Telegram config:', error);
+        logger.error('Error saving Telegram config', {
+          error: error.message,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Failed to save configuration' });
       }
     }
@@ -1245,7 +1321,7 @@ module.exports = (app, deps) => {
 
         res.json({ success: true, messageId: result.messageId });
       } catch (error) {
-        logger.error('Error sending test message:', error);
+        logger.error('Error sending test message', { error: error.message });
         res.status(500).json({ error: 'Failed to send test message' });
       }
     }
@@ -1278,7 +1354,9 @@ module.exports = (app, deps) => {
 
         res.json({ success: true, messageId: result.messageId });
       } catch (error) {
-        logger.error('Error sending test preview message:', error);
+        logger.error('Error sending test preview message', {
+          error: error.message,
+        });
         res.status(500).json({ error: 'Failed to send test message' });
       }
     }
@@ -1292,10 +1370,16 @@ module.exports = (app, deps) => {
     async (req, res) => {
       try {
         await telegramNotifier.disconnect();
-        logger.info('Telegram disconnected by admin:', req.user.username);
+        logger.info('Telegram disconnected', {
+          adminUsername: req.user.username,
+          adminId: req.user._id,
+        });
         res.json({ success: true });
       } catch (error) {
-        logger.error('Error disconnecting Telegram:', error);
+        logger.error('Error disconnecting Telegram', {
+          error: error.message,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Failed to disconnect' });
       }
     }
@@ -1328,7 +1412,10 @@ module.exports = (app, deps) => {
 
         res.json({ success: true });
       } catch (error) {
-        logger.error('Error linking Telegram account:', error);
+        logger.error('Error linking Telegram account', {
+          error: error.message,
+          userId: req.user._id,
+        });
         res.status(500).json({ error: 'Failed to link account' });
       }
     }

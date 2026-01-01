@@ -346,7 +346,10 @@ module.exports = (app, deps) => {
 
         res.json(listsObj);
       } catch (err) {
-        logger.error('Error fetching lists:', err);
+        logger.error('Error fetching lists', {
+          error: err.message,
+          userId: req.user._id,
+        });
         return res.status(500).json({ error: 'Error fetching lists' });
       }
     }
@@ -401,7 +404,10 @@ module.exports = (app, deps) => {
         dismissedUntil: req.user.listSetupDismissedUntil || null,
       });
     } catch (err) {
-      logger.error('Error checking list setup status:', err);
+      logger.error('Error checking list setup status', {
+        error: err.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Failed to check setup status' });
     }
   });
@@ -490,7 +496,10 @@ module.exports = (app, deps) => {
       });
     } catch (err) {
       await client.query('ROLLBACK');
-      logger.error('Error bulk updating lists:', err);
+      logger.error('Error bulk updating lists', {
+        error: err.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Failed to update lists' });
     } finally {
       client.release();
@@ -510,7 +519,10 @@ module.exports = (app, deps) => {
 
       res.json({ success: true, dismissedUntil });
     } catch (err) {
-      logger.error('Error dismissing setup wizard:', err);
+      logger.error('Error dismissing setup wizard', {
+        error: err.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Failed to dismiss wizard' });
     }
   });
@@ -570,7 +582,7 @@ module.exports = (app, deps) => {
       try {
         const { name } = req.params;
         const isExport = req.query.export === 'true';
-        logger.debug('Fetching list:', {
+        logger.debug('Fetching list', {
           name,
           userId: req.user._id,
           isExport,
@@ -578,10 +590,10 @@ module.exports = (app, deps) => {
         const list = await listsAsync.findOne({ userId: req.user._id, name });
 
         if (!list) {
-          logger.warn('List not found:', { name, userId: req.user._id });
+          logger.warn('List not found', { name, userId: req.user._id });
           return res.status(404).json({ error: 'List not found' });
         }
-        logger.debug('List found:', { listId: list._id, name });
+        logger.debug('List found', { listId: list._id, name });
 
         // OPTIMIZED: Use single JOIN query instead of 3 separate queries
         // Old approach: findOne + find + findByAlbumIds + Map construction
@@ -840,7 +852,9 @@ module.exports = (app, deps) => {
           upsertedAlbumIds.map((albumId) =>
             invalidateCachesForAlbumUsers(albumId)
           )
-        ).catch((err) => logger.warn('Album cache invalidation failed:', err));
+        ).catch((err) =>
+          logger.warn('Album cache invalidation failed', { error: err.message })
+        );
 
         // If this is a main list, trigger aggregate list recomputation
         if (existingList && existingList.isMain) {
@@ -866,13 +880,17 @@ module.exports = (app, deps) => {
         });
       } catch (dbErr) {
         await client.query('ROLLBACK');
-        logger.error('Error updating list:', dbErr);
+        logger.error('Error updating list', {
+          error: dbErr.message,
+          listName: name,
+          userId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       } finally {
         client.release();
       }
     } catch (err) {
-      logger.error('Error in list update:', err);
+      logger.error('Error in list update', { error: err.message });
       // Only release client if it was acquired
       if (client) {
         client.release();
@@ -956,7 +974,10 @@ module.exports = (app, deps) => {
           {},
           (updateErr) => {
             if (updateErr) {
-              logger.error('Error updating last selected list:', updateErr);
+              logger.error('Error updating last selected list', {
+                error: updateErr.message,
+                userId: req.user._id,
+              });
             }
           }
         );
@@ -1004,7 +1025,7 @@ module.exports = (app, deps) => {
         updatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      logger.error('Error updating list metadata:', err);
+      logger.error('Error updating list metadata', { error: err.message });
       return res.status(500).json({ error: 'Database error' });
     }
   });
@@ -1092,7 +1113,7 @@ module.exports = (app, deps) => {
         updatedAt: new Date().toISOString(),
       });
     } catch (err) {
-      logger.error('Error updating main status:', err);
+      logger.error('Error updating main status', { error: err.message });
       return res.status(500).json({ error: 'Database error' });
     }
   });
@@ -1133,7 +1154,10 @@ module.exports = (app, deps) => {
           {},
           (updateErr) => {
             if (updateErr) {
-              logger.error('Error clearing last selected list:', updateErr);
+              logger.error('Error clearing last selected list', {
+                error: updateErr.message,
+                userId: req.user._id,
+              });
             }
             req.user.lastSelectedList = null;
             req.session.save();
@@ -1154,7 +1178,7 @@ module.exports = (app, deps) => {
 
       res.json({ success: true, message: 'List deleted' });
     } catch (err) {
-      logger.error('Error deleting list:', err);
+      logger.error('Error deleting list', { error: err.message });
       return res.status(500).json({ error: 'Error deleting list' });
     }
   });
@@ -1182,7 +1206,9 @@ module.exports = (app, deps) => {
 
     users.findOne({ email }, (err, user) => {
       if (err) {
-        logger.error('Database error during forgot password:', err);
+        logger.error('Database error during forgot password', {
+          error: err.message,
+        });
         req.flash('error', 'An error occurred. Please try again.');
         return res.redirect('/forgot');
       }
@@ -1204,7 +1230,7 @@ module.exports = (app, deps) => {
         {},
         (err, numReplaced) => {
           if (err) {
-            logger.error('Failed to set reset token:', err);
+            logger.error('Failed to set reset token', { error: err.message });
             // Don't show error to user for security reasons
             return res.redirect('/forgot');
           }
@@ -1215,7 +1241,7 @@ module.exports = (app, deps) => {
             return res.redirect('/forgot');
           }
 
-          logger.info('Reset token set for user:', user.email);
+          logger.info('Reset token set for user', { email: user.email });
 
           // Support both Resend and SendGrid for email delivery
           // Prefer Resend if RESEND_API_KEY is set, otherwise fall back to SendGrid
@@ -1260,7 +1286,7 @@ module.exports = (app, deps) => {
             logger.warn(
               'No email service configured (RESEND_API_KEY or SENDGRID_API_KEY required) - password reset email not sent'
             );
-            logger.info('Reset token for testing:', token);
+            logger.debug('Reset token for testing', { token });
           }
 
           res.redirect('/forgot');
@@ -1302,7 +1328,9 @@ module.exports = (app, deps) => {
         { resetToken: req.params.token, resetExpires: { $gt: Date.now() } },
         async (err, user) => {
           if (err) {
-            logger.error('Error finding user with reset token:', err);
+            logger.error('Error finding user with reset token', {
+              error: err.message,
+            });
             return res.send(
               htmlTemplate(
                 invalidTokenTemplate(),
@@ -1332,7 +1360,9 @@ module.exports = (app, deps) => {
               {},
               (err, numReplaced) => {
                 if (err) {
-                  logger.error('Password reset update error:', err);
+                  logger.error('Password reset update error', {
+                    error: err.message,
+                  });
                   req.flash(
                     'error',
                     'Error updating password. Please try again.'
@@ -1361,7 +1391,7 @@ module.exports = (app, deps) => {
               }
             );
           } catch (error) {
-            logger.error('Password hashing error:', error);
+            logger.error('Password hashing error', { error: error.message });
             req.flash('error', 'Error processing password. Please try again.');
             res.redirect('/reset/' + req.params.token);
           }
@@ -1396,7 +1426,7 @@ module.exports = (app, deps) => {
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('Deezer proxy error:', error);
+        logger.error('Deezer proxy error', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch from Deezer' });
       }
     }
@@ -1428,7 +1458,7 @@ module.exports = (app, deps) => {
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('Deezer artist proxy error:', error);
+        logger.error('Deezer artist proxy error', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch artist from Deezer' });
       }
     }
@@ -1458,7 +1488,9 @@ module.exports = (app, deps) => {
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('Deezer artist albums proxy error:', error);
+        logger.error('Deezer artist albums proxy error', {
+          error: error.message,
+        });
         res
           .status(500)
           .json({ error: 'Failed to fetch artist albums from Deezer' });
@@ -1552,7 +1584,7 @@ module.exports = (app, deps) => {
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('Wikidata proxy error:', error);
+        logger.error('Wikidata proxy error', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch from Wikidata API' });
       }
     }
@@ -1590,7 +1622,7 @@ module.exports = (app, deps) => {
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('iTunes proxy error:', error);
+        logger.error('iTunes proxy error', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch from iTunes API' });
       }
     }
@@ -1675,7 +1707,7 @@ module.exports = (app, deps) => {
 
         res.json(result);
       } catch (error) {
-        logger.error('Image proxy error:', error);
+        logger.error('Image proxy error', { error: error.message });
         res.status(500).json({ error: 'Failed to fetch image' });
       }
     }
@@ -1686,7 +1718,7 @@ module.exports = (app, deps) => {
     // Ensure valid Spotify token (auto-refresh if needed)
     const tokenResult = await ensureValidSpotifyToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed:', tokenResult.error);
+      logger.warn('Spotify auth check failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -1700,7 +1732,7 @@ module.exports = (app, deps) => {
     if (!artist || !album) {
       return res.status(400).json({ error: 'artist and album are required' });
     }
-    logger.info('Spotify album search:', { artist, album });
+    logger.info('Spotify album search', { artist, album });
 
     try {
       const query = `album:${album} artist:${artist}`;
@@ -1740,11 +1772,11 @@ module.exports = (app, deps) => {
       }
       const data = await resp.json();
       if (!data.albums || !data.albums.items.length) {
-        logger.info('Album not found on Spotify:', { artist, album });
+        logger.info('Album not found on Spotify', { artist, album });
         return res.status(404).json({ error: 'Album not found' });
       }
       const albumId = data.albums.items[0].id;
-      logger.info('Spotify search result:', { albumId, artist, album });
+      logger.info('Spotify search result', { albumId, artist, album });
       res.json({ id: albumId });
     } catch (err) {
       logger.error('Spotify search error:', {
@@ -1762,7 +1794,7 @@ module.exports = (app, deps) => {
     // Ensure valid Spotify token (auto-refresh if needed)
     const tokenResult = await ensureValidSpotifyToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Spotify token request failed:', tokenResult.error);
+      logger.warn('Spotify token request failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -1778,7 +1810,7 @@ module.exports = (app, deps) => {
     // Ensure valid Spotify token (auto-refresh if needed)
     const tokenResult = await ensureValidSpotifyToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed:', tokenResult.error);
+      logger.warn('Spotify auth check failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -1818,7 +1850,7 @@ module.exports = (app, deps) => {
       );
       res.json({ devices: usableDevices });
     } catch (err) {
-      logger.error('Spotify devices error:', err);
+      logger.error('Spotify devices error', { error: err.message });
       res.status(500).json({ error: 'Failed to get Spotify devices' });
     }
   });
@@ -1828,7 +1860,7 @@ module.exports = (app, deps) => {
     // Ensure valid Spotify token (auto-refresh if needed)
     const tokenResult = await ensureValidSpotifyToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed:', tokenResult.error);
+      logger.warn('Spotify auth check failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -1889,7 +1921,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'play');
     } catch (err) {
-      logger.error('Spotify play error:', err);
+      logger.error('Spotify play error', { error: err.message });
       res.status(500).json({ error: 'Failed to start playback' });
     }
   });
@@ -1901,7 +1933,7 @@ module.exports = (app, deps) => {
     // 403 = Premium required for playback control
     if (resp.status === 403) {
       // Only log once per session type of thing, not every poll
-      logger.debug('Spotify Premium required for:', action);
+      logger.debug('Spotify Premium required', { action });
       return res.status(403).json({
         error: 'Spotify Premium required for playback control',
         code: 'PREMIUM_REQUIRED',
@@ -1977,7 +2009,7 @@ module.exports = (app, deps) => {
       const data = await resp.json();
       res.json(data);
     } catch (err) {
-      logger.error('Spotify playback state error:', err);
+      logger.error('Spotify playback state error', { error: err.message });
       res.status(500).json({ error: 'Failed to get playback state' });
     }
   });
@@ -2008,7 +2040,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'pause');
     } catch (err) {
-      logger.error('Spotify pause error:', err);
+      logger.error('Spotify pause error', { error: err.message });
       res.status(500).json({ error: 'Failed to pause playback' });
     }
   });
@@ -2039,7 +2071,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'resume');
     } catch (err) {
-      logger.error('Spotify resume error:', err);
+      logger.error('Spotify resume error', { error: err.message });
       res.status(500).json({ error: 'Failed to resume playback' });
     }
   });
@@ -2073,7 +2105,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'previous');
     } catch (err) {
-      logger.error('Spotify previous track error:', err);
+      logger.error('Spotify previous track error', { error: err.message });
       res.status(500).json({ error: 'Failed to skip to previous' });
     }
   });
@@ -2104,7 +2136,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'next');
     } catch (err) {
-      logger.error('Spotify next track error:', err);
+      logger.error('Spotify next track error', { error: err.message });
       res.status(500).json({ error: 'Failed to skip to next' });
     }
   });
@@ -2143,7 +2175,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'seek');
     } catch (err) {
-      logger.error('Spotify seek error:', err);
+      logger.error('Spotify seek error', { error: err.message });
       res.status(500).json({ error: 'Failed to seek' });
     }
   });
@@ -2184,7 +2216,7 @@ module.exports = (app, deps) => {
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'volume');
     } catch (err) {
-      logger.error('Spotify volume error:', err);
+      logger.error('Spotify volume error', { error: err.message });
       res.status(500).json({ error: 'Failed to set volume' });
     }
   });
@@ -2219,14 +2251,14 @@ module.exports = (app, deps) => {
       });
 
       if (resp.ok || resp.status === 204) {
-        logger.info('Spotify playback transferred to device:', device_id);
+        logger.info('Spotify playback transferred', { deviceId: device_id });
         return res.json({ success: true });
       }
 
       const errorData = await resp.json().catch(() => ({}));
       return handleSpotifyPlayerError(resp, errorData, res, logger, 'transfer');
     } catch (err) {
-      logger.error('Spotify transfer error:', err);
+      logger.error('Spotify transfer error', { error: err.message });
       res.status(500).json({ error: 'Failed to transfer playback' });
     }
   });
@@ -2236,7 +2268,7 @@ module.exports = (app, deps) => {
     // Ensure valid Tidal token (auto-refresh if needed)
     const tokenResult = await ensureValidTidalToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Tidal auth check failed:', tokenResult.error);
+      logger.warn('Tidal auth check failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -2246,7 +2278,7 @@ module.exports = (app, deps) => {
 
     const tidalAuth = tokenResult.tidalAuth;
 
-    logger.debug('Tidal token expires at:', tidalAuth.expires_at);
+    logger.debug('Tidal token expires at', { expiresAt: tidalAuth.expires_at });
     logger.debug(
       'Using Tidal access token:',
       (tidalAuth.access_token || '').slice(0, 6) +
@@ -2330,7 +2362,7 @@ module.exports = (app, deps) => {
       logger.info('Tidal search result id:', albumId);
       res.json({ id: albumId });
     } catch (err) {
-      logger.error('Tidal search error:', err);
+      logger.error('Tidal search error', { error: err.message });
       res.status(500).json({ error: 'Failed to search Tidal' });
     }
   });
@@ -2340,7 +2372,7 @@ module.exports = (app, deps) => {
     // Ensure valid Spotify token (auto-refresh if needed)
     const tokenResult = await ensureValidSpotifyToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed:', tokenResult.error);
+      logger.warn('Spotify auth check failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -2429,7 +2461,7 @@ module.exports = (app, deps) => {
       }
       const albumData = await albumResp.json();
       if (!albumData.albums || !albumData.albums.items.length) {
-        logger.info('Album not found on Spotify:', { artist, album });
+        logger.info('Album not found on Spotify', { artist, album });
         return res.status(404).json({ error: 'Album not found' });
       }
       const spotifyAlbumId = albumData.albums.items[0].id;
@@ -2582,7 +2614,7 @@ module.exports = (app, deps) => {
     // Ensure valid Tidal token (auto-refresh if needed)
     const tokenResult = await ensureValidTidalToken(req.user, users);
     if (!tokenResult.success) {
-      logger.warn('Tidal auth check failed:', tokenResult.error);
+      logger.warn('Tidal auth check failed', { error: tokenResult.error });
       return res.status(401).json({
         error: tokenResult.message,
         code: tokenResult.error,
@@ -2640,7 +2672,9 @@ module.exports = (app, deps) => {
       const trackNum = parseInt(track);
       if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
         const matchedTrack = tracks[trackNum - 1];
-        logger.info('Tidal track matched by number:', matchedTrack.id);
+        logger.info('Tidal track matched by number', {
+          trackId: matchedTrack.id,
+        });
         return res.json({ id: matchedTrack.id });
       }
 
@@ -2675,7 +2709,9 @@ module.exports = (app, deps) => {
             searchName.toLowerCase().includes(t.name.toLowerCase()))
       );
       if (matchingTrack) {
-        logger.info('Tidal track matched by name:', matchingTrack.id);
+        logger.info('Tidal track matched by name', {
+          trackId: matchingTrack.id,
+        });
         return res.json({ id: matchingTrack.id });
       }
 
@@ -2700,7 +2736,7 @@ module.exports = (app, deps) => {
 
       return res.status(404).json({ error: 'Track not found' });
     } catch (err) {
-      logger.error('Tidal track search error:', err);
+      logger.error('Tidal track search error', { error: err.message });
       res.status(500).json({ error: 'Failed to search Tidal' });
     }
   });
@@ -2743,7 +2779,7 @@ module.exports = (app, deps) => {
           image: getMeta('image'),
         });
       } catch (err) {
-        logger.error('Unfurl error:', err);
+        logger.error('Unfurl error', { error: err.message });
         res.status(500).json({ error: 'Failed to unfurl' });
       }
     }
@@ -2803,7 +2839,7 @@ module.exports = (app, deps) => {
               ? { tracks, releaseId: `itunes:${best.collectionId}` }
               : null;
           } catch (err) {
-            logger.error('iTunes fallback error:', err);
+            logger.error('iTunes fallback error', { error: err.message });
             return null;
           }
         };
@@ -2830,7 +2866,7 @@ module.exports = (app, deps) => {
               ? { tracks, releaseId: `deezer:${albumId}` }
               : null;
           } catch (err) {
-            logger.error('Deezer fallback error:', err);
+            logger.error('Deezer fallback error', { error: err.message });
             return null;
           }
         };
@@ -3013,7 +3049,7 @@ module.exports = (app, deps) => {
 
         res.json({ tracks, releaseId: best.id });
       } catch (err) {
-        logger.error('MusicBrainz tracks error:', err);
+        logger.error('MusicBrainz tracks error', { error: err.message });
         res.status(500).json({ error: 'Failed to fetch tracks' });
       }
     }
@@ -3075,7 +3111,9 @@ module.exports = (app, deps) => {
         // For Spotify, use automatic token refresh
         const tokenResult = await ensureValidSpotifyToken(req.user, users);
         if (!tokenResult.success) {
-          logger.warn('Spotify auth check failed:', tokenResult.error);
+          logger.warn('Spotify auth check failed', {
+            error: tokenResult.error,
+          });
           return res.status(401).json({
             error: tokenResult.message,
             code: tokenResult.error,
@@ -3087,7 +3125,7 @@ module.exports = (app, deps) => {
         // For Tidal, use automatic token refresh
         const tokenResult = await ensureValidTidalToken(req.user, users);
         if (!tokenResult.success) {
-          logger.warn('Tidal auth check failed:', tokenResult.error);
+          logger.warn('Tidal auth check failed', { error: tokenResult.error });
           return res.status(401).json({
             error: tokenResult.message,
             code: tokenResult.error,

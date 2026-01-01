@@ -59,7 +59,10 @@ module.exports = (app, deps) => {
         data: record.data,
       });
     } catch (err) {
-      logger.error('Error fetching aggregate list:', err);
+      logger.error('Error fetching aggregate list', {
+        error: err.message,
+        year: req.params.year,
+      });
       res.status(500).json({ error: 'Database error' });
     }
   });
@@ -81,7 +84,10 @@ module.exports = (app, deps) => {
         const status = await aggregateList.getStatus(year);
         res.json(status);
       } catch (err) {
-        logger.error('Error fetching aggregate list status:', err);
+        logger.error('Error fetching aggregate list status', {
+          error: err.message,
+          year: req.params.year,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -123,7 +129,10 @@ module.exports = (app, deps) => {
           stats: record.stats,
         });
       } catch (err) {
-        logger.error('Error fetching aggregate list stats:', err);
+        logger.error('Error fetching aggregate list stats', {
+          error: err.message,
+          year: req.params.year,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -159,7 +168,11 @@ module.exports = (app, deps) => {
           status: result.status,
         });
       } catch (err) {
-        logger.error('Error confirming aggregate list reveal:', err);
+        logger.error('Error confirming aggregate list reveal', {
+          error: err.message,
+          year: req.params.year,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -198,7 +211,11 @@ module.exports = (app, deps) => {
           status: result.status,
         });
       } catch (err) {
-        logger.error('Error revoking aggregate list confirmation:', err);
+        logger.error('Error revoking aggregate list confirmation', {
+          error: err.message,
+          year: req.params.year,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -213,7 +230,7 @@ module.exports = (app, deps) => {
       const years = await aggregateList.getRevealedYears();
       res.json({ years });
     } catch (err) {
-      logger.error('Error fetching revealed years:', err);
+      logger.error('Error fetching revealed years', { error: err.message });
       res.status(500).json({ error: 'Database error' });
     }
   });
@@ -236,7 +253,9 @@ module.exports = (app, deps) => {
         `);
         res.json({ years: result.rows.map((r) => r.year) });
       } catch (err) {
-        logger.error('Error fetching years with main lists:', err);
+        logger.error('Error fetching years with main lists', {
+          error: err.message,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -266,7 +285,11 @@ module.exports = (app, deps) => {
           status,
         });
       } catch (err) {
-        logger.error('Error recomputing aggregate list:', err);
+        logger.error('Error recomputing aggregate list', {
+          error: err.message,
+          year: req.params.year,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -291,7 +314,11 @@ module.exports = (app, deps) => {
         const hasSeen = await aggregateList.hasSeen(year, req.user._id);
         res.json({ hasSeen, year });
       } catch (err) {
-        logger.error('Error checking reveal view status:', err);
+        logger.error('Error checking reveal view status', {
+          error: err.message,
+          year: req.params.year,
+          userId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -314,7 +341,11 @@ module.exports = (app, deps) => {
         await aggregateList.markSeen(year, req.user._id);
         res.json({ success: true, year });
       } catch (err) {
-        logger.error('Error marking reveal as seen:', err);
+        logger.error('Error marking reveal as seen', {
+          error: err.message,
+          year: req.params.year,
+          userId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -344,7 +375,11 @@ module.exports = (app, deps) => {
             : 'No view record found to reset',
         });
       } catch (err) {
-        logger.error('Error resetting reveal view status:', err);
+        logger.error('Error resetting reveal view status', {
+          error: err.message,
+          year: req.params.year,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -363,7 +398,10 @@ module.exports = (app, deps) => {
         const viewedYears = await aggregateList.getViewedYears(req.user._id);
         res.json({ viewedYears });
       } catch (err) {
-        logger.error('Error fetching viewed years:', err);
+        logger.error('Error fetching viewed years', {
+          error: err.message,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -389,7 +427,10 @@ module.exports = (app, deps) => {
         const contributors = await aggregateList.getContributors(year);
         res.json({ year, contributors });
       } catch (err) {
-        logger.error('Error fetching contributors:', err);
+        logger.error('Error fetching contributors', {
+          error: err.message,
+          year: req.params.year,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -413,7 +454,10 @@ module.exports = (app, deps) => {
         const eligibleUsers = await aggregateList.getEligibleUsers(year);
         res.json({ year, eligibleUsers });
       } catch (err) {
-        logger.error('Error fetching eligible users:', err);
+        logger.error('Error fetching eligible users', {
+          error: err.message,
+          year: req.params.year,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -449,7 +493,12 @@ module.exports = (app, deps) => {
           message: `User added as contributor for ${year}`,
         });
       } catch (err) {
-        logger.error('Error adding contributor:', err);
+        logger.error('Error adding contributor', {
+          error: err.message,
+          year: req.params.year,
+          userId: req.body.userId,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -488,7 +537,12 @@ module.exports = (app, deps) => {
             : 'User was not a contributor',
         });
       } catch (err) {
-        logger.error('Error removing contributor:', err);
+        logger.error('Error removing contributor', {
+          error: err.message,
+          year: req.params.year,
+          userId: req.params.userId,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }
@@ -525,7 +579,12 @@ module.exports = (app, deps) => {
           message: `Set ${userIds.length} contributors for ${year}`,
         });
       } catch (err) {
-        logger.error('Error setting contributors:', err);
+        logger.error('Error setting contributors', {
+          error: err.message,
+          year: req.params.year,
+          count: req.body.userIds?.length,
+          adminId: req.user._id,
+        });
         res.status(500).json({ error: 'Database error' });
       }
     }

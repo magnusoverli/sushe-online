@@ -138,7 +138,9 @@ function createEnsureAuthAPI(deps) {
           }
         }
       } catch (error) {
-        logger.error('Token validation error in middleware:', error);
+        logger.error('Token validation error in middleware', {
+          error: error.message,
+        });
       }
     }
 

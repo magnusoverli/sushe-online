@@ -158,7 +158,7 @@ module.exports = (app, deps) => {
           }
         } catch (eventError) {
           // Don't fail registration if event creation fails
-          logger.error('Failed to create admin event for registration:', {
+          logger.error('Failed to create admin event for registration', {
             error: eventError.message,
           });
         }
@@ -194,7 +194,10 @@ module.exports = (app, deps) => {
       {},
       (err) => {
         if (err) {
-          logger.error('Error updating last selected list:', err);
+          logger.error('Error updating last selected list', {
+            error: err.message,
+            userId: req.user._id,
+          });
           return res
             .status(500)
             .json({ error: 'Error updating last selected list' });
@@ -248,7 +251,11 @@ module.exports = (app, deps) => {
       });
 
       if (!user) {
-        logger.info('Authentication failed:', info);
+        logger.warn('Authentication failed', {
+          reason: info?.message,
+          email: req.body.email,
+          requestId: req.id,
+        });
         recordAuthAttempt('login', 'failure');
         req.flash('error', info.message || 'Invalid credentials');
 
@@ -256,7 +263,10 @@ module.exports = (app, deps) => {
         await new Promise((resolve) => {
           req.session.save((err) => {
             if (err) {
-              logger.error('Session save error:', err);
+              logger.error('Session save error', {
+                error: err.message,
+                requestId: req.id,
+              });
             }
             resolve();
           });
@@ -301,7 +311,7 @@ module.exports = (app, deps) => {
       await new Promise((resolve) => {
         req.session.save((err) => {
           if (err) {
-            logger.error('Session save error:', err);
+            logger.error('Session save error', { error: err.message });
             // Continue anyway - session might still work
           }
           resolve();
@@ -392,7 +402,10 @@ module.exports = (app, deps) => {
           };
         }
       } catch (prefsError) {
-        logger.error('Error fetching music preferences:', prefsError);
+        logger.error('Error fetching music preferences', {
+          error: prefsError.message,
+          userId: req.user._id,
+        });
         // Continue without preferences - not critical
       }
 
@@ -504,7 +517,7 @@ module.exports = (app, deps) => {
           );
           dbSize = rows[0].size;
         } catch (e) {
-          logger.error('Error calculating DB size:', e);
+          logger.error('Error calculating DB size', { error: e.message });
         }
 
         // Count active sessions from PostgreSQL
@@ -515,7 +528,7 @@ module.exports = (app, deps) => {
           );
           activeSessions = parseInt(rows[0].count, 10);
         } catch (e) {
-          logger.error('Error counting sessions:', e);
+          logger.error('Error counting sessions', { error: e.message });
         }
 
         stats = {
@@ -634,7 +647,10 @@ module.exports = (app, deps) => {
         })
       );
     } catch (error) {
-      logger.error('Settings page error:', error);
+      logger.error('Settings page error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       req.flash('error', 'Error loading settings');
       res.redirect('/');
     }
@@ -660,7 +676,10 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            logger.error('Error updating accent color:', err);
+            logger.error('Error updating accent color', {
+              error: err.message,
+              userId: req.user._id,
+            });
             return res
               .status(500)
               .json({ error: 'Error updating theme color' });
@@ -669,7 +688,7 @@ module.exports = (app, deps) => {
           // Update session
           req.user.accentColor = accentColor;
           req.session.save((err) => {
-            if (err) logger.error('Session save error:', err);
+            if (err) logger.error('Session save error', { error: err.message });
             res.json({ success: true });
           });
 
@@ -679,7 +698,10 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      logger.error('Update accent color error:', error);
+      logger.error('Update accent color error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error updating theme color' });
     }
   });
@@ -698,7 +720,10 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            logger.error('Error updating time format:', err);
+            logger.error('Error updating time format', {
+              error: err.message,
+              userId: req.user._id,
+            });
             return res
               .status(500)
               .json({ error: 'Error updating time format' });
@@ -706,7 +731,7 @@ module.exports = (app, deps) => {
 
           req.user.timeFormat = timeFormat;
           req.session.save((err) => {
-            if (err) logger.error('Session save error:', err);
+            if (err) logger.error('Session save error', { error: err.message });
             res.json({ success: true });
           });
 
@@ -716,7 +741,10 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      logger.error('Update time format error:', error);
+      logger.error('Update time format error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error updating time format' });
     }
   });
@@ -735,7 +763,10 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            logger.error('Error updating date format:', err);
+            logger.error('Error updating date format', {
+              error: err.message,
+              userId: req.user._id,
+            });
             return res
               .status(500)
               .json({ error: 'Error updating date format' });
@@ -743,7 +774,7 @@ module.exports = (app, deps) => {
 
           req.user.dateFormat = dateFormat;
           req.session.save((err) => {
-            if (err) logger.error('Session save error:', err);
+            if (err) logger.error('Session save error', { error: err.message });
             res.json({ success: true });
           });
 
@@ -753,7 +784,10 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      logger.error('Update date format error:', error);
+      logger.error('Update date format error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error updating date format' });
     }
   });
@@ -772,7 +806,10 @@ module.exports = (app, deps) => {
         {},
         (err) => {
           if (err) {
-            logger.error('Error updating music service:', err);
+            logger.error('Error updating music service', {
+              error: err.message,
+              userId: req.user._id,
+            });
             return res
               .status(500)
               .json({ error: 'Error updating music service' });
@@ -780,7 +817,7 @@ module.exports = (app, deps) => {
 
           req.user.musicService = musicService || null;
           req.session.save((err) => {
-            if (err) logger.error('Session save error:', err);
+            if (err) logger.error('Session save error', { error: err.message });
             res.json({ success: true });
           });
 
@@ -790,7 +827,10 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      logger.error('Update music service error:', error);
+      logger.error('Update music service error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error updating music service' });
     }
   });
@@ -862,7 +902,10 @@ module.exports = (app, deps) => {
           {},
           (err) => {
             if (err) {
-              logger.error('Error updating password:', err);
+              logger.error('Error updating password', {
+                error: err.message,
+                userId: req.user._id,
+              });
               req.flash('error', 'Error updating password');
               return res.redirect('/settings');
             }
@@ -872,7 +915,10 @@ module.exports = (app, deps) => {
           }
         );
       } catch (error) {
-        logger.error('Password change error:', error);
+        logger.error('Password change error', {
+          error: error.message,
+          userId: req.user._id,
+        });
         req.flash('error', 'Error changing password');
         res.redirect('/settings');
       }
@@ -886,7 +932,11 @@ module.exports = (app, deps) => {
     csrfProtection,
     rateLimitAdminRequest,
     async (req, res) => {
-      logger.info('Admin request received from:', req.user.email);
+      logger.info('Admin request received', {
+        email: req.user.email,
+        userId: req.user._id,
+        requestId: req.id,
+      });
 
       try {
         const { code } = req.body;
@@ -923,7 +973,10 @@ module.exports = (app, deps) => {
           {},
           (err, _numUpdated) => {
             if (err) {
-              logger.error('Error granting admin:', err);
+              logger.error('Error granting admin', {
+                error: err.message,
+                userId: req.user._id,
+              });
               req.flash('error', 'Error granting admin access');
               return res.redirect('/settings');
             }
@@ -941,14 +994,18 @@ module.exports = (app, deps) => {
             // Update the session
             req.user.role = 'admin';
             req.session.save((err) => {
-              if (err) logger.error('Session save error:', err);
+              if (err)
+                logger.error('Session save error', { error: err.message });
               req.flash('success', 'Admin access granted!');
               res.redirect('/settings');
             });
           }
         );
       } catch (error) {
-        logger.error('Admin request error:', error);
+        logger.error('Admin request error', {
+          error: error.message,
+          userId: req.user._id,
+        });
         req.flash('error', 'Error processing admin request');
         res.redirect('/settings');
       }
@@ -974,7 +1031,10 @@ module.exports = (app, deps) => {
         { email, _id: { $ne: req.user._id } },
         (err, existingUser) => {
           if (err) {
-            logger.error('Database error:', err);
+            logger.error('Database error', {
+              error: err.message,
+              operation: 'findOne',
+            });
             return res.status(500).json({ error: 'Database error' });
           }
 
@@ -989,14 +1049,18 @@ module.exports = (app, deps) => {
             {},
             (err) => {
               if (err) {
-                logger.error('Error updating email:', err);
+                logger.error('Error updating email', {
+                  error: err.message,
+                  userId: req.user._id,
+                });
                 return res.status(500).json({ error: 'Error updating email' });
               }
 
               // Update session
               req.user.email = email.trim();
               req.session.save((err) => {
-                if (err) logger.error('Session save error:', err);
+                if (err)
+                  logger.error('Session save error', { error: err.message });
                 req.flash('success', 'Email updated successfully');
                 res.json({ success: true });
               });
@@ -1005,7 +1069,10 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      logger.error('Update email error:', error);
+      logger.error('Update email error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error updating email' });
     }
   });
@@ -1032,7 +1099,10 @@ module.exports = (app, deps) => {
         { username, _id: { $ne: req.user._id } },
         (err, existingUser) => {
           if (err) {
-            logger.error('Database error:', err);
+            logger.error('Database error', {
+              error: err.message,
+              operation: 'findOne',
+            });
             return res.status(500).json({ error: 'Database error' });
           }
 
@@ -1047,7 +1117,10 @@ module.exports = (app, deps) => {
             {},
             (err) => {
               if (err) {
-                logger.error('Error updating username:', err);
+                logger.error('Error updating username', {
+                  error: err.message,
+                  userId: req.user._id,
+                });
                 return res
                   .status(500)
                   .json({ error: 'Error updating username' });
@@ -1056,7 +1129,8 @@ module.exports = (app, deps) => {
               // Update session
               req.user.username = username.trim();
               req.session.save((err) => {
-                if (err) logger.error('Session save error:', err);
+                if (err)
+                  logger.error('Session save error', { error: err.message });
                 req.flash('success', 'Username updated successfully');
                 res.json({ success: true });
               });
@@ -1065,7 +1139,10 @@ module.exports = (app, deps) => {
         }
       );
     } catch (error) {
-      logger.error('Update username error:', error);
+      logger.error('Update username error', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error updating username' });
     }
   });
@@ -1305,7 +1382,10 @@ module.exports = (app, deps) => {
         expiresAt: expiresAt.toISOString(),
       });
     } catch (error) {
-      logger.error('Error generating extension token:', error);
+      logger.error('Error generating extension token', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error generating token' });
     }
   });
@@ -1335,7 +1415,7 @@ module.exports = (app, deps) => {
         user: sanitizeUser(user),
       });
     } catch (error) {
-      logger.error('Error validating token:', error);
+      logger.error('Error validating token', { error: error.message });
       res.status(500).json({ error: 'Error validating token' });
     }
   });
@@ -1368,7 +1448,10 @@ module.exports = (app, deps) => {
 
       res.json({ success: true });
     } catch (error) {
-      logger.error('Error revoking token:', error);
+      logger.error('Error revoking token', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error revoking token' });
     }
   });
@@ -1386,7 +1469,10 @@ module.exports = (app, deps) => {
 
       res.json({ tokens: result.rows });
     } catch (error) {
-      logger.error('Error listing tokens:', error);
+      logger.error('Error listing tokens', {
+        error: error.message,
+        userId: req.user._id,
+      });
       res.status(500).json({ error: 'Error listing tokens' });
     }
   });
@@ -1405,7 +1491,7 @@ module.exports = (app, deps) => {
 
       res.json({ deletedCount });
     } catch (error) {
-      logger.error('Error cleaning up tokens:', error);
+      logger.error('Error cleaning up tokens', { error: error.message });
       res.status(500).json({ error: 'Error cleaning up tokens' });
     }
   });

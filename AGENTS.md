@@ -87,6 +87,141 @@ npx playwright install --with-deps chromium
 - **Configuration**: Environment-based config, feature flags for gradual rollouts
 - **Code comments**: Add inline comments only for complex/non-obvious logic
 
+## Logging Guidelines
+
+This codebase uses **Pino** for structured JSON logging. All backend code should use the logger from `utils/logger.js`.
+
+### Usage
+
+```javascript
+const logger = require('./utils/logger');
+
+// Basic logging
+logger.info('User logged in', { userId: user._id, email: user.email });
+logger.warn('Rate limit approaching', { ip: req.ip, remaining: 5 });
+logger.error('Database query failed', { error: err.message, stack: err.stack });
+logger.debug('Cache hit', { key: cacheKey });
+```
+
+### Log Levels Strategy
+
+| Level | When to Use | Examples |
+|-------|-------------|----------|
+| **ERROR** | Unexpected failures requiring attention | Database connection failures, unhandled exceptions, critical API errors |
+| **WARN** | Expected errors or concerning events | Failed login attempts, rate limit hits, deprecated feature usage |
+| **INFO** | Normal application flow (production default) | Server startup, user registration, major operations, admin actions |
+| **DEBUG** | Detailed diagnostic info (development only) | SQL queries, cache details, step-by-step flow |
+
+### Structured Logging Patterns
+
+Always use objects for metadata instead of string interpolation:
+
+```javascript
+// ❌ BAD: String interpolation
+logger.info('User logged in:', email);
+logger.error('Database error:', err);
+
+// ✅ GOOD: Structured objects
+logger.info('User logged in', { email, userId: user._id, requestId: req.id });
+logger.error('Database query failed', { error: err.message, stack: err.stack, operation: 'findOne' });
+```
+
+### Standard Patterns by Event Type
+
+#### Authentication Events
+
+```javascript
+// Login attempt
+logger.info('Login attempt', { email, ip: req.ip, requestId: req.id });
+
+// Success
+logger.info('User logged in', { userId: user._id, email, requestId: req.id });
+
+// Failure (use warn, not error)
+logger.warn('Login failed', { email, reason: 'invalid_credentials', requestId: req.id });
+```
+
+#### Database Operations
+
+```javascript
+// Slow queries (>100ms)
+logger.warn('Slow database query', { operation: 'findWithAlbumData', duration_ms: elapsed, listId });
+
+// Database errors
+logger.error('Database operation failed', { operation: 'insert', table: 'users', error: err.message });
+```
+
+#### External API Calls
+
+```javascript
+// API requests
+logger.debug('External API request', { service: 'spotify', endpoint: '/v1/me' });
+
+// API responses
+logger.info('External API response', { service: 'spotify', status: 200, duration_ms: elapsed });
+
+// API errors (warn for 4xx, error for 5xx)
+logger.warn('External API rate limited', { service: 'spotify', status: 429, retryAfter: headers['retry-after'] });
+```
+
+#### Admin Actions (Audit Trail)
+
+```javascript
+logger.info('Admin action', { action: 'approve_user', adminId: req.user._id, targetUserId: userId, ip: req.ip });
+```
+
+#### Security Events
+
+```javascript
+// Rate limiting
+logger.warn('Rate limit exceeded', { ip: req.ip, endpoint: req.path, userId: req.user?._id });
+
+// CSRF failures
+logger.warn('CSRF token validation failed', { requestId: req.id, ip: req.ip, endpoint: req.path });
+```
+
+### Child Loggers for Request Context
+
+Use child loggers to bind context throughout request lifecycle:
+
+```javascript
+app.post('/api/lists/:id', ensureAuthAPI, async (req, res) => {
+  const requestLogger = logger.child({
+    requestId: req.id,
+    userId: req.user._id,
+    listId: req.params.id
+  });
+
+  requestLogger.info('List update started');
+  requestLogger.debug('Validating input');
+  requestLogger.info('List updated successfully');
+});
+```
+
+### What NOT to Log
+
+Never log sensitive data:
+
+- ❌ Passwords (plain or hashed)
+- ❌ Session tokens
+- ❌ API keys or secrets
+- ❌ CSRF tokens
+- ❌ Full credit card numbers
+- ✅ User IDs (non-sensitive identifiers)
+- ✅ Email addresses (for audit trails)
+- ✅ IP addresses (for security monitoring)
+
+### Environment Configuration
+
+- `LOG_LEVEL`: Set to ERROR, WARN, INFO, or DEBUG (default: INFO)
+- `NODE_ENV=production`: Outputs JSON format for log aggregation
+- `NODE_ENV=development`: Pretty-prints with colors for readability
+- `LOG_SQL=true`: Enables SQL query logging at DEBUG level
+
+### Frontend/Browser Code
+
+Frontend code (`src/js/*`, `browser-extension/*`) should continue using `console.*` for browser DevTools debugging.
+
 ## Quality Assurance
 
 ### Test Suite Overview
