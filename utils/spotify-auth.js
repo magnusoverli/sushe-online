@@ -230,6 +230,38 @@ function createDataFetchers(spotifyApiRequest) {
 }
 
 // ============================================
+// ERROR PARSING UTILITY
+// ============================================
+
+/**
+ * Parse Spotify API error response to extract meaningful error information
+ * @param {string} errorText - Raw error response text
+ * @param {number} statusCode - HTTP status code
+ * @returns {Object} Parsed error with message, errorType, and status
+ */
+function parseSpotifyError(errorText, statusCode) {
+  try {
+    const errorJson = JSON.parse(errorText);
+    return {
+      message:
+        errorJson.error?.message ||
+        errorJson.message ||
+        errorText ||
+        `HTTP ${statusCode}`,
+      errorType: errorJson.error?.type || 'unknown',
+      status: errorJson.error?.status || statusCode,
+    };
+  } catch {
+    // Not JSON, return raw text
+    return {
+      message: errorText || `HTTP ${statusCode}`,
+      errorType: 'unknown',
+      status: statusCode,
+    };
+  }
+}
+
+// ============================================
 // MAIN FACTORY
 // ============================================
 
@@ -389,34 +421,6 @@ function createSpotifyAuth(deps = {}) {
     } catch (dbError) {
       log.error('Failed to save refreshed Spotify token:', dbError);
       return { success: true, spotifyAuth: newToken, error: null };
-    }
-  }
-
-  /**
-   * Parse Spotify API error response to extract meaningful error information
-   * @param {string} errorText - Raw error response text
-   * @param {number} statusCode - HTTP status code
-   * @returns {Object} Parsed error with message, errorType, and status
-   */
-  function parseSpotifyError(errorText, statusCode) {
-    try {
-      const errorJson = JSON.parse(errorText);
-      return {
-        message:
-          errorJson.error?.message ||
-          errorJson.message ||
-          errorText ||
-          `HTTP ${statusCode}`,
-        errorType: errorJson.error?.type || 'unknown',
-        status: errorJson.error?.status || statusCode,
-      };
-    } catch {
-      // Not JSON, return raw text
-      return {
-        message: errorText || `HTTP ${statusCode}`,
-        errorType: 'unknown',
-        status: statusCode,
-      };
     }
   }
 
