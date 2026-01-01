@@ -4,7 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SuShe Online - Extension Settings</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         --accent-color: #dc2626;
@@ -20,7 +23,13 @@
       }
 
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-family:
+          'Inter',
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Roboto,
+          sans-serif;
         background: #000;
         color: #e5e7eb;
         min-height: 100vh;
@@ -45,7 +54,11 @@
         position: fixed;
         width: 384px;
         height: 384px;
-        background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%);
+        background: radial-gradient(
+          circle,
+          var(--accent-subtle) 0%,
+          transparent 70%
+        );
         border-radius: 50%;
         filter: blur(48px);
         opacity: 0.1;
@@ -65,8 +78,14 @@
       }
 
       @keyframes pulse {
-        0% { opacity: 0.08; transform: scale(1); }
-        100% { opacity: 0.15; transform: scale(1.1); }
+        0% {
+          opacity: 0.08;
+          transform: scale(1);
+        }
+        100% {
+          opacity: 0.15;
+          transform: scale(1.1);
+        }
       }
 
       /* Metal title styling */
@@ -81,8 +100,18 @@
       }
 
       @keyframes glow {
-        from { text-shadow: 0 0 10px var(--accent-color), 0 0 20px var(--accent-color), 0 0 30px var(--accent-color); }
-        to { text-shadow: 0 0 20px var(--accent-color), 0 0 30px var(--accent-color), 0 0 40px var(--accent-color); }
+        from {
+          text-shadow:
+            0 0 10px var(--accent-color),
+            0 0 20px var(--accent-color),
+            0 0 30px var(--accent-color);
+        }
+        to {
+          text-shadow:
+            0 0 20px var(--accent-color),
+            0 0 30px var(--accent-color),
+            0 0 40px var(--accent-color);
+        }
       }
 
       /* Card container */
@@ -363,12 +392,25 @@
       }
 
       /* Utility classes */
-      .text-success { color: #10b981; }
-      .text-warning { color: #f59e0b; }
-      .text-error { color: #ef4444; }
-      .text-muted { color: #6b7280; }
-      .text-link { color: #60a5fa; text-decoration: none; }
-      .text-link:hover { text-decoration: underline; }
+      .text-success {
+        color: #10b981;
+      }
+      .text-warning {
+        color: #f59e0b;
+      }
+      .text-error {
+        color: #ef4444;
+      }
+      .text-muted {
+        color: #6b7280;
+      }
+      .text-link {
+        color: #60a5fa;
+        text-decoration: none;
+      }
+      .text-link:hover {
+        text-decoration: underline;
+      }
     </style>
   </head>
   <body>
@@ -397,7 +439,8 @@
               required
             />
             <p class="help-text">
-              Enter the full URL where your SuShe Online instance is running (without trailing slash)
+              Enter the full URL where your SuShe Online instance is running
+              (without trailing slash)
             </p>
 
             <button type="submit" class="btn-primary">Save Settings</button>
@@ -412,7 +455,7 @@
         <div class="section">
           <div class="section-title">Authentication</div>
           <div class="auth-section">
-            <p class="help-text" style="margin-top: 0; margin-bottom: 12px;">
+            <p class="help-text" style="margin-top: 0; margin-bottom: 12px">
               Make sure the URL above is correct before logging in
             </p>
             <div id="authStatus" class="auth-status">
@@ -423,7 +466,7 @@
                 type="button"
                 id="loginBtn"
                 class="btn-accent"
-                style="display: none;"
+                style="display: none"
               >
                 Login
               </button>
@@ -431,7 +474,7 @@
                 type="button"
                 id="logoutBtn"
                 class="btn-danger"
-                style="display: none;"
+                style="display: none"
               >
                 Logout
               </button>

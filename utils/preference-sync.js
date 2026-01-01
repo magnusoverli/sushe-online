@@ -358,7 +358,6 @@ function createPreferenceSyncService(deps = {}) {
   const staleThresholdMs = deps.staleThresholdMs || DEFAULT_STALE_THRESHOLD_MS;
   let syncInterval = null;
   let isRunning = false;
-
   /**
    * Get users who need preference sync
    */
