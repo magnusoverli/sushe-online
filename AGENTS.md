@@ -62,6 +62,37 @@ npx playwright install --with-deps chromium
 - Linting/formatting CAN run on host if npm available, but container is more reliable
 - E2E tests run on host but connect to the containerized app at http://localhost:3000 (avoids slow Playwright browser installation in Docker, saving ~5 minutes per build)
 
+### Handling Test Failures
+
+**IMPORTANT: Always verify linting passes before committing, even if tests fail.**
+
+When `npm test` fails due to infrastructure issues (e.g., coverage directory permissions, Docker issues), **always run linting separately** to catch issues that would fail CI:
+
+```bash
+# If npm test fails due to infrastructure issues, run these separately:
+docker compose -f docker-compose.local.yml exec app npm run lint:strict
+docker compose -f docker-compose.local.yml exec app npm run format:check
+```
+
+**Why this matters:**
+- `npm test` runs `lint:strict` which treats warnings as errors (`--max-warnings 0`)
+- CI will fail on formatting issues (prettier) and linting warnings (eslint)
+- Infrastructure failures (permissions, Docker) can mask linting issues
+- Always verify linting passes independently before committing
+
+**Common scenarios:**
+- Coverage directory permission errors → Run `lint:strict` separately
+- Docker container issues → Run `lint:strict` separately
+- Test timeouts → Run `lint:strict` separately
+- Any `npm test` failure → Verify linting before committing
+
+**Best practice workflow:**
+1. Make code changes
+2. Run `npm test` (or individual test files)
+3. **If tests fail due to infrastructure**: Run `npm run lint:strict` separately
+4. Fix any linting/formatting issues
+5. Commit only when linting passes
+
 ### Pre-commit Hooks (Recommended)
 
 **Install git hooks to catch issues before commit:**
