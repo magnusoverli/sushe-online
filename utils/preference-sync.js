@@ -229,6 +229,7 @@ async function syncAllDataSources(user, syncHelpers, log) {
   } catch (err) {
     log.error('Failed to aggregate internal data', {
       userId,
+      username: user.username,
       error: err.message,
     });
     errors.push({ source: 'internal', error: err.message });
@@ -245,7 +246,11 @@ async function syncAllDataSources(user, syncHelpers, log) {
         updates.spotifySyncedAt = spotifyData.syncedAt;
       }
     } catch (err) {
-      log.error('Failed to sync Spotify data', { userId, error: err.message });
+      log.error('Failed to sync Spotify data', {
+        userId,
+        username: user.username,
+        error: err.message,
+      });
       errors.push({ source: 'spotify', error: err.message });
     }
   }
@@ -262,7 +267,11 @@ async function syncAllDataSources(user, syncHelpers, log) {
         updates.lastfmSyncedAt = lastfmData.syncedAt;
       }
     } catch (err) {
-      log.error('Failed to sync Last.fm data', { userId, error: err.message });
+      log.error('Failed to sync Last.fm data', {
+        userId,
+        username: user.username,
+        error: err.message,
+      });
       errors.push({ source: 'lastfm', error: err.message });
     }
   }
