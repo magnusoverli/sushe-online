@@ -868,7 +868,9 @@ module.exports = (app, deps) => {
         const broadcast = req.app.locals.broadcast;
         if (broadcast) {
           if (existingList) {
-            broadcast.listUpdated(req.user._id, name);
+            broadcast.listUpdated(req.user._id, name, {
+              excludeSocketId: req.headers['x-socket-id'],
+            });
           } else {
             broadcast.listCreated(req.user._id, name, yearValidation.value);
           }
@@ -1013,7 +1015,9 @@ module.exports = (app, deps) => {
         if (newName && newName !== name) {
           broadcast.listRenamed(req.user._id, name, newName);
         } else {
-          broadcast.listUpdated(req.user._id, newName || name);
+          broadcast.listUpdated(req.user._id, newName || name, {
+            excludeSocketId: req.headers['x-socket-id'],
+          });
         }
       }
 

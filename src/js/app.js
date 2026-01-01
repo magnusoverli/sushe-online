@@ -922,12 +922,19 @@ async function fetchAndRenderLinkPreview(previewEl, url) {
 // API helper functions
 export async function apiCall(url, options = {}) {
   try {
+    // Get socket ID to exclude self from real-time broadcasts
+    const socketId = realtimeSyncModule?.getSocket()?.id;
+    const headers = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    };
+    if (socketId) {
+      headers['X-Socket-ID'] = socketId;
+    }
+
     const response = await fetch(url, {
       ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
+      headers,
       credentials: 'same-origin',
     });
 
