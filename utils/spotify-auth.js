@@ -18,7 +18,8 @@ function createDataFetchers(spotifyApiRequest) {
     accessToken,
     timeRange = 'medium_term',
     limit = 50,
-    offset = 0
+    offset = 0,
+    userContext = {}
   ) {
     const params = new URLSearchParams({
       time_range: timeRange,
@@ -28,7 +29,8 @@ function createDataFetchers(spotifyApiRequest) {
 
     const data = await spotifyApiRequest(
       `/me/top/artists?${params}`,
-      accessToken
+      accessToken,
+      userContext
     );
 
     return {
@@ -51,7 +53,8 @@ function createDataFetchers(spotifyApiRequest) {
     accessToken,
     timeRange = 'medium_term',
     limit = 50,
-    offset = 0
+    offset = 0,
+    userContext = {}
   ) {
     const params = new URLSearchParams({
       time_range: timeRange,
@@ -61,7 +64,8 @@ function createDataFetchers(spotifyApiRequest) {
 
     const data = await spotifyApiRequest(
       `/me/top/tracks?${params}`,
-      accessToken
+      accessToken,
+      userContext
     );
 
     return {
@@ -83,13 +87,13 @@ function createDataFetchers(spotifyApiRequest) {
     };
   }
 
-  async function getSavedAlbums(accessToken, limit = 50, offset = 0) {
+  async function getSavedAlbums(accessToken, limit = 50, offset = 0, userContext = {}) {
     const params = new URLSearchParams({
       limit: String(Math.min(limit, 50)),
       offset: String(offset),
     });
 
-    const data = await spotifyApiRequest(`/me/albums?${params}`, accessToken);
+    const data = await spotifyApiRequest(`/me/albums?${params}`, accessToken, userContext);
 
     return {
       items: data.items.map((item) => ({
@@ -117,7 +121,8 @@ function createDataFetchers(spotifyApiRequest) {
     accessToken,
     limit = 50,
     before = null,
-    after = null
+    after = null,
+    userContext = {}
   ) {
     const params = new URLSearchParams({ limit: String(Math.min(limit, 50)) });
     if (before) params.set('before', String(before));
@@ -125,7 +130,8 @@ function createDataFetchers(spotifyApiRequest) {
 
     const data = await spotifyApiRequest(
       `/me/player/recently-played?${params}`,
-      accessToken
+      accessToken,
+      userContext
     );
 
     return {
@@ -167,11 +173,11 @@ function createDataFetchers(spotifyApiRequest) {
     return allItems.slice(0, maxItems);
   }
 
-  async function getAllTopArtists(accessToken, limitPerRange = 50) {
+  async function getAllTopArtists(accessToken, limitPerRange = 50, userContext = {}) {
     const [shortTerm, mediumTerm, longTerm] = await Promise.all([
-      getTopArtists(accessToken, 'short_term', limitPerRange),
-      getTopArtists(accessToken, 'medium_term', limitPerRange),
-      getTopArtists(accessToken, 'long_term', limitPerRange),
+      getTopArtists(accessToken, 'short_term', limitPerRange, 0, userContext),
+      getTopArtists(accessToken, 'medium_term', limitPerRange, 0, userContext),
+      getTopArtists(accessToken, 'long_term', limitPerRange, 0, userContext),
     ]);
 
     return {
@@ -181,11 +187,11 @@ function createDataFetchers(spotifyApiRequest) {
     };
   }
 
-  async function getAllTopTracks(accessToken, limitPerRange = 50) {
+  async function getAllTopTracks(accessToken, limitPerRange = 50, userContext = {}) {
     const [shortTerm, mediumTerm, longTerm] = await Promise.all([
-      getTopTracks(accessToken, 'short_term', limitPerRange),
-      getTopTracks(accessToken, 'medium_term', limitPerRange),
-      getTopTracks(accessToken, 'long_term', limitPerRange),
+      getTopTracks(accessToken, 'short_term', limitPerRange, 0, userContext),
+      getTopTracks(accessToken, 'medium_term', limitPerRange, 0, userContext),
+      getTopTracks(accessToken, 'long_term', limitPerRange, 0, userContext),
     ]);
 
     return {
@@ -405,6 +411,8 @@ function createSpotifyAuth(deps = {}) {
           endpoint,
           status: response.status,
           error: errorText,
+          userId: options.userId,
+          username: options.username,
         });
         recordExternalApiError('spotify', `http_${response.status}`);
         throw new Error(`Spotify API error: ${response.status}`);

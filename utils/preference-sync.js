@@ -63,12 +63,13 @@ async function syncSpotifyDataForUser(user, pool, spotifyAuth, log) {
   }
 
   const accessToken = tokenResult.spotifyAuth.access_token;
+  const userContext = { userId: user._id, username: user.username };
 
   const [topArtists, topTracks, savedAlbumsRaw] = await Promise.all([
-    spotifyAuth.getAllTopArtists(accessToken, 50),
-    spotifyAuth.getAllTopTracks(accessToken, 50),
+    spotifyAuth.getAllTopArtists(accessToken, 50, userContext),
+    spotifyAuth.getAllTopTracks(accessToken, 50, userContext),
     spotifyAuth.fetchAllPages(
-      (offset) => spotifyAuth.getSavedAlbums(accessToken, 50, offset),
+      (offset) => spotifyAuth.getSavedAlbums(accessToken, 50, offset, userContext),
       200
     ),
   ]);
@@ -368,6 +369,7 @@ function createPreferenceSyncService(deps = {}) {
       SELECT 
         u._id,
         u.email,
+        u.username,
         u.spotify_auth,
         u.lastfm_auth,
         u.lastfm_username,
