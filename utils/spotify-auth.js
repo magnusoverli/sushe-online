@@ -453,8 +453,7 @@ function createSpotifyAuth(deps = {}) {
       if (!response.ok) {
         const errorText = await response.text();
         const parsedError = parseSpotifyError(errorText, response.status);
-        const isClientError =
-          response.status >= 400 && response.status < 500;
+        const isClientError = response.status >= 400 && response.status < 500;
         const isServerError = response.status >= 500;
 
         const logData = {
