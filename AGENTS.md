@@ -35,6 +35,23 @@ This includes:
 - **Lint**: `npm run lint` (check code quality)
 - **Format**: `npm run format` (format code with prettier)
 
+### Container vs Local Execution
+
+**Run INSIDE container** (use `docker compose exec app <command>`):
+- `npm test` - Core test suite
+- `npm run test:e2e` - End-to-end tests
+- `npm run test:coverage` - Test coverage
+- `npm run test:watch` - Watch mode tests
+- `node --test test/filename.test.js` - Individual tests
+
+**Run OUTSIDE container** (use directly on host):
+- `npm run lint` - ESLint code quality checks
+- `npm run format` - Prettier formatting
+
+**Why this separation?**
+- Tests need the database and full application environment (container provides this)
+- Linting/formatting are static analysis tools that work directly on source files (faster on host)
+
 ## Code Style & Best Practices
 
 - **Imports**: Prefer ES6 modules (`import`/`export`) when possible, use CommonJS for Node.js compatibility
