@@ -393,6 +393,34 @@ function createSpotifyAuth(deps = {}) {
   }
 
   /**
+   * Parse Spotify API error response to extract meaningful error information
+   * @param {string} errorText - Raw error response text
+   * @param {number} statusCode - HTTP status code
+   * @returns {Object} Parsed error with message, errorType, and status
+   */
+  function parseSpotifyError(errorText, statusCode) {
+    try {
+      const errorJson = JSON.parse(errorText);
+      return {
+        message:
+          errorJson.error?.message ||
+          errorJson.message ||
+          errorText ||
+          `HTTP ${statusCode}`,
+        errorType: errorJson.error?.type || 'unknown',
+        status: errorJson.error?.status || statusCode,
+      };
+    } catch {
+      // Not JSON, return raw text
+      return {
+        message: errorText || `HTTP ${statusCode}`,
+        errorType: 'unknown',
+        status: statusCode,
+      };
+    }
+  }
+
+  /**
    * Make an authenticated request to Spotify Web API
    */
   async function spotifyApiRequest(endpoint, accessToken, options = {}) {
@@ -424,15 +452,35 @@ function createSpotifyAuth(deps = {}) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        log.error('Spotify API request failed:', {
+        const parsedError = parseSpotifyError(errorText, response.status);
+        const isClientError =
+          response.status >= 400 && response.status < 500;
+        const isServerError = response.status >= 500;
+
+        const logData = {
           endpoint,
           status: response.status,
-          error: errorText,
+          error: parsedError.message,
+          errorType: parsedError.errorType,
           userId: options.userId,
           username: options.username,
-        });
+        };
+
+        if (isClientError) {
+          // 4xx errors: Expected client errors (user not registered, token expired, etc.)
+          log.warn('Spotify API client error:', logData);
+        } else if (isServerError) {
+          // 5xx errors: Unexpected server errors (Spotify API issues)
+          log.error('Spotify API server error:', logData);
+        } else {
+          // Fallback for unexpected status codes
+          log.error('Spotify API request failed:', logData);
+        }
+
         recordExternalApiError('spotify', `http_${response.status}`);
-        throw new Error(`Spotify API error: ${response.status}`);
+        throw new Error(
+          `Spotify API error: ${response.status} - ${parsedError.message}`
+        );
       }
 
       return response.json();
@@ -442,6 +490,13 @@ function createSpotifyAuth(deps = {}) {
         const duration = Date.now() - startTime;
         observeExternalApiCall('spotify', metricsEndpoint, duration, 0);
         recordExternalApiError('spotify', 'network_error');
+        // Network errors are unexpected and should be logged as errors
+        log.error('Spotify API network error:', {
+          endpoint,
+          error: error.message,
+          userId: options.userId,
+          username: options.username,
+        });
       }
       throw error;
     }
