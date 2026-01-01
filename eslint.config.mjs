@@ -190,6 +190,8 @@ export default [
     files: ['utils/**/*.js'],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
+      // preference-sync has one large factory function that's hard to split
+      'max-lines-per-function': ['warn', { max: 210, skipBlankLines: true, skipComments: true }],
     },
   },
   {
