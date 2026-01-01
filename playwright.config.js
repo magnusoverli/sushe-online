@@ -42,16 +42,18 @@ module.exports = defineConfig({
   ],
 
   /* Run your local dev server before starting the tests */
-  webServer: {
-    command: 'npm start',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120 * 1000,
-    stdout: 'pipe',
-    stderr: 'pipe',
-    env: {
-      ...process.env,
-      DISABLE_RATE_LIMITING: 'true',
-    },
-  },
+  webServer: process.env.PLAYWRIGHT_SKIP_SERVER
+    ? undefined
+    : {
+        command: 'npm start',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000,
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: {
+          ...process.env,
+          DISABLE_RATE_LIMITING: 'true',
+        },
+      },
 });

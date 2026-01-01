@@ -27,8 +27,8 @@ This includes:
 
 - **Build**: `npm run build` (builds CSS + JS)
 - **Dev**: `npm run dev` (watch mode with nodemon)
-- **Test**: `npm test` (runs core tests - ~215 tests, ~30 seconds)
-- **E2E Tests**: `npm run test:e2e` (runs end-to-end browser tests)
+- **Test**: `npm test` (runs core tests - ~1138 tests, ~37 seconds)
+- **E2E Tests**: `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` (runs end-to-end browser tests headless on host)
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
 - **Single test**: `node --test test/filename.test.js`
@@ -37,9 +37,8 @@ This includes:
 
 ### Container vs Local Execution
 
-**Run INSIDE container** (use `docker compose exec app <command>`):
-- `npm test` - Core test suite
-- `npm run test:e2e` - End-to-end tests
+**Run INSIDE container** (use `docker compose -f docker-compose.local.yml exec app <command>`):
+- `npm test` - Core test suite (~1138 tests, ~37 seconds)
 - `npm run test:coverage` - Test coverage
 - `npm run test:watch` - Watch mode tests
 - `node --test test/filename.test.js` - Individual tests
@@ -47,10 +46,18 @@ This includes:
 **Run OUTSIDE container** (use directly on host):
 - `npm run lint` - ESLint code quality checks
 - `npm run format` - Prettier formatting
+- `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` - End-to-end browser tests (headless, requires Docker containers running)
+
+**Prerequisites for E2E tests on host:**
+```bash
+# First time only: Install Playwright browsers on your host machine
+npx playwright install --with-deps chromium
+```
 
 **Why this separation?**
-- Tests need the database and full application environment (container provides this)
+- Core tests need the database and full application environment (container provides this)
 - Linting/formatting are static analysis tools that work directly on source files (faster on host)
+- E2E tests run on host but connect to the containerized app at http://localhost:3000 (avoids slow Playwright browser installation in Docker, saving ~5 minutes per build)
 
 ## Code Style & Best Practices
 
@@ -93,24 +100,26 @@ We focus on testing what matters: security, authentication, and critical paths.
 - **Auth Utilities**: Password hashing, token validation, auth helpers
 - **Basic Smoke Tests**: Server initialization, core routes, database connectivity
 
-#### End-to-End Tests (`npm run test:e2e`)
+#### End-to-End Tests (Headless Browser Tests)
 
 - **Critical User Journeys**: Registration, login/logout, basic operations, security validation
+- **Run on host**: Connects to containerized app at http://localhost:3000
+- **Headless execution**: Tests run without UI for speed and CI compatibility
 
 ### Running Tests
 
 ```bash
-# Before committing
-npm test
+# Core tests (run inside container)
+docker compose -f docker-compose.local.yml exec app npm test
 
-# End-to-end browser tests
-npm run test:e2e
+# End-to-end browser tests (run on host, headless)
+PLAYWRIGHT_SKIP_SERVER=1 npx playwright test
 
-# Individual test file
-node --test test/filename.test.js
+# Individual test file (run inside container)
+docker compose -f docker-compose.local.yml exec app node --test test/filename.test.js
 
-# Coverage report
-npm run test:coverage
+# Coverage report (run inside container)
+docker compose -f docker-compose.local.yml exec app npm run test:coverage
 ```
 
 ### Test Quality Standards

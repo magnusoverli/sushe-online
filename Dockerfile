@@ -25,6 +25,9 @@ RUN rm -rf node_modules
 # ----- Runtime stage -----
 FROM node:24-slim AS runtime
 
+# Build arg to control whether to install dev dependencies (default: production only)
+ARG INSTALL_DEV_DEPS=false
+
 # Update npm to specific version
 RUN npm install -g npm@11.6.1 --no-fund
 
@@ -44,7 +47,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-18 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install --omit=dev --prefer-offline --no-audit --no-fund
+# Install dependencies - include dev dependencies only if INSTALL_DEV_DEPS=true
+RUN if [ "$INSTALL_DEV_DEPS" = "true" ]; then \
+      npm ci --prefer-offline --no-audit --no-fund; \
+    else \
+      npm install --omit=dev --prefer-offline --no-audit --no-fund; \
+    fi
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./

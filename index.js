@@ -428,6 +428,17 @@ app.use(cors(corsOptions));
 // Basic Express middleware
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
+// Handle .well-known requests (Android Asset Links, iOS Universal Links, etc.)
+// We don't have native Android/iOS apps, but Google still checks for these files
+app.use('/.well-known', (req, res) => {
+  // For assetlinks.json (Android), return empty array per spec
+  if (req.path === '/.well-known/assetlinks.json') {
+    return res.json([]);
+  }
+  // For apple-app-site-association (iOS) or other .well-known paths, return 204
+  res.status(204).end();
+});
+
 // Smart HTTP caching for static assets (before compression and no-cache middleware)
 app.use((req, res, next) => {
   const path = req.path;

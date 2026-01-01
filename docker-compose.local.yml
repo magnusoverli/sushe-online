@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
       no_cache: true
+      args:
+        INSTALL_DEV_DEPS: "true"
     container_name: sushe-online-local
     ports:
       - '3000:3000'
