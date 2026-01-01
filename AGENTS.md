@@ -27,25 +27,28 @@ This includes:
 
 - **Build**: `npm run build` (builds CSS + JS)
 - **Dev**: `npm run dev` (watch mode with nodemon)
-- **Test**: `npm test` (runs core tests - ~1138 tests, ~37 seconds)
+- **Test**: `npm test` (runs strict linting + core tests - ~1138 tests, ~37 seconds)
 - **E2E Tests**: `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` (runs end-to-end browser tests headless on host)
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
 - **Single test**: `node --test test/filename.test.js`
-- **Lint**: `npm run lint` (check code quality)
+- **Lint**: `npm run lint` (check code quality, allows warnings)
+- **Lint Strict**: `npm run lint:strict` (check code + formatting, treats warnings as errors)
 - **Format**: `npm run format` (format code with prettier)
+- **Format Check**: `npm run format:check` (verify formatting without changes)
 
 ### Container vs Local Execution
 
 **Run INSIDE container** (use `docker compose -f docker-compose.local.yml exec app <command>`):
-- `npm test` - Core test suite (~1138 tests, ~37 seconds)
+- `npm test` - Full test suite with strict linting (~1138 tests, ~37 seconds)
 - `npm run test:coverage` - Test coverage
 - `npm run test:watch` - Watch mode tests
+- `npm run lint:strict` - Strict linting (prettier + eslint with no warnings)
 - `node --test test/filename.test.js` - Individual tests
 
 **Run OUTSIDE container** (use directly on host):
-- `npm run lint` - ESLint code quality checks
-- `npm run format` - Prettier formatting
+- `npm run lint` - ESLint code quality checks (if npm available)
+- `npm run format` - Prettier formatting (if npm available)
 - `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` - End-to-end browser tests (headless, requires Docker containers running)
 
 **Prerequisites for E2E tests on host:**
@@ -56,8 +59,31 @@ npx playwright install --with-deps chromium
 
 **Why this separation?**
 - Core tests need the database and full application environment (container provides this)
-- Linting/formatting are static analysis tools that work directly on source files (faster on host)
+- Linting/formatting CAN run on host if npm available, but container is more reliable
 - E2E tests run on host but connect to the containerized app at http://localhost:3000 (avoids slow Playwright browser installation in Docker, saving ~5 minutes per build)
+
+### Pre-commit Hooks (Recommended)
+
+**Install git hooks to catch issues before commit:**
+```bash
+npm run changelog:setup
+# or manually:
+bash scripts/setup-git-hooks.sh
+```
+
+This installs:
+- **pre-commit**: Runs prettier + eslint checks on staged files (catches formatting issues before CI)
+- **post-commit**: Prompts to update changelog for user-facing changes
+
+**Benefits:**
+- Catches prettier/eslint errors immediately
+- Prevents CI failures from formatting issues
+- Faster feedback loop (seconds vs minutes waiting for CI)
+
+**Skip hooks if needed:**
+```bash
+git commit --no-verify  # Skip for emergency commits only
+```
 
 ## Code Style & Best Practices
 

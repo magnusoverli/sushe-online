@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+public/js/bundle.js
+public/js/chunks/
+public/styles/output.css
+
+# Coverage
+coverage/
+
+# Generated files
+playwright-report/
+test-results/
+
+# Data directories
+data/
+
+# Logs
+*.log
