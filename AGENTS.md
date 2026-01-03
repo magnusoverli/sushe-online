@@ -43,16 +43,25 @@ This includes:
 
 **Run INSIDE container** (use `docker compose -f docker-compose.local.yml exec app <command>`):
 
-- `npm test` - Full test suite with strict linting (~1138 tests, ~37 seconds)
+- `npm test` - Full test suite (~1138 tests, ~37 seconds) - **Note: This runs lint:strict internally, but linting should be verified locally before committing**
 - `npm run test:coverage` - Test coverage
 - `npm run test:watch` - Watch mode tests
-- `npm run lint:strict` - Strict linting (prettier + eslint with no warnings)
 - `npm run format` - Format code with prettier (formats your local files)
 - `node --test test/filename.test.js` - Individual tests
 
 **Run OUTSIDE container** (use directly on host):
 
+- `npm run lint` - Check code quality (allows warnings)
+- `npm run lint:strict` - **CRITICAL: Always run this locally before committing** - Strict linting (prettier + eslint with no warnings)
+- `npm run format:check` - Verify formatting without changes
 - `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` - End-to-end browser tests (headless, requires Docker containers running)
+
+**⚠️ CRITICAL: Lint/eslint commands MUST be run locally, NOT in the container!**
+
+- CI runs linting in the local environment, not in Docker
+- Container's prettier/eslint versions may differ from CI, causing false positives/negatives
+- Always verify formatting with `npm run lint:strict` locally before committing
+- The container's prettier may format code differently than CI's prettier, leading to CI failures
 
 **Prerequisites for E2E tests on host:**
 
@@ -68,6 +77,14 @@ npx playwright install --with-deps chromium
 - npm may not be available on the host machine
 - E2E tests are the exception: they run on host but connect to the containerized app at http://localhost:3000 (avoids slow Playwright browser installation in Docker, saving ~5 minutes per build)
 
+**Why lint locally instead of in container?**
+
+- **CI runs linting in local environment**, not in Docker container
+- Container's prettier/eslint versions may differ from CI's versions
+- Container's formatting rules may not match CI's expectations
+- Running lint locally ensures you catch the same issues CI will catch
+- Prevents false positives/negatives that lead to CI failures after commit
+
 ### Formatting Before Commit
 
 **CRITICAL: Always run prettier before committing changes.**
@@ -82,9 +99,13 @@ Since the container mounts your local directory, this command formats your local
 **Recommended workflow:**
 
 1. Make code changes
-2. Run `docker compose -f docker-compose.local.yml exec app npm run format`
-3. Run `docker compose -f docker-compose.local.yml exec app npm run lint:strict`
+2. Run `docker compose -f docker-compose.local.yml exec app npm run format` (format in container)
+3. **Run `npm run lint:strict` locally** (verify linting matches CI expectations)
 4. Commit your changes
+
+**Why format in container but lint locally?**
+- Formatting: Container's prettier formats files, which is fine for initial formatting
+- Linting: **Must run locally** because CI uses local environment - container's eslint/prettier versions may differ and give false results
 
 ### Handling Test Failures
 
@@ -93,10 +114,12 @@ Since the container mounts your local directory, this command formats your local
 When `npm test` fails due to infrastructure issues (e.g., coverage directory permissions, Docker issues), **always run linting separately** to catch issues that would fail CI:
 
 ```bash
-# If npm test fails due to infrastructure issues, run these separately:
-docker compose -f docker-compose.local.yml exec app npm run lint:strict
-docker compose -f docker-compose.local.yml exec app npm run format:check
+# If npm test fails due to infrastructure issues, run these separately LOCALLY:
+npm run lint:strict  # Run locally, NOT in container!
+npm run format:check  # Run locally to verify formatting matches CI
 ```
+
+**⚠️ IMPORTANT: These commands must run locally, not in the container!**
 
 **Why this matters:**
 
@@ -115,10 +138,12 @@ docker compose -f docker-compose.local.yml exec app npm run format:check
 **Best practice workflow:**
 
 1. Make code changes
-2. Run `npm test` (or individual test files)
-3. **If tests fail due to infrastructure**: Run `npm run lint:strict` separately
-4. Fix any linting/formatting issues
-5. Commit only when linting passes
+2. Run `docker compose -f docker-compose.local.yml exec app npm run format` (format in container)
+3. Run `npm run lint:strict` **locally** (verify linting matches CI)
+4. Run `docker compose -f docker-compose.local.yml exec app npm test` (or individual test files)
+5. **If tests fail due to infrastructure**: Run `npm run lint:strict` **locally** again to verify
+6. Fix any linting/formatting issues
+7. Commit only when linting passes locally
 
 ### Pre-commit Hooks (Recommended)
 
