@@ -703,10 +703,27 @@ export function createMobileUI(deps = {}) {
           <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
           <h3 class="font-semibold text-white mb-4">${listName}</h3>
           
-          <button data-action="download"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
-            <i class="fas fa-download mr-3 text-gray-400"></i>Download List
-          </button>
+          <!-- Expandable Download Section -->
+          <div class="download-section">
+            <button data-action="download-toggle"
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded">
+              <span>
+                <i class="fas fa-download mr-3 text-gray-400"></i>Download List...
+              </span>
+              <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-download-chevron></i>
+            </button>
+            
+            <!-- Expandable download options (hidden by default) -->
+            <div data-download-options class="hidden overflow-hidden transition-all duration-200 ease-out" style="max-height: 0;">
+              <div class="ml-4 border-l-2 border-gray-700 pl-4 py-1">
+                <button data-action="download-json"
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                  <i class="fas fa-file-code mr-3 text-gray-400 text-sm"></i>
+                  <span class="text-sm">Download as JSON</span>
+                </button>
+              </div>
+            </div>
+          </div>
           
           <button data-action="edit"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
@@ -745,7 +762,10 @@ export function createMobileUI(deps = {}) {
 
     // Attach event listeners
     const backdrop = actionSheet.querySelector('[data-backdrop]');
-    const downloadBtn = actionSheet.querySelector('[data-action="download"]');
+    const downloadToggleBtn = actionSheet.querySelector('[data-action="download-toggle"]');
+    const downloadOptions = actionSheet.querySelector('[data-download-options]');
+    const downloadChevron = actionSheet.querySelector('[data-download-chevron]');
+    const downloadJsonBtn = actionSheet.querySelector('[data-action="download-json"]');
     const editBtn = actionSheet.querySelector('[data-action="edit"]');
     const toggleMainBtn = actionSheet.querySelector(
       '[data-action="toggle-main"]'
@@ -767,7 +787,33 @@ export function createMobileUI(deps = {}) {
     backdrop.addEventListener('click', closeSheet);
     cancelBtn.addEventListener('click', closeSheet);
 
-    downloadBtn.addEventListener('click', (e) => {
+    // Toggle download options expansion
+    let isDownloadExpanded = false;
+    const toggleDownloadOptions = () => {
+      isDownloadExpanded = !isDownloadExpanded;
+      if (isDownloadExpanded) {
+        downloadOptions.classList.remove('hidden');
+        void downloadOptions.offsetHeight;
+        downloadOptions.style.maxHeight = downloadOptions.scrollHeight + 'px';
+        if (downloadChevron) downloadChevron.style.transform = 'rotate(180deg)';
+      } else {
+        downloadOptions.style.maxHeight = '0';
+        if (downloadChevron) downloadChevron.style.transform = 'rotate(0deg)';
+        setTimeout(() => {
+          if (!isDownloadExpanded) {
+            downloadOptions.classList.add('hidden');
+          }
+        }, 200);
+      }
+    };
+
+    downloadToggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleDownloadOptions();
+    });
+
+    downloadJsonBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       closeSheet();

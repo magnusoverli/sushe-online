@@ -371,8 +371,9 @@ const importConflictModalComponent = () => `
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
-    <button id="downloadListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-download mr-2 w-4 text-center"></i>Download List
+    <button id="downloadListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-download mr-2 w-4 text-center"></i>Download List...</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
     </button>
     <button id="renameListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
@@ -420,6 +421,11 @@ const contextMenusComponent = () => `
   <!-- Submenu for Play Album (Spotify Connect devices) -->
   <div id="playAlbumSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
     <!-- Populated dynamically with devices -->
+  </div>
+  
+  <!-- Submenu for Download List -->
+  <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 min-w-44">
+    <!-- Populated dynamically -->
   </div>
 `;
 

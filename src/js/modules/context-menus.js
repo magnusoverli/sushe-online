@@ -139,11 +139,18 @@ export function createContextMenus(deps = {}) {
       playAlbumSubmenu.classList.add('hidden');
     }
 
+    const downloadListSubmenu = document.getElementById('downloadListSubmenu');
+    if (downloadListSubmenu) {
+      downloadListSubmenu.classList.add('hidden');
+    }
+
     // Remove highlights from submenu parent options
     const moveOption = document.getElementById('moveAlbumOption');
     const playOption = document.getElementById('playAlbumOption');
+    const downloadOption = document.getElementById('downloadListOption');
     moveOption?.classList.remove('bg-gray-700', 'text-white');
     playOption?.classList.remove('bg-gray-700', 'text-white');
+    downloadOption?.classList.remove('bg-gray-700', 'text-white');
 
     // Restore FAB visibility if a list is selected
     const fab = document.getElementById('addAlbumFAB');
@@ -274,6 +281,54 @@ export function createContextMenus(deps = {}) {
 
     submenu.style.left = `${menuRect.right}px`;
     submenu.style.top = `${moveRect.top}px`;
+    submenu.classList.remove('hidden');
+  }
+
+  /**
+   * Show download list submenu for desktop
+   */
+  function showDownloadListSubmenu() {
+    const { list: currentContextList } = getContextState();
+    const submenu = document.getElementById('downloadListSubmenu');
+    const downloadOption = document.getElementById('downloadListOption');
+
+    if (!submenu || !downloadOption || !currentContextList) return;
+
+    // Highlight the parent menu item
+    downloadOption.classList.add('bg-gray-700', 'text-white');
+
+    // Build submenu with download options
+    submenu.innerHTML = `
+      <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-download-action="json">
+        <i class="fas fa-file-code mr-2 w-4 text-center"></i>Download as JSON
+      </button>
+    `;
+
+    // Add click handler for JSON download
+    const jsonOption = submenu.querySelector('[data-download-action="json"]');
+    if (jsonOption) {
+      jsonOption.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Hide both menus and remove highlight
+        document.getElementById('contextMenu')?.classList.add('hidden');
+        submenu.classList.add('hidden');
+        downloadOption.classList.remove('bg-gray-700', 'text-white');
+
+        // Download the list
+        downloadListAsJSON(currentContextList);
+        setContextState({ list: null });
+      });
+    }
+
+    // Position submenu next to the download option
+    const downloadRect = downloadOption.getBoundingClientRect();
+    const contextMenu = document.getElementById('contextMenu');
+    const menuRect = contextMenu.getBoundingClientRect();
+
+    submenu.style.left = `${menuRect.right}px`;
+    submenu.style.top = `${downloadRect.top}px`;
     submenu.classList.remove('hidden');
   }
 
@@ -641,16 +696,11 @@ export function createContextMenus(deps = {}) {
       }
     }
 
-    // Handle download option click
-    downloadOption.onclick = () => {
-      const { list: currentContextList } = getContextState();
-      contextMenu.classList.add('hidden');
-
-      if (!currentContextList) return;
-
-      downloadListAsJSON(currentContextList);
-
-      setContextState({ list: null });
+    // Handle download option click - show submenu
+    downloadOption.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showDownloadListSubmenu();
     };
 
     // Handle rename option click
@@ -811,6 +861,49 @@ export function createContextMenus(deps = {}) {
 
       setContextState({ list: null });
     };
+
+    // Setup mouse handlers for download submenu
+    const downloadSubmenu = document.getElementById('downloadListSubmenu');
+    let downloadSubmenuTimeout;
+
+    const hideDownloadSubmenu = () => {
+      downloadSubmenuTimeout = setTimeout(() => {
+        if (downloadSubmenu) {
+          downloadSubmenu.classList.add('hidden');
+          downloadOption.classList.remove('bg-gray-700', 'text-white');
+        }
+      }, 200);
+    };
+
+    const cancelHideDownloadSubmenu = () => {
+      if (downloadSubmenuTimeout) clearTimeout(downloadSubmenuTimeout);
+    };
+
+    // Show submenu on mouse enter
+    downloadOption.addEventListener('mouseenter', () => {
+      cancelHideDownloadSubmenu();
+      const { list: currentContextList } = getContextState();
+      if (currentContextList) {
+        showDownloadListSubmenu();
+      }
+    });
+
+    // Hide submenu when mouse leaves context menu (unless moving to submenu)
+    contextMenu.addEventListener('mouseleave', (e) => {
+      const toDownloadSubmenu =
+        downloadSubmenu &&
+        (e.relatedTarget === downloadSubmenu ||
+          downloadSubmenu.contains(e.relatedTarget));
+
+      if (!toDownloadSubmenu) {
+        hideDownloadSubmenu();
+      }
+    });
+
+    if (downloadSubmenu) {
+      downloadSubmenu.addEventListener('mouseenter', cancelHideDownloadSubmenu);
+      downloadSubmenu.addEventListener('mouseleave', hideDownloadSubmenu);
+    }
   }
 
   // Return public API
@@ -825,6 +918,7 @@ export function createContextMenus(deps = {}) {
     setupSubmenuHideOnLeave,
     positionPlaySubmenu,
     showPlayAlbumSubmenu,
+    showDownloadListSubmenu,
     initializeContextMenu,
   };
 }
