@@ -27,13 +27,13 @@ This includes:
 
 - **Build**: `npm run build` (builds CSS + JS)
 - **Dev**: `npm run dev` (watch mode with nodemon)
-- **Test**: `npm test` (runs strict linting + core tests - ~1138 tests, ~37 seconds)
+- **Test**: `npm test` (runs `lint:strict` internally, then core tests, then playwright if not in CI - ~1138 tests, ~37 seconds)
 - **E2E Tests**: `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` (runs end-to-end browser tests headless on host)
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
 - **Single test**: `node --test test/filename.test.js`
-- **Lint**: `npm run lint` (check code quality, allows warnings)
-- **Lint Strict**: `npm run lint:strict` (check code + formatting, treats warnings as errors)
+- **Lint**: `npm run lint` (check code quality with eslint, allows warnings) - **Note: CI runs this, but `lint:strict` is what actually fails CI**
+- **Lint Strict**: `npm run lint:strict` (runs `format:check:source` + `eslint . --max-warnings 0`, treats warnings as errors) - **This is what CI's `npm test` runs internally and what will fail CI**
 - **Format**: `npm run format` (format code with prettier)
 - **Format Check**: `npm run format:check` (verify formatting without changes)
 
@@ -123,10 +123,11 @@ npm run format:check  # Run locally to verify formatting matches CI
 
 **Why this matters:**
 
-- `npm test` runs `lint:strict` which treats warnings as errors (`--max-warnings 0`)
-- CI will fail on formatting issues (prettier) and linting warnings (eslint)
+- `npm test` runs `lint:strict` internally, which runs `format:check:source` + `eslint . --max-warnings 0`
+- CI runs `npm run lint` first (allows warnings), then `npm test` (which includes `lint:strict` - no warnings)
+- **`lint:strict` is what actually fails CI** - it checks formatting AND treats eslint warnings as errors
 - Infrastructure failures (permissions, Docker) can mask linting issues
-- Always verify linting passes independently before committing
+- Always verify `lint:strict` passes locally before committing (matches what CI's `npm test` will check)
 
 **Common scenarios:**
 
