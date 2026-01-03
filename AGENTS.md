@@ -32,10 +32,11 @@ This includes:
 - **Test Coverage**: `npm run test:coverage` (runs tests with coverage report)
 - **Test Watch**: `npm run test:watch` (runs tests in watch mode)
 - **Single test**: `node --test test/filename.test.js`
-- **Lint**: `npm run lint` (check code quality with eslint, allows warnings) - **Note: CI runs this, but `lint:strict` is what actually fails CI**
-- **Lint Strict**: `npm run lint:strict` (runs `format:check:source` + `eslint . --max-warnings 0`, treats warnings as errors) - **This is what CI's `npm test` runs internally and what will fail CI**
-- **Format**: `npm run format` (format code with prettier)
-- **Format Check**: `npm run format:check` (verify formatting without changes)
+- **Lint**: `npm run lint` (check code quality with eslint, allows warnings) - **Note: CI runs this first, but both this and `lint:strict` can fail CI**
+- **Lint Strict**: `npm run lint:strict` (runs `format:check:source` + `eslint . --max-warnings 0`, treats warnings as errors) - **This is what CI's `npm test` runs internally and is the stricter check that will fail CI if issues are found**
+- **Format**: `npm run format` (format code with prettier - formats all files)
+- **Format Check**: `npm run format:check` (verify formatting without changes - checks all files)
+- **Format Check Source**: `npm run format:check:source` (checks only source code directories: `*.{js,mjs,json}` and `{src,test,utils,middleware,routes,db,scripts,browser-extension}/**/*.{js,mjs,json,html}` - used by `lint:strict`)
 
 ### Container vs Local Execution
 
@@ -125,7 +126,7 @@ npm run format:check  # Run locally to verify formatting matches CI
 
 - `npm test` runs `lint:strict` internally, which runs `format:check:source` + `eslint . --max-warnings 0`
 - CI runs `npm run lint` first (allows warnings), then `npm test` (which includes `lint:strict` - no warnings)
-- **`lint:strict` is what actually fails CI** - it checks formatting AND treats eslint warnings as errors
+- **Both `npm run lint` and `npm test` (via `lint:strict`) can fail CI** - `lint:strict` is the stricter check that treats warnings as errors and checks formatting
 - Infrastructure failures (permissions, Docker) can mask linting issues
 - Always verify `lint:strict` passes locally before committing (matches what CI's `npm test` will check)
 
@@ -158,7 +159,7 @@ bash scripts/setup-git-hooks.sh
 
 This installs:
 
-- **pre-commit**: Runs prettier + eslint checks on staged files (catches formatting issues before CI)
+- **pre-commit**: Runs `format:check` + `eslint --max-warnings 0` on staged JavaScript files only (catches formatting and linting issues before CI)
 - **post-commit**: Prompts to update changelog for user-facing changes
 
 **Benefits:**
