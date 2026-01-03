@@ -339,8 +339,8 @@ module.exports = (app, deps) => {
   });
 
   // Home (protected) - Spotify-like interface
-  app.get('/', ensureAuth, (req, res) => {
-    res.send(spotifyTemplate(sanitizeUser(req.user)));
+  app.get('/', ensureAuth, csrfProtection, (req, res) => {
+    res.send(spotifyTemplate(sanitizeUser(req.user), req.csrfToken()));
   });
 
   // Unified Settings Page
@@ -871,16 +871,25 @@ module.exports = (app, deps) => {
 
         // Validate inputs
         if (!currentPassword || !newPassword || !confirmPassword) {
+          if (req.accepts('json')) {
+            return res.status(400).json({ error: 'All fields are required' });
+          }
           req.flash('error', 'All fields are required');
           return res.redirect('/settings');
         }
 
         if (newPassword !== confirmPassword) {
+          if (req.accepts('json')) {
+            return res.status(400).json({ error: 'New passwords do not match' });
+          }
           req.flash('error', 'New passwords do not match');
           return res.redirect('/settings');
         }
 
         if (!isValidPassword(newPassword)) {
+          if (req.accepts('json')) {
+            return res.status(400).json({ error: 'New password must be at least 8 characters' });
+          }
           req.flash('error', 'New password must be at least 8 characters');
           return res.redirect('/settings');
         }
@@ -888,6 +897,9 @@ module.exports = (app, deps) => {
         // Verify current password
         const isMatch = await bcrypt.compare(currentPassword, req.user.hash);
         if (!isMatch) {
+          if (req.accepts('json')) {
+            return res.status(400).json({ error: 'Current password is incorrect' });
+          }
           req.flash('error', 'Current password is incorrect');
           return res.redirect('/settings');
         }
@@ -906,10 +918,16 @@ module.exports = (app, deps) => {
                 error: err.message,
                 userId: req.user._id,
               });
+              if (req.accepts('json')) {
+                return res.status(500).json({ error: 'Error updating password' });
+              }
               req.flash('error', 'Error updating password');
               return res.redirect('/settings');
             }
 
+            if (req.accepts('json')) {
+              return res.json({ success: true, message: 'Password updated successfully' });
+            }
             req.flash('success', 'Password updated successfully');
             res.redirect('/settings');
           }
@@ -919,6 +937,9 @@ module.exports = (app, deps) => {
           error: error.message,
           userId: req.user._id,
         });
+        if (req.accepts('json')) {
+          return res.status(500).json({ error: 'Error changing password' });
+        }
         req.flash('error', 'Error changing password');
         res.redirect('/settings');
       }
@@ -954,6 +975,9 @@ module.exports = (app, deps) => {
           attempts.count++;
           adminCodeAttempts.set(req.user._id, attempts);
 
+          if (req.accepts('json')) {
+            return res.status(400).json({ error: 'Invalid or expired admin code' });
+          }
           req.flash('error', 'Invalid or expired admin code');
           return res.redirect('/settings');
         }
@@ -977,6 +1001,9 @@ module.exports = (app, deps) => {
                 error: err.message,
                 userId: req.user._id,
               });
+              if (req.accepts('json')) {
+                return res.status(500).json({ error: 'Error granting admin access' });
+              }
               req.flash('error', 'Error granting admin access');
               return res.redirect('/settings');
             }
@@ -996,6 +1023,9 @@ module.exports = (app, deps) => {
             req.session.save((err) => {
               if (err)
                 logger.error('Session save error', { error: err.message });
+              if (req.accepts('json')) {
+                return res.json({ success: true, message: 'Admin access granted!' });
+              }
               req.flash('success', 'Admin access granted!');
               res.redirect('/settings');
             });
@@ -1006,6 +1036,9 @@ module.exports = (app, deps) => {
           error: error.message,
           userId: req.user._id,
         });
+        if (req.accepts('json')) {
+          return res.status(500).json({ error: 'Error processing admin request' });
+        }
         req.flash('error', 'Error processing admin request');
         res.redirect('/settings');
       }

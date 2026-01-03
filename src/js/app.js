@@ -18,6 +18,7 @@ import {
   hideConfirmation,
 } from './modules/ui-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
+import { createSettingsDrawer } from './modules/settings-drawer.js';
 
 // Re-export UI utilities for backward compatibility
 export { showToast, showConfirmation };
@@ -930,6 +931,11 @@ export async function apiCall(url, options = {}) {
     };
     if (socketId) {
       headers['X-Socket-ID'] = socketId;
+    }
+    // Add CSRF token for POST/PUT/DELETE requests
+    const method = options.method || 'GET';
+    if (window.csrfToken && (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH')) {
+      headers['X-CSRF-Token'] = window.csrfToken;
     }
 
     const response = await fetch(url, {
@@ -2868,6 +2874,75 @@ document.addEventListener('DOMContentLoaded', () => {
     // Don't initialize main app features on auth pages
     return;
   }
+
+  // Initialize settings drawer
+  function initializeSettingsDrawer() {
+    const settingsDrawer = createSettingsDrawer({
+      showToast,
+      showConfirmation,
+      apiCall: window.apiCall,
+    });
+
+    settingsDrawer.initialize();
+
+    // Expose open function globally for header button
+    window.openSettingsDrawer = () => {
+      settingsDrawer.openDrawer();
+    };
+  }
+
+  // Initialize settings drawer
+  initializeSettingsDrawer();
+
+  // Initialize settings button long-press handler
+  function initializeSettingsButtonLongPress() {
+    const button = document.getElementById('newSettingsButton');
+    if (!button) return;
+
+    let longPressTimer = null;
+    let longPressDetected = false;
+    const LONG_PRESS_DELAY = 750; // ms
+
+    const startLongPress = () => {
+      longPressDetected = false;
+      longPressTimer = setTimeout(() => {
+        longPressDetected = true;
+        window.location.href = '/settings';
+      }, LONG_PRESS_DELAY);
+    };
+
+    const cancelLongPress = () => {
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    const handleClick = (e) => {
+      // If long press was detected, prevent normal click
+      if (longPressDetected) {
+        e.preventDefault();
+        e.stopPropagation();
+        longPressDetected = false;
+        return false;
+      }
+    };
+
+    // Mouse events
+    button.addEventListener('mousedown', startLongPress);
+    button.addEventListener('mouseup', cancelLongPress);
+    button.addEventListener('mouseleave', cancelLongPress);
+    
+    // Touch events
+    button.addEventListener('touchstart', startLongPress, { passive: true });
+    button.addEventListener('touchend', cancelLongPress);
+    button.addEventListener('touchmove', cancelLongPress);
+    
+    // Prevent click if long press occurred
+    button.addEventListener('click', handleClick, true); // Use capture phase
+  }
+
+  initializeSettingsButtonLongPress();
 
   // Sidebar collapse functionality
   function initializeSidebarCollapse() {

@@ -65,9 +65,9 @@ const headerComponent = (user, activeSection = 'home') => `
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-1">
         <span class="text-xs lg:text-sm text-gray-400 truncate max-w-[120px] lg:max-w-none">${user?.username || user?.email}</span>
-        <a href="/settings" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-6" title="Settings">
-          <i class="fas fa-cog text-lg"></i>
-        </a>
+        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-6" title="Settings (Hold for legacy page)" id="newSettingsButton">
+          <i class="fas fa-sliders-h text-lg"></i>
+        </button>
         <a href="/logout" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
@@ -840,6 +840,46 @@ const serviceSelectModalComponent = () => `
   </div>
 `;
 
+// Component: Settings Drawer
+const settingsDrawerComponent = (user) => `
+  <!-- Settings Drawer -->
+  <div id="settingsDrawer" class="settings-drawer">
+    <!-- Backdrop -->
+    <div class="settings-drawer-backdrop"></div>
+    
+    <!-- Drawer Panel -->
+    <div class="settings-drawer-panel">
+      <!-- Header -->
+      <div class="settings-drawer-header">
+        <h2 class="settings-drawer-title">Settings</h2>
+        <button class="settings-drawer-close" aria-label="Close settings">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <!-- Content Area -->
+      <div class="settings-drawer-content">
+        <!-- Category Navigation (Left) -->
+        <nav class="settings-drawer-nav">
+          <button data-category="account" class="settings-nav-item active">Account</button>
+          <button data-category="integrations" class="settings-nav-item">Integrations</button>
+          <button data-category="visual" class="settings-nav-item">Visual</button>
+          <button data-category="preferences" class="settings-nav-item">Preferences</button>
+          <button data-category="stats" class="settings-nav-item">Stats</button>
+          ${user?.role === 'admin' ? '<button data-category="admin" class="settings-nav-item">Admin</button>' : ''}
+        </nav>
+        
+        <!-- Category Content (Right) -->
+        <div class="settings-drawer-main">
+          <div id="settingsCategoryContent">
+            <!-- Content loaded dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+`;
+
 // Component: List Setup Wizard Modal
 const listSetupWizardComponent = () => `
   <div id="listSetupWizard" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex items-center justify-center p-4">
@@ -879,7 +919,7 @@ const listSetupWizardComponent = () => `
 `;
 
 // Main Spotify template - Consolidated version
-const spotifyTemplate = (user) => `
+const spotifyTemplate = (user, csrfToken = '') => `
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1328,12 +1368,13 @@ const spotifyTemplate = (user) => `
   ${serviceSelectModalComponent()}
   ${confirmationModalComponent()}
   ${listSetupWizardComponent()}
+  ${settingsDrawerComponent(user)}
   
   <script>
     // Global state - must be set before bundle.js loads
     window.currentUser = ${JSON.stringify(user)};
     window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
-    
+    window.csrfToken = ${JSON.stringify(csrfToken)};
   </script>
   
   <script type="module" src="${asset('/js/bundle.js')}"></script>

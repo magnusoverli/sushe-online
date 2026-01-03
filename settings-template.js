@@ -1444,7 +1444,7 @@ const settingsTemplate = (req, options) => {
       font-weight: 500;
       transform: translateX(100%);
       transition: transform 0.3s ease;
-      z-index: 1000;
+      z-index: 10001;
     }
     
     .toast.show {
@@ -1821,10 +1821,6 @@ const settingsTemplate = (req, options) => {
         showToast('Error updating color', 'error');
         location.reload();
       }
-    }
-    
-    function resetAccentColor() {
-      updateAccentColor('#dc2626');
     }
 
     async function updateTimeFormat(format) {

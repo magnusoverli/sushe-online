@@ -931,6 +931,79 @@ module.exports = (app, deps) => {
     });
   });
 
+  // Admin stats endpoint
+  app.get('/api/admin/stats', ensureAuth, ensureAdmin, async (req, res) => {
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      // Parallel fetch of all independent data
+      const [allUsers, allLists, userListCountsResult, adminStatsResult] =
+        await Promise.all([
+          usersAsync.find({}),
+          listsAsync.find({}),
+          pool.query(
+            'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
+          ),
+          pool.query(
+            `
+            WITH album_genres AS (
+              SELECT DISTINCT li.album_id, li.genre_1, li.genre_2 
+              FROM list_items li
+            ),
+            unique_albums AS (
+              SELECT COUNT(DISTINCT album_id) as total 
+              FROM album_genres 
+              WHERE album_id IS NOT NULL AND album_id != ''
+            ),
+            active_users AS (
+              SELECT COUNT(DISTINCT user_id) as count FROM lists WHERE updated_at >= $1
+            )
+            SELECT 
+              (SELECT total FROM unique_albums) as total_albums,
+              (SELECT count FROM active_users) as active_users
+          `,
+            [sevenDaysAgo]
+          ),
+        ]);
+
+      // Build Map for O(1) list count lookup
+      const listCountMap = new Map(
+        userListCountsResult.rows.map((r) => [
+          r.user_id,
+          parseInt(r.list_count, 10),
+        ])
+      );
+
+      const usersWithCounts = allUsers.map((user) => ({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        listCount: listCountMap.get(user._id) || 0,
+        lastActivity: user.lastActivity,
+        createdAt: user.createdAt,
+      }));
+
+      // Extract stats from aggregate query
+      const aggregateStats = adminStatsResult.rows[0] || {};
+      const totalAlbums = parseInt(aggregateStats.total_albums, 10) || 0;
+      const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
+
+      res.json({
+        totalUsers: allUsers.length,
+        totalLists: allLists.length,
+        totalAlbums,
+        adminUsers: allUsers.filter((u) => u.role === 'admin').length,
+        activeUsers,
+        users: usersWithCounts,
+      });
+    } catch (error) {
+      logger.error('Error fetching admin stats', { error: error.message });
+      res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
   // ============ ADMIN EVENTS API ============
   // Core event system for admin actions (works with or without Telegram)
 
