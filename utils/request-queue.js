@@ -180,7 +180,10 @@ class MusicBrainzQueue {
           } catch (fetchError) {
             clearTimeout(timeoutId);
             // Handle timeout specifically
-            if (fetchError.name === 'AbortError' && abortController.signal.aborted) {
+            if (
+              fetchError.name === 'AbortError' &&
+              abortController.signal.aborted
+            ) {
               const timeoutError = new Error(
                 `Request timeout after ${this.timeout}ms: ${url}`
               );
@@ -196,7 +199,10 @@ class MusicBrainzQueue {
         }
 
         // Check if we should retry
-        if (retryCount < this.maxRetries && this._isRetryableError(lastError, lastResponse)) {
+        if (
+          retryCount < this.maxRetries &&
+          this._isRetryableError(lastError, lastResponse)
+        ) {
           retryCount++;
           // Exponential backoff: 1s, 2s delays
           const backoffDelay = Math.pow(2, retryCount - 1) * 1000;

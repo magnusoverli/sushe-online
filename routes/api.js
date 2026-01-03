@@ -1598,7 +1598,8 @@ module.exports = (app, deps) => {
           duration_ms: duration,
           endpoint: req.query.endpoint,
           url: constructedUrl,
-          retries: error.retries !== undefined ? error.retries : response?._retries,
+          retries:
+            error.retries !== undefined ? error.retries : response?._retries,
         };
 
         // Add Content-Type and body preview for JSON parsing errors
@@ -1617,13 +1618,16 @@ module.exports = (app, deps) => {
         logger.error('MusicBrainz proxy error:', errorLog);
 
         // Return appropriate status code
-        const statusCode = error.status && error.status >= 400 && error.status < 600
-          ? error.status
-          : 500;
+        const statusCode =
+          error.status && error.status >= 400 && error.status < 600
+            ? error.status
+            : 500;
 
         res.status(statusCode).json({
           error: 'Failed to fetch from MusicBrainz API',
-          ...(process.env.NODE_ENV === 'development' && { details: error.message }),
+          ...(process.env.NODE_ENV === 'development' && {
+            details: error.message,
+          }),
         });
       }
     }

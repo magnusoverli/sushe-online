@@ -617,7 +617,12 @@ describe('MusicBrainzQueue', () => {
     });
 
     it('should retry on various network error codes', async () => {
-      const retryableCodes = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED'];
+      const retryableCodes = [
+        'ECONNRESET',
+        'ETIMEDOUT',
+        'ENOTFOUND',
+        'ECONNREFUSED',
+      ];
       for (const code of retryableCodes) {
         let attemptCount = 0;
         const networkErrorFetch = mock.fn(() => {
@@ -639,7 +644,11 @@ describe('MusicBrainzQueue', () => {
         const response = await retryQueue.add('https://example.com', {});
 
         assert.strictEqual(response.ok, true, `Should retry on ${code}`);
-        assert.strictEqual(attemptCount, 2, `Should have retried once for ${code}`);
+        assert.strictEqual(
+          attemptCount,
+          2,
+          `Should have retried once for ${code}`
+        );
       }
     });
   });

@@ -934,7 +934,13 @@ export async function apiCall(url, options = {}) {
     }
     // Add CSRF token for POST/PUT/DELETE requests
     const method = options.method || 'GET';
-    if (window.csrfToken && (method === 'POST' || method === 'PUT' || method === 'DELETE' || method === 'PATCH')) {
+    if (
+      window.csrfToken &&
+      (method === 'POST' ||
+        method === 'PUT' ||
+        method === 'DELETE' ||
+        method === 'PATCH')
+    ) {
       headers['X-CSRF-Token'] = window.csrfToken;
     }
 
@@ -2932,12 +2938,12 @@ document.addEventListener('DOMContentLoaded', () => {
     button.addEventListener('mousedown', startLongPress);
     button.addEventListener('mouseup', cancelLongPress);
     button.addEventListener('mouseleave', cancelLongPress);
-    
+
     // Touch events
     button.addEventListener('touchstart', startLongPress, { passive: true });
     button.addEventListener('touchend', cancelLongPress);
     button.addEventListener('touchmove', cancelLongPress);
-    
+
     // Prevent click if long press occurred
     button.addEventListener('click', handleClick, true); // Use capture phase
   }
