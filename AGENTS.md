@@ -39,28 +39,52 @@ This includes:
 
 ### Container vs Local Execution
 
+**IMPORTANT: The container mounts the local directory as a volume.** When you run commands inside the container, they operate on your local files directly. There is no distinction between "container files" and "local files" - they are the same files.
+
 **Run INSIDE container** (use `docker compose -f docker-compose.local.yml exec app <command>`):
+
 - `npm test` - Full test suite with strict linting (~1138 tests, ~37 seconds)
 - `npm run test:coverage` - Test coverage
 - `npm run test:watch` - Watch mode tests
 - `npm run lint:strict` - Strict linting (prettier + eslint with no warnings)
+- `npm run format` - Format code with prettier (formats your local files)
 - `node --test test/filename.test.js` - Individual tests
 
 **Run OUTSIDE container** (use directly on host):
-- `npm run lint` - ESLint code quality checks (if npm available)
-- `npm run format` - Prettier formatting (if npm available)
+
 - `PLAYWRIGHT_SKIP_SERVER=1 npx playwright test` - End-to-end browser tests (headless, requires Docker containers running)
 
 **Prerequisites for E2E tests on host:**
+
 ```bash
 # First time only: Install Playwright browsers on your host machine
 npx playwright install --with-deps chromium
 ```
 
-**Why this separation?**
+**Why use the container?**
+
 - Core tests need the database and full application environment (container provides this)
-- Linting/formatting CAN run on host if npm available, but container is more reliable
-- E2E tests run on host but connect to the containerized app at http://localhost:3000 (avoids slow Playwright browser installation in Docker, saving ~5 minutes per build)
+- Consistent Node.js version and dependencies across all environments
+- npm may not be available on the host machine
+- E2E tests are the exception: they run on host but connect to the containerized app at http://localhost:3000 (avoids slow Playwright browser installation in Docker, saving ~5 minutes per build)
+
+### Formatting Before Commit
+
+**CRITICAL: Always run prettier before committing changes.**
+
+```bash
+# Format all modified files (run inside container)
+docker compose -f docker-compose.local.yml exec app npm run format
+```
+
+Since the container mounts your local directory, this command formats your local files directly. Always run this before committing to avoid CI failures from prettier violations.
+
+**Recommended workflow:**
+
+1. Make code changes
+2. Run `docker compose -f docker-compose.local.yml exec app npm run format`
+3. Run `docker compose -f docker-compose.local.yml exec app npm run lint:strict`
+4. Commit your changes
 
 ### Handling Test Failures
 
@@ -75,18 +99,21 @@ docker compose -f docker-compose.local.yml exec app npm run format:check
 ```
 
 **Why this matters:**
+
 - `npm test` runs `lint:strict` which treats warnings as errors (`--max-warnings 0`)
 - CI will fail on formatting issues (prettier) and linting warnings (eslint)
 - Infrastructure failures (permissions, Docker) can mask linting issues
 - Always verify linting passes independently before committing
 
 **Common scenarios:**
+
 - Coverage directory permission errors → Run `lint:strict` separately
 - Docker container issues → Run `lint:strict` separately
 - Test timeouts → Run `lint:strict` separately
 - Any `npm test` failure → Verify linting before committing
 
 **Best practice workflow:**
+
 1. Make code changes
 2. Run `npm test` (or individual test files)
 3. **If tests fail due to infrastructure**: Run `npm run lint:strict` separately
@@ -96,6 +123,7 @@ docker compose -f docker-compose.local.yml exec app npm run format:check
 ### Pre-commit Hooks (Recommended)
 
 **Install git hooks to catch issues before commit:**
+
 ```bash
 npm run changelog:setup
 # or manually:
@@ -103,15 +131,18 @@ bash scripts/setup-git-hooks.sh
 ```
 
 This installs:
+
 - **pre-commit**: Runs prettier + eslint checks on staged files (catches formatting issues before CI)
 - **post-commit**: Prompts to update changelog for user-facing changes
 
 **Benefits:**
+
 - Catches prettier/eslint errors immediately
 - Prevents CI failures from formatting issues
 - Faster feedback loop (seconds vs minutes waiting for CI)
 
 **Skip hooks if needed:**
+
 ```bash
 git commit --no-verify  # Skip for emergency commits only
 ```
@@ -162,12 +193,12 @@ logger.debug('Cache hit', { key: cacheKey });
 
 ### Log Levels Strategy
 
-| Level | When to Use | Examples |
-|-------|-------------|----------|
-| **ERROR** | Unexpected failures requiring attention | Database connection failures, unhandled exceptions, critical API errors |
-| **WARN** | Expected errors or concerning events | Failed login attempts, rate limit hits, deprecated feature usage |
-| **INFO** | Normal application flow (production default) | Server startup, user registration, major operations, admin actions |
-| **DEBUG** | Detailed diagnostic info (development only) | SQL queries, cache details, step-by-step flow |
+| Level     | When to Use                                  | Examples                                                                |
+| --------- | -------------------------------------------- | ----------------------------------------------------------------------- |
+| **ERROR** | Unexpected failures requiring attention      | Database connection failures, unhandled exceptions, critical API errors |
+| **WARN**  | Expected errors or concerning events         | Failed login attempts, rate limit hits, deprecated feature usage        |
+| **INFO**  | Normal application flow (production default) | Server startup, user registration, major operations, admin actions      |
+| **DEBUG** | Detailed diagnostic info (development only)  | SQL queries, cache details, step-by-step flow                           |
 
 ### Structured Logging Patterns
 
@@ -180,7 +211,11 @@ logger.error('Database error:', err);
 
 // ✅ GOOD: Structured objects
 logger.info('User logged in', { email, userId: user._id, requestId: req.id });
-logger.error('Database query failed', { error: err.message, stack: err.stack, operation: 'findOne' });
+logger.error('Database query failed', {
+  error: err.message,
+  stack: err.stack,
+  operation: 'findOne',
+});
 ```
 
 ### Standard Patterns by Event Type
@@ -195,46 +230,82 @@ logger.info('Login attempt', { email, ip: req.ip, requestId: req.id });
 logger.info('User logged in', { userId: user._id, email, requestId: req.id });
 
 // Failure (use warn, not error)
-logger.warn('Login failed', { email, reason: 'invalid_credentials', requestId: req.id });
+logger.warn('Login failed', {
+  email,
+  reason: 'invalid_credentials',
+  requestId: req.id,
+});
 ```
 
 #### Database Operations
 
 ```javascript
 // Slow queries (>100ms)
-logger.warn('Slow database query', { operation: 'findWithAlbumData', duration_ms: elapsed, listId });
+logger.warn('Slow database query', {
+  operation: 'findWithAlbumData',
+  duration_ms: elapsed,
+  listId,
+});
 
 // Database errors
-logger.error('Database operation failed', { operation: 'insert', table: 'users', error: err.message });
+logger.error('Database operation failed', {
+  operation: 'insert',
+  table: 'users',
+  error: err.message,
+});
 ```
 
 #### External API Calls
 
 ```javascript
 // API requests
-logger.debug('External API request', { service: 'spotify', endpoint: '/v1/me' });
+logger.debug('External API request', {
+  service: 'spotify',
+  endpoint: '/v1/me',
+});
 
 // API responses
-logger.info('External API response', { service: 'spotify', status: 200, duration_ms: elapsed });
+logger.info('External API response', {
+  service: 'spotify',
+  status: 200,
+  duration_ms: elapsed,
+});
 
 // API errors (warn for 4xx, error for 5xx)
-logger.warn('External API rate limited', { service: 'spotify', status: 429, retryAfter: headers['retry-after'] });
+logger.warn('External API rate limited', {
+  service: 'spotify',
+  status: 429,
+  retryAfter: headers['retry-after'],
+});
 ```
 
 #### Admin Actions (Audit Trail)
 
 ```javascript
-logger.info('Admin action', { action: 'approve_user', adminId: req.user._id, targetUserId: userId, ip: req.ip });
+logger.info('Admin action', {
+  action: 'approve_user',
+  adminId: req.user._id,
+  targetUserId: userId,
+  ip: req.ip,
+});
 ```
 
 #### Security Events
 
 ```javascript
 // Rate limiting
-logger.warn('Rate limit exceeded', { ip: req.ip, endpoint: req.path, userId: req.user?._id });
+logger.warn('Rate limit exceeded', {
+  ip: req.ip,
+  endpoint: req.path,
+  userId: req.user?._id,
+});
 
 // CSRF failures
-logger.warn('CSRF token validation failed', { requestId: req.id, ip: req.ip, endpoint: req.path });
+logger.warn('CSRF token validation failed', {
+  requestId: req.id,
+  ip: req.ip,
+  endpoint: req.path,
+});
 ```
 
 ### Child Loggers for Request Context
@@ -246,7 +317,7 @@ app.post('/api/lists/:id', ensureAuthAPI, async (req, res) => {
   const requestLogger = logger.child({
     requestId: req.id,
     userId: req.user._id,
-    listId: req.params.id
+    listId: req.params.id,
   });
 
   requestLogger.info('List update started');
