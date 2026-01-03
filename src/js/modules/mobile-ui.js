@@ -31,6 +31,7 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
  * @param {Function} deps.openRenameModal - Open rename modal
  * @param {Function} deps.downloadListAsJSON - Download list as JSON
  * @param {Function} deps.downloadListAsPDF - Download list as PDF
+ * @param {Function} deps.downloadListAsCSV - Download list as CSV
  * @param {Function} deps.updatePlaylist - Update playlist on music service
  * @param {Function} deps.toggleMainStatus - Toggle main status
  * @param {Function} deps.getDeviceIcon - Get icon for device type
@@ -63,6 +64,7 @@ export function createMobileUI(deps = {}) {
     openRenameModal,
     downloadListAsJSON,
     downloadListAsPDF,
+    downloadListAsCSV,
     updatePlaylist,
     toggleMainStatus,
     getDeviceIcon,
@@ -728,6 +730,11 @@ export function createMobileUI(deps = {}) {
                   <i class="fas fa-file-pdf mr-3 text-gray-400 text-sm"></i>
                   <span class="text-sm">Download as PDF</span>
                 </button>
+                <button data-action="download-csv"
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                  <i class="fas fa-file-csv mr-3 text-gray-400 text-sm"></i>
+                  <span class="text-sm">Download as CSV</span>
+                </button>
               </div>
             </div>
           </div>
@@ -783,6 +790,9 @@ export function createMobileUI(deps = {}) {
     );
     const downloadPdfBtn = actionSheet.querySelector(
       '[data-action="download-pdf"]'
+    );
+    const downloadCsvBtn = actionSheet.querySelector(
+      '[data-action="download-csv"]'
     );
     const editBtn = actionSheet.querySelector('[data-action="edit"]');
     const toggleMainBtn = actionSheet.querySelector(
@@ -843,6 +853,13 @@ export function createMobileUI(deps = {}) {
       e.stopPropagation();
       closeSheet();
       downloadListAsPDF(listName);
+    });
+
+    downloadCsvBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSheet();
+      downloadListAsCSV(listName);
     });
 
     editBtn.addEventListener('click', (e) => {

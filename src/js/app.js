@@ -129,6 +129,7 @@ function getContextMenusModule() {
       findAlbumByIdentity,
       downloadListAsJSON,
       downloadListAsPDF,
+      downloadListAsCSV,
       updatePlaylist,
       openRenameModal,
       updateListNav,
@@ -199,6 +200,7 @@ function getMobileUIModule() {
       openRenameModal,
       downloadListAsJSON,
       downloadListAsPDF,
+      downloadListAsCSV,
       updatePlaylist,
       toggleMainStatus,
       getDeviceIcon,
@@ -824,6 +826,14 @@ async function downloadListAsPDF(listName) {
     importExportModule = await import('./modules/import-export.js');
   }
   return importExportModule.downloadListAsPDF(listName);
+}
+
+async function downloadListAsCSV(listName) {
+  if (!importExportModule) {
+    showToast('Loading export module...', 'info', 1000);
+    importExportModule = await import('./modules/import-export.js');
+  }
+  return importExportModule.downloadListAsCSV(listName);
 }
 
 async function updatePlaylist(listName, listData = null) {

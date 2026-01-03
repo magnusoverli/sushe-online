@@ -98,8 +98,12 @@ export async function downloadListAsPDF(listName) {
 
     // Filter out comments and points as specified
     const albums = exportData.map((album) => {
-      const { comments: _comments, points: _points, ...albumData } = album;
-      // _comments and _points are intentionally unused (filtered out)
+      const {
+        comments: _unusedComments,
+        points: _unusedPoints,
+        ...albumData
+      } = album;
+      // _unusedComments and _unusedPoints are intentionally unused (filtered out)
       return albumData;
     });
 
@@ -240,6 +244,121 @@ export async function downloadListAsPDF(listName) {
   } catch (error) {
     console.error('PDF export error:', error);
     showToast('Error exporting PDF', 'error');
+  }
+}
+
+/**
+ * Escape a CSV field value
+ * @param {string} value - Value to escape
+ * @returns {string} Escaped CSV field
+ */
+function escapeCSVField(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const str = String(value);
+
+  // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  return str;
+}
+
+/**
+ * Download list as CSV file with all album data
+ * @param {string} listName - Name of the list to export
+ */
+export async function downloadListAsCSV(listName) {
+  try {
+    // Fetch list with embedded base64 images from server
+    showToast('Preparing CSV export...', 'info', 2000);
+
+    const response = await fetch(
+      `/api/lists/${encodeURIComponent(listName)}?export=true`,
+      { credentials: 'include' }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        showToast('List not found', 'error');
+        return;
+      }
+      throw new Error(`Failed to fetch list: ${response.status}`);
+    }
+
+    // Server returns data with rank, points, and cover_image already included
+    const exportData = await response.json();
+
+    // CSV column headers
+    const headers = [
+      'rank',
+      'artist',
+      'album',
+      'album_id',
+      'release_date',
+      'country',
+      'genre_1',
+      'genre_2',
+      'track_pick',
+      'comments',
+      'tracks',
+      'points',
+      'cover_image_format',
+    ];
+
+    // Build CSV rows
+    const rows = [headers.map(escapeCSVField).join(',')];
+
+    for (const album of exportData) {
+      // Serialize tracks array as JSON string if it exists
+      let tracksValue = '';
+      if (album.tracks) {
+        if (Array.isArray(album.tracks)) {
+          tracksValue = JSON.stringify(album.tracks);
+        } else {
+          tracksValue = String(album.tracks);
+        }
+      }
+
+      const row = [
+        album.rank || '',
+        album.artist || '',
+        album.album || '',
+        album.album_id || '',
+        album.release_date || '',
+        album.country || '',
+        album.genre_1 || '',
+        album.genre_2 || '',
+        album.track_pick || '',
+        album.comments || '',
+        tracksValue,
+        album.points || '',
+        album.cover_image_format || '',
+      ];
+
+      rows.push(row.map(escapeCSVField).join(','));
+    }
+
+    // Create CSV content
+    const csvContent = rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${listName}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('CSV exported successfully!', 'success');
+  } catch (error) {
+    console.error('CSV export error:', error);
+    showToast('Error exporting CSV', 'error');
   }
 }
 
