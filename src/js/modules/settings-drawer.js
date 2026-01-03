@@ -70,7 +70,7 @@ export function createSettingsDrawer(deps = {}) {
     const fab = document.getElementById('addAlbumFAB');
     const nowPlaying = document.getElementById('mobileNowPlaying');
     const currentList = window.currentList || null;
-    
+
     if (fab) {
       // Only show FAB if there's a current list (matches mobile menu pattern)
       if (currentList) {
@@ -4423,67 +4423,83 @@ export function createSettingsDrawer(deps = {}) {
       let touchStartY = null;
       let isSwiping = false;
 
-      panel.addEventListener('touchstart', (e) => {
-        // Only allow swipe from the left edge or if already dragging
-        const touch = e.touches[0];
-        touchStartX = touch.clientX;
-        touchStartY = touch.clientY;
-        isSwiping = false;
-      }, { passive: true });
+      panel.addEventListener(
+        'touchstart',
+        (e) => {
+          // Only allow swipe from the left edge or if already dragging
+          const touch = e.touches[0];
+          touchStartX = touch.clientX;
+          touchStartY = touch.clientY;
+          isSwiping = false;
+        },
+        { passive: true }
+      );
 
-      panel.addEventListener('touchmove', (e) => {
-        if (touchStartX === null) return;
+      panel.addEventListener(
+        'touchmove',
+        (e) => {
+          if (touchStartX === null) return;
 
-        const touch = e.touches[0];
-        const deltaX = touch.clientX - touchStartX;
-        const deltaY = touch.clientY - touchStartY;
+          const touch = e.touches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const deltaY = touch.clientY - touchStartY;
 
-        // Only start swiping if horizontal movement is greater than vertical
-        if (!isSwiping && Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 10) {
-          isSwiping = true;
-        }
-
-        // If swiping left (closing gesture), translate the panel
-        if (isSwiping && deltaX < 0) {
-          const translateX = Math.max(deltaX, -panel.offsetWidth);
-          panel.style.transform = `translateX(${translateX}px)`;
-          // Add opacity to backdrop based on swipe progress
-          const backdrop = drawer.querySelector('.settings-drawer-backdrop');
-          if (backdrop) {
-            const progress = Math.abs(translateX) / panel.offsetWidth;
-            backdrop.style.opacity = String(1 - progress * 0.5);
+          // Only start swiping if horizontal movement is greater than vertical
+          if (
+            !isSwiping &&
+            Math.abs(deltaX) > Math.abs(deltaY) &&
+            Math.abs(deltaX) > 10
+          ) {
+            isSwiping = true;
           }
-        }
-      }, { passive: true });
 
-      panel.addEventListener('touchend', (e) => {
-        if (!isSwiping || touchStartX === null) {
+          // If swiping left (closing gesture), translate the panel
+          if (isSwiping && deltaX < 0) {
+            const translateX = Math.max(deltaX, -panel.offsetWidth);
+            panel.style.transform = `translateX(${translateX}px)`;
+            // Add opacity to backdrop based on swipe progress
+            const backdrop = drawer.querySelector('.settings-drawer-backdrop');
+            if (backdrop) {
+              const progress = Math.abs(translateX) / panel.offsetWidth;
+              backdrop.style.opacity = String(1 - progress * 0.5);
+            }
+          }
+        },
+        { passive: true }
+      );
+
+      panel.addEventListener(
+        'touchend',
+        (e) => {
+          if (!isSwiping || touchStartX === null) {
+            touchStartX = null;
+            touchStartY = null;
+            isSwiping = false;
+            return;
+          }
+
+          const touch = e.changedTouches[0];
+          const deltaX = touch.clientX - touchStartX;
+          const swipeThreshold = panel.offsetWidth * 0.3; // 30% of panel width
+
+          // If swiped left enough, close the drawer
+          if (deltaX < -swipeThreshold) {
+            closeDrawer();
+          } else {
+            // Otherwise, snap back to open position
+            panel.style.transform = '';
+            const backdrop = drawer.querySelector('.settings-drawer-backdrop');
+            if (backdrop) {
+              backdrop.style.opacity = '';
+            }
+          }
+
           touchStartX = null;
           touchStartY = null;
           isSwiping = false;
-          return;
-        }
-
-        const touch = e.changedTouches[0];
-        const deltaX = touch.clientX - touchStartX;
-        const swipeThreshold = panel.offsetWidth * 0.3; // 30% of panel width
-
-        // If swiped left enough, close the drawer
-        if (deltaX < -swipeThreshold) {
-          closeDrawer();
-        } else {
-          // Otherwise, snap back to open position
-          panel.style.transform = '';
-          const backdrop = drawer.querySelector('.settings-drawer-backdrop');
-          if (backdrop) {
-            backdrop.style.opacity = '';
-          }
-        }
-
-        touchStartX = null;
-        touchStartY = null;
-        isSwiping = false;
-      }, { passive: true });
+        },
+        { passive: true }
+      );
 
       // Reset transform on transition end (when drawer closes normally)
       panel.addEventListener('transitionend', () => {
