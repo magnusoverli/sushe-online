@@ -762,10 +762,18 @@ export function createMobileUI(deps = {}) {
 
     // Attach event listeners
     const backdrop = actionSheet.querySelector('[data-backdrop]');
-    const downloadToggleBtn = actionSheet.querySelector('[data-action="download-toggle"]');
-    const downloadOptions = actionSheet.querySelector('[data-download-options]');
-    const downloadChevron = actionSheet.querySelector('[data-download-chevron]');
-    const downloadJsonBtn = actionSheet.querySelector('[data-action="download-json"]');
+    const downloadToggleBtn = actionSheet.querySelector(
+      '[data-action="download-toggle"]'
+    );
+    const downloadOptions = actionSheet.querySelector(
+      '[data-download-options]'
+    );
+    const downloadChevron = actionSheet.querySelector(
+      '[data-download-chevron]'
+    );
+    const downloadJsonBtn = actionSheet.querySelector(
+      '[data-action="download-json"]'
+    );
     const editBtn = actionSheet.querySelector('[data-action="edit"]');
     const toggleMainBtn = actionSheet.querySelector(
       '[data-action="toggle-main"]'
