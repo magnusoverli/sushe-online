@@ -2689,16 +2689,17 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   if (trackValue && tracks && Array.isArray(tracks)) {
     const trackMatch = tracks.find((t) => getTrackName(t) === trackValue);
     if (trackMatch) {
-      const match = getTrackName(trackMatch).match(/^(\d+)[.\s-]?\s*(.*)$/);
+      const trackName = getTrackName(trackMatch);
+      const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
       if (match) {
         const trackNum = match[1];
-        const trackName = match[2] || '';
-        trackPickDisplay = trackName
-          ? `${trackNum}. ${trackName}`
+        const displayName = match[2] || '';
+        trackPickDisplay = displayName
+          ? `${trackNum}. ${displayName}`
           : `Track ${trackNum}`;
         trackPickClass = 'text-gray-300';
       } else {
-        trackPickDisplay = trackMatch;
+        trackPickDisplay = trackName;
         trackPickClass = 'text-gray-300';
       }
     } else if (trackValue.match(/^\d+$/)) {
