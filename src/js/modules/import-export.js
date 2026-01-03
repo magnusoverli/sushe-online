@@ -98,7 +98,8 @@ export async function downloadListAsPDF(listName) {
 
     // Filter out comments and points as specified
     const albums = exportData.map((album) => {
-      const { comments, points, ...albumData } = album;
+      const { comments: _comments, points: _points, ...albumData } = album;
+      // _comments and _points are intentionally unused (filtered out)
       return albumData;
     });
 
@@ -165,7 +166,14 @@ export async function downloadListAsPDF(listName) {
           const dataUrl = `data:image/${imageFormat};base64,${album.cover_image}`;
 
           // Add image with error handling
-          doc.addImage(dataUrl, imageFormat, margin, yPos, coverSize, coverSize);
+          doc.addImage(
+            dataUrl,
+            imageFormat,
+            margin,
+            yPos,
+            coverSize,
+            coverSize
+          );
         } catch (imgError) {
           console.warn('Failed to add cover image:', imgError);
           // Draw placeholder rectangle if image fails
