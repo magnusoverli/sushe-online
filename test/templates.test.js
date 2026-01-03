@@ -709,12 +709,13 @@ describe('templates utilities', () => {
       assert.ok(result.includes('href="/"'));
     });
 
-    it('should include settings link', () => {
+    it('should include settings button', () => {
       const user = { username: 'test' };
       const result = templates.headerComponent(user);
 
-      assert.ok(result.includes('href="/settings"'));
-      assert.ok(result.includes('fa-cog'));
+      // Settings is now a button that opens a drawer, not a direct link
+      assert.ok(result.includes('openSettingsDrawer'));
+      assert.ok(result.includes('fa-sliders-h'));
     });
 
     it('should include logout link in header', () => {

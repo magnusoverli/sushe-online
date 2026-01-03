@@ -223,11 +223,14 @@ describe('POST /settings/change-password', () => {
   it('should change password with valid inputs', async () => {
     const { app, mockUsers, mockBcrypt } = createTestApp();
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'oldpassword123',
-      newPassword: 'newpassword123',
-      confirmPassword: 'newpassword123',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'oldpassword123',
+        newPassword: 'newpassword123',
+        confirmPassword: 'newpassword123',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -239,11 +242,14 @@ describe('POST /settings/change-password', () => {
   it('should reject missing current password', async () => {
     const { app } = createTestApp();
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: '',
-      newPassword: 'newpassword123',
-      confirmPassword: 'newpassword123',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: '',
+        newPassword: 'newpassword123',
+        confirmPassword: 'newpassword123',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -252,11 +258,14 @@ describe('POST /settings/change-password', () => {
   it('should reject missing new password', async () => {
     const { app } = createTestApp();
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'oldpassword123',
-      newPassword: '',
-      confirmPassword: 'newpassword123',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'oldpassword123',
+        newPassword: '',
+        confirmPassword: 'newpassword123',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -265,11 +274,14 @@ describe('POST /settings/change-password', () => {
   it('should reject missing confirm password', async () => {
     const { app } = createTestApp();
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'oldpassword123',
-      newPassword: 'newpassword123',
-      confirmPassword: '',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'oldpassword123',
+        newPassword: 'newpassword123',
+        confirmPassword: '',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -278,11 +290,14 @@ describe('POST /settings/change-password', () => {
   it('should reject mismatched passwords', async () => {
     const { app } = createTestApp();
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'oldpassword123',
-      newPassword: 'newpassword123',
-      confirmPassword: 'differentpassword',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'oldpassword123',
+        newPassword: 'newpassword123',
+        confirmPassword: 'differentpassword',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -291,11 +306,14 @@ describe('POST /settings/change-password', () => {
   it('should reject short new password (<8 chars)', async () => {
     const { app } = createTestApp();
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'oldpassword123',
-      newPassword: 'short',
-      confirmPassword: 'short',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'oldpassword123',
+        newPassword: 'short',
+        confirmPassword: 'short',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -306,11 +324,14 @@ describe('POST /settings/change-password', () => {
       bcryptCompare: mock.fn(() => Promise.resolve(false)),
     });
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'wrongpassword',
-      newPassword: 'newpassword123',
-      confirmPassword: 'newpassword123',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'wrongpassword',
+        newPassword: 'newpassword123',
+        confirmPassword: 'newpassword123',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -354,11 +375,14 @@ describe('POST /settings/change-password', () => {
       }),
     });
 
-    const response = await request(app).post('/settings/change-password').send({
-      currentPassword: 'oldpassword123',
-      newPassword: 'newpassword123',
-      confirmPassword: 'newpassword123',
-    });
+    const response = await request(app)
+      .post('/settings/change-password')
+      .set('Accept', 'text/html')
+      .send({
+        currentPassword: 'oldpassword123',
+        newPassword: 'newpassword123',
+        confirmPassword: 'newpassword123',
+      });
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/settings');
@@ -376,6 +400,7 @@ describe('POST /settings/request-admin', () => {
 
     const response = await request(app)
       .post('/settings/request-admin')
+      .set('Accept', 'text/html')
       .send({ code: 'VALID123' });
 
     assert.strictEqual(response.status, 302);
@@ -399,6 +424,7 @@ describe('POST /settings/request-admin', () => {
 
     const response = await request(app)
       .post('/settings/request-admin')
+      .set('Accept', 'text/html')
       .send({ code: 'valid123' });
 
     assert.strictEqual(response.status, 302);
@@ -413,6 +439,7 @@ describe('POST /settings/request-admin', () => {
 
     const response = await request(app)
       .post('/settings/request-admin')
+      .set('Accept', 'text/html')
       .send({ code: 'WRONGCODE' });
 
     assert.strictEqual(response.status, 302);
@@ -431,6 +458,7 @@ describe('POST /settings/request-admin', () => {
 
     const response = await request(app)
       .post('/settings/request-admin')
+      .set('Accept', 'text/html')
       .send({ code: 'VALID123' });
 
     assert.strictEqual(response.status, 302);
@@ -443,6 +471,7 @@ describe('POST /settings/request-admin', () => {
 
     const response = await request(app)
       .post('/settings/request-admin')
+      .set('Accept', 'text/html')
       .send({ code: '' });
 
     assert.strictEqual(response.status, 302);
@@ -503,6 +532,7 @@ describe('POST /settings/request-admin', () => {
 
     const response = await request(app)
       .post('/settings/request-admin')
+      .set('Accept', 'text/html')
       .send({ code: 'VALID123' });
 
     assert.strictEqual(response.status, 302);

@@ -102,6 +102,110 @@ class MusicBrainzQueue {
   }
 
   /**
+   * Execute a single fetch with timeout handling
+   * @param {string} url - URL to fetch
+   * @param {Object} options - Fetch options
+   * @returns {Promise<{response?: Response, error?: Error}>}
+   * @private
+   */
+  async _executeFetch(url, options) {
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      abortController.abort();
+    }, this.timeout);
+
+    const fetchOptions = {
+      ...options,
+      signal: abortController.signal,
+    };
+
+    try {
+      const response = await this.fetch(url, fetchOptions);
+      clearTimeout(timeoutId);
+      return { response };
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      // Handle timeout specifically
+      if (fetchError.name === 'AbortError' && abortController.signal.aborted) {
+        const timeoutError = new Error(
+          `Request timeout after ${this.timeout}ms: ${url}`
+        );
+        timeoutError.name = 'TimeoutError';
+        timeoutError.code = 'ETIMEDOUT';
+        return { error: timeoutError };
+      }
+      return { error: fetchError };
+    }
+  }
+
+  /**
+   * Process a single request with retry logic
+   * @param {string} url - URL to fetch
+   * @param {Object} options - Fetch options
+   * @returns {Promise<Response>}
+   * @private
+   */
+  async _processRequest(url, options) {
+    let retryCount = 0;
+    let lastError = null;
+    let lastResponse = null;
+
+    while (retryCount <= this.maxRetries) {
+      const { response, error } = await this._executeFetch(url, options);
+
+      if (response) {
+        if (response.ok) {
+          // Success - attach retry count for logging
+          if (retryCount > 0) {
+            response._retries = retryCount;
+          }
+          return response;
+        }
+
+        // Non-OK response
+        lastResponse = response;
+        const httpError = new Error(`HTTP ${response.status}`);
+        if (
+          retryCount < this.maxRetries &&
+          this._isRetryableError(httpError, response)
+        ) {
+          retryCount++;
+          const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
+          await wait(backoffDelay);
+          continue;
+        }
+
+        // Not retryable or max retries reached
+        const finalError = new Error(
+          `MusicBrainz API responded with status ${response.status}`
+        );
+        finalError.status = response.status;
+        finalError.retries = retryCount;
+        throw finalError;
+      }
+
+      // Fetch error occurred
+      lastError = error;
+      if (
+        retryCount < this.maxRetries &&
+        this._isRetryableError(lastError, lastResponse)
+      ) {
+        retryCount++;
+        const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
+        await wait(backoffDelay);
+        continue;
+      }
+
+      // Not retryable or max retries reached
+      lastError.retries = retryCount;
+      throw lastError;
+    }
+
+    // Should not reach here, but handle it
+    throw lastError || new Error('Unknown error occurred');
+  }
+
+  /**
    * Process queued requests respecting rate limits
    * @returns {Promise<void>}
    */
@@ -110,118 +214,29 @@ class MusicBrainzQueue {
 
     this.processing = true;
 
-    while (this.queue.length > 0) {
-      const now = Date.now();
-      const timeSinceLastRequest = now - this.lastRequestTime;
+    try {
+      while (this.queue.length > 0) {
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
 
-      // Wait if we need to respect rate limit
-      if (timeSinceLastRequest < this.minInterval) {
-        await wait(this.minInterval - timeSinceLastRequest);
-      }
+        // Wait if we need to respect rate limit
+        if (timeSinceLastRequest < this.minInterval) {
+          await wait(this.minInterval - timeSinceLastRequest);
+        }
 
-      const { url, options, resolve, reject } = this.queue.shift();
-      this.lastRequestTime = Date.now();
+        const { url, options, resolve, reject } = this.queue.shift();
+        this.lastRequestTime = Date.now();
 
-      let retryCount = 0;
-      let lastError = null;
-      let lastResponse = null;
-
-      while (retryCount <= this.maxRetries) {
         try {
-          // Create AbortController for timeout handling
-          const abortController = new AbortController();
-          const timeoutId = setTimeout(() => {
-            abortController.abort();
-          }, this.timeout);
-
-          // Merge abort signal with existing options
-          const fetchOptions = {
-            ...options,
-            signal: abortController.signal,
-          };
-
-          try {
-            const response = await this.fetch(url, fetchOptions);
-            clearTimeout(timeoutId);
-
-            // Check if response is OK
-            if (!response.ok) {
-              lastResponse = response;
-              // Check if we should retry
-              if (
-                retryCount < this.maxRetries &&
-                this._isRetryableError(
-                  new Error(`HTTP ${response.status}`),
-                  response
-                )
-              ) {
-                retryCount++;
-                // Exponential backoff: 1s, 2s delays
-                const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
-                await wait(backoffDelay);
-                continue;
-              }
-              // Not retryable or max retries reached
-              const error = new Error(
-                `MusicBrainz API responded with status ${response.status}`
-              );
-              error.status = response.status;
-              error.retries = retryCount;
-              reject(error);
-              return;
-            }
-
-            // Success - attach retry count for logging
-            if (retryCount > 0) {
-              response._retries = retryCount;
-            }
-            resolve(response);
-            return;
-          } catch (fetchError) {
-            clearTimeout(timeoutId);
-            // Handle timeout specifically
-            if (
-              fetchError.name === 'AbortError' &&
-              abortController.signal.aborted
-            ) {
-              const timeoutError = new Error(
-                `Request timeout after ${this.timeout}ms: ${url}`
-              );
-              timeoutError.name = 'TimeoutError';
-              timeoutError.code = 'ETIMEDOUT';
-              lastError = timeoutError;
-            } else {
-              lastError = fetchError;
-            }
-          }
+          const response = await this._processRequest(url, options);
+          resolve(response);
         } catch (error) {
-          lastError = error;
+          reject(error);
         }
-
-        // Check if we should retry
-        if (
-          retryCount < this.maxRetries &&
-          this._isRetryableError(lastError, lastResponse)
-        ) {
-          retryCount++;
-          // Exponential backoff: 1s, 2s delays
-          const backoffDelay = Math.pow(2, retryCount - 1) * 1000;
-          await wait(backoffDelay);
-          continue;
-        }
-
-        // Not retryable or max retries reached
-        if (lastError) {
-          lastError.retries = retryCount;
-          reject(lastError);
-        } else {
-          reject(new Error('Unknown error occurred'));
-        }
-        return;
       }
+    } finally {
+      this.processing = false;
     }
-
-    this.processing = false;
   }
 
   /**

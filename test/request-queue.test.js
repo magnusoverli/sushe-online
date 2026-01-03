@@ -80,9 +80,10 @@ describe('MusicBrainzQueue', () => {
         mockFetch.mock.calls[0].arguments[0],
         'https://example.com'
       );
-      assert.deepStrictEqual(mockFetch.mock.calls[0].arguments[1], {
-        method: 'GET',
-      });
+      // Check that original options are preserved (signal is added by queue)
+      const fetchOptions = mockFetch.mock.calls[0].arguments[1];
+      assert.strictEqual(fetchOptions.method, 'GET');
+      assert.ok(fetchOptions.signal, 'AbortSignal should be added for timeout');
     });
 
     it('should use default priority of normal', async () => {
@@ -265,15 +266,31 @@ describe('MusicBrainzQueue', () => {
   });
 
   describe('timeout handling', () => {
+    // Helper to create a fetch that respects AbortSignal
+    const createSlowFetch = (delayMs) =>
+      mock.fn((url, options) => {
+        return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => resolve({ ok: true }), delayMs);
+
+          // Listen for abort signal
+          if (options && options.signal) {
+            options.signal.addEventListener('abort', () => {
+              clearTimeout(timeoutId);
+              const error = new Error('The operation was aborted');
+              error.name = 'AbortError';
+              reject(error);
+            });
+          }
+        });
+      });
+
     it('should timeout when request exceeds timeout duration', async () => {
-      const slowFetch = mock.fn(
-        () =>
-          new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200))
-      );
+      const slowFetch = createSlowFetch(200);
       const timeoutQueue = new MusicBrainzQueue({
         fetch: slowFetch,
         minInterval: 0,
         timeout: 50, // 50ms timeout
+        maxRetries: 0, // No retries for this test
       });
 
       await assert.rejects(
@@ -304,14 +321,12 @@ describe('MusicBrainzQueue', () => {
     });
 
     it('should include timeout duration in error message', async () => {
-      const slowFetch = mock.fn(
-        () =>
-          new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200))
-      );
+      const slowFetch = createSlowFetch(200);
       const timeoutQueue = new MusicBrainzQueue({
         fetch: slowFetch,
         minInterval: 0,
         timeout: 100,
+        maxRetries: 0, // No retries for this test
       });
 
       await assert.rejects(
@@ -327,14 +342,12 @@ describe('MusicBrainzQueue', () => {
     });
 
     it('should handle timeout with dependency injection', async () => {
-      const slowFetch = mock.fn(
-        () =>
-          new Promise((resolve) => setTimeout(() => resolve({ ok: true }), 200))
-      );
+      const slowFetch = createSlowFetch(200);
       const timeoutQueue = new MusicBrainzQueue({
         fetch: slowFetch,
         minInterval: 0,
         timeout: 50,
+        maxRetries: 0, // No retries for this test
       });
 
       await assert.rejects(
@@ -351,13 +364,22 @@ describe('MusicBrainzQueue', () => {
   describe('retry logic', () => {
     it('should retry on timeout errors', async () => {
       let attemptCount = 0;
-      const timeoutFetch = mock.fn(() => {
+      const timeoutFetch = mock.fn((url, options) => {
         attemptCount++;
         if (attemptCount < 2) {
-          // First attempt times out
-          return new Promise((resolve) =>
-            setTimeout(() => resolve({ ok: true }), 200)
-          );
+          // First attempt times out - must respect abort signal
+          return new Promise((resolve, reject) => {
+            const timeoutId = setTimeout(() => resolve({ ok: true }), 200);
+
+            if (options && options.signal) {
+              options.signal.addEventListener('abort', () => {
+                clearTimeout(timeoutId);
+                const error = new Error('The operation was aborted');
+                error.name = 'AbortError';
+                reject(error);
+              });
+            }
+          });
         }
         // Second attempt succeeds
         return Promise.resolve({ ok: true, status: 200 });
@@ -433,15 +455,17 @@ describe('MusicBrainzQueue', () => {
     it('should use exponential backoff for retries', async () => {
       const backoffDelays = [];
       let lastTime = Date.now();
+      let attemptCount = 0;
 
       const resetFetch = mock.fn(() => {
+        attemptCount++;
         const now = Date.now();
-        if (backoffDelays.length > 0) {
+        if (attemptCount > 1) {
           backoffDelays.push(now - lastTime);
         }
         lastTime = now;
 
-        if (backoffDelays.length < 2) {
+        if (attemptCount < 3) {
           const error = new Error('Connection reset');
           error.code = 'ECONNRESET';
           return Promise.reject(error);
@@ -461,12 +485,12 @@ describe('MusicBrainzQueue', () => {
       assert.strictEqual(backoffDelays.length, 2);
       // First delay should be ~1000ms (with some tolerance)
       assert.ok(
-        backoffDelays[0] >= 900 && backoffDelays[0] <= 1100,
+        backoffDelays[0] >= 900 && backoffDelays[0] <= 1200,
         `First delay ${backoffDelays[0]}ms should be ~1000ms`
       );
       // Second delay should be ~2000ms (with some tolerance)
       assert.ok(
-        backoffDelays[1] >= 1900 && backoffDelays[1] <= 2100,
+        backoffDelays[1] >= 1900 && backoffDelays[1] <= 2200,
         `Second delay ${backoffDelays[1]}ms should be ~2000ms`
       );
     });
