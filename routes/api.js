@@ -2914,7 +2914,10 @@ module.exports = (app, deps) => {
             const lookupData = await lookup.json();
             const tracks = (lookupData.results || [])
               .filter((r) => r.wrapperType === 'track')
-              .map((r) => r.trackName);
+              .map((r) => ({
+                name: r.trackName,
+                length: r.trackTimeMillis || null,
+              }));
             return tracks.length
               ? { tracks, releaseId: `itunes:${best.collectionId}` }
               : null;
@@ -2941,7 +2944,10 @@ module.exports = (app, deps) => {
             );
             if (!albumResp.ok) return null;
             const albumData = await albumResp.json();
-            const tracks = (albumData.tracks?.data || []).map((t) => t.title);
+            const tracks = (albumData.tracks?.data || []).map((t) => ({
+              name: t.title,
+              length: t.duration ? t.duration * 1000 : null,
+            }));
             return tracks.length
               ? { tracks, releaseId: `deezer:${albumId}` }
               : null;
@@ -3116,7 +3122,10 @@ module.exports = (app, deps) => {
           if (Array.isArray(medium.tracks)) {
             medium.tracks.forEach((t) => {
               const title = t.title || (t.recording && t.recording.title) || '';
-              tracks.push(title);
+              // Extract length: prefer track-specific length, fallback to recording length (median)
+              const length =
+                t.length || (t.recording && t.recording.length) || null;
+              tracks.push({ name: title, length });
             });
           }
         }

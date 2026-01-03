@@ -59,6 +59,9 @@ export function createMobileUI(deps = {}) {
     displayAlbums,
     updateListNav,
     fetchTracksForAlbum,
+    getTrackName,
+    getTrackLength,
+    formatTrackTime,
     playAlbum,
     playAlbumOnDeviceMobile,
     openRenameModal,
@@ -1167,13 +1170,15 @@ export function createMobileUI(deps = {}) {
                 ? `
               <ul class="space-y-2">
                 ${album.tracks
-                  .map(
-                    (t) => `
+                  .map((t) => {
+                    const trackName = getTrackName(t);
+                    const trackLength = formatTrackTime(getTrackLength(t));
+                    return `
                   <li class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${t}" ${t === (album.track_pick || '') ? 'checked' : ''}>
-                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${t.replace(/"/g, '&quot;')}">${t}</span>
-                  </li>`
-                  )
+                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${trackName}" ${trackName === (album.track_pick || '') ? 'checked' : ''}>
+                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
+                  </li>`;
+                  })
                   .join('')}
               </ul>
             `
@@ -1352,13 +1357,15 @@ export function createMobileUI(deps = {}) {
             trackPickContainer.innerHTML =
               tracks.length > 0
                 ? `<ul class="space-y-2">${tracks
-                    .map(
-                      (t) => `
+                    .map((t) => {
+                      const trackName = getTrackName(t);
+                      const trackLength = formatTrackTime(getTrackLength(t));
+                      return `
                   <li class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${t}">
-                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${t.replace(/"/g, '&quot;')}">${t}</span>
-                  </li>`
-                    )
+                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${trackName}">
+                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
+                  </li>`;
+                    })
                     .join('')}</ul>`
                 : `<input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"

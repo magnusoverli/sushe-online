@@ -236,6 +236,7 @@ export function createAlbumDisplay(deps = {}) {
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
     setContextAlbum,
+    getTrackName,
   } = deps;
 
   /**
@@ -289,9 +290,11 @@ export function createAlbumDisplay(deps = {}) {
     let trackPickClass = 'text-gray-800 italic';
 
     if (trackPick && album.tracks && Array.isArray(album.tracks)) {
-      const trackMatch = album.tracks.find((t) => t === trackPick);
+      const trackMatch = album.tracks.find(
+        (t) => getTrackName(t) === trackPick
+      );
       if (trackMatch) {
-        const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
+        const match = getTrackName(trackMatch).match(/^(\d+)[.\s-]?\s*(.*)$/);
         if (match) {
           const trackNum = match[1];
           const trackName = match[2] || '';

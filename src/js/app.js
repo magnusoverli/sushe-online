@@ -76,6 +76,7 @@ function getAlbumDisplayModule() {
       showMobileEditForm,
       showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
       playTrackSafe: (albumId) => window.playTrackSafe(albumId),
+      getTrackName,
       reapplyNowPlayingBorder,
       initializeUnifiedSorting,
       setContextAlbum: (index, albumId) => {
@@ -192,6 +193,9 @@ function getMobileUIModule() {
       showToast,
       showConfirmation,
       apiCall,
+      getTrackName,
+      getTrackLength,
+      formatTrackTime,
       displayAlbums,
       updateListNav,
       fetchTracksForAlbum,
@@ -1188,6 +1192,41 @@ async function saveList(name, data, year = undefined) {
 // Expose saveList for other modules
 window.saveList = saveList;
 
+/**
+ * Get track name from track (string or object format)
+ * @param {string|object} track - Track as string or object with name property
+ * @returns {string} Track name
+ */
+function getTrackName(track) {
+  if (!track) return '';
+  if (typeof track === 'string') return track;
+  if (typeof track === 'object' && track.name) return track.name;
+  return String(track); // Fallback for unexpected types
+}
+
+/**
+ * Get track length in milliseconds from track object
+ * @param {string|object} track - Track as string or object with length property
+ * @returns {number|null} Track length in milliseconds or null
+ */
+function getTrackLength(track) {
+  if (!track || typeof track !== 'object') return null;
+  return track.length || null;
+}
+
+/**
+ * Format milliseconds to MM:SS format
+ * @param {number|null|undefined} ms - Milliseconds
+ * @returns {string} Formatted time string (e.g., "3:45") or empty string
+ */
+function formatTrackTime(ms) {
+  if (!ms || ms < 0) return '';
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
 async function fetchTracksForAlbum(album, signal = null) {
   const params = new URLSearchParams({
     id: album.album_id || '',
@@ -1214,6 +1253,9 @@ async function fetchTracksForAlbum(album, signal = null) {
   return data.tracks;
 }
 window.fetchTracksForAlbum = fetchTracksForAlbum;
+window.getTrackName = getTrackName;
+window.getTrackLength = getTrackLength;
+window.formatTrackTime = formatTrackTime;
 
 // Performance: Concurrency limiter for parallel requests
 async function pLimit(concurrency, tasks) {
@@ -1243,9 +1285,13 @@ async function autoFetchTracksForList(name) {
   const list = getListData(name);
   if (!list || !Array.isArray(list)) return;
 
-  const toFetch = list.filter(
-    (album) => !Array.isArray(album.tracks) || album.tracks.length === 0
-  );
+  const toFetch = list.filter((album) => {
+    // Fetch if missing/empty
+    if (!Array.isArray(album.tracks) || album.tracks.length === 0) return true;
+    // Also fetch if tracks exist but are in old string format (need upgrade)
+    // Safety check: ensure array has elements before checking type
+    return album.tracks.length > 0 && typeof album.tracks[0] === 'string';
+  });
   if (toFetch.length === 0) return;
 
   // Fetch up to 5 tracks concurrently instead of sequentially
@@ -2641,9 +2687,9 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   let trackPickClass = 'text-gray-800 italic';
 
   if (trackValue && tracks && Array.isArray(tracks)) {
-    const trackMatch = tracks.find((t) => t === trackValue);
+    const trackMatch = tracks.find((t) => getTrackName(t) === trackValue);
     if (trackMatch) {
-      const match = trackMatch.match(/^(\d+)[.\s-]?\s*(.*)$/);
+      const match = getTrackName(trackMatch).match(/^(\d+)[.\s-]?\s*(.*)$/);
       if (match) {
         const trackNum = match[1];
         const trackName = match[2] || '';
@@ -2713,8 +2759,10 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
   } else {
     // Sort tracks by track number
     const sortedTracks = [...album.tracks].sort((a, b) => {
-      const numA = parseInt(a.match(/^(\d+)[.\s-]/) ? a.match(/^(\d+)/)[1] : 0);
-      const numB = parseInt(b.match(/^(\d+)[.\s-]/) ? b.match(/^(\d+)/)[1] : 0);
+      const nameA = getTrackName(a);
+      const nameB = getTrackName(b);
+      const numA = parseInt(nameA.match(/^(\d+)/)?.[1] || 0);
+      const numB = parseInt(nameB.match(/^(\d+)/)?.[1] || 0);
       return numA && numB ? numA - numB : 0;
     });
 
@@ -2732,20 +2780,22 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     `;
 
     sortedTracks.forEach((track, idx) => {
+      const trackName = getTrackName(track);
       const isSelected =
         currentAlbum &&
-        (currentAlbum.track_pick === track ||
+        (currentAlbum.track_pick === trackName ||
           currentAlbum.track_pick === (idx + 1).toString());
-      const match = track.match(/^(\d+)[.\s-]?\s*(.*)$/);
+      const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
       const trackNum = match ? match[1] : idx + 1;
-      const trackName = match ? match[2] : track;
+      const displayName = match ? match[2] : trackName;
+      const trackLength = formatTrackTime(getTrackLength(track));
 
       menuHTML += `
         <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm ${isSelected ? 'bg-gray-700/50' : ''}" 
-             data-track-value="${track}">
+             data-track-value="${trackName}">
           <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
             ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
-            <span class="font-medium">${trackNum}.</span> ${trackName}
+            <span class="font-medium">${trackNum}.</span> ${displayName}${trackLength ? ` <span class="text-gray-500 text-xs ml-2">${trackLength}</span>` : ''}
           </span>
         </div>
       `;
