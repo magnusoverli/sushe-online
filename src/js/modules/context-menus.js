@@ -22,6 +22,7 @@
  * @param {Function} deps.apiCall - Make API call
  * @param {Function} deps.findAlbumByIdentity - Find album by identity string
  * @param {Function} deps.downloadListAsJSON - Download list as JSON
+ * @param {Function} deps.downloadListAsPDF - Download list as PDF
  * @param {Function} deps.updatePlaylist - Update playlist on music service
  * @param {Function} deps.openRenameModal - Open rename modal
  * @param {Function} deps.updateListNav - Update list navigation
@@ -49,6 +50,7 @@ export function createContextMenus(deps = {}) {
     apiCall,
     findAlbumByIdentity,
     downloadListAsJSON,
+    downloadListAsPDF,
     updatePlaylist,
     openRenameModal,
     updateListNav,
@@ -302,6 +304,9 @@ export function createContextMenus(deps = {}) {
       <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-download-action="json">
         <i class="fas fa-file-code mr-2 w-4 text-center"></i>Download as JSON
       </button>
+      <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-download-action="pdf">
+        <i class="fas fa-file-pdf mr-2 w-4 text-center"></i>Download as PDF
+      </button>
     `;
 
     // Add click handler for JSON download
@@ -318,6 +323,24 @@ export function createContextMenus(deps = {}) {
 
         // Download the list
         downloadListAsJSON(currentContextList);
+        setContextState({ list: null });
+      });
+    }
+
+    // Add click handler for PDF download
+    const pdfOption = submenu.querySelector('[data-download-action="pdf"]');
+    if (pdfOption) {
+      pdfOption.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        // Hide both menus and remove highlight
+        document.getElementById('contextMenu')?.classList.add('hidden');
+        submenu.classList.add('hidden');
+        downloadOption.classList.remove('bg-gray-700', 'text-white');
+
+        // Download the list
+        downloadListAsPDF(currentContextList);
         setContextState({ list: null });
       });
     }

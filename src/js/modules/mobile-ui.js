@@ -30,6 +30,7 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
  * @param {Function} deps.playAlbumOnDeviceMobile - Play album on specific Spotify device
  * @param {Function} deps.openRenameModal - Open rename modal
  * @param {Function} deps.downloadListAsJSON - Download list as JSON
+ * @param {Function} deps.downloadListAsPDF - Download list as PDF
  * @param {Function} deps.updatePlaylist - Update playlist on music service
  * @param {Function} deps.toggleMainStatus - Toggle main status
  * @param {Function} deps.getDeviceIcon - Get icon for device type
@@ -61,6 +62,7 @@ export function createMobileUI(deps = {}) {
     playAlbumOnDeviceMobile,
     openRenameModal,
     downloadListAsJSON,
+    downloadListAsPDF,
     updatePlaylist,
     toggleMainStatus,
     getDeviceIcon,
@@ -721,6 +723,11 @@ export function createMobileUI(deps = {}) {
                   <i class="fas fa-file-code mr-3 text-gray-400 text-sm"></i>
                   <span class="text-sm">Download as JSON</span>
                 </button>
+                <button data-action="download-pdf"
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                  <i class="fas fa-file-pdf mr-3 text-gray-400 text-sm"></i>
+                  <span class="text-sm">Download as PDF</span>
+                </button>
               </div>
             </div>
           </div>
@@ -774,6 +781,9 @@ export function createMobileUI(deps = {}) {
     const downloadJsonBtn = actionSheet.querySelector(
       '[data-action="download-json"]'
     );
+    const downloadPdfBtn = actionSheet.querySelector(
+      '[data-action="download-pdf"]'
+    );
     const editBtn = actionSheet.querySelector('[data-action="edit"]');
     const toggleMainBtn = actionSheet.querySelector(
       '[data-action="toggle-main"]'
@@ -826,6 +836,13 @@ export function createMobileUI(deps = {}) {
       e.stopPropagation();
       closeSheet();
       downloadListAsJSON(listName);
+    });
+
+    downloadPdfBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeSheet();
+      downloadListAsPDF(listName);
     });
 
     editBtn.addEventListener('click', (e) => {
