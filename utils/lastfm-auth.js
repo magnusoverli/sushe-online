@@ -77,10 +77,14 @@ function createCoreUserDataMethods(fetchFn, log, env) {
       method: 'album.getInfo',
       artist,
       album,
-      username,
       api_key: apiKey || env.LASTFM_API_KEY,
       format: 'json',
     });
+
+    // Only include username if provided (for user-specific playcount data)
+    if (username) {
+      params.set('username', username);
+    }
 
     const response = await fetchFn(`${API_URL}?${params}`);
     const data = await response.json();
