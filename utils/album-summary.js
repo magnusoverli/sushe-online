@@ -240,11 +240,13 @@ function processBatchAlbums(batchJob, albums, fetchAndStoreSummary, log) {
  * @param {Object} deps.pool - PostgreSQL pool
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.responseCache - Response cache instance (optional, for cache invalidation)
+ * @param {Object} deps.broadcast - WebSocket broadcast service (optional, for real-time updates)
  */
 function createAlbumSummaryService(deps = {}) {
   const log = deps.logger || logger;
   const pool = deps.pool;
   const responseCache = deps.responseCache;
+  const broadcast = deps.broadcast;
 
   if (!pool) {
     throw new Error('Database pool is required');
@@ -291,6 +293,37 @@ function createAlbumSummaryService(deps = {}) {
       // Invalidate caches for all users who have this album in their lists
       // This ensures summaries appear immediately after refresh/change list
       await invalidateCachesForAlbum(pool, responseCache, log, albumId);
+
+      // Broadcast summary update to all users who have this album in their lists
+      // This allows real-time UI updates without page refresh
+      if (summary && broadcast) {
+        try {
+          const usersResult = await pool.query(
+            `SELECT DISTINCT l.user_id 
+             FROM lists l 
+             JOIN list_items li ON li.list_id = l._id 
+             WHERE li.album_id = $1`,
+            [albumId]
+          );
+
+          for (const row of usersResult.rows) {
+            broadcast.albumSummaryUpdated(row.user_id, albumId);
+          }
+
+          if (usersResult.rows.length > 0) {
+            log.debug('Broadcasted summary update to users', {
+              albumId,
+              userCount: usersResult.rows.length,
+            });
+          }
+        } catch (broadcastErr) {
+          // Don't fail summary storage if broadcast fails
+          log.warn('Failed to broadcast summary update', {
+            albumId,
+            error: broadcastErr.message,
+          });
+        }
+      }
 
       const duration = Date.now() - startTime;
       observeExternalApiCall(

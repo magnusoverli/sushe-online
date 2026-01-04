@@ -1505,6 +1505,7 @@ module.exports = (app, deps) => {
     pool,
     logger,
     responseCache,
+    broadcast: app.locals.broadcast,
   });
 
   // Expose service for use by other modules (e.g., api.js for new album triggers)

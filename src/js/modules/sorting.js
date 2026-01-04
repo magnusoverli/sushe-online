@@ -93,10 +93,8 @@ export function createSorting(deps = {}) {
           // Mobile-specific feedback
           evt.item.classList.add('dragging-mobile');
 
-          // Haptic feedback if available
-          if (navigator.vibrate) {
-            navigator.vibrate(50);
-          }
+          // Haptic feedback already triggered in touchmove handler
+          // (onStart fires after delay, gesture context may be expired)
         }
       },
       onEnd: async function (evt) {
@@ -158,6 +156,7 @@ export function createSorting(deps = {}) {
     // - 300ms: SortableJS starts the drag
     if (isMobile) {
       const SCROLL_GRACE_PERIOD = 200; // ms - allow scroll during this initial period
+      const DRAG_DELAY = 300; // ms - matches SortableJS delay
       let touchState = null;
 
       const onTouchStart = (e) => {
@@ -166,6 +165,7 @@ export function createSorting(deps = {}) {
 
         touchState = {
           startTime: Date.now(),
+          vibrated: false,
         };
       };
 
@@ -177,6 +177,17 @@ export function createSorting(deps = {}) {
         // Allow scroll during grace period, block after
         if (elapsed >= SCROLL_GRACE_PERIOD) {
           e.preventDefault();
+        }
+
+        // Trigger haptic feedback when delay threshold is reached
+        // Must be called within user gesture context (during touchmove)
+        if (
+          elapsed >= DRAG_DELAY &&
+          !touchState.vibrated &&
+          navigator.vibrate
+        ) {
+          navigator.vibrate(50);
+          touchState.vibrated = true;
         }
       };
 

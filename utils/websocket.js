@@ -275,6 +275,29 @@ function createWebSocketService(deps = {}) {
       io.to(userRoom).emit('list:main-changed', payload);
       logger.debug('Broadcast list:main-changed', { userId, listName, isMain });
     },
+
+    /**
+     * Notify all clients of a user that an album summary was updated
+     * @param {string} userId - User ID
+     * @param {string} albumId - Album ID that was updated
+     */
+    albumSummaryUpdated(userId, albumId) {
+      if (!io) {
+        logger.warn(
+          'WebSocket not initialized, cannot broadcast album:summary-updated'
+        );
+        return;
+      }
+
+      const userRoom = `user:${userId}`;
+      const payload = {
+        albumId,
+        updatedAt: new Date().toISOString(),
+      };
+
+      io.to(userRoom).emit('album:summary-updated', payload);
+      logger.debug('Broadcast album:summary-updated', { userId, albumId });
+    },
   };
 
   /**

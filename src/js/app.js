@@ -464,6 +464,7 @@ function getRealtimeSyncModule() {
   if (!realtimeSyncModule) {
     realtimeSyncModule = createRealtimeSync({
       getCurrentList: () => currentList,
+      getListData: (listName) => getListData(listName),
       refreshListData: async (listName) => {
         // Check if this was our own save - skip refresh and notification
         if (wasRecentLocalSave(listName)) {
@@ -483,6 +484,16 @@ function getRealtimeSyncModule() {
           displayAlbums(data, { forceFullRebuild: true });
         }
         return { wasLocalSave: false };
+      },
+      refreshListDataSilent: async (listName) => {
+        // Silent refresh without notifications (for summary updates)
+        const data = await apiCall(
+          `/api/lists/${encodeURIComponent(listName)}`
+        );
+        setListData(listName, data);
+        if (currentList === listName) {
+          displayAlbums(data, { forceFullRebuild: true });
+        }
       },
       refreshListNav: () => {
         // Re-fetch list metadata and update sidebar
