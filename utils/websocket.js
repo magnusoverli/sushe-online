@@ -284,7 +284,8 @@ function createWebSocketService(deps = {}) {
     albumSummaryUpdated(userId, albumId) {
       if (!io) {
         logger.warn(
-          'WebSocket not initialized, cannot broadcast album:summary-updated'
+          'WebSocket not initialized, cannot broadcast album:summary-updated',
+          { userId, albumId }
         );
         return;
       }
@@ -295,8 +296,17 @@ function createWebSocketService(deps = {}) {
         updatedAt: new Date().toISOString(),
       };
 
+      // Get count of clients in the room for logging
+      const room = io.sockets.adapter.rooms.get(userRoom);
+      const clientCount = room ? room.size : 0;
+
       io.to(userRoom).emit('album:summary-updated', payload);
-      logger.debug('Broadcast album:summary-updated', { userId, albumId });
+      logger.info('Broadcast album:summary-updated', {
+        userId,
+        albumId,
+        clientCount,
+        userRoom,
+      });
     },
   };
 

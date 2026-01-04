@@ -19,7 +19,6 @@ import { io } from 'socket.io-client';
 export function createRealtimeSync(deps = {}) {
   const {
     getCurrentList = () => null,
-    getListData = () => null,
     refreshListData = async () => {},
     refreshListDataSilent = async () => {},
     refreshListNav = () => {},
@@ -58,7 +57,18 @@ export function createRealtimeSync(deps = {}) {
     socket.on('connect', () => {
       isConnected = true;
       reconnectAttempts = 0;
-      console.log('[RealtimeSync] Connected to server');
+      console.log('[RealtimeSync] Connected to server', {
+        socketId: socket.id,
+        transport: socket.io.engine.transport.name,
+      });
+
+      // Re-register event listeners on reconnect (Socket.io should preserve them, but be explicit)
+      socket.on('list:updated', handleListUpdated);
+      socket.on('list:created', handleListCreated);
+      socket.on('list:deleted', handleListDeleted);
+      socket.on('list:renamed', handleListRenamed);
+      socket.on('list:main-changed', handleListMainChanged);
+      socket.on('album:summary-updated', handleAlbumSummaryUpdated);
 
       // Subscribe to current list if one is selected
       const currentList = getCurrentList();
@@ -231,29 +241,35 @@ export function createRealtimeSync(deps = {}) {
     console.log('[RealtimeSync] Album summary updated:', data);
 
     const currentList = getCurrentList();
-    if (!currentList) return;
+    if (!currentList) {
+      console.log('[RealtimeSync] No current list, skipping summary update');
+      return;
+    }
 
-    // Check if current list contains this album
-    const listData = getListData(currentList);
-    if (!listData || !Array.isArray(listData)) return;
+    // Always refresh the current list when a summary update is received
+    // This ensures the summary badge appears even if:
+    // - The album was just added and local state is stale
+    // - The album check fails due to timing issues
+    // - The list data hasn't been synced yet
+    console.log('[RealtimeSync] Refreshing list to show summary badge', {
+      currentList,
+      albumId: data.albumId,
+    });
 
-    const hasAlbum = listData.some((album) => album.album_id === data.albumId);
-
-    if (hasAlbum) {
-      // Silently refresh the current list to show the new summary badge
-      try {
-        // Use silent refresh if available, otherwise use regular refresh
-        if (refreshListDataSilent) {
-          await refreshListDataSilent(currentList);
-        } else {
-          await refreshListData(currentList);
-        }
-      } catch (error) {
-        console.error(
-          '[RealtimeSync] Failed to refresh list after summary update:',
-          error
-        );
+    try {
+      // Use silent refresh if available, otherwise use regular refresh
+      if (refreshListDataSilent) {
+        await refreshListDataSilent(currentList);
+        console.log('[RealtimeSync] List refreshed silently');
+      } else {
+        await refreshListData(currentList);
+        console.log('[RealtimeSync] List refreshed (regular)');
       }
+    } catch (error) {
+      console.error(
+        '[RealtimeSync] Failed to refresh list after summary update:',
+        error
+      );
     }
   }
 

@@ -464,7 +464,6 @@ function getRealtimeSyncModule() {
   if (!realtimeSyncModule) {
     realtimeSyncModule = createRealtimeSync({
       getCurrentList: () => currentList,
-      getListData: (listName) => getListData(listName),
       refreshListData: async (listName) => {
         // Check if this was our own save - skip refresh and notification
         if (wasRecentLocalSave(listName)) {
