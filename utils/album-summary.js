@@ -141,6 +141,33 @@ function findBestWikipediaMatch(results, albumName, artistName) {
 }
 
 /**
+ * Check if Wikipedia page description indicates an artist/band (not an album)
+ * @param {string} description - Wikipedia page description
+ * @returns {boolean} True if page appears to be about an artist/band
+ */
+function isArtistDescription(description) {
+  const artistIndicators = [
+    'band',
+    'musician',
+    'singer',
+    'rapper',
+    'artist',
+    'group',
+    'duo',
+    'trio',
+    'quartet',
+    'composer',
+    'producer',
+    'dj',
+    'vocalist',
+    'guitarist',
+    'drummer',
+    'pianist',
+  ];
+  return artistIndicators.some((indicator) => description.includes(indicator));
+}
+
+/**
  * Check if Wikipedia page data represents an album
  * @param {Object} summaryData - Wikipedia page summary data
  * @returns {boolean} True if page appears to be about an album
@@ -148,24 +175,38 @@ function findBestWikipediaMatch(results, albumName, artistName) {
 function isWikipediaAlbumPage(summaryData) {
   const description = (summaryData.description || '').toLowerCase();
 
+  // First, reject if it looks like an artist/band page
+  if (isArtistDescription(description)) {
+    return false;
+  }
+
   // Check description for album indicators
   if (
     description.includes('album') ||
-    description.includes('ep') ||
+    description.includes(' ep ') ||
+    description.includes(' ep,') ||
+    description.endsWith(' ep') ||
     description.includes('mixtape') ||
     description.includes('soundtrack')
   ) {
     return true;
   }
 
-  // Fall back to checking the extract
+  // Fall back to checking the extract - but be more strict
   if (summaryData.extract) {
     const extractLower = summaryData.extract.toLowerCase();
-    return (
-      extractLower.includes('album') ||
-      extractLower.includes('released') ||
-      extractLower.includes('studio album')
-    );
+    // Must have "studio album" or "is the...album" pattern, not just "album" anywhere
+    const hasAlbumPattern =
+      extractLower.includes('studio album') ||
+      extractLower.includes('debut album') ||
+      extractLower.includes('second album') ||
+      extractLower.includes('third album') ||
+      extractLower.includes('fourth album') ||
+      extractLower.includes('fifth album') ||
+      /is the \w+ album/.test(extractLower) ||
+      /is an album/.test(extractLower);
+
+    return hasAlbumPattern;
   }
 
   return false;

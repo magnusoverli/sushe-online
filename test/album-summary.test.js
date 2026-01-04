@@ -449,6 +449,48 @@ test('fetchWikipediaSummary should reject non-album Wikipedia pages', async () =
   assert.strictEqual(result.found, false);
 });
 
+test('fetchWikipediaSummary should reject artist/band pages', async () => {
+  const mockFetch = async (url) => {
+    if (url.includes('/w/api.php')) {
+      return {
+        ok: true,
+        json: async () => ({
+          query: {
+            search: [
+              {
+                title: 'Radiohead',
+                snippet:
+                  'Radiohead are an English rock band formed in Abingdon',
+              },
+            ],
+          },
+        }),
+      };
+    } else if (url.includes('/api/rest_v1/page/summary')) {
+      return {
+        ok: true,
+        json: async () => ({
+          title: 'Radiohead',
+          description: 'English rock band',
+          extract:
+            'Radiohead are an English rock band formed in Abingdon, Oxfordshire, in 1985.',
+        }),
+      };
+    }
+    return { ok: false };
+  };
+
+  const result = await fetchWikipediaSummary(
+    'Radiohead',
+    'Radiohead',
+    mockFetch
+  );
+
+  // Should not match because description says "band" - this is an artist page, not an album
+  assert.strictEqual(result.found, false);
+  assert.strictEqual(result.summary, null);
+});
+
 // =============================================================================
 // fetchAlbumSummary tests (integrated - tries Last.fm then Wikipedia)
 // =============================================================================
