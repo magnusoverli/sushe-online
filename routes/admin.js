@@ -1493,4 +1493,138 @@ module.exports = (app, deps) => {
       }
     }
   );
+
+  // ============ ALBUM SUMMARY FETCH API ============
+  // Batch fetch album summaries from Last.fm
+
+  const { createAlbumSummaryService } = require('../utils/album-summary');
+
+  // Create album summary service instance
+  const albumSummaryService = createAlbumSummaryService({ pool, logger });
+
+  // Expose service for use by other modules (e.g., api.js for new album triggers)
+  app.locals.albumSummaryService = albumSummaryService;
+
+  // Get album summary statistics
+  app.get(
+    '/api/admin/album-summaries/stats',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const stats = await albumSummaryService.getStats();
+        const batchStatus = albumSummaryService.getBatchStatus();
+        res.json({ stats, batchStatus });
+      } catch (error) {
+        logger.error('Error fetching album summary stats', {
+          error: error.message,
+        });
+        res.status(500).json({ error: 'Failed to fetch stats' });
+      }
+    }
+  );
+
+  // Get batch job status
+  app.get(
+    '/api/admin/album-summaries/status',
+    ensureAuth,
+    ensureAdmin,
+    (req, res) => {
+      const status = albumSummaryService.getBatchStatus();
+      res.json({ status });
+    }
+  );
+
+  // Start batch fetch job
+  app.post(
+    '/api/admin/album-summaries/fetch',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { includeRetries } = req.body;
+
+        // Check if already running
+        const currentStatus = albumSummaryService.getBatchStatus();
+        if (currentStatus?.running) {
+          return res.status(409).json({
+            error: 'Batch job already running',
+            status: currentStatus,
+          });
+        }
+
+        logger.info('Admin started album summary batch fetch', {
+          adminUsername: req.user.username,
+          adminId: req.user._id,
+          includeRetries: !!includeRetries,
+        });
+
+        await albumSummaryService.startBatchFetch({ includeRetries });
+
+        res.json({
+          success: true,
+          message: 'Batch fetch started',
+          status: albumSummaryService.getBatchStatus(),
+        });
+      } catch (error) {
+        logger.error('Error starting album summary batch fetch', {
+          error: error.message,
+          adminId: req.user._id,
+        });
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
+  // Stop batch fetch job
+  app.post(
+    '/api/admin/album-summaries/stop',
+    ensureAuth,
+    ensureAdmin,
+    (req, res) => {
+      const stopped = albumSummaryService.stopBatchFetch();
+
+      logger.info('Admin stopped album summary batch fetch', {
+        adminUsername: req.user.username,
+        adminId: req.user._id,
+        wasStopped: stopped,
+      });
+
+      res.json({
+        success: true,
+        stopped,
+        status: albumSummaryService.getBatchStatus(),
+      });
+    }
+  );
+
+  // Fetch summary for a single album (for testing/manual trigger)
+  app.post(
+    '/api/admin/album-summaries/fetch-single',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { albumId } = req.body;
+
+        if (!albumId) {
+          return res.status(400).json({ error: 'albumId is required' });
+        }
+
+        const result = await albumSummaryService.fetchAndStoreSummary(albumId);
+
+        res.json({
+          success: result.success,
+          hasSummary: result.hasSummary,
+          error: result.error,
+        });
+      } catch (error) {
+        logger.error('Error fetching single album summary', {
+          error: error.message,
+          albumId: req.body?.albumId,
+        });
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
 };

@@ -740,6 +740,8 @@ describe('PgDatastore', () => {
           tracks: null,
           cover_image: 'image.jpg',
           cover_image_format: 'jpg',
+          summary: 'A great rock album from the 2020s.',
+          lastfm_url: 'https://www.last.fm/music/Artist+Name/Album+Title',
         },
       ];
       mockPool.query = mock.fn(() =>
@@ -754,10 +756,18 @@ describe('PgDatastore', () => {
       assert.strictEqual(result[0].artist, 'Artist Name');
       assert.strictEqual(result[0].album, 'Album Title');
       assert.strictEqual(result[0].trackPick, 'Track 1');
+      assert.strictEqual(
+        result[0].summary,
+        'A great rock album from the 2020s.'
+      );
+      assert.strictEqual(
+        result[0].lastfmUrl,
+        'https://www.last.fm/music/Artist+Name/Album+Title'
+      );
 
       // Check that prepared query was used
       const queryCall = mockPool.query.mock.calls[0].arguments[0];
-      assert.strictEqual(queryCall.name, 'findListItemsWithAlbums');
+      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV2');
       assert.ok(queryCall.text.includes('LEFT JOIN albums'));
       assert.ok(queryCall.text.includes('COALESCE'));
     });

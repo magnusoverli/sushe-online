@@ -320,6 +320,10 @@ export function createAlbumDisplay(deps = {}) {
       trackPickDisplay = 'Select Track';
     }
 
+    // Album summary from Last.fm
+    const summary = album.summary || '';
+    const lastfmUrl = album.lastfm_url || album.lastfmUrl || '';
+
     // Get playcount from cache (keyed by list item _id)
     const itemId = album._id || '';
     const playcount = playcountCache[itemId];
@@ -352,6 +356,8 @@ export function createAlbumDisplay(deps = {}) {
       itemId,
       playcount,
       playcountDisplay,
+      summary,
+      lastfmUrl,
     };
   }
 
@@ -366,6 +372,21 @@ export function createAlbumDisplay(deps = {}) {
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
     if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
     return count.toString();
+  }
+
+  /**
+   * Escape HTML special characters for safe attribute values
+   * @param {string} str - String to escape
+   * @returns {string} Escaped string
+   */
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   /**
@@ -437,6 +458,13 @@ export function createAlbumDisplay(deps = {}) {
         ? data.coverImageUrl
         : null;
 
+    // Last.fm badge HTML (only shown if album has a summary)
+    const lastfmBadgeHtml = data.summary
+      ? `<div class="lastfm-badge" data-summary="${escapeHtml(data.summary)}" data-lastfm-url="${escapeHtml(data.lastfmUrl)}" data-album-name="${escapeHtml(data.albumName)}" data-artist="${escapeHtml(data.artist)}">
+           <i class="fab fa-lastfm"></i>
+         </div>`
+      : '';
+
     row.innerHTML = `
       <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
       <div class="flex items-center">
@@ -463,6 +491,7 @@ export function createAlbumDisplay(deps = {}) {
             </div>
           `
           }
+          ${lastfmBadgeHtml}
         </div>
       </div>
       <div class="flex flex-col justify-center">
@@ -1269,6 +1298,173 @@ export function createAlbumDisplay(deps = {}) {
     }
   }
 
+  // Last.fm tooltip state
+  let activeTooltip = null;
+  let tooltipHideTimeout = null;
+  const TOOLTIP_HIDE_DELAY = 500; // 500ms delay before hiding
+
+  /**
+   * Initialize Last.fm summary tooltips for badges
+   * @param {HTMLElement} container - Container element
+   */
+  function initLastfmTooltips(container) {
+    const badges = container.querySelectorAll('.lastfm-badge');
+
+    badges.forEach((badge) => {
+      badge.addEventListener('mouseenter', handleBadgeMouseEnter);
+      badge.addEventListener('mouseleave', handleBadgeMouseLeave);
+    });
+  }
+
+  /**
+   * Handle mouse enter on Last.fm badge
+   * @param {MouseEvent} e - Mouse event
+   */
+  function handleBadgeMouseEnter(e) {
+    const badge = e.currentTarget;
+    const summary = badge.dataset.summary;
+    const lastfmUrl = badge.dataset.lastfmUrl;
+    const albumName = badge.dataset.albumName;
+    const artist = badge.dataset.artist;
+
+    if (!summary) return;
+
+    // Clear any pending hide timeout
+    if (tooltipHideTimeout) {
+      clearTimeout(tooltipHideTimeout);
+      tooltipHideTimeout = null;
+    }
+
+    // Remove existing tooltip if any
+    hideTooltip();
+
+    // Create tooltip element
+    const tooltip = document.createElement('div');
+    tooltip.className = 'lastfm-tooltip';
+    tooltip.innerHTML = `
+      <div class="lastfm-tooltip-header">
+        <i class="fab fa-lastfm"></i>
+        <span>${escapeHtml(albumName)} - ${escapeHtml(artist)}</span>
+      </div>
+      <div class="lastfm-tooltip-content">${escapeHtml(summary)}</div>
+      ${
+        lastfmUrl
+          ? `
+        <div class="lastfm-tooltip-footer">
+          <a href="${escapeHtml(lastfmUrl)}" target="_blank" rel="noopener noreferrer" class="lastfm-tooltip-link">
+            <i class="fas fa-external-link-alt"></i>
+            View on Last.fm
+          </a>
+        </div>
+      `
+          : ''
+      }
+    `;
+
+    // Add event listeners to tooltip for hover persistence
+    tooltip.addEventListener('mouseenter', handleTooltipMouseEnter);
+    tooltip.addEventListener('mouseleave', handleTooltipMouseLeave);
+
+    document.body.appendChild(tooltip);
+    activeTooltip = tooltip;
+
+    // Position tooltip to the right of the badge, top-aligned
+    positionTooltip(badge, tooltip);
+
+    // Show tooltip with animation
+    requestAnimationFrame(() => {
+      tooltip.classList.add('visible');
+    });
+  }
+
+  /**
+   * Handle mouse leave on Last.fm badge
+   */
+  function handleBadgeMouseLeave() {
+    scheduleHideTooltip();
+  }
+
+  /**
+   * Handle mouse enter on tooltip (keep it visible)
+   */
+  function handleTooltipMouseEnter() {
+    if (tooltipHideTimeout) {
+      clearTimeout(tooltipHideTimeout);
+      tooltipHideTimeout = null;
+    }
+  }
+
+  /**
+   * Handle mouse leave on tooltip
+   */
+  function handleTooltipMouseLeave() {
+    scheduleHideTooltip();
+  }
+
+  /**
+   * Schedule hiding the tooltip with delay
+   */
+  function scheduleHideTooltip() {
+    if (tooltipHideTimeout) {
+      clearTimeout(tooltipHideTimeout);
+    }
+    tooltipHideTimeout = setTimeout(() => {
+      hideTooltip();
+      tooltipHideTimeout = null;
+    }, TOOLTIP_HIDE_DELAY);
+  }
+
+  /**
+   * Hide and remove the active tooltip
+   */
+  function hideTooltip() {
+    if (activeTooltip) {
+      activeTooltip.classList.remove('visible');
+      // Remove after animation
+      setTimeout(() => {
+        if (activeTooltip && activeTooltip.parentNode) {
+          activeTooltip.parentNode.removeChild(activeTooltip);
+        }
+        activeTooltip = null;
+      }, 200);
+    }
+  }
+
+  /**
+   * Position tooltip to the right of the badge
+   * @param {HTMLElement} badge - Badge element
+   * @param {HTMLElement} tooltip - Tooltip element
+   */
+  function positionTooltip(badge, tooltip) {
+    const badgeRect = badge.getBoundingClientRect();
+    const tooltipWidth = 320; // Match CSS width
+    const gap = 8; // Gap between badge and tooltip
+
+    // Position to the right of the badge, top-aligned
+    let left = badgeRect.right + gap;
+    let top = badgeRect.top;
+
+    // Check if tooltip would overflow right edge of viewport
+    if (left + tooltipWidth > window.innerWidth - 16) {
+      // Position to the left of the badge instead
+      left = badgeRect.left - tooltipWidth - gap;
+    }
+
+    // Check if tooltip would overflow bottom of viewport
+    const tooltipHeight = Math.min(400, tooltip.scrollHeight || 300);
+    if (top + tooltipHeight > window.innerHeight - 16) {
+      top = window.innerHeight - tooltipHeight - 16;
+    }
+
+    // Ensure tooltip doesn't go above viewport
+    if (top < 16) {
+      top = 16;
+    }
+
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${top}px`;
+  }
+
   /**
    * Main display function - renders albums to the container
    * @param {Array} albums - Album array to display
@@ -1397,6 +1593,11 @@ export function createAlbumDisplay(deps = {}) {
 
     // Initialize lazy loading for album cover images
     observeLazyImages(container);
+
+    // Initialize Last.fm summary tooltips (desktop only)
+    if (!isMobile) {
+      initLastfmTooltips(container);
+    }
 
     // Update lightweight state instead of expensive deep clone
     requestAnimationFrame(() => {

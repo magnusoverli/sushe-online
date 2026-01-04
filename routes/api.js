@@ -100,7 +100,7 @@ module.exports = (app, deps) => {
       timestamp,
     ];
 
-    await pool.query(
+    const result = await pool.query(
       `INSERT INTO albums (
         album_id,
         artist,
@@ -126,9 +126,30 @@ module.exports = (app, deps) => {
         tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
         cover_image = COALESCE(EXCLUDED.cover_image, albums.cover_image),
         cover_image_format = COALESCE(NULLIF(EXCLUDED.cover_image_format, ''), albums.cover_image_format),
-        updated_at = EXCLUDED.updated_at`,
+        updated_at = EXCLUDED.updated_at
+      RETURNING (xmax = 0) AS inserted`,
       values
     );
+
+    // For newly inserted albums, trigger async summary fetch
+    // xmax = 0 means this was an INSERT, not an UPDATE
+    if (result.rows[0]?.inserted) {
+      triggerAlbumSummaryFetch(album.album_id, album.artist, album.album);
+    }
+  }
+
+  /**
+   * Helper to trigger album summary fetch for a new album (non-blocking)
+   * @param {string} albumId - The album_id
+   * @param {string} artist - The artist name
+   * @param {string} albumName - The album name
+   */
+  function triggerAlbumSummaryFetch(albumId, artist, albumName) {
+    // Get the album summary service from app.locals (set by admin.js)
+    const albumSummaryService = app.locals?.albumSummaryService;
+    if (albumSummaryService) {
+      albumSummaryService.fetchSummaryAsync(albumId, artist, albumName);
+    }
   }
 
   /**

@@ -392,7 +392,7 @@ class PgDatastore {
     }
 
     // Use prepared statement with consistent naming
-    const queryName = 'findListItemsWithAlbums';
+    const queryName = 'findListItemsWithAlbumsV2';
     const queryText = `
       SELECT 
         li._id,
@@ -412,7 +412,10 @@ class PgDatastore {
         -- For cover_image: if list_item has a custom cover (NOT NULL), use it
         -- Otherwise fall back to album's cover. BYTEA can't be empty string.
         COALESCE(li.cover_image, a.cover_image) as cover_image,
-        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format
+        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
+        -- Album summary from Last.fm (stored on canonical albums table only)
+        a.summary as summary,
+        a.lastfm_url as lastfm_url
       FROM list_items li
       LEFT JOIN albums a ON li.album_id = a.album_id
       WHERE li.list_id = $1
@@ -438,6 +441,8 @@ class PgDatastore {
       tracks: row.tracks || null,
       coverImage: row.cover_image || '',
       coverImageFormat: row.cover_image_format || '',
+      summary: row.summary || '',
+      lastfmUrl: row.lastfm_url || '',
     }));
   }
 
@@ -454,7 +459,7 @@ class PgDatastore {
       );
     }
 
-    const queryName = 'findAllUserListsWithItems';
+    const queryName = 'findAllUserListsWithItemsV2';
     const queryText = `
       SELECT 
         l._id as list_id,
@@ -474,7 +479,9 @@ class PgDatastore {
         COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
         COALESCE(li.tracks, a.tracks) as tracks,
         COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
-        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format
+        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
+        a.summary as summary,
+        a.lastfm_url as lastfm_url
       FROM lists l
       LEFT JOIN list_items li ON li.list_id = l._id
       LEFT JOIN albums a ON li.album_id = a.album_id

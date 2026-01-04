@@ -1611,6 +1611,32 @@ export function createSettingsDrawer(deps = {}) {
           </div>
         </div>
 
+        <!-- Album Summaries -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Album Summaries</h3>
+          <div class="settings-group-content">
+            <div id="albumSummaryStats" class="mb-4">
+              <div class="text-gray-400 text-sm">Loading stats...</div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Fetch Album Summaries</label>
+                <p class="settings-description">Fetch album descriptions from Last.fm for all albums without summaries</p>
+              </div>
+              <div class="flex gap-2">
+                <button id="fetchAlbumSummariesBtn" class="settings-button">Fetch Summaries</button>
+                <button id="stopAlbumSummariesBtn" class="settings-button settings-button-danger hidden">Stop</button>
+              </div>
+            </div>
+            <div id="albumSummaryProgress" class="hidden mt-4">
+              <div class="w-full bg-gray-700 rounded-full h-2.5 mb-2">
+                <div id="albumSummaryProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+              <div id="albumSummaryProgressText" class="text-sm text-gray-400"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Aggregate List Management -->
         ${
           aggregateLists.length > 0
@@ -2100,6 +2126,28 @@ export function createSettingsDrawer(deps = {}) {
           await handleShowContributorManager(year);
         });
       });
+
+    // Album summary handlers
+    const fetchAlbumSummariesBtn = document.getElementById(
+      'fetchAlbumSummariesBtn'
+    );
+    const stopAlbumSummariesBtn = document.getElementById(
+      'stopAlbumSummariesBtn'
+    );
+
+    if (fetchAlbumSummariesBtn) {
+      fetchAlbumSummariesBtn.addEventListener(
+        'click',
+        handleFetchAlbumSummaries
+      );
+    }
+
+    if (stopAlbumSummariesBtn) {
+      stopAlbumSummariesBtn.addEventListener('click', handleStopAlbumSummaries);
+    }
+
+    // Load album summary stats on admin panel load
+    loadAlbumSummaryStats();
   }
 
   /**
@@ -3643,6 +3691,168 @@ export function createSettingsDrawer(deps = {}) {
       progressEl.classList.add('hidden');
       confirmBtn.disabled = false;
       confirmBtn.textContent = 'Restore Database';
+    }
+  }
+
+  // ============ ALBUM SUMMARY HANDLERS ============
+
+  let albumSummaryPollInterval = null;
+
+  /**
+   * Load and display album summary statistics
+   */
+  async function loadAlbumSummaryStats() {
+    const statsEl = document.getElementById('albumSummaryStats');
+    if (!statsEl) return;
+
+    try {
+      const response = await apiCall('/api/admin/album-summaries/stats');
+      const { stats, batchStatus } = response;
+
+      if (!stats) {
+        statsEl.innerHTML =
+          '<div class="text-gray-400 text-sm">No stats available</div>';
+        return;
+      }
+
+      statsEl.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
+          </div>
+          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-green-400 text-lg">${stats.withSummary || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">With Summary</div>
+          </div>
+          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-yellow-400 text-lg">${stats.attemptedNoSummary || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">No Summary Found</div>
+          </div>
+          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-blue-400 text-lg">${stats.neverAttempted || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
+          </div>
+        </div>
+      `;
+
+      // Update UI based on batch status
+      updateAlbumSummaryUI(batchStatus);
+    } catch (error) {
+      console.error('Error loading album summary stats:', error);
+      statsEl.innerHTML =
+        '<div class="text-red-400 text-sm">Failed to load stats</div>';
+    }
+  }
+
+  /**
+   * Update album summary UI based on batch status
+   */
+  function updateAlbumSummaryUI(status) {
+    const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
+    const stopBtn = document.getElementById('stopAlbumSummariesBtn');
+    const progressEl = document.getElementById('albumSummaryProgress');
+    const progressBar = document.getElementById('albumSummaryProgressBar');
+    const progressText = document.getElementById('albumSummaryProgressText');
+
+    if (!fetchBtn || !stopBtn || !progressEl) return;
+
+    if (status?.running) {
+      fetchBtn.classList.add('hidden');
+      stopBtn.classList.remove('hidden');
+      progressEl.classList.remove('hidden');
+
+      const progress = status.progress || 0;
+      progressBar.style.width = `${progress}%`;
+      progressText.textContent = `Processing: ${status.processed || 0}/${status.total || 0} (${status.found || 0} found, ${status.notFound || 0} not found, ${status.errors || 0} errors)`;
+
+      // Start polling if not already
+      if (!albumSummaryPollInterval) {
+        albumSummaryPollInterval = setInterval(pollAlbumSummaryStatus, 2000);
+      }
+    } else {
+      fetchBtn.classList.remove('hidden');
+      stopBtn.classList.add('hidden');
+      progressEl.classList.add('hidden');
+
+      // Stop polling
+      if (albumSummaryPollInterval) {
+        clearInterval(albumSummaryPollInterval);
+        albumSummaryPollInterval = null;
+      }
+    }
+  }
+
+  /**
+   * Poll album summary batch status
+   */
+  async function pollAlbumSummaryStatus() {
+    try {
+      const response = await apiCall('/api/admin/album-summaries/status');
+      updateAlbumSummaryUI(response.status);
+
+      // If job finished, reload stats
+      if (!response.status?.running) {
+        await loadAlbumSummaryStats();
+      }
+    } catch (error) {
+      console.error('Error polling album summary status:', error);
+    }
+  }
+
+  /**
+   * Handle fetch album summaries button
+   */
+  async function handleFetchAlbumSummaries() {
+    const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
+
+    try {
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = 'Starting...';
+
+      const response = await apiCall('/api/admin/album-summaries/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ includeRetries: true }),
+      });
+
+      if (response.success) {
+        showToast('Album summary fetch started', 'success');
+        updateAlbumSummaryUI(response.status);
+      }
+    } catch (error) {
+      console.error('Error starting album summary fetch:', error);
+      showToast(error.data?.error || 'Failed to start fetch', 'error');
+    } finally {
+      fetchBtn.disabled = false;
+      fetchBtn.textContent = 'Fetch Summaries';
+    }
+  }
+
+  /**
+   * Handle stop album summaries button
+   */
+  async function handleStopAlbumSummaries() {
+    const stopBtn = document.getElementById('stopAlbumSummariesBtn');
+
+    try {
+      stopBtn.disabled = true;
+      stopBtn.textContent = 'Stopping...';
+
+      const response = await apiCall('/api/admin/album-summaries/stop', {
+        method: 'POST',
+      });
+
+      if (response.success) {
+        showToast('Album summary fetch stopped', 'success');
+        updateAlbumSummaryUI(response.status);
+        await loadAlbumSummaryStats();
+      }
+    } catch (error) {
+      console.error('Error stopping album summary fetch:', error);
+      showToast('Failed to stop fetch', 'error');
+    } finally {
+      stopBtn.disabled = false;
+      stopBtn.textContent = 'Stop';
     }
   }
 

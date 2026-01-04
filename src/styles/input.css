@@ -1457,7 +1457,11 @@ body.now-playing-bar-visible #addAlbumFAB {
 
 .preferences-country-progress-fill {
   height: 100%;
-  background: linear-gradient(to right, #3b82f6, #60a5fa); /* blue-500 to blue-400 */
+  background: linear-gradient(
+    to right,
+    #3b82f6,
+    #60a5fa
+  ); /* blue-500 to blue-400 */
   border-radius: 9999px;
   transition: width 0.5s ease-out;
 }
@@ -1609,7 +1613,9 @@ body.now-playing-bar-visible #addAlbumFAB {
   border-radius: 0.5rem;
   padding: 1rem;
   margin-bottom: 1.5rem;
-  transition: opacity 0.3s ease, border-color 0.3s ease;
+  transition:
+    opacity 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .telegram-step.active {
@@ -1692,4 +1698,117 @@ body.now-playing-bar-visible #addAlbumFAB {
 
 .telegram-feedback i {
   margin-right: 0.5rem;
+}
+
+/* Last.fm Summary Badge and Tooltip */
+.album-cover-container {
+  position: relative;
+}
+
+.lastfm-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.lastfm-badge i {
+  color: #d51007; /* Last.fm red */
+  font-size: 10px;
+}
+
+.lastfm-badge:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+/* Last.fm Summary Tooltip */
+.lastfm-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 320px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s ease;
+}
+
+.lastfm-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.lastfm-tooltip-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lastfm-tooltip-header i {
+  color: #d51007;
+  font-size: 14px;
+}
+
+.lastfm-tooltip-header span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lastfm-tooltip-content {
+  padding: 14px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #ccc;
+}
+
+.lastfm-tooltip-footer {
+  padding: 12px 14px;
+  border-top: 1px solid #333;
+}
+
+.lastfm-tooltip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #d51007;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.lastfm-tooltip-link:hover {
+  background: #b30d06;
+}
+
+.lastfm-tooltip-link i {
+  font-size: 11px;
 }

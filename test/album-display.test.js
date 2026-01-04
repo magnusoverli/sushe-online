@@ -81,6 +81,9 @@ describe('album-display module', () => {
         formatReleaseDate: mock.fn((d) => d || ''),
         isYearMismatch: mock.fn(() => false),
         extractYearFromDate: mock.fn(() => 2024),
+        getTrackName: mock.fn((t) =>
+          typeof t === 'string' ? t : t?.name || ''
+        ),
       };
 
       const module = createAlbumDisplay(mockDeps);
@@ -168,6 +171,9 @@ describe('album-display module', () => {
         formatReleaseDate: mock.fn(() => ''),
         isYearMismatch: mock.fn(() => false),
         extractYearFromDate: mock.fn(() => null),
+        getTrackName: mock.fn((t) =>
+          typeof t === 'string' ? t : t?.name || ''
+        ),
       };
 
       const module = createAlbumDisplay(mockDeps);
