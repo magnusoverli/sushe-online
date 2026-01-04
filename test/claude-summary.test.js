@@ -125,7 +125,7 @@ test('fetchClaudeSummary should return summary for successful API call', async (
   assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 1);
 
   // Verify API call parameters
-  const callArgs = mockAnthropic.messages.create.mock.calls[0][0];
+  const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
   assert.strictEqual(callArgs.model, 'claude-sonnet-4-5');
   assert.ok(callArgs.tools);
   assert.strictEqual(callArgs.tools[0].type, 'web_search_20250305');

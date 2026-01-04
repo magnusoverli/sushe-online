@@ -255,12 +255,12 @@ Rate limiting is **enabled by default** with production-ready settings:
 
 ### Claude API (Album Descriptions)
 
-| Variable            | Default                 | Description                                    |
-| ------------------- | ----------------------- | ---------------------------------------------- |
-| `ANTHROPIC_API_KEY` | **Required**            | Anthropic API key for Claude API               |
-| `CLAUDE_MODEL`      | `claude-sonnet-4-5`     | Claude model to use                            |
-| `CLAUDE_MAX_TOKENS` | `1024`                  | Maximum tokens in API response                 |
-| `CLAUDE_RATE_LIMIT_MS` | `1000`               | Rate limit delay between requests (milliseconds) |
+| Variable               | Default             | Description                                      |
+| ---------------------- | ------------------- | ------------------------------------------------ |
+| `ANTHROPIC_API_KEY`    | **Required**        | Anthropic API key for Claude API                 |
+| `CLAUDE_MODEL`         | `claude-sonnet-4-5` | Claude model to use                              |
+| `CLAUDE_MAX_TOKENS`    | `1024`              | Maximum tokens in API response                   |
+| `CLAUDE_RATE_LIMIT_MS` | `1000`              | Rate limit delay between requests (milliseconds) |
 
 </details>
 

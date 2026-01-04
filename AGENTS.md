@@ -105,6 +105,7 @@ Since the container mounts your local directory, this command formats your local
 4. Commit your changes
 
 **Why format in container but lint locally?**
+
 - Formatting: Container's prettier formats files, which is fine for initial formatting
 - Linting: **Must run locally** because CI uses local environment - container's eslint/prettier versions may differ and give false results
 

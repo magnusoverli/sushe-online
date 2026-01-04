@@ -34,17 +34,22 @@ async function waitForRateLimit() {
  */
 function createClaudeSummaryService(deps = {}) {
   const log = deps.logger || logger;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
-  const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '1024', 10);
 
-  if (!apiKey) {
-    log.warn('ANTHROPIC_API_KEY not set, Claude summary fetching will fail');
+  // Lazy-initialized client - created on first use, not at module load time
+  // This ensures environment variables are available in Docker containers
+  let anthropicClient = deps.anthropicClient || null;
+
+  function getClient() {
+    if (anthropicClient) return anthropicClient;
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return null;
+    }
+
+    anthropicClient = new Anthropic({ apiKey });
+    return anthropicClient;
   }
-
-  // Create Anthropic client (or use injected one for testing)
-  const anthropic =
-    deps.anthropicClient || (apiKey ? new Anthropic({ apiKey }) : null);
 
   /**
    * Fetch album summary from Claude API with web search
@@ -57,10 +62,15 @@ function createClaudeSummaryService(deps = {}) {
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
 
+    const anthropic = getClient();
     if (!anthropic) {
       log.error('Claude API client not available (missing API key)');
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
+
+    // Read config at call time, not module load time
+    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '1024', 10);
 
     const startTime = Date.now();
 
