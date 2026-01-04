@@ -67,7 +67,7 @@ function createClaudeSummaryService(deps = {}) {
     try {
       await waitForRateLimit();
 
-      const prompt = `Write a 4-6 sentence description of the album "${album}" by ${artist}. Search online for current information about this album, including its release date, genre, critical reception, and notable tracks or themes. Write in a clear, informative style suitable for music fans.`;
+      const prompt = `Write a 4-6 sentence description/summary of the album "${album}" by ${artist}. Search online for current information about this album, including its release date, genre, critical reception, and notable tracks or themes. Write in a clear, informative style suitable for music fans. The summary must be at least 2 sentences long, and should include some insight into both the album and the artist. For example the albums number in the artists discography or what makes this album stand out from the rest of the dsicography or if there is anything specal/nerdy/dogmatic about this release. Do a proper online search to gather the info needed about the album.`;
 
       log.debug('Calling Claude API for album summary', {
         artist,
@@ -96,24 +96,38 @@ function createClaudeSummaryService(deps = {}) {
       const duration = Date.now() - startTime;
 
       // Extract text content from Claude's response
+      // Concatenate all text blocks (in case there are multiple)
       let summary = null;
       if (message.content && Array.isArray(message.content)) {
-        // Find the first text block
-        const textBlock = message.content.find(
+        const textBlocks = message.content.filter(
           (block) => block.type === 'text'
         );
-        if (textBlock && textBlock.text) {
-          summary = textBlock.text.trim();
+        if (textBlocks.length > 0) {
+          // Join all text blocks with spaces
+          summary = textBlocks
+            .map((block) => block.text)
+            .join(' ')
+            .trim();
         }
       }
 
       if (summary) {
-        // Validate summary length (should be 4-6 sentences, roughly 200-800 chars)
-        if (summary.length < 50) {
+        // Validate summary meets requirements (at least 2 sentences, 4-6 preferred)
+        const sentenceCount = (summary.match(/[.!?]+/g) || []).length;
+        if (summary.length < 100) {
           log.warn('Claude returned very short summary', {
             artist,
             album,
             summaryLength: summary.length,
+            sentenceCount,
+          });
+          // Still use it, but log warning
+        } else if (sentenceCount < 2) {
+          log.warn('Claude returned summary with fewer than 2 sentences', {
+            artist,
+            album,
+            summaryLength: summary.length,
+            sentenceCount,
           });
           // Still use it, but log warning
         }
