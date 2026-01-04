@@ -1498,9 +1498,14 @@ module.exports = (app, deps) => {
   // Batch fetch album summaries from Claude API
 
   const { createAlbumSummaryService } = require('../utils/album-summary');
+  const { responseCache } = require('../middleware/response-cache');
 
   // Create album summary service instance
-  const albumSummaryService = createAlbumSummaryService({ pool, logger });
+  const albumSummaryService = createAlbumSummaryService({
+    pool,
+    logger,
+    responseCache,
+  });
 
   // Expose service for use by other modules (e.g., api.js for new album triggers)
   app.locals.albumSummaryService = albumSummaryService;

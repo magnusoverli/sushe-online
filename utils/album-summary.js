@@ -143,10 +143,12 @@ function parseStatsRow(row) {
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL pool
  * @param {Object} deps.logger - Logger instance
+ * @param {Object} deps.responseCache - Response cache instance (optional, for cache invalidation)
  */
 function createAlbumSummaryService(deps = {}) {
   const log = deps.logger || logger;
   const pool = deps.pool;
+  const responseCache = deps.responseCache;
 
   if (!pool) {
     throw new Error('Database pool is required');
@@ -189,6 +191,37 @@ function createAlbumSummaryService(deps = {}) {
           summary_source = $2, summary_fetched_at = NOW() WHERE album_id = $3`,
         [summary, source, albumId]
       );
+
+      // Invalidate caches for all users who have this album in their lists
+      // This ensures summaries appear immediately after refresh/change list
+      if (responseCache) {
+        try {
+          const result = await pool.query(
+            `SELECT DISTINCT l.user_id 
+             FROM lists l 
+             JOIN list_items li ON li.list_id = l._id 
+             WHERE li.album_id = $1`,
+            [albumId]
+          );
+
+          for (const row of result.rows) {
+            responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
+          }
+
+          if (result.rows.length > 0) {
+            log.debug('Invalidated caches for users with album', {
+              albumId,
+              userCount: result.rows.length,
+            });
+          }
+        } catch (err) {
+          // Don't fail summary storage if cache invalidation fails
+          log.warn('Failed to invalidate caches after summary update', {
+            albumId,
+            error: err.message,
+          });
+        }
+      }
 
       const duration = Date.now() - startTime;
       observeExternalApiCall(
