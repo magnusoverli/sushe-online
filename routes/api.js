@@ -278,6 +278,8 @@ module.exports = (app, deps) => {
                   tracks: row.tracks || null,
                   cover_image: row.cover_image || '',
                   cover_image_format: row.cover_image_format || '',
+                  summary: row.summary || '',
+                  lastfm_url: row.lastfm_url || '',
                 });
               }
             }
@@ -638,6 +640,9 @@ module.exports = (app, deps) => {
           comments: item.comments,
           tracks: item.tracks,
           cover_image_format: item.coverImageFormat,
+          // Album summary from Last.fm
+          summary: item.summary || '',
+          lastfm_url: item.lastfmUrl || '',
           // Export mode: embed base64 images + rank/points for shareable JSON
           // Normal mode: return URLs for fast parallel loading & caching
           ...(isExport
