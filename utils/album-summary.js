@@ -139,6 +139,45 @@ function parseStatsRow(row) {
 }
 
 /**
+ * Invalidate caches for all users who have a specific album in their lists
+ * @param {Object} params - Parameters
+ * @param {Object} params.pool - PostgreSQL pool
+ * @param {Object} params.responseCache - Response cache instance
+ * @param {Object} params.logger - Logger instance
+ * @param {string} params.albumId - Album ID to invalidate caches for
+ */
+async function invalidateCachesForAlbum(pool, responseCache, logger, albumId) {
+  if (!responseCache) return;
+
+  try {
+    const result = await pool.query(
+      `SELECT DISTINCT l.user_id 
+       FROM lists l 
+       JOIN list_items li ON li.list_id = l._id 
+       WHERE li.album_id = $1`,
+      [albumId]
+    );
+
+    for (const row of result.rows) {
+      responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
+    }
+
+    if (result.rows.length > 0) {
+      logger.debug('Invalidated caches for users with album', {
+        albumId,
+        userCount: result.rows.length,
+      });
+    }
+  } catch (err) {
+    // Don't fail summary storage if cache invalidation fails
+    logger.warn('Failed to invalidate caches after summary update', {
+      albumId,
+      error: err.message,
+    });
+  }
+}
+
+/**
  * Create album summary service with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL pool
@@ -194,34 +233,7 @@ function createAlbumSummaryService(deps = {}) {
 
       // Invalidate caches for all users who have this album in their lists
       // This ensures summaries appear immediately after refresh/change list
-      if (responseCache) {
-        try {
-          const result = await pool.query(
-            `SELECT DISTINCT l.user_id 
-             FROM lists l 
-             JOIN list_items li ON li.list_id = l._id 
-             WHERE li.album_id = $1`,
-            [albumId]
-          );
-
-          for (const row of result.rows) {
-            responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
-          }
-
-          if (result.rows.length > 0) {
-            log.debug('Invalidated caches for users with album', {
-              albumId,
-              userCount: result.rows.length,
-            });
-          }
-        } catch (err) {
-          // Don't fail summary storage if cache invalidation fails
-          log.warn('Failed to invalidate caches after summary update', {
-            albumId,
-            error: err.message,
-          });
-        }
-      }
+      await invalidateCachesForAlbum(pool, responseCache, log, albumId);
 
       const duration = Date.now() - startTime;
       observeExternalApiCall(
