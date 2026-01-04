@@ -71,13 +71,25 @@ function createClaudeSummaryService(deps = {}) {
     // Read config at call time, not module load time
     const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
     const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '1024', 10);
+    
+    // Configurable summary length preferences
+    const targetSentences = parseInt(process.env.CLAUDE_SUMMARY_SENTENCES || '4', 10);
+    const targetMaxChars = parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10); // 0 = no limit
 
     const startTime = Date.now();
 
     try {
       await waitForRateLimit();
 
-      const prompt = `Write a 4-6 sentence description/summary of the album "${album}" by ${artist}. Search online for current information about this album, including its release date, genre, critical reception, and notable tracks or themes. Write in a clear, informative style suitable for music fans. The summary must be at least 2 sentences long, and should include some insight into both the album and the artist. For example the albums number in the artists discography or what makes this album stand out from the rest of the dsicography or if there is anything specal/nerdy/dogmatic about this release. Do a proper online search to gather the info needed about the album.`;
+      // Build prompt with configurable length guidance
+      let lengthGuidance = '';
+      if (targetMaxChars > 0) {
+        lengthGuidance = ` CRITICAL REQUIREMENT: Your response must be under ${targetMaxChars} characters total (including spaces and punctuation). Count characters as you write and stop before reaching ${targetMaxChars}. Be concise and focused - prioritize key information only.`;
+      } else if (targetSentences > 0) {
+        lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
+      }
+      
+      const prompt = `Write a ${targetSentences > 0 ? `${targetSentences}-sentence` : 'concise'} summary of the album "${album}" by ${artist}.${lengthGuidance} Search online for current information. Include the release date, genre, and what makes this album notable in the artist's discography. Write in a clear, informative style suitable for music fans. Do a proper online search to gather accurate information.`;
 
       log.debug('Calling Claude API for album summary', {
         artist,
@@ -118,25 +130,52 @@ function createClaudeSummaryService(deps = {}) {
             .map((block) => block.text)
             .join(' ')
             .trim();
+          
+          // Debug logging for short summaries
+          if (summary.length < 100) {
+            log.debug('Short summary detected - checking text blocks', {
+              artist,
+              album,
+              textBlockCount: textBlocks.length,
+              textBlockLengths: textBlocks.map((b) => b.text?.length || 0),
+              totalLength: summary.length,
+            });
+          }
         }
       }
 
       if (summary) {
-        // Validate summary meets requirements (at least 2 sentences, 4-6 preferred)
+        // Validate summary meets requirements (configurable via env vars)
+        // Note: We rely on Claude to respect the prompt limits - no truncation is performed
         const sentenceCount = (summary.match(/[.!?]+/g) || []).length;
-        if (summary.length < 100) {
-          log.warn('Claude returned very short summary', {
+        const minChars = parseInt(process.env.CLAUDE_SUMMARY_MIN_CHARS || '100', 10);
+        const maxChars = parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10);
+        const minSentences = parseInt(process.env.CLAUDE_SUMMARY_MIN_SENTENCES || '2', 10);
+        
+        if (summary.length < minChars) {
+          log.warn('Claude returned summary shorter than configured minimum', {
             artist,
             album,
             summaryLength: summary.length,
+            minChars,
             sentenceCount,
           });
           // Still use it, but log warning
-        } else if (sentenceCount < 2) {
-          log.warn('Claude returned summary with fewer than 2 sentences', {
+        } else if (maxChars > 0 && summary.length > maxChars) {
+          log.warn('Claude returned summary longer than configured maximum', {
             artist,
             album,
             summaryLength: summary.length,
+            maxChars,
+            sentenceCount,
+          });
+          // Still use it, but log warning - Claude should respect the prompt limit
+        } else if (sentenceCount < minSentences) {
+          log.warn('Claude returned summary with fewer than configured minimum sentences', {
+            artist,
+            album,
+            summaryLength: summary.length,
+            minSentences,
             sentenceCount,
           });
           // Still use it, but log warning

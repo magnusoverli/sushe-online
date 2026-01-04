@@ -203,6 +203,19 @@ ANTHROPIC_API_KEY=your-anthropic-api-key
 CLAUDE_MODEL=claude-sonnet-4-5    # Model to use (default: claude-sonnet-4-5)
 CLAUDE_MAX_TOKENS=1024            # Max tokens in response (default: 1024)
 CLAUDE_RATE_LIMIT_MS=1000         # Rate limit in ms between requests (default: 1000)
+
+# Optional summary length configuration
+CLAUDE_SUMMARY_SENTENCES=4        # Target number of sentences (default: 4)
+CLAUDE_SUMMARY_MIN_SENTENCES=2    # Minimum sentences (default: 2)
+CLAUDE_SUMMARY_MIN_CHARS=100      # Minimum characters (default: 100)
+CLAUDE_SUMMARY_MAX_CHARS=0        # Maximum characters, 0 = no limit (default: 0)
+
+# Note: max_tokens vs character limits
+# - max_tokens is a HARD LIMIT (Claude stops generating at this point)
+# - Roughly: 1 token ≈ 4 characters (English text)
+# - If max_tokens is too low, summaries may be cut off mid-sentence (quality issue)
+# - Recommendation: Set CLAUDE_MAX_TOKENS to ~1.5x your character limit
+#   Example: For 1000 char limit, use CLAUDE_MAX_TOKENS=400
 ```
 
 Get your API key from [Anthropic Console](https://console.anthropic.com/).
