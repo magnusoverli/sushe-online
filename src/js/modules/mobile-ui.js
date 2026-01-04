@@ -1577,7 +1577,7 @@ export function createMobileUI(deps = {}) {
     // Attach close handlers
     const backdrop = summaryModal.querySelector('[data-backdrop]');
     const closeBtn = summaryModal.querySelector('[data-close-summary]');
-    
+
     const closeModal = () => {
       summaryModal.remove();
       const fabElement = document.getElementById('addAlbumFAB');
@@ -1589,7 +1589,7 @@ export function createMobileUI(deps = {}) {
     if (backdrop) {
       backdrop.addEventListener('click', closeModal);
     }
-    
+
     if (closeBtn) {
       closeBtn.addEventListener('click', (e) => {
         e.preventDefault();
