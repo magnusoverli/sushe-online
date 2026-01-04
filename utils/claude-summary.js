@@ -27,6 +27,158 @@ async function waitForRateLimit() {
 }
 
 /**
+ * Build the prompt with configurable length guidance
+ */
+function buildPrompt(artist, album, targetSentences, targetMaxChars) {
+  let lengthGuidance = '';
+  if (targetMaxChars > 0) {
+    lengthGuidance = ` CRITICAL REQUIREMENT: Your response must be under ${targetMaxChars} characters total (including spaces and punctuation). Count characters as you write and stop before reaching ${targetMaxChars}. Be concise and focused - prioritize key information only.`;
+  } else if (targetSentences > 0) {
+    lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
+  }
+
+  return `Write a ${targetSentences > 0 ? `${targetSentences}-sentence` : 'concise'} summary of the album "${album}" by ${artist}.${lengthGuidance} Search online for current information. Include the release date, genre, and what makes this album notable in the artist's discography. Write in a clear, informative style suitable for music fans. Do a proper online search to gather accurate information.`;
+}
+
+/**
+ * Extract summary text from Claude's response content
+ */
+function extractSummaryFromContent(content, artist, album, log) {
+  if (!content || !Array.isArray(content)) {
+    return null;
+  }
+
+  const textBlocks = content.filter((block) => block.type === 'text');
+  if (textBlocks.length === 0) {
+    return null;
+  }
+
+  // Join all text blocks with spaces
+  const summary = textBlocks
+    .map((block) => block.text)
+    .join(' ')
+    .trim();
+
+  // Debug logging for short summaries
+  if (summary.length < 100) {
+    log.debug('Short summary detected - checking text blocks', {
+      artist,
+      album,
+      textBlockCount: textBlocks.length,
+      textBlockLengths: textBlocks.map((b) => b.text?.length || 0),
+      totalLength: summary.length,
+    });
+  }
+
+  return summary;
+}
+
+/**
+ * Validate and log warnings for summary length/sentence requirements
+ */
+function validateSummary(summary, artist, album, log) {
+  const sentenceCount = (summary.match(/[.!?]+/g) || []).length;
+  const minChars = parseInt(process.env.CLAUDE_SUMMARY_MIN_CHARS || '100', 10);
+  const maxChars = parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10);
+  const minSentences = parseInt(
+    process.env.CLAUDE_SUMMARY_MIN_SENTENCES || '2',
+    10
+  );
+
+  if (summary.length < minChars) {
+    log.warn('Claude returned summary shorter than configured minimum', {
+      artist,
+      album,
+      summaryLength: summary.length,
+      minChars,
+      sentenceCount,
+    });
+  } else if (maxChars > 0 && summary.length > maxChars) {
+    log.warn('Claude returned summary longer than configured maximum', {
+      artist,
+      album,
+      summaryLength: summary.length,
+      maxChars,
+      sentenceCount,
+    });
+  } else if (sentenceCount < minSentences) {
+    log.warn(
+      'Claude returned summary with fewer than configured minimum sentences',
+      {
+        artist,
+        album,
+        summaryLength: summary.length,
+        minSentences,
+        sentenceCount,
+      }
+    );
+  }
+}
+
+/**
+ * Handle Claude API errors with appropriate logging and metrics
+ */
+function handleApiError(err, artist, album, duration, log) {
+  recordExternalApiError('claude', 'api_error');
+
+  if (err.status === 429) {
+    log.warn('Claude API rate limit exceeded', {
+      artist,
+      album,
+      error: err.message,
+      status: err.status,
+      retryAfter: err.headers?.['retry-after'] || err.retryAfter,
+    });
+    observeExternalApiCall('claude', 'messages.create', duration, 429);
+  } else if (err.status >= 500) {
+    log.error('Claude API server error', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+      stack: err.stack,
+      type: err.type,
+    });
+    observeExternalApiCall(
+      'claude',
+      'messages.create',
+      duration,
+      err.status || 500
+    );
+  } else if (err.status === 401 || err.status === 403) {
+    log.error('Claude API authentication error', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+      type: err.type,
+    });
+    observeExternalApiCall(
+      'claude',
+      'messages.create',
+      duration,
+      err.status || 401
+    );
+  } else {
+    log.error('Claude API error', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+      stack: err.stack,
+      type: err.type,
+      cause: err.cause?.message,
+    });
+    observeExternalApiCall(
+      'claude',
+      'messages.create',
+      duration,
+      err.status || 400
+    );
+  }
+}
+
+/**
  * Create Claude summary service with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
@@ -71,25 +223,28 @@ function createClaudeSummaryService(deps = {}) {
     // Read config at call time, not module load time
     const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
     const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '1024', 10);
-    
+
     // Configurable summary length preferences
-    const targetSentences = parseInt(process.env.CLAUDE_SUMMARY_SENTENCES || '4', 10);
-    const targetMaxChars = parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10); // 0 = no limit
+    const targetSentences = parseInt(
+      process.env.CLAUDE_SUMMARY_SENTENCES || '4',
+      10
+    );
+    const targetMaxChars = parseInt(
+      process.env.CLAUDE_SUMMARY_MAX_CHARS || '0',
+      10
+    ); // 0 = no limit
 
     const startTime = Date.now();
 
     try {
       await waitForRateLimit();
 
-      // Build prompt with configurable length guidance
-      let lengthGuidance = '';
-      if (targetMaxChars > 0) {
-        lengthGuidance = ` CRITICAL REQUIREMENT: Your response must be under ${targetMaxChars} characters total (including spaces and punctuation). Count characters as you write and stop before reaching ${targetMaxChars}. Be concise and focused - prioritize key information only.`;
-      } else if (targetSentences > 0) {
-        lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
-      }
-      
-      const prompt = `Write a ${targetSentences > 0 ? `${targetSentences}-sentence` : 'concise'} summary of the album "${album}" by ${artist}.${lengthGuidance} Search online for current information. Include the release date, genre, and what makes this album notable in the artist's discography. Write in a clear, informative style suitable for music fans. Do a proper online search to gather accurate information.`;
+      const prompt = buildPrompt(
+        artist,
+        album,
+        targetSentences,
+        targetMaxChars
+      );
 
       log.debug('Calling Claude API for album summary', {
         artist,
@@ -118,68 +273,15 @@ function createClaudeSummaryService(deps = {}) {
       const duration = Date.now() - startTime;
 
       // Extract text content from Claude's response
-      // Concatenate all text blocks (in case there are multiple)
-      let summary = null;
-      if (message.content && Array.isArray(message.content)) {
-        const textBlocks = message.content.filter(
-          (block) => block.type === 'text'
-        );
-        if (textBlocks.length > 0) {
-          // Join all text blocks with spaces
-          summary = textBlocks
-            .map((block) => block.text)
-            .join(' ')
-            .trim();
-          
-          // Debug logging for short summaries
-          if (summary.length < 100) {
-            log.debug('Short summary detected - checking text blocks', {
-              artist,
-              album,
-              textBlockCount: textBlocks.length,
-              textBlockLengths: textBlocks.map((b) => b.text?.length || 0),
-              totalLength: summary.length,
-            });
-          }
-        }
-      }
+      const summary = extractSummaryFromContent(
+        message.content,
+        artist,
+        album,
+        log
+      );
 
       if (summary) {
-        // Validate summary meets requirements (configurable via env vars)
-        // Note: We rely on Claude to respect the prompt limits - no truncation is performed
-        const sentenceCount = (summary.match(/[.!?]+/g) || []).length;
-        const minChars = parseInt(process.env.CLAUDE_SUMMARY_MIN_CHARS || '100', 10);
-        const maxChars = parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10);
-        const minSentences = parseInt(process.env.CLAUDE_SUMMARY_MIN_SENTENCES || '2', 10);
-        
-        if (summary.length < minChars) {
-          log.warn('Claude returned summary shorter than configured minimum', {
-            artist,
-            album,
-            summaryLength: summary.length,
-            minChars,
-            sentenceCount,
-          });
-          // Still use it, but log warning
-        } else if (maxChars > 0 && summary.length > maxChars) {
-          log.warn('Claude returned summary longer than configured maximum', {
-            artist,
-            album,
-            summaryLength: summary.length,
-            maxChars,
-            sentenceCount,
-          });
-          // Still use it, but log warning - Claude should respect the prompt limit
-        } else if (sentenceCount < minSentences) {
-          log.warn('Claude returned summary with fewer than configured minimum sentences', {
-            artist,
-            album,
-            summaryLength: summary.length,
-            minSentences,
-            sentenceCount,
-          });
-          // Still use it, but log warning
-        }
+        validateSummary(summary, artist, album, log);
 
         log.info('Claude API returned album summary', {
           artist,
@@ -207,65 +309,7 @@ function createClaudeSummaryService(deps = {}) {
       }
     } catch (err) {
       const duration = Date.now() - startTime;
-      recordExternalApiError('claude', 'api_error');
-
-      // Handle different error types
-      if (err.status === 429) {
-        log.warn('Claude API rate limit exceeded', {
-          artist,
-          album,
-          error: err.message,
-          status: err.status,
-          retryAfter: err.headers?.['retry-after'] || err.retryAfter,
-        });
-        observeExternalApiCall('claude', 'messages.create', duration, 429);
-      } else if (err.status >= 500) {
-        log.error('Claude API server error', {
-          artist,
-          album,
-          status: err.status,
-          error: err.message,
-          stack: err.stack,
-          type: err.type,
-        });
-        observeExternalApiCall(
-          'claude',
-          'messages.create',
-          duration,
-          err.status || 500
-        );
-      } else if (err.status === 401 || err.status === 403) {
-        log.error('Claude API authentication error', {
-          artist,
-          album,
-          status: err.status,
-          error: err.message,
-          type: err.type,
-        });
-        observeExternalApiCall(
-          'claude',
-          'messages.create',
-          duration,
-          err.status || 401
-        );
-      } else {
-        log.error('Claude API error', {
-          artist,
-          album,
-          status: err.status,
-          error: err.message,
-          stack: err.stack,
-          type: err.type,
-          cause: err.cause?.message,
-        });
-        observeExternalApiCall(
-          'claude',
-          'messages.create',
-          duration,
-          err.status || 400
-        );
-      }
-
+      handleApiError(err, artist, album, duration, log);
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
   }

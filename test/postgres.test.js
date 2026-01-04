@@ -767,7 +767,7 @@ describe('PgDatastore', () => {
 
       // Check that prepared query was used
       const queryCall = mockPool.query.mock.calls[0].arguments[0];
-      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV2');
+      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV3');
       assert.ok(queryCall.text.includes('LEFT JOIN albums'));
       assert.ok(queryCall.text.includes('COALESCE'));
     });
