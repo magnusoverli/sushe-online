@@ -1700,11 +1700,150 @@ body.now-playing-bar-visible #addAlbumFAB {
   margin-right: 0.5rem;
 }
 
-/* Last.fm Summary Badge and Tooltip */
+/* Album Summary Badge and Tooltip (shared by Last.fm and Wikipedia) */
 .album-cover-container {
   position: relative;
 }
 
+/* Base summary badge styles */
+.summary-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.summary-badge i {
+  font-size: 10px;
+}
+
+.summary-badge:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+/* Last.fm badge - red icon */
+.summary-badge.lastfm-badge i {
+  color: #d51007;
+}
+
+/* Wikipedia badge - white icon (Wikipedia's color scheme) */
+.summary-badge.wikipedia-badge i {
+  color: #ffffff;
+}
+
+/* Base summary tooltip styles */
+.summary-tooltip {
+  position: fixed;
+  z-index: 10000;
+  background: #1a1a1a;
+  border: 1px solid #333;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  width: 320px;
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.2s ease,
+    visibility 0.2s ease;
+}
+
+.summary-tooltip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.summary-tooltip-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.summary-tooltip-header i {
+  font-size: 14px;
+}
+
+.summary-tooltip-header span {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.summary-tooltip-content {
+  padding: 14px;
+  overflow-y: auto;
+  flex: 1;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #ccc;
+}
+
+.summary-tooltip-footer {
+  padding: 12px 14px;
+  border-top: 1px solid #333;
+}
+
+.summary-tooltip-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: background 0.2s ease;
+}
+
+.summary-tooltip-link i {
+  font-size: 11px;
+}
+
+/* Last.fm tooltip - red accent */
+.summary-tooltip.lastfm-tooltip .summary-tooltip-header i {
+  color: #d51007;
+}
+
+.summary-tooltip.lastfm-tooltip .summary-tooltip-link {
+  background: #d51007;
+}
+
+.summary-tooltip.lastfm-tooltip .summary-tooltip-link:hover {
+  background: #b30d06;
+}
+
+/* Wikipedia tooltip - blue accent (Wikipedia's link color) */
+.summary-tooltip.wikipedia-tooltip .summary-tooltip-header i {
+  color: #3366cc;
+}
+
+.summary-tooltip.wikipedia-tooltip .summary-tooltip-link {
+  background: #3366cc;
+}
+
+.summary-tooltip.wikipedia-tooltip .summary-tooltip-link:hover {
+  background: #2a4d99;
+}
+
+/* Legacy class aliases for backwards compatibility */
 .lastfm-badge {
   position: absolute;
   top: 2px;
@@ -1722,7 +1861,7 @@ body.now-playing-bar-visible #addAlbumFAB {
 }
 
 .lastfm-badge i {
-  color: #d51007; /* Last.fm red */
+  color: #d51007;
   font-size: 10px;
 }
 
@@ -1731,7 +1870,6 @@ body.now-playing-bar-visible #addAlbumFAB {
   transform: scale(1.1);
 }
 
-/* Last.fm Summary Tooltip */
 .lastfm-tooltip {
   position: fixed;
   z-index: 10000;

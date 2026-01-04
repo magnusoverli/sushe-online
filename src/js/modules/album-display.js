@@ -320,9 +320,11 @@ export function createAlbumDisplay(deps = {}) {
       trackPickDisplay = 'Select Track';
     }
 
-    // Album summary from Last.fm
+    // Album summary (from Last.fm or Wikipedia)
     const summary = album.summary || '';
     const lastfmUrl = album.lastfm_url || album.lastfmUrl || '';
+    const wikipediaUrl = album.wikipedia_url || album.wikipediaUrl || '';
+    const summarySource = album.summary_source || album.summarySource || '';
 
     // Get playcount from cache (keyed by list item _id)
     const itemId = album._id || '';
@@ -358,6 +360,8 @@ export function createAlbumDisplay(deps = {}) {
       playcountDisplay,
       summary,
       lastfmUrl,
+      wikipediaUrl,
+      summarySource,
     };
   }
 
@@ -458,12 +462,23 @@ export function createAlbumDisplay(deps = {}) {
         ? data.coverImageUrl
         : null;
 
-    // Last.fm badge HTML (only shown if album has a summary)
-    const lastfmBadgeHtml = data.summary
-      ? `<div class="lastfm-badge" data-summary="${escapeHtml(data.summary)}" data-lastfm-url="${escapeHtml(data.lastfmUrl)}" data-album-name="${escapeHtml(data.albumName)}" data-artist="${escapeHtml(data.artist)}">
-           <i class="fab fa-lastfm"></i>
-         </div>`
-      : '';
+    // Summary badge HTML (shown if album has a summary from any source)
+    let summaryBadgeHtml = '';
+    if (data.summary) {
+      const isWikipedia = data.summarySource === 'wikipedia';
+      const badgeClass = isWikipedia ? 'wikipedia-badge' : 'lastfm-badge';
+      const iconClass = isWikipedia ? 'fab fa-wikipedia-w' : 'fab fa-lastfm';
+      const sourceUrl = isWikipedia ? data.wikipediaUrl : data.lastfmUrl;
+
+      summaryBadgeHtml = `<div class="summary-badge ${badgeClass}" 
+        data-summary="${escapeHtml(data.summary)}" 
+        data-source-url="${escapeHtml(sourceUrl)}" 
+        data-source="${escapeHtml(data.summarySource)}"
+        data-album-name="${escapeHtml(data.albumName)}" 
+        data-artist="${escapeHtml(data.artist)}">
+        <i class="${iconClass}"></i>
+      </div>`;
+    }
 
     row.innerHTML = `
       <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
@@ -491,7 +506,7 @@ export function createAlbumDisplay(deps = {}) {
             </div>
           `
           }
-          ${lastfmBadgeHtml}
+          ${summaryBadgeHtml}
         </div>
       </div>
       <div class="flex flex-col justify-center">
@@ -1298,17 +1313,17 @@ export function createAlbumDisplay(deps = {}) {
     }
   }
 
-  // Last.fm tooltip state
+  // Summary tooltip state
   let activeTooltip = null;
   let tooltipHideTimeout = null;
   const TOOLTIP_HIDE_DELAY = 500; // 500ms delay before hiding
 
   /**
-   * Initialize Last.fm summary tooltips for badges
+   * Initialize summary tooltips for badges (Last.fm and Wikipedia)
    * @param {HTMLElement} container - Container element
    */
-  function initLastfmTooltips(container) {
-    const badges = container.querySelectorAll('.lastfm-badge');
+  function initSummaryTooltips(container) {
+    const badges = container.querySelectorAll('.summary-badge');
 
     badges.forEach((badge) => {
       badge.addEventListener('mouseenter', handleBadgeMouseEnter);
@@ -1316,14 +1331,20 @@ export function createAlbumDisplay(deps = {}) {
     });
   }
 
+  // Backwards compatibility alias
+  function initLastfmTooltips(container) {
+    initSummaryTooltips(container);
+  }
+
   /**
-   * Handle mouse enter on Last.fm badge
+   * Handle mouse enter on summary badge
    * @param {MouseEvent} e - Mouse event
    */
   function handleBadgeMouseEnter(e) {
     const badge = e.currentTarget;
     const summary = badge.dataset.summary;
-    const lastfmUrl = badge.dataset.lastfmUrl;
+    const sourceUrl = badge.dataset.sourceUrl;
+    const source = badge.dataset.source || 'lastfm';
     const albumName = badge.dataset.albumName;
     const artist = badge.dataset.artist;
 
@@ -1338,22 +1359,30 @@ export function createAlbumDisplay(deps = {}) {
     // Remove existing tooltip if any
     hideTooltip();
 
+    // Determine source-specific styling
+    const isWikipedia = source === 'wikipedia';
+    const tooltipClass = isWikipedia
+      ? 'summary-tooltip wikipedia-tooltip'
+      : 'summary-tooltip lastfm-tooltip';
+    const iconClass = isWikipedia ? 'fab fa-wikipedia-w' : 'fab fa-lastfm';
+    const sourceName = isWikipedia ? 'Wikipedia' : 'Last.fm';
+
     // Create tooltip element
     const tooltip = document.createElement('div');
-    tooltip.className = 'lastfm-tooltip';
+    tooltip.className = tooltipClass;
     tooltip.innerHTML = `
-      <div class="lastfm-tooltip-header">
-        <i class="fab fa-lastfm"></i>
+      <div class="summary-tooltip-header">
+        <i class="${iconClass}"></i>
         <span>${escapeHtml(albumName)} - ${escapeHtml(artist)}</span>
       </div>
-      <div class="lastfm-tooltip-content">${escapeHtml(summary)}</div>
+      <div class="summary-tooltip-content">${escapeHtml(summary)}</div>
       ${
-        lastfmUrl
+        sourceUrl
           ? `
-        <div class="lastfm-tooltip-footer">
-          <a href="${escapeHtml(lastfmUrl)}" target="_blank" rel="noopener noreferrer" class="lastfm-tooltip-link">
+        <div class="summary-tooltip-footer">
+          <a href="${escapeHtml(sourceUrl)}" target="_blank" rel="noopener noreferrer" class="summary-tooltip-link">
             <i class="fas fa-external-link-alt"></i>
-            View on Last.fm
+            View on ${sourceName}
           </a>
         </div>
       `
@@ -1378,7 +1407,7 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Handle mouse leave on Last.fm badge
+   * Handle mouse leave on summary badge
    */
   function handleBadgeMouseLeave() {
     scheduleHideTooltip();

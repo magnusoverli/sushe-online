@@ -4,7 +4,11 @@ const {
   stripHtml,
   generateNameVariations,
   buildLastfmUrl,
+  buildWikipediaSearchQuery,
   createAlbumSummaryService,
+  fetchAlbumSummary,
+  fetchWikipediaSummary,
+  SUMMARY_SOURCES,
 } = require('../utils/album-summary.js');
 
 // =============================================================================
@@ -185,6 +189,8 @@ test('getStats should return album statistics', async () => {
           with_summary: '50',
           attempted_no_summary: '20',
           never_attempted: '30',
+          from_lastfm: '35',
+          from_wikipedia: '15',
         },
       ],
     }),
@@ -202,6 +208,8 @@ test('getStats should return album statistics', async () => {
   assert.strictEqual(stats.attemptedNoSummary, 20);
   assert.strictEqual(stats.neverAttempted, 30);
   assert.strictEqual(stats.pending, 50); // neverAttempted + attemptedNoSummary
+  assert.strictEqual(stats.fromLastfm, 35);
+  assert.strictEqual(stats.fromWikipedia, 15);
 });
 
 test('stopBatchFetch should return false when no job running', () => {
@@ -270,6 +278,231 @@ test('module should export helper functions for testing', () => {
   assert.strictEqual(typeof module.stripHtml, 'function');
   assert.strictEqual(typeof module.generateNameVariations, 'function');
   assert.strictEqual(typeof module.buildLastfmUrl, 'function');
+  assert.strictEqual(typeof module.buildWikipediaSearchQuery, 'function');
   assert.strictEqual(typeof module.createAlbumSummaryService, 'function');
   assert.strictEqual(typeof module.getDefaultInstance, 'function');
+  assert.strictEqual(typeof module.fetchAlbumSummary, 'function');
+  assert.strictEqual(typeof module.fetchWikipediaSummary, 'function');
+  assert.ok(module.SUMMARY_SOURCES);
+});
+
+// =============================================================================
+// SUMMARY_SOURCES constants tests
+// =============================================================================
+
+test('SUMMARY_SOURCES should have lastfm and wikipedia', () => {
+  assert.strictEqual(SUMMARY_SOURCES.LASTFM, 'lastfm');
+  assert.strictEqual(SUMMARY_SOURCES.WIKIPEDIA, 'wikipedia');
+});
+
+// =============================================================================
+// buildWikipediaSearchQuery tests
+// =============================================================================
+
+test('buildWikipediaSearchQuery should build correct search query', () => {
+  const query = buildWikipediaSearchQuery('The Beatles', 'Abbey Road');
+  assert.strictEqual(query, 'Abbey Road album The Beatles');
+});
+
+test('buildWikipediaSearchQuery should include album and artist', () => {
+  const query = buildWikipediaSearchQuery(
+    'Daft Punk',
+    'Random Access Memories'
+  );
+  assert.ok(query.includes('Random Access Memories'));
+  assert.ok(query.includes('Daft Punk'));
+  assert.ok(query.includes('album'));
+});
+
+// =============================================================================
+// fetchWikipediaSummary tests (with mocked fetch)
+// =============================================================================
+
+test('fetchWikipediaSummary should return not found for empty input', async () => {
+  const result = await fetchWikipediaSummary('', '', () => {});
+  assert.strictEqual(result.found, false);
+  assert.strictEqual(result.summary, null);
+  assert.strictEqual(result.wikipediaUrl, null);
+});
+
+test('fetchWikipediaSummary should return not found for null input', async () => {
+  const result = await fetchWikipediaSummary(null, null, () => {});
+  assert.strictEqual(result.found, false);
+});
+
+test('fetchWikipediaSummary should handle search with no results', async () => {
+  const mockFetch = async () => ({
+    ok: true,
+    json: async () => ({ query: { search: [] } }),
+  });
+
+  const result = await fetchWikipediaSummary(
+    'Unknown Artist',
+    'Unknown Album',
+    mockFetch
+  );
+  assert.strictEqual(result.found, false);
+  assert.strictEqual(result.summary, null);
+});
+
+test('fetchWikipediaSummary should handle search API failure', async () => {
+  const mockFetch = async () => ({
+    ok: false,
+    status: 500,
+  });
+
+  const result = await fetchWikipediaSummary(
+    'Test Artist',
+    'Test Album',
+    mockFetch
+  );
+  assert.strictEqual(result.found, false);
+});
+
+test('fetchWikipediaSummary should return summary for matching album', async () => {
+  const mockFetch = async (url) => {
+    if (url.includes('/w/api.php')) {
+      // Search API
+      return {
+        ok: true,
+        json: async () => ({
+          query: {
+            search: [
+              {
+                title: 'Abbey Road',
+                snippet:
+                  'Abbey Road is the eleventh studio album by the English rock band the Beatles',
+              },
+            ],
+          },
+        }),
+      };
+    } else if (url.includes('/api/rest_v1/page/summary')) {
+      // Summary API
+      return {
+        ok: true,
+        json: async () => ({
+          title: 'Abbey Road',
+          description: '1969 studio album by the Beatles',
+          extract:
+            'Abbey Road is the eleventh studio album by the English rock band the Beatles.',
+          content_urls: {
+            desktop: { page: 'https://en.wikipedia.org/wiki/Abbey_Road' },
+          },
+        }),
+      };
+    }
+    return { ok: false };
+  };
+
+  const result = await fetchWikipediaSummary(
+    'The Beatles',
+    'Abbey Road',
+    mockFetch
+  );
+
+  assert.strictEqual(result.found, true);
+  assert.ok(result.summary.includes('Abbey Road'));
+  assert.strictEqual(
+    result.wikipediaUrl,
+    'https://en.wikipedia.org/wiki/Abbey_Road'
+  );
+});
+
+test('fetchWikipediaSummary should reject non-album Wikipedia pages', async () => {
+  const mockFetch = async (url) => {
+    if (url.includes('/w/api.php')) {
+      return {
+        ok: true,
+        json: async () => ({
+          query: {
+            search: [
+              {
+                title: 'Abbey Road, London',
+                snippet:
+                  'Abbey Road is a road in London known for its recording studios',
+              },
+            ],
+          },
+        }),
+      };
+    } else if (url.includes('/api/rest_v1/page/summary')) {
+      return {
+        ok: true,
+        json: async () => ({
+          title: 'Abbey Road, London',
+          description: 'Street in London, England',
+          extract: 'Abbey Road is a road in the City of Westminster in London.',
+        }),
+      };
+    }
+    return { ok: false };
+  };
+
+  const result = await fetchWikipediaSummary(
+    'The Beatles',
+    'Abbey Road',
+    mockFetch
+  );
+
+  // Should not match because the description says "Street" not "album"
+  assert.strictEqual(result.found, false);
+});
+
+// =============================================================================
+// fetchAlbumSummary tests (integrated - tries Last.fm then Wikipedia)
+// =============================================================================
+
+test('fetchAlbumSummary should return not found for empty input', async () => {
+  const result = await fetchAlbumSummary('', '');
+  assert.strictEqual(result.found, false);
+  assert.strictEqual(result.summary, null);
+  assert.strictEqual(result.source, null);
+});
+
+test('fetchAlbumSummary should include source in result', async () => {
+  // This tests the structure of the result
+  const result = await fetchAlbumSummary(
+    'NonExistentArtist12345',
+    'NonExistentAlbum12345'
+  );
+
+  assert.ok('summary' in result);
+  assert.ok('lastfmUrl' in result);
+  assert.ok('wikipediaUrl' in result);
+  assert.ok('source' in result);
+  assert.ok('found' in result);
+});
+
+// =============================================================================
+// getStats should include source breakdown
+// =============================================================================
+
+test('getStats should return source breakdown', async () => {
+  const mockPool = {
+    query: async () => ({
+      rows: [
+        {
+          total_albums: '100',
+          with_summary: '50',
+          attempted_no_summary: '20',
+          never_attempted: '30',
+          from_lastfm: '35',
+          from_wikipedia: '15',
+        },
+      ],
+    }),
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  const stats = await service.getStats();
+
+  assert.strictEqual(stats.totalAlbums, 100);
+  assert.strictEqual(stats.withSummary, 50);
+  assert.strictEqual(stats.fromLastfm, 35);
+  assert.strictEqual(stats.fromWikipedia, 15);
 });

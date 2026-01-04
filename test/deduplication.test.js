@@ -322,6 +322,54 @@ describe('deduplication helpers', () => {
       );
     });
 
+    it('should always return null for genre_1 (genres are canonical)', async () => {
+      // Genres should always use albums table, never store overrides
+      const albumData = { genre_1: 'Rock', genre_2: 'Pop' };
+      mockPool.query = mock.fn(() => Promise.resolve({ rows: [albumData] }));
+
+      // Even if value differs, should return null
+      const result = await helpers.getStorableValue(
+        'Metal',
+        'album123',
+        'genre_1',
+        mockPool
+      );
+
+      assert.strictEqual(result, null);
+      // Should not query database - genres are handled early
+      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+    });
+
+    it('should always return null for genre_2 (genres are canonical)', async () => {
+      // Genres should always use albums table, never store overrides
+      const albumData = { genre_1: 'Rock', genre_2: 'Pop' };
+      mockPool.query = mock.fn(() => Promise.resolve({ rows: [albumData] }));
+
+      // Even if value differs, should return null
+      const result = await helpers.getStorableValue(
+        'Jazz',
+        'album123',
+        'genre_2',
+        mockPool
+      );
+
+      assert.strictEqual(result, null);
+      // Should not query database - genres are handled early
+      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+    });
+
+    it('should return null for genres even when albumId is null', async () => {
+      // Genres should always return null regardless of albumId
+      const result = await helpers.getStorableValue(
+        'Rock',
+        null,
+        'genre_1',
+        mockPool
+      );
+
+      assert.strictEqual(result, null);
+    });
+
     it('should return null (not empty string) when listItemValue is empty and no albumId', async () => {
       const result = await helpers.getStorableValue(
         '',

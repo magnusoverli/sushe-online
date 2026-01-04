@@ -3716,7 +3716,7 @@ export function createSettingsDrawer(deps = {}) {
       }
 
       statsEl.innerHTML = `
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
           <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
             <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
             <div class="text-xs text-gray-400 uppercase">Total Albums</div>
@@ -3732,6 +3732,16 @@ export function createSettingsDrawer(deps = {}) {
           <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
             <div class="font-bold text-blue-400 text-lg">${stats.neverAttempted || 0}</div>
             <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-red-400 text-lg">${stats.fromLastfm || 0}</div>
+            <div class="text-xs text-gray-400 uppercase"><i class="fab fa-lastfm mr-1"></i>From Last.fm</div>
+          </div>
+          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-blue-300 text-lg">${stats.fromWikipedia || 0}</div>
+            <div class="text-xs text-gray-400 uppercase"><i class="fab fa-wikipedia-w mr-1"></i>From Wikipedia</div>
           </div>
         </div>
       `;
