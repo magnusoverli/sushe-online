@@ -5,6 +5,10 @@
  * duplicate data. Returns NULL if values match (save storage), returns value
  * if different (custom override).
  *
+ * Special handling:
+ * - Genres (genre_1, genre_2): Always return NULL - genres are canonical and
+ *   stored only in albums table, never as per-list overrides.
+ *
  * Follows dependency injection pattern for testability.
  */
 
@@ -100,6 +104,42 @@ function createDeduplicationHelpers(deps = {}) {
   }
 
   /**
+   * Convert value to Buffer for BYTEA storage
+   * @param {*} value - Value to convert
+   * @returns {Buffer|null} Buffer or null
+   */
+  function toBuffer(value) {
+    if (!value) return null;
+    return Buffer.isBuffer(value) ? value : Buffer.from(value, 'base64');
+  }
+
+  /**
+   * Compare two cover images for equality
+   * @param {*} albumValue - Album cover value
+   * @param {*} listValue - List item cover value
+   * @returns {boolean} True if images are equal
+   */
+  function coverImagesEqual(albumValue, listValue) {
+    if (!albumValue || !listValue) return false;
+    const albumBuffer = toBuffer(albumValue);
+    const listBuffer = toBuffer(listValue);
+    return albumBuffer && listBuffer && albumBuffer.equals(listBuffer);
+  }
+
+  /**
+   * Get storable value for cover_image field
+   * @param {*} listItemValue - List item cover value
+   * @param {*} albumValue - Album cover value (if album exists)
+   * @returns {Buffer|null} Buffer to store or null if duplicate
+   */
+  function getStorableCoverImage(listItemValue, albumValue) {
+    if (albumValue && coverImagesEqual(albumValue, listItemValue)) {
+      return null; // Duplicate
+    }
+    return toBuffer(listItemValue);
+  }
+
+  /**
    * Compare list_item value with albums table value
    * Returns NULL if they match (to save storage), or the value if different (custom override)
    *
@@ -110,63 +150,38 @@ function createDeduplicationHelpers(deps = {}) {
    * @returns {Promise<*>} - NULL if duplicate, value if different
    */
   async function getStorableValue(listItemValue, albumId, field, pool) {
+    // Genres are canonical - always use albums table, never store overrides
+    if (field === 'genre_1' || field === 'genre_2') {
+      return null;
+    }
+
     // No album reference or no value - store as-is
     if (!albumId || listItemValue === null || listItemValue === undefined) {
-      // Special handling for cover_image: convert base64 string to Buffer for BYTEA
-      if (field === 'cover_image' && listItemValue) {
-        return Buffer.isBuffer(listItemValue)
-          ? listItemValue
-          : Buffer.from(listItemValue, 'base64');
-      }
-      return listItemValue || null;
+      return field === 'cover_image'
+        ? toBuffer(listItemValue)
+        : listItemValue || null;
     }
 
     // Fetch album data
     const albumData = await getAlbumData(albumId, pool);
     if (!albumData) {
-      // No matching album in database - store the value
-      // Special handling for cover_image: convert base64 string to Buffer for BYTEA
-      if (field === 'cover_image' && listItemValue) {
-        return Buffer.isBuffer(listItemValue)
-          ? listItemValue
-          : Buffer.from(listItemValue, 'base64');
-      }
-      return listItemValue || null;
+      return field === 'cover_image'
+        ? toBuffer(listItemValue)
+        : listItemValue || null;
+    }
+
+    // Special handling for cover_image
+    if (field === 'cover_image') {
+      return getStorableCoverImage(listItemValue, albumData[field]);
     }
 
     // Compare values: if identical, return NULL (save space)
-    // Handle both null/undefined and empty string as "no value"
     const albumValue = albumData[field];
     const normalizedListValue = listItemValue === '' ? null : listItemValue;
     const normalizedAlbumValue = albumValue === '' ? null : albumValue;
 
-    // Special handling for cover_image: compare Buffer contents
-    // Handles both BYTEA (Buffer) and legacy TEXT (base64 string) formats
-    if (field === 'cover_image') {
-      // If album has the same image, don't store in list_item
-      if (albumValue && listItemValue) {
-        const listBuffer = Buffer.isBuffer(listItemValue)
-          ? listItemValue
-          : Buffer.from(listItemValue, 'base64');
-        // Handle both Buffer (BYTEA) and string (legacy TEXT) album values
-        const albumBuffer = Buffer.isBuffer(albumValue)
-          ? albumValue
-          : Buffer.from(albumValue, 'base64');
-        if (albumBuffer.equals(listBuffer)) {
-          return null; // Duplicate - don't store
-        }
-      }
-      // Different image - convert to Buffer and store
-      if (listItemValue) {
-        return Buffer.isBuffer(listItemValue)
-          ? listItemValue
-          : Buffer.from(listItemValue, 'base64');
-      }
-      return null;
-    }
-
     if (normalizedListValue === normalizedAlbumValue) {
-      return null; // Duplicate - don't store
+      return null; // Duplicate
     }
 
     return listItemValue; // Different - store custom value
