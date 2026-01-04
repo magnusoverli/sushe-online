@@ -178,6 +178,63 @@ async function invalidateCachesForAlbum(pool, responseCache, logger, albumId) {
 }
 
 /**
+ * Process batch job albums in background
+ * @param {Object} batchJob - Batch job state object
+ * @param {Array} albums - Albums to process
+ * @param {Function} fetchAndStoreSummary - Function to fetch and store summary
+ * @param {Object} log - Logger instance
+ */
+function processBatchAlbums(batchJob, albums, fetchAndStoreSummary, log) {
+  setImmediate(async () => {
+    for (const album of albums) {
+      if (!batchJob.running) {
+        log.info('Batch job cancelled');
+        break;
+      }
+      try {
+        const result = await fetchAndStoreSummary(album.album_id);
+        batchJob.processed++;
+        if (result.success) {
+          if (result.hasSummary) {
+            batchJob.found++;
+          } else {
+            batchJob.notFound++;
+          }
+        } else {
+          batchJob.errors++;
+        }
+        if (batchJob.processed % 50 === 0) {
+          log.info('Batch summary fetch progress', {
+            processed: batchJob.processed,
+            total: batchJob.total,
+            found: batchJob.found,
+            progress: `${Math.round((batchJob.processed / batchJob.total) * 100)}%`,
+          });
+        }
+      } catch (err) {
+        batchJob.processed++;
+        batchJob.errors++;
+        log.error('Batch fetch error for album', {
+          albumId: album.album_id,
+          artist: album.artist,
+          album: album.album,
+          error: err.message,
+          stack: err.stack,
+        });
+      }
+    }
+    batchJob.running = false;
+    log.info('Batch summary fetch completed', {
+      total: batchJob.total,
+      found: batchJob.found,
+      notFound: batchJob.notFound,
+      errors: batchJob.errors,
+      duration: `${Math.round((Date.now() - new Date(batchJob.startedAt).getTime()) / 1000)}s`,
+    });
+  });
+}
+
+/**
  * Create album summary service with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL pool
@@ -263,18 +320,33 @@ function createAlbumSummaryService(deps = {}) {
 
   /** Fetch summary for a new album (non-blocking) */
   function fetchSummaryAsync(albumId, _artist, _album) {
-    setImmediate(async () => {
-      try {
-        const existing = await pool.query(
-          'SELECT summary_fetched_at FROM albums WHERE album_id = $1',
-          [albumId]
-        );
-        if (existing.rows.length > 0 && existing.rows[0].summary_fetched_at)
-          return;
-        await fetchAndStoreSummary(albumId);
-      } catch (err) {
-        log.warn('Async summary fetch failed', { albumId, error: err.message });
-      }
+    // Use setImmediate to ensure this runs after the current call stack
+    // Wrap in Promise.resolve().then() to properly handle async errors
+    setImmediate(() => {
+      Promise.resolve()
+        .then(async () => {
+          try {
+            const existing = await pool.query(
+              'SELECT summary_fetched_at FROM albums WHERE album_id = $1',
+              [albumId]
+            );
+            if (existing.rows.length > 0 && existing.rows[0].summary_fetched_at)
+              return;
+            await fetchAndStoreSummary(albumId);
+          } catch (err) {
+            log.warn('Async summary fetch failed', {
+              albumId,
+              error: err.message,
+            });
+          }
+        })
+        .catch((err) => {
+          // Catch any unhandled rejections from the promise chain
+          log.warn('Unhandled error in async summary fetch', {
+            albumId,
+            error: err.message,
+          });
+        });
     });
   }
 
@@ -309,57 +381,6 @@ function createAlbumSummaryService(deps = {}) {
       FROM albums a INNER JOIN list_items li ON li.album_id = a.album_id
     `);
     return parseStatsRow(result.rows[0]);
-  }
-
-  /** Process batch job albums in background */
-  function processBatchAlbums(albums) {
-    setImmediate(async () => {
-      for (const album of albums) {
-        if (!batchJob.running) {
-          log.info('Batch job cancelled');
-          break;
-        }
-        try {
-          const result = await fetchAndStoreSummary(album.album_id);
-          batchJob.processed++;
-          if (result.success) {
-            if (result.hasSummary) {
-              batchJob.found++;
-            } else {
-              batchJob.notFound++;
-            }
-          } else {
-            batchJob.errors++;
-          }
-          if (batchJob.processed % 50 === 0) {
-            log.info('Batch summary fetch progress', {
-              processed: batchJob.processed,
-              total: batchJob.total,
-              found: batchJob.found,
-              progress: `${Math.round((batchJob.processed / batchJob.total) * 100)}%`,
-            });
-          }
-        } catch (err) {
-          batchJob.processed++;
-          batchJob.errors++;
-          log.error('Batch fetch error for album', {
-            albumId: album.album_id,
-            artist: album.artist,
-            album: album.album,
-            error: err.message,
-            stack: err.stack,
-          });
-        }
-      }
-      batchJob.running = false;
-      log.info('Batch summary fetch completed', {
-        total: batchJob.total,
-        found: batchJob.found,
-        notFound: batchJob.notFound,
-        errors: batchJob.errors,
-        duration: `${Math.round((Date.now() - new Date(batchJob.startedAt).getTime()) / 1000)}s`,
-      });
-    });
   }
 
   /** Start batch fetch job for albums without summaries */
@@ -400,7 +421,7 @@ function createAlbumSummaryService(deps = {}) {
       startedAt: new Date().toISOString(),
     };
 
-    processBatchAlbums(albums);
+    processBatchAlbums(batchJob, albums, fetchAndStoreSummary, log);
   }
 
   /** Stop the running batch job */

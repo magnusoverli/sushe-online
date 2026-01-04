@@ -127,13 +127,17 @@ module.exports = (app, deps) => {
         cover_image = COALESCE(EXCLUDED.cover_image, albums.cover_image),
         cover_image_format = COALESCE(NULLIF(EXCLUDED.cover_image_format, ''), albums.cover_image_format),
         updated_at = EXCLUDED.updated_at
-      RETURNING (xmax = 0) AS inserted`,
+      RETURNING (xmax = 0) AS inserted, summary_fetched_at`,
       values
     );
 
-    // For newly inserted albums, trigger async summary fetch
-    // xmax = 0 means this was an INSERT, not an UPDATE
-    if (result.rows[0]?.inserted) {
+    const wasInserted = result.rows[0]?.inserted;
+    const hasSummaryFetched = result.rows[0]?.summary_fetched_at !== null;
+
+    // Trigger async summary fetch if:
+    // 1. Album is newly inserted, OR
+    // 2. Album exists but summary was never fetched (summary_fetched_at is NULL)
+    if (wasInserted || !hasSummaryFetched) {
       triggerAlbumSummaryFetch(album.album_id, album.artist, album.album);
     }
   }
