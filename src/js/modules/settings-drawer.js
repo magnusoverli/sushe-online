@@ -1621,10 +1621,11 @@ export function createSettingsDrawer(deps = {}) {
             <div class="settings-row">
               <div class="settings-row-label">
                 <label class="settings-label">Fetch Album Summaries</label>
-                <p class="settings-description">Fetch album descriptions from Last.fm for all albums without summaries</p>
+                <p class="settings-description">Fetch album descriptions from Claude AI for all albums without summaries</p>
               </div>
               <div class="flex gap-2">
                 <button id="fetchAlbumSummariesBtn" class="settings-button">Fetch Summaries</button>
+                <button id="regenerateAllSummariesBtn" class="settings-button" title="Regenerate all summaries (including existing ones)">Regenerate All</button>
                 <button id="stopAlbumSummariesBtn" class="settings-button settings-button-danger hidden">Stop</button>
               </div>
             </div>
@@ -2131,6 +2132,9 @@ export function createSettingsDrawer(deps = {}) {
     const fetchAlbumSummariesBtn = document.getElementById(
       'fetchAlbumSummariesBtn'
     );
+    const regenerateAllSummariesBtn = document.getElementById(
+      'regenerateAllSummariesBtn'
+    );
     const stopAlbumSummariesBtn = document.getElementById(
       'stopAlbumSummariesBtn'
     );
@@ -2140,6 +2144,37 @@ export function createSettingsDrawer(deps = {}) {
         'click',
         handleFetchAlbumSummaries
       );
+    }
+
+    if (regenerateAllSummariesBtn) {
+      regenerateAllSummariesBtn.addEventListener('click', async () => {
+        const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
+        try {
+          fetchBtn.disabled = true;
+          regenerateAllSummariesBtn.disabled = true;
+          regenerateAllSummariesBtn.textContent = 'Starting...';
+
+          const response = await apiCall('/api/admin/album-summaries/fetch', {
+            method: 'POST',
+            body: JSON.stringify({ includeRetries: true, regenerateAll: true }),
+          });
+
+          if (response.success) {
+            showToast('Regenerating all album summaries...', 'success');
+            await loadAlbumSummaryStats();
+            startAlbumSummaryPolling();
+          } else {
+            showToast('Failed to start regeneration', 'error');
+          }
+        } catch (error) {
+          console.error('Error regenerating all summaries:', error);
+          showToast('Error regenerating summaries', 'error');
+        } finally {
+          fetchBtn.disabled = false;
+          regenerateAllSummariesBtn.disabled = false;
+          regenerateAllSummariesBtn.textContent = 'Regenerate All';
+        }
+      });
     }
 
     if (stopAlbumSummariesBtn) {
@@ -3734,16 +3769,31 @@ export function createSettingsDrawer(deps = {}) {
             <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
           </div>
         </div>
-        <div class="grid grid-cols-2 gap-2">
+        <div class="grid grid-cols-1 gap-2">
           <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-red-400 text-lg">${stats.fromLastfm || 0}</div>
-            <div class="text-xs text-gray-400 uppercase"><i class="fab fa-lastfm mr-1"></i>From Last.fm</div>
-          </div>
-          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
-            <div class="font-bold text-blue-300 text-lg">${stats.fromWikipedia || 0}</div>
-            <div class="text-xs text-gray-400 uppercase"><i class="fab fa-wikipedia-w mr-1"></i>From Wikipedia</div>
+            <div class="font-bold text-orange-400 text-lg">${stats.fromClaude || 0}</div>
+            <div class="text-xs text-gray-400 uppercase"><i class="fas fa-robot mr-1"></i>From Claude AI</div>
           </div>
         </div>
+        ${
+          (stats.fromLastfm || 0) > 0 || (stats.fromWikipedia || 0) > 0
+            ? `
+        <div class="mt-2 pt-2 border-t border-gray-700/50">
+          <div class="text-xs text-gray-500 mb-1">Legacy Sources (deprecated):</div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="bg-gray-800/30 rounded p-2 text-center border border-gray-700/30">
+              <div class="font-bold text-red-400/60 text-sm">${stats.fromLastfm || 0}</div>
+              <div class="text-xs text-gray-500 uppercase"><i class="fab fa-lastfm mr-1"></i>Last.fm</div>
+            </div>
+            <div class="bg-gray-800/30 rounded p-2 text-center border border-gray-700/30">
+              <div class="font-bold text-blue-300/60 text-sm">${stats.fromWikipedia || 0}</div>
+              <div class="text-xs text-gray-500 uppercase"><i class="fab fa-wikipedia-w mr-1"></i>Wikipedia</div>
+            </div>
+          </div>
+        </div>
+        `
+            : ''
+        }
       `;
 
       // Update UI based on batch status
@@ -3801,11 +3851,18 @@ export function createSettingsDrawer(deps = {}) {
       const response = await apiCall('/api/admin/album-summaries/status');
       updateAlbumSummaryUI(response.status);
 
-      // If job finished, reload stats
+      // If job finished, reload stats (silently handle errors to avoid false positives)
       if (!response.status?.running) {
-        await loadAlbumSummaryStats();
+        try {
+          await loadAlbumSummaryStats();
+        } catch (statsError) {
+          // Silently handle stats loading errors - these are not critical failures
+          // The batch job completed successfully, stats loading failure is just a UI refresh issue
+          console.error('Error loading album summary stats after batch completion:', statsError);
+        }
       }
     } catch (error) {
+      // Only log polling errors, don't show toast (polling failures are expected during network issues)
       console.error('Error polling album summary status:', error);
     }
   }
@@ -3822,7 +3879,7 @@ export function createSettingsDrawer(deps = {}) {
 
       const response = await apiCall('/api/admin/album-summaries/fetch', {
         method: 'POST',
-        body: JSON.stringify({ includeRetries: true }),
+        body: JSON.stringify({ includeRetries: true, regenerateAll: false }),
       });
 
       if (response.success) {

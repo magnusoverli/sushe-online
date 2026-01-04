@@ -3,11 +3,8 @@ const assert = require('node:assert');
 const {
   stripHtml,
   generateNameVariations,
-  buildLastfmUrl,
-  buildWikipediaSearchQuery,
   createAlbumSummaryService,
   fetchAlbumSummary,
-  fetchWikipediaSummary,
   SUMMARY_SOURCES,
 } = require('../utils/album-summary.js');
 
@@ -104,33 +101,6 @@ test('generateNameVariations should deduplicate', () => {
   assert.strictEqual(variations.length, uniqueSet.size);
 });
 
-// =============================================================================
-// buildLastfmUrl tests
-// =============================================================================
-
-test('buildLastfmUrl should build correct URL', () => {
-  const url = buildLastfmUrl('Radiohead', 'OK Computer');
-  assert.strictEqual(url, 'https://www.last.fm/music/Radiohead/OK+Computer');
-});
-
-test('buildLastfmUrl should encode special characters', () => {
-  const url = buildLastfmUrl('AC/DC', 'Back in Black');
-  assert.ok(url.includes('AC%2FDC'));
-  assert.ok(url.includes('Back+in+Black'));
-});
-
-test('buildLastfmUrl should handle spaces', () => {
-  const url = buildLastfmUrl('Pink Floyd', 'The Dark Side of the Moon');
-  assert.strictEqual(
-    url,
-    'https://www.last.fm/music/Pink+Floyd/The+Dark+Side+of+the+Moon'
-  );
-});
-
-test('buildLastfmUrl should handle ampersand', () => {
-  const url = buildLastfmUrl('Simon & Garfunkel', 'Bridge Over Troubled Water');
-  assert.ok(url.includes('Simon+%26+Garfunkel'));
-});
 
 // =============================================================================
 // createAlbumSummaryService tests
@@ -189,6 +159,7 @@ test('getStats should return album statistics', async () => {
           with_summary: '50',
           attempted_no_summary: '20',
           never_attempted: '30',
+          from_claude: '50',
           from_lastfm: '35',
           from_wikipedia: '15',
         },
@@ -208,6 +179,7 @@ test('getStats should return album statistics', async () => {
   assert.strictEqual(stats.attemptedNoSummary, 20);
   assert.strictEqual(stats.neverAttempted, 30);
   assert.strictEqual(stats.pending, 50); // neverAttempted + attemptedNoSummary
+  assert.strictEqual(stats.fromClaude, 50);
   assert.strictEqual(stats.fromLastfm, 35);
   assert.strictEqual(stats.fromWikipedia, 15);
 });
@@ -277,12 +249,9 @@ test('module should export helper functions for testing', () => {
 
   assert.strictEqual(typeof module.stripHtml, 'function');
   assert.strictEqual(typeof module.generateNameVariations, 'function');
-  assert.strictEqual(typeof module.buildLastfmUrl, 'function');
-  assert.strictEqual(typeof module.buildWikipediaSearchQuery, 'function');
   assert.strictEqual(typeof module.createAlbumSummaryService, 'function');
   assert.strictEqual(typeof module.getDefaultInstance, 'function');
   assert.strictEqual(typeof module.fetchAlbumSummary, 'function');
-  assert.strictEqual(typeof module.fetchWikipediaSummary, 'function');
   assert.ok(module.SUMMARY_SOURCES);
 });
 
@@ -290,209 +259,15 @@ test('module should export helper functions for testing', () => {
 // SUMMARY_SOURCES constants tests
 // =============================================================================
 
-test('SUMMARY_SOURCES should have lastfm and wikipedia', () => {
+test('SUMMARY_SOURCES should have claude', () => {
+  assert.strictEqual(SUMMARY_SOURCES.CLAUDE, 'claude');
+  // Legacy sources kept for backward compatibility
   assert.strictEqual(SUMMARY_SOURCES.LASTFM, 'lastfm');
   assert.strictEqual(SUMMARY_SOURCES.WIKIPEDIA, 'wikipedia');
 });
 
 // =============================================================================
-// buildWikipediaSearchQuery tests
-// =============================================================================
-
-test('buildWikipediaSearchQuery should build correct search query', () => {
-  const query = buildWikipediaSearchQuery('The Beatles', 'Abbey Road');
-  assert.strictEqual(query, 'Abbey Road album The Beatles');
-});
-
-test('buildWikipediaSearchQuery should include album and artist', () => {
-  const query = buildWikipediaSearchQuery(
-    'Daft Punk',
-    'Random Access Memories'
-  );
-  assert.ok(query.includes('Random Access Memories'));
-  assert.ok(query.includes('Daft Punk'));
-  assert.ok(query.includes('album'));
-});
-
-// =============================================================================
-// fetchWikipediaSummary tests (with mocked fetch)
-// =============================================================================
-
-test('fetchWikipediaSummary should return not found for empty input', async () => {
-  const result = await fetchWikipediaSummary('', '', () => {});
-  assert.strictEqual(result.found, false);
-  assert.strictEqual(result.summary, null);
-  assert.strictEqual(result.wikipediaUrl, null);
-});
-
-test('fetchWikipediaSummary should return not found for null input', async () => {
-  const result = await fetchWikipediaSummary(null, null, () => {});
-  assert.strictEqual(result.found, false);
-});
-
-test('fetchWikipediaSummary should handle search with no results', async () => {
-  const mockFetch = async () => ({
-    ok: true,
-    json: async () => ({ query: { search: [] } }),
-  });
-
-  const result = await fetchWikipediaSummary(
-    'Unknown Artist',
-    'Unknown Album',
-    mockFetch
-  );
-  assert.strictEqual(result.found, false);
-  assert.strictEqual(result.summary, null);
-});
-
-test('fetchWikipediaSummary should handle search API failure', async () => {
-  const mockFetch = async () => ({
-    ok: false,
-    status: 500,
-  });
-
-  const result = await fetchWikipediaSummary(
-    'Test Artist',
-    'Test Album',
-    mockFetch
-  );
-  assert.strictEqual(result.found, false);
-});
-
-test('fetchWikipediaSummary should return summary for matching album', async () => {
-  const mockFetch = async (url) => {
-    if (url.includes('/w/api.php')) {
-      // Search API
-      return {
-        ok: true,
-        json: async () => ({
-          query: {
-            search: [
-              {
-                title: 'Abbey Road',
-                snippet:
-                  'Abbey Road is the eleventh studio album by the English rock band the Beatles',
-              },
-            ],
-          },
-        }),
-      };
-    } else if (url.includes('/api/rest_v1/page/summary')) {
-      // Summary API
-      return {
-        ok: true,
-        json: async () => ({
-          title: 'Abbey Road',
-          description: '1969 studio album by the Beatles',
-          extract:
-            'Abbey Road is the eleventh studio album by the English rock band the Beatles.',
-          content_urls: {
-            desktop: { page: 'https://en.wikipedia.org/wiki/Abbey_Road' },
-          },
-        }),
-      };
-    }
-    return { ok: false };
-  };
-
-  const result = await fetchWikipediaSummary(
-    'The Beatles',
-    'Abbey Road',
-    mockFetch
-  );
-
-  assert.strictEqual(result.found, true);
-  assert.ok(result.summary.includes('Abbey Road'));
-  assert.strictEqual(
-    result.wikipediaUrl,
-    'https://en.wikipedia.org/wiki/Abbey_Road'
-  );
-});
-
-test('fetchWikipediaSummary should reject non-album Wikipedia pages', async () => {
-  const mockFetch = async (url) => {
-    if (url.includes('/w/api.php')) {
-      return {
-        ok: true,
-        json: async () => ({
-          query: {
-            search: [
-              {
-                title: 'Abbey Road, London',
-                snippet:
-                  'Abbey Road is a road in London known for its recording studios',
-              },
-            ],
-          },
-        }),
-      };
-    } else if (url.includes('/api/rest_v1/page/summary')) {
-      return {
-        ok: true,
-        json: async () => ({
-          title: 'Abbey Road, London',
-          description: 'Street in London, England',
-          extract: 'Abbey Road is a road in the City of Westminster in London.',
-        }),
-      };
-    }
-    return { ok: false };
-  };
-
-  const result = await fetchWikipediaSummary(
-    'The Beatles',
-    'Abbey Road',
-    mockFetch
-  );
-
-  // Should not match because the description says "Street" not "album"
-  assert.strictEqual(result.found, false);
-});
-
-test('fetchWikipediaSummary should reject artist/band pages', async () => {
-  const mockFetch = async (url) => {
-    if (url.includes('/w/api.php')) {
-      return {
-        ok: true,
-        json: async () => ({
-          query: {
-            search: [
-              {
-                title: 'Radiohead',
-                snippet:
-                  'Radiohead are an English rock band formed in Abingdon',
-              },
-            ],
-          },
-        }),
-      };
-    } else if (url.includes('/api/rest_v1/page/summary')) {
-      return {
-        ok: true,
-        json: async () => ({
-          title: 'Radiohead',
-          description: 'English rock band',
-          extract:
-            'Radiohead are an English rock band formed in Abingdon, Oxfordshire, in 1985.',
-        }),
-      };
-    }
-    return { ok: false };
-  };
-
-  const result = await fetchWikipediaSummary(
-    'Radiohead',
-    'Radiohead',
-    mockFetch
-  );
-
-  // Should not match because description says "band" - this is an artist page, not an album
-  assert.strictEqual(result.found, false);
-  assert.strictEqual(result.summary, null);
-});
-
-// =============================================================================
-// fetchAlbumSummary tests (integrated - tries Last.fm then Wikipedia)
+// fetchAlbumSummary tests (uses Claude API)
 // =============================================================================
 
 test('fetchAlbumSummary should return not found for empty input', async () => {
@@ -504,6 +279,7 @@ test('fetchAlbumSummary should return not found for empty input', async () => {
 
 test('fetchAlbumSummary should include source in result', async () => {
   // This tests the structure of the result
+  // Note: This will fail if Claude API key is not set, but that's OK for test structure validation
   const result = await fetchAlbumSummary(
     'NonExistentArtist12345',
     'NonExistentAlbum12345'
@@ -529,6 +305,7 @@ test('getStats should return source breakdown', async () => {
           with_summary: '50',
           attempted_no_summary: '20',
           never_attempted: '30',
+          from_claude: '50',
           from_lastfm: '35',
           from_wikipedia: '15',
         },
@@ -545,6 +322,7 @@ test('getStats should return source breakdown', async () => {
 
   assert.strictEqual(stats.totalAlbums, 100);
   assert.strictEqual(stats.withSummary, 50);
+  assert.strictEqual(stats.fromClaude, 50);
   assert.strictEqual(stats.fromLastfm, 35);
   assert.strictEqual(stats.fromWikipedia, 15);
 });

@@ -1,19 +1,17 @@
 // utils/album-summary.js
-// Album summary fetching from Last.fm and Wikipedia
+// Album summary fetching from Claude API
 
 const logger = require('./logger');
-const { getAlbumInfo } = require('./lastfm-auth');
 const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
+const { fetchClaudeSummary, SUMMARY_SOURCE } = require('./claude-summary');
 
-// Summary sources in order of preference
+// Summary sources
 const SUMMARY_SOURCES = {
+  CLAUDE: 'claude',
+  // Legacy sources kept for backward compatibility with existing data
   LASTFM: 'lastfm',
   WIKIPEDIA: 'wikipedia',
 };
-
-// Rate limiter: 2 requests per second to Last.fm
-const RATE_LIMIT_MS = 500; // 500ms between requests = 2/sec
-let lastRequestTime = 0;
 
 /**
  * Strip HTML tags from a string
@@ -79,371 +77,13 @@ function generateNameVariations(name) {
 }
 
 /**
- * Build Last.fm URL from artist and album names
- * @param {string} artist - Artist name
- * @param {string} album - Album name
- * @returns {string} Last.fm URL
- */
-function buildLastfmUrl(artist, album) {
-  // Last.fm URLs use URL-encoded names with + for spaces
-  const encodeForLastfm = (str) => encodeURIComponent(str).replace(/%20/g, '+');
-  return `https://www.last.fm/music/${encodeForLastfm(artist)}/${encodeForLastfm(album)}`;
-}
-
-/**
- * Build Wikipedia search query for an album
- * @param {string} artist - Artist name
- * @param {string} album - Album name
- * @returns {string} Search query
- */
-function buildWikipediaSearchQuery(artist, album) {
-  return `${album} album ${artist}`;
-}
-
-/**
- * Find the best matching album result from Wikipedia search results
- * @param {Array} results - Wikipedia search results
- * @param {string} albumName - Album name to match
- * @param {string} artistName - Artist name to match
- * @returns {Object|null} Best matching result or null
- */
-function findBestWikipediaMatch(results, albumName, artistName) {
-  const albumLower = albumName.toLowerCase();
-  const artistLower = artistName.toLowerCase();
-  let bestMatch = null;
-
-  for (const result of results) {
-    const titleLower = result.title.toLowerCase();
-    const snippetLower = (result.snippet || '').toLowerCase();
-
-    // Check if it's likely an album article
-    const isAlbumArticle =
-      snippetLower.includes('album') ||
-      snippetLower.includes('studio album') ||
-      snippetLower.includes('released') ||
-      titleLower.includes(albumLower);
-
-    // Check if artist is mentioned
-    const hasArtist =
-      snippetLower.includes(artistLower) || titleLower.includes(artistLower);
-
-    if (isAlbumArticle && hasArtist) {
-      return result; // Best match found
-    }
-
-    // Fallback: first result that mentions artist
-    if (!bestMatch && hasArtist) {
-      bestMatch = result;
-    }
-  }
-
-  return bestMatch;
-}
-
-/**
- * Check if Wikipedia page description indicates an artist/band (not an album)
- * @param {string} description - Wikipedia page description
- * @returns {boolean} True if page appears to be about an artist/band
- */
-function isArtistDescription(description) {
-  const artistIndicators = [
-    'band',
-    'musician',
-    'singer',
-    'rapper',
-    'artist',
-    'group',
-    'duo',
-    'trio',
-    'quartet',
-    'composer',
-    'producer',
-    'dj',
-    'vocalist',
-    'guitarist',
-    'drummer',
-    'pianist',
-  ];
-  return artistIndicators.some((indicator) => description.includes(indicator));
-}
-
-/**
- * Check if Wikipedia page data represents an album
- * @param {Object} summaryData - Wikipedia page summary data
- * @returns {boolean} True if page appears to be about an album
- */
-function isWikipediaAlbumPage(summaryData) {
-  const description = (summaryData.description || '').toLowerCase();
-
-  // First, reject if it looks like an artist/band page
-  if (isArtistDescription(description)) {
-    return false;
-  }
-
-  // Check description for album indicators
-  if (
-    description.includes('album') ||
-    description.includes(' ep ') ||
-    description.includes(' ep,') ||
-    description.endsWith(' ep') ||
-    description.includes('mixtape') ||
-    description.includes('soundtrack')
-  ) {
-    return true;
-  }
-
-  // Fall back to checking the extract - but be more strict
-  if (summaryData.extract) {
-    const extractLower = summaryData.extract.toLowerCase();
-    // Must have "studio album" or "is the...album" pattern, not just "album" anywhere
-    const hasAlbumPattern =
-      extractLower.includes('studio album') ||
-      extractLower.includes('debut album') ||
-      extractLower.includes('second album') ||
-      extractLower.includes('third album') ||
-      extractLower.includes('fourth album') ||
-      extractLower.includes('fifth album') ||
-      /is the \w+ album/.test(extractLower) ||
-      /is an album/.test(extractLower);
-
-    return hasAlbumPattern;
-  }
-
-  return false;
-}
-
-/**
- * Search Wikipedia for an album and get the summary
- * Uses Wikipedia's REST API for search and page summary
+ * Fetch album summary from Claude API
  *
  * @param {string} artist - Artist name
  * @param {string} album - Album name
- * @param {Function} fetchFn - Fetch function (for dependency injection)
- * @returns {Promise<{summary: string|null, wikipediaUrl: string|null, found: boolean}>}
- */
-async function fetchWikipediaSummary(artist, album, fetchFn = fetch) {
-  if (!artist || !album) {
-    return { summary: null, wikipediaUrl: null, found: false };
-  }
-
-  const artistVariations = generateNameVariations(artist);
-  const albumVariations = generateNameVariations(album);
-
-  // Try combinations up to ~5 attempts
-  const attempts = [];
-  for (let i = 0; i < Math.min(artistVariations.length, 3); i++) {
-    for (let j = 0; j < Math.min(albumVariations.length, 3); j++) {
-      attempts.push({
-        artist: artistVariations[i],
-        album: albumVariations[j],
-      });
-      if (attempts.length >= 5) break;
-    }
-    if (attempts.length >= 5) break;
-  }
-
-  for (const attempt of attempts) {
-    try {
-      await waitForRateLimit();
-
-      const searchQuery = buildWikipediaSearchQuery(
-        attempt.artist,
-        attempt.album
-      );
-      const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(searchQuery)}&format=json&srlimit=5`;
-
-      const searchResp = await fetchFn(searchUrl, {
-        headers: { 'User-Agent': 'SusheOnline/1.0 (album summary fetcher)' },
-      });
-
-      if (!searchResp.ok) {
-        logger.debug('Wikipedia search failed', {
-          status: searchResp.status,
-          query: searchQuery,
-        });
-        continue;
-      }
-
-      const searchData = await searchResp.json();
-      const results = searchData?.query?.search || [];
-
-      if (results.length === 0) {
-        continue;
-      }
-
-      const bestMatch = findBestWikipediaMatch(
-        results,
-        attempt.album,
-        attempt.artist
-      );
-      if (!bestMatch) {
-        continue;
-      }
-
-      // Get the page summary using the REST API
-      const pageTitle = bestMatch.title.replace(/ /g, '_');
-      const summaryUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(pageTitle)}`;
-
-      const summaryResp = await fetchFn(summaryUrl, {
-        headers: { 'User-Agent': 'SusheOnline/1.0 (album summary fetcher)' },
-      });
-
-      if (!summaryResp.ok) {
-        logger.debug('Wikipedia summary fetch failed', {
-          status: summaryResp.status,
-          title: bestMatch.title,
-        });
-        continue;
-      }
-
-      const summaryData = await summaryResp.json();
-
-      // Verify this is actually an album article
-      if (!isWikipediaAlbumPage(summaryData)) {
-        logger.debug('Wikipedia result does not appear to be an album', {
-          title: bestMatch.title,
-          description: summaryData.description,
-        });
-        continue;
-      }
-
-      if (summaryData.extract) {
-        const wikipediaUrl =
-          summaryData.content_urls?.desktop?.page ||
-          `https://en.wikipedia.org/wiki/${pageTitle}`;
-
-        logger.debug('Found Wikipedia album summary', {
-          artist: attempt.artist,
-          album: attempt.album,
-          title: bestMatch.title,
-          summaryLength: summaryData.extract.length,
-        });
-
-        return {
-          summary: summaryData.extract,
-          wikipediaUrl,
-          found: true,
-        };
-      }
-    } catch (err) {
-      logger.debug('Wikipedia lookup attempt failed', {
-        artist: attempt.artist,
-        album: attempt.album,
-        error: err.message,
-      });
-      // Continue to next variation
-    }
-  }
-
-  return { summary: null, wikipediaUrl: null, found: false };
-}
-
-/**
- * Wait for rate limit
- */
-async function waitForRateLimit() {
-  const now = Date.now();
-  const timeSinceLastRequest = now - lastRequestTime;
-  if (timeSinceLastRequest < RATE_LIMIT_MS) {
-    await new Promise((r) =>
-      setTimeout(r, RATE_LIMIT_MS - timeSinceLastRequest)
-    );
-  }
-  lastRequestTime = Date.now();
-}
-
-/**
- * Fetch album summary from Last.fm only
- * Tries name variations until a match is found
- *
- * @param {string} artist - Artist name
- * @param {string} album - Album name
- * @returns {Promise<{summary: string|null, lastfmUrl: string|null, found: boolean}>}
- */
-async function fetchLastfmSummary(artist, album) {
-  if (!artist || !album) {
-    return { summary: null, lastfmUrl: null, found: false };
-  }
-
-  const artistVariations = generateNameVariations(artist);
-  const albumVariations = generateNameVariations(album);
-
-  // Try combinations up to ~5 attempts
-  const attempts = [];
-  for (let i = 0; i < Math.min(artistVariations.length, 3); i++) {
-    for (let j = 0; j < Math.min(albumVariations.length, 3); j++) {
-      attempts.push({
-        artist: artistVariations[i],
-        album: albumVariations[j],
-      });
-      if (attempts.length >= 5) break;
-    }
-    if (attempts.length >= 5) break;
-  }
-
-  for (const attempt of attempts) {
-    try {
-      await waitForRateLimit();
-
-      const info = await getAlbumInfo(attempt.artist, attempt.album, '');
-
-      // Check if we got wiki data
-      if (info && info.wiki && info.wiki.summary) {
-        const summary = stripHtml(info.wiki.summary);
-        // Use the actual artist/album names from Last.fm response for URL
-        const responseArtist = info.artist || attempt.artist;
-        const responseAlbum = info.name || attempt.album;
-        const lastfmUrl =
-          info.url || buildLastfmUrl(responseArtist, responseAlbum);
-
-        logger.debug('Found Last.fm album summary', {
-          artist: attempt.artist,
-          album: attempt.album,
-          summaryLength: summary.length,
-        });
-
-        return {
-          summary: summary || null,
-          lastfmUrl,
-          found: true,
-        };
-      }
-
-      // Found the album but no wiki
-      if (info && (info.name || info.artist)) {
-        const responseArtist = info.artist || attempt.artist;
-        const responseAlbum = info.name || attempt.album;
-        return {
-          summary: null,
-          lastfmUrl: info.url || buildLastfmUrl(responseArtist, responseAlbum),
-          found: true,
-        };
-      }
-    } catch (err) {
-      logger.debug('Last.fm lookup attempt failed', {
-        artist: attempt.artist,
-        album: attempt.album,
-        error: err.message,
-      });
-      // Continue to next variation
-    }
-  }
-
-  // No match found after all attempts
-  return { summary: null, lastfmUrl: null, found: false };
-}
-
-/**
- * Fetch album summary from all sources in order of preference
- * 1. Last.fm (primary)
- * 2. Wikipedia (fallback)
- *
- * @param {string} artist - Artist name
- * @param {string} album - Album name
- * @param {Function} fetchFn - Fetch function (for dependency injection in tests)
  * @returns {Promise<{summary: string|null, lastfmUrl: string|null, wikipediaUrl: string|null, source: string|null, found: boolean}>}
  */
-async function fetchAlbumSummary(artist, album, fetchFn = fetch) {
+async function fetchAlbumSummary(artist, album) {
   if (!artist || !album) {
     return {
       summary: null,
@@ -454,40 +94,26 @@ async function fetchAlbumSummary(artist, album, fetchFn = fetch) {
     };
   }
 
-  // Try Last.fm first (primary source)
-  const lastfmResult = await fetchLastfmSummary(artist, album);
+  // Use Claude API as the sole source
+  const claudeResult = await fetchClaudeSummary(artist, album);
 
-  if (lastfmResult.summary) {
+  if (claudeResult.summary) {
     return {
-      summary: lastfmResult.summary,
-      lastfmUrl: lastfmResult.lastfmUrl,
-      wikipediaUrl: null,
-      source: SUMMARY_SOURCES.LASTFM,
+      summary: claudeResult.summary,
+      lastfmUrl: null, // Clear Last.fm URL for new Claude summaries
+      wikipediaUrl: null, // Clear Wikipedia URL for new Claude summaries
+      source: SUMMARY_SOURCES.CLAUDE,
       found: true,
     };
   }
 
-  // Try Wikipedia as fallback
-  logger.debug('No Last.fm summary found, trying Wikipedia', { artist, album });
-  const wikiResult = await fetchWikipediaSummary(artist, album, fetchFn);
-
-  if (wikiResult.summary) {
-    return {
-      summary: wikiResult.summary,
-      lastfmUrl: lastfmResult.lastfmUrl, // Keep Last.fm URL if we found the album there
-      wikipediaUrl: wikiResult.wikipediaUrl,
-      source: SUMMARY_SOURCES.WIKIPEDIA,
-      found: true,
-    };
-  }
-
-  // No summary found from any source
+  // No summary found
   return {
     summary: null,
-    lastfmUrl: lastfmResult.lastfmUrl,
+    lastfmUrl: null,
     wikipediaUrl: null,
     source: null,
-    found: lastfmResult.found || wikiResult.found,
+    found: false,
   };
 }
 
@@ -505,8 +131,10 @@ function parseStatsRow(row) {
     pending:
       parseInt(row.never_attempted, 10) +
       parseInt(row.attempted_no_summary, 10),
-    fromLastfm: parseInt(row.from_lastfm, 10),
-    fromWikipedia: parseInt(row.from_wikipedia, 10),
+    fromClaude: parseInt(row.from_claude, 10),
+    // Deprecated: kept for backward compatibility
+    fromLastfm: parseInt(row.from_lastfm || '0', 10),
+    fromWikipedia: parseInt(row.from_wikipedia || '0', 10),
   };
 }
 
@@ -552,15 +180,16 @@ function createAlbumSummaryService(deps = {}) {
       const { summary, lastfmUrl, wikipediaUrl, source } =
         await fetchAlbumSummary(albumRecord.artist, albumRecord.album);
 
+      // Clear lastfm_url and wikipedia_url for Claude summaries (set to NULL)
       await pool.query(
-        `UPDATE albums SET summary = $1, lastfm_url = $2, wikipedia_url = $3,
-          summary_source = $4, summary_fetched_at = NOW() WHERE album_id = $5`,
-        [summary, lastfmUrl, wikipediaUrl, source, albumId]
+        `UPDATE albums SET summary = $1, lastfm_url = NULL, wikipedia_url = NULL,
+          summary_source = $2, summary_fetched_at = NOW() WHERE album_id = $3`,
+        [summary, source, albumId]
       );
 
       const duration = Date.now() - startTime;
       observeExternalApiCall(
-        source || 'lastfm',
+        source || 'claude',
         'album.getInfo',
         duration,
         summary ? 200 : 404
@@ -571,6 +200,9 @@ function createAlbumSummaryService(deps = {}) {
       log.error('Error fetching album summary', {
         albumId,
         error: err.message,
+        stack: err.stack,
+        artist: albumRecord?.artist,
+        album: albumRecord?.album,
       });
       return {
         success: false,
@@ -623,6 +255,7 @@ function createAlbumSummaryService(deps = {}) {
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary IS NOT NULL) AS with_summary,
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NOT NULL AND a.summary IS NULL) AS attempted_no_summary,
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NULL) AS never_attempted,
+        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'claude') AS from_claude,
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'lastfm') AS from_lastfm,
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'wikipedia') AS from_wikipedia
       FROM albums a INNER JOIN list_items li ON li.album_id = a.album_id
@@ -663,7 +296,10 @@ function createAlbumSummaryService(deps = {}) {
           batchJob.errors++;
           log.error('Batch fetch error for album', {
             albumId: album.album_id,
+            artist: album.artist,
+            album: album.album,
             error: err.message,
+            stack: err.stack,
           });
         }
       }
@@ -681,11 +317,15 @@ function createAlbumSummaryService(deps = {}) {
   /** Start batch fetch job for albums without summaries */
   async function startBatchFetch(options = {}) {
     const includeRetries = options.includeRetries !== false;
+    const regenerateAll = options.regenerateAll === true; // New option to regenerate all summaries
     if (batchJob?.running) throw new Error('Batch job already running');
 
-    const whereClause = includeRetries
-      ? 'a.summary IS NULL'
-      : 'a.summary_fetched_at IS NULL';
+    // If regenerateAll is true, fetch all albums (including those with summaries)
+    const whereClause = regenerateAll
+      ? '1=1' // All albums
+      : includeRetries
+        ? 'a.summary IS NULL'
+        : 'a.summary_fetched_at IS NULL';
     const query = `SELECT DISTINCT a.album_id, a.artist, a.album FROM albums a
       INNER JOIN list_items li ON li.album_id = a.album_id WHERE ${whereClause} ORDER BY a.album_id`;
 
@@ -700,6 +340,7 @@ function createAlbumSummaryService(deps = {}) {
     log.info('Starting batch summary fetch', {
       albumCount: albums.length,
       includeRetries,
+      regenerateAll: !!regenerateAll,
     });
     batchJob = {
       running: true,
@@ -733,7 +374,6 @@ function createAlbumSummaryService(deps = {}) {
     stopBatchFetch,
     stripHtml,
     generateNameVariations,
-    buildLastfmUrl,
   };
 }
 
@@ -753,11 +393,7 @@ module.exports = {
   // Export helpers for testing
   stripHtml,
   generateNameVariations,
-  buildLastfmUrl,
-  buildWikipediaSearchQuery,
   fetchAlbumSummary,
-  fetchLastfmSummary,
-  fetchWikipediaSummary,
   // Constants
   SUMMARY_SOURCES,
 };

@@ -1495,7 +1495,7 @@ module.exports = (app, deps) => {
   );
 
   // ============ ALBUM SUMMARY FETCH API ============
-  // Batch fetch album summaries from Last.fm
+  // Batch fetch album summaries from Claude API
 
   const { createAlbumSummaryService } = require('../utils/album-summary');
 
@@ -1542,7 +1542,7 @@ module.exports = (app, deps) => {
     ensureAdmin,
     async (req, res) => {
       try {
-        const { includeRetries } = req.body;
+        const { includeRetries, regenerateAll } = req.body;
 
         // Check if already running
         const currentStatus = albumSummaryService.getBatchStatus();
@@ -1557,9 +1557,13 @@ module.exports = (app, deps) => {
           adminUsername: req.user.username,
           adminId: req.user._id,
           includeRetries: !!includeRetries,
+          regenerateAll: !!regenerateAll,
         });
 
-        await albumSummaryService.startBatchFetch({ includeRetries });
+        await albumSummaryService.startBatchFetch({
+          includeRetries,
+          regenerateAll,
+        });
 
         res.json({
           success: true,

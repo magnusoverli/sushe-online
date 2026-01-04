@@ -1741,6 +1741,11 @@ body.now-playing-bar-visible #addAlbumFAB {
   color: #ffffff;
 }
 
+/* Claude badge - purple/indigo icon (AI/Claude branding) */
+.summary-badge.claude-badge i {
+  color: #d97706; /* Orange/amber color for Claude */
+}
+
 /* Base summary tooltip styles */
 .summary-tooltip {
   position: fixed;
@@ -1841,6 +1846,20 @@ body.now-playing-bar-visible #addAlbumFAB {
 
 .summary-tooltip.wikipedia-tooltip .summary-tooltip-link:hover {
   background: #2a4d99;
+}
+
+/* Claude tooltip - orange/amber accent (Claude branding) */
+.summary-tooltip.claude-tooltip .summary-tooltip-header i {
+  color: #d97706;
+}
+
+.summary-tooltip.claude-tooltip .summary-tooltip-link {
+  background: #d97706;
+  cursor: default;
+}
+
+.summary-tooltip.claude-tooltip .summary-tooltip-link:hover {
+  background: #b45309;
 }
 
 /* Legacy class aliases for backwards compatibility */

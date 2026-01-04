@@ -192,6 +192,23 @@ TIDAL_REDIRECT_URI=https://your-domain.com/auth/tidal/callback
 
 </details>
 
+<details>
+<summary><strong>Claude API Configuration (Album Descriptions)</strong></summary>
+
+```bash
+# Required for album description generation
+ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# Optional Claude API settings
+CLAUDE_MODEL=claude-sonnet-4-5    # Model to use (default: claude-sonnet-4-5)
+CLAUDE_MAX_TOKENS=1024            # Max tokens in response (default: 1024)
+CLAUDE_RATE_LIMIT_MS=1000         # Rate limit in ms between requests (default: 1000)
+```
+
+Get your API key from [Anthropic Console](https://console.anthropic.com/).
+
+</details>
+
 ### Security & Rate Limiting
 
 Rate limiting is **enabled by default** with production-ready settings:
@@ -235,6 +252,15 @@ Rate limiting is **enabled by default** with production-ready settings:
 | ------------ | ------------ | ------------------ |
 | `PG_DUMP`    | `pg_dump`    | Path to pg_dump    |
 | `PG_RESTORE` | `pg_restore` | Path to pg_restore |
+
+### Claude API (Album Descriptions)
+
+| Variable            | Default                 | Description                                    |
+| ------------------- | ----------------------- | ---------------------------------------------- |
+| `ANTHROPIC_API_KEY` | **Required**            | Anthropic API key for Claude API               |
+| `CLAUDE_MODEL`      | `claude-sonnet-4-5`     | Claude model to use                            |
+| `CLAUDE_MAX_TOKENS` | `1024`                  | Maximum tokens in API response                 |
+| `CLAUDE_RATE_LIMIT_MS` | `1000`               | Rate limit delay between requests (milliseconds) |
 
 </details>
 
