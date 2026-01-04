@@ -43,7 +43,7 @@ function createTestApp(sessionConfig = {}) {
     store: new FileStore({
       path: tempSessionDir,
       ttl: 86400, // 1 day
-      reapInterval: 3600, // 1 hour
+      reapInterval: -1, // Disable automatic cleanup timer to prevent test hangs
     }),
   };
 
