@@ -101,7 +101,6 @@ test('generateNameVariations should deduplicate', () => {
   assert.strictEqual(variations.length, uniqueSet.size);
 });
 
-
 // =============================================================================
 // createAlbumSummaryService tests
 // =============================================================================

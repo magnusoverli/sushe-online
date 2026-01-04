@@ -3,7 +3,7 @@
 
 const logger = require('./logger');
 const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
-const { fetchClaudeSummary, SUMMARY_SOURCE } = require('./claude-summary');
+const { fetchClaudeSummary } = require('./claude-summary');
 
 // Summary sources
 const SUMMARY_SOURCES = {
@@ -160,6 +160,7 @@ function createAlbumSummaryService(deps = {}) {
    */
   async function fetchAndStoreSummary(albumId) {
     const startTime = Date.now();
+    let albumRecord = null;
 
     try {
       const albumResult = await pool.query(
@@ -176,9 +177,11 @@ function createAlbumSummaryService(deps = {}) {
         };
       }
 
-      const albumRecord = albumResult.rows[0];
-      const { summary, lastfmUrl, wikipediaUrl, source } =
-        await fetchAlbumSummary(albumRecord.artist, albumRecord.album);
+      albumRecord = albumResult.rows[0];
+      const { summary, source } = await fetchAlbumSummary(
+        albumRecord.artist,
+        albumRecord.album
+      );
 
       // Clear lastfm_url and wikipedia_url for Claude summaries (set to NULL)
       await pool.query(

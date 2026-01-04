@@ -44,8 +44,7 @@ function createClaudeSummaryService(deps = {}) {
 
   // Create Anthropic client (or use injected one for testing)
   const anthropic =
-    deps.anthropicClient ||
-    (apiKey ? new Anthropic({ apiKey }) : null);
+    deps.anthropicClient || (apiKey ? new Anthropic({ apiKey }) : null);
 
   /**
    * Fetch album summary from Claude API with web search
@@ -166,7 +165,12 @@ function createClaudeSummaryService(deps = {}) {
           stack: err.stack,
           type: err.type,
         });
-        observeExternalApiCall('claude', 'messages.create', duration, err.status || 500);
+        observeExternalApiCall(
+          'claude',
+          'messages.create',
+          duration,
+          err.status || 500
+        );
       } else if (err.status === 401 || err.status === 403) {
         log.error('Claude API authentication error', {
           artist,
@@ -175,7 +179,12 @@ function createClaudeSummaryService(deps = {}) {
           error: err.message,
           type: err.type,
         });
-        observeExternalApiCall('claude', 'messages.create', duration, err.status || 401);
+        observeExternalApiCall(
+          'claude',
+          'messages.create',
+          duration,
+          err.status || 401
+        );
       } else {
         log.error('Claude API error', {
           artist,
@@ -186,7 +195,12 @@ function createClaudeSummaryService(deps = {}) {
           type: err.type,
           cause: err.cause?.message,
         });
-        observeExternalApiCall('claude', 'messages.create', duration, err.status || 400);
+        observeExternalApiCall(
+          'claude',
+          'messages.create',
+          duration,
+          err.status || 400
+        );
       }
 
       return { summary: null, source: SUMMARY_SOURCE, found: false };

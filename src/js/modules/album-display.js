@@ -1346,8 +1346,8 @@ export function createAlbumDisplay(deps = {}) {
   function handleBadgeMouseEnter(e) {
     const badge = e.currentTarget;
     const summary = badge.dataset.summary;
-    const sourceUrl = badge.dataset.sourceUrl;
-    const source = badge.dataset.source || 'lastfm';
+    const _sourceUrl = badge.dataset.sourceUrl;
+    const _source = badge.dataset.source || 'lastfm';
     const albumName = badge.dataset.albumName;
     const artist = badge.dataset.artist;
 

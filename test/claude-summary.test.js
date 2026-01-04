@@ -11,7 +11,12 @@ const {
 // =============================================================================
 
 test('createClaudeSummaryService should create service with dependencies', () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
   const mockAnthropic = {
     messages: {
       create: mock.fn(),
@@ -37,7 +42,12 @@ test('SUMMARY_SOURCE should be "claude"', () => {
 // =============================================================================
 
 test('fetchClaudeSummary should return not found for empty input', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
   const mockAnthropic = {
     messages: {
       create: mock.fn(),
@@ -56,7 +66,12 @@ test('fetchClaudeSummary should return not found for empty input', async () => {
 });
 
 test('fetchClaudeSummary should return not found for null input', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
   const mockAnthropic = {
     messages: {
       create: mock.fn(),
@@ -75,9 +90,15 @@ test('fetchClaudeSummary should return not found for null input', async () => {
 });
 
 test('fetchClaudeSummary should return summary for successful API call', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
-  const mockSummary = 'This is a great album released in 2020. It features innovative production and received critical acclaim.';
-  
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+  const mockSummary =
+    'This is a great album released in 2020. It features innovative production and received critical acclaim.';
+
   const mockAnthropic = {
     messages: {
       create: mock.fn(async () => ({
@@ -115,8 +136,13 @@ test('fetchClaudeSummary should return summary for successful API call', async (
 });
 
 test('fetchClaudeSummary should handle API response with no text content', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
-  
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
   const mockAnthropic = {
     messages: {
       create: mock.fn(async () => ({
@@ -145,8 +171,13 @@ test('fetchClaudeSummary should handle API response with no text content', async
 });
 
 test('fetchClaudeSummary should handle rate limit error (429)', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
-  
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
   const rateLimitError = new Error('Rate limit exceeded');
   rateLimitError.status = 429;
 
@@ -172,8 +203,13 @@ test('fetchClaudeSummary should handle rate limit error (429)', async () => {
 });
 
 test('fetchClaudeSummary should handle server error (500)', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
-  
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
   const serverError = new Error('Internal server error');
   serverError.status = 500;
 
@@ -199,8 +235,13 @@ test('fetchClaudeSummary should handle server error (500)', async () => {
 });
 
 test('fetchClaudeSummary should handle network error', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
-  
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
   const networkError = new Error('Network error');
 
   const mockAnthropic = {
@@ -229,7 +270,12 @@ test('fetchClaudeSummary should handle missing API key', async () => {
   const originalApiKey = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
 
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
 
   const service = createClaudeSummaryService({
     logger: mockLogger,
@@ -248,9 +294,14 @@ test('fetchClaudeSummary should handle missing API key', async () => {
 });
 
 test('fetchClaudeSummary should validate summary length', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
   const veryShortSummary = 'Short';
-  
+
   const mockAnthropic = {
     messages: {
       create: mock.fn(async () => ({
@@ -278,9 +329,14 @@ test('fetchClaudeSummary should validate summary length', async () => {
 });
 
 test('fetchClaudeSummary should respect rate limiting', async () => {
-  const mockLogger = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
   const mockSummary = 'Test summary';
-  
+
   const mockAnthropic = {
     messages: {
       create: mock.fn(async () => ({

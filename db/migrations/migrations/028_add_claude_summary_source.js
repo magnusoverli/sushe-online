@@ -8,7 +8,7 @@ const logger = require('../../../utils/logger');
  * Existing summaries with 'lastfm' or 'wikipedia' sources will remain until regenerated.
  */
 
-async function up(pool) {
+async function up(_pool) {
   logger.info('Migration 028: Claude summary source support');
 
   // No schema changes needed - summary_source column already exists
@@ -18,7 +18,7 @@ async function up(pool) {
   logger.info('Migration completed: Claude summary source support added');
 }
 
-async function down(pool) {
+async function down(_pool) {
   logger.info('Reverting migration 028: Claude summary source support');
 
   // No schema changes to revert

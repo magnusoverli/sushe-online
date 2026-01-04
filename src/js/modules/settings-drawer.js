@@ -2162,7 +2162,13 @@ export function createSettingsDrawer(deps = {}) {
           if (response.success) {
             showToast('Regenerating all album summaries...', 'success');
             await loadAlbumSummaryStats();
-            startAlbumSummaryPolling();
+            // Start polling for batch status updates
+            if (!albumSummaryPollInterval) {
+              albumSummaryPollInterval = setInterval(
+                pollAlbumSummaryStatus,
+                2000
+              );
+            }
           } else {
             showToast('Failed to start regeneration', 'error');
           }
@@ -3858,7 +3864,10 @@ export function createSettingsDrawer(deps = {}) {
         } catch (statsError) {
           // Silently handle stats loading errors - these are not critical failures
           // The batch job completed successfully, stats loading failure is just a UI refresh issue
-          console.error('Error loading album summary stats after batch completion:', statsError);
+          console.error(
+            'Error loading album summary stats after batch completion:',
+            statsError
+          );
         }
       }
     } catch (error) {
