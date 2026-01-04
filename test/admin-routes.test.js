@@ -22,6 +22,34 @@ require.cache[require.resolve('../utils/logger')] = {
   exports: mockLogger,
 };
 
+// Mock response-cache to prevent setInterval from keeping the process alive
+// The ResponseCache singleton creates a cleanup timer that would hang tests
+require.cache[require.resolve('../middleware/response-cache')] = {
+  exports: {
+    ResponseCache: class MockResponseCache {
+      constructor() {
+        this.cache = new Map();
+      }
+      get() {
+        return null;
+      }
+      set() {}
+      invalidate() {}
+      cleanup() {}
+    },
+    responseCache: {
+      cache: new Map(),
+      get() {
+        return null;
+      },
+      set() {},
+      invalidate() {},
+      cleanup() {},
+    },
+    cacheConfigs: {},
+  },
+};
+
 /**
  * Create a test Express app with admin routes
  */
