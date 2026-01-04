@@ -75,6 +75,8 @@ function getAlbumDisplayModule() {
       showTrackSelectionMenu,
       showMobileEditForm,
       showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
+      showMobileSummarySheet: (summary, albumName, artist) =>
+        window.showMobileSummarySheet(summary, albumName, artist),
       playTrackSafe: (albumId) => window.playTrackSafe(albumId),
       getTrackName,
       reapplyNowPlayingBorder,
@@ -247,6 +249,10 @@ function showMobileEditForm(index) {
   return getMobileUIModule().showMobileEditForm(index);
 }
 
+function showMobileSummarySheet(summary, albumName, artist) {
+  return getMobileUIModule().showMobileSummarySheet(summary, albumName, artist);
+}
+
 function showMobileEditFormSafe(albumId) {
   return getMobileUIModule().showMobileEditFormSafe(albumId);
 }
@@ -269,6 +275,7 @@ window.showMobileMoveToListSheet = showMobileMoveToListSheet;
 window.showMobileListMenu = showMobileListMenu;
 window.showMobileEditForm = showMobileEditForm;
 window.showMobileEditFormSafe = showMobileEditFormSafe;
+window.showMobileSummarySheet = showMobileSummarySheet;
 window.playAlbumSafe = playAlbumSafe;
 window.removeAlbumSafe = removeAlbumSafe;
 

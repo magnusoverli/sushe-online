@@ -1746,6 +1746,36 @@ body.now-playing-bar-visible #addAlbumFAB {
   color: #d97706; /* Orange/amber color for Claude */
 }
 
+/* Mobile-specific summary badge styles */
+.summary-badge-mobile {
+  width: 24px;
+  height: 24px;
+  top: 2px;
+  right: 2px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.summary-badge-mobile i {
+  font-size: 11px;
+}
+
+.summary-badge-mobile:active {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(0.95);
+}
+
+.summary-badge-mobile.claude-badge i {
+  color: #d97706;
+}
+
 /* Base summary tooltip styles */
 .summary-tooltip {
   position: fixed;
@@ -1968,4 +1998,13 @@ body.now-playing-bar-visible #addAlbumFAB {
 
 .lastfm-tooltip-link i {
   font-size: 11px;
+}
+
+/* Mobile summary modal styles */
+/* Uses same modal structure as edit form - inherits existing styles */
+/* Summary text styling for better readability */
+.fixed.inset-0.z-50.bg-gray-900 .text-sm.text-gray-300 {
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }

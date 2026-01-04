@@ -1503,6 +1503,102 @@ export function createMobileUI(deps = {}) {
     document.getElementById('removeAlbumOption').click();
   }
 
+  /**
+   * Escape HTML special characters for safe attribute values
+   * @param {string} str - String to escape
+   * @returns {string} Escaped string
+   */
+  function escapeHtml(str) {
+    if (!str) return '';
+    return str
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  /**
+   * Show mobile summary modal
+   * @param {string} summary - Album summary text
+   * @param {string} albumName - Album name
+   * @param {string} artist - Artist name
+   */
+  function showMobileSummarySheet(summary, albumName, artist) {
+    if (!summary) {
+      showToast('No summary available', 'error');
+      return;
+    }
+
+    // Remove any existing modals first
+    const existingModals = document.querySelectorAll(
+      '.fixed.inset-0.z-50.bg-gray-900'
+    );
+    existingModals.forEach((modal) => modal.remove());
+
+    // Hide FAB when modal is shown
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = 'none';
+    }
+
+    const summaryModal = document.createElement('div');
+    summaryModal.className =
+      'fixed inset-0 z-50 flex items-center justify-center p-4';
+    summaryModal.innerHTML = `
+      <!-- Backdrop -->
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      
+      <!-- Modal Content -->
+      <div class="relative bg-gray-900 rounded-lg shadow-2xl flex flex-col w-full max-w-lg max-h-[85vh] overflow-hidden">
+        <!-- Header -->
+        <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
+          <button data-close-summary class="p-2 -m-2 text-gray-400 hover:text-white active:text-white">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+          <div class="flex-1 text-center px-4">
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-robot text-[#d97706]"></i>
+              <h3 class="text-lg font-semibold text-white truncate">${escapeHtml(albumName)}</h3>
+            </div>
+            <p class="text-sm text-gray-400 truncate">${escapeHtml(artist)}</p>
+          </div>
+          <div class="w-10"></div>
+        </div>
+        
+        <!-- Summary Content -->
+        <div class="flex-1 overflow-y-auto overflow-x-hidden -webkit-overflow-scrolling-touch p-4">
+          <div class="text-sm text-gray-300 leading-relaxed whitespace-pre-wrap">${escapeHtml(summary)}</div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(summaryModal);
+
+    // Attach close handlers
+    const backdrop = summaryModal.querySelector('[data-backdrop]');
+    const closeBtn = summaryModal.querySelector('[data-close-summary]');
+    
+    const closeModal = () => {
+      summaryModal.remove();
+      const fabElement = document.getElementById('addAlbumFAB');
+      if (fabElement && getCurrentList()) {
+        fabElement.style.display = 'flex';
+      }
+    };
+
+    if (backdrop) {
+      backdrop.addEventListener('click', closeModal);
+    }
+    
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+      });
+    }
+  }
+
   // Return public API
   return {
     findAlbumByIdentity,
@@ -1515,5 +1611,6 @@ export function createMobileUI(deps = {}) {
     removeAlbumSafe,
     moveAlbumToList,
     showMoveConfirmation,
+    showMobileSummarySheet,
   };
 }

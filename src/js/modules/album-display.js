@@ -210,6 +210,7 @@ let playcountFetchInProgress = false;
  * @param {Function} deps.showTrackSelectionMenu - Show track selection menu
  * @param {Function} deps.showMobileEditForm - Show mobile edit form
  * @param {Function} deps.showMobileAlbumMenu - Show mobile album menu
+ * @param {Function} deps.showMobileSummarySheet - Show mobile summary sheet
  * @param {Function} deps.playTrackSafe - Play track safely by album ID
  * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
  * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
@@ -232,6 +233,7 @@ export function createAlbumDisplay(deps = {}) {
     showTrackSelectionMenu,
     showMobileEditForm,
     showMobileAlbumMenu,
+    showMobileSummarySheet,
     playTrackSafe,
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
@@ -743,6 +745,27 @@ export function createAlbumDisplay(deps = {}) {
         ? data.coverImageUrl
         : null;
 
+    // Summary badge HTML (shown if album has a summary from any source)
+    // All summaries now use Claude badge (even if originally from Last.fm/Wikipedia)
+    let mobileSummaryBadgeHtml = '';
+    if (data.summary) {
+      const source = data.summarySource || '';
+      // Always show Claude badge for all summaries
+      const badgeClass = 'claude-badge';
+      const iconClass = 'fas fa-robot';
+      // No source URL for Claude summaries
+      const sourceUrl = null;
+
+      mobileSummaryBadgeHtml = `<div class="summary-badge summary-badge-mobile ${badgeClass}" 
+        data-summary="${escapeHtml(data.summary)}" 
+        data-source-url="${escapeHtml(sourceUrl || '')}" 
+        data-source="${escapeHtml(source)}"
+        data-album-name="${escapeHtml(data.albumName)}" 
+        data-artist="${escapeHtml(data.artist)}">
+        <i class="${iconClass}"></i>
+      </div>`;
+    }
+
     card.innerHTML = `
       <!-- Position badge (upper right, above action column) -->
       <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
@@ -766,11 +789,13 @@ export function createAlbumDisplay(deps = {}) {
                       class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
                       loading="lazy"
                       decoding="async">
+                  ${mobileSummaryBadgeHtml}
                 </div>
               `
                   : `
                 <div class="mobile-album-cover w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center relative">
                   <i class="fas fa-compact-disc text-xl text-gray-600"></i>
+                  ${mobileSummaryBadgeHtml}
                 </div>
               `
               }
@@ -857,6 +882,37 @@ export function createAlbumDisplay(deps = {}) {
     const comment = album ? album.comments || album.comment || '' : '';
     const contentDiv = card.querySelector('.flex-1.min-w-0');
     if (contentDiv) attachLinkPreview(contentDiv, comment);
+
+    // Attach summary badge handler (if summary exists)
+    const summaryBadge = card.querySelector('.summary-badge-mobile');
+    if (summaryBadge && showMobileSummarySheet) {
+      summaryBadge.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      summaryBadge.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      summaryBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        const summary = summaryBadge.dataset.summary;
+        const albumName = summaryBadge.dataset.albumName;
+        const artist = summaryBadge.dataset.artist;
+        if (summary) {
+          showMobileSummarySheet(summary, albumName, artist);
+        }
+      });
+    }
 
     // Attach three-dot menu button handler
     const menuBtn = card.querySelector('[data-album-menu-btn]');
