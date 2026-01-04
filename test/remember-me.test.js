@@ -16,6 +16,22 @@ require.cache[require.resolve('../utils/logger')] = {
   exports: mockLogger,
 };
 
+// Mock metrics to prevent prom-client timers from keeping process alive
+require.cache[require.resolve('../utils/metrics')] = {
+  exports: {
+    recordAuthAttempt: mock.fn(),
+    observeExternalApiCall: mock.fn(),
+    recordExternalApiError: mock.fn(),
+    observeDbQuery: mock.fn(),
+    setWebsocketConnections: mock.fn(),
+    incWebsocketConnections: mock.fn(),
+    decWebsocketConnections: mock.fn(),
+    setActiveSessions: mock.fn(),
+    updateDbPoolMetrics: mock.fn(),
+    metricsMiddleware: () => (req, res, next) => next(),
+  },
+};
+
 function createTestApp() {
   const app = express();
   app.use(express.json());
