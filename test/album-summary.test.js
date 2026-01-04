@@ -217,8 +217,8 @@ test('stopBatchFetch should return false when no job running', () => {
 test('startBatchFetch should throw if already running', async () => {
   const mockPool = {
     query: async (query) => {
-      // Return albums for the initial query
-      if (query.includes('SELECT album_id')) {
+      // Return albums for the initial query (now uses JOIN with list_items)
+      if (query.includes('SELECT DISTINCT a.album_id')) {
         return {
           rows: [{ album_id: 'test1', artist: 'Test', album: 'Album' }],
         };

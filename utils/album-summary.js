@@ -304,17 +304,18 @@ function createAlbumSummaryService(deps = {}) {
   }
 
   /**
-   * Get summary statistics
+   * Get summary statistics (only for albums that are in lists)
    * @returns {Promise<Object>}
    */
   async function getStats() {
     const result = await pool.query(`
       SELECT 
-        COUNT(*) AS total_albums,
-        COUNT(summary) AS with_summary,
-        COUNT(summary_fetched_at) FILTER (WHERE summary IS NULL) AS attempted_no_summary,
-        COUNT(*) FILTER (WHERE summary_fetched_at IS NULL) AS never_attempted
-      FROM albums
+        COUNT(DISTINCT a.album_id) AS total_albums,
+        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary IS NOT NULL) AS with_summary,
+        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NOT NULL AND a.summary IS NULL) AS attempted_no_summary,
+        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NULL) AS never_attempted
+      FROM albums a
+      INNER JOIN list_items li ON li.album_id = a.album_id
     `);
 
     const row = result.rows[0];
@@ -330,7 +331,7 @@ function createAlbumSummaryService(deps = {}) {
   }
 
   /**
-   * Start batch fetch job for all albums without summaries
+   * Start batch fetch job for albums without summaries (only albums in lists)
    * @param {Object} options
    * @param {boolean} options.includeRetries - Whether to retry previously failed albums
    * @returns {Promise<void>}
@@ -342,16 +343,24 @@ function createAlbumSummaryService(deps = {}) {
       throw new Error('Batch job already running');
     }
 
-    // Get albums that need summaries
+    // Get albums that need summaries (only albums that are in at least one list)
     let query;
     if (includeRetries) {
       // All albums without a summary (including previously attempted ones)
-      query =
-        'SELECT album_id, artist, album FROM albums WHERE summary IS NULL ORDER BY updated_at DESC';
+      query = `
+        SELECT DISTINCT a.album_id, a.artist, a.album 
+        FROM albums a
+        INNER JOIN list_items li ON li.album_id = a.album_id
+        WHERE a.summary IS NULL 
+        ORDER BY a.album_id`;
     } else {
       // Only albums never attempted
-      query =
-        'SELECT album_id, artist, album FROM albums WHERE summary_fetched_at IS NULL ORDER BY updated_at DESC';
+      query = `
+        SELECT DISTINCT a.album_id, a.artist, a.album 
+        FROM albums a
+        INNER JOIN list_items li ON li.album_id = a.album_id
+        WHERE a.summary_fetched_at IS NULL 
+        ORDER BY a.album_id`;
     }
 
     const albumsResult = await pool.query(query);
