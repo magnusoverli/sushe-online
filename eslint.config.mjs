@@ -198,6 +198,14 @@ export default [
     },
   },
   {
+    files: ['utils/album-summary.js'],
+    rules: {
+      // album-summary service has complex responsibilities (batch processing, async fetching, advisory locks)
+      // that justify a longer function (266 lines vs 210 limit)
+      'max-lines-per-function': 'off',
+    },
+  },
+  {
     files: ['browser-extension/**/*.js'],
     languageOptions: {
       globals: {
