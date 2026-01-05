@@ -2034,7 +2034,7 @@ body.now-playing-bar-visible #addAlbumFAB {
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  z-index: 10;
+  z-index: 1;
 }
 
 .summary-badge i {
@@ -2074,7 +2074,7 @@ body.now-playing-bar-visible #addAlbumFAB {
   justify-content: center;
   cursor: pointer;
   transition: all 0.2s ease;
-  z-index: 10;
+  z-index: 1;
   -webkit-tap-highlight-color: transparent;
 }
 

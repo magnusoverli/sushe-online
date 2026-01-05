@@ -1370,7 +1370,9 @@ export function createAlbumDisplay(deps = {}) {
 
   // Summary tooltip state
   let activeTooltip = null;
+  let activeBadge = null; // Track which badge the tooltip is for
   let tooltipHideTimeout = null;
+  let tooltipRemoveTimeout = null; // Track the removal animation timeout
   const TOOLTIP_HIDE_DELAY = 500; // 500ms delay before hiding
 
   /**
@@ -1411,8 +1413,23 @@ export function createAlbumDisplay(deps = {}) {
       tooltipHideTimeout = null;
     }
 
-    // Remove existing tooltip if any
-    hideTooltip();
+    // Cancel any pending removal animation
+    if (tooltipRemoveTimeout) {
+      clearTimeout(tooltipRemoveTimeout);
+      tooltipRemoveTimeout = null;
+    }
+
+    // If tooltip is already showing for this badge, just ensure it's visible
+    if (activeTooltip && activeBadge === badge && activeTooltip.parentNode) {
+      activeTooltip.classList.add('visible');
+      positionTooltip(badge, activeTooltip);
+      return;
+    }
+
+    // Remove existing tooltip if any (for a different badge)
+    if (activeTooltip && activeBadge !== badge) {
+      hideTooltip();
+    }
 
     // All summaries now use Claude styling
     const tooltipClass = 'summary-tooltip claude-tooltip';
@@ -1442,6 +1459,7 @@ export function createAlbumDisplay(deps = {}) {
 
     document.body.appendChild(tooltip);
     activeTooltip = tooltip;
+    activeBadge = badge; // Track which badge this tooltip is for
 
     // Position tooltip to the right of the badge, top-aligned
     positionTooltip(badge, tooltip);
@@ -1455,8 +1473,13 @@ export function createAlbumDisplay(deps = {}) {
   /**
    * Handle mouse leave on summary badge
    */
-  function handleBadgeMouseLeave() {
-    scheduleHideTooltip();
+  function handleBadgeMouseLeave(e) {
+    const badge = e.currentTarget;
+    // Only schedule hide if this badge is the one showing the tooltip
+    // This prevents hiding when moving between badges
+    if (activeBadge === badge) {
+      scheduleHideTooltip();
+    }
   }
 
   /**
@@ -1496,11 +1519,13 @@ export function createAlbumDisplay(deps = {}) {
     if (activeTooltip) {
       activeTooltip.classList.remove('visible');
       // Remove after animation
-      setTimeout(() => {
+      tooltipRemoveTimeout = setTimeout(() => {
         if (activeTooltip && activeTooltip.parentNode) {
           activeTooltip.parentNode.removeChild(activeTooltip);
         }
         activeTooltip = null;
+        activeBadge = null;
+        tooltipRemoveTimeout = null;
       }, 200);
     }
   }
