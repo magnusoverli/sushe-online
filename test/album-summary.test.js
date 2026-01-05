@@ -237,7 +237,7 @@ test('fetchAndStoreSummary should return error for missing album', async () => {
 
 test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
   const mockPool = {
-    query: async (query, params) => {
+    query: async (query, _params) => {
       if (query.includes('SELECT album_id, artist, album')) {
         return {
           rows: [{ album_id: 'test1', artist: '', album: 'Test Album' }],
@@ -264,7 +264,7 @@ test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
 
 test('fetchAndStoreSummary should skip fetch for empty album', async () => {
   const mockPool = {
-    query: async (query, params) => {
+    query: async (query, _params) => {
       if (query.includes('SELECT album_id, artist, album')) {
         return {
           rows: [{ album_id: 'test2', artist: 'Test Artist', album: '' }],
@@ -291,12 +291,10 @@ test('fetchAndStoreSummary should skip fetch for empty album', async () => {
 
 test('fetchAndStoreSummary should skip fetch for whitespace-only artist', async () => {
   const mockPool = {
-    query: async (query, params) => {
+    query: async (query, _params) => {
       if (query.includes('SELECT album_id, artist, album')) {
         return {
-          rows: [
-            { album_id: 'test3', artist: '   ', album: 'Test Album' },
-          ],
+          rows: [{ album_id: 'test3', artist: '   ', album: 'Test Album' }],
         };
       }
       if (query.includes('UPDATE albums SET summary_fetched_at')) {

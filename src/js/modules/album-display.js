@@ -1916,9 +1916,7 @@ export function createAlbumDisplay(deps = {}) {
             const source = summaryData.summarySource || '';
             const badgeClass = 'claude-badge';
             const iconClass = 'fas fa-robot';
-            const badgeClassMobile = isMobile
-              ? 'summary-badge-mobile'
-              : '';
+            const badgeClassMobile = isMobile ? 'summary-badge-mobile' : '';
 
             const badgeHtml = `<div class="summary-badge ${badgeClassMobile} ${badgeClass}" 
               data-summary="${escapeHtml(summaryData.summary)}" 
