@@ -464,6 +464,10 @@ function getRealtimeSyncModule() {
   if (!realtimeSyncModule) {
     realtimeSyncModule = createRealtimeSync({
       getCurrentList: () => currentList,
+      getListData,
+      apiCall,
+      updateAlbumSummaryInPlace: (albumId, summaryData) =>
+        getAlbumDisplayModule().updateAlbumSummaryInPlace(albumId, summaryData),
       refreshListData: async (listName) => {
         // Check if this was our own save - skip refresh and notification
         if (wasRecentLocalSave(listName)) {

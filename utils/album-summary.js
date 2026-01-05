@@ -353,9 +353,38 @@ function createAlbumSummaryService(deps = {}) {
       }
 
       albumRecord = albumResult.rows[0];
+
+      // Validate artist and album before API call
+      if (
+        !albumRecord.artist ||
+        !albumRecord.album ||
+        albumRecord.artist.trim() === '' ||
+        albumRecord.album.trim() === ''
+      ) {
+        log.warn('Skipping summary fetch - invalid artist/album', {
+          albumId,
+          artist: albumRecord.artist || '(empty)',
+          album: albumRecord.album || '(empty)',
+          reason: 'empty_or_whitespace_only',
+        });
+
+        // Mark as attempted to prevent retries
+        await pool.query(
+          `UPDATE albums SET summary_fetched_at = NOW() WHERE album_id = $1`,
+          [albumId]
+        );
+
+        return {
+          success: true,
+          hasSummary: false,
+          source: null,
+          skipped: true,
+        };
+      }
+
       const { summary, source } = await fetchAlbumSummary(
-        albumRecord.artist,
-        albumRecord.album
+        albumRecord.artist.trim(),
+        albumRecord.album.trim()
       );
 
       await pool.query(
@@ -414,8 +443,9 @@ function createAlbumSummaryService(deps = {}) {
         albumId,
         error: err.message,
         stack: err.stack,
-        artist: albumRecord?.artist,
-        album: albumRecord?.album,
+        artist: albumRecord?.artist || '(unknown)',
+        album: albumRecord?.album || '(unknown)',
+        operation: 'fetchAndStoreSummary',
       });
       return {
         success: false,
@@ -426,6 +456,23 @@ function createAlbumSummaryService(deps = {}) {
     }
   }
 
+  /**
+   * Hash album ID to integer for PostgreSQL advisory lock
+   * @param {string} albumId - Album ID string
+   * @returns {number} Integer hash suitable for pg_advisory_lock
+   */
+  function hashAlbumId(albumId) {
+    // Convert album_id string to integer for advisory lock
+    // Use simple hash function (FNV-1a variant)
+    let hash = 2166136261;
+    for (let i = 0; i < albumId.length; i++) {
+      hash ^= albumId.charCodeAt(i);
+      hash +=
+        (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+    }
+    return Math.abs(hash) % 2147483647; // PostgreSQL int4 range
+  }
+
   /** Fetch summary for a new album (non-blocking) */
   function fetchSummaryAsync(albumId, _artist, _album) {
     // Use setImmediate to ensure this runs after the current call stack
@@ -433,19 +480,58 @@ function createAlbumSummaryService(deps = {}) {
     setImmediate(() => {
       Promise.resolve()
         .then(async () => {
+          // Use advisory lock based on album_id hash to prevent race conditions
+          const lockId = hashAlbumId(albumId);
+          const client = await pool.connect();
+
           try {
-            const existing = await pool.query(
-              'SELECT summary_fetched_at FROM albums WHERE album_id = $1',
-              [albumId]
+            // Try to acquire lock (non-blocking)
+            const lockResult = await client.query(
+              'SELECT pg_try_advisory_lock($1) as acquired',
+              [lockId]
             );
-            if (existing.rows.length > 0 && existing.rows[0].summary_fetched_at)
-              return;
-            await fetchAndStoreSummary(albumId);
+
+            if (!lockResult.rows[0].acquired) {
+              log.debug('Summary fetch already in progress (lock held)', {
+                albumId,
+                lockId,
+              });
+              return; // Another process is handling this
+            }
+
+            log.debug('Acquired advisory lock for summary fetch', {
+              albumId,
+              lockId,
+            });
+
+            try {
+              // Check if already fetched
+              const existing = await client.query(
+                'SELECT summary_fetched_at FROM albums WHERE album_id = $1',
+                [albumId]
+              );
+              if (
+                existing.rows.length > 0 &&
+                existing.rows[0].summary_fetched_at
+              ) {
+                return; // Already fetched
+              }
+              await fetchAndStoreSummary(albumId);
+            } finally {
+              // Always release lock
+              await client.query('SELECT pg_advisory_unlock($1)', [lockId]);
+              log.debug('Released advisory lock for summary fetch', {
+                albumId,
+                lockId,
+              });
+            }
           } catch (err) {
             log.warn('Async summary fetch failed', {
               albumId,
               error: err.message,
             });
+          } finally {
+            client.release();
           }
         })
         .catch((err) => {

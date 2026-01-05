@@ -19,10 +19,13 @@ import { io } from 'socket.io-client';
 export function createRealtimeSync(deps = {}) {
   const {
     getCurrentList = () => null,
+    getListData = () => null,
     refreshListData = async () => {},
     refreshListDataSilent = async () => {},
     refreshListNav = () => {},
     showToast = () => {},
+    apiCall = async () => {},
+    updateAlbumSummaryInPlace = async () => {},
   } = deps;
 
   let socket = null;
@@ -246,7 +249,36 @@ export function createRealtimeSync(deps = {}) {
       return;
     }
 
-    // Always refresh the current list when a summary update is received
+    // Try incremental update first
+    const albums = getListData(currentList);
+    const albumIndex =
+      albums?.findIndex((a) => a.album_id === data.albumId) ?? -1;
+
+    if (albumIndex >= 0 && updateAlbumSummaryInPlace && apiCall) {
+      try {
+        // Fetch only the updated summary
+        const summaryData = await apiCall(
+          `/api/albums/${data.albumId}/summary`
+        );
+
+        // Update in-place without full refresh
+        await updateAlbumSummaryInPlace(data.albumId, summaryData);
+        console.log('[RealtimeSync] Summary updated incrementally', {
+          albumId: data.albumId,
+          hasSummary: !!summaryData.summary,
+          source: summaryData.summarySource || 'unknown',
+        });
+        return;
+      } catch (err) {
+        console.warn(
+          '[RealtimeSync] Incremental update failed, falling back to full refresh',
+          err
+        );
+        // Fall back to full refresh on error
+      }
+    }
+
+    // Fallback to full refresh
     // This ensures the summary badge appears even if:
     // - The album was just added and local state is stale
     // - The album check fails due to timing issues

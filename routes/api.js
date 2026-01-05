@@ -243,6 +243,34 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Get single album summary (for incremental updates)
+  app.get('/api/albums/:albumId/summary', ensureAuthAPI, async (req, res) => {
+    try {
+      const { albumId } = req.params;
+      const result = await pool.query(
+        `SELECT summary, summary_source 
+         FROM albums 
+         WHERE album_id = $1`,
+        [albumId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+
+      res.json({
+        summary: result.rows[0].summary || '',
+        summarySource: result.rows[0].summary_source || '',
+      });
+    } catch (err) {
+      logger.error('Error fetching album summary', {
+        error: err.message,
+        albumId: req.params.albumId,
+      });
+      res.status(500).json({ error: 'Error fetching summary' });
+    }
+  });
+
   app.get(
     '/api/lists',
     ensureAuthAPI,

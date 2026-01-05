@@ -1548,6 +1548,12 @@ export function createAlbumDisplay(deps = {}) {
     if (left + tooltipWidth > window.innerWidth - 16) {
       // Position to the left of the badge instead
       left = badgeRect.left - tooltipWidth - gap;
+
+      // Check if left position would overflow left edge
+      if (left < 16) {
+        // Center tooltip horizontally in viewport
+        left = Math.max(16, (window.innerWidth - tooltipWidth) / 2);
+      }
     }
 
     // Check if tooltip would overflow bottom of viewport
@@ -1865,6 +1871,106 @@ export function createAlbumDisplay(deps = {}) {
     setTimeout(poll, POLL_INTERVAL);
   }
 
+  /**
+   * Update summary for a single album without full refresh
+   * @param {string} albumId - Album ID to update
+   * @param {Object} summaryData - Summary data from API
+   * @param {string} summaryData.summary - Summary text
+   * @param {string} summaryData.summarySource - Summary source
+   */
+  async function updateAlbumSummaryInPlace(albumId, summaryData) {
+    const isMobile = window.innerWidth < 1024;
+    const container = document.getElementById('albumContainer');
+    if (!container) return;
+
+    // Find album row/card by album_id
+    const albumRows = isMobile
+      ? container.querySelectorAll('.album-card')
+      : container.querySelectorAll('.album-row');
+
+    for (const row of albumRows) {
+      // Try to find album_id from row dataset or nested element
+      const rowIndex = parseInt(row.dataset.index, 10);
+      if (rowIndex === undefined || rowIndex < 0) continue;
+
+      const currentList = getCurrentList();
+      const albums = getListData(currentList);
+      const album = albums?.[rowIndex];
+
+      if (album && album.album_id === albumId) {
+        // Found the album - update summary badge
+        const coverContainer = row.querySelector(
+          '.album-cover-container, .mobile-album-cover'
+        );
+        if (!coverContainer) continue;
+
+        const badge = coverContainer.querySelector(
+          '.summary-badge, .summary-badge-mobile'
+        );
+
+        if (summaryData.summary) {
+          // Add or update badge
+          if (!badge) {
+            // Create badge (reuse existing badge creation logic)
+            const data = processAlbumData(album, rowIndex);
+            const source = summaryData.summarySource || '';
+            const badgeClass = 'claude-badge';
+            const iconClass = 'fas fa-robot';
+            const badgeClassMobile = isMobile
+              ? 'summary-badge-mobile'
+              : '';
+
+            const badgeHtml = `<div class="summary-badge ${badgeClassMobile} ${badgeClass}" 
+              data-summary="${escapeHtml(summaryData.summary)}" 
+              data-source-url="" 
+              data-source="${escapeHtml(source)}"
+              data-album-name="${escapeHtml(data.albumName)}" 
+              data-artist="${escapeHtml(data.artist)}">
+              <i class="${iconClass}"></i>
+            </div>`;
+
+            // Insert badge into cover container
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = badgeHtml;
+            const newBadge = tempDiv.firstElementChild;
+            coverContainer.appendChild(newBadge);
+
+            // Attach event handlers for the new badge
+            if (isMobile && showMobileSummarySheet) {
+              newBadge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                showMobileSummarySheet(
+                  summaryData.summary,
+                  data.albumName,
+                  data.artist
+                );
+              });
+            } else {
+              newBadge.addEventListener('mouseenter', handleBadgeMouseEnter);
+              newBadge.addEventListener('mouseleave', handleBadgeMouseLeave);
+            }
+          } else {
+            // Update existing badge
+            badge.dataset.summary = escapeHtml(summaryData.summary);
+            badge.dataset.source = escapeHtml(summaryData.summarySource || '');
+          }
+        } else if (badge) {
+          // Remove badge if summary was removed
+          badge.remove();
+        }
+
+        // Update local state
+        if (album) {
+          album.summary = summaryData.summary || '';
+          album.summary_source = summaryData.summarySource || '';
+        }
+
+        break;
+      }
+    }
+  }
+
   // Return public API
   return {
     displayAlbums,
@@ -1872,6 +1978,7 @@ export function createAlbumDisplay(deps = {}) {
     updatePositionNumbers,
     clearLastRenderedCache,
     clearPlaycountCache,
+    updateAlbumSummaryInPlace,
     // Expose for testing
     processAlbumData,
     createAlbumItem,

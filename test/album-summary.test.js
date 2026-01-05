@@ -235,6 +235,89 @@ test('fetchAndStoreSummary should return error for missing album', async () => {
   assert.strictEqual(result.error, 'Album not found');
 });
 
+test('fetchAndStoreSummary should skip fetch for empty artist', async () => {
+  const mockPool = {
+    query: async (query, params) => {
+      if (query.includes('SELECT album_id, artist, album')) {
+        return {
+          rows: [{ album_id: 'test1', artist: '', album: 'Test Album' }],
+        };
+      }
+      if (query.includes('UPDATE albums SET summary_fetched_at')) {
+        return { rowCount: 1 };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  const result = await service.fetchAndStoreSummary('test1');
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.hasSummary, false);
+  assert.strictEqual(result.skipped, true);
+});
+
+test('fetchAndStoreSummary should skip fetch for empty album', async () => {
+  const mockPool = {
+    query: async (query, params) => {
+      if (query.includes('SELECT album_id, artist, album')) {
+        return {
+          rows: [{ album_id: 'test2', artist: 'Test Artist', album: '' }],
+        };
+      }
+      if (query.includes('UPDATE albums SET summary_fetched_at')) {
+        return { rowCount: 1 };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  const result = await service.fetchAndStoreSummary('test2');
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.hasSummary, false);
+  assert.strictEqual(result.skipped, true);
+});
+
+test('fetchAndStoreSummary should skip fetch for whitespace-only artist', async () => {
+  const mockPool = {
+    query: async (query, params) => {
+      if (query.includes('SELECT album_id, artist, album')) {
+        return {
+          rows: [
+            { album_id: 'test3', artist: '   ', album: 'Test Album' },
+          ],
+        };
+      }
+      if (query.includes('UPDATE albums SET summary_fetched_at')) {
+        return { rowCount: 1 };
+      }
+      return { rows: [] };
+    },
+  };
+
+  const service = createAlbumSummaryService({
+    pool: mockPool,
+    logger: createMockLogger(),
+  });
+
+  const result = await service.fetchAndStoreSummary('test3');
+
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.hasSummary, false);
+  assert.strictEqual(result.skipped, true);
+});
+
 // =============================================================================
 // Helper function exports tests
 // =============================================================================
