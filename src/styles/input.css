@@ -2167,32 +2167,6 @@ body.now-playing-bar-visible #addAlbumFAB {
   font-size: 11px;
 }
 
-/* Last.fm tooltip - red accent */
-.summary-tooltip.lastfm-tooltip .summary-tooltip-header i {
-  color: #d51007;
-}
-
-.summary-tooltip.lastfm-tooltip .summary-tooltip-link {
-  background: #d51007;
-}
-
-.summary-tooltip.lastfm-tooltip .summary-tooltip-link:hover {
-  background: #b30d06;
-}
-
-/* Wikipedia tooltip - blue accent (Wikipedia's link color) */
-.summary-tooltip.wikipedia-tooltip .summary-tooltip-header i {
-  color: #3366cc;
-}
-
-.summary-tooltip.wikipedia-tooltip .summary-tooltip-link {
-  background: #3366cc;
-}
-
-.summary-tooltip.wikipedia-tooltip .summary-tooltip-link:hover {
-  background: #2a4d99;
-}
-
 /* Claude tooltip - orange/amber accent (Claude branding) */
 .summary-tooltip.claude-tooltip .summary-tooltip-header i {
   color: #d97706;

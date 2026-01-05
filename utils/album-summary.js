@@ -8,9 +8,6 @@ const { fetchClaudeSummary } = require('./claude-summary');
 // Summary sources
 const SUMMARY_SOURCES = {
   CLAUDE: 'claude',
-  // Legacy sources kept for backward compatibility with existing data
-  LASTFM: 'lastfm',
-  WIKIPEDIA: 'wikipedia',
 };
 
 /**
@@ -21,7 +18,6 @@ const SUMMARY_SOURCES = {
 function stripHtml(html) {
   if (!html) return '';
   return html
-    .replace(/<a[^>]*href="([^"]*)"[^>]*>Read more on Last\.fm<\/a>/gi, '')
     .replace(/<[^>]*>/g, '')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -81,14 +77,12 @@ function generateNameVariations(name) {
  *
  * @param {string} artist - Artist name
  * @param {string} album - Album name
- * @returns {Promise<{summary: string|null, lastfmUrl: string|null, wikipediaUrl: string|null, source: string|null, found: boolean}>}
+ * @returns {Promise<{summary: string|null, source: string|null, found: boolean}>}
  */
 async function fetchAlbumSummary(artist, album) {
   if (!artist || !album) {
     return {
       summary: null,
-      lastfmUrl: null,
-      wikipediaUrl: null,
       source: null,
       found: false,
     };
@@ -100,8 +94,6 @@ async function fetchAlbumSummary(artist, album) {
   if (claudeResult.summary) {
     return {
       summary: claudeResult.summary,
-      lastfmUrl: null, // Clear Last.fm URL for new Claude summaries
-      wikipediaUrl: null, // Clear Wikipedia URL for new Claude summaries
       source: SUMMARY_SOURCES.CLAUDE,
       found: true,
     };
@@ -110,8 +102,6 @@ async function fetchAlbumSummary(artist, album) {
   // No summary found
   return {
     summary: null,
-    lastfmUrl: null,
-    wikipediaUrl: null,
     source: null,
     found: false,
   };
@@ -132,9 +122,6 @@ function parseStatsRow(row) {
       parseInt(row.never_attempted, 10) +
       parseInt(row.attempted_no_summary, 10),
     fromClaude: parseInt(row.from_claude, 10),
-    // Deprecated: kept for backward compatibility
-    fromLastfm: parseInt(row.from_lastfm || '0', 10),
-    fromWikipedia: parseInt(row.from_wikipedia || '0', 10),
   };
 }
 
@@ -371,10 +358,8 @@ function createAlbumSummaryService(deps = {}) {
         albumRecord.album
       );
 
-      // Clear lastfm_url and wikipedia_url for Claude summaries (set to NULL)
       await pool.query(
-        `UPDATE albums SET summary = $1, lastfm_url = NULL, wikipedia_url = NULL,
-          summary_source = $2, summary_fetched_at = NOW() WHERE album_id = $3`,
+        `UPDATE albums SET summary = $1, summary_source = $2, summary_fetched_at = NOW() WHERE album_id = $3`,
         [summary, source, albumId]
       );
 
@@ -498,9 +483,7 @@ function createAlbumSummaryService(deps = {}) {
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary IS NOT NULL) AS with_summary,
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NOT NULL AND a.summary IS NULL) AS attempted_no_summary,
         COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_fetched_at IS NULL) AS never_attempted,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'claude') AS from_claude,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'lastfm') AS from_lastfm,
-        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'wikipedia') AS from_wikipedia
+        COUNT(DISTINCT a.album_id) FILTER (WHERE a.summary_source = 'claude') AS from_claude
       FROM albums a INNER JOIN list_items li ON li.album_id = a.album_id
     `);
     return parseStatsRow(result.rows[0]);

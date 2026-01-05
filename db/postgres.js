@@ -415,8 +415,6 @@ class PgDatastore {
         COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
         -- Album summary (stored on canonical albums table only)
         a.summary as summary,
-        a.lastfm_url as lastfm_url,
-        a.wikipedia_url as wikipedia_url,
         a.summary_source as summary_source
       FROM list_items li
       LEFT JOIN albums a ON li.album_id = a.album_id
@@ -444,8 +442,6 @@ class PgDatastore {
       coverImage: row.cover_image || '',
       coverImageFormat: row.cover_image_format || '',
       summary: row.summary || '',
-      lastfmUrl: row.lastfm_url || '',
-      wikipediaUrl: row.wikipedia_url || '',
       summarySource: row.summary_source || '',
     }));
   }
@@ -485,8 +481,6 @@ class PgDatastore {
         COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
         COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
         a.summary as summary,
-        a.lastfm_url as lastfm_url,
-        a.wikipedia_url as wikipedia_url,
         a.summary_source as summary_source
       FROM lists l
       LEFT JOIN list_items li ON li.list_id = l._id

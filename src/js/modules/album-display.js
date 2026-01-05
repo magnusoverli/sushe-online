@@ -322,10 +322,8 @@ export function createAlbumDisplay(deps = {}) {
       trackPickDisplay = 'Select Track';
     }
 
-    // Album summary (from Last.fm or Wikipedia)
+    // Album summary (from Claude AI)
     const summary = album.summary || '';
-    const lastfmUrl = album.lastfm_url || album.lastfmUrl || '';
-    const wikipediaUrl = album.wikipedia_url || album.wikipediaUrl || '';
     const summarySource = album.summary_source || album.summarySource || '';
 
     // Get playcount from cache (keyed by list item _id)
@@ -361,8 +359,6 @@ export function createAlbumDisplay(deps = {}) {
       playcount,
       playcountDisplay,
       summary,
-      lastfmUrl,
-      wikipediaUrl,
       summarySource,
     };
   }

@@ -283,8 +283,6 @@ module.exports = (app, deps) => {
                   cover_image: row.cover_image || '',
                   cover_image_format: row.cover_image_format || '',
                   summary: row.summary || '',
-                  lastfm_url: row.lastfm_url || '',
-                  wikipedia_url: row.wikipedia_url || '',
                   summary_source: row.summary_source || '',
                 });
               }
@@ -646,10 +644,8 @@ module.exports = (app, deps) => {
           comments: item.comments,
           tracks: item.tracks,
           cover_image_format: item.coverImageFormat,
-          // Album summary (from Last.fm or Wikipedia)
+          // Album summary (from Claude AI)
           summary: item.summary || '',
-          lastfm_url: item.lastfmUrl || '',
-          wikipedia_url: item.wikipediaUrl || '',
           summary_source: item.summarySource || '',
           // Export mode: embed base64 images + rank/points for shareable JSON
           // Normal mode: return URLs for fast parallel loading & caching

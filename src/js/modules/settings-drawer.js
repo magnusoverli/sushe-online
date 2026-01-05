@@ -3781,25 +3781,6 @@ export function createSettingsDrawer(deps = {}) {
             <div class="text-xs text-gray-400 uppercase"><i class="fas fa-robot mr-1"></i>From Claude AI</div>
           </div>
         </div>
-        ${
-          (stats.fromLastfm || 0) > 0 || (stats.fromWikipedia || 0) > 0
-            ? `
-        <div class="mt-2 pt-2 border-t border-gray-700/50">
-          <div class="text-xs text-gray-500 mb-1">Legacy Sources (deprecated):</div>
-          <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gray-800/30 rounded-sm p-2 text-center border border-gray-700/30">
-              <div class="font-bold text-red-400/60 text-sm">${stats.fromLastfm || 0}</div>
-              <div class="text-xs text-gray-500 uppercase"><i class="fab fa-lastfm mr-1"></i>Last.fm</div>
-            </div>
-            <div class="bg-gray-800/30 rounded-sm p-2 text-center border border-gray-700/30">
-              <div class="font-bold text-blue-300/60 text-sm">${stats.fromWikipedia || 0}</div>
-              <div class="text-xs text-gray-500 uppercase"><i class="fab fa-wikipedia-w mr-1"></i>Wikipedia</div>
-            </div>
-          </div>
-        </div>
-        `
-            : ''
-        }
       `;
 
       // Update UI based on batch status

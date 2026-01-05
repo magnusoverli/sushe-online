@@ -741,7 +741,6 @@ describe('PgDatastore', () => {
           cover_image: 'image.jpg',
           cover_image_format: 'jpg',
           summary: 'A great rock album from the 2020s.',
-          lastfm_url: 'https://www.last.fm/music/Artist+Name/Album+Title',
         },
       ];
       mockPool.query = mock.fn(() =>
@@ -759,10 +758,6 @@ describe('PgDatastore', () => {
       assert.strictEqual(
         result[0].summary,
         'A great rock album from the 2020s.'
-      );
-      assert.strictEqual(
-        result[0].lastfmUrl,
-        'https://www.last.fm/music/Artist+Name/Album+Title'
       );
 
       // Check that prepared query was used

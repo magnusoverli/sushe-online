@@ -159,8 +159,6 @@ test('getStats should return album statistics', async () => {
           attempted_no_summary: '20',
           never_attempted: '30',
           from_claude: '50',
-          from_lastfm: '35',
-          from_wikipedia: '15',
         },
       ],
     }),
@@ -179,8 +177,6 @@ test('getStats should return album statistics', async () => {
   assert.strictEqual(stats.neverAttempted, 30);
   assert.strictEqual(stats.pending, 50); // neverAttempted + attemptedNoSummary
   assert.strictEqual(stats.fromClaude, 50);
-  assert.strictEqual(stats.fromLastfm, 35);
-  assert.strictEqual(stats.fromWikipedia, 15);
 });
 
 test('stopBatchFetch should return false when no job running', () => {
@@ -285,8 +281,6 @@ test('fetchAlbumSummary should include source in result', async () => {
   );
 
   assert.ok('summary' in result);
-  assert.ok('lastfmUrl' in result);
-  assert.ok('wikipediaUrl' in result);
   assert.ok('source' in result);
   assert.ok('found' in result);
 });
@@ -305,8 +299,6 @@ test('getStats should return source breakdown', async () => {
           attempted_no_summary: '20',
           never_attempted: '30',
           from_claude: '50',
-          from_lastfm: '35',
-          from_wikipedia: '15',
         },
       ],
     }),
@@ -322,6 +314,4 @@ test('getStats should return source breakdown', async () => {
   assert.strictEqual(stats.totalAlbums, 100);
   assert.strictEqual(stats.withSummary, 50);
   assert.strictEqual(stats.fromClaude, 50);
-  assert.strictEqual(stats.fromLastfm, 35);
-  assert.strictEqual(stats.fromWikipedia, 15);
 });
