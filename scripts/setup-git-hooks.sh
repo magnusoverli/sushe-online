@@ -15,11 +15,11 @@ cat > "$PRE_COMMIT_HOOK" << 'EOF'
 
 echo "🔍 Running pre-commit checks..."
 
-# Get list of staged JS files
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '\.js$')
+# Get list of staged files (JS, JSON, HTML, MJS)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(js|mjs|json|html)$')
 
 if [ -z "$STAGED_FILES" ]; then
-  echo "✅ No JavaScript files to check"
+  echo "✅ No JavaScript/JSON/HTML files to check"
   exit 0
 fi
 
@@ -27,37 +27,54 @@ fi
 if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ]; then
   # We're inside Docker, use npm directly
   NPM_CMD="npm"
+  NODE_CMD="node"
 else
   # We're on host, check if Docker Compose is available
   if command -v docker &> /dev/null && [ -f "docker-compose.local.yml" ]; then
     # Use Docker Compose
     NPM_CMD="docker compose -f docker-compose.local.yml exec -T app npm"
+    NODE_CMD="docker compose -f docker-compose.local.yml exec -T app node"
   elif command -v npm &> /dev/null; then
     # Use host npm
     NPM_CMD="npm"
+    NODE_CMD="node"
   else
     echo "⚠️  Warning: npm not found and Docker not available. Skipping checks."
     exit 0
   fi
 fi
 
-# Run prettier check on staged files
-echo "📝 Checking Prettier formatting..."
-if ! echo "$STAGED_FILES" | xargs $NPM_CMD run format:check -- 2>&1; then
+# Filter staged files to only source files (matching format:check:source pattern)
+SOURCE_FILES=$(echo "$STAGED_FILES" | grep -E '^[^/]+\.(js|mjs|json)$|^(src|test|utils|middleware|routes|db|scripts|browser-extension)/.*\.(js|mjs|json|html)$' || true)
+
+if [ -z "$SOURCE_FILES" ]; then
+  echo "✅ No source files to check (only non-source files staged)"
+  exit 0
+fi
+
+# Run prettier check on staged source files (prettier accepts multiple files)
+echo "📝 Checking Prettier formatting on staged files..."
+if ! echo "$SOURCE_FILES" | xargs -r $NPM_CMD exec prettier --check 2>&1; then
   echo ""
-  echo "❌ Prettier formatting issues found!"
+  echo "❌ Prettier formatting issues found in staged files!"
   echo "💡 Fix with: npm run format"
-  echo "   Or auto-fix: git add -u && npm run format && git add -u"
+  echo "   Or auto-fix staged files: echo \"$SOURCE_FILES\" | xargs $NPM_CMD exec prettier --write && git add $SOURCE_FILES"
   exit 1
 fi
 
-# Run ESLint with max-warnings 0 on staged files
-echo "🔎 Checking ESLint rules..."
-if ! echo "$STAGED_FILES" | xargs $NPM_CMD exec eslint -- --max-warnings 0 2>&1; then
-  echo ""
-  echo "❌ ESLint issues found!"
-  echo "💡 Fix with: npm run lint:fix"
-  exit 1
+# Run ESLint with max-warnings 0 on staged JS/MJS files only (matches lint:strict behavior)
+JS_FILES=$(echo "$SOURCE_FILES" | grep -E '\.(js|mjs)$' || true)
+
+if [ -n "$JS_FILES" ]; then
+  echo "🔎 Checking ESLint rules on staged files (--max-warnings 0)..."
+  # eslint accepts multiple files, use xargs for efficiency
+  if ! echo "$JS_FILES" | xargs -r $NPM_CMD exec eslint --max-warnings 0 2>&1; then
+    echo ""
+    echo "❌ ESLint issues found in staged files!"
+    echo "💡 Fix with: npm run lint:fix"
+    echo "   Or fix specific files: echo \"$JS_FILES\" | xargs $NPM_CMD exec eslint --fix"
+    exit 1
+  fi
 fi
 
 echo "✅ All pre-commit checks passed!"
