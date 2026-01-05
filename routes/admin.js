@@ -101,7 +101,7 @@ module.exports = (app, deps) => {
   app.get('/auth/spotify/callback', ensureAuth, async (req, res) => {
     if (req.query.state !== req.session.spotifyState) {
       req.flash('error', 'Invalid Spotify state');
-      return res.redirect('/settings');
+      return res.redirect('/');
     }
     delete req.session.spotifyState;
     logger.info('Spotify callback received', {
@@ -162,8 +162,8 @@ module.exports = (app, deps) => {
       req.flash('error', 'Failed to authenticate with Spotify');
     }
 
-    // Redirect back to where the user was (for automatic reconnects) or settings
-    const returnTo = req.session.spotifyReturnTo || '/settings';
+    // Redirect back to where the user was (for automatic reconnects) or home
+    const returnTo = req.session.spotifyReturnTo || '/';
     delete req.session.spotifyReturnTo; // Clean up
     res.redirect(returnTo);
   });
@@ -187,7 +187,7 @@ module.exports = (app, deps) => {
     );
     delete req.user.spotifyAuth;
     req.flash('success', 'Spotify disconnected');
-    res.redirect('/settings');
+    res.redirect('/');
   });
 
   // Tidal OAuth flow
@@ -228,7 +228,7 @@ module.exports = (app, deps) => {
   app.get('/auth/tidal/callback', ensureAuth, async (req, res) => {
     if (req.query.state !== req.session.tidalState) {
       req.flash('error', 'Invalid Tidal state');
-      return res.redirect('/settings');
+      return res.redirect('/');
     }
     const verifier = req.session.tidalVerifier;
     delete req.session.tidalState;
@@ -333,8 +333,8 @@ module.exports = (app, deps) => {
       req.flash('error', 'Failed to authenticate with Tidal');
     }
 
-    // Redirect back to where the user was (for automatic reconnects) or settings
-    const returnTo = req.session.tidalReturnTo || '/settings';
+    // Redirect back to where the user was (for automatic reconnects) or home
+    const returnTo = req.session.tidalReturnTo || '/';
     delete req.session.tidalReturnTo; // Clean up
     res.redirect(returnTo);
   });
@@ -368,7 +368,7 @@ module.exports = (app, deps) => {
       });
       req.flash('error', 'Failed to disconnect Tidal');
     }
-    res.redirect('/settings');
+    res.redirect('/');
   });
 
   // ===== Last.fm Authentication =====
@@ -383,7 +383,7 @@ module.exports = (app, deps) => {
     if (!apiKey) {
       logger.warn('Last.fm API key not configured');
       req.flash('error', 'Last.fm is not configured on this server');
-      return res.redirect('/settings');
+      return res.redirect('/');
     }
 
     const callbackUrl = `${process.env.BASE_URL}/auth/lastfm/callback`;
@@ -402,7 +402,7 @@ module.exports = (app, deps) => {
     if (!token) {
       logger.warn('Last.fm callback received without token');
       req.flash('error', 'Last.fm authorization failed - no token received');
-      return res.redirect('/settings');
+      return res.redirect('/');
     }
 
     try {
@@ -447,7 +447,7 @@ module.exports = (app, deps) => {
       req.flash('error', `Last.fm connection failed: ${error.message}`);
     }
 
-    res.redirect('/settings');
+    res.redirect('/');
   });
 
   app.get('/auth/lastfm/disconnect', ensureAuth, async (req, res) => {
@@ -475,7 +475,7 @@ module.exports = (app, deps) => {
       req.flash('error', 'Failed to disconnect from Last.fm');
     }
 
-    res.redirect('/settings');
+    res.redirect('/');
   });
 
   // Admin: Make user admin

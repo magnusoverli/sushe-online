@@ -253,7 +253,6 @@ function createRouteDependencies(
     passport: mockPassport,
     isTokenValid: () => false,
     isTokenUsable: () => false,
-    settingsTemplate: () => '<div>Settings</div>',
   };
 }
 

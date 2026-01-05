@@ -201,7 +201,6 @@ function createTestApp(options = {}) {
   const mockRegisterTemplate = () => '<form>Register</form>';
   const mockLoginTemplate = () => '<form>Login</form>';
   const mockSpotifyTemplate = () => '<div>Spotify</div>';
-  const mockSettingsTemplate = () => '<div>Settings</div>';
 
   // Mock token helpers
   const mockIsTokenValid = () => true;
@@ -245,7 +244,6 @@ function createTestApp(options = {}) {
     registerTemplate: mockRegisterTemplate,
     loginTemplate: mockLoginTemplate,
     spotifyTemplate: mockSpotifyTemplate,
-    settingsTemplate: mockSettingsTemplate,
     isTokenValid: mockIsTokenValid,
     isTokenUsable: mockIsTokenUsable,
     adminCodeAttempts: mockAdminCodeAttempts,

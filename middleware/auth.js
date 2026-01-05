@@ -194,7 +194,7 @@ function createRateLimitAdminRequest(deps) {
         reason: 'too many attempts',
       });
       req.flash('error', 'Too many failed attempts. Please wait 30 minutes.');
-      return res.redirect('/settings');
+      return res.redirect('/');
     }
 
     req.adminAttempts = attempts;

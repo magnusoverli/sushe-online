@@ -162,7 +162,7 @@ export default [
     },
   },
   {
-    files: ['routes/**/*.js', 'templates.js', 'settings-template.js'],
+    files: ['routes/**/*.js', 'templates.js'],
     rules: {
       'security/detect-non-literal-fs-filename': 'off',
       'max-lines-per-function': 'off',

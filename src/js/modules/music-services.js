@@ -106,7 +106,7 @@ export async function updatePlaylist(listName, listData = []) {
       );
 
       if (shouldRedirect) {
-        window.location.href = '/settings';
+        window.openSettingsDrawer && window.openSettingsDrawer();
       }
       return;
     }
@@ -125,7 +125,7 @@ export async function updatePlaylist(listName, listData = []) {
       );
 
       if (shouldRedirect) {
-        window.location.href = '/settings';
+        window.openSettingsDrawer && window.openSettingsDrawer();
       }
       return;
     }

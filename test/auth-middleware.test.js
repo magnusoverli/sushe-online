@@ -583,7 +583,7 @@ describe('createRateLimitAdminRequest', () => {
 
     assert.strictEqual(next.mock.calls.length, 0);
     assert.strictEqual(res.redirect.mock.calls.length, 1);
-    assert.strictEqual(res.redirect.mock.calls[0].arguments[0], '/settings');
+    assert.strictEqual(res.redirect.mock.calls[0].arguments[0], '/');
     assert.strictEqual(req.flash.mock.calls.length, 1);
     assert.strictEqual(req.flash.mock.calls[0].arguments[0], 'error');
     assert.ok(req.flash.mock.calls[0].arguments[1].includes('30 minutes'));

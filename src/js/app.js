@@ -2988,56 +2988,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize settings drawer
   initializeSettingsDrawer();
 
-  // Initialize settings button long-press handler
-  function initializeSettingsButtonLongPress() {
-    const button = document.getElementById('newSettingsButton');
-    if (!button) return;
-
-    let longPressTimer = null;
-    let longPressDetected = false;
-    const LONG_PRESS_DELAY = 750; // ms
-
-    const startLongPress = () => {
-      longPressDetected = false;
-      longPressTimer = setTimeout(() => {
-        longPressDetected = true;
-        window.location.href = '/settings';
-      }, LONG_PRESS_DELAY);
-    };
-
-    const cancelLongPress = () => {
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = null;
-      }
-    };
-
-    const handleClick = (e) => {
-      // If long press was detected, prevent normal click
-      if (longPressDetected) {
-        e.preventDefault();
-        e.stopPropagation();
-        longPressDetected = false;
-        return false;
-      }
-    };
-
-    // Mouse events
-    button.addEventListener('mousedown', startLongPress);
-    button.addEventListener('mouseup', cancelLongPress);
-    button.addEventListener('mouseleave', cancelLongPress);
-
-    // Touch events
-    button.addEventListener('touchstart', startLongPress, { passive: true });
-    button.addEventListener('touchend', cancelLongPress);
-    button.addEventListener('touchmove', cancelLongPress);
-
-    // Prevent click if long press occurred
-    button.addEventListener('click', handleClick, true); // Use capture phase
-  }
-
-  initializeSettingsButtonLongPress();
-
   // Sidebar collapse functionality
   function initializeSidebarCollapse() {
     const sidebar = document.getElementById('sidebar');

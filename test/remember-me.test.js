@@ -90,7 +90,6 @@ function createTestApp() {
     registerTemplate: () => '<div>register</div>',
     loginTemplate: () => '<div>login</div>',
     spotifyTemplate: () => '<div>home</div>',
-    settingsTemplate: () => '<div>settings</div>',
     isTokenValid: () => true,
     isTokenUsable: () => true,
     users: { update: mock.fn((_q, _u, _o, cb) => cb(null, 1)) },

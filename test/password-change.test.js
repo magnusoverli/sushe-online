@@ -140,7 +140,6 @@ function createTestApp(options = {}) {
   // Mock templates
   const mockHtmlTemplate = (content, title) =>
     `<html><head><title>${title}</title></head><body>${content}</body></html>`;
-  const mockSettingsTemplate = () => '<div>Settings</div>';
   const mockRegisterTemplate = () => '<form>Register</form>';
   const mockLoginTemplate = () => '<form>Login</form>';
   const mockSpotifyTemplate = () => '<div>Spotify</div>';
@@ -206,7 +205,6 @@ function createTestApp(options = {}) {
     registerTemplate: mockRegisterTemplate,
     loginTemplate: mockLoginTemplate,
     spotifyTemplate: mockSpotifyTemplate,
-    settingsTemplate: mockSettingsTemplate,
     isTokenValid: () => true,
     isTokenUsable: () => true,
     adminCodeAttempts: mockAdminCodeAttempts,
@@ -249,7 +247,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
     assert.strictEqual(mockBcrypt.compare.mock.calls.length, 1);
     assert.strictEqual(mockBcrypt.hash.mock.calls.length, 1);
     assert.strictEqual(mockUsers.update.mock.calls.length, 1);
@@ -268,7 +266,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 
   it('should reject missing new password', async () => {
@@ -284,7 +282,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 
   it('should reject missing confirm password', async () => {
@@ -300,7 +298,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 
   it('should reject mismatched passwords', async () => {
@@ -316,7 +314,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 
   it('should reject short new password (<8 chars)', async () => {
@@ -332,7 +330,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 
   it('should reject incorrect current password', async () => {
@@ -350,7 +348,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
     // The bcryptCompare mock was passed in options, not attached to mockBcrypt
   });
 
@@ -401,7 +399,7 @@ describe('POST /settings/change-password', () => {
       });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 });
 
@@ -420,7 +418,7 @@ describe('POST /settings/request-admin', () => {
       .send({ code: 'VALID123' });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
     assert.strictEqual(mockUsers.update.mock.calls.length, 1);
 
     // Should grant admin role
@@ -459,7 +457,7 @@ describe('POST /settings/request-admin', () => {
       .send({ code: 'WRONGCODE' });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
     // Should NOT update user role
     assert.strictEqual(mockUsers.update.mock.calls.length, 0);
     // Should increment failed attempts
@@ -552,6 +550,6 @@ describe('POST /settings/request-admin', () => {
       .send({ code: 'VALID123' });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(response.headers.location, '/settings');
+    assert.strictEqual(response.headers.location, '/');
   });
 });

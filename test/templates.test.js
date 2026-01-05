@@ -748,13 +748,6 @@ describe('templates utilities', () => {
       assert.ok(result.includes('fa-bars'));
     });
 
-    it('should render back arrow for non-home sections', () => {
-      const user = { username: 'test' };
-      const result = templates.headerComponent(user, 'settings');
-
-      assert.ok(result.includes('fa-arrow-left'));
-      assert.ok(!result.includes('toggleMobileMenu'));
-    });
 
     it('should default to home section', () => {
       const user = { username: 'test' };

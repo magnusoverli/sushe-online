@@ -12,7 +12,6 @@ module.exports = (app, deps) => {
     loginTemplate,
 
     spotifyTemplate,
-    settingsTemplate,
     isTokenUsable,
     csrfProtection,
     ensureAuth,
@@ -343,319 +342,6 @@ module.exports = (app, deps) => {
     res.send(spotifyTemplate(sanitizeUser(req.user), req.csrfToken()));
   });
 
-  // Unified Settings Page
-  app.get('/settings', ensureAuth, csrfProtection, async (req, res) => {
-    // Prevent browser caching so OAuth redirects show fresh state
-    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.set('Pragma', 'no-cache');
-    res.set('Expires', '0');
-
-    try {
-      // For Spotify, use isTokenUsable since we can auto-refresh expired tokens
-      const spotifyValid = isTokenUsable(req.user.spotifyAuth);
-      // For Tidal, use isTokenUsable since we can now auto-refresh expired tokens
-      const tidalValid = isTokenUsable(req.user.tidalAuth);
-      // For Last.fm, sessions never expire, just check if connected
-      const {
-        isSessionValid: isLastfmSessionValid,
-      } = require('../utils/lastfm-auth');
-      const lastfmValid = isLastfmSessionValid(req.user.lastfmAuth);
-
-      const sanitized = sanitizeUser(req.user);
-      // Get user's personal stats
-      const userLists = await listsAsync.find({ userId: req.user._id });
-      let albumCount = 0;
-      for (const l of userLists) {
-        albumCount += await listItemsAsync.count({ listId: l._id });
-      }
-      const userStats = {
-        listCount: userLists.length,
-        totalAlbums: albumCount,
-      };
-
-      // Get user's music preferences
-      let musicPreferences = null;
-      try {
-        const { createUserPreferences } = require('../utils/user-preferences');
-        const userPrefs = createUserPreferences({ pool, logger });
-        const prefs = await userPrefs.getPreferences(req.user._id);
-        if (prefs) {
-          musicPreferences = {
-            // Consolidated affinity scores (from all sources)
-            topGenres: prefs.genre_affinity || [],
-            topArtists: prefs.artist_affinity || [],
-            topCountries: prefs.country_affinity || prefs.top_countries || [],
-            totalAlbums: prefs.total_albums || 0,
-            // Source-specific data for detailed view
-            spotify: {
-              topArtists: prefs.spotify_top_artists || {},
-              topTracks: prefs.spotify_top_tracks || {},
-              syncedAt: prefs.spotify_synced_at,
-            },
-            lastfm: {
-              topArtists: prefs.lastfm_top_artists || {},
-              topAlbums: prefs.lastfm_top_albums || {},
-              totalScrobbles: prefs.lastfm_total_scrobbles || 0,
-              syncedAt: prefs.lastfm_synced_at,
-            },
-            updatedAt: prefs.updated_at,
-          };
-        }
-      } catch (prefsError) {
-        logger.error('Error fetching music preferences', {
-          error: prefsError.message,
-          userId: req.user._id,
-        });
-        // Continue without preferences - not critical
-      }
-
-      // If admin, get admin data
-      let adminData = null;
-      let stats = null;
-
-      if (req.user.role === 'admin') {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-
-        const twoWeeksAgo = new Date();
-        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-        // OPTIMIZATION: Parallel fetch of all independent data
-        // Reduces N+1 queries to 4 parallel queries using aggregates
-        const [allUsers, allLists, userListCountsResult, adminStatsResult] =
-          await Promise.all([
-            usersAsync.find({}),
-            listsAsync.find({}),
-            // Single query for user list counts (replaces N async count calls)
-            pool.query(
-              'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
-            ),
-            // OPTIMIZATION: Single aggregate query for album/genre stats
-            // Replaces N+1 loop through all lists
-            pool.query(
-              `
-            WITH album_genres AS (
-              SELECT DISTINCT li.album_id, li.genre_1, li.genre_2 
-              FROM list_items li
-            ),
-            unique_albums AS (
-              SELECT COUNT(DISTINCT album_id) as total 
-              FROM album_genres 
-              WHERE album_id IS NOT NULL AND album_id != ''
-            ),
-            genre_counts AS (
-              SELECT genre, SUM(cnt)::int as count FROM (
-                SELECT genre_1 as genre, COUNT(*) as cnt FROM album_genres 
-                WHERE genre_1 IS NOT NULL AND genre_1 NOT IN ('', 'Genre 1') 
-                GROUP BY genre_1
-                UNION ALL
-                SELECT genre_2 as genre, COUNT(*) as cnt FROM album_genres 
-                WHERE genre_2 IS NOT NULL AND genre_2 NOT IN ('', 'Genre 2', '-') 
-                GROUP BY genre_2
-              ) g GROUP BY genre ORDER BY count DESC LIMIT 5
-            ),
-            active_users AS (
-              SELECT COUNT(DISTINCT user_id) as count FROM lists WHERE updated_at >= $1
-            )
-            SELECT 
-              (SELECT total FROM unique_albums) as total_albums,
-              (SELECT count FROM active_users) as active_users,
-              COALESCE((SELECT json_agg(json_build_object('name', genre, 'count', count)) FROM genre_counts), '[]'::json) as top_genres
-          `,
-              [sevenDaysAgo]
-            ),
-          ]);
-
-        // Build Map for O(1) list count lookup
-        const listCountMap = new Map(
-          userListCountsResult.rows.map((r) => [
-            r.user_id,
-            parseInt(r.list_count, 10),
-          ])
-        );
-
-        const usersWithCounts = allUsers.map((user) => ({
-          ...user,
-          listCount: listCountMap.get(user._id) || 0,
-        }));
-
-        // Extract stats from aggregate query
-        const aggregateStats = adminStatsResult.rows[0] || {};
-        const totalAlbums = parseInt(aggregateStats.total_albums, 10) || 0;
-        const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
-        const topGenres = aggregateStats.top_genres || [];
-
-        // Calculate user growth
-        const usersThisWeek = allUsers.filter(
-          (u) => new Date(u.createdAt) >= sevenDaysAgo
-        ).length;
-        const usersLastWeek = allUsers.filter((u) => {
-          const createdAt = new Date(u.createdAt);
-          return createdAt >= twoWeeksAgo && createdAt < sevenDaysAgo;
-        }).length;
-
-        const userGrowth =
-          usersLastWeek > 0
-            ? Math.round(
-                ((usersThisWeek - usersLastWeek) / usersLastWeek) * 100
-              )
-            : usersThisWeek > 0
-              ? 100
-              : 0;
-
-        // Get top users by list count
-        const topUsers = usersWithCounts
-          .filter((u) => u.listCount > 0)
-          .sort((a, b) => b.listCount - a.listCount)
-          .slice(0, 5);
-
-        // Calculate database size
-        let dbSize = 'N/A';
-        try {
-          const { rows } = await pool.query(
-            'SELECT pg_size_pretty(pg_database_size(current_database())) AS size'
-          );
-          dbSize = rows[0].size;
-        } catch (e) {
-          logger.error('Error calculating DB size', { error: e.message });
-        }
-
-        // Count active sessions from PostgreSQL
-        let activeSessions = 0;
-        try {
-          const { rows } = await pool.query(
-            'SELECT COUNT(*) AS count FROM session WHERE expire > NOW()'
-          );
-          activeSessions = parseInt(rows[0].count, 10);
-        } catch (e) {
-          logger.error('Error counting sessions', { error: e.message });
-        }
-
-        stats = {
-          totalUsers: allUsers.length,
-          totalLists: allLists.length,
-          totalAlbums,
-          adminUsers: allUsers.filter((u) => u.role === 'admin').length,
-          activeUsers,
-          userGrowth,
-          dbSize,
-          activeSessions,
-          topGenres,
-          topUsers,
-        };
-
-        // Generate real recent activity based on actual data
-        const recentActivity = [];
-
-        // Find recent user registrations
-        const recentUsers = allUsers
-          .filter((u) => u.createdAt)
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 2);
-
-        recentUsers.forEach((user) => {
-          const timeAgo = getTimeAgo(new Date(user.createdAt));
-          recentActivity.push({
-            icon: 'fa-user-plus',
-            color: 'green',
-            message: `New user: ${user.username}`,
-            time: timeAgo,
-          });
-        });
-
-        // Find recent list creations
-        const recentLists = allLists
-          .filter((l) => l.createdAt)
-          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-          .slice(0, 2);
-
-        recentLists.forEach((list) => {
-          const timeAgo = getTimeAgo(new Date(list.createdAt));
-          recentActivity.push({
-            icon: 'fa-list',
-            color: 'blue',
-            message: `New list: ${list.name}`,
-            time: timeAgo,
-          });
-        });
-
-        // Find recent admin grants
-        const recentAdmins = allUsers
-          .filter((u) => u.role === 'admin' && u.adminGrantedAt)
-          .sort(
-            (a, b) => new Date(b.adminGrantedAt) - new Date(a.adminGrantedAt)
-          )
-          .slice(0, 1);
-
-        recentAdmins.forEach((admin) => {
-          const timeAgo = getTimeAgo(new Date(admin.adminGrantedAt));
-          recentActivity.push({
-            icon: 'fa-user-shield',
-            color: 'yellow',
-            message: `Admin granted: ${admin.username}`,
-            time: timeAgo,
-          });
-        });
-
-        // Sort by time and take the most recent 4
-        recentActivity.sort((a, b) => {
-          // This is a simplified sort - in production you'd want to store actual timestamps
-          const timeValues = {
-            'just now': 0,
-            'minutes ago': 1,
-            hour: 2,
-            'hours ago': 3,
-            day: 4,
-            'days ago': 5,
-          };
-          const aValue =
-            Object.keys(timeValues).find((key) => a.time.includes(key)) || 6;
-          const bValue =
-            Object.keys(timeValues).find((key) => b.time.includes(key)) || 6;
-          return timeValues[aValue] - timeValues[bValue];
-        });
-
-        // Ensure we have at least 4 items (pad with defaults if needed)
-        while (recentActivity.length < 4) {
-          recentActivity.push({
-            icon: 'fa-clock',
-            color: 'gray',
-            message: 'No recent activity',
-            time: '-',
-          });
-        }
-
-        adminData = {
-          users: usersWithCounts,
-          stats,
-          recentActivity: recentActivity.slice(0, 4),
-        };
-      }
-
-      res.send(
-        settingsTemplate(req, {
-          user: sanitized,
-          userStats,
-          stats,
-          adminData,
-          flash: res.locals.flash,
-          spotifyValid,
-          tidalValid,
-          lastfmValid,
-          lastfmUsername: req.user.lastfmUsername || null,
-          musicPreferences,
-        })
-      );
-    } catch (error) {
-      logger.error('Settings page error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      req.flash('error', 'Error loading settings');
-      res.redirect('/');
-    }
-  });
-
   // Update accent color endpoint
   app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
     try {
@@ -875,7 +561,7 @@ module.exports = (app, deps) => {
             return res.status(400).json({ error: 'All fields are required' });
           }
           req.flash('error', 'All fields are required');
-          return res.redirect('/settings');
+          return res.redirect('/');
         }
 
         if (newPassword !== confirmPassword) {
@@ -885,7 +571,7 @@ module.exports = (app, deps) => {
               .json({ error: 'New passwords do not match' });
           }
           req.flash('error', 'New passwords do not match');
-          return res.redirect('/settings');
+          return res.redirect('/');
         }
 
         if (!isValidPassword(newPassword)) {
@@ -895,7 +581,7 @@ module.exports = (app, deps) => {
               .json({ error: 'New password must be at least 8 characters' });
           }
           req.flash('error', 'New password must be at least 8 characters');
-          return res.redirect('/settings');
+          return res.redirect('/');
         }
 
         // Verify current password
@@ -907,7 +593,7 @@ module.exports = (app, deps) => {
               .json({ error: 'Current password is incorrect' });
           }
           req.flash('error', 'Current password is incorrect');
-          return res.redirect('/settings');
+          return res.redirect('/');
         }
 
         // Hash new password
@@ -930,7 +616,7 @@ module.exports = (app, deps) => {
                   .json({ error: 'Error updating password' });
               }
               req.flash('error', 'Error updating password');
-              return res.redirect('/settings');
+              return res.redirect('/');
             }
 
             if (req.accepts('json')) {
@@ -940,7 +626,7 @@ module.exports = (app, deps) => {
               });
             }
             req.flash('success', 'Password updated successfully');
-            res.redirect('/settings');
+            res.redirect('/');
           }
         );
       } catch (error) {
@@ -952,7 +638,7 @@ module.exports = (app, deps) => {
           return res.status(500).json({ error: 'Error changing password' });
         }
         req.flash('error', 'Error changing password');
-        res.redirect('/settings');
+        res.redirect('/');
       }
     }
   );
@@ -992,7 +678,7 @@ module.exports = (app, deps) => {
               .json({ error: 'Invalid or expired admin code' });
           }
           req.flash('error', 'Invalid or expired admin code');
-          return res.redirect('/settings');
+          return res.redirect('/');
         }
 
         // Clear failed attempts on success
@@ -1020,7 +706,7 @@ module.exports = (app, deps) => {
                   .json({ error: 'Error granting admin access' });
               }
               req.flash('error', 'Error granting admin access');
-              return res.redirect('/settings');
+              return res.redirect('/');
             }
 
             logger.info(`✅ Admin access granted to: ${req.user.email}`);
@@ -1045,7 +731,7 @@ module.exports = (app, deps) => {
                 });
               }
               req.flash('success', 'Admin access granted!');
-              res.redirect('/settings');
+              res.redirect('/');
             });
           }
         );
@@ -1060,7 +746,7 @@ module.exports = (app, deps) => {
             .json({ error: 'Error processing admin request' });
         }
         req.flash('error', 'Error processing admin request');
-        res.redirect('/settings');
+        res.redirect('/');
       }
     }
   );
