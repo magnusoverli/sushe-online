@@ -173,6 +173,43 @@ const authAttemptsTotal = new client.Counter({
 });
 
 // ============================================
+// Claude API Metrics
+// ============================================
+
+/**
+ * Claude API token usage counter
+ * Tracks input and output tokens consumed by Claude API
+ */
+const claudeTokensTotal = new client.Counter({
+  name: 'sushe_claude_tokens_total',
+  help: 'Total Claude API tokens used',
+  labelNames: ['type', 'model'], // type: 'input' or 'output', model: 'claude-haiku-4-5', etc.
+  registers: [register],
+});
+
+/**
+ * Claude API estimated cost counter
+ * Tracks estimated cost in USD for Claude API usage
+ */
+const claudeEstimatedCostTotal = new client.Counter({
+  name: 'sushe_claude_estimated_cost_dollars',
+  help: 'Estimated Claude API cost in USD',
+  labelNames: ['model'],
+  registers: [register],
+});
+
+/**
+ * Claude API requests counter
+ * Tracks number of requests to Claude API
+ */
+const claudeRequestsTotal = new client.Counter({
+  name: 'sushe_claude_requests_total',
+  help: 'Total number of Claude API requests',
+  labelNames: ['model', 'status'], // status: 'success', 'error', 'rate_limited'
+  registers: [register],
+});
+
+// ============================================
 // Helper Functions
 // ============================================
 
@@ -331,6 +368,44 @@ function updateUptime() {
 }
 
 /**
+ * Record Claude API token usage and estimate cost
+ * @param {string} model - The Claude model used (e.g., 'claude-haiku-4-5')
+ * @param {number} inputTokens - Number of input tokens used
+ * @param {number} outputTokens - Number of output tokens used
+ * @param {string} status - Request status ('success', 'error', 'rate_limited')
+ */
+function recordClaudeUsage(
+  model,
+  inputTokens,
+  outputTokens,
+  status = 'success'
+) {
+  // Record token usage
+  claudeTokensTotal.labels('input', model).inc(inputTokens);
+  claudeTokensTotal.labels('output', model).inc(outputTokens);
+
+  // Record request count
+  claudeRequestsTotal.labels(model, status).inc();
+
+  // Calculate and record estimated cost based on model pricing
+  // Prices per million tokens (as of January 2025)
+  const costs = {
+    'claude-sonnet-4-5': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
+    'claude-sonnet-4': { input: 3.0 / 1_000_000, output: 15.0 / 1_000_000 },
+    'claude-haiku-4-5': { input: 0.25 / 1_000_000, output: 1.25 / 1_000_000 },
+    'claude-haiku-4': { input: 0.25 / 1_000_000, output: 1.25 / 1_000_000 },
+    'claude-opus-4': { input: 15.0 / 1_000_000, output: 75.0 / 1_000_000 },
+  };
+
+  // Default to Haiku pricing if model not recognized
+  const modelCosts = costs[model] || costs['claude-haiku-4-5'];
+  const cost =
+    inputTokens * modelCosts.input + outputTokens * modelCosts.output;
+
+  claudeEstimatedCostTotal.labels(model).inc(cost);
+}
+
+/**
  * Get metrics in Prometheus format
  * @returns {Promise<string>} Metrics in Prometheus text format
  */
@@ -363,6 +438,9 @@ module.exports = {
   dbPoolSize,
   userSessionsActive,
   authAttemptsTotal,
+  claudeTokensTotal,
+  claudeEstimatedCostTotal,
+  claudeRequestsTotal,
   appInfo,
   appUptime,
 
@@ -375,6 +453,7 @@ module.exports = {
   recordExternalApiError,
   observeDbQuery,
   recordAuthAttempt,
+  recordClaudeUsage,
   setWebsocketConnections,
   incWebsocketConnections,
   decWebsocketConnections,

@@ -33,9 +33,10 @@ services:
       - LASTFM_SECRET=${LASTFM_SECRET:-}
       # Claude API credentials - get from https://console.anthropic.com/
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-5}
-      - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-1024}
-      - CLAUDE_RATE_LIMIT_MS=${CLAUDE_RATE_LIMIT_MS:-1000}
+      - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-haiku-4-5}
+      - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-512}
+      - CLAUDE_RATE_LIMIT_MS=${CLAUDE_RATE_LIMIT_MS:-500}
+      - ALBUM_SUMMARY_CONCURRENCY=${ALBUM_SUMMARY_CONCURRENCY:-2}
       # Email service (optional for local development)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       # Disable rate limiting for local development/testing

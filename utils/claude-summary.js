@@ -3,13 +3,17 @@
 
 const Anthropic = require('@anthropic-ai/sdk');
 const logger = require('./logger');
-const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
+const {
+  observeExternalApiCall,
+  recordExternalApiError,
+  recordClaudeUsage,
+} = require('./metrics');
 
 // Summary source constant
 const SUMMARY_SOURCE = 'claude';
 
-// Rate limiter: 1 request per second (conservative for Claude API)
-const RATE_LIMIT_MS = parseInt(process.env.CLAUDE_RATE_LIMIT_MS || '1000', 10);
+// Rate limiter: 2 requests per second (500ms = 120 RPM, safe for all tiers)
+const RATE_LIMIT_MS = parseInt(process.env.CLAUDE_RATE_LIMIT_MS || '500', 10);
 let lastRequestTime = 0;
 
 /**
@@ -118,8 +122,19 @@ function validateSummary(summary, artist, album, log) {
 /**
  * Handle Claude API errors with appropriate logging and metrics
  */
-function handleApiError(err, artist, album, duration, log) {
+function handleApiError(
+  err,
+  artist,
+  album,
+  duration,
+  log,
+  model = 'claude-haiku-4-5'
+) {
   recordExternalApiError('claude', 'api_error');
+
+  // Record request failure metrics
+  const status = err.status === 429 ? 'rate_limited' : 'error';
+  recordClaudeUsage(model, 0, 0, status);
 
   if (err.status === 429) {
     log.warn('Claude API rate limit exceeded', {
@@ -221,8 +236,8 @@ function createClaudeSummaryService(deps = {}) {
     }
 
     // Read config at call time, not module load time
-    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
-    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '1024', 10);
+    const model = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
+    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '512', 10);
 
     // Configurable summary length preferences
     const targetSentences = parseInt(
@@ -259,7 +274,7 @@ function createClaudeSummaryService(deps = {}) {
           {
             type: 'web_search_20250305',
             name: 'web_search',
-            max_uses: 5,
+            max_uses: 3,
           },
         ],
         messages: [
@@ -283,11 +298,23 @@ function createClaudeSummaryService(deps = {}) {
       if (summary) {
         validateSummary(summary, artist, album, log);
 
+        // Record token usage and estimated cost
+        if (message.usage) {
+          recordClaudeUsage(
+            model,
+            message.usage.input_tokens || 0,
+            message.usage.output_tokens || 0,
+            'success'
+          );
+        }
+
         log.info('Claude API returned album summary', {
           artist,
           album,
           summaryLength: summary.length,
           duration_ms: duration,
+          inputTokens: message.usage?.input_tokens,
+          outputTokens: message.usage?.output_tokens,
         });
 
         observeExternalApiCall('claude', 'messages.create', duration, 200);
@@ -297,6 +324,16 @@ function createClaudeSummaryService(deps = {}) {
           found: true,
         };
       } else {
+        // Record token usage even for failed responses
+        if (message.usage) {
+          recordClaudeUsage(
+            model,
+            message.usage.input_tokens || 0,
+            message.usage.output_tokens || 0,
+            'success'
+          );
+        }
+
         log.warn('Claude API returned no text content', {
           artist,
           album,
@@ -309,7 +346,7 @@ function createClaudeSummaryService(deps = {}) {
       }
     } catch (err) {
       const duration = Date.now() - startTime;
-      handleApiError(err, artist, album, duration, log);
+      handleApiError(err, artist, album, duration, log, model);
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
   }

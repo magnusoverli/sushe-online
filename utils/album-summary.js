@@ -178,59 +178,142 @@ async function invalidateCachesForAlbum(pool, responseCache, logger, albumId) {
 }
 
 /**
- * Process batch job albums in background
+ * Process batch job albums in background with controlled concurrency
  * @param {Object} batchJob - Batch job state object
  * @param {Array} albums - Albums to process
  * @param {Function} fetchAndStoreSummary - Function to fetch and store summary
  * @param {Object} log - Logger instance
+ * @param {Object} pool - Database pool (for batch cache invalidation)
+ * @param {Object} responseCache - Response cache instance (for batch cache invalidation)
  */
-function processBatchAlbums(batchJob, albums, fetchAndStoreSummary, log) {
+async function processBatchAlbums(
+  batchJob,
+  albums,
+  fetchAndStoreSummary,
+  log,
+  pool,
+  responseCache
+) {
+  // Concurrent processing configuration
+  // Default to 2 to coordinate with 500ms rate limit (2 req/sec)
+  const CONCURRENCY = parseInt(
+    process.env.ALBUM_SUMMARY_CONCURRENCY || '2',
+    10
+  );
+
   setImmediate(async () => {
-    for (const album of albums) {
+    const queue = [...albums];
+    const inFlight = new Map(); // Map to track promises with their album info
+    const processedAlbumIds = []; // Track successfully processed album IDs for cache invalidation
+
+    while (queue.length > 0 || inFlight.size > 0) {
       if (!batchJob.running) {
-        log.info('Batch job cancelled');
+        log.info('Batch job cancelled', {
+          processed: batchJob.processed,
+          remaining: queue.length + inFlight.size,
+        });
         break;
       }
-      try {
-        const result = await fetchAndStoreSummary(album.album_id);
-        batchJob.processed++;
-        if (result.success) {
-          if (result.hasSummary) {
-            batchJob.found++;
-          } else {
-            batchJob.notFound++;
+
+      // Start new requests up to concurrency limit
+      while (queue.length > 0 && inFlight.size < CONCURRENCY) {
+        const album = queue.shift();
+
+        const promise = (async () => {
+          try {
+            const result = await fetchAndStoreSummary(album.album_id, {
+              skipCacheInvalidation: true, // Will invalidate in batch at the end
+              skipBroadcast: true, // Prevent WebSocket flood during batch
+            });
+            batchJob.processed++;
+
+            if (result.success) {
+              if (result.hasSummary) {
+                batchJob.found++;
+                processedAlbumIds.push(album.album_id); // Track for cache invalidation
+              } else {
+                batchJob.notFound++;
+              }
+            } else {
+              batchJob.errors++;
+            }
+
+            if (batchJob.processed % 10 === 0) {
+              log.info('Batch summary fetch progress', {
+                processed: batchJob.processed,
+                total: batchJob.total,
+                found: batchJob.found,
+                inFlight: inFlight.size,
+                progress: `${Math.round((batchJob.processed / batchJob.total) * 100)}%`,
+              });
+            }
+          } catch (err) {
+            batchJob.processed++;
+            batchJob.errors++;
+            log.error('Batch fetch error for album', {
+              albumId: album.album_id,
+              artist: album.artist,
+              album: album.album,
+              error: err.message,
+              stack: err.stack,
+            });
           }
-        } else {
-          batchJob.errors++;
-        }
-        if (batchJob.processed % 50 === 0) {
-          log.info('Batch summary fetch progress', {
-            processed: batchJob.processed,
-            total: batchJob.total,
-            found: batchJob.found,
-            progress: `${Math.round((batchJob.processed / batchJob.total) * 100)}%`,
-          });
-        }
-      } catch (err) {
-        batchJob.processed++;
-        batchJob.errors++;
-        log.error('Batch fetch error for album', {
-          albumId: album.album_id,
-          artist: album.artist,
-          album: album.album,
-          error: err.message,
-          stack: err.stack,
+        })();
+
+        inFlight.set(promise, album);
+
+        // Clean up completed promise
+        promise.finally(() => {
+          inFlight.delete(promise);
         });
       }
+
+      // Wait for at least one request to complete before starting more
+      if (inFlight.size > 0) {
+        await Promise.race(inFlight.keys());
+      }
     }
+
     batchJob.running = false;
+
+    const durationSeconds = Math.round(
+      (Date.now() - new Date(batchJob.startedAt).getTime()) / 1000
+    );
+
     log.info('Batch summary fetch completed', {
       total: batchJob.total,
       found: batchJob.found,
       notFound: batchJob.notFound,
       errors: batchJob.errors,
-      duration: `${Math.round((Date.now() - new Date(batchJob.startedAt).getTime()) / 1000)}s`,
+      duration: `${durationSeconds}s`,
     });
+
+    // Batch cache invalidation: invalidate caches once at the end
+    if (responseCache && pool && processedAlbumIds.length > 0) {
+      try {
+        // Use explicit album IDs instead of timestamps to avoid race conditions
+        const affectedUsers = await pool.query(
+          `SELECT DISTINCT l.user_id 
+           FROM lists l 
+           JOIN list_items li ON li.list_id = l._id 
+           WHERE li.album_id = ANY($1::text[])`,
+          [processedAlbumIds]
+        );
+
+        for (const row of affectedUsers.rows) {
+          responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
+        }
+
+        log.info('Batch cache invalidation completed', {
+          userCount: affectedUsers.rows.length,
+          albumsProcessed: processedAlbumIds.length,
+        });
+      } catch (err) {
+        log.warn('Failed to invalidate caches after batch', {
+          error: err.message,
+        });
+      }
+    }
   });
 }
 
@@ -257,10 +340,15 @@ function createAlbumSummaryService(deps = {}) {
 
   /**
    * Fetch and store summary for a single album by album_id
+   * @param {string} albumId - The album ID
+   * @param {Object} options - Options
+   * @param {boolean} options.skipCacheInvalidation - Skip immediate cache invalidation (for batch processing)
+   * @param {boolean} options.skipBroadcast - Skip WebSocket broadcast (for batch processing)
    */
-  async function fetchAndStoreSummary(albumId) {
+  async function fetchAndStoreSummary(albumId, options = {}) {
     const startTime = Date.now();
     let albumRecord = null;
+    const { skipCacheInvalidation = false, skipBroadcast = false } = options;
 
     try {
       const albumResult = await pool.query(
@@ -291,12 +379,14 @@ function createAlbumSummaryService(deps = {}) {
       );
 
       // Invalidate caches for all users who have this album in their lists
-      // This ensures summaries appear immediately after refresh/change list
-      await invalidateCachesForAlbum(pool, responseCache, log, albumId);
+      // Skip during batch processing (will be done at the end for efficiency)
+      if (!skipCacheInvalidation) {
+        await invalidateCachesForAlbum(pool, responseCache, log, albumId);
+      }
 
       // Broadcast summary update to all users who have this album in their lists
-      // This allows real-time UI updates without page refresh
-      if (summary && broadcast) {
+      // Skip during batch processing to avoid flooding WebSocket clients
+      if (summary && broadcast && !skipBroadcast) {
         try {
           const usersResult = await pool.query(
             `SELECT DISTINCT l.user_id 
@@ -443,6 +533,7 @@ function createAlbumSummaryService(deps = {}) {
       albumCount: albums.length,
       includeRetries,
       regenerateAll: !!regenerateAll,
+      concurrency: parseInt(process.env.ALBUM_SUMMARY_CONCURRENCY || '3', 10),
     });
     batchJob = {
       running: true,
@@ -454,7 +545,14 @@ function createAlbumSummaryService(deps = {}) {
       startedAt: new Date().toISOString(),
     };
 
-    processBatchAlbums(batchJob, albums, fetchAndStoreSummary, log);
+    processBatchAlbums(
+      batchJob,
+      albums,
+      fetchAndStoreSummary,
+      log,
+      pool,
+      responseCache
+    );
   }
 
   /** Stop the running batch job */

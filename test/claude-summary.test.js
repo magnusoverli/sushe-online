@@ -126,11 +126,11 @@ test('fetchClaudeSummary should return summary for successful API call', async (
 
   // Verify API call parameters
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  assert.strictEqual(callArgs.model, 'claude-sonnet-4-5');
+  assert.strictEqual(callArgs.model, 'claude-haiku-4-5');
   assert.ok(callArgs.tools);
   assert.strictEqual(callArgs.tools[0].type, 'web_search_20250305');
   assert.strictEqual(callArgs.tools[0].name, 'web_search');
-  assert.strictEqual(callArgs.tools[0].max_uses, 5);
+  assert.strictEqual(callArgs.tools[0].max_uses, 3);
   assert.ok(callArgs.messages[0].content.includes('OK Computer'));
   assert.ok(callArgs.messages[0].content.includes('Radiohead'));
 });
@@ -311,6 +311,10 @@ test('fetchClaudeSummary should validate summary length', async () => {
             text: veryShortSummary,
           },
         ],
+        usage: {
+          input_tokens: 80,
+          output_tokens: 10,
+        },
       })),
     },
   };
@@ -360,7 +364,7 @@ test('fetchClaudeSummary should respect rate limiting', async () => {
   await service.fetchClaudeSummary('Artist2', 'Album2');
   const endTime = Date.now();
 
-  // Should have waited at least 1000ms between calls (rate limit)
-  assert.ok(endTime - startTime >= 1000);
+  // Should have waited at least 500ms between calls (rate limit: 2 req/sec)
+  assert.ok(endTime - startTime >= 500);
   assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 2);
 });
