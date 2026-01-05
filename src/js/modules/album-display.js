@@ -1373,6 +1373,7 @@ export function createAlbumDisplay(deps = {}) {
   let activeBadge = null; // Track which badge the tooltip is for
   let tooltipHideTimeout = null;
   let tooltipRemoveTimeout = null; // Track the removal animation timeout
+  const TOOLTIP_HIDE_DELAY = 80; // 80ms delay before hiding (prevents accidental dismissal)
 
   /**
    * Initialize summary tooltips for badges (Last.fm and Wikipedia)
@@ -1499,15 +1500,16 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Schedule hiding the tooltip (immediate)
+   * Schedule hiding the tooltip with short delay
    */
   function scheduleHideTooltip() {
     if (tooltipHideTimeout) {
       clearTimeout(tooltipHideTimeout);
     }
-    // Hide immediately when cursor leaves badge or tooltip
-    hideTooltip();
-    tooltipHideTimeout = null;
+    tooltipHideTimeout = setTimeout(() => {
+      hideTooltip();
+      tooltipHideTimeout = null;
+    }, TOOLTIP_HIDE_DELAY);
   }
 
   /**
