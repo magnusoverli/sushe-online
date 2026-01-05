@@ -54,9 +54,10 @@ export function createSorting(deps = {}) {
     }
 
     // Find the actual scrollable element (the parent with overflow-y-auto)
-    const scrollElement = isMobile
-      ? sortableContainer.closest('.overflow-y-auto')
-      : sortableContainer;
+    // Both mobile and desktop need to find the scrollable parent, not the sortable container itself
+    // The sortable container (.album-rows-container) is a child of the scrollable element (#albumContainer)
+    const scrollElement =
+      sortableContainer.closest('.overflow-y-auto') || sortableContainer;
 
     // Configure SortableJS options
     const sortableOptions = {
