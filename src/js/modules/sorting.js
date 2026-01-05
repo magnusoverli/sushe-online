@@ -81,8 +81,9 @@ export function createSorting(deps = {}) {
 
       // Configure scrolling - use SortableJS built-in autoscroll for both desktop and mobile
       scroll: scrollElement, // Scroll the correct scrollable element
-      scrollSensitivity: isMobile ? 100 : 30, // Larger zone for mobile
-      scrollSpeed: isMobile ? 25 : 15, // Faster scroll for mobile
+      forceAutoScrollFallback: true, // Force SortableJS autoscroll instead of native browser autoscroll
+      scrollSensitivity: 100, // 100px trigger zone for autoscroll
+      scrollSpeed: 25, // px per scroll tick
       bubbleScroll: false, // Disable parent container scrolling to prevent double-scroll
 
       // Enhanced event handlers
