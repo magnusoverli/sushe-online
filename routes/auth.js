@@ -12,15 +12,12 @@ module.exports = (app, deps) => {
     loginTemplate,
 
     spotifyTemplate,
-    isTokenUsable,
     csrfProtection,
     ensureAuth,
     ensureAuthAPI,
     rateLimitAdminRequest,
     users,
     usersAsync,
-    listsAsync,
-    listItemsAsync,
     bcrypt,
     isValidEmail,
     isValidUsername,
@@ -520,30 +517,6 @@ module.exports = (app, deps) => {
       res.status(500).json({ error: 'Error updating music service' });
     }
   });
-
-  function getTimeAgo(date) {
-    const seconds = Math.floor((new Date() - date) / 1000);
-
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} minutes ago`;
-    if (seconds < 86400) {
-      const hours = Math.floor(seconds / 3600);
-      return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
-    }
-    if (seconds < 2592000) {
-      const days = Math.floor(seconds / 86400);
-      return days === 1 ? '1 day ago' : `${days} days ago`;
-    }
-
-    // For "recent activity", cap at months - anything older isn't really "recent"
-    const months = Math.floor(seconds / 2592000);
-    if (months === 0) return '< 1 month ago';
-    if (months === 1) return '1 month ago';
-    if (months < 12) return `${months} months ago`;
-
-    // For anything over a year, just show "over a year ago" for recent activity
-    return 'over a year ago';
-  }
 
   // Change password endpoint
   app.post(

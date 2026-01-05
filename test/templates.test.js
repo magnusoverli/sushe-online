@@ -748,7 +748,6 @@ describe('templates utilities', () => {
       assert.ok(result.includes('fa-bars'));
     });
 
-
     it('should default to home section', () => {
       const user = { username: 'test' };
       const result = templates.headerComponent(user);

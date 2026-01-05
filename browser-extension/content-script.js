@@ -47,10 +47,23 @@ async function extractAlbumDataFromPage(context) {
     const match = url.match(/\/release\/[^/]+\/([^/]+)\/([^/]+)/);
 
     if (match) {
-      // Replace both underscores and hyphens with spaces
+      // Handle RYM URL encoding: leading underscore represents ellipsis
+      // e.g., "_and-oceans" -> "...and oceans"
+      let artistSlug = match[1];
+      let albumSlug = match[2];
+
+      // Convert leading underscore to ellipsis before replacing other underscores
+      if (artistSlug.startsWith('_')) {
+        artistSlug = '...' + artistSlug.slice(1);
+      }
+      if (albumSlug.startsWith('_')) {
+        albumSlug = '...' + albumSlug.slice(1);
+      }
+
+      // Replace remaining underscores and hyphens with spaces
       // RYM uses both in URLs: some_artist and some-album
-      data.artist = decodeURIComponent(match[1].replace(/[-_]/g, ' '));
-      data.album = decodeURIComponent(match[2].replace(/[-_]/g, ' '));
+      data.artist = decodeURIComponent(artistSlug.replace(/[-_]/g, ' '));
+      data.album = decodeURIComponent(albumSlug.replace(/[-_]/g, ' '));
 
       // Clean up artist and album names
       data.artist = cleanName(data.artist);
@@ -268,21 +281,45 @@ function cleanName(name) {
     name = name.normalize('NFC');
   }
 
-  // Capitalize only if the entire name is lowercase or all uppercase
+  // Preserve leading punctuation (e.g., ellipsis "...and Oceans")
+  const leadingPunctMatch = name.match(/^([^\w\s]+)/);
+  const leadingPunct = leadingPunctMatch ? leadingPunctMatch[1] : '';
+  const nameWithoutLeadingPunct = leadingPunct
+    ? name.slice(leadingPunct.length)
+    : name;
+
+  // Capitalize only if the entire name (without leading punct) is lowercase or all uppercase
   // Otherwise preserve the original casing
-  const isAllLowercase = name === name.toLowerCase();
-  const isAllUppercase = name === name.toUpperCase();
+  const isAllLowercase =
+    nameWithoutLeadingPunct === nameWithoutLeadingPunct.toLowerCase();
+  const isAllUppercase =
+    nameWithoutLeadingPunct === nameWithoutLeadingPunct.toUpperCase();
 
   if (isAllLowercase || isAllUppercase) {
     // Only apply capitalization if name is entirely lowercase or uppercase
-    name = name
+    const capitalized = nameWithoutLeadingPunct
       .split(' ')
       .map((word) => {
         if (!word) return word;
+        // Find first letter (skip leading punctuation)
+        const firstLetterMatch = word.match(/[a-zA-Z]/);
+        if (!firstLetterMatch) {
+          // No letters, return as-is (e.g., "...")
+          return word;
+        }
+        const firstLetterIndex = firstLetterMatch.index;
+        const beforeLetter = word.slice(0, firstLetterIndex);
+        const letter = word[firstLetterIndex];
+        const afterLetter = word.slice(firstLetterIndex + 1);
         // Capitalize first letter, lowercase the rest
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        return (
+          beforeLetter +
+          letter.toUpperCase() +
+          afterLetter.toLowerCase()
+        );
       })
       .join(' ');
+    name = leadingPunct + capitalized;
   }
   // Otherwise preserve original casing (e.g., "McCartney", "AC/DC")
 
