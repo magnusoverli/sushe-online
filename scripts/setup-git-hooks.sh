@@ -54,11 +54,18 @@ fi
 
 # Run prettier check on staged source files (prettier accepts multiple files)
 echo "📝 Checking Prettier formatting on staged files..."
-if ! echo "$SOURCE_FILES" | xargs -r $NPM_CMD exec prettier --check 2>&1; then
+# Use npx or npm exec with -- to properly pass flags to prettier
+if command -v npx &> /dev/null; then
+  PRETTIER_CMD="npx prettier"
+else
+  PRETTIER_CMD="$NPM_CMD exec -- prettier"
+fi
+
+if ! echo "$SOURCE_FILES" | xargs -r $PRETTIER_CMD --check 2>&1; then
   echo ""
   echo "❌ Prettier formatting issues found in staged files!"
   echo "💡 Fix with: npm run format"
-  echo "   Or auto-fix staged files: echo \"$SOURCE_FILES\" | xargs $NPM_CMD exec prettier --write && git add $SOURCE_FILES"
+  echo "   Or auto-fix staged files: echo \"$SOURCE_FILES\" | xargs $PRETTIER_CMD --write && git add $SOURCE_FILES"
   exit 1
 fi
 
@@ -68,11 +75,12 @@ JS_FILES=$(echo "$SOURCE_FILES" | grep -E '\.(js|mjs)$' || true)
 if [ -n "$JS_FILES" ]; then
   echo "🔎 Checking ESLint rules on staged files (--max-warnings 0)..."
   # eslint accepts multiple files, use xargs for efficiency
-  if ! echo "$JS_FILES" | xargs -r $NPM_CMD exec eslint --max-warnings 0 2>&1; then
+  # Use -- to properly pass flags to eslint
+  if ! echo "$JS_FILES" | xargs -r $NPM_CMD exec -- eslint --max-warnings 0 2>&1; then
     echo ""
     echo "❌ ESLint issues found in staged files!"
     echo "💡 Fix with: npm run lint:fix"
-    echo "   Or fix specific files: echo \"$JS_FILES\" | xargs $NPM_CMD exec eslint --fix"
+    echo "   Or fix specific files: echo \"$JS_FILES\" | xargs $NPM_CMD exec -- eslint --fix"
     exit 1
   fi
 fi
