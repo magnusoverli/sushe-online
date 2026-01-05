@@ -35,7 +35,7 @@ function createModalElement() {
   modal.innerHTML = `
     <div class="discovery-modal-content bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
       <!-- Modal Header -->
-      <div class="p-4 sm:p-6 border-b border-gray-800 flex-shrink-0">
+      <div class="p-4 sm:p-6 border-b border-gray-800 shrink-0">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
             <i id="discoveryModalIcon" class="fas fa-music text-xl text-gray-400"></i>
@@ -51,7 +51,7 @@ function createModalElement() {
       </div>
       
       <!-- Modal Content (scrollable) -->
-      <div id="discoveryModalContent" class="p-4 sm:p-6 overflow-y-auto flex-grow">
+      <div id="discoveryModalContent" class="p-4 sm:p-6 overflow-y-auto grow">
         <!-- Content loaded dynamically -->
       </div>
     </div>
@@ -142,13 +142,13 @@ function renderSkeletonLoaders() {
     .map(
       () => `
     <div class="flex items-center gap-4 p-3 rounded-lg animate-pulse">
-      <div class="w-16 h-16 bg-gray-700 rounded flex-shrink-0"></div>
-      <div class="flex-grow">
-        <div class="h-4 bg-gray-700 rounded w-3/4 mb-2"></div>
-        <div class="h-3 bg-gray-700 rounded w-1/2 mb-2"></div>
-        <div class="h-3 bg-gray-700 rounded w-1/4"></div>
+      <div class="w-16 h-16 bg-gray-700 rounded-sm shrink-0"></div>
+      <div class="grow">
+        <div class="h-4 bg-gray-700 rounded-sm w-3/4 mb-2"></div>
+        <div class="h-3 bg-gray-700 rounded-sm w-1/2 mb-2"></div>
+        <div class="h-3 bg-gray-700 rounded-sm w-1/4"></div>
       </div>
-      <div class="w-24 h-8 bg-gray-700 rounded flex-shrink-0"></div>
+      <div class="w-24 h-8 bg-gray-700 rounded-sm shrink-0"></div>
     </div>
   `
     )
@@ -180,7 +180,7 @@ function renderErrorState(message, retryAction) {
     <div class="text-center py-12">
       <i class="fas fa-exclamation-circle text-4xl text-red-500 mb-4"></i>
       <p class="text-gray-400 mb-4">${message}</p>
-      <button class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors" onclick="${retryAction}">
+      <button class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition-colors" onclick="${retryAction}">
         <i class="fas fa-redo mr-2"></i>Try Again
       </button>
     </div>
@@ -304,21 +304,21 @@ function renderSimilarArtistsList(artists) {
       return `
       <div class="flex items-center gap-3 sm:gap-4 p-3 bg-gray-800 rounded-lg hover:bg-gray-750 transition-colors">
         <!-- Artist Image (lazy-loaded) -->
-        <div class="artist-image-container w-12 h-12 sm:w-14 sm:h-14 bg-gray-700 rounded-full flex-shrink-0 overflow-hidden animate-pulse flex items-center justify-center"
+        <div class="artist-image-container w-12 h-12 sm:w-14 sm:h-14 bg-gray-700 rounded-full shrink-0 overflow-hidden animate-pulse flex items-center justify-center"
              data-artist="${escapeHtml(artist.name)}">
           <i class="fas fa-user text-gray-500"></i>
         </div>
         
         <!-- Info -->
-        <div class="flex-grow min-w-0">
+        <div class="grow min-w-0">
           <p class="font-semibold text-white truncate">${escapeHtml(artist.name)}</p>
           <p class="text-xs text-purple-400">${matchPercent}% match</p>
         </div>
         
         <!-- RateYourMusic Link -->
-        <div class="flex-shrink-0">
+        <div class="shrink-0">
           <a href="${rymUrl}" target="_blank" rel="noopener noreferrer"
-             class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded transition-colors whitespace-nowrap inline-flex items-center gap-1">
+             class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-sm transition-colors whitespace-nowrap inline-flex items-center gap-1">
             <i class="fas fa-external-link-alt text-xs"></i>
             <span class="hidden sm:inline">RYM</span>
           </a>

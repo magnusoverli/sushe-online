@@ -139,7 +139,7 @@ describe('List Navigation Module - Unit Tests', () => {
     it('should include main badge for main lists', () => {
       const isMain = true;
       const mainBadge = isMain
-        ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Main list"></i>'
+        ? '<i class="fas fa-star text-yellow-500 ml-1 shrink-0 text-xs" title="Main list"></i>'
         : '';
 
       assert.ok(mainBadge.includes('fa-star'));

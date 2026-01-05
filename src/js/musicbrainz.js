@@ -875,12 +875,12 @@ async function displayDirectAlbumResults(releaseGroups) {
         isNewRelease
           ? `
         <div class="absolute top-2 right-2 flex gap-1 z-10">
-          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>
+          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded-sm font-semibold">NEW</span>
         </div>
       `
           : ''
       }
-      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
+      <div class="album-cover-container shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md bg-gray-700 animate-pulse">
         <img data-artist="${artistDisplay.replace(/"/g, '&quot;')}"
             data-album="${rg.title.replace(/"/g, '&quot;')}"
             data-release-group-id="${rg.id}"
@@ -1280,7 +1280,7 @@ async function handleCoverArtUpload(e) {
   const reader = new FileReader();
   reader.onload = function (event) {
     modalElements.coverPreview.innerHTML = `
-      <img src="${event.target.result}" alt="Cover preview" class="w-full h-full object-cover rounded">
+      <img src="${event.target.result}" alt="Cover preview" class="w-full h-full object-cover rounded-sm">
     `;
   };
   reader.readAsDataURL(file);
@@ -1565,7 +1565,7 @@ async function displayArtistResults(artists) {
 
     // Start with placeholder image
     artistEl.innerHTML = `
-      <div class="artist-image-container flex-shrink-0">
+      <div class="artist-image-container shrink-0">
         <div class="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center animate-pulse">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -1581,7 +1581,7 @@ async function displayArtistResults(artists) {
         ${secondaryText ? `<div class="text-sm text-gray-400 mt-1">${secondaryText}</div>` : ''}
         <div class="text-sm text-gray-400 mt-1 artist-country">${artist.type || 'Artist'}${artist.country ? ` • ${artist.country}` : ''}</div>
       </div>
-      <div class="flex-shrink-0">
+      <div class="shrink-0">
         <i class="fas fa-chevron-right text-gray-500"></i>
       </div>
     `;
@@ -1915,12 +1915,12 @@ function displayAlbumResultsWithProvider(albums, providerName) {
         isNewRelease
           ? `
         <div class="absolute top-2 right-2 flex gap-1 z-10">
-          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded font-semibold">NEW</span>
+          <span class="bg-red-600 text-white text-xs px-2 py-1 rounded-sm font-semibold">NEW</span>
         </div>
       `
           : ''
       }
-      <div class="album-cover-container flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md ${hasCover ? '' : 'bg-gray-700 animate-pulse'}">
+      <div class="album-cover-container shrink-0 w-20 h-20 rounded-lg overflow-hidden flex items-center justify-center shadow-md ${hasCover ? '' : 'bg-gray-700 animate-pulse'}">
         ${coverHtml}
       </div>
       <div class="flex-1 min-w-0">

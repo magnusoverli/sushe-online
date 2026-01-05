@@ -54,7 +54,7 @@ export function createEditableFields(deps = {}) {
     const input = document.createElement('input');
     input.type = 'text';
     input.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-gray-500';
+      'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500';
     input.value = currentCountry;
     input.placeholder = 'Type to search countries...';
     input.setAttribute('list', `country-list-${currentList}-${albumIndex}`);
@@ -209,7 +209,7 @@ export function createEditableFields(deps = {}) {
     const input = document.createElement('input');
     input.type = 'text';
     input.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded border border-gray-700 focus:outline-none focus:border-gray-500';
+      'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500';
     input.value = currentGenre;
     input.placeholder = `Type to search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
     input.setAttribute(
@@ -380,7 +380,7 @@ export function createEditableFields(deps = {}) {
     // Create textarea
     const textarea = document.createElement('textarea');
     textarea.className =
-      'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded border border-gray-700 focus:outline-none focus:border-gray-500 resize-none';
+      'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500 resize-none';
     textarea.value = currentComment;
     textarea.rows = 2;
 

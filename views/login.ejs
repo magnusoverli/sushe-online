@@ -1,4 +1,4 @@
-<div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
+<div class="bg-gray-900/90 backdrop-blur-xs border border-gray-800 rounded-lg p-8 shadow-2xl">
   <div class="text-center mb-8">
     <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">LOGIN</h1>
   </div>
@@ -10,7 +10,7 @@
         Email Address
       </label>
       <input
-        class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+        class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
         name="email"
         id="email"
         type="email"
@@ -27,7 +27,7 @@
       </label>
       <div class="relative">
         <input
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200 pr-12"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200 pr-12"
           name="password"
           id="password"
           type="password"
@@ -44,14 +44,14 @@
 
     <div class="flex items-center justify-between">
       <label class="flex items-center text-sm text-gray-400">
-        <input type="checkbox" name="remember" class="mr-2 rounded bg-gray-800 border-gray-700 text-red-600 focus:ring-red-600 focus:ring-offset-0">
+        <input type="checkbox" name="remember" class="mr-2 rounded-sm bg-gray-800 border-gray-700 text-red-600 focus:ring-red-600 focus:ring-offset-0">
         Remember me
       </label>
       <a href="/forgot" class="text-sm text-gray-400 hover:text-red-500 transition duration-200">Forgot password?</a>
     </div>
 
     <button
-      class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+      class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
       type="submit"
       id="loginButton"
     >
@@ -63,7 +63,7 @@
   </form>
 
   <% if (flash.error && flash.error.length) { %>
-    <div class="mt-4 p-3 bg-red-900/20 border border-red-800 rounded flash-message" data-flash="error" data-flash-content="<%= flash.error[0] %>">
+    <div class="mt-4 p-3 bg-red-900/20 border border-red-800 rounded-sm flash-message" data-flash="error" data-flash-content="<%= flash.error[0] %>">
       <p class="text-red-400 text-sm flex items-center">
         <i class="fas fa-exclamation-circle mr-2"></i>
         <%= flash.error[0] %>
@@ -72,7 +72,7 @@
   <% } %>
 
   <% if (flash.success && flash.success.length) { %>
-    <div class="mt-4 p-3 bg-green-900/20 border border-green-800 rounded flash-message" data-flash="success" data-flash-content="<%= flash.success[0] %>">
+    <div class="mt-4 p-3 bg-green-900/20 border border-green-800 rounded-sm flash-message" data-flash="success" data-flash-content="<%= flash.success[0] %>">
       <p class="text-green-400 text-sm flex items-center">
         <i class="fas fa-check-circle mr-2"></i>
         <%= flash.success[0] %>
@@ -81,7 +81,7 @@
   <% } %>
 
   <% if (flash.info && flash.info.length) { %>
-    <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded flash-message" data-flash="info" data-flash-content="<%= flash.info[0] %>">
+    <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800 rounded-sm flash-message" data-flash="info" data-flash-content="<%= flash.info[0] %>">
       <p class="text-blue-400 text-sm flex items-center">
         <i class="fas fa-info-circle mr-2"></i>
         <%= flash.info[0] %>

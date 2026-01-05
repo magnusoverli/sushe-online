@@ -495,14 +495,14 @@ export function createAlbumDisplay(deps = {}) {
             <img src="${PLACEHOLDER_GIF}" 
                 data-lazy-src="${coverImageSrc}"
                 alt="${data.albumName}" 
-                class="album-cover rounded shadow-lg"
+                class="album-cover rounded-sm shadow-lg"
                 loading="lazy"
                 decoding="async"
-                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
+                onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded-sm bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
             >
           `
               : `
-            <div class="album-cover-placeholder rounded bg-gray-800 shadow-lg">
+            <div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
@@ -517,7 +517,7 @@ export function createAlbumDisplay(deps = {}) {
       <div class="flex flex-col justify-center">
         <div class="flex items-center gap-2">
           <span class="font-semibold text-gray-100 truncate">${data.albumName}</span>
-          ${data.playcountDisplay ? `<span class="text-xs text-gray-500 flex-shrink-0" data-playcount="${data.itemId}" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay}</span>` : `<span class="text-xs text-gray-500 flex-shrink-0 hidden" data-playcount="${data.itemId}"></span>`}
+          ${data.playcountDisplay ? `<span class="text-xs text-gray-500 shrink-0" data-playcount="${data.itemId}" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay}</span>` : `<span class="text-xs text-gray-500 shrink-0 hidden" data-playcount="${data.itemId}"></span>`}
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
       </div>
@@ -775,10 +775,10 @@ export function createAlbumDisplay(deps = {}) {
       </div>
       <div class="flex items-stretch h-full bg-gray-900">
         <!-- Left section: Album cover and Release date -->
-        <div class="flex-shrink-0 flex items-stretch h-full">
+        <div class="shrink-0 flex items-stretch h-full">
           <!-- Album cover with release date below -->
           <div class="flex flex-col items-center pl-[4px] pt-2 self-stretch">
-            <div class="flex-shrink-0">
+            <div class="shrink-0">
               ${
                 mobileCoverSrc
                   ? `
@@ -852,7 +852,7 @@ export function createAlbumDisplay(deps = {}) {
         </div>
 
         <!-- Actions on the right -->
-        <div class="flex items-center justify-center flex-shrink-0 w-[25px] border-l border-gray-800/50">
+        <div class="flex items-center justify-center shrink-0 w-[25px] border-l border-gray-800/50">
           <button data-album-menu-btn
                   class="p-2 text-gray-400 active:text-gray-200 no-drag">
             <i class="fas fa-ellipsis-v"></i>
@@ -1621,7 +1621,7 @@ export function createAlbumDisplay(deps = {}) {
       // Create header as direct child of scrolling container
       const header = document.createElement('div');
       header.className =
-        'album-header album-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 bg-black z-10 flex-shrink-0';
+        'album-header album-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 bg-black z-10 shrink-0';
       header.style.alignItems = 'center';
       header.innerHTML = `
         <div class="text-center"></div>

@@ -316,14 +316,14 @@ export function createMobileUI(deps = {}) {
           <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
           
           <button data-action="edit"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
           </button>
 
           <!-- Expandable Play Section -->
           <div class="play-section">
             <button data-action="play-toggle"
-                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded ${!hasAnyService ? 'opacity-50' : ''}">
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm ${!hasAnyService ? 'opacity-50' : ''}">
               <span>
                 <i class="fas fa-play mr-3 text-gray-400"></i>Play Album
               </span>
@@ -335,7 +335,7 @@ export function createMobileUI(deps = {}) {
               <div class="ml-4 border-l-2 border-gray-700 pl-4 py-1">
                 <!-- Open in app option -->
                 <button data-action="open-app"
-                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm flex items-center">
                   <i class="fas fa-external-link-alt mr-3 text-green-500 text-sm"></i>
                   <span class="text-sm">Open in ${primaryServiceName}</span>
                 </button>
@@ -360,7 +360,7 @@ export function createMobileUI(deps = {}) {
           </div>
 
           <button data-action="move"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-arrow-right mr-3 text-gray-400"></i>Move to List...
           </button>
 
@@ -370,7 +370,7 @@ export function createMobileUI(deps = {}) {
           <!-- Last.fm Discovery Options -->
           <div class="border-t border-gray-700 my-2"></div>
           <button data-action="similar-artists"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-users mr-3 text-purple-400"></i>Show Similar Artists
           </button>
           <div class="border-t border-gray-700 my-2"></div>
@@ -379,12 +379,12 @@ export function createMobileUI(deps = {}) {
           }
 
           <button data-action="remove"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm text-red-500">
             <i class="fas fa-trash mr-3"></i>Remove from List
           </button>
           
           <button data-action="cancel"
-                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
           </button>
         </div>
@@ -471,7 +471,7 @@ export function createMobileUI(deps = {}) {
                 : '';
               return `
                 <button data-action="play-device" data-device-id="${device.id}"
-                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm flex items-center">
                   <i class="${icon} mr-3 ${activeClass} text-sm"></i>
                   <span class="text-sm truncate">${device.name}</span>
                   ${activeBadge}
@@ -619,7 +619,7 @@ export function createMobileUI(deps = {}) {
             </div>
             
             <button data-action="cancel"
-                    class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+                    class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
               Cancel
             </button>
           </div>
@@ -630,7 +630,7 @@ export function createMobileUI(deps = {}) {
         .map(
           (listName) => `
           <button data-target-list="${listName}"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-list mr-3 text-gray-400"></i>${listName}
           </button>
         `
@@ -648,7 +648,7 @@ export function createMobileUI(deps = {}) {
             ${listButtons}
             
             <button data-action="cancel"
-                    class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+                    class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
               Cancel
             </button>
           </div>
@@ -702,7 +702,7 @@ export function createMobileUI(deps = {}) {
     }
 
     const actionSheet = document.createElement('div');
-    actionSheet.className = 'fixed inset-0 z-[60]';
+    actionSheet.className = 'fixed inset-0 z-60';
     actionSheet.innerHTML = `
       <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
       <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
@@ -713,7 +713,7 @@ export function createMobileUI(deps = {}) {
           <!-- Expandable Download Section -->
           <div class="download-section">
             <button data-action="download-toggle"
-                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded">
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
               <span>
                 <i class="fas fa-download mr-3 text-gray-400"></i>Download List...
               </span>
@@ -724,17 +724,17 @@ export function createMobileUI(deps = {}) {
             <div data-download-options class="hidden overflow-hidden transition-all duration-200 ease-out" style="max-height: 0;">
               <div class="ml-4 border-l-2 border-gray-700 pl-4 py-1">
                 <button data-action="download-json"
-                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm flex items-center">
                   <i class="fas fa-file-code mr-3 text-gray-400 text-sm"></i>
                   <span class="text-sm">Download as JSON</span>
                 </button>
                 <button data-action="download-pdf"
-                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm flex items-center">
                   <i class="fas fa-file-pdf mr-3 text-gray-400 text-sm"></i>
                   <span class="text-sm">Download as PDF</span>
                 </button>
                 <button data-action="download-csv"
-                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded flex items-center">
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm flex items-center">
                   <i class="fas fa-file-csv mr-3 text-gray-400 text-sm"></i>
                   <span class="text-sm">Download as CSV</span>
                 </button>
@@ -743,7 +743,7 @@ export function createMobileUI(deps = {}) {
           </div>
           
           <button data-action="edit"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-edit mr-3 text-gray-400"></i>Edit Details
           </button>
           
@@ -751,7 +751,7 @@ export function createMobileUI(deps = {}) {
             menuConfig.hasYear
               ? `
           <button data-action="toggle-main"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas ${menuConfig.mainIconClass} mr-3 text-yellow-500"></i>${menuConfig.mainToggleText}
           </button>
           `
@@ -759,17 +759,17 @@ export function createMobileUI(deps = {}) {
           }
           
           <button data-action="send-to-service"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${menuConfig.musicServiceText}
           </button>
           
           <button data-action="delete"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded text-red-500">
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm text-red-500">
             <i class="fas fa-trash mr-3"></i>Delete List
           </button>
           
           <button data-action="cancel"
-                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded">
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
           </button>
         </div>
@@ -990,7 +990,7 @@ export function createMobileUI(deps = {}) {
       'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl';
     editModal.innerHTML = `
       <!-- Header -->
-      <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
+      <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
         <button data-close-editor class="p-2 -m-2 text-gray-400 hover:text-white">
           <i class="fas fa-times text-xl"></i>
         </button>
@@ -1005,7 +1005,7 @@ export function createMobileUI(deps = {}) {
           <div class="w-full">
             <label class="block text-gray-400 text-sm mb-2">Cover Art</label>
             <div class="flex items-start gap-4">
-              <div id="editCoverPreview" class="w-24 h-24 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 flex-shrink-0 overflow-hidden">
+              <div id="editCoverPreview" class="w-24 h-24 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 shrink-0 overflow-hidden">
                 ${
                   album.cover_image
                     ? `<img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
@@ -1040,7 +1040,7 @@ export function createMobileUI(deps = {}) {
               type="text" 
               id="editArtist" 
               value="${album.artist || ''}"
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
               placeholder="Artist name"
             >
           </div>
@@ -1052,7 +1052,7 @@ export function createMobileUI(deps = {}) {
               type="text" 
               id="editAlbum" 
               value="${album.album || ''}"
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
               placeholder="Album title"
             >
           </div>
@@ -1064,7 +1064,7 @@ export function createMobileUI(deps = {}) {
               type="date"
               id="editReleaseDate"
               value="${inputReleaseDate}"
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
               style="display: block; width: 100%; min-height: 48px; -webkit-appearance: none;"
             >
             ${!album.release_date ? '<p class="text-xs text-gray-500 mt-1">No date set - defaulting to today</p>' : ''}
@@ -1076,7 +1076,7 @@ export function createMobileUI(deps = {}) {
             <div class="relative">
               <select 
                 id="editCountry" 
-                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
+                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-hidden focus:border-gray-500 transition duration-200 appearance-none pr-10"
               >
                 <option value="">Select a country...</option>
                 ${availableCountries
@@ -1100,7 +1100,7 @@ export function createMobileUI(deps = {}) {
             <div class="relative">
               <select 
                 id="editGenre1" 
-                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
+                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-hidden focus:border-gray-500 transition duration-200 appearance-none pr-10"
               >
                 <option value="">Select a genre...</option>
                 ${availableGenres
@@ -1124,7 +1124,7 @@ export function createMobileUI(deps = {}) {
             <div class="relative">
               <select 
                 id="editGenre2" 
-                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200 appearance-none pr-10"
+                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-hidden focus:border-gray-500 transition duration-200 appearance-none pr-10"
               >
                 <option value="">None (optional)</option>
                 ${availableGenres
@@ -1153,7 +1153,7 @@ export function createMobileUI(deps = {}) {
             <textarea
               id="editComments"
               rows="3"
-              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200 resize-none"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200 resize-none"
               placeholder="Add your notes..."
             >${album.comments || album.comment || ''}</textarea>
           </div>
@@ -1175,7 +1175,7 @@ export function createMobileUI(deps = {}) {
                     const trackLength = formatTrackTime(getTrackLength(t));
                     return `
                   <li class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${trackName}" ${trackName === (album.track_pick || '') ? 'checked' : ''}>
+                    <input type="checkbox" class="track-pick-checkbox shrink-0" value="${trackName}" ${trackName === (album.track_pick || '') ? 'checked' : ''}>
                     <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
                   </li>`;
                   })
@@ -1184,7 +1184,7 @@ export function createMobileUI(deps = {}) {
             `
                 : `
               <input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
-                     class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+                     class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number">
             `
             }
@@ -1362,13 +1362,13 @@ export function createMobileUI(deps = {}) {
                       const trackLength = formatTrackTime(getTrackLength(t));
                       return `
                   <li class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox flex-shrink-0" value="${trackName}">
+                    <input type="checkbox" class="track-pick-checkbox shrink-0" value="${trackName}">
                     <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
                   </li>`;
                     })
                     .join('')}</ul>`
                 : `<input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
-                     class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+                     class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number">`;
             setupTrackPickCheckboxes();
             setupTrackPlayLinks();
@@ -1552,7 +1552,7 @@ export function createMobileUI(deps = {}) {
       <!-- Modal Content -->
       <div class="relative bg-gray-900 rounded-lg shadow-2xl flex flex-col w-full max-w-lg max-h-[85vh] overflow-hidden">
         <!-- Header -->
-        <div class="flex items-center justify-between p-4 border-b border-gray-800 flex-shrink-0">
+        <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
           <button data-close-summary class="p-2 -m-2 text-gray-400 hover:text-white active:text-white">
             <i class="fas fa-times text-xl"></i>
           </button>

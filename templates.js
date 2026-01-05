@@ -91,7 +91,7 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) =>
 const registerTemplate = (req, flash) =>
   htmlTemplate(
     `
-  <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
+  <div class="bg-gray-900/90 backdrop-blur-xs border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-4xl font-bold text-red-600 glow-red mb-2">Join SuShe Online</h1>
     </div>
@@ -103,7 +103,7 @@ const registerTemplate = (req, flash) =>
           Email Address
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
           name="email" 
           id="email"
           type="email" 
@@ -118,7 +118,7 @@ const registerTemplate = (req, flash) =>
           Username
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
           name="username" 
           id="username"
           type="text" 
@@ -135,7 +135,7 @@ const registerTemplate = (req, flash) =>
           Password
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
           name="password" 
           id="password"
           type="password" 
@@ -151,7 +151,7 @@ const registerTemplate = (req, flash) =>
           Confirm Password
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
           name="confirmPassword" 
           id="confirmPassword"
           type="password" 
@@ -163,7 +163,7 @@ const registerTemplate = (req, flash) =>
       </div>
       
       <button 
-        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
         Create Account
@@ -190,7 +190,7 @@ const loginTemplate = (req, flash) =>
 
 // Forgot password template - Updated with flash parameter
 const forgotPasswordTemplate = (req, flash) => `
-  <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
+  <div class="bg-gray-900/90 backdrop-blur-xs border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">Forgot password</h1>
     </div>
@@ -202,7 +202,7 @@ const forgotPasswordTemplate = (req, flash) => `
           Email Address
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
           name="email" 
           id="email"
           type="email" 
@@ -211,7 +211,7 @@ const forgotPasswordTemplate = (req, flash) => `
         />
       </div>
       <button 
-        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
         Reset password
@@ -231,7 +231,7 @@ const forgotPasswordTemplate = (req, flash) => `
 
 // Reset password template
 const resetPasswordTemplate = (token, csrfToken = '') => `
-  <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
+  <div class="bg-gray-900/90 backdrop-blur-xs border border-gray-800 rounded-lg p-8 shadow-2xl">
     <div class="text-center mb-8">
       <h1 class="metal-title text-3xl font-bold text-red-600 mb-2">Reset Your Password</h1>
       <p class="text-gray-400 text-sm">Create a new password for your account</p>
@@ -244,7 +244,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
           New Password
         </label>
         <input 
-          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none transition duration-200"
+          class="spotify-input w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200"
           name="password" 
           id="password"
           type="password" 
@@ -254,7 +254,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
         />
       </div>
       <button 
-        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded transition duration-200 transform hover:scale-105 uppercase tracking-wider"
+        class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider"
         type="submit"
       >
         Reset Password
@@ -265,7 +265,7 @@ const resetPasswordTemplate = (token, csrfToken = '') => `
 
 // Invalid token template
 const invalidTokenTemplate = () => `
-  <div class="bg-gray-900/90 backdrop-blur-sm border border-gray-800 rounded-lg p-8 shadow-2xl">
+  <div class="bg-gray-900/90 backdrop-blur-xs border border-gray-800 rounded-lg p-8 shadow-2xl">
     <p class="text-red-500 text-center mb-4">This password reset link has expired or is invalid</p>
     <a href="/forgot" class="block text-center text-red-500 hover:text-red-400 font-semibold">Request a new reset link</a>
   </div>
@@ -288,7 +288,7 @@ const importConflictModalComponent = () => `
         <div class="space-y-3">
           <button 
             id="importOverwriteBtn"
-            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 hover:border-red-600 transition-colors group"
+            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded-sm border border-gray-700 hover:border-red-600 transition-colors group"
           >
             <div class="font-semibold text-white group-hover:text-red-500">Overwrite Existing List</div>
             <div class="text-xs text-gray-400 mt-1">Replace the current list with the imported one</div>
@@ -296,7 +296,7 @@ const importConflictModalComponent = () => `
           
           <button 
             id="importRenameBtn"
-            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 hover:border-red-600 transition-colors group"
+            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded-sm border border-gray-700 hover:border-red-600 transition-colors group"
           >
             <div class="font-semibold text-white group-hover:text-red-500">Rename Import</div>
             <div class="text-xs text-gray-400 mt-1">Save with a different name</div>
@@ -304,7 +304,7 @@ const importConflictModalComponent = () => `
           
           <button 
             id="importMergeBtn"
-            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded border border-gray-700 hover:border-red-600 transition-colors group"
+            class="w-full text-left p-4 bg-gray-800 hover:bg-gray-700 rounded-sm border border-gray-700 hover:border-red-600 transition-colors group"
           >
             <div class="font-semibold text-white group-hover:text-red-500">Merge Lists</div>
             <div class="text-xs text-gray-400 mt-1">Add imported albums to the existing list</div>
@@ -316,7 +316,7 @@ const importConflictModalComponent = () => `
       <div class="p-6 border-t border-gray-800">
         <button 
           id="importCancelBtn" 
-          class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+          class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
         >
           Cancel Import
         </button>
@@ -342,7 +342,7 @@ const importConflictModalComponent = () => `
           type="text" 
           id="importNewName" 
           placeholder="Enter new name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
           maxlength="50"
         >
         <p class="text-xs text-gray-500 mt-2">Choose a unique name for the imported list</p>
@@ -352,13 +352,13 @@ const importConflictModalComponent = () => `
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="cancelImportRenameBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
         >
           Cancel
         </button>
         <button 
           id="confirmImportRenameBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
         >
           Import with New Name
         </button>
@@ -370,7 +370,7 @@ const importConflictModalComponent = () => `
 // Component: Context Menus
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
-  <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+  <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50">
     <button id="downloadListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
       <span><i class="fas fa-download mr-2 w-4 text-center"></i>Download List...</span>
       <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
@@ -390,7 +390,7 @@ const contextMenusComponent = () => `
   </div>
   
   <!-- Context Menu for Albums -->
-  <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50">
+  <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50">
     <button id="editAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>
@@ -414,17 +414,17 @@ const contextMenusComponent = () => `
   </div>
   
   <!-- Submenu for Move to List -->
-  <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+  <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
     <!-- Populated dynamically -->
   </div>
   
   <!-- Submenu for Play Album (Spotify Connect devices) -->
-  <div id="playAlbumSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
+  <div id="playAlbumSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
     <!-- Populated dynamically with devices -->
   </div>
   
   <!-- Submenu for Download List -->
-  <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded shadow-lg py-1 z-50 min-w-44">
+  <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 min-w-44">
     <!-- Populated dynamically -->
   </div>
 `;
@@ -448,7 +448,7 @@ const createListModalComponent = () => `
             type="text" 
             id="newListName" 
             placeholder="Enter list name..." 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
             maxlength="50"
           >
           <p class="text-xs text-gray-500 mt-2">Give your list a unique name</p>
@@ -462,7 +462,7 @@ const createListModalComponent = () => `
             type="number" 
             id="newListYear" 
             placeholder="e.g. 2025" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
             min="1000"
             max="9999"
           >
@@ -475,13 +475,13 @@ const createListModalComponent = () => `
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="cancelCreateBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
         >
           Cancel
         </button>
         <button 
           id="confirmCreateBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
         >
           Create List
         </button>
@@ -510,7 +510,7 @@ const renameListModalComponent = () => `
             type="text" 
             id="newListNameInput" 
             placeholder="Enter new name..." 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
             maxlength="50"
           >
           <p class="text-xs text-gray-500 mt-2">Enter a new unique name for this list</p>
@@ -524,7 +524,7 @@ const renameListModalComponent = () => `
             type="number" 
             id="editListYear" 
             placeholder="e.g. 2025 (optional)" 
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
             min="1000"
             max="9999"
           >
@@ -537,13 +537,13 @@ const renameListModalComponent = () => `
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="cancelRenameBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200"
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
         >
           Cancel
         </button>
         <button 
           id="confirmRenameBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
         >
           Save Changes
         </button>
@@ -592,7 +592,7 @@ const addAlbumModalComponent = () => `
                 type="text" 
                 id="artistSearchInput" 
                 placeholder="Search for an artist..." 
-                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+                class="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
               >
               <button 
                 id="searchArtistBtn" 
@@ -622,7 +622,7 @@ const addAlbumModalComponent = () => `
           
           <!-- Album Results -->
           <div id="albumResults" class="hidden">
-            <div class="sticky top-0 bg-gray-900 p-4 lg:p-6 border-b border-gray-800 z-10 backdrop-blur-sm bg-opacity-95">
+            <div class="sticky top-0 bg-gray-900 p-4 lg:p-6 border-b border-gray-800 z-10 backdrop-blur-xs bg-opacity-95">
               <div class="max-w-4xl mx-auto">
                 <button id="backToArtists" class="text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
                   <i class="fas fa-arrow-left"></i>
@@ -664,7 +664,7 @@ const addAlbumModalComponent = () => `
                       type="text" 
                       id="manualArtist" 
                       name="artist"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                       placeholder="Enter artist name"
                       required
                     >
@@ -679,7 +679,7 @@ const addAlbumModalComponent = () => `
                       type="text" 
                       id="manualAlbum" 
                       name="album"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                       placeholder="Enter album title"
                       required
                     >
@@ -694,7 +694,7 @@ const addAlbumModalComponent = () => `
                       type="date" 
                       id="manualReleaseDate" 
                       name="release_date"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                     >
                   </div>
                   
@@ -706,7 +706,7 @@ const addAlbumModalComponent = () => `
                     <select 
                       id="manualCountry" 
                       name="country"
-                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-gray-500 transition duration-200"
+                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-hidden focus:border-gray-500 transition duration-200"
                     >
                       <option value="">Select a country...</option>
                     </select>
@@ -719,7 +719,7 @@ const addAlbumModalComponent = () => `
                     Cover Art
                   </label>
                   <div class="flex items-start gap-4">
-                    <div id="coverPreview" class="w-20 h-20 lg:w-32 lg:h-32 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 flex-shrink-0">
+                    <div id="coverPreview" class="w-20 h-20 lg:w-32 lg:h-32 bg-gray-800 rounded-lg flex items-center justify-center border border-gray-700 shrink-0">
                       <i class="fas fa-image text-2xl text-gray-600 lg:hidden"></i>
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" class="text-gray-600 hidden lg:block">
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
@@ -804,13 +804,13 @@ const confirmationModalComponent = () => `
       <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
         <button 
           id="confirmationCancelBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition duration-200"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition duration-200"
         >
           Cancel
         </button>
         <button 
           id="confirmationConfirmBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition duration-200 font-semibold"
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
         >
           Remove
         </button>
@@ -830,17 +830,17 @@ const serviceSelectModalComponent = () => `
 
       <!-- Modal Content -->
       <div class="p-6 space-y-3">
-        <button id="serviceSpotifyBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200 flex items-center justify-center">
+        <button id="serviceSpotifyBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200 flex items-center justify-center">
           <i class="fab fa-spotify mr-2"></i>Spotify
         </button>
-        <button id="serviceTidalBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200 flex items-center justify-center">
+        <button id="serviceTidalBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200 flex items-center justify-center">
           <i class="fas fa-wave-square mr-2"></i>Tidal
         </button>
       </div>
 
       <!-- Modal Footer -->
       <div class="p-6 border-t border-gray-800">
-        <button id="serviceCancelBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded transition duration-200">Cancel</button>
+        <button id="serviceCancelBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200">Cancel</button>
       </div>
     </div>
   </div>
@@ -888,10 +888,10 @@ const settingsDrawerComponent = (user) => `
 
 // Component: List Setup Wizard Modal
 const listSetupWizardComponent = () => `
-  <div id="listSetupWizard" class="hidden fixed inset-0 bg-black bg-opacity-70 z-[60] flex items-center justify-center p-4">
+  <div id="listSetupWizard" class="hidden fixed inset-0 bg-black bg-opacity-70 z-60 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
       <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-700 flex-shrink-0">
+      <div class="p-6 border-b border-gray-700 shrink-0">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-full bg-red-600/20 flex items-center justify-center">
             <i class="fas fa-list-check text-red-500"></i>
@@ -912,11 +912,11 @@ const listSetupWizardComponent = () => `
       </div>
       
       <!-- Modal Footer -->
-      <div class="p-4 border-t border-gray-700 flex-shrink-0 flex gap-3 justify-between">
+      <div class="p-4 border-t border-gray-700 shrink-0 flex gap-3 justify-between">
         <button id="listSetupDismiss" class="px-4 py-2 text-gray-400 hover:text-gray-300 transition text-sm">
           Remind me later
         </button>
-        <button id="listSetupSave" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+        <button id="listSetupSave" class="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm transition font-medium disabled:opacity-50 disabled:cursor-not-allowed" disabled>
           <i class="fas fa-check mr-2"></i>Save Changes
         </button>
       </div>
@@ -1108,7 +1108,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <h2 class="sidebar-title text-lg font-bold text-white transition-opacity duration-300">Lists</h2>
         <button 
           id="sidebarToggle" 
-          class="p-2 hover:bg-gray-800 rounded transition-colors"
+          class="p-2 hover:bg-gray-800 rounded-sm transition-colors"
           title="Toggle sidebar"
         >
           <i class="fas fa-chevron-left text-gray-400 transition-transform duration-300"></i>
@@ -1122,11 +1122,11 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </ul>
         </div>
         
-        <div class="mt-4 pt-4 border-t border-gray-800 flex-shrink-0">
-          <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 flex items-center">
+        <div class="mt-4 pt-4 border-t border-gray-800 shrink-0">
+          <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
             <i class="fas fa-plus mr-2"></i><span>Create List</span>
           </button>
-          <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 mt-2 flex items-center">
+          <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 mt-2 flex items-center">
             <i class="fas fa-file-import mr-2"></i><span>Import List</span>
           </button>
           <input type="file" id="fileInput" accept=".json" style="display: none;">
@@ -1134,7 +1134,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </nav>
       
       <!-- Spotify Miniplayer (Desktop only) -->
-      <div id="spotifyMiniplayer" class="spotify-miniplayer flex-shrink-0 border-t border-gray-800 p-3 hidden">
+      <div id="spotifyMiniplayer" class="spotify-miniplayer shrink-0 border-t border-gray-800 p-3 hidden">
         <!-- Not Connected State -->
         <div id="miniplayerNotConnected" class="text-center py-3">
           <a href="/settings" 
@@ -1168,7 +1168,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
           <div class="flex items-center gap-3 mb-3">
-            <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded flex-shrink-0 overflow-hidden">
+            <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded-sm shrink-0 overflow-hidden">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
             <div class="flex-1 min-w-0">
@@ -1251,7 +1251,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </div>
       
       <!-- Tidal Widget (Desktop only) -->
-      <div id="tidalWidget" class="tidal-widget flex-shrink-0 border-t border-gray-800 p-3 hidden">
+      <div id="tidalWidget" class="tidal-widget shrink-0 border-t border-gray-800 p-3 hidden">
         <!-- Not Connected State -->
         <div id="tidalWidgetNotConnected" class="text-center py-3">
           <a href="/settings" 
@@ -1316,11 +1316,11 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <!-- Footer Actions -->
         <div class="p-4 border-t border-gray-800 space-y-2" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));">
           <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 flex items-center">
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
             <i class="fas fa-plus mr-2"></i>Create List
           </button>
           <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded text-sm transition duration-200 flex items-center">
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
             <i class="fas fa-file-import mr-2"></i>Import List
           </button>
         </div>
@@ -1331,7 +1331,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
   <!-- Floating Action Button -->
   <button
     id="addAlbumFAB"
-    class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transform hover:scale-110 active:scale-95 z-[9999]"
+    class="fixed bottom-6 right-6 w-14 h-14 bg-gray-700 hover:bg-gray-600 text-white rounded-full shadow-lg flex items-center justify-center transform hover:scale-110 active:scale-95 z-9999"
     style="display: none; touch-action: manipulation; pointer-events: auto; transition: opacity var(--sidebar-transition-duration), transform 200ms, bottom 300ms ease;"
   >
     <i class="fas fa-plus text-xl"></i>
@@ -2131,11 +2131,11 @@ const aggregateListTemplate = (user, year) => `
       
       return '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3 animate-fade-in" data-rank="' + album.rank + '" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
         '<div class="flex items-center gap-3">' +
-          '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
-          '<div class="flex-shrink-0">' +
+          '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + album.rank + '</div>' +
+          '<div class="shrink-0">' +
             (album.coverImage ? 
-              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
-              '<div class="w-14 h-14 md:w-16 md:h-16 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
+              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded-sm object-cover">' :
+              '<div class="w-14 h-14 md:w-16 md:h-16 rounded-sm bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
             ) +
           '</div>' +
           '<div class="flex-1 min-w-0">' +
@@ -2183,11 +2183,11 @@ const aggregateListTemplate = (user, year) => `
       // Card content (compact layout, no fade-in animation)
       const cardContent = '<div class="album-card album-card-compact bg-gray-800/50 rounded-lg p-3" data-rank="' + album.rank + '">' +
         '<div class="flex items-center gap-3">' +
-          '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + album.rank + '</div>' +
-          '<div class="flex-shrink-0">' +
+          '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + album.rank + '</div>' +
+          '<div class="shrink-0">' +
             (album.coverImage ? 
-              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded object-cover">' :
-              '<div class="w-14 h-14 md:w-16 md:h-16 rounded bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
+              '<img src="' + album.coverImage + '" alt="' + escapeHtml(album.album) + '" class="w-14 h-14 md:w-16 md:h-16 rounded-sm object-cover">' :
+              '<div class="w-14 h-14 md:w-16 md:h-16 rounded-sm bg-gray-700 flex items-center justify-center"><i class="fas fa-compact-disc text-gray-500 text-xl"></i></div>'
             ) +
           '</div>' +
           '<div class="flex-1 min-w-0">' +
@@ -3009,15 +3009,15 @@ const aggregateListTemplate = (user, year) => `
           placeholdersHtml += 
             '<div class="album-card bg-gray-800/30 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
               '<div class="flex items-center gap-4">' +
-                '<div class="position-badge ' + positionClass + ' text-gray-200 flex-shrink-0">' + i + '</div>' +
-                '<div class="w-16 h-16 md:w-20 md:h-20 rounded bg-gray-700/50 flex items-center justify-center flex-shrink-0">' +
+                '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + i + '</div>' +
+                '<div class="w-16 h-16 md:w-20 md:h-20 rounded-sm bg-gray-700/50 flex items-center justify-center shrink-0">' +
                   '<i class="fas fa-question text-gray-600 text-2xl"></i>' +
                 '</div>' +
                 '<div class="flex-1 min-w-0">' +
-                  '<div class="h-5 bg-gray-700/50 rounded w-2/3 mb-2"></div>' +
-                  '<div class="h-4 bg-gray-700/30 rounded w-1/2"></div>' +
+                  '<div class="h-5 bg-gray-700/50 rounded-sm w-2/3 mb-2"></div>' +
+                  '<div class="h-4 bg-gray-700/30 rounded-sm w-1/2"></div>' +
                 '</div>' +
-                '<div class="flex-shrink-0">' +
+                '<div class="shrink-0">' +
                   '<i class="fas fa-lock text-gray-600"></i>' +
                 '</div>' +
               '</div>' +

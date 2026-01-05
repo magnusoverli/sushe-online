@@ -85,9 +85,9 @@ function renderWizardContent(container) {
           ${listsWithoutYear
             .map(
               (list) => `
-            <div class="flex items-center gap-3 bg-gray-800/50 rounded p-3" data-list-id="${list.id}">
+            <div class="flex items-center gap-3 bg-gray-800/50 rounded-sm p-3" data-list-id="${list.id}">
               <span class="flex-1 text-white font-medium truncate">${escapeHtml(list.name)}</span>
-              <select class="year-select bg-gray-700 border border-gray-600 text-white rounded px-3 py-1 text-sm focus:border-red-500 focus:outline-none" data-list-id="${list.id}">
+              <select class="year-select bg-gray-700 border border-gray-600 text-white rounded-sm px-3 py-1 text-sm focus:border-red-500 focus:outline-hidden" data-list-id="${list.id}">
                 <option value="">Select year</option>
                 ${generateYearOptions()}
               </select>
@@ -115,13 +115,13 @@ function renderWizardContent(container) {
           ${yearsNeedingMain
             .map(
               (yearData) => `
-            <div class="bg-gray-800/50 rounded p-3">
+            <div class="bg-gray-800/50 rounded-sm p-3">
               <div class="text-sm font-bold text-red-500 mb-2">${yearData.year}</div>
               <div class="space-y-1">
                 ${yearData.lists
                   .map(
                     (list) => `
-                  <label class="flex items-center gap-3 p-2 hover:bg-gray-700/50 rounded cursor-pointer group">
+                  <label class="flex items-center gap-3 p-2 hover:bg-gray-700/50 rounded-sm cursor-pointer group">
                     <input type="radio" name="main-${yearData.year}" value="${list.id}" 
                            class="main-radio text-red-600 focus:ring-red-500 focus:ring-offset-gray-800"
                            data-year="${yearData.year}" data-list-id="${list.id}"

@@ -581,7 +581,7 @@ export function createSettingsDrawer(deps = {}) {
 
     const roleDisplay =
       data.role === 'admin'
-        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Administrator</span>'
+        ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Administrator</span>'
         : 'User';
 
     const isAdmin = data.role === 'admin';
@@ -1525,7 +1525,7 @@ export function createSettingsDrawer(deps = {}) {
                       <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
                           <h4 class="text-white font-semibold">${event.title || 'Untitled Event'}</h4>
-                          <span class="px-2 py-0.5 text-xs rounded border ${getPriorityBadge(event.priority || 'normal')}">
+                          <span class="px-2 py-0.5 text-xs rounded-sm border ${getPriorityBadge(event.priority || 'normal')}">
                             ${(event.priority || 'normal').toUpperCase()}
                           </span>
                         </div>
@@ -1667,12 +1667,12 @@ export function createSettingsDrawer(deps = {}) {
                   let statusBadge = '';
                   if (isRevealed) {
                     statusBadge =
-                      '<span class="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded border border-green-600/30">Revealed</span>';
+                      '<span class="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded-sm border border-green-600/30">Revealed</span>';
                   } else if (confirmCount > 0) {
-                    statusBadge = `<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30">${confirmCount}/${required} Confirmations</span>`;
+                    statusBadge = `<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm border border-yellow-600/30">${confirmCount}/${required} Confirmations</span>`;
                   } else {
                     statusBadge =
-                      '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded border border-gray-600">Pending</span>';
+                      '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded-sm border border-gray-600">Pending</span>';
                   }
 
                   // Confirmations display
@@ -1683,7 +1683,7 @@ export function createSettingsDrawer(deps = {}) {
                       ${confirmations
                         .map(
                           (c) => `
-                        <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded border border-green-600/20">
+                        <span class="inline-flex items-center gap-1 px-2 py-1 bg-green-900/20 text-green-400 text-xs rounded-sm border border-green-600/20">
                           <i class="fas fa-check-circle"></i>${c.username || 'Unknown'}
                         </span>
                       `
@@ -1698,19 +1698,19 @@ export function createSettingsDrawer(deps = {}) {
                   if (stats && !isRevealed) {
                     statsHtml = `
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
-                      <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                         <div class="font-bold text-white text-lg">${stats.participantCount || 0}</div>
                         <div class="text-xs text-gray-400 uppercase">Contributors</div>
                       </div>
-                      <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                         <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
                         <div class="text-xs text-gray-400 uppercase">Albums</div>
                       </div>
-                      <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                         <div class="font-bold text-white text-lg">${stats.albumsWith3PlusVoters || 0}</div>
                         <div class="text-xs text-gray-400 uppercase">3+ Votes</div>
                       </div>
-                      <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+                      <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
                         <div class="font-bold text-white text-lg">${stats.albumsWith2Voters || 0}</div>
                         <div class="text-xs text-gray-400 uppercase">2 Votes</div>
                       </div>
@@ -1804,18 +1804,18 @@ export function createSettingsDrawer(deps = {}) {
                 .map((user) => {
                   const isCurrentUser = user._id === window.currentUser?._id;
                   return `
-                  <div class="flex flex-col bg-gray-800/50 rounded p-3 gap-3">
-                    <div class="break-words">
+                  <div class="flex flex-col bg-gray-800/50 rounded-sm p-3 gap-3">
+                    <div class="wrap-break-word">
                       <div class="flex items-center gap-2 mb-1">
                         <span class="text-white font-medium">${user.username || user.email}</span>
                         ${
                           user.role === 'admin'
-                            ? '<span class="px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30">Admin</span>'
+                            ? '<span class="px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm border border-yellow-600/30">Admin</span>'
                             : ''
                         }
                         ${isCurrentUser ? '<span class="text-xs text-gray-500">(You)</span>' : ''}
                       </div>
-                      <p class="settings-description break-words">
+                      <p class="settings-description wrap-break-word">
                         ${user.listCount || 0} lists • ${user.email || 'No email'}
                       </p>
                     </div>
@@ -2951,7 +2951,7 @@ export function createSettingsDrawer(deps = {}) {
             </h4>
             <ol class="text-sm text-gray-400 mb-4 space-y-1 list-decimal list-inside">
               <li>Open Telegram and message <a href="https://t.me/BotFather" target="_blank" class="text-blue-400 hover:underline">@BotFather</a></li>
-              <li>Send <code class="bg-gray-800 px-1.5 py-0.5 rounded text-xs">/newbot</code> and follow the prompts</li>
+              <li>Send <code class="bg-gray-800 px-1.5 py-0.5 rounded-sm text-xs">/newbot</code> and follow the prompts</li>
               <li>Copy the bot token and paste it below</li>
             </ol>
             <div class="flex gap-2">
@@ -3758,25 +3758,25 @@ export function createSettingsDrawer(deps = {}) {
 
       statsEl.innerHTML = `
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
-          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
             <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
             <div class="text-xs text-gray-400 uppercase">Total Albums</div>
           </div>
-          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
             <div class="font-bold text-green-400 text-lg">${stats.withSummary || 0}</div>
             <div class="text-xs text-gray-400 uppercase">With Summary</div>
           </div>
-          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
             <div class="font-bold text-yellow-400 text-lg">${stats.attemptedNoSummary || 0}</div>
             <div class="text-xs text-gray-400 uppercase">No Summary Found</div>
           </div>
-          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
             <div class="font-bold text-blue-400 text-lg">${stats.neverAttempted || 0}</div>
             <div class="text-xs text-gray-400 uppercase">Never Attempted</div>
           </div>
         </div>
         <div class="grid grid-cols-1 gap-2">
-          <div class="bg-gray-800/50 rounded p-2 text-center border border-gray-700/50">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
             <div class="font-bold text-orange-400 text-lg">${stats.fromClaude || 0}</div>
             <div class="text-xs text-gray-400 uppercase"><i class="fas fa-robot mr-1"></i>From Claude AI</div>
           </div>
@@ -3787,11 +3787,11 @@ export function createSettingsDrawer(deps = {}) {
         <div class="mt-2 pt-2 border-t border-gray-700/50">
           <div class="text-xs text-gray-500 mb-1">Legacy Sources (deprecated):</div>
           <div class="grid grid-cols-2 gap-2">
-            <div class="bg-gray-800/30 rounded p-2 text-center border border-gray-700/30">
+            <div class="bg-gray-800/30 rounded-sm p-2 text-center border border-gray-700/30">
               <div class="font-bold text-red-400/60 text-sm">${stats.fromLastfm || 0}</div>
               <div class="text-xs text-gray-500 uppercase"><i class="fab fa-lastfm mr-1"></i>Last.fm</div>
             </div>
-            <div class="bg-gray-800/30 rounded p-2 text-center border border-gray-700/30">
+            <div class="bg-gray-800/30 rounded-sm p-2 text-center border border-gray-700/30">
               <div class="font-bold text-blue-300/60 text-sm">${stats.fromWikipedia || 0}</div>
               <div class="text-xs text-gray-500 uppercase"><i class="fab fa-wikipedia-w mr-1"></i>Wikipedia</div>
             </div>
@@ -4048,7 +4048,7 @@ export function createSettingsDrawer(deps = {}) {
               ${lists
                 .map(
                   (list) => `
-                <div class="flex items-center justify-between py-2 px-3 bg-gray-800/50 rounded border border-gray-700/50">
+                <div class="flex items-center justify-between py-2 px-3 bg-gray-800/50 rounded-sm border border-gray-700/50">
                   <div>
                     <div class="text-white font-medium">${list.name || 'Unnamed List'}</div>
                     <div class="text-xs text-gray-400 mt-1">
@@ -4375,9 +4375,9 @@ export function createSettingsDrawer(deps = {}) {
       eligibleUsers.forEach((user) => {
         const isChecked = user.is_contributor ? 'checked' : '';
         html += `
-          <label class="flex items-center gap-3 p-2 bg-gray-900/50 rounded cursor-pointer hover:bg-gray-800/50 transition border border-gray-700/50">
+          <label class="flex items-center gap-3 p-2 bg-gray-900/50 rounded-sm cursor-pointer hover:bg-gray-800/50 transition border border-gray-700/50">
             <input type="checkbox" 
-                   class="contributor-checkbox w-5 h-5 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900"
+                   class="contributor-checkbox w-5 h-5 rounded-sm border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900"
                    data-user-id="${user.user_id}" 
                    ${isChecked}>
             <div class="flex-1 min-w-0">

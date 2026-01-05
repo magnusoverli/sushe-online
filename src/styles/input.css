@@ -1,88 +1,45 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
 
-/* Hide scrollbar on mobile only */
-@media (max-width: 768px) {
-  /* For Webkit browsers (Chrome, Safari, Edge) */
-  ::-webkit-scrollbar {
-    display: none;
-  }
+@config '../../tailwind.config.js';
 
-  /* For Firefox */
-  * {
-    scrollbar-width: none;
-  }
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
 
-  /* For all browsers - prevent scrollbar space */
-  body,
-  html {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
   }
 }
 
-/* Hide flash messages when JavaScript is enabled for toast conversion */
-.js-enabled .flash-message {
-  display: none !important;
-}
-
-/* SortableJS Touch-and-Hold Drag Styles */
-@layer components {
+@utility sortable-ghost {
   /* SortableJS ghost element (placeholder during drag) */
-  .sortable-ghost {
-    opacity: 0 !important;
-  }
+  opacity: 0 !important;
 
+  /* Touch feedback for mobile */
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+}
+@utility sortable-chosen {
   /* SortableJS chosen element (element being dragged) */
-  .sortable-chosen {
-    @apply cursor-grabbing;
-    z-index: 1000;
-    /* Removed transform and box-shadow for desktop - only subtle color change */
-  }
-
-  /* SortableJS drag element (fallback drag element) */
-  .sortable-drag {
-    @apply opacity-80;
-    transform: none;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-  }
-
-  /* SortableJS fallback element for touch devices */
-  /* Apply all visual styling to the wrapper for clean appearance */
-  .sortable-fallback {
-    @apply cursor-grabbing;
-    z-index: 100000;
-    /* Visual styling on wrapper itself */
-    opacity: 0.9;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
-    border-top: 1px solid #4ade80; /* green-400 */
-    border-bottom: 1px solid #4ade80;
-    border-left: none;
-    border-right: none;
-    background-color: var(--accent-subtle) !important;
-    /* Zoom effect */
-    transform: scale(1.05);
-  }
-
-  /* Remove any conflicting styling from inner element during drag */
-  .sortable-fallback .album-card,
-  .sortable-fallback .album-row {
-    border: none !important;
-    box-shadow: none !important;
-  }
+  @apply cursor-grabbing;
+  z-index: 1000;
+  /* Removed transform and box-shadow for desktop - only subtle color change */
 
   /* Touch feedback for mobile */
   @media (max-width: 768px) {
-    .album-card,
-    .album-row {
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-    }
-
     /* Only disable touch-action when actually dragging (chosen state) */
-    .sortable-chosen.album-card-wrapper {
+    &.album-card-wrapper {
       touch-action: none !important;
     }
 
@@ -90,9 +47,35 @@
     /* Apply fallback element appearance immediately when drag is enabled (at 300ms) */
     /* Target the wrapper (mobile) and the row itself (desktop) */
     /* Keep same appearance when dragging starts - no visual change from chosen to dragging */
-    .sortable-chosen.album-card-wrapper .album-card,
-    .sortable-chosen.album-card-wrapper .album-row,
-    .sortable-chosen.album-row {
+    &.album-card-wrapper .album-card {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    &.album-card-wrapper .album-row {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    &.album-row {
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       /* Apply fallback element styling immediately - matches what will be dragged */
@@ -109,8 +92,117 @@
 
     /* When actually dragging, keep the EXACT same appearance as chosen state */
     /* Original element stays fully visible with same styling (no fade out) */
-    .sortable-chosen.dragging-mobile.album-card-wrapper .album-card,
-    .sortable-chosen.dragging-mobile.album-card-wrapper .album-row {
+    &.dragging-mobile.album-card-wrapper .album-card {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    &.dragging-mobile.album-card-wrapper .album-row {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+  }
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+}
+@utility sortable-drag {
+  /* SortableJS drag element (fallback drag element) */
+  @apply opacity-80;
+  transform: none;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+
+  /* Touch feedback for mobile */
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+}
+@utility sortable-fallback {
+  /* SortableJS fallback element for touch devices */
+  /* Apply all visual styling to the wrapper for clean appearance */
+  @apply cursor-grabbing;
+  z-index: 100000;
+  /* Visual styling on wrapper itself */
+  opacity: 0.9;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+  border-top: 1px solid #4ade80; /* green-400 */
+  border-bottom: 1px solid #4ade80;
+  border-left: none;
+  border-right: none;
+  background-color: var(--accent-subtle) !important;
+  /* Zoom effect */
+  transform: scale(1.05);
+
+  /* Remove any conflicting styling from inner element during drag */
+  & .album-card {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  & .album-row {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Touch feedback for mobile */
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+}
+@utility album-card {
+  /* Remove any conflicting styling from inner element during drag */
+  .sortable-fallback & {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Touch feedback for mobile */
+  @media (max-width: 768px) {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+
+    /* Visual feedback for touch-and-hold on entire card */
+    /* Apply fallback element appearance immediately when drag is enabled (at 300ms) */
+    /* Target the wrapper (mobile) and the row itself (desktop) */
+    /* Keep same appearance when dragging starts - no visual change from chosen to dragging */
+    .sortable-chosen.album-card-wrapper & {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+
+    /* When actually dragging, keep the EXACT same appearance as chosen state */
+    /* Original element stays fully visible with same styling (no fade out) */
+    .sortable-chosen.dragging-mobile.album-card-wrapper & {
       background-color: var(--accent-subtle) !important;
       cursor: grabbing;
       opacity: 0.9;
@@ -128,14 +220,253 @@
     /* No immediate visual feedback on touch - only after 500ms delay */
 
     /* Ensure buttons remain interactive */
-    .album-card button,
-    .album-row button {
+    & button {
       cursor: pointer;
       touch-action: manipulation;
     }
   }
 
   /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+  @media (max-width: 768px) {
+    transition: all 0.2s ease;
+
+    /* Stage 2 effects removed - no visual changes during delay period */
+    .sortable-delay & {
+      /* No visual changes */
+    }
+  }
+}
+@utility album-row {
+  .sortable-fallback & {
+    border: none !important;
+    box-shadow: none !important;
+  }
+
+  /* Touch feedback for mobile */
+  @media (max-width: 768px) {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+
+    .sortable-chosen.album-card-wrapper & {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    & .sortable-chosen {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+
+    .sortable-chosen.dragging-mobile.album-card-wrapper & {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    & button {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+  }
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+  @media (max-width: 768px) {
+    /* No effects for album-row during sortable delay */
+    .sortable-delay & {
+      /* No visual changes */
+    }
+  }
+}
+@utility album-card-wrapper {
+  /* Touch feedback for mobile */
+  @media (max-width: 768px) {
+    /* Only disable touch-action when actually dragging (chosen state) */
+    &.sortable-chosen {
+      touch-action: none !important;
+    }
+
+    /* Visual feedback for touch-and-hold on entire card */
+    /* Apply fallback element appearance immediately when drag is enabled (at 300ms) */
+    /* Target the wrapper (mobile) and the row itself (desktop) */
+    /* Keep same appearance when dragging starts - no visual change from chosen to dragging */
+    &.sortable-chosen .album-card {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    & .sortable-chosen .album-row {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      /* Apply fallback element styling immediately - matches what will be dragged */
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+
+    /* When actually dragging, keep the EXACT same appearance as chosen state */
+    /* Original element stays fully visible with same styling (no fade out) */
+    &.sortable-chosen.dragging-mobile .album-card {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    & .sortable-chosen.dragging-mobile .album-row {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+  }
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+}
+@utility dragging-mobile {
+  /* Touch feedback for mobile */
+  @media (max-width: 768px) {
+    /* When actually dragging, keep the EXACT same appearance as chosen state */
+    /* Original element stays fully visible with same styling (no fade out) */
+    &.sortable-chosen.album-card-wrapper .album-card {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+    & .sortable-chosen.album-card-wrapper .album-row {
+      background-color: var(--accent-subtle) !important;
+      cursor: grabbing;
+      opacity: 0.9;
+      z-index: 100000;
+      box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
+      /* Remove all borders during drag */
+      border: none !important;
+      /* Slight zoom effect to indicate "lifted" state */
+      transform: scale(1.03);
+      /* Prevent any touch scrolling during drag */
+      touch-action: none !important;
+    }
+  }
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+}
+@utility sortable-delay {
+  /* Touch feedback for mobile */
+
+  /* Pulse animation for active drag state */
+
+  /* Subtle animation to indicate touch-and-hold capability */
+  @media (max-width: 768px) {
+    /* Stage 2 effects removed - no visual changes during delay period */
+    & .album-card {
+      /* No visual changes */
+    }
+    /* No effects for album-row during sortable delay */
+    & .album-row {
+      /* No visual changes */
+    }
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar on mobile only */
+  @media (max-width: 768px) {
+    /* For Webkit browsers (Chrome, Safari, Edge) */
+    ::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* For Firefox */
+    * {
+      scrollbar-width: none;
+    }
+
+    /* For all browsers - prevent scrollbar space */
+    body,
+    html {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+  }
+
+  /* Hide flash messages when JavaScript is enabled for toast conversion */
+  .js-enabled .flash-message {
+    display: none !important;
+  }
+
+  /* SortableJS Touch-and-Hold Drag Styles */
+}
+@layer components {
   @keyframes pulse-drag {
     0%,
     100% {
@@ -143,22 +474,6 @@
     }
     50% {
       box-shadow: 0 0 0 8px transparent;
-    }
-  }
-
-  /* Subtle animation to indicate touch-and-hold capability */
-  @media (max-width: 768px) {
-    .album-card {
-      transition: all 0.2s ease;
-    }
-
-    /* Stage 2 effects removed - no visual changes during delay period */
-    .sortable-delay .album-card {
-      /* No visual changes */
-    }
-    /* No effects for album-row during sortable delay */
-    .sortable-delay .album-row {
-      /* No visual changes */
     }
   }
 }

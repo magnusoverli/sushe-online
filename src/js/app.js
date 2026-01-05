@@ -953,7 +953,7 @@ async function fetchAndRenderLinkPreview(previewEl, url) {
   }
 
   const img = data.image
-    ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded flex-shrink-0" alt="">`
+    ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded-sm shrink-0" alt="">`
     : '';
   const desc = data.description
     ? `<div class="text-gray-400 truncate">${data.description}</div>`
@@ -1057,11 +1057,11 @@ function attachLinkPreview(container, comment) {
     if (!data) return; // Previously failed URL
 
     const previewEl = document.createElement('div');
-    previewEl.className = 'mt-2 text-xs bg-gray-800 rounded';
+    previewEl.className = 'mt-2 text-xs bg-gray-800 rounded-sm';
     container.appendChild(previewEl);
 
     const img = data.image
-      ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded flex-shrink-0" alt="">`
+      ? `<img src="${data.image}" class="w-12 h-12 object-cover rounded-sm shrink-0" alt="">`
       : '';
     const desc = data.description
       ? `<div class="text-gray-400 truncate">${data.description}</div>`
@@ -1072,7 +1072,7 @@ function attachLinkPreview(container, comment) {
 
   // Create placeholder element and defer loading via IntersectionObserver
   const previewEl = document.createElement('div');
-  previewEl.className = 'mt-2 text-xs bg-gray-800 rounded';
+  previewEl.className = 'mt-2 text-xs bg-gray-800 rounded-sm';
   previewEl.dataset.previewUrl = url;
   previewEl.textContent = 'Loading preview...';
   container.appendChild(previewEl);

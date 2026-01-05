@@ -149,14 +149,14 @@ const input = (
     id="${id}"
     ${value ? `value="${value}"` : ''}
     ${placeholder ? `placeholder="${placeholder}"` : ''}
-    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-gray-500 transition duration-200 ${className}"
+    class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200 ${className}"
     ${attributes}
   >
 `;
 
 // Reusable User Avatar Component
 const userAvatar = (username, size = 'w-12 h-12', textSize = 'text-lg') => `
-  <div class="${size} rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+  <div class="${size} rounded-full bg-blue-600 flex items-center justify-center shrink-0">
     <span class="text-white font-bold ${textSize}">
       ${username.substring(0, 2).toUpperCase()}
     </span>
@@ -175,7 +175,7 @@ const userCard = (user, actions = '', isCurrentUser = false) => `
             <h5 class="text-white font-semibold truncate">${user.username}</h5>
             ${
               user.role === 'admin'
-                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Admin</span>'
+                ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm border border-yellow-600/30"><i class="fas fa-shield-alt"></i>Admin</span>'
                 : ''
             }
           </div>
@@ -191,7 +191,7 @@ const userCard = (user, actions = '', isCurrentUser = false) => `
       <div class="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
         ${
           isCurrentUser
-            ? '<span class="text-xs text-gray-500 px-3 py-1 bg-gray-700/50 rounded min-h-[44px] flex items-center justify-center">You</span>'
+            ? '<span class="text-xs text-gray-500 px-3 py-1 bg-gray-700/50 rounded-sm min-h-[44px] flex items-center justify-center">You</span>'
             : actions
         }
       </div>
@@ -338,7 +338,7 @@ const themeSection = (user) =>
           'Time Format',
           `
             <div class="flex gap-3">
-              <select id="timeFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500">
+              <select id="timeFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-hidden focus:border-gray-500">
                 <option value="24h" ${user.timeFormat !== '12h' ? 'selected' : ''}>24-hour</option>
                 <option value="12h" ${user.timeFormat === '12h' ? 'selected' : ''}>12-hour</option>
               </select>
@@ -351,7 +351,7 @@ const themeSection = (user) =>
           'Date Format',
           `
             <div class="flex gap-3">
-              <select id="dateFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500">
+              <select id="dateFormatSelect" class="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-hidden focus:border-gray-500">
                 <option value="MM/DD/YYYY" ${user.dateFormat !== 'DD/MM/YYYY' ? 'selected' : ''}>MM/DD/YYYY</option>
                 <option value="DD/MM/YYYY" ${user.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
               </select>
@@ -469,7 +469,7 @@ const musicServicesSection = (
       ${formField(
         'Preferred Service',
         `
-          <select id="musicServiceSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-none focus:border-gray-500" onchange="updateMusicService(this.value)">
+          <select id="musicServiceSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-3 focus:outline-hidden focus:border-gray-500" onchange="updateMusicService(this.value)">
             <option value="" ${!user.musicService ? 'selected' : ''}>Ask each time</option>
             <option value="spotify" ${user.musicService === 'spotify' ? 'selected' : ''} ${!user.spotifyAuth ? 'disabled' : ''}>Spotify</option>
             <option value="tidal" ${user.musicService === 'tidal' ? 'selected' : ''} ${!user.tidalAuth ? 'disabled' : ''}>Tidal</option>
@@ -1017,11 +1017,11 @@ const adminEventsSection = () =>
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
           <span class="text-sm text-gray-400">Filter:</span>
-          <select id="eventTypeFilter" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white" onchange="loadAdminEvents()">
+          <select id="eventTypeFilter" class="bg-gray-800 border border-gray-700 rounded-sm px-3 py-1.5 text-sm text-white" onchange="loadAdminEvents()">
             <option value="">All Types</option>
             <option value="account_approval">Account Approvals</option>
           </select>
-          <select id="eventPriorityFilter" class="bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white" onchange="loadAdminEvents()">
+          <select id="eventPriorityFilter" class="bg-gray-800 border border-gray-700 rounded-sm px-3 py-1.5 text-sm text-white" onchange="loadAdminEvents()">
             <option value="">All Priorities</option>
             <option value="urgent">Urgent</option>
             <option value="high">High</option>
@@ -1029,7 +1029,7 @@ const adminEventsSection = () =>
             <option value="low">Low</option>
           </select>
         </div>
-        <button onclick="loadAdminEvents()" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm transition flex items-center gap-2">
+        <button onclick="loadAdminEvents()" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm text-sm transition flex items-center gap-2">
           <i class="fas fa-sync-alt"></i> Refresh
         </button>
       </div>
@@ -1092,7 +1092,7 @@ const adminNotificationsSection = () =>
 
 // Telegram Setup Modal (standalone, not in a settingsCard)
 const telegramSetupModal = () => `
-  <div id="telegramModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div id="telegramModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all">
       <!-- Header -->
       <div class="p-6 border-b border-gray-800 sticky top-0 bg-gray-900 z-10">
@@ -1117,7 +1117,7 @@ const telegramSetupModal = () => `
           </h4>
           <ol class="text-sm text-gray-400 mb-4 space-y-1 list-decimal list-inside">
             <li>Open Telegram and message <a href="https://t.me/BotFather" target="_blank" class="text-blue-400 hover:underline">@BotFather</a></li>
-            <li>Send <code class="bg-gray-800 px-1.5 py-0.5 rounded text-xs">/newbot</code> and follow the prompts</li>
+            <li>Send <code class="bg-gray-800 px-1.5 py-0.5 rounded-sm text-xs">/newbot</code> and follow the prompts</li>
             <li>Copy the bot token and paste it below</li>
           </ol>
           <div class="flex gap-2">
@@ -1125,7 +1125,7 @@ const telegramSetupModal = () => `
               type="password" 
               id="telegramBotToken" 
               placeholder="Paste your bot token here..."
-              class="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              class="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-blue-500"
             >
             <button onclick="validateTelegramToken()" id="validateTokenBtn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition flex items-center gap-2">
               <i class="fas fa-check"></i> Validate
@@ -1148,7 +1148,7 @@ const telegramSetupModal = () => `
               <i class="fas fa-search"></i> Detect Groups
             </button>
           </div>
-          <select id="telegramGroupSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:outline-none focus:border-gray-500 hidden">
+          <select id="telegramGroupSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:outline-hidden focus:border-gray-500 hidden">
             <option value="">Select a group...</option>
           </select>
           <div id="groupSelectResult" class="mt-2 text-sm hidden"></div>
@@ -1163,7 +1163,7 @@ const telegramSetupModal = () => `
           <p class="text-sm text-gray-400 mb-4">
             This group has Topics enabled. Select a topic for notifications or use General.
           </p>
-          <select id="telegramTopicSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:outline-none focus:border-gray-500">
+          <select id="telegramTopicSelect" class="w-full bg-gray-800 border border-gray-700 rounded-lg text-white px-4 py-2 focus:outline-hidden focus:border-gray-500">
             <option value="">General (default)</option>
           </select>
         </div>
@@ -1279,11 +1279,11 @@ const adminPanelSection = (stats, adminData) =>
             const actions = `
               ${
                 u.role !== 'admin'
-                  ? `<button onclick="makeAdmin('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center" title="Grant Admin"><i class="fas fa-user-shield"></i></button>`
-                  : `<button onclick="revokeAdmin('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-yellow-600 hover:bg-yellow-700 text-white transition-colors flex items-center justify-center" title="Revoke Admin"><i class="fas fa-user-times"></i></button>`
+                  ? `<button onclick="makeAdmin('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded-sm bg-blue-600 hover:bg-blue-700 text-white transition-colors flex items-center justify-center" title="Grant Admin"><i class="fas fa-user-shield"></i></button>`
+                  : `<button onclick="revokeAdmin('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded-sm bg-yellow-600 hover:bg-yellow-700 text-white transition-colors flex items-center justify-center" title="Revoke Admin"><i class="fas fa-user-times"></i></button>`
               }
-              <button onclick="viewUserLists('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex items-center justify-center" title="View Lists"><i class="fas fa-list"></i></button>
-              <button onclick="deleteUser('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center justify-center" title="Delete User"><i class="fas fa-trash-alt"></i></button>
+              <button onclick="viewUserLists('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded-sm bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors flex items-center justify-center" title="View Lists"><i class="fas fa-list"></i></button>
+              <button onclick="deleteUser('${u._id}')" class="min-h-[44px] min-w-[44px] p-3 rounded-sm bg-red-600 hover:bg-red-700 text-white transition-colors flex items-center justify-center" title="Delete User"><i class="fas fa-trash-alt"></i></button>
             `;
             return userCard(u, actions, isCurrentUser);
           })
@@ -1508,7 +1508,7 @@ const settingsTemplate = (req, options) => {
   </div>
   
   <!-- Restore Modal -->
-  <div id="restoreModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+  <div id="restoreModal" class="hidden fixed inset-0 bg-black bg-opacity-70 backdrop-blur-xs z-50 flex items-center justify-center p-4">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-lg transform transition-all">
       <!-- Header -->
       <div class="p-6 border-b border-gray-800">
@@ -1548,7 +1548,7 @@ const settingsTemplate = (req, options) => {
                          file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 
                          file:text-sm file:font-semibold file:bg-gray-700 file:text-white 
                          hover:file:bg-gray-600 file:transition-colors file:cursor-pointer
-                         focus:outline-none focus:border-gray-500 transition-colors cursor-pointer"
+                         focus:outline-hidden focus:border-gray-500 transition-colors cursor-pointer"
                 >
               </div>
               <p class="text-xs text-gray-500 mt-2">
@@ -1603,7 +1603,7 @@ const settingsTemplate = (req, options) => {
           <div class="space-y-4">
             <!-- Step 1: Upload -->
             <div id="step-upload" class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+              <div class="shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
                 <i class="fas fa-spinner fa-spin text-gray-400 text-sm"></i>
               </div>
               <div class="flex-1">
@@ -1614,7 +1614,7 @@ const settingsTemplate = (req, options) => {
             
             <!-- Step 2: Validate -->
             <div id="step-validate" class="flex items-start gap-4 opacity-50">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+              <div class="shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
                 <i class="fas fa-circle text-gray-600 text-xs"></i>
               </div>
               <div class="flex-1">
@@ -1625,7 +1625,7 @@ const settingsTemplate = (req, options) => {
             
             <!-- Step 3: Restore -->
             <div id="step-restore" class="flex items-start gap-4 opacity-50">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+              <div class="shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
                 <i class="fas fa-circle text-gray-600 text-xs"></i>
               </div>
               <div class="flex-1">
@@ -1636,7 +1636,7 @@ const settingsTemplate = (req, options) => {
             
             <!-- Step 4: Restart -->
             <div id="step-restart" class="flex items-start gap-4 opacity-50">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
+              <div class="shrink-0 w-8 h-8 rounded-full bg-gray-800 border-2 border-gray-700 flex items-center justify-center">
                 <i class="fas fa-circle text-gray-600 text-xs"></i>
               </div>
               <div class="flex-1">
@@ -2091,13 +2091,13 @@ const settingsTemplate = (req, options) => {
         
         if (state === 'active') {
           icon.className = 'fas fa-spinner fa-spin text-red-500 text-sm';
-          circle.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-red-900/30 border-2 border-red-600 flex items-center justify-center';
+          circle.className = 'shrink-0 w-8 h-8 rounded-full bg-red-900/30 border-2 border-red-600 flex items-center justify-center';
         } else if (state === 'complete') {
           icon.className = 'fas fa-check text-green-400 text-sm';
-          circle.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-green-900/30 border-2 border-green-600 flex items-center justify-center';
+          circle.className = 'shrink-0 w-8 h-8 rounded-full bg-green-900/30 border-2 border-green-600 flex items-center justify-center';
         } else if (state === 'error') {
           icon.className = 'fas fa-times text-red-400 text-sm';
-          circle.className = 'flex-shrink-0 w-8 h-8 rounded-full bg-red-900/50 border-2 border-red-500 flex items-center justify-center';
+          circle.className = 'shrink-0 w-8 h-8 rounded-full bg-red-900/50 border-2 border-red-500 flex items-center justify-center';
         }
       }
       
@@ -2399,30 +2399,30 @@ const settingsTemplate = (req, options) => {
         
         let statusBadge = '';
         if (isRevealed) {
-          statusBadge = '<span class="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded">Revealed</span>';
+          statusBadge = '<span class="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded-sm">Revealed</span>';
         } else if (confirmCount > 0) {
-          statusBadge = \`<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded">\${confirmCount}/\${required} Confirmations</span>\`;
+          statusBadge = \`<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm">\${confirmCount}/\${required} Confirmations</span>\`;
         } else {
-          statusBadge = '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded">Pending</span>';
+          statusBadge = '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded-sm">Pending</span>';
         }
         
         let statsHtml = '';
         if (stats && !isRevealed) {
           statsHtml = \`
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-center text-sm">
-              <div class="bg-gray-800 rounded p-2">
+              <div class="bg-gray-800 rounded-sm p-2">
                 <div class="font-bold text-white">\${stats.participantCount || 0}</div>
                 <div class="text-xs text-gray-500">Contributors</div>
               </div>
-              <div class="bg-gray-800 rounded p-2">
+              <div class="bg-gray-800 rounded-sm p-2">
                 <div class="font-bold text-white">\${stats.totalAlbums || 0}</div>
                 <div class="text-xs text-gray-500">Albums</div>
               </div>
-              <div class="bg-gray-800 rounded p-2">
+              <div class="bg-gray-800 rounded-sm p-2">
                 <div class="font-bold text-white">\${stats.albumsWith3PlusVoters || 0}</div>
                 <div class="text-xs text-gray-500">3+ Votes</div>
               </div>
-              <div class="bg-gray-800 rounded p-2">
+              <div class="bg-gray-800 rounded-sm p-2">
                 <div class="font-bold text-white">\${stats.albumsWith2Voters || 0}</div>
                 <div class="text-xs text-gray-500">2 Votes</div>
               </div>
@@ -2441,19 +2441,19 @@ const settingsTemplate = (req, options) => {
         
         let actionsHtml = '';
         // Always show Manage Contributors button for admins (even after reveal for reference)
-        actionsHtml += \`<button onclick="showContributorManager(\${year})" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-users"></i>Manage Contributors</button> \`;
+        actionsHtml += \`<button onclick="showContributorManager(\${year})" class="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-sm text-sm transition inline-flex items-center gap-2"><i class="fas fa-users"></i>Manage Contributors</button> \`;
         
         if (isRevealed) {
-          actionsHtml += \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a> \`;
-          actionsHtml += \`<button onclick="resetRevealExperience(\${year})" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded text-sm transition inline-flex items-center gap-2" title="Reset your reveal view status to experience the dramatic reveal again"><i class="fas fa-undo"></i>Reset Reveal</button>\`;
+          actionsHtml += \`<a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-sm text-sm transition inline-flex items-center gap-2"><i class="fas fa-eye"></i>View List</a> \`;
+          actionsHtml += \`<button onclick="resetRevealExperience(\${year})" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-sm text-sm transition inline-flex items-center gap-2" title="Reset your reveal view status to experience the dramatic reveal again"><i class="fas fa-undo"></i>Reset Reveal</button>\`;
         } else {
           const hasConfirmed = status.confirmations && status.confirmations.some(c => c.username === '${user.username}');
           if (hasConfirmed) {
-            actionsHtml += \`<button onclick="revokeAggregateListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
+            actionsHtml += \`<button onclick="revokeAggregateListConfirm(\${year})" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-sm text-sm transition inline-flex items-center gap-2"><i class="fas fa-times"></i>Revoke</button>\`;
           } else {
-            actionsHtml += \`<button onclick="confirmAggregateListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
+            actionsHtml += \`<button onclick="confirmAggregateListReveal(\${year})" class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-sm text-sm transition inline-flex items-center gap-2"><i class="fas fa-check"></i>Confirm Reveal</button>\`;
           }
-          actionsHtml += \` <a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded text-sm transition inline-flex items-center gap-2"><i class="fas fa-external-link-alt"></i>Open Page</a>\`;
+          actionsHtml += \` <a href="/aggregate-list/\${year}" class="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-sm text-sm transition inline-flex items-center gap-2"><i class="fas fa-external-link-alt"></i>Open Page</a>\`;
         }
         
         return \`
@@ -2593,8 +2593,8 @@ const settingsTemplate = (req, options) => {
                 <span id="contributor-count-\${year}">\${contributorCount}</span> of \${eligibleUsers.length} users selected as contributors
               </span>
               <div class="flex gap-2">
-                <button onclick="selectAllContributors(\${year})" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition">Select All</button>
-                <button onclick="deselectAllContributors(\${year})" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition">Deselect All</button>
+                <button onclick="selectAllContributors(\${year})" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition">Select All</button>
+                <button onclick="deselectAllContributors(\${year})" class="text-xs px-2 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition">Deselect All</button>
               </div>
             </div>
             <div class="space-y-2 max-h-64 overflow-y-auto" id="user-list-\${year}">
@@ -2603,9 +2603,9 @@ const settingsTemplate = (req, options) => {
           for (const user of eligibleUsers) {
             const isChecked = user.is_contributor ? 'checked' : '';
             html += \`
-              <label class="flex items-center gap-3 p-2 bg-gray-900 rounded cursor-pointer hover:bg-gray-800 transition">
+              <label class="flex items-center gap-3 p-2 bg-gray-900 rounded-sm cursor-pointer hover:bg-gray-800 transition">
                 <input type="checkbox" 
-                       class="contributor-checkbox w-5 h-5 rounded border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900"
+                       class="contributor-checkbox w-5 h-5 rounded-sm border-gray-600 bg-gray-800 text-purple-600 focus:ring-purple-500 focus:ring-offset-gray-900"
                        data-year="\${year}" 
                        data-user-id="\${user.user_id}" 
                        \${isChecked}
@@ -2789,16 +2789,16 @@ const settingsTemplate = (req, options) => {
         let actionButtons = '';
         if (event.event_type === 'account_approval') {
           actionButtons = \`
-            <button onclick="executeEventAction('\${event.id}', 'approve')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-sm transition flex items-center gap-1">
+            <button onclick="executeEventAction('\${event.id}', 'approve')" class="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-sm text-sm transition flex items-center gap-1">
               <i class="fas fa-check"></i> Approve
             </button>
-            <button onclick="executeEventAction('\${event.id}', 'reject')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-sm transition flex items-center gap-1">
+            <button onclick="executeEventAction('\${event.id}', 'reject')" class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-sm text-sm transition flex items-center gap-1">
               <i class="fas fa-times"></i> Reject
             </button>
           \`;
         } else {
           actionButtons = \`
-            <button onclick="executeEventAction('\${event.id}', 'dismiss')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded text-sm transition flex items-center gap-1">
+            <button onclick="executeEventAction('\${event.id}', 'dismiss')" class="px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-sm text-sm transition flex items-center gap-1">
               <i class="fas fa-check"></i> Dismiss
             </button>
           \`;

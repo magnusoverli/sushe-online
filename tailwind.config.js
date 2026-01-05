@@ -119,7 +119,7 @@ module.exports = {
     'bg-gray-900/50',
     'bg-red-600',
     'bg-opacity-50',
-    'backdrop-blur-sm',
+    'backdrop-blur-xs',
 
     // Borders
     'border',
@@ -129,7 +129,7 @@ module.exports = {
     'border-gray-700',
     'border-gray-800',
     'border-b-2',
-    'rounded',
+    'rounded-sm',
     'rounded-full',
 
     // Hover states
@@ -154,7 +154,7 @@ module.exports = {
     'animate-spin',
 
     // Focus/Form
-    'focus:outline-none',
+    'focus:outline-hidden',
     'focus:border-red-600',
     'resize-none',
     'cursor-pointer',

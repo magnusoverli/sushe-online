@@ -137,7 +137,7 @@ export function createListNav(deps = {}) {
         <i class="fas ${chevronClass} mr-2 text-xs year-chevron"></i>
         <span>${year}</span>
       </div>
-      <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded font-normal">${count}</span>
+      <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded-sm font-normal">${count}</span>
     `;
   }
 
@@ -154,12 +154,12 @@ export function createListNav(deps = {}) {
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
     const mainBadge = isMain
-      ? '<i class="fas fa-star text-yellow-500 ml-1 flex-shrink-0 text-xs" title="Main list"></i>'
+      ? '<i class="fas fa-star text-yellow-500 ml-1 shrink-0 text-xs" title="Main list"></i>'
       : '';
 
     const buttonHTML = `
-      <button data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
-        <i class="fas fa-list mr-2 flex-shrink-0"></i>
+      <button data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
+        <i class="fas fa-list mr-2 shrink-0"></i>
         <span class="truncate flex-1">${listName}</span>
         ${mainBadge}
       </button>
@@ -168,7 +168,7 @@ export function createListNav(deps = {}) {
     if (isMobile) {
       return `
         ${buttonHTML}
-        <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag flex-shrink-0" aria-label="List options">
+        <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag shrink-0" aria-label="List options">
           <i class="fas fa-ellipsis-v"></i>
         </button>
       `;
@@ -320,7 +320,7 @@ export function createListNav(deps = {}) {
     // Year header
     const header = document.createElement('button');
     const paddingClass = isMobile ? 'py-2' : 'py-1.5';
-    header.className = `w-full text-left px-3 ${paddingClass} rounded text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+    header.className = `w-full text-left px-3 ${paddingClass} rounded-sm text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
     header.innerHTML = createYearHeaderHTML(year, yearLists.length, isExpanded);
     header.onclick = (e) => {
       e.preventDefault();
