@@ -50,7 +50,7 @@ services:
           cpus: '0.5'
 
   db:
-    image: postgres:18
+    image: postgres:18.1
     ports:
       - '5433:5432' # Expose PostgreSQL for local development
     environment:

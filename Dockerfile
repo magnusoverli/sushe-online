@@ -5,7 +5,7 @@ FROM node:24-slim AS builder
 ARG CACHE_BUST=1
 
 # Update npm to specific version
-RUN npm install -g npm@11.6.1 --no-fund
+RUN npm install -g npm@11.7.0 --no-fund
 
 WORKDIR /app
 
@@ -29,7 +29,7 @@ FROM node:24-slim AS runtime
 ARG INSTALL_DEV_DEPS=false
 
 # Update npm to specific version
-RUN npm install -g npm@11.6.1 --no-fund
+RUN npm install -g npm@11.7.0 --no-fund
 
 WORKDIR /app
 
