@@ -827,31 +827,74 @@ body.now-playing-bar-visible #addAlbumFAB {
   );
 }
 
-/* Progress bar styling */
-.miniplayer-progress {
-  position: relative;
+/* Progress bar styling (native input range) */
+#miniplayerProgress {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  border-radius: 9999px;
+  height: 4px;
 }
 
-#miniplayerProgressFill {
-  transition: width 0.1s linear;
+#miniplayerProgress::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #1db954 0%,
+    #1db954 var(--progress, 0%),
+    #374151 var(--progress, 0%),
+    #374151 100%
+  );
+}
+
+#miniplayerProgress::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #374151;
+}
+
+#miniplayerProgress::-moz-range-progress {
   background: linear-gradient(90deg, #1db954 0%, #1ed760 100%);
+  border-radius: 9999px;
+  height: 4px;
 }
 
-.miniplayer-progress:hover #miniplayerProgressFill {
-  background: linear-gradient(90deg, #1ed760 0%, #22d369 100%);
-}
-
-#miniplayerProgressHandle {
-  opacity: 1;
+#miniplayerProgress::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
   background: #ededed;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  border-radius: 50%;
+  cursor: pointer;
   transition:
     transform 0.15s ease,
     background 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  margin-top: -4px;
 }
 
-#miniplayerProgressHandle:hover {
-  transform: translateY(-5%) scale(1.25);
+#miniplayerProgress::-webkit-slider-thumb:hover {
+  transform: scale(1.25);
+  background: #fff;
+}
+
+#miniplayerProgress::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  background: #ededed;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+#miniplayerProgress::-moz-range-thumb:hover {
+  transform: scale(1.25);
   background: #fff;
 }
 

@@ -29,10 +29,10 @@ let trackPlayStartTime = 0; // When current track started playing
 let accumulatedPlayTime = 0; // Total play time for current track (handles pause/resume)
 
 // Polling configuration
-const POLL_INTERVAL_PLAYING = 2000; // 2s when playing (slightly longer, we interpolate)
+const POLL_INTERVAL_PLAYING = 1500; // 1.5s when playing (interpolation fills gaps)
 const POLL_INTERVAL_PAUSED = 5000; // 5s when paused
 const POLL_INTERVAL_IDLE = 4000; // 4s when no playback
-const POLL_INTERVAL_NEAR_END = 500; // 500ms when track is about to end
+const POLL_INTERVAL_NEAR_END = 300; // 300ms when track is about to end
 const POLL_INTERVAL_MOBILE = 3000; // 3s for mobile (balanced responsiveness/battery)
 const NEAR_END_THRESHOLD = 5000; // 5 seconds from end
 const MAX_CONSECUTIVE_ERRORS = 5;
@@ -521,8 +521,6 @@ function cacheElements() {
     track: document.getElementById('miniplayerTrack'),
     artist: document.getElementById('miniplayerArtist'),
     progress: document.getElementById('miniplayerProgress'),
-    progressFill: document.getElementById('miniplayerProgressFill'),
-    progressHandle: document.getElementById('miniplayerProgressHandle'),
     timeElapsed: document.getElementById('miniplayerTimeElapsed'),
     timeTotal: document.getElementById('miniplayerTimeTotal'),
     prevBtn: document.getElementById('miniplayerPrev'),
@@ -716,16 +714,13 @@ function hideMiniplayer() {
  * Update the progress bar UI (called from animation frame)
  */
 function updateProgress(position, duration) {
-  if (!elements.progressFill || !duration) return;
+  if (!elements.progress || !duration) return;
 
-  const percent = Math.min((position / duration) * 100, 100);
+  const value = Math.min((position / duration) * 1000, 1000);
+  elements.progress.value = value;
+  // Update CSS variable for Webkit fill effect
+  elements.progress.style.setProperty('--progress', `${value / 10}%`);
 
-  // Use transform for GPU-accelerated animation
-  elements.progressFill.style.width = `${percent}%`;
-
-  if (elements.progressHandle) {
-    elements.progressHandle.style.left = `${percent}%`;
-  }
   if (elements.timeElapsed) {
     elements.timeElapsed.textContent = formatTime(position);
   }
@@ -1329,7 +1324,7 @@ async function handleSeek(positionMs) {
       // Brief poll to confirm position
       setTimeout(() => scheduleImmediatePoll(), 200);
     }
-  }, 150);
+  }, 75);
 }
 
 /**
@@ -1387,8 +1382,38 @@ function setupControls() {
   // Next track
   elements.nextBtn?.addEventListener('click', handleNext);
 
-  // Progress bar seeking (mouse)
-  setupProgressBarEvents();
+  // Progress bar seeking (native input range)
+  elements.progress?.addEventListener('input', (e) => {
+    const percent = parseInt(e.target.value) / 1000;
+    const duration = currentPlayback?.item?.duration_ms || 0;
+    const position = Math.floor(percent * duration);
+
+    // Update time display immediately
+    if (elements.timeElapsed) {
+      elements.timeElapsed.textContent = formatTime(position);
+    }
+    // Update CSS variable for fill
+    elements.progress.style.setProperty('--progress', `${percent * 100}%`);
+  });
+
+  elements.progress?.addEventListener('change', (e) => {
+    const percent = parseInt(e.target.value) / 1000;
+    const duration = currentPlayback?.item?.duration_ms || 0;
+    const position = Math.floor(percent * duration);
+    handleSeek(position);
+  });
+
+  elements.progress?.addEventListener('mousedown', () => {
+    isSeeking = true;
+    stopProgressAnimation();
+  });
+
+  elements.progress?.addEventListener('mouseup', () => {
+    isSeeking = false;
+    if (currentPlayback?.is_playing) {
+      startProgressAnimation();
+    }
+  });
 
   // Volume control
   elements.volumeSlider?.addEventListener('input', (e) => {
@@ -1416,90 +1441,6 @@ function setupControls() {
 
   // Keyboard shortcuts
   setupKeyboardShortcuts();
-}
-
-/**
- * Set up progress bar mouse/touch events
- */
-function setupProgressBarEvents() {
-  if (!elements.progress) return;
-
-  function updateSeekPosition(e, commit = false) {
-    const rect = elements.progress.getBoundingClientRect();
-    let clientX;
-
-    // Handle both mouse and touch events
-    if (e.touches && e.touches.length > 0) {
-      clientX = e.touches[0].clientX;
-    } else if (e.changedTouches && e.changedTouches.length > 0) {
-      clientX = e.changedTouches[0].clientX;
-    } else {
-      clientX = e.clientX;
-    }
-
-    const percent = Math.max(
-      0,
-      Math.min(1, (clientX - rect.left) / rect.width)
-    );
-    const duration = currentPlayback?.item?.duration_ms || 0;
-    const position = Math.floor(percent * duration);
-
-    updateProgress(position, duration);
-
-    if (commit) {
-      handleSeek(position);
-    }
-  }
-
-  // Mouse events
-  elements.progress.addEventListener('mousedown', (e) => {
-    isSeeking = true;
-    stopProgressAnimation();
-    updateSeekPosition(e);
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (isSeeking) updateSeekPosition(e);
-  });
-
-  document.addEventListener('mouseup', (e) => {
-    if (isSeeking) {
-      updateSeekPosition(e, true);
-      isSeeking = false;
-      if (currentPlayback?.is_playing) {
-        startProgressAnimation();
-      }
-    }
-  });
-
-  // Touch events for laptop touchscreens
-  elements.progress.addEventListener(
-    'touchstart',
-    (e) => {
-      isSeeking = true;
-      stopProgressAnimation();
-      updateSeekPosition(e);
-    },
-    { passive: true }
-  );
-
-  document.addEventListener(
-    'touchmove',
-    (e) => {
-      if (isSeeking) updateSeekPosition(e);
-    },
-    { passive: true }
-  );
-
-  document.addEventListener('touchend', (e) => {
-    if (isSeeking) {
-      updateSeekPosition(e, true);
-      isSeeking = false;
-      if (currentPlayback?.is_playing) {
-        startProgressAnimation();
-      }
-    }
-  });
 }
 
 /**

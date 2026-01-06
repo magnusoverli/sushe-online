@@ -1180,10 +1180,8 @@ const spotifyTemplate = (user, csrfToken = '') => `
           
           <!-- Progress Bar -->
           <div class="mb-1">
-            <div id="miniplayerProgress" class="miniplayer-progress h-1 bg-gray-700 rounded-full cursor-pointer group relative">
-              <div id="miniplayerProgressFill" class="h-full bg-green-500 rounded-full" style="width: 0%"></div>
-              <div id="miniplayerProgressHandle" class="absolute top-1/2 w-3 h-3 rounded-full shadow-md" style="left: 0%; transform: translateY(-5%)"></div>
-            </div>
+            <input id="miniplayerProgress" type="range" min="0" max="1000" value="0"
+              class="miniplayer-progress w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
             <div class="flex justify-between text-[10px] text-gray-300 mt-1">
               <span id="miniplayerTimeElapsed">0:00</span>
               <span id="miniplayerTimeTotal">0:00</span>
