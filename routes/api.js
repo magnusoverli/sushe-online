@@ -1977,10 +1977,36 @@ module.exports = (app, deps) => {
       }
 
       const data = await resp.json();
+
+      // Log ALL devices returned by Spotify (before filtering)
+      logger.info('Spotify API returned devices (raw):', {
+        count: data.devices?.length || 0,
+        devices: (data.devices || []).map((d) => ({
+          name: d.name,
+          id: d.id ? `${d.id.substring(0, 8)}...` : null,
+          type: d.type,
+          is_restricted: d.is_restricted,
+          is_active: d.is_active,
+        })),
+      });
+
       // Filter out restricted devices (can't accept commands)
       const usableDevices = (data.devices || []).filter(
         (d) => !d.is_restricted && d.id
       );
+
+      // Log what was filtered out
+      const filteredOut = (data.devices || []).filter(
+        (d) => d.is_restricted || !d.id
+      );
+      if (filteredOut.length > 0) {
+        logger.info('Devices filtered out:', {
+          devices: filteredOut.map((d) => ({
+            name: d.name,
+            reason: !d.id ? 'no device ID' : 'is_restricted',
+          })),
+        });
+      }
 
       logger.info(
         'Spotify devices found:',

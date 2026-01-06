@@ -882,12 +882,7 @@ function updateDeviceName(device) {
 function renderDeviceList(devices) {
   if (!elements.deviceList) return;
 
-  // Filter out any "SuShe Online" devices (legacy SDK devices)
-  const filteredDevices = devices.filter(
-    (d) => !d.name?.includes('SuShe Online')
-  );
-
-  if (!filteredDevices || filteredDevices.length === 0) {
+  if (!devices || devices.length === 0) {
     elements.deviceList.innerHTML = `
       <div class="text-center py-4 text-gray-500 text-xs">
         No devices found.<br>
@@ -897,7 +892,7 @@ function renderDeviceList(devices) {
     return;
   }
 
-  elements.deviceList.innerHTML = filteredDevices
+  elements.deviceList.innerHTML = devices
     .map(
       (device) => `
       <button 
