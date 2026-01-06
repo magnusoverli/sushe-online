@@ -1350,7 +1350,7 @@ async function handleVolumeChange(percent) {
   volumeTimeout = setTimeout(async () => {
     await apiSetVolume(percent);
     volumeTimeout = null;
-  }, 100);
+  }, 50);
 }
 
 /**
