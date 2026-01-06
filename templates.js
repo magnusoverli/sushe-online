@@ -1205,7 +1205,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </div>
           
           <!-- Volume Control Row -->
-          <div class="flex items-center justify-center mt-3">
+          <div id="miniplayerVolumeRow" class="flex items-center justify-center mt-4">
             <div class="relative flex items-center">
               <button id="miniplayerMute" class="absolute right-full mr-[10px] p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
                 <i class="fas fa-volume-up text-xs"></i>
@@ -1216,19 +1216,16 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </div>
           
           <!-- Current Device Indicator with Device Picker -->
-          <div id="miniplayerCurrentDevice" class="mt-[15px] flex items-center justify-between">
-            <span class="h-5 flex items-center text-[13px] text-gray-500">
-              <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
-              <span id="miniplayerDeviceName">Listening on...</span>
-            </span>
-            <!-- Device Picker -->
-            <div class="relative w-6 flex justify-end">
-              <button id="miniplayerDeviceBtn" class="p-1 text-green-500 hover:text-green-400 transition-colors" title="Change device">
-                <i class="fas fa-desktop text-xs"></i>
+          <div id="miniplayerCurrentDevice" class="mt-4 flex items-center justify-center">
+            <div class="relative">
+              <button id="miniplayerDeviceBtn" class="h-5 flex items-center text-[13px] text-gray-500 hover:text-gray-300 transition-colors cursor-pointer" title="Change device">
+                <i class="fas fa-broadcast-tower mr-1.5 text-green-500"></i>
+                <span id="miniplayerDeviceName">Listening on...</span>
+                <i class="fas fa-chevron-down ml-1.5 text-[10px]"></i>
               </button>
               
               <!-- Device Dropdown -->
-              <div id="miniplayerDeviceDropdown" class="hidden absolute bottom-full right-0 mb-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+              <div id="miniplayerDeviceDropdown" class="hidden absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
                 <div class="p-2 border-b border-gray-700">
                   <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Connect to a device</span>
                 </div>

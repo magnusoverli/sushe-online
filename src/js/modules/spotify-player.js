@@ -348,15 +348,24 @@ async function apiCall(url, options = {}, actionName = null) {
       if (contentType && contentType.includes('application/json')) {
         const errorData = await response.json();
 
-        // Handle Premium required - stop polling entirely
+        // Handle Premium required - only hide miniplayer for playback state requests
+        // Volume/seek on some devices (iPhone) may return 403 but player should stay visible
         if (errorData.code === 'PREMIUM_REQUIRED') {
-          isPremiumRequired = true;
-          stopPolling();
-          hideMiniplayer();
-          // Don't log this as an error - it's expected for Free users
-          console.info(
-            'Spotify miniplayer disabled: Premium required for playback control'
-          );
+          if (url === '/api/spotify/playback') {
+            // Only disable miniplayer if playback state polling fails (Free user)
+            isPremiumRequired = true;
+            stopPolling();
+            hideMiniplayer();
+            console.info(
+              'Spotify miniplayer disabled: Premium required for playback control'
+            );
+          } else {
+            // For other actions (volume, seek), just log and continue
+            console.debug(
+              'Action not supported on this device:',
+              url.split('/').pop()
+            );
+          }
           return null;
         }
 
@@ -529,6 +538,7 @@ function cacheElements() {
     nextBtn: document.getElementById('miniplayerNext'),
     muteBtn: document.getElementById('miniplayerMute'),
     volumeSlider: document.getElementById('miniplayerVolume'),
+    volumeRow: document.getElementById('miniplayerVolumeRow'),
     deviceBtn: document.getElementById('miniplayerDeviceBtn'),
     deviceDropdown: document.getElementById('miniplayerDeviceDropdown'),
     deviceList: document.getElementById('miniplayerDeviceList'),
@@ -755,6 +765,22 @@ function updateVolumeIcon(volume) {
     } else {
       icon.className = 'fas fa-volume-up text-xs';
     }
+  }
+}
+
+/**
+ * Show/hide volume control based on device support
+ */
+function updateVolumeControlVisibility(device) {
+  if (!elements.volumeRow) return;
+
+  // Show volume control if device supports it (or if unknown, default to showing)
+  const supportsVolume = device?.supports_volume !== false;
+
+  if (supportsVolume) {
+    elements.volumeRow.classList.remove('hidden');
+  } else {
+    elements.volumeRow.classList.add('hidden');
   }
 }
 
@@ -1159,6 +1185,9 @@ async function pollPlaybackState() {
     }
     updatePlayPauseIcon(state.is_playing);
     updateDeviceName(state.device);
+
+    // Show/hide volume control based on device support
+    updateVolumeControlVisibility(state.device);
 
     // Update volume if available (skip if user is actively adjusting)
     if (state.device?.volume_percent !== undefined) {
