@@ -1168,7 +1168,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <!-- Active Player State -->
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
-          <div class="flex items-center gap-3 mb-3">
+          <div class="flex items-center gap-3 mb-4">
             <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded-sm shrink-0 overflow-hidden">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
@@ -1179,21 +1179,21 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </div>
           
           <!-- Progress Bar -->
-          <div class="mb-3">
+          <div class="mb-1">
             <div id="miniplayerProgress" class="miniplayer-progress h-1 bg-gray-700 rounded-full cursor-pointer group relative">
               <div id="miniplayerProgressFill" class="h-full bg-green-500 rounded-full" style="width: 0%"></div>
-              <div id="miniplayerProgressHandle" class="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full opacity-0 group-hover:opacity-100 shadow-md" style="left: 0%"></div>
+              <div id="miniplayerProgressHandle" class="absolute top-1/2 w-3 h-3 rounded-full shadow-md" style="left: 0%; transform: translateY(-5%)"></div>
             </div>
-            <div class="flex justify-between text-[10px] text-gray-500 mt-1">
+            <div class="flex justify-between text-[10px] text-gray-300 mt-1">
               <span id="miniplayerTimeElapsed">0:00</span>
               <span id="miniplayerTimeTotal">0:00</span>
             </div>
           </div>
           
           <!-- Controls Row -->
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-center">
             <!-- Playback Controls -->
-            <div class="flex items-center gap-3">
+<div class="flex items-center justify-between w-[200px]">
               <button id="miniplayerPrev" class="px-2 py-1.5 text-gray-400 hover:text-white transition-colors" title="Previous">
                 <i class="fas fa-step-backward text-sm"></i>
               </button>
@@ -1204,22 +1204,22 @@ const spotifyTemplate = (user, csrfToken = '') => `
                 <i class="fas fa-step-forward text-sm"></i>
               </button>
             </div>
-            
-            <!-- Volume Control -->
-            <div class="flex items-center gap-1 mr-2">
-              <button id="miniplayerMute" class="p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
+          </div>
+          
+          <!-- Volume Control Row -->
+          <div class="flex items-center justify-center mt-3">
+            <div class="relative flex items-center">
+              <button id="miniplayerMute" class="absolute right-full mr-[10px] p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
                 <i class="fas fa-volume-up text-xs"></i>
               </button>
               <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                class="w-[110px] h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+                class="w-[190px] h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
             </div>
           </div>
           
           <!-- Current Device Indicator with Device Picker -->
-          <div id="miniplayerCurrentDevice" class="mt-2 flex items-center justify-between">
-            <!-- Spacer to balance the device button for centering -->
-            <div class="w-6"></div>
-            <span class="text-[10px] text-gray-500">
+          <div id="miniplayerCurrentDevice" class="mt-[15px] flex items-center justify-between">
+            <span class="h-5 flex items-center text-[13px] text-gray-500">
               <i class="fas fa-broadcast-tower mr-1 text-green-500"></i>
               <span id="miniplayerDeviceName">Listening on...</span>
             </span>

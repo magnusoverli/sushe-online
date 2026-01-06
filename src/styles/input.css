@@ -830,11 +830,6 @@ body.now-playing-bar-visible #addAlbumFAB {
 /* Progress bar styling */
 .miniplayer-progress {
   position: relative;
-  transition: height 0.15s ease;
-}
-
-.miniplayer-progress:hover {
-  height: 6px;
 }
 
 #miniplayerProgressFill {
@@ -847,15 +842,17 @@ body.now-playing-bar-visible #addAlbumFAB {
 }
 
 #miniplayerProgressHandle {
-  transition:
-    opacity 0.15s ease,
-    transform 0.15s ease;
+  opacity: 1;
+  background: #ededed;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
 }
 
-.miniplayer-progress:hover #miniplayerProgressHandle {
-  opacity: 1;
-  transform: translateY(-50%) scale(1.1);
+#miniplayerProgressHandle:hover {
+  transform: translateY(-5%) scale(1.25);
+  background: #fff;
 }
 
 /* Volume slider styling */
@@ -865,11 +862,6 @@ body.now-playing-bar-visible #addAlbumFAB {
   background: #374151;
   border-radius: 9999px;
   height: 4px;
-  transition: height 0.15s ease;
-}
-
-#miniplayerVolume:hover {
-  height: 6px;
 }
 
 #miniplayerVolume::-webkit-slider-thumb {
@@ -877,24 +869,35 @@ body.now-playing-bar-visible #addAlbumFAB {
   appearance: none;
   width: 12px;
   height: 12px;
-  background: #fff;
+  background: #ededed;
   border-radius: 50%;
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 #miniplayerVolume::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
+  transform: scale(1.25);
+  background: #fff;
 }
 
 #miniplayerVolume::-moz-range-thumb {
   width: 12px;
   height: 12px;
-  background: #fff;
+  background: #ededed;
   border: none;
   border-radius: 50%;
   cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+}
+
+#miniplayerVolume::-moz-range-thumb:hover {
+  transform: scale(1.25);
+  background: #fff;
 }
 
 /* Play/pause button */
