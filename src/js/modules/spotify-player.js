@@ -14,6 +14,7 @@ let pollInterval = null;
 let animationFrameId = null;
 let volumeBeforeMute = 50; // Tracks volume before muting for restore
 let isSeeking = false;
+let isAdjustingVolume = false;
 let lastPollTime = 0;
 let lastPosition = 0;
 let consecutiveErrors = 0;
@@ -1152,13 +1153,16 @@ async function pollPlaybackState() {
 
     // Update UI (animate if track changed)
     updateTrackInfo(state.item, isTrackChange);
-    updateProgress(state.progress_ms, state.item?.duration_ms);
+    // Skip progress update if user is actively seeking
+    if (!isSeeking) {
+      updateProgress(state.progress_ms, state.item?.duration_ms);
+    }
     updatePlayPauseIcon(state.is_playing);
     updateDeviceName(state.device);
 
-    // Update volume if available
+    // Update volume if available (skip if user is actively adjusting)
     if (state.device?.volume_percent !== undefined) {
-      if (elements.volumeSlider) {
+      if (elements.volumeSlider && !isAdjustingVolume) {
         elements.volumeSlider.value = state.device.volume_percent;
       }
       updateVolumeIcon(state.device.volume_percent);
@@ -1418,6 +1422,27 @@ function setupControls() {
   // Volume control
   elements.volumeSlider?.addEventListener('input', (e) => {
     handleVolumeChange(parseInt(e.target.value));
+  });
+
+  elements.volumeSlider?.addEventListener('mousedown', () => {
+    isAdjustingVolume = true;
+  });
+
+  elements.volumeSlider?.addEventListener('touchstart', () => {
+    isAdjustingVolume = true;
+  });
+
+  // Use document listeners to catch mouseup/touchend even if cursor leaves slider
+  document.addEventListener('mouseup', () => {
+    if (isAdjustingVolume) {
+      isAdjustingVolume = false;
+    }
+  });
+
+  document.addEventListener('touchend', () => {
+    if (isAdjustingVolume) {
+      isAdjustingVolume = false;
+    }
   });
 
   // Mute toggle
