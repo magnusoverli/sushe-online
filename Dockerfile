@@ -19,8 +19,13 @@ RUN echo "Cache bust: ${CACHE_BUST}"
 COPY . .
 RUN npm run build
 
-# Remove node_modules so they are not copied to the final image
-RUN rm -rf node_modules
+# Remove node_modules and dev-only files before copying to runtime
+# This reduces final image size by ~3MB
+RUN rm -rf node_modules \
+    && rm -rf test browser-extension .github scripts screenshots .cursor .opencode \
+    && rm -f AGENTS.md TESTING.md CHANGELOG.md playwright.config.js \
+    && rm -f vite.config.js postcss.config.js tailwind.config.js \
+    && rm -f eslint.config.mjs .prettierrc .prettierignore
 
 # ----- Runtime stage -----
 FROM node:24-slim AS runtime
@@ -37,6 +42,7 @@ WORKDIR /app
 COPY --chown=node:node package*.json ./
 
 # Add PGDG repository for PostgreSQL 18 client
+# Install build-time dependencies, add repo, install pg client, then remove build-time deps
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
     && install -d /usr/share/postgresql-common/pgdg \
@@ -45,7 +51,8 @@ RUN apt-get update \
     && echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-18 \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get purge -y --auto-remove curl gnupg \
+    && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
 
 # Install dependencies - include dev dependencies only if INSTALL_DEV_DEPS=true
 RUN if [ "$INSTALL_DEV_DEPS" = "true" ]; then \
@@ -62,13 +69,20 @@ ENV NODE_ENV=production
 RUN mkdir -p /app/data /app/logs && \
     chown node:node /app/data /app/logs
 
-# Node.js optimizations
-ENV NODE_OPTIONS="--max-old-space-size=512"
+# Node.js runtime optimizations
+# - max-old-space-size: V8 heap limit (1GB)
+# - enable-source-maps: Better error stack traces in production
+# - max-semi-space-size: Larger young generation (64MB) reduces GC pause frequency
+# - dns-result-order: Prefer IPv4 to avoid IPv6 fallback delays on external API calls
+# - UV_THREADPOOL_SIZE: Increase libuv thread pool for better I/O concurrency
+ENV NODE_OPTIONS="--max-old-space-size=1024 --enable-source-maps --max-semi-space-size=64 --dns-result-order=ipv4first"
+ENV UV_THREADPOOL_SIZE=8
 
 EXPOSE 3000
 
+# Healthcheck using Node.js (no curl dependency needed)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:3000/ || exit 1
+  CMD node -e "require('http').get('http://localhost:3000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
 
 USER node
 
