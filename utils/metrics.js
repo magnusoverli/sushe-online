@@ -351,16 +351,6 @@ function updateDbPoolMetrics(poolStats) {
 }
 
 /**
- * Observe HTTP response size
- * @param {string} method - HTTP method
- * @param {string} route - Route path
- * @param {number} sizeBytes - Response size in bytes
- */
-function observeResponseSize(method, route, sizeBytes) {
-  httpResponseSize.labels(method, normalizeRoute(route)).observe(sizeBytes);
-}
-
-/**
  * Update application uptime metric
  */
 function updateUptime() {
@@ -459,7 +449,6 @@ module.exports = {
   decWebsocketConnections,
   setActiveSessions,
   updateDbPoolMetrics,
-  observeResponseSize,
   updateUptime,
   getMetrics,
   getContentType,

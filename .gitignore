@@ -176,3 +176,4 @@ opencodetmp/*
 
 # Local plans and notes (not synced to repo)
 /plans/
+.opencode/

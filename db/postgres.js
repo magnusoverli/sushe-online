@@ -522,6 +522,5 @@ module.exports = {
   Pool,
   waitForPostgres,
   warmConnections,
-  getPoolStats,
   reportPoolMetrics,
 };

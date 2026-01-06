@@ -22,32 +22,5 @@ function requestIdMiddleware() {
   };
 }
 
-/**
- * Create request ID middleware with custom options
- * @param {Object} options - Middleware options
- * @param {Function} options.generator - Custom ID generator function (default: crypto.randomUUID)
- * @param {string} options.headerName - Header name to read/write (default: 'x-request-id')
- * @returns {Function} Express middleware
- */
-function createRequestIdMiddleware(options = {}) {
-  const generator = options.generator || (() => crypto.randomUUID());
-  const headerName = options.headerName || 'x-request-id';
-  const headerNameLower = headerName.toLowerCase();
-
-  return (req, res, next) => {
-    // Use existing request ID from header or generate new one
-    const requestId = req.headers[headerNameLower] || generator();
-
-    // Attach to request object
-    req.id = requestId;
-
-    // Set response header
-    res.setHeader(headerName, requestId);
-
-    next();
-  };
-}
-
 module.exports = requestIdMiddleware;
 module.exports.requestIdMiddleware = requestIdMiddleware;
-module.exports.createRequestIdMiddleware = createRequestIdMiddleware;
