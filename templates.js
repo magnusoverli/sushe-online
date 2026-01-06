@@ -1168,7 +1168,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <!-- Active Player State -->
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
-          <div class="flex items-center gap-3 mb-4">
+          <div class="flex items-center gap-3 mb-1">
             <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded-sm shrink-0 overflow-hidden">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
@@ -1179,7 +1179,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </div>
           
           <!-- Progress Bar -->
-          <div class="mb-1">
+          <div>
             <input id="miniplayerProgress" type="range" min="0" max="1000" value="0"
               class="miniplayer-progress w-full h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
             <div class="flex justify-between text-[10px] text-gray-300 mt-1">
@@ -1205,18 +1205,18 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </div>
           
           <!-- Volume Control Row -->
-          <div id="miniplayerVolumeRow" class="flex items-center justify-center mt-4">
+          <div id="miniplayerVolumeRow" class="flex items-center justify-center mt-5 mb-5">
             <div class="relative flex items-center">
-              <button id="miniplayerMute" class="absolute right-full mr-[10px] p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
+              <button id="miniplayerMute" class="absolute right-full mr-[7px] p-1.5 text-gray-400 hover:text-white transition-colors" title="Mute">
                 <i class="fas fa-volume-up text-xs"></i>
               </button>
               <input id="miniplayerVolume" type="range" min="0" max="100" value="50" 
-                class="w-[190px] h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
+                class="w-[210px] h-1 bg-gray-700 rounded-full appearance-none cursor-pointer">
             </div>
           </div>
           
           <!-- Current Device Indicator with Device Picker -->
-          <div id="miniplayerCurrentDevice" class="mt-4 flex items-center justify-center">
+          <div id="miniplayerCurrentDevice" class="mt-4 pt-4 border-t-2 border-gray-700/50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)] flex items-center justify-center">
             <div class="relative">
               <button id="miniplayerDeviceBtn" class="h-5 flex items-center text-[13px] text-gray-500 hover:text-gray-300 transition-colors cursor-pointer" title="Change device">
                 <i class="fas fa-broadcast-tower mr-1.5 text-green-500"></i>
