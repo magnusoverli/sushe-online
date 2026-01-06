@@ -1210,6 +1210,19 @@ body.now-playing-bar-visible #addAlbumFAB {
 }
 
 /* ============================================
+   Modal Portal
+   ============================================ */
+
+/* Modal Portal - global container for all modals
+ * Ensures modals appear above all UI layers including settings drawer
+ * Modals inside use relative z-index for internal stacking if needed
+ */
+#modalPortal {
+  position: relative;
+  z-index: 10001;
+}
+
+/* ============================================
    Settings Drawer Styles
    ============================================ */
 

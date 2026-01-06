@@ -1,13 +1,18 @@
-# ----- Build stage -----
-FROM node:24-slim AS builder
+# ----- Common base stage -----
+# Shared setup for both builder and runtime stages
+# This layer is cached and reused, saving ~8-9 seconds per build
+FROM node:24-slim AS base
 
-# Cache-busting arg - changes with each build to ensure fresh source code
-ARG CACHE_BUST=1
-
-# Update npm to specific version
+# Update npm to specific version (done once, inherited by both stages)
 RUN npm install -g npm@11.7.0 --no-fund
 
 WORKDIR /app
+
+# ----- Build stage -----
+FROM base AS builder
+
+# Cache-busting arg - changes with each build to ensure fresh source code
+ARG CACHE_BUST=1
 
 # Copy package files and install all dependencies (dev included)
 COPY package*.json ./
@@ -28,15 +33,10 @@ RUN rm -rf node_modules \
     && rm -f eslint.config.mjs .prettierrc .prettierignore
 
 # ----- Runtime stage -----
-FROM node:24-slim AS runtime
+FROM base AS runtime
 
 # Build arg to control whether to install dev dependencies (default: production only)
 ARG INSTALL_DEV_DEPS=false
-
-# Update npm to specific version
-RUN npm install -g npm@11.7.0 --no-fund
-
-WORKDIR /app
 
 # Install only production dependencies  
 COPY --chown=node:node package*.json ./

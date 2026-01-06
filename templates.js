@@ -924,6 +924,19 @@ const listSetupWizardComponent = () => `
   </div>
 `;
 
+// Component: Modal Portal - contains all modals for proper z-index stacking above settings drawer
+const modalPortalComponent = () => `
+  <div id="modalPortal">
+    ${createListModalComponent()}
+    ${renameListModalComponent()}
+    ${addAlbumModalComponent()}
+    ${importConflictModalComponent()}
+    ${serviceSelectModalComponent()}
+    ${confirmationModalComponent()}
+    ${listSetupWizardComponent()}
+  </div>
+`;
+
 // Main Spotify template - Consolidated version
 const spotifyTemplate = (user, csrfToken = '') => `
 <!DOCTYPE html>
@@ -1364,14 +1377,8 @@ const spotifyTemplate = (user, csrfToken = '') => `
   
   <!-- Modals -->
   ${contextMenusComponent()}
-  ${createListModalComponent()}
-  ${renameListModalComponent()}
-  ${addAlbumModalComponent()}
-  ${importConflictModalComponent()}
-  ${serviceSelectModalComponent()}
-  ${confirmationModalComponent()}
-  ${listSetupWizardComponent()}
   ${settingsDrawerComponent(user)}
+  ${modalPortalComponent()}
   
   <script>
     // Global state - must be set before bundle.js loads
