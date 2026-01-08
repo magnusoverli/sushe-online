@@ -413,9 +413,14 @@ const contextMenusComponent = () => `
     </button>
   </div>
   
-  <!-- Submenu for Move to List -->
+  <!-- Submenu for Move to List - Years -->
   <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
-    <!-- Populated dynamically -->
+    <!-- Populated dynamically with years -->
+  </div>
+  
+  <!-- Submenu for Move to List - Lists within a year -->
+  <div id="albumMoveListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+    <!-- Populated dynamically with lists for selected year -->
   </div>
   
   <!-- Submenu for Play Album (Spotify Connect devices) -->

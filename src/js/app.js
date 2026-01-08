@@ -1392,7 +1392,7 @@ function initializeAlbumContextMenu() {
       playHideTimeout = setTimeout(() => {
         if (submenu) submenu.classList.add('hidden');
         playOption.classList.remove('bg-gray-700', 'text-white');
-      }, 200);
+      }, 100);
     }
   });
 
@@ -1483,16 +1483,23 @@ function initializeAlbumContextMenu() {
 
     moveOption.addEventListener('mouseleave', (e) => {
       const submenu = document.getElementById('albumMoveSubmenu');
-      // Check if moving to submenu
+      const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
+      // Check if moving to year submenu or lists submenu
       const toSubmenu =
         submenu &&
         (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
+      const toListsSubmenu =
+        listsSubmenu &&
+        (e.relatedTarget === listsSubmenu ||
+          listsSubmenu.contains(e.relatedTarget));
 
-      if (!toSubmenu) {
+      if (!toSubmenu && !toListsSubmenu) {
         hideTimeout = setTimeout(() => {
           if (submenu) submenu.classList.add('hidden');
+          if (listsSubmenu) listsSubmenu.classList.add('hidden');
           moveOption.classList.remove('bg-gray-700', 'text-white');
-        }, 200);
+          currentHighlightedYear = null;
+        }, 100);
       }
     });
 
@@ -1538,58 +1545,107 @@ function initializeAlbumContextMenu() {
   }
 }
 
-// Show the move to list submenu for desktop
+// Track the currently highlighted year in the move submenu
+let currentHighlightedYear = null;
+let moveListsHideTimeout = null;
+
+// Group lists by year for the move submenu (only lists with years, excluding current list)
+function groupListsForMove() {
+  const listsByYear = {};
+
+  Object.keys(lists).forEach((listName) => {
+    // Skip current list
+    if (listName === currentList) return;
+
+    const meta = lists[listName];
+    const year = meta?.year;
+
+    // Only include lists that have a year
+    if (year) {
+      if (!listsByYear[year]) {
+        listsByYear[year] = [];
+      }
+      listsByYear[year].push(listName);
+    }
+  });
+
+  // Sort years descending
+  const sortedYears = Object.keys(listsByYear).sort(
+    (a, b) => parseInt(b) - parseInt(a)
+  );
+
+  return { listsByYear, sortedYears };
+}
+
+// Show the move to list submenu for desktop (now shows years)
 function showMoveToListSubmenu() {
   const submenu = document.getElementById('albumMoveSubmenu');
+  const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
   const moveOption = document.getElementById('moveAlbumOption');
   const playSubmenu = document.getElementById('playAlbumSubmenu');
   const playOption = document.getElementById('playAlbumOption');
 
   if (!submenu || !moveOption) return;
 
-  // Hide the other submenu first
+  // Hide the other submenus first
   if (playSubmenu) {
     playSubmenu.classList.add('hidden');
     playOption?.classList.remove('bg-gray-700', 'text-white');
   }
+  if (listsSubmenu) {
+    listsSubmenu.classList.add('hidden');
+  }
+
+  // Reset highlighted year
+  currentHighlightedYear = null;
 
   // Highlight the parent menu item
   moveOption.classList.add('bg-gray-700', 'text-white');
 
-  // Get all list names except the current one
-  const listNames = Object.keys(lists).filter((name) => name !== currentList);
+  // Group lists by year
+  const { listsByYear, sortedYears } = groupListsForMove();
 
-  if (listNames.length === 0) {
+  if (sortedYears.length === 0) {
     submenu.innerHTML =
       '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
   } else {
-    submenu.innerHTML = listNames
+    submenu.innerHTML = sortedYears
       .map(
-        (listName) => `
-        <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listName}">
-          <span class="mr-2">•</span>${listName}
+        (year) => `
+        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-year="${year}">
+          <span>${year}</span>
+          <i class="fas fa-chevron-right text-xs ml-3 text-gray-500"></i>
         </button>
       `
       )
       .join('');
 
-    // Add click handlers to each list option
-    submenu.querySelectorAll('[data-target-list]').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const targetList = btn.dataset.targetList;
+    // Add hover handlers to each year option
+    submenu.querySelectorAll('[data-year]').forEach((btn) => {
+      btn.addEventListener('mouseenter', () => {
+        if (moveListsHideTimeout) {
+          clearTimeout(moveListsHideTimeout);
+          moveListsHideTimeout = null;
+        }
+        const year = btn.dataset.year;
+        showMoveToListYearSubmenu(year, btn, listsByYear);
+      });
 
-        // Hide both menus and remove highlight
-        document.getElementById('albumContextMenu')?.classList.add('hidden');
-        submenu.classList.add('hidden');
-        moveOption?.classList.remove('bg-gray-700', 'text-white');
+      btn.addEventListener('mouseleave', (e) => {
+        const listsMenu = document.getElementById('albumMoveListsSubmenu');
+        const toListsSubmenu =
+          listsMenu &&
+          (e.relatedTarget === listsMenu ||
+            listsMenu.contains(e.relatedTarget));
 
-        // Show confirmation modal
-        getMobileUIModule().showMoveConfirmation(
-          currentContextAlbumId,
-          targetList
-        );
+        if (!toListsSubmenu) {
+          moveListsHideTimeout = setTimeout(() => {
+            if (listsMenu) listsMenu.classList.add('hidden');
+            // Remove highlight from year button
+            btn.classList.remove('bg-gray-700', 'text-white');
+            currentHighlightedYear = null;
+          }, 100);
+        }
       });
     });
   }
@@ -1604,10 +1660,113 @@ function showMoveToListSubmenu() {
   submenu.classList.remove('hidden');
 }
 
+// Show the lists submenu for a specific year
+function showMoveToListYearSubmenu(year, yearButton, listsByYear) {
+  const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
+  const yearSubmenu = document.getElementById('albumMoveSubmenu');
+  const moveOption = document.getElementById('moveAlbumOption');
+
+  if (!listsSubmenu || !yearSubmenu) return;
+
+  // Remove highlight from previously highlighted year
+  if (currentHighlightedYear && currentHighlightedYear !== year) {
+    const prevBtn = yearSubmenu.querySelector(
+      `[data-year="${currentHighlightedYear}"]`
+    );
+    if (prevBtn) {
+      prevBtn.classList.remove('bg-gray-700', 'text-white');
+    }
+  }
+
+  // Highlight the current year button
+  yearButton.classList.add('bg-gray-700', 'text-white');
+  currentHighlightedYear = year;
+
+  // Get lists for this year
+  const yearLists = listsByYear[year] || [];
+
+  if (yearLists.length === 0) {
+    listsSubmenu.classList.add('hidden');
+    return;
+  }
+
+  // Populate the lists submenu
+  listsSubmenu.innerHTML = yearLists
+    .map(
+      (listName) => `
+      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listName}">
+        <span class="mr-2">•</span>${listName}
+      </button>
+    `
+    )
+    .join('');
+
+  // Add click handlers to each list option
+  listsSubmenu.querySelectorAll('[data-target-list]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetList = btn.dataset.targetList;
+
+      // Hide all menus and remove highlights
+      document.getElementById('albumContextMenu')?.classList.add('hidden');
+      yearSubmenu.classList.add('hidden');
+      listsSubmenu.classList.add('hidden');
+      moveOption?.classList.remove('bg-gray-700', 'text-white');
+
+      // Show confirmation modal
+      getMobileUIModule().showMoveConfirmation(
+        currentContextAlbumId,
+        targetList
+      );
+    });
+  });
+
+  // Handle mouse leaving the lists submenu
+  listsSubmenu.onmouseenter = () => {
+    if (moveListsHideTimeout) {
+      clearTimeout(moveListsHideTimeout);
+      moveListsHideTimeout = null;
+    }
+  };
+
+  listsSubmenu.onmouseleave = (e) => {
+    const yearMenu = document.getElementById('albumMoveSubmenu');
+    const toYearSubmenu =
+      yearMenu &&
+      (e.relatedTarget === yearMenu || yearMenu.contains(e.relatedTarget));
+
+    if (!toYearSubmenu) {
+      moveListsHideTimeout = setTimeout(() => {
+        listsSubmenu.classList.add('hidden');
+        // Remove highlight from year button
+        if (currentHighlightedYear) {
+          const yearBtn = yearMenu?.querySelector(
+            `[data-year="${currentHighlightedYear}"]`
+          );
+          if (yearBtn) {
+            yearBtn.classList.remove('bg-gray-700', 'text-white');
+          }
+          currentHighlightedYear = null;
+        }
+      }, 100);
+    }
+  };
+
+  // Position lists submenu next to the year button
+  const yearRect = yearButton.getBoundingClientRect();
+  const yearSubmenuRect = yearSubmenu.getBoundingClientRect();
+
+  listsSubmenu.style.left = `${yearSubmenuRect.right}px`;
+  listsSubmenu.style.top = `${yearRect.top}px`;
+  listsSubmenu.classList.remove('hidden');
+}
+
 // Hide submenus when mouse leaves the context menu area
 function hideSubmenuOnLeave() {
   const contextMenu = document.getElementById('albumContextMenu');
   const moveSubmenu = document.getElementById('albumMoveSubmenu');
+  const moveListsSubmenu = document.getElementById('albumMoveListsSubmenu');
   const playSubmenu = document.getElementById('playAlbumSubmenu');
   const moveOption = document.getElementById('moveAlbumOption');
   const playOption = document.getElementById('playAlbumOption');
@@ -1626,7 +1785,13 @@ function hideSubmenuOnLeave() {
         playSubmenu.classList.add('hidden');
         playOption?.classList.remove('bg-gray-700', 'text-white');
       }
-    }, 200);
+      // Also hide the lists submenu (third level for move)
+      if (moveListsSubmenu) {
+        moveListsSubmenu.classList.add('hidden');
+      }
+      // Reset highlighted year
+      currentHighlightedYear = null;
+    }, 100);
   };
 
   const cancelHide = () => {
@@ -1634,24 +1799,58 @@ function hideSubmenuOnLeave() {
   };
 
   contextMenu.addEventListener('mouseleave', (e) => {
-    // Check if moving to either submenu
+    // Check if moving to any submenu
     const toMoveSubmenu =
       moveSubmenu &&
       (e.relatedTarget === moveSubmenu ||
         moveSubmenu.contains(e.relatedTarget));
+    const toMoveListsSubmenu =
+      moveListsSubmenu &&
+      (e.relatedTarget === moveListsSubmenu ||
+        moveListsSubmenu.contains(e.relatedTarget));
     const toPlaySubmenu =
       playSubmenu &&
       (e.relatedTarget === playSubmenu ||
         playSubmenu.contains(e.relatedTarget));
 
-    if (!toMoveSubmenu && !toPlaySubmenu) {
+    if (!toMoveSubmenu && !toMoveListsSubmenu && !toPlaySubmenu) {
       hideSubmenus();
     }
   });
 
   if (moveSubmenu) {
     moveSubmenu.addEventListener('mouseenter', cancelHide);
-    moveSubmenu.addEventListener('mouseleave', hideSubmenus);
+    moveSubmenu.addEventListener('mouseleave', (e) => {
+      // Check if moving to the lists submenu (third level)
+      const toListsSubmenu =
+        moveListsSubmenu &&
+        (e.relatedTarget === moveListsSubmenu ||
+          moveListsSubmenu.contains(e.relatedTarget));
+      // Check if moving back to context menu
+      const toContextMenu =
+        contextMenu &&
+        (e.relatedTarget === contextMenu ||
+          contextMenu.contains(e.relatedTarget));
+
+      if (!toListsSubmenu && !toContextMenu) {
+        hideSubmenus();
+      }
+    });
+  }
+
+  if (moveListsSubmenu) {
+    moveListsSubmenu.addEventListener('mouseenter', cancelHide);
+    moveListsSubmenu.addEventListener('mouseleave', (e) => {
+      // Check if moving back to year submenu
+      const toMoveSubmenu =
+        moveSubmenu &&
+        (e.relatedTarget === moveSubmenu ||
+          moveSubmenu.contains(e.relatedTarget));
+
+      if (!toMoveSubmenu) {
+        hideSubmenus();
+      }
+    });
   }
 
   if (playSubmenu) {
