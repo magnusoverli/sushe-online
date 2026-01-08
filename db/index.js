@@ -413,6 +413,7 @@ if (process.env.DATABASE_URL) {
           accent_color: '#dc2626',
           time_format: '24h',
           date_format: 'MM/DD/YYYY',
+          role: 'admin',
           admin_granted_at: new Date(),
           music_service: null,
           created_at: new Date(),
