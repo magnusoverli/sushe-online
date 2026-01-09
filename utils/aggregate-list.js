@@ -48,10 +48,11 @@ const POSITION_POINTS = {
 };
 
 /**
- * Get points for a position (1 point for positions beyond 40)
+ * Get points for a position (0 points for positions beyond 40)
+ * Only positions 1-40 are eligible for points
  */
 function getPositionPoints(position) {
-  return POSITION_POINTS[position] || 1;
+  return POSITION_POINTS[position] || 0;
 }
 
 // ============================================
@@ -129,6 +130,7 @@ function buildAlbumMap(items, userMap) {
 function sortAndRankAlbums(albumMap) {
   const albums = Array.from(albumMap.values())
     .filter((album) => album.positions && album.positions.length > 0) // Guard against empty positions
+    .filter((album) => album.totalPoints > 0) // Only include albums with points (must appear in top 40)
     .map((album) => {
       const positions = album.positions;
       return {
@@ -268,6 +270,7 @@ async function fetchMainListsForYear(pool, year) {
 
 /**
  * Fetch all list items for given list IDs
+ * Only includes items in positions 1-40 (top 40 albums per list)
  */
 async function fetchListItemsForLists(pool, listIds) {
   const itemsResult = await pool.query(
@@ -288,7 +291,7 @@ async function fetchListItemsForLists(pool, listIds) {
     FROM list_items li
     JOIN lists l ON li.list_id = l._id
     LEFT JOIN albums a ON li.album_id = a.album_id
-    WHERE li.list_id = ANY($1)
+    WHERE li.list_id = ANY($1) AND li.position <= 40
     ORDER BY li.position
   `,
     [listIds]

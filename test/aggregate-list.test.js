@@ -68,14 +68,14 @@ describe('aggregate-list', () => {
       assert.strictEqual(getPositionPoints(15), 26);
     });
 
-    it('should return 1 for positions beyond 40', () => {
-      assert.strictEqual(getPositionPoints(41), 1);
-      assert.strictEqual(getPositionPoints(100), 1);
+    it('should return 0 for positions beyond 40', () => {
+      assert.strictEqual(getPositionPoints(41), 0);
+      assert.strictEqual(getPositionPoints(100), 0);
     });
 
-    it('should return 1 for invalid positions', () => {
-      assert.strictEqual(getPositionPoints(0), 1);
-      assert.strictEqual(getPositionPoints(-1), 1);
+    it('should return 0 for invalid positions', () => {
+      assert.strictEqual(getPositionPoints(0), 0);
+      assert.strictEqual(getPositionPoints(-1), 0);
     });
   });
 
@@ -588,6 +588,113 @@ describe('aggregate-list', () => {
       assert.strictEqual(result.stats.albumsWith2Voters, 1);
       assert.strictEqual(result.stats.albumsWith1Voter, 1);
       assert.ok(Array.isArray(result.stats.topPointsDistribution));
+    });
+
+    it('should exclude albums that only appear beyond position 40', async () => {
+      const pool = createMockPool([
+        {
+          rows: [
+            { list_id: 'list1', user_id: 'user1', username: 'alice' },
+            { list_id: 'list2', user_id: 'user2', username: 'bob' },
+          ],
+        },
+        {
+          rows: [
+            // Album A: position 10 (should be included)
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 10,
+              album_id: 'albumA',
+              artist: 'Artist A',
+              album: 'Album A',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album B: position 40 (should be included)
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 40,
+              album_id: 'albumB',
+              artist: 'Artist B',
+              album: 'Album B',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album C: position 41 (should be excluded - beyond top 40)
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 41,
+              album_id: 'albumC',
+              artist: 'Artist C',
+              album: 'Album C',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album D: position 50 (should be excluded - beyond top 40)
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 50,
+              album_id: 'albumD',
+              artist: 'Artist D',
+              album: 'Album D',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Album E: position 10 in list1, position 45 in list2 (should be included - has top 40 position)
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 10,
+              album_id: 'albumE',
+              artist: 'Artist E',
+              album: 'Album E',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+          ],
+        },
+      ]);
+      const logger = createMockLogger();
+      const aggregateList = createAggregateList({ pool, logger });
+
+      const result = await aggregateList.aggregateForYear(2024);
+
+      // Should only include albums A, B, and E (all have at least one position <= 40)
+      assert.strictEqual(result.data.albums.length, 3);
+
+      const albumA = result.data.albums.find((a) => a.albumId === 'albumA');
+      const albumB = result.data.albums.find((a) => a.albumId === 'albumB');
+      const albumE = result.data.albums.find((a) => a.albumId === 'albumE');
+      const albumC = result.data.albums.find((a) => a.albumId === 'albumC');
+      const albumD = result.data.albums.find((a) => a.albumId === 'albumD');
+
+      assert.ok(albumA, 'Album A should be included');
+      assert.strictEqual(albumA.totalPoints, 32); // Position 10 = 32 points
+      assert.ok(albumB, 'Album B should be included');
+      assert.strictEqual(albumB.totalPoints, 1); // Position 40 = 1 point
+      assert.ok(albumE, 'Album E should be included');
+      assert.strictEqual(albumE.totalPoints, 32); // Position 10 = 32 points (position 45 excluded)
+      assert.strictEqual(albumC, undefined, 'Album C should be excluded');
+      assert.strictEqual(albumD, undefined, 'Album D should be excluded');
     });
   });
 
