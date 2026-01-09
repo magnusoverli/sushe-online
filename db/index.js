@@ -400,7 +400,7 @@ if (process.env.DATABASE_URL) {
   async function ensureAdminUser() {
     try {
       logger.info('Checking for admin user...');
-      const existingAdmin = await users.findOne({ username: 'admin' });
+      const existingAdmin = await users.findOne({ role: 'admin' });
       logger.info('Existing admin user check', { exists: !!existingAdmin });
 
       if (!existingAdmin) {
@@ -433,6 +433,7 @@ if (process.env.DATABASE_URL) {
       } else {
         logger.debug('Admin user already exists', {
           email: existingAdmin.email,
+          username: existingAdmin.username,
         });
       }
     } catch (err) {
