@@ -3007,10 +3007,45 @@ const aggregateListTemplate = (user, year) => `
     function renderPendingReveal(status) {
       const container = document.getElementById('aggregateListContent');
       const totalAlbums = status.totalAlbums || 0;
+      const rankDistribution = status.rankDistribution || {};
       
-      // Generate position placeholder cards
+      // Generate position placeholder cards based on actual rank structure
       let placeholdersHtml = '';
-      if (totalAlbums > 0) {
+      if (totalAlbums > 0 && Object.keys(rankDistribution).length > 0) {
+        // Get sorted ranks (convert to numbers and sort)
+        const sortedRanks = Object.keys(rankDistribution)
+          .map(rank => parseInt(rank, 10))
+          .sort((a, b) => a - b);
+        
+        let cardIndex = 0;
+        sortedRanks.forEach(rank => {
+          const albumCount = rankDistribution[rank];
+          // Generate a placeholder card for each album at this rank
+          for (let j = 0; j < albumCount; j++) {
+            const positionClass = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+            const delay = Math.min(cardIndex * 30, 300);
+            
+            placeholdersHtml += 
+              '<div class="album-card bg-gray-800/30 rounded-lg p-4 animate-fade-in" style="animation-delay: ' + delay + 'ms; opacity: 0;">' +
+                '<div class="flex items-center gap-4">' +
+                  '<div class="position-badge ' + positionClass + ' text-gray-200 shrink-0">' + rank + '</div>' +
+                  '<div class="w-16 h-16 md:w-20 md:h-20 rounded-sm bg-gray-700/50 flex items-center justify-center shrink-0">' +
+                    '<i class="fas fa-question text-gray-600 text-2xl"></i>' +
+                  '</div>' +
+                  '<div class="flex-1 min-w-0">' +
+                    '<div class="h-5 bg-gray-700/50 rounded-sm w-2/3 mb-2"></div>' +
+                    '<div class="h-4 bg-gray-700/30 rounded-sm w-1/2"></div>' +
+                  '</div>' +
+                  '<div class="shrink-0">' +
+                    '<i class="fas fa-lock text-gray-600"></i>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            cardIndex++;
+          }
+        });
+      } else if (totalAlbums > 0) {
+        // Fallback: if rankDistribution is not available, use sequential generation
         for (let i = 1; i <= totalAlbums; i++) {
           const positionClass = i === 1 ? 'gold' : i === 2 ? 'silver' : i === 3 ? 'bronze' : '';
           const delay = Math.min((i - 1) * 30, 300);

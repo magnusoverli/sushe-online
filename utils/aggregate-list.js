@@ -220,10 +220,18 @@ function computeStats(albums, participantCount, year) {
   const albumsWith1Voter = albums.filter((a) => a.voterCount === 1).length;
   const topPointsDistribution = albums.slice(0, 20).map((a) => a.totalPoints);
 
+  // Calculate rank distribution: which ranks exist and how many albums at each rank
+  const rankDistribution = {};
+  albums.forEach((album) => {
+    const rank = album.rank;
+    rankDistribution[rank] = (rankDistribution[rank] || 0) + 1;
+  });
+
   return {
     year,
     participantCount,
     totalAlbums: albums.length,
+    rankDistribution,
     albumsWith3PlusVoters,
     albumsWith2Voters,
     albumsWith1Voter,
@@ -247,6 +255,7 @@ function createEmptyResult(year) {
       year,
       participantCount: 0,
       totalAlbums: 0,
+      rankDistribution: {},
       albumsWith3PlusVoters: 0,
       albumsWith2Voters: 0,
       albumsWith1Voter: 0,
@@ -365,6 +374,7 @@ async function buildAggregateStatus(pool, aggregateList, year) {
   );
 
   const totalAlbums = aggregateList.stats?.totalAlbums || 0;
+  const rankDistribution = aggregateList.stats?.rankDistribution || {};
 
   return {
     exists: true,
@@ -372,6 +382,7 @@ async function buildAggregateStatus(pool, aggregateList, year) {
     revealedAt: aggregateList.revealed_at,
     computedAt: aggregateList.computed_at,
     totalAlbums,
+    rankDistribution,
     confirmations: confirmResult.rows.map((r) => ({
       username: r.username,
       confirmedAt: r.confirmed_at,
