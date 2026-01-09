@@ -931,6 +931,57 @@ module.exports = (app, deps) => {
     });
   });
 
+  // Public stats endpoint (accessible to all authenticated users)
+  app.get('/api/stats', ensureAuth, async (req, res) => {
+    try {
+      const { pool } = deps;
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+      // Parallel fetch of aggregate stats only (no user details)
+      const [allUsers, allLists, adminStatsResult] = await Promise.all([
+        usersAsync.find({}),
+        listsAsync.find({}),
+        pool.query(
+          `
+            WITH album_genres AS (
+              SELECT DISTINCT li.album_id, li.genre_1, li.genre_2 
+              FROM list_items li
+            ),
+            unique_albums AS (
+              SELECT COUNT(DISTINCT album_id) as total 
+              FROM album_genres 
+              WHERE album_id IS NOT NULL AND album_id != ''
+            ),
+            active_users AS (
+              SELECT COUNT(DISTINCT user_id) as count FROM lists WHERE updated_at >= $1
+            )
+            SELECT 
+              (SELECT total FROM unique_albums) as total_albums,
+              (SELECT count FROM active_users) as active_users
+          `,
+          [sevenDaysAgo]
+        ),
+      ]);
+
+      // Extract stats from aggregate query
+      const aggregateStats = adminStatsResult.rows[0] || {};
+      const totalAlbums = parseInt(aggregateStats.total_albums, 10) || 0;
+      const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
+
+      res.json({
+        totalUsers: allUsers.length,
+        totalLists: allLists.length,
+        totalAlbums,
+        adminUsers: allUsers.filter((u) => u.role === 'admin').length,
+        activeUsers,
+      });
+    } catch (error) {
+      logger.error('Error fetching public stats', { error: error.message });
+      res.status(500).json({ error: 'Failed to fetch stats' });
+    }
+  });
+
   // Admin stats endpoint
   app.get('/api/admin/stats', ensureAuth, ensureAdmin, async (req, res) => {
     try {

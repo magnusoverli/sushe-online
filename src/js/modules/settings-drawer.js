@@ -397,12 +397,21 @@ export function createSettingsDrawer(deps = {}) {
         console.warn('Could not fetch list count:', e);
       }
 
+      // Load system stats
+      let systemStats = null;
+      try {
+        systemStats = await apiCall('/api/stats');
+      } catch (e) {
+        console.warn('Could not load system stats:', e);
+      }
+
       return {
         totalAlbums: prefs?.data?.totalAlbums || 0,
         totalScrobbles: prefs?.data?.totalScrobbles || 0,
         hasSpotify: prefs?.data?.hasSpotify || false,
         hasLastfm: prefs?.data?.hasLastfm || false,
         listCount: listCount,
+        systemStats: systemStats,
       };
     } catch (error) {
       console.error('Error loading stats data:', error);
@@ -412,6 +421,7 @@ export function createSettingsDrawer(deps = {}) {
         hasSpotify: false,
         hasLastfm: false,
         listCount: 0,
+        systemStats: null,
       };
     }
   }
@@ -1381,6 +1391,55 @@ export function createSettingsDrawer(deps = {}) {
             }
           </div>
         </div>
+        <!-- System Statistics -->
+        ${
+          data.systemStats
+            ? `
+        <div class="settings-group">
+          <h3 class="settings-group-title">System Statistics</h3>
+          <div class="settings-group-content">
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div class="preferences-stat-card">
+                <div class="text-blue-400 mb-2">
+                  <i class="fas fa-users text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white mb-1">${data.systemStats.totalUsers || 0}</div>
+                <div class="text-xs text-gray-400 uppercase tracking-wide">Users</div>
+              </div>
+              <div class="preferences-stat-card">
+                <div class="text-purple-400 mb-2">
+                  <i class="fas fa-list text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white mb-1">${data.systemStats.totalLists || 0}</div>
+                <div class="text-xs text-gray-400 uppercase tracking-wide">Lists</div>
+              </div>
+              <div class="preferences-stat-card">
+                <div class="text-green-400 mb-2">
+                  <i class="fas fa-compact-disc text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white mb-1">${data.systemStats.totalAlbums || 0}</div>
+                <div class="text-xs text-gray-400 uppercase tracking-wide">Albums</div>
+              </div>
+              <div class="preferences-stat-card">
+                <div class="text-yellow-400 mb-2">
+                  <i class="fas fa-shield-alt text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white mb-1">${data.systemStats.adminUsers || 0}</div>
+                <div class="text-xs text-gray-400 uppercase tracking-wide">Admins</div>
+              </div>
+              <div class="preferences-stat-card">
+                <div class="text-red-400 mb-2">
+                  <i class="fas fa-user-check text-xl"></i>
+                </div>
+                <div class="text-2xl font-bold text-white mb-1">${data.systemStats.activeUsers || 0}</div>
+                <div class="text-xs text-gray-400 uppercase tracking-wide">Active (7d)</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        `
+            : ''
+        }
       </div>
     `;
   }
@@ -1412,7 +1471,6 @@ export function createSettingsDrawer(deps = {}) {
       counts: { total: 0, byType: {}, byPriority: {} },
     };
     const telegram = data.telegram || { configured: false };
-    const stats = data.stats || null;
     const users = data.users || [];
     const aggregateLists = data.aggregateLists || [];
 
@@ -1453,191 +1511,6 @@ export function createSettingsDrawer(deps = {}) {
 
     return `
       <div class="space-y-6">
-        <!-- System Statistics -->
-        ${
-          stats
-            ? `
-        <div class="settings-group">
-          <h3 class="settings-group-title">System Statistics</h3>
-          <div class="settings-group-content">
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div class="preferences-stat-card">
-                <div class="text-blue-400 mb-2">
-                  <i class="fas fa-users text-xl"></i>
-                </div>
-                <div class="text-2xl font-bold text-white mb-1">${stats.totalUsers || 0}</div>
-                <div class="text-xs text-gray-400 uppercase tracking-wide">Users</div>
-              </div>
-              <div class="preferences-stat-card">
-                <div class="text-purple-400 mb-2">
-                  <i class="fas fa-list text-xl"></i>
-                </div>
-                <div class="text-2xl font-bold text-white mb-1">${stats.totalLists || 0}</div>
-                <div class="text-xs text-gray-400 uppercase tracking-wide">Lists</div>
-              </div>
-              <div class="preferences-stat-card">
-                <div class="text-green-400 mb-2">
-                  <i class="fas fa-compact-disc text-xl"></i>
-                </div>
-                <div class="text-2xl font-bold text-white mb-1">${stats.totalAlbums || 0}</div>
-                <div class="text-xs text-gray-400 uppercase tracking-wide">Albums</div>
-              </div>
-              <div class="preferences-stat-card">
-                <div class="text-yellow-400 mb-2">
-                  <i class="fas fa-shield-alt text-xl"></i>
-                </div>
-                <div class="text-2xl font-bold text-white mb-1">${stats.adminUsers || 0}</div>
-                <div class="text-xs text-gray-400 uppercase tracking-wide">Admins</div>
-              </div>
-              <div class="preferences-stat-card">
-                <div class="text-red-400 mb-2">
-                  <i class="fas fa-user-check text-xl"></i>
-                </div>
-                <div class="text-2xl font-bold text-white mb-1">${stats.activeUsers || 0}</div>
-                <div class="text-xs text-gray-400 uppercase tracking-wide">Active (7d)</div>
-              </div>
-            </div>
-          </div>
-        </div>
-        `
-            : ''
-        }
-
-        <!-- Admin Events Dashboard -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">Pending Events</h3>
-          <div class="settings-group-content">
-            ${
-              events.pending.length === 0
-                ? `
-              <div class="text-center py-8">
-                <i class="fas fa-check-circle text-3xl text-gray-600 mb-2"></i>
-                <p class="text-gray-400">No pending events</p>
-              </div>
-            `
-                : `
-              <div class="space-y-3">
-                ${events.pending
-                  .map(
-                    (event) => `
-                  <div class="bg-gray-800/50 rounded-lg p-4" data-event-id="${event.id}">
-                    <div class="flex items-start justify-between mb-2">
-                      <div class="flex-1">
-                        <div class="flex items-center gap-2 mb-1">
-                          <h4 class="text-white font-semibold">${event.title || 'Untitled Event'}</h4>
-                          <span class="px-2 py-0.5 text-xs rounded-sm border ${getPriorityBadge(event.priority || 'normal')}">
-                            ${(event.priority || 'normal').toUpperCase()}
-                          </span>
-                        </div>
-                        <p class="text-sm text-gray-400">${event.description || ''}</p>
-                        <p class="text-xs text-gray-500 mt-1">${formatRelativeTime(event.created_at)}</p>
-                      </div>
-                    </div>
-                    ${
-                      event.actions && event.actions.length > 0
-                        ? `
-                      <div class="flex gap-2 mt-3">
-                        ${event.actions
-                          .map(
-                            (action) => `
-                          <button 
-                            class="settings-button admin-event-action" 
-                            data-event-id="${event.id}" 
-                            data-action="${action.id}"
-                          >
-                            ${action.label}
-                          </button>
-                        `
-                          )
-                          .join('')}
-                      </div>
-                    `
-                        : ''
-                    }
-                  </div>
-                `
-                  )
-                  .join('')}
-              </div>
-            `
-            }
-          </div>
-        </div>
-
-        <!-- Telegram Notifications -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">Telegram Notifications</h3>
-          <div class="settings-group-content">
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Status</label>
-                <p class="settings-description">
-                  ${
-                    telegram.configured
-                      ? `Connected to ${telegram.chatTitle || 'Telegram group'}${telegram.topicName ? ` (${telegram.topicName})` : ''}`
-                      : 'Not configured'
-                  }
-                </p>
-              </div>
-              <div class="settings-row-control">
-                ${
-                  telegram.configured
-                    ? `<button id="disconnectTelegramBtn" class="settings-button settings-button-danger">Disconnect</button>`
-                    : `<button id="configureTelegramBtn" class="settings-button">Configure</button>`
-                }
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Database Management -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">Database Management</h3>
-          <div class="settings-group-content">
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Backup Database</label>
-                <p class="settings-description">Download a backup of the entire database</p>
-              </div>
-              <a href="/admin/backup" class="settings-button" download>Download Backup</a>
-            </div>
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Restore Database</label>
-                <p class="settings-description">Restore from a backup file (destructive operation)</p>
-              </div>
-              <button id="restoreDatabaseBtn" class="settings-button settings-button-danger">Restore Backup</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Album Summaries -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">Album Summaries</h3>
-          <div class="settings-group-content">
-            <div id="albumSummaryStats" class="mb-4">
-              <div class="text-gray-400 text-sm">Loading stats...</div>
-            </div>
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Fetch Album Summaries</label>
-                <p class="settings-description">Fetch album descriptions from Claude AI for all albums without summaries</p>
-              </div>
-              <div class="flex gap-2">
-                <button id="fetchAlbumSummariesBtn" class="settings-button">Fetch Summaries</button>
-                <button id="regenerateAllSummariesBtn" class="settings-button" title="Regenerate all summaries (including existing ones)">Regenerate All</button>
-                <button id="stopAlbumSummariesBtn" class="settings-button settings-button-danger hidden">Stop</button>
-              </div>
-            </div>
-            <div id="albumSummaryProgress" class="hidden mt-4">
-              <div class="w-full bg-gray-700 rounded-full h-2.5 mb-2">
-                <div id="albumSummaryProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
-              </div>
-              <div id="albumSummaryProgressText" class="text-sm text-gray-400"></div>
-            </div>
-          </div>
-        </div>
-
         <!-- Aggregate List Management -->
         ${
           aggregateLists.length > 0
@@ -1761,15 +1634,31 @@ export function createSettingsDrawer(deps = {}) {
                 `;
 
                   return `
-                  <div class="bg-gray-800/50 rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-2">
-                      <h5 class="text-lg font-bold text-white">${year}</h5>
+                  <div class="bg-gray-800/50 rounded-lg overflow-hidden aggregate-year-item" data-year="${year}">
+                    <button 
+                      class="w-full flex items-center justify-between p-4 hover:bg-gray-700/30 transition-colors duration-200 cursor-pointer aggregate-year-toggle focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-inset rounded-t-lg"
+                      data-year="${year}"
+                      aria-expanded="false"
+                      aria-controls="aggregate-year-content-${year}"
+                    >
+                      <div class="flex items-center gap-3">
+                        <i class="fas fa-chevron-right text-gray-400 aggregate-year-chevron transition-transform duration-300 ease-in-out text-sm" style="transform: rotate(0deg);" aria-hidden="true"></i>
+                        <h5 class="text-lg font-bold text-white">${year}</h5>
+                      </div>
                       ${statusBadge}
-                    </div>
-                    ${confirmationsHtml}
-                    ${statsHtml}
-                    <div class="mt-3 flex flex-wrap gap-2">
-                      ${actionsHtml}
+                    </button>
+                    <div 
+                      id="aggregate-year-content-${year}"
+                      class="aggregate-year-content hidden overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out"
+                      style="max-height: 0; opacity: 0;"
+                    >
+                      <div class="px-4 pb-4 pt-0 space-y-3">
+                        ${confirmationsHtml}
+                        ${statsHtml}
+                        <div class="flex flex-wrap gap-2">
+                          ${actionsHtml}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 `;
@@ -1791,6 +1680,54 @@ export function createSettingsDrawer(deps = {}) {
         </div>
         `
         }
+
+        <!-- Database Management -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Database Management</h3>
+          <div class="settings-group-content">
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Backup Database</label>
+                <p class="settings-description">Download a backup of the entire database</p>
+              </div>
+              <a href="/admin/backup" class="settings-button" download>Download Backup</a>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Restore Database</label>
+                <p class="settings-description">Restore from a backup file (destructive operation)</p>
+              </div>
+              <button id="restoreDatabaseBtn" class="settings-button settings-button-danger">Restore Backup</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Album Summaries -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Album Summaries</h3>
+          <div class="settings-group-content">
+            <div id="albumSummaryStats" class="mb-4">
+              <div class="text-gray-400 text-sm">Loading stats...</div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Fetch Album Summaries</label>
+                <p class="settings-description">Fetch album descriptions from Claude AI for all albums without summaries</p>
+              </div>
+              <div class="flex gap-2">
+                <button id="fetchAlbumSummariesBtn" class="settings-button">Fetch Summaries</button>
+                <button id="regenerateAllSummariesBtn" class="settings-button" title="Regenerate all summaries (including existing ones)">Regenerate All</button>
+                <button id="stopAlbumSummariesBtn" class="settings-button settings-button-danger hidden">Stop</button>
+              </div>
+            </div>
+            <div id="albumSummaryProgress" class="hidden mt-4">
+              <div class="w-full bg-gray-700 rounded-full h-2.5 mb-2">
+                <div id="albumSummaryProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+              </div>
+              <div id="albumSummaryProgressText" class="text-sm text-gray-400"></div>
+            </div>
+          </div>
+        </div>
 
         <!-- User Management -->
         ${
@@ -1844,6 +1781,93 @@ export function createSettingsDrawer(deps = {}) {
         `
             : ''
         }
+
+        <!-- Admin Events Dashboard -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Pending Events</h3>
+          <div class="settings-group-content">
+            ${
+              events.pending.length === 0
+                ? `
+              <div class="text-center py-8">
+                <i class="fas fa-check-circle text-3xl text-gray-600 mb-2"></i>
+                <p class="text-gray-400">No pending events</p>
+              </div>
+            `
+                : `
+              <div class="space-y-3">
+                ${events.pending
+                  .map(
+                    (event) => `
+                  <div class="bg-gray-800/50 rounded-lg p-4" data-event-id="${event.id}">
+                    <div class="flex items-start justify-between mb-2">
+                      <div class="flex-1">
+                        <div class="flex items-center gap-2 mb-1">
+                          <h4 class="text-white font-semibold">${event.title || 'Untitled Event'}</h4>
+                          <span class="px-2 py-0.5 text-xs rounded-sm border ${getPriorityBadge(event.priority || 'normal')}">
+                            ${(event.priority || 'normal').toUpperCase()}
+                          </span>
+                        </div>
+                        <p class="text-sm text-gray-400">${event.description || ''}</p>
+                        <p class="text-xs text-gray-500 mt-1">${formatRelativeTime(event.created_at)}</p>
+                      </div>
+                    </div>
+                    ${
+                      event.actions && event.actions.length > 0
+                        ? `
+                      <div class="flex gap-2 mt-3">
+                        ${event.actions
+                          .map(
+                            (action) => `
+                          <button 
+                            class="settings-button admin-event-action" 
+                            data-event-id="${event.id}" 
+                            data-action="${action.id}"
+                          >
+                            ${action.label}
+                          </button>
+                        `
+                          )
+                          .join('')}
+                      </div>
+                    `
+                        : ''
+                    }
+                  </div>
+                `
+                  )
+                  .join('')}
+              </div>
+            `
+            }
+          </div>
+        </div>
+
+        <!-- Telegram Notifications -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Telegram Notifications</h3>
+          <div class="settings-group-content">
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Status</label>
+                <p class="settings-description">
+                  ${
+                    telegram.configured
+                      ? `Connected to ${telegram.chatTitle || 'Telegram group'}${telegram.topicName ? ` (${telegram.topicName})` : ''}`
+                      : 'Not configured'
+                  }
+                </p>
+              </div>
+              <div class="settings-row-control">
+                ${
+                  telegram.configured
+                    ? `<button id="disconnectTelegramBtn" class="settings-button settings-button-danger">Disconnect</button>`
+                    : `<button id="configureTelegramBtn" class="settings-button">Configure</button>`
+                }
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -2087,6 +2111,59 @@ export function createSettingsDrawer(deps = {}) {
       btn.addEventListener('click', async () => {
         const userId = btn.dataset.userId;
         await handleDeleteUser(userId);
+      });
+    });
+
+    // Aggregate list toggle handlers (collapsible years)
+    document.querySelectorAll('.aggregate-year-toggle').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const year = btn.dataset.year;
+        const content = document.getElementById(
+          `aggregate-year-content-${year}`
+        );
+        const chevron = btn.querySelector('.aggregate-year-chevron');
+        const isExpanded = btn.getAttribute('aria-expanded') === 'true';
+
+        if (isExpanded) {
+          // Collapse
+          content.style.maxHeight = `${content.scrollHeight}px`;
+          content.style.opacity = '1';
+          // Force reflow to ensure transition starts
+          void content.offsetHeight;
+          content.style.maxHeight = '0';
+          content.style.opacity = '0';
+          setTimeout(() => {
+            content.classList.add('hidden');
+          }, 300); // Match transition duration
+          chevron.style.transform = 'rotate(0deg)';
+          btn.setAttribute('aria-expanded', 'false');
+        } else {
+          // Expand
+          content.classList.remove('hidden');
+          // Temporarily set to auto to get actual height
+          content.style.maxHeight = 'none';
+          content.style.opacity = '0';
+          const height = content.scrollHeight;
+          content.style.maxHeight = '0';
+          // Force reflow
+          void content.offsetHeight;
+          // Now animate to full height
+          requestAnimationFrame(() => {
+            content.style.maxHeight = `${height}px`;
+            content.style.opacity = '1';
+          });
+          chevron.style.transform = 'rotate(90deg)';
+          btn.setAttribute('aria-expanded', 'true');
+        }
+      });
+
+      // Keyboard accessibility
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          btn.click();
+        }
       });
     });
 
