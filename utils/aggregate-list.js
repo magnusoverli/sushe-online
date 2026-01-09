@@ -55,6 +55,25 @@ function getPositionPoints(position) {
   return POSITION_POINTS[position] || 0;
 }
 
+/**
+ * Normalize artist and album names for aggregate list deduplication
+ * Only affects the key used for grouping - does not modify display values
+ * @param {string|null|undefined} artist - Artist name
+ * @param {string|null|undefined} album - Album name
+ * @returns {string} Normalized key in format "artist::album"
+ */
+function normalizeAlbumKey(artist, album) {
+  // Normalize each part separately, handling null/undefined/empty
+  // Convert to string first (defensive), then lowercase and trim
+  const normalizedArtist = String(artist || '')
+    .toLowerCase()
+    .trim();
+  const normalizedAlbum = String(album || '')
+    .toLowerCase()
+    .trim();
+  return `${normalizedArtist}::${normalizedAlbum}`;
+}
+
 // ============================================
 // AGGREGATION HELPER FUNCTIONS
 // ============================================
@@ -87,7 +106,8 @@ function buildAlbumMap(items, userMap) {
   const albumMap = new Map();
 
   for (const item of items) {
-    const albumKey = item.album_id || `${item.artist}::${item.album}`;
+    const albumKey =
+      item.album_id || normalizeAlbumKey(item.artist, item.album);
     const points = getPositionPoints(item.position);
     const username = userMap.get(item.user_id);
 
