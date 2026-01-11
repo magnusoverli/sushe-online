@@ -1,5 +1,6 @@
 // MusicBrainz API integration
 import { isAlbumInList } from './modules/utils.js';
+import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -1304,7 +1305,7 @@ async function handleManualSubmit(e) {
   const album = {
     artist: artist,
     album: albumTitle,
-    album_id: 'manual-' + Date.now(), // Generate a unique ID for manual entries
+    album_id: 'manual-' + window.crypto.randomUUID(), // Generate a unique ID for manual entries
     release_date: formData.get('release_date') || '',
     country: formData.get('country') || '',
     genre_1: '',
@@ -2075,6 +2076,24 @@ async function addAlbumToCurrentList(album) {
       showToast(`"${album.album}" is already in this list`, 'error');
       return;
     }
+
+    // Check for similar albums in the database (fuzzy duplicate detection)
+    const similarCheck = await checkAndPromptSimilar(album);
+
+    if (similarCheck.action === 'cancelled') {
+      // User cancelled - don't add anything
+      return;
+    }
+
+    if (similarCheck.action === 'use_existing' && similarCheck.album) {
+      // User confirmed this is the same album - use the existing album's ID
+      // but keep the new metadata that might be better (cover, etc.)
+      album.album_id = similarCheck.album.album_id;
+      // Optionally sync artist/album names to canonical version
+      // album.artist = similarCheck.album.artist;
+      // album.album = similarCheck.album.album;
+    }
+    // If action === 'add_new', proceed with the new album as-is
 
     currentListData.push(album);
     window.setListData(window.currentList, currentListData);

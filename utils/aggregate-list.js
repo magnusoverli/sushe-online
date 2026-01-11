@@ -98,16 +98,28 @@ function convertCoverToDataUrl(coverImage, format) {
 
 /**
  * Build album map from list items
+ *
+ * IMPORTANT: We always use normalized artist::album as the grouping key.
+ * This ensures the same album is never duplicated in the aggregate list,
+ * even if different users added it with different album_id values
+ * (e.g., one from MusicBrainz, one from Spotify, one manual entry).
+ *
+ * The album_id is still stored in the result for reference, but the first
+ * album_id encountered is used (typically the most complete one since
+ * items are ordered by position).
+ *
  * @param {Array} items - List items from database
  * @param {Map} userMap - Map of user_id -> username
- * @returns {Map} - Map of album key -> album data
+ * @returns {Map} - Map of normalized album key -> album data
  */
 function buildAlbumMap(items, userMap) {
   const albumMap = new Map();
 
   for (const item of items) {
-    const albumKey =
-      item.album_id || normalizeAlbumKey(item.artist, item.album);
+    // Always use normalized key to prevent duplicates from different sources
+    // This ensures "Radiohead - OK Computer" is grouped together regardless of
+    // whether it came from MusicBrainz, Spotify, Tidal, or manual entry
+    const albumKey = normalizeAlbumKey(item.artist, item.album);
     const points = getPositionPoints(item.position);
     const username = userMap.get(item.user_id);
 

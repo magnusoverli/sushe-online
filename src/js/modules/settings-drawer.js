@@ -7,6 +7,8 @@
  * @module settings-drawer
  */
 
+import { openDuplicateReviewModal } from './duplicate-review-modal.js';
+
 /**
  * Create settings drawer utilities with injected dependencies
  * @param {Object} deps - Dependencies
@@ -1631,6 +1633,9 @@ export function createSettingsDrawer(deps = {}) {
                   <button class="settings-button aggregate-recompute" data-year="${year}">
                     <i class="fas fa-sync-alt mr-2"></i>Recompute
                   </button>
+                  <button class="settings-button aggregate-audit" data-year="${year}">
+                    <i class="fas fa-search mr-2"></i>Audit Data
+                  </button>
                 `;
 
                   return `
@@ -1726,6 +1731,23 @@ export function createSettingsDrawer(deps = {}) {
               </div>
               <div id="albumSummaryProgressText" class="text-sm text-gray-400"></div>
             </div>
+          </div>
+        </div>
+
+        <!-- Duplicate Album Scanner -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Duplicate Album Scanner</h3>
+          <div class="settings-group-content">
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Scan for Duplicates</label>
+                <p class="settings-description">Find and review albums that may be duplicates based on fuzzy matching</p>
+              </div>
+              <div class="flex gap-2">
+                <button id="scanDuplicatesBtn" class="settings-button">Scan & Review</button>
+              </div>
+            </div>
+            <div id="duplicateScanStatus" class="hidden mt-3 text-sm text-gray-400"></div>
           </div>
         </div>
 
@@ -2196,6 +2218,13 @@ export function createSettingsDrawer(deps = {}) {
       });
     });
 
+    document.querySelectorAll('.aggregate-audit').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const year = parseInt(btn.dataset.year, 10);
+        await handleAuditAggregateList(year);
+      });
+    });
+
     document
       .querySelectorAll('.aggregate-manage-contributors')
       .forEach((btn) => {
@@ -2266,6 +2295,72 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load album summary stats on admin panel load
     loadAlbumSummaryStats();
+
+    // Duplicate scanner handlers
+    const scanDuplicatesBtn = document.getElementById('scanDuplicatesBtn');
+    if (scanDuplicatesBtn) {
+      scanDuplicatesBtn.addEventListener('click', handleScanDuplicates);
+    }
+  }
+
+  /**
+   * Handle duplicate album scanning - opens review modal
+   */
+  async function handleScanDuplicates() {
+    const scanBtn = document.getElementById('scanDuplicatesBtn');
+    const statusDiv = document.getElementById('duplicateScanStatus');
+
+    try {
+      scanBtn.disabled = true;
+      scanBtn.textContent = 'Scanning...';
+      statusDiv.classList.remove('hidden');
+      statusDiv.innerHTML =
+        '<i class="fas fa-spinner fa-spin mr-2"></i>Scanning database for potential duplicates...';
+
+      const response = await apiCall('/admin/api/scan-duplicates');
+
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      if (response.pairs.length === 0) {
+        statusDiv.innerHTML = `
+          <span class="text-green-400">
+            <i class="fas fa-check-circle mr-2"></i>
+            No potential duplicates found (${response.totalAlbums} albums, ${response.excludedPairs} marked distinct)
+          </span>
+        `;
+        showToast('No potential duplicates found', 'success');
+      } else {
+        statusDiv.innerHTML = `
+          <span class="text-yellow-400">
+            Found ${response.potentialDuplicates} potential duplicates. Opening review...
+          </span>
+        `;
+
+        // Open the review modal
+        const result = await openDuplicateReviewModal(response.pairs);
+
+        // Update status after review
+        statusDiv.innerHTML = `
+          <span class="text-gray-400">
+            Last scan: ${response.potentialDuplicates} found, ${result.resolved} resolved, ${result.remaining} remaining
+          </span>
+        `;
+      }
+    } catch (error) {
+      console.error('Error scanning for duplicates:', error);
+      statusDiv.innerHTML = `
+        <span class="text-red-400">
+          <i class="fas fa-exclamation-triangle mr-2"></i>
+          Error: ${error.message}
+        </span>
+      `;
+      showToast('Error scanning for duplicates', 'error');
+    } finally {
+      scanBtn.disabled = false;
+      scanBtn.textContent = 'Scan & Review';
+    }
   }
 
   /**
@@ -4331,6 +4426,295 @@ export function createSettingsDrawer(deps = {}) {
         'Failed to recompute aggregate list';
       showToast(errorMsg, 'error');
     }
+  }
+
+  /**
+   * Handle audit aggregate list data integrity
+   */
+  async function handleAuditAggregateList(year) {
+    try {
+      showToast('Running audit...', 'info');
+
+      const response = await apiCall(`/api/admin/aggregate-audit/${year}`);
+
+      if (!response) {
+        showToast('Failed to run audit', 'error');
+        return;
+      }
+
+      // Create and show the audit results modal
+      await showAuditResultsModal(year, response);
+    } catch (error) {
+      console.error('Error auditing aggregate list:', error);
+      const errorMsg =
+        error.data?.error || error.message || 'Failed to run audit';
+      showToast(errorMsg, 'error');
+    }
+  }
+
+  /**
+   * Show audit results in a modal
+   */
+  async function showAuditResultsModal(year, auditData) {
+    const modal = document.createElement('div');
+    modal.className = 'settings-modal';
+    modal.id = `audit-modal-${year}`;
+
+    const { summary, duplicates } = auditData;
+    const hasDuplicates = duplicates && duplicates.length > 0;
+
+    // Build duplicate items HTML
+    let duplicatesHtml = '';
+    if (hasDuplicates) {
+      duplicatesHtml = duplicates
+        .map(
+          (dup) => `
+        <div class="bg-gray-800 rounded-lg p-3 mb-2">
+          <div class="flex items-start justify-between">
+            <div>
+              <div class="text-white font-medium">${escapeHtml(dup.artist)} - ${escapeHtml(dup.album)}</div>
+              <div class="text-gray-400 text-sm mt-1">
+                ${dup.albumIds.length} different IDs across ${dup.entryCount} list entries
+              </div>
+            </div>
+            <span class="bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded text-xs">
+              ${dup.albumIds.length} IDs
+            </span>
+          </div>
+          <div class="mt-2 text-xs text-gray-500">
+            <div class="font-medium text-gray-400 mb-1">Album IDs:</div>
+            ${dup.albumIds.map((id) => `<code class="bg-gray-900 px-1 rounded mr-1">${escapeHtml(id.substring(0, 20))}${id.length > 20 ? '...' : ''}</code>`).join('')}
+          </div>
+        </div>
+      `
+        )
+        .join('');
+    }
+
+    modal.innerHTML = `
+      <div class="settings-modal-backdrop"></div>
+      <div class="settings-modal-content" style="max-width: 700px; max-height: 80vh;">
+        <div class="settings-modal-header">
+          <h3 class="settings-modal-title">
+            <i class="fas fa-search mr-2"></i>Data Audit Results - ${year}
+          </h3>
+          <button class="settings-modal-close" aria-label="Close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="settings-modal-body" style="max-height: 60vh; overflow-y: auto;">
+          <!-- Summary Section -->
+          <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+            <h4 class="text-white font-semibold mb-3">
+              <i class="fas fa-chart-bar mr-2 text-blue-400"></i>Summary
+            </h4>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span class="text-gray-400">Albums Scanned:</span>
+                <span class="text-white ml-2">${summary.totalAlbumsScanned}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Unique Albums:</span>
+                <span class="text-white ml-2">${summary.uniqueAlbums}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Albums with Multiple IDs:</span>
+                <span class="${summary.albumsWithMultipleIds > 0 ? 'text-yellow-400' : 'text-green-400'} ml-2">${summary.albumsWithMultipleIds}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Changes Needed:</span>
+                <span class="${summary.totalChangesNeeded > 0 ? 'text-yellow-400' : 'text-green-400'} ml-2">${summary.totalChangesNeeded}</span>
+              </div>
+            </div>
+          </div>
+
+          ${
+            hasDuplicates
+              ? `
+          <!-- Duplicates Section -->
+          <div class="mb-4">
+            <h4 class="text-white font-semibold mb-3">
+              <i class="fas fa-exclamation-triangle mr-2 text-yellow-400"></i>Albums with Different IDs
+            </h4>
+            <p class="text-gray-400 text-sm mb-3">
+              These albums were added from different sources (MusicBrainz, Spotify, manual entry) but represent the same album.
+              The aggregation system now groups them correctly, but you can optionally normalize the IDs for cleaner data.
+            </p>
+            <div class="max-h-64 overflow-y-auto">
+              ${duplicatesHtml}
+            </div>
+          </div>
+          `
+              : `
+          <!-- All Good Section -->
+          <div class="text-center py-8">
+            <i class="fas fa-check-circle text-green-500 text-4xl mb-3"></i>
+            <p class="text-white font-medium">All Clear!</p>
+            <p class="text-gray-400 text-sm mt-1">No data integrity issues found for ${year}.</p>
+          </div>
+          `
+          }
+        </div>
+        <div class="settings-modal-footer">
+          <button id="closeAuditBtn-${year}" class="settings-button">Close</button>
+          ${
+            hasDuplicates && summary.totalChangesNeeded > 0
+              ? `
+          <button id="previewFixBtn-${year}" class="settings-button">
+            <i class="fas fa-eye mr-2"></i>Preview Fix
+          </button>
+          <button id="applyFixBtn-${year}" class="settings-button settings-button-danger">
+            <i class="fas fa-wrench mr-2"></i>Apply Fix
+          </button>
+          `
+              : ''
+          }
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    // Attach close handlers
+    const backdrop = modal.querySelector('.settings-modal-backdrop');
+    const closeBtn = modal.querySelector('.settings-modal-close');
+    const closeAuditBtn = modal.querySelector(`#closeAuditBtn-${year}`);
+    const previewFixBtn = modal.querySelector(`#previewFixBtn-${year}`);
+    const applyFixBtn = modal.querySelector(`#applyFixBtn-${year}`);
+
+    const closeModal = () => {
+      modal.classList.add('hidden');
+      setTimeout(() => {
+        if (document.body.contains(modal)) {
+          document.body.removeChild(modal);
+        }
+      }, 300);
+    };
+
+    backdrop.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+    closeAuditBtn.addEventListener('click', closeModal);
+
+    if (previewFixBtn) {
+      previewFixBtn.addEventListener('click', async () => {
+        try {
+          previewFixBtn.disabled = true;
+          previewFixBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-2"></i>Loading...';
+
+          const preview = await apiCall(
+            `/api/admin/aggregate-audit/${year}/preview`
+          );
+
+          if (preview.changesRequired) {
+            const changeDetails = preview.changes
+              .map(
+                (c) => `
+              <div class="bg-gray-900 rounded p-2 mb-2 text-sm">
+                <div class="text-white">${escapeHtml(c.artist)} - ${escapeHtml(c.album)}</div>
+                <div class="text-gray-400 text-xs mt-1">
+                  Canonical ID: <code class="bg-gray-800 px-1 rounded">${escapeHtml(c.canonicalAlbumId.substring(0, 25))}...</code>
+                </div>
+                <div class="text-gray-500 text-xs">
+                  ${c.affectedEntries.length} entries would be updated
+                </div>
+              </div>
+            `
+              )
+              .join('');
+
+            showToast(`${preview.totalChanges} changes would be made`, 'info');
+
+            // Update modal body with preview details
+            const detailsContainer = modal.querySelector(
+              '.max-h-64.overflow-y-auto'
+            );
+            if (detailsContainer) {
+              detailsContainer.innerHTML = `
+                <div class="mb-2 text-sm text-gray-300">
+                  <i class="fas fa-info-circle mr-1"></i>
+                  Preview of ${preview.totalChanges} changes:
+                </div>
+                ${changeDetails}
+              `;
+            }
+          } else {
+            showToast('No changes needed', 'success');
+          }
+        } catch (error) {
+          console.error('Error previewing fix:', error);
+          showToast('Failed to preview fix', 'error');
+        } finally {
+          previewFixBtn.disabled = false;
+          previewFixBtn.innerHTML =
+            '<i class="fas fa-eye mr-2"></i>Preview Fix';
+        }
+      });
+    }
+
+    if (applyFixBtn) {
+      applyFixBtn.addEventListener('click', async () => {
+        const confirmed = await showConfirmation(
+          'Apply Data Fix',
+          `Apply data integrity fix for ${year}?`,
+          'This will normalize album IDs to their canonical values. This action cannot be undone.',
+          'Apply Fix'
+        );
+
+        if (!confirmed) return;
+
+        try {
+          applyFixBtn.disabled = true;
+          applyFixBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-2"></i>Applying...';
+
+          const result = await apiCall(
+            `/api/admin/aggregate-audit/${year}/fix`,
+            {
+              method: 'POST',
+              body: JSON.stringify({ confirm: true }),
+            }
+          );
+
+          if (result.success) {
+            showToast(
+              `Applied ${result.changesApplied} changes successfully`,
+              'success'
+            );
+            closeModal();
+
+            // Reload admin data
+            categoryData.admin = null;
+            await loadCategoryData('admin');
+          }
+        } catch (error) {
+          console.error('Error applying fix:', error);
+          showToast('Failed to apply fix', 'error');
+        } finally {
+          applyFixBtn.disabled = false;
+          applyFixBtn.innerHTML = '<i class="fas fa-wrench mr-2"></i>Apply Fix';
+        }
+      });
+    }
+
+    // Handle escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  }
+
+  /**
+   * Escape HTML to prevent XSS
+   */
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   /**

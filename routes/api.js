@@ -25,6 +25,12 @@ const {
 // Import aggregate list utilities for recomputation triggers
 const { createAggregateList } = require('../utils/aggregate-list');
 
+// Import album canonical utilities for deduplication
+const { createAlbumCanonical } = require('../utils/album-canonical');
+
+// Import fuzzy matching utilities for similar album detection
+const { findPotentialDuplicates } = require('../utils/fuzzy-match');
+
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const {
@@ -63,6 +69,9 @@ module.exports = (app, deps) => {
   // Create aggregate list instance for recomputation triggers
   const aggregateList = createAggregateList({ pool, logger });
 
+  // Create album canonical instance for deduplication
+  const albumCanonical = createAlbumCanonical({ pool, logger });
+
   /**
    * Helper to trigger aggregate list recomputation for a year (non-blocking)
    * @param {number} year - The year to recompute
@@ -75,71 +84,30 @@ module.exports = (app, deps) => {
     });
   }
 
-  async function upsertAlbumRecord(album, timestamp) {
-    // Convert base64 cover_image to Buffer for BYTEA storage
-    let coverImageBuffer = null;
-    if (album.cover_image) {
-      // Handle both Buffer (already binary) and string (base64)
-      coverImageBuffer = Buffer.isBuffer(album.cover_image)
-        ? album.cover_image
-        : Buffer.from(album.cover_image, 'base64');
-    }
-
-    const values = [
-      album.album_id,
-      album.artist || '',
-      album.album || '',
-      album.release_date || '',
-      album.country || '',
-      album.genre_1 || album.genre || '',
-      album.genre_2 || '',
-      Array.isArray(album.tracks) ? JSON.stringify(album.tracks) : null,
-      coverImageBuffer,
-      album.cover_image_format || '',
+  /**
+   * Upsert an album record with canonical deduplication.
+   *
+   * This ensures only ONE entry per unique artist/album name exists in the
+   * albums table, regardless of source (Spotify, MusicBrainz, Tidal, manual).
+   *
+   * @param {Object} album - Album data to upsert
+   * @param {Date} timestamp - Timestamp for created_at/updated_at
+   * @param {Object} client - Database client (optional, for transactions)
+   * @returns {Promise<string>} - The canonical album_id to use
+   */
+  async function upsertAlbumRecord(album, timestamp, client = null) {
+    const result = await albumCanonical.upsertCanonical(
+      album,
       timestamp,
-      timestamp,
-    ];
-
-    const result = await pool.query(
-      `INSERT INTO albums (
-        album_id,
-        artist,
-        album,
-        release_date,
-        country,
-        genre_1,
-        genre_2,
-        tracks,
-        cover_image,
-        cover_image_format,
-        created_at,
-        updated_at
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12
-      ) ON CONFLICT (album_id) DO UPDATE SET
-        artist = COALESCE(NULLIF(EXCLUDED.artist, ''), albums.artist),
-        album = COALESCE(NULLIF(EXCLUDED.album, ''), albums.album),
-        release_date = COALESCE(NULLIF(EXCLUDED.release_date, ''), albums.release_date),
-        country = COALESCE(NULLIF(EXCLUDED.country, ''), albums.country),
-        genre_1 = COALESCE(NULLIF(EXCLUDED.genre_1, ''), albums.genre_1),
-        genre_2 = COALESCE(NULLIF(EXCLUDED.genre_2, ''), albums.genre_2),
-        tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
-        cover_image = COALESCE(EXCLUDED.cover_image, albums.cover_image),
-        cover_image_format = COALESCE(NULLIF(EXCLUDED.cover_image_format, ''), albums.cover_image_format),
-        updated_at = EXCLUDED.updated_at
-      RETURNING (xmax = 0) AS inserted, summary_fetched_at`,
-      values
+      client
     );
 
-    const wasInserted = result.rows[0]?.inserted;
-    const hasSummaryFetched = result.rows[0]?.summary_fetched_at !== null;
-
-    // Trigger async summary fetch if:
-    // 1. Album is newly inserted, OR
-    // 2. Album exists but summary was never fetched (summary_fetched_at is NULL)
-    if (wasInserted || !hasSummaryFetched) {
-      triggerAlbumSummaryFetch(album.album_id, album.artist, album.album);
+    // Trigger async summary fetch if needed
+    if (result.needsSummaryFetch) {
+      triggerAlbumSummaryFetch(result.albumId, album.artist, album.album);
     }
+
+    return result.albumId;
   }
 
   /**
@@ -268,6 +236,117 @@ module.exports = (app, deps) => {
         albumId: req.params.albumId,
       });
       res.status(500).json({ error: 'Error fetching summary' });
+    }
+  });
+
+  // Check for similar albums before adding (fuzzy duplicate detection)
+  app.post('/api/albums/check-similar', ensureAuthAPI, async (req, res) => {
+    try {
+      const { artist, album, album_id } = req.body;
+
+      if (!artist || !album) {
+        return res.status(400).json({ error: 'artist and album are required' });
+      }
+
+      // Get all albums from the database
+      const albumsResult = await pool.query(`
+        SELECT album_id, artist, album, cover_image IS NOT NULL as has_cover
+        FROM albums
+        WHERE artist IS NOT NULL AND artist != ''
+          AND album IS NOT NULL AND album != ''
+      `);
+
+      // Get excluded pairs from album_distinct_pairs table
+      const excludedPairsResult = await pool.query(`
+        SELECT album_id_1, album_id_2 FROM album_distinct_pairs
+      `);
+
+      const excludePairs = new Set();
+      for (const row of excludedPairsResult.rows) {
+        excludePairs.add(`${row.album_id_1}::${row.album_id_2}`);
+        excludePairs.add(`${row.album_id_2}::${row.album_id_1}`);
+      }
+
+      // Find potential duplicates
+      const candidates = albumsResult.rows.map((row) => ({
+        album_id: row.album_id,
+        artist: row.artist,
+        album: row.album,
+        hasCover: row.has_cover,
+      }));
+
+      const newAlbum = { artist, album, album_id };
+      const matches = findPotentialDuplicates(newAlbum, candidates, {
+        threshold: 0.65, // Lower threshold for "very fuzzy" matching
+        maxResults: 3,
+        excludePairs,
+      });
+
+      res.json({
+        hasSimilar: matches.length > 0,
+        matches: matches.map((m) => ({
+          album_id: m.candidate.album_id,
+          artist: m.candidate.artist,
+          album: m.candidate.album,
+          hasCover: m.candidate.hasCover,
+          confidence: Math.round(m.confidence * 100),
+        })),
+      });
+    } catch (err) {
+      logger.error('Error checking similar albums:', {
+        error: err.message,
+        artist: req.body.artist,
+        album: req.body.album,
+      });
+      res.status(500).json({ error: 'Error checking for similar albums' });
+    }
+  });
+
+  // Mark two albums as distinct (not the same album)
+  app.post('/api/albums/mark-distinct', ensureAuthAPI, async (req, res) => {
+    try {
+      const { album_id_1, album_id_2 } = req.body;
+
+      if (!album_id_1 || !album_id_2) {
+        return res
+          .status(400)
+          .json({ error: 'album_id_1 and album_id_2 are required' });
+      }
+
+      if (album_id_1 === album_id_2) {
+        return res
+          .status(400)
+          .json({ error: 'Cannot mark album as distinct from itself' });
+      }
+
+      // Store in consistent order (id_1 < id_2)
+      const [id1, id2] =
+        album_id_1 < album_id_2
+          ? [album_id_1, album_id_2]
+          : [album_id_2, album_id_1];
+
+      // Insert the pair (ignore if already exists)
+      await pool.query(
+        `INSERT INTO album_distinct_pairs (album_id_1, album_id_2, created_by)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (album_id_1, album_id_2) DO NOTHING`,
+        [id1, id2, req.user?.id || null]
+      );
+
+      logger.info('Albums marked as distinct', {
+        album_id_1: id1,
+        album_id_2: id2,
+        userId: req.user?.id,
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error marking albums as distinct:', {
+        error: err.message,
+        album_id_1: req.body.album_id_1,
+        album_id_2: req.body.album_id_2,
+      });
+      res.status(500).json({ error: 'Error marking albums as distinct' });
     }
   });
 
@@ -809,14 +888,20 @@ module.exports = (app, deps) => {
 
         for (let i = 0; i < data.length; i++) {
           const album = data[i];
-          if (album.album_id) {
-            await upsertAlbumRecord(album, timestamp);
-            upsertedAlbumIds.push(album.album_id);
-          }
 
-          // Deduplicate: Only store values that differ from albums table
-          // NULL = "use albums table value", non-NULL = "custom override"
-          const albumId = album.album_id || '';
+          // CANONICAL DEDUPLICATION: Always upsert to canonical albums table
+          // This ensures ONE entry per unique artist/album name, regardless of source
+          // Returns the canonical album_id to use (may differ from album.album_id if merged)
+          const canonicalAlbumId = await upsertAlbumRecord(
+            album,
+            timestamp,
+            client
+          );
+          upsertedAlbumIds.push(canonicalAlbumId);
+
+          // Use the canonical album_id for list_items reference
+          // This ensures all references point to the same canonical album
+          const albumId = canonicalAlbumId;
 
           placeholders.push(
             `($${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++}, $${idx++})`

@@ -696,6 +696,191 @@ describe('aggregate-list', () => {
       assert.strictEqual(albumC, undefined, 'Album C should be excluded');
       assert.strictEqual(albumD, undefined, 'Album D should be excluded');
     });
+
+    it('should group albums with same name but different album_ids together', async () => {
+      // This test verifies that albums are grouped by normalized artist::album key,
+      // NOT by album_id. This prevents duplicates when the same album was added
+      // from different sources (MusicBrainz, Spotify, Tidal, manual entry).
+      const pool = createMockPool([
+        {
+          rows: [
+            { list_id: 'list1', user_id: 'user1', username: 'alice' },
+            { list_id: 'list2', user_id: 'user2', username: 'bob' },
+            { list_id: 'list3', user_id: 'user3', username: 'carol' },
+          ],
+        },
+        {
+          rows: [
+            // Alice added "OK Computer" from MusicBrainz
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 1,
+              album_id: 'mb-radiohead-ok-computer-uuid',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              cover_image: '',
+              release_date: '1997-05-21',
+              country: 'UK',
+              genre_1: 'Alternative Rock',
+              genre_2: '',
+            },
+            // Bob added "OK Computer" from Spotify (different album_id!)
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 2,
+              album_id: 'spotify-6dVIqQ8qmQ5GBnJ9shOYGE',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              cover_image: '',
+              release_date: '1997-05-21',
+              country: 'UK',
+              genre_1: 'Alternative Rock',
+              genre_2: '',
+            },
+            // Carol added "OK Computer" manually (yet another album_id!)
+            {
+              list_id: 'list3',
+              user_id: 'user3',
+              position: 3,
+              album_id: 'manual-1234567890',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              cover_image: '',
+              release_date: '1997',
+              country: 'UK',
+              genre_1: 'Rock',
+              genre_2: '',
+            },
+            // A different album for comparison
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 2,
+              album_id: 'mb-nirvana-nevermind',
+              artist: 'Nirvana',
+              album: 'Nevermind',
+              cover_image: '',
+              release_date: '1991-09-24',
+              country: 'US',
+              genre_1: 'Grunge',
+              genre_2: '',
+            },
+          ],
+        },
+      ]);
+      const logger = createMockLogger();
+      const aggregateList = createAggregateList({ pool, logger });
+
+      const result = await aggregateList.aggregateForYear(2024);
+
+      // Should only have 2 unique albums (OK Computer grouped, Nevermind separate)
+      assert.strictEqual(
+        result.data.albums.length,
+        2,
+        'Should have exactly 2 albums (OK Computer grouped together, Nevermind separate)'
+      );
+
+      // Find OK Computer - it should have 3 voters despite different album_ids
+      const okComputer = result.data.albums.find(
+        (a) => a.album.toLowerCase() === 'ok computer'
+      );
+      assert.ok(okComputer, 'OK Computer should exist in results');
+      assert.strictEqual(
+        okComputer.voterCount,
+        3,
+        'OK Computer should have 3 voters (from 3 different album_ids)'
+      );
+      assert.strictEqual(
+        okComputer.totalPoints,
+        60 + 54 + 50,
+        'OK Computer should have points from all 3 positions'
+      ); // pos 1 + pos 2 + pos 3
+      assert.strictEqual(
+        okComputer.voters.length,
+        3,
+        'Should have 3 voter entries'
+      );
+
+      // Verify all voters are listed
+      const voterUsernames = okComputer.voters.map((v) => v.username).sort();
+      assert.deepStrictEqual(
+        voterUsernames,
+        ['alice', 'bob', 'carol'],
+        'All three voters should be listed'
+      );
+
+      // Nevermind should have 1 voter
+      const nevermind = result.data.albums.find(
+        (a) => a.album.toLowerCase() === 'nevermind'
+      );
+      assert.ok(nevermind, 'Nevermind should exist in results');
+      assert.strictEqual(nevermind.voterCount, 1);
+    });
+
+    it('should handle case-insensitive and whitespace-normalized grouping', async () => {
+      // Same album with different casing/whitespace should be grouped together
+      const pool = createMockPool([
+        {
+          rows: [
+            { list_id: 'list1', user_id: 'user1', username: 'alice' },
+            { list_id: 'list2', user_id: 'user2', username: 'bob' },
+          ],
+        },
+        {
+          rows: [
+            // Album with title case
+            {
+              list_id: 'list1',
+              user_id: 'user1',
+              position: 1,
+              album_id: 'id1',
+              artist: 'The Beatles',
+              album: 'Abbey Road',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+            // Same album with different casing and extra whitespace
+            {
+              list_id: 'list2',
+              user_id: 'user2',
+              position: 5,
+              album_id: 'id2',
+              artist: '  the beatles  ',
+              album: 'ABBEY ROAD',
+              cover_image: '',
+              release_date: '',
+              country: '',
+              genre_1: '',
+              genre_2: '',
+            },
+          ],
+        },
+      ]);
+      const logger = createMockLogger();
+      const aggregateList = createAggregateList({ pool, logger });
+
+      const result = await aggregateList.aggregateForYear(2024);
+
+      // Should have only 1 album (both entries grouped together)
+      assert.strictEqual(
+        result.data.albums.length,
+        1,
+        'Should have exactly 1 album after case-insensitive grouping'
+      );
+
+      const abbeyRoad = result.data.albums[0];
+      assert.strictEqual(abbeyRoad.voterCount, 2, 'Should have 2 voters');
+      assert.strictEqual(
+        abbeyRoad.totalPoints,
+        60 + 43,
+        'Should have combined points'
+      ); // pos 1 + pos 5
+    });
   });
 
   // ===========================================================================
