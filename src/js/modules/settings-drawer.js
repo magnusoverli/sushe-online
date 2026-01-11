@@ -8,6 +8,7 @@
  */
 
 import { openDuplicateReviewModal } from './duplicate-review-modal.js';
+import { openManualAlbumAudit } from './manual-album-audit-modal.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -1748,6 +1749,15 @@ export function createSettingsDrawer(deps = {}) {
               </div>
             </div>
             <div id="duplicateScanStatus" class="hidden mt-3 text-sm text-gray-400"></div>
+            <div class="settings-row mt-4 pt-4 border-t border-gray-700/50">
+              <div class="settings-row-label">
+                <label class="settings-label">Manual Album Reconciliation</label>
+                <p class="settings-description">Review manually-added albums that may match existing canonical albums</p>
+              </div>
+              <div class="flex gap-2">
+                <button id="auditManualAlbumsBtn" class="settings-button">Audit Manual Albums</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2300,6 +2310,14 @@ export function createSettingsDrawer(deps = {}) {
     const scanDuplicatesBtn = document.getElementById('scanDuplicatesBtn');
     if (scanDuplicatesBtn) {
       scanDuplicatesBtn.addEventListener('click', handleScanDuplicates);
+    }
+
+    // Manual album reconciliation handler
+    const auditManualAlbumsBtn = document.getElementById(
+      'auditManualAlbumsBtn'
+    );
+    if (auditManualAlbumsBtn) {
+      auditManualAlbumsBtn.addEventListener('click', openManualAlbumAudit);
     }
   }
 

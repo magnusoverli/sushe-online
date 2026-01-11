@@ -13,6 +13,7 @@
  */
 
 const logger = require('./logger');
+const { findPotentialDuplicates } = require('./fuzzy-match');
 
 /**
  * Normalize artist and album names for comparison
@@ -92,6 +93,7 @@ async function applyFixTransaction(pool, log, year, preview) {
  * @param {Object} deps.pool - PostgreSQL pool instance
  * @param {Object} deps.logger - Logger instance (optional)
  */
+// eslint-disable-next-line max-lines-per-function -- Cohesive utility module with multiple related functions
 function createAggregateAudit(deps = {}) {
   const log = deps.logger || logger;
   const pool = deps.pool;
@@ -323,11 +325,346 @@ function createAggregateAudit(deps = {}) {
     };
   }
 
+  /**
+   * Find manual albums that may match canonical albums in the database
+   *
+   * Scans all list_items with manual-* album_ids and finds potential
+   * matches in the albums table using fuzzy matching.
+   *
+   * @param {Object} options - Options
+   * @param {number} options.threshold - Fuzzy match threshold (default: 0.20, very low since human reviews)
+   * @param {number} options.maxMatchesPerAlbum - Max matches per manual album (default: 5)
+   * @returns {Promise<Object>} Manual albums with potential matches
+   */
+  async function findManualAlbumsForReconciliation(options = {}) {
+    // Very low threshold - better to show false positives than miss real duplicates
+    const { threshold = 0.2, maxMatchesPerAlbum = 5 } = options;
+
+    log.info('Finding manual albums for reconciliation');
+
+    // 1. Find all manual albums in list_items
+    const manualItemsResult = await pool.query(`
+      SELECT DISTINCT ON (li.album_id)
+        li.album_id,
+        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
+        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        a.cover_image IS NOT NULL as has_cover
+      FROM list_items li
+      LEFT JOIN albums a ON li.album_id = a.album_id
+      WHERE li.album_id LIKE 'manual-%'
+      ORDER BY li.album_id
+    `);
+
+    if (manualItemsResult.rows.length === 0) {
+      log.info('No manual albums found');
+      return {
+        manualAlbums: [],
+        totalManual: 0,
+        totalWithMatches: 0,
+      };
+    }
+
+    // 2. Get usage info for each manual album (which lists use it)
+    const usageResult = await pool.query(`
+      SELECT 
+        li.album_id,
+        l._id as list_id,
+        l.name as list_name,
+        l.year,
+        u._id as user_id,
+        u.username
+      FROM list_items li
+      JOIN lists l ON li.list_id = l._id
+      JOIN users u ON l.user_id = u._id
+      WHERE li.album_id LIKE 'manual-%'
+      ORDER BY li.album_id, l.year DESC
+    `);
+
+    // Build usage map
+    const usageMap = new Map();
+    for (const row of usageResult.rows) {
+      if (!usageMap.has(row.album_id)) {
+        usageMap.set(row.album_id, []);
+      }
+      usageMap.get(row.album_id).push({
+        listId: row.list_id,
+        listName: row.list_name,
+        year: row.year,
+        userId: row.user_id,
+        username: row.username,
+      });
+    }
+
+    // 3. Get all canonical albums (non-manual) for matching
+    const canonicalResult = await pool.query(`
+      SELECT 
+        album_id,
+        artist,
+        album,
+        cover_image IS NOT NULL as has_cover
+      FROM albums
+      WHERE album_id NOT LIKE 'manual-%'
+        AND album_id NOT LIKE 'internal-%'
+        AND artist IS NOT NULL AND artist != ''
+        AND album IS NOT NULL AND album != ''
+    `);
+
+    const canonicalAlbums = canonicalResult.rows.map((row) => ({
+      album_id: row.album_id,
+      artist: row.artist,
+      album: row.album,
+      hasCover: row.has_cover,
+    }));
+
+    // 4. Get excluded pairs (already marked as distinct)
+    const excludedResult = await pool.query(`
+      SELECT album_id_1, album_id_2 FROM album_distinct_pairs
+    `);
+
+    const excludePairs = new Set();
+    for (const row of excludedResult.rows) {
+      excludePairs.add(`${row.album_id_1}::${row.album_id_2}`);
+      excludePairs.add(`${row.album_id_2}::${row.album_id_1}`);
+    }
+
+    // 5. Find matches for each manual album
+    const manualAlbums = [];
+    let totalWithMatches = 0;
+
+    for (const manualAlbum of manualItemsResult.rows) {
+      const matches = findPotentialDuplicates(
+        {
+          artist: manualAlbum.artist,
+          album: manualAlbum.album,
+          album_id: manualAlbum.album_id,
+        },
+        canonicalAlbums,
+        {
+          threshold,
+          maxResults: maxMatchesPerAlbum,
+          excludePairs,
+        }
+      );
+
+      const albumEntry = {
+        manualId: manualAlbum.album_id,
+        artist: manualAlbum.artist,
+        album: manualAlbum.album,
+        hasCover: manualAlbum.has_cover,
+        usedIn: usageMap.get(manualAlbum.album_id) || [],
+        matches: matches.map((m) => ({
+          albumId: m.candidate.album_id,
+          artist: m.candidate.artist,
+          album: m.candidate.album,
+          hasCover: m.candidate.hasCover,
+          confidence: Math.round(m.confidence * 100),
+        })),
+      };
+
+      manualAlbums.push(albumEntry);
+
+      if (matches.length > 0) {
+        totalWithMatches++;
+      }
+    }
+
+    // Sort by those with matches first, then by confidence of best match
+    manualAlbums.sort((a, b) => {
+      if (a.matches.length > 0 && b.matches.length === 0) return -1;
+      if (a.matches.length === 0 && b.matches.length > 0) return 1;
+      if (a.matches.length > 0 && b.matches.length > 0) {
+        return b.matches[0].confidence - a.matches[0].confidence;
+      }
+      return 0;
+    });
+
+    log.info(
+      `Found ${manualItemsResult.rows.length} manual albums, ${totalWithMatches} with potential matches`
+    );
+
+    return {
+      manualAlbums,
+      totalManual: manualItemsResult.rows.length,
+      totalWithMatches,
+    };
+  }
+
+  /**
+   * Merge a manual album into a canonical album
+   *
+   * Updates all list_items using the manual album_id to use the canonical album_id.
+   * Optionally syncs metadata (artist/album names) from the canonical album.
+   *
+   * @param {string} manualAlbumId - The manual album ID to merge (source)
+   * @param {string} canonicalAlbumId - The canonical album ID (target)
+   * @param {Object} options - Options
+   * @param {boolean} options.syncMetadata - Sync artist/album names from canonical (default: true)
+   * @param {string} options.adminUserId - Admin user ID for audit log
+   * @returns {Promise<Object>} Result of the merge operation
+   */
+  async function mergeManualAlbum(
+    manualAlbumId,
+    canonicalAlbumId,
+    options = {}
+  ) {
+    const { syncMetadata = true, adminUserId = null } = options;
+
+    log.info(`Merging manual album ${manualAlbumId} into ${canonicalAlbumId}`);
+
+    // Validate inputs
+    if (!manualAlbumId || !manualAlbumId.startsWith('manual-')) {
+      throw new Error('Invalid manual album ID');
+    }
+
+    if (!canonicalAlbumId) {
+      throw new Error('Canonical album ID is required');
+    }
+
+    if (manualAlbumId === canonicalAlbumId) {
+      throw new Error('Cannot merge album into itself');
+    }
+
+    // Get canonical album metadata
+    const canonicalResult = await pool.query(
+      `SELECT artist, album FROM albums WHERE album_id = $1`,
+      [canonicalAlbumId]
+    );
+
+    if (canonicalResult.rows.length === 0) {
+      throw new Error(`Canonical album ${canonicalAlbumId} not found`);
+    }
+
+    const canonicalAlbum = canonicalResult.rows[0];
+
+    // Find affected lists before merge
+    const affectedResult = await pool.query(
+      `
+      SELECT DISTINCT 
+        l._id as list_id,
+        l.name as list_name,
+        l.year,
+        u.username
+      FROM list_items li
+      JOIN lists l ON li.list_id = l._id
+      JOIN users u ON l.user_id = u._id
+      WHERE li.album_id = $1
+    `,
+      [manualAlbumId]
+    );
+
+    const affectedLists = affectedResult.rows;
+    const affectedYears = [...new Set(affectedLists.map((l) => l.year))];
+
+    // Perform merge in transaction
+    const client = await pool.connect();
+    let updatedCount = 0;
+
+    try {
+      await client.query('BEGIN');
+
+      // Update list_items to use canonical album_id
+      if (syncMetadata) {
+        // Also sync artist/album names
+        const updateResult = await client.query(
+          `
+          UPDATE list_items
+          SET 
+            album_id = $1,
+            artist = $2,
+            album = $3,
+            updated_at = NOW()
+          WHERE album_id = $4
+        `,
+          [
+            canonicalAlbumId,
+            canonicalAlbum.artist,
+            canonicalAlbum.album,
+            manualAlbumId,
+          ]
+        );
+        updatedCount = updateResult.rowCount;
+      } else {
+        // Just update album_id
+        const updateResult = await client.query(
+          `
+          UPDATE list_items
+          SET album_id = $1, updated_at = NOW()
+          WHERE album_id = $2
+        `,
+          [canonicalAlbumId, manualAlbumId]
+        );
+        updatedCount = updateResult.rowCount;
+      }
+
+      // Delete manual album from albums table if it exists
+      await client.query(`DELETE FROM albums WHERE album_id = $1`, [
+        manualAlbumId,
+      ]);
+
+      // Log admin event
+      await client.query(
+        `
+        INSERT INTO admin_events (event_type, event_data, created_by)
+        VALUES ($1, $2, $3)
+      `,
+        [
+          'manual_album_merged',
+          JSON.stringify({
+            manualAlbumId,
+            canonicalAlbumId,
+            canonicalArtist: canonicalAlbum.artist,
+            canonicalAlbum: canonicalAlbum.album,
+            syncMetadata,
+            updatedListItems: updatedCount,
+            affectedLists: affectedLists.map((l) => l.list_name),
+            affectedYears,
+          }),
+          adminUserId,
+        ]
+      );
+
+      await client.query('COMMIT');
+
+      log.info(
+        `Merged manual album: ${updatedCount} list_items updated, ` +
+          `${affectedLists.length} lists affected, years: ${affectedYears.join(', ')}`
+      );
+
+      return {
+        success: true,
+        manualAlbumId,
+        canonicalAlbumId,
+        updatedListItems: updatedCount,
+        affectedLists: affectedLists.map((l) => ({
+          listId: l.list_id,
+          listName: l.list_name,
+          year: l.year,
+          username: l.username,
+        })),
+        affectedYears,
+        syncedMetadata: syncMetadata
+          ? {
+              artist: canonicalAlbum.artist,
+              album: canonicalAlbum.album,
+            }
+          : null,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      log.error(`Failed to merge manual album: ${err.message}`);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   return {
     findDuplicates,
     previewFix,
     executeFix,
     getAuditReport,
+    findManualAlbumsForReconciliation,
+    mergeManualAlbum,
     // Export for testing
     normalizeAlbumKey,
   };

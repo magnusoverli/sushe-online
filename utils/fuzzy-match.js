@@ -252,10 +252,9 @@ function calculateSimilarity(a, b) {
  *
  * @param {Object} album1 - First album { artist, album }
  * @param {Object} album2 - Second album { artist, album }
- * @param {number} threshold - Minimum combined score to consider a match (default: 0.6)
- * @returns {Object} - { isPotentialMatch: boolean, confidence: number, artistScore: Object, albumScore: Object }
+ * @param {number} threshold - Minimum combined score to consider a match (default: 0.20)
  */
-function isPotentialDuplicate(album1, album2, threshold = 0.6) {
+function isPotentialDuplicate(album1, album2, threshold = 0.2) {
   const artistScore = calculateSimilarity(album1.artist, album2.artist);
   const albumScore = calculateSimilarity(album1.album, album2.album);
 
@@ -287,13 +286,14 @@ function isPotentialDuplicate(album1, album2, threshold = 0.6) {
  * @param {Object} newAlbum - Album to check { artist, album }
  * @param {Array<Object>} candidates - List of existing albums to check against
  * @param {Object} options - Options
- * @param {number} options.threshold - Minimum confidence to include (default: 0.7)
+ * @param {number} options.threshold - Minimum confidence to include (default: 0.45)
  * @param {number} options.maxResults - Maximum results to return (default: 5)
  * @param {Set<string>} options.excludePairs - Set of "id1::id2" pairs to exclude (already confirmed different)
  * @returns {Array<Object>} - Sorted array of potential matches with confidence scores
  */
 function findPotentialDuplicates(newAlbum, candidates, options = {}) {
-  const { threshold = 0.7, maxResults = 5, excludePairs = new Set() } = options;
+  // Very low threshold since human reviews all matches - better to show false positives than miss real duplicates
+  const { threshold = 0.2, maxResults = 5, excludePairs = new Set() } = options;
 
   const results = [];
 

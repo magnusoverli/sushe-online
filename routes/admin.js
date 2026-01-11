@@ -1796,7 +1796,7 @@ module.exports = (app, deps) => {
           const candidates = albums.slice(i + 1); // Only check forward to avoid duplicate pairs
 
           const matches = findPotentialDuplicates(album, candidates, {
-            threshold: 0.65,
+            threshold: 0.2, // Very low threshold - human reviews all matches
             maxResults: 10,
             excludePairs,
           });
@@ -2126,6 +2126,123 @@ module.exports = (app, deps) => {
         logger.error('Error executing aggregate fix', {
           error: error.message,
           year: req.params.year,
+        });
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
+  // ============ MANUAL ALBUM RECONCILIATION ENDPOINTS ============
+
+  /**
+   * GET /api/admin/audit/manual-albums
+   * Find manual albums that may match canonical albums
+   * Returns list of manual albums with potential matches for admin review
+   */
+  app.get(
+    '/api/admin/audit/manual-albums',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const threshold = parseFloat(req.query.threshold) || 0.2;
+        const maxMatches = parseInt(req.query.maxMatches, 10) || 3;
+
+        const result = await aggregateAudit.findManualAlbumsForReconciliation({
+          threshold,
+          maxMatchesPerAlbum: maxMatches,
+        });
+
+        res.json(result);
+      } catch (error) {
+        logger.error('Error finding manual albums for reconciliation', {
+          error: error.message,
+        });
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
+  /**
+   * POST /api/admin/audit/merge-album
+   * Merge a manual album into a canonical album
+   * Updates all list_items and optionally syncs metadata
+   */
+  app.post(
+    '/api/admin/audit/merge-album',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const {
+          manualAlbumId,
+          canonicalAlbumId,
+          syncMetadata = true,
+        } = req.body;
+
+        if (!manualAlbumId || !canonicalAlbumId) {
+          return res.status(400).json({
+            error: 'manualAlbumId and canonicalAlbumId are required',
+          });
+        }
+
+        if (!manualAlbumId.startsWith('manual-')) {
+          return res.status(400).json({
+            error: 'manualAlbumId must be a manual album (manual-* prefix)',
+          });
+        }
+
+        const result = await aggregateAudit.mergeManualAlbum(
+          manualAlbumId,
+          canonicalAlbumId,
+          {
+            syncMetadata,
+            adminUserId: req.user._id,
+          }
+        );
+
+        // Recompute aggregate lists for affected years
+        if (result.affectedYears && result.affectedYears.length > 0) {
+          const { createAggregateList } = require('../utils/aggregate-list');
+          const aggregateList = createAggregateList({
+            pool: deps.pool,
+            logger,
+          });
+
+          const recomputeResults = [];
+          for (const year of result.affectedYears) {
+            try {
+              await aggregateList.recompute(year);
+              recomputeResults.push({ year, success: true });
+              logger.info(`Recomputed aggregate list for ${year} after merge`);
+            } catch (recomputeErr) {
+              recomputeResults.push({
+                year,
+                success: false,
+                error: recomputeErr.message,
+              });
+              logger.error(`Failed to recompute aggregate list for ${year}`, {
+                error: recomputeErr.message,
+              });
+            }
+          }
+          result.recomputeResults = recomputeResults;
+        }
+
+        logger.info('Manual album merged', {
+          manualAlbumId,
+          canonicalAlbumId,
+          updatedListItems: result.updatedListItems,
+          affectedYears: result.affectedYears,
+          adminId: req.user._id,
+        });
+
+        res.json(result);
+      } catch (error) {
+        logger.error('Error merging manual album', {
+          error: error.message,
+          manualAlbumId: req.body?.manualAlbumId,
+          canonicalAlbumId: req.body?.canonicalAlbumId,
         });
         res.status(500).json({ error: error.message });
       }

@@ -419,4 +419,224 @@ describe('aggregate-audit', () => {
       assert.strictEqual(result.summary.albumsWithMultipleIds, 0);
     });
   });
+
+  // ===========================================================================
+  // findManualAlbumsForReconciliation tests
+  // ===========================================================================
+
+  describe('findManualAlbumsForReconciliation', () => {
+    it('should return empty when no manual albums exist', async () => {
+      const pool = createMockPool([
+        { rows: [] }, // Manual items query
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.findManualAlbumsForReconciliation();
+
+      assert.strictEqual(result.totalManual, 0);
+      assert.strictEqual(result.totalWithMatches, 0);
+      assert.deepStrictEqual(result.manualAlbums, []);
+    });
+
+    it('should find manual albums with potential canonical matches', async () => {
+      const pool = createMockPool([
+        // Query 1: Manual items
+        {
+          rows: [
+            {
+              album_id: 'manual-123',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              has_cover: false,
+            },
+          ],
+        },
+        // Query 2: Usage info
+        {
+          rows: [
+            {
+              album_id: 'manual-123',
+              list_id: 'list-1',
+              list_name: 'Best of 2020',
+              year: 2020,
+              user_id: 'user-1',
+              username: 'alice',
+            },
+          ],
+        },
+        // Query 3: Canonical albums
+        {
+          rows: [
+            {
+              album_id: 'spotify-abc123',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              has_cover: true,
+            },
+          ],
+        },
+        // Query 4: Excluded pairs
+        { rows: [] },
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.findManualAlbumsForReconciliation();
+
+      assert.strictEqual(result.totalManual, 1);
+      assert.strictEqual(result.totalWithMatches, 1);
+      assert.strictEqual(result.manualAlbums.length, 1);
+
+      const album = result.manualAlbums[0];
+      assert.strictEqual(album.manualId, 'manual-123');
+      assert.strictEqual(album.artist, 'Radiohead');
+      assert.strictEqual(album.album, 'OK Computer');
+      assert.ok(album.matches.length > 0);
+      assert.strictEqual(album.matches[0].albumId, 'spotify-abc123');
+    });
+
+    it('should exclude pairs marked as distinct', async () => {
+      const pool = createMockPool([
+        // Query 1: Manual items
+        {
+          rows: [
+            {
+              album_id: 'manual-123',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              has_cover: false,
+            },
+          ],
+        },
+        // Query 2: Usage info
+        { rows: [] },
+        // Query 3: Canonical albums
+        {
+          rows: [
+            {
+              album_id: 'spotify-abc123',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              has_cover: true,
+            },
+          ],
+        },
+        // Query 4: Excluded pairs - these are marked as distinct
+        {
+          rows: [{ album_id_1: 'manual-123', album_id_2: 'spotify-abc123' }],
+        },
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.findManualAlbumsForReconciliation();
+
+      assert.strictEqual(result.totalManual, 1);
+      // The manual album should have no matches because it's excluded
+      assert.strictEqual(result.manualAlbums[0].matches.length, 0);
+      assert.strictEqual(result.totalWithMatches, 0);
+    });
+  });
+
+  // ===========================================================================
+  // mergeManualAlbum tests
+  // ===========================================================================
+
+  describe('mergeManualAlbum', () => {
+    it('should throw error when manual album ID is invalid', async () => {
+      const pool = createMockPool([]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      await assert.rejects(
+        async () => {
+          await audit.mergeManualAlbum('invalid-123', 'spotify-abc123');
+        },
+        { message: 'Invalid manual album ID' }
+      );
+    });
+
+    it('should throw error when canonical album not found', async () => {
+      const pool = createMockPool([
+        // Query for canonical album - returns empty
+        { rows: [] },
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      await assert.rejects(
+        async () => {
+          await audit.mergeManualAlbum('manual-123', 'spotify-nonexistent');
+        },
+        { message: /not found/ }
+      );
+    });
+
+    it('should successfully merge manual album into canonical', async () => {
+      // Create a more sophisticated mock for this test
+      let queryIndex = 0;
+      const queryResults = [
+        // Query 1: Check manual album exists
+        { rows: [{ count: '1' }] },
+        // Query 2: Check canonical album exists
+        { rows: [{ count: '1' }] },
+        // Query 3: Get canonical album metadata
+        { rows: [{ artist: 'Radiohead', album: 'OK Computer' }] },
+        // Query 4: Get affected lists
+        {
+          rows: [
+            {
+              list_id: 'list-1',
+              list_name: 'Best of 2020',
+              year: 2020,
+              user_id: 'user-1',
+            },
+          ],
+        },
+        // Query 5: Update list_items (UPDATE query)
+        { rowCount: 1 },
+        // Query 6: Delete manual album
+        { rowCount: 1 },
+        // Query 7: Insert admin event (returns the inserted event)
+        {
+          rows: [
+            {
+              id: 'event-123',
+              type: 'album_merge',
+              created_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ];
+
+      const pool = {
+        query: mock.fn(async () => {
+          const result = queryResults[queryIndex] || { rows: [] };
+          queryIndex++;
+          return result;
+        }),
+        connect: mock.fn(async () => ({
+          query: mock.fn(async () => ({ rowCount: 1 })),
+          release: mock.fn(),
+        })),
+      };
+
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.mergeManualAlbum(
+        'manual-123',
+        'spotify-abc123',
+        {
+          syncMetadata: true,
+          adminUserId: 'admin-1',
+        }
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.updatedListItems, 1);
+      assert.ok(result.affectedLists.length > 0);
+    });
+  });
 });

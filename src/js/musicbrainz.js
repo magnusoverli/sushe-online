@@ -1398,13 +1398,35 @@ async function finishManualAdd(album) {
       return;
     }
 
+    // Check for similar existing albums before adding
+    const similarCheck = await checkAndPromptSimilar(album);
+
+    if (similarCheck.action === 'cancelled') {
+      // User cancelled - don't close modal, let them continue editing
+      return;
+    }
+
+    let albumToAdd = album;
+
+    if (similarCheck.action === 'use_existing' && similarCheck.album) {
+      // User wants to use the existing canonical album
+      // Use the canonical album_id but keep the user's cover art if they uploaded one
+      albumToAdd = {
+        ...album,
+        album_id: similarCheck.album.album_id,
+        artist: similarCheck.album.artist,
+        album: similarCheck.album.album,
+      };
+      // If the manual album had no cover but canonical has one, the server will use canonical's cover
+    }
+
     // Add to current list
-    currentListData.push(album);
+    currentListData.push(albumToAdd);
     window.setListData(window.currentList, currentListData);
 
-    if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
+    if (!Array.isArray(albumToAdd.tracks) || albumToAdd.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(album);
+        await window.fetchTracksForAlbum(albumToAdd);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
@@ -1419,7 +1441,15 @@ async function finishManualAdd(album) {
     // Close modal
     closeAddAlbumModal();
 
-    showToast(`Added "${album.album}" by ${album.artist} to the list`);
+    if (similarCheck.action === 'use_existing') {
+      showToast(
+        `Added "${albumToAdd.album}" by ${albumToAdd.artist} (using existing album)`
+      );
+    } else {
+      showToast(
+        `Added "${albumToAdd.album}" by ${albumToAdd.artist} to the list`
+      );
+    }
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 

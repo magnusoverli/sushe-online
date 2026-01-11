@@ -277,7 +277,7 @@ module.exports = (app, deps) => {
 
       const newAlbum = { artist, album, album_id };
       const matches = findPotentialDuplicates(newAlbum, candidates, {
-        threshold: 0.65, // Lower threshold for "very fuzzy" matching
+        threshold: 0.2, // Very low threshold - human reviews all matches
         maxResults: 3,
         excludePairs,
       });
