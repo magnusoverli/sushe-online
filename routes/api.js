@@ -350,6 +350,51 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Merge metadata into an existing canonical album (e.g., better cover, more complete data)
+  app.post('/api/albums/merge-metadata', ensureAuthAPI, async (req, res) => {
+    try {
+      const {
+        album_id,
+        artist,
+        album,
+        cover_image,
+        cover_image_format,
+        tracks,
+      } = req.body;
+
+      if (!album_id) {
+        return res.status(400).json({ error: 'album_id is required' });
+      }
+
+      // Use upsertAlbumRecord to merge the new metadata with existing
+      const timestamp = new Date();
+      const canonicalId = await upsertAlbumRecord(
+        {
+          album_id,
+          artist,
+          album,
+          cover_image,
+          cover_image_format,
+          tracks,
+        },
+        timestamp
+      );
+
+      logger.info('Album metadata merged', {
+        album_id: canonicalId,
+        userId: req.user?.id,
+      });
+
+      res.json({ success: true, album_id: canonicalId });
+    } catch (err) {
+      logger.error('Error merging album metadata:', {
+        error: err.message,
+        album_id: req.body.album_id,
+      });
+      res.status(500).json({ error: 'Error merging album metadata' });
+    }
+  });
+
   app.get(
     '/api/lists',
     ensureAuthAPI,

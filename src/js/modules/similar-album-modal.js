@@ -96,10 +96,10 @@ function createModal() {
       <!-- Footer -->
       <div class="p-5 border-t border-gray-800 flex flex-col sm:flex-row gap-3">
         <button id="similarAlbumSame" class="flex-1 px-4 py-3 bg-green-700 hover:bg-green-600 text-white rounded font-semibold transition-colors">
-          Yes, Use Existing
+          Yes, Merge Best
         </button>
         <button id="similarAlbumDifferent" class="flex-1 px-4 py-3 bg-blue-700 hover:bg-blue-600 text-white rounded font-semibold transition-colors">
-          No, Add as New
+          No, Different Album
         </button>
         <button id="similarAlbumCancel" class="px-4 py-3 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded transition-colors">
           Cancel
@@ -220,8 +220,8 @@ function populateModal(newAlbum, existingMatch) {
     </div>
     
     <div class="mt-3 p-3 bg-gray-800/50 rounded text-sm text-gray-400">
-      <strong class="text-gray-300">Tip:</strong> If these are the same album (e.g., different editions, 
-      reissues, or slight spelling variations), click "Use Existing" to keep your library clean.
+      <strong class="text-gray-300">Tip:</strong> "Merge Best" combines the best metadata from both 
+      (higher quality cover, more complete dates, etc.) into a single entry.
     </div>
   `;
 

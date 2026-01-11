@@ -10,6 +10,8 @@ const {
   normalizeForLookup,
   generateInternalAlbumId,
   isBetterCoverImage,
+  chooseBetterText,
+  chooseBetterTracks,
 } = require('../utils/album-canonical');
 
 // ============================================
@@ -88,6 +90,81 @@ describe('isBetterCoverImage', () => {
   });
 });
 
+describe('chooseBetterText', () => {
+  it('should return empty string if both are empty', () => {
+    assert.strictEqual(chooseBetterText('', ''), '');
+    assert.strictEqual(chooseBetterText(null, undefined), '');
+  });
+
+  it('should return non-empty value when other is empty', () => {
+    assert.strictEqual(chooseBetterText('', 'value'), 'value');
+    assert.strictEqual(chooseBetterText('value', ''), 'value');
+    assert.strictEqual(chooseBetterText(null, 'value'), 'value');
+  });
+
+  it('should prefer longer/more specific value', () => {
+    // Full date vs year only
+    assert.strictEqual(chooseBetterText('2024', '2024-03-15'), '2024-03-15');
+    // Full country name vs abbreviation
+    assert.strictEqual(
+      chooseBetterText('US', 'United States'),
+      'United States'
+    );
+    // More complete artist name
+    assert.strictEqual(
+      chooseBetterText('Aara', 'Aara (Switzerland)'),
+      'Aara (Switzerland)'
+    );
+  });
+
+  it('should keep existing if same length', () => {
+    assert.strictEqual(chooseBetterText('ABCD', 'EFGH'), 'ABCD');
+  });
+
+  it('should trim whitespace before comparing', () => {
+    assert.strictEqual(
+      chooseBetterText('  short  ', 'longer value'),
+      'longer value'
+    );
+  });
+});
+
+describe('chooseBetterTracks', () => {
+  it('should return null if both are null/undefined', () => {
+    assert.strictEqual(chooseBetterTracks(null, null), null);
+    assert.strictEqual(chooseBetterTracks(undefined, null), null);
+  });
+
+  it('should return non-null array when other is null', () => {
+    const tracks = [{ title: 'Track 1' }];
+    assert.deepStrictEqual(chooseBetterTracks(null, tracks), tracks);
+    assert.deepStrictEqual(chooseBetterTracks(tracks, null), tracks);
+  });
+
+  it('should prefer array with more tracks', () => {
+    const short = [{ title: 'Track 1' }];
+    const long = [
+      { title: 'Track 1' },
+      { title: 'Track 2' },
+      { title: 'Track 3' },
+    ];
+    assert.deepStrictEqual(chooseBetterTracks(short, long), long);
+    assert.deepStrictEqual(chooseBetterTracks(long, short), long);
+  });
+
+  it('should keep existing if same length', () => {
+    const existing = [{ title: 'Existing Track' }];
+    const newTracks = [{ title: 'New Track' }];
+    assert.deepStrictEqual(chooseBetterTracks(existing, newTracks), existing);
+  });
+
+  it('should handle non-array values as null', () => {
+    const tracks = [{ title: 'Track 1' }];
+    assert.deepStrictEqual(chooseBetterTracks('not an array', tracks), tracks);
+    assert.deepStrictEqual(chooseBetterTracks(tracks, 'not an array'), tracks);
+  });
+});
+
 // ============================================
 // FACTORY FUNCTION TESTS
 // ============================================
@@ -106,6 +183,7 @@ describe('createAlbumCanonical', () => {
 
     assert.ok(canonical);
     assert.strictEqual(typeof canonical.findByNormalizedName, 'function');
+    assert.strictEqual(typeof canonical.findByAlbumId, 'function');
     assert.strictEqual(typeof canonical.smartMergeMetadata, 'function');
     assert.strictEqual(typeof canonical.upsertCanonical, 'function');
   });
@@ -160,6 +238,61 @@ describe('findByNormalizedName', () => {
       'New Artist',
       'New Album'
     );
+
+    assert.strictEqual(result, null);
+  });
+});
+
+// ============================================
+// FIND BY ALBUM ID TESTS
+// ============================================
+
+describe('findByAlbumId', () => {
+  it('should return null for empty/null album_id', async () => {
+    const mockPool = { query: mock.fn() };
+    const canonical = createAlbumCanonical({ pool: mockPool });
+
+    assert.strictEqual(await canonical.findByAlbumId(null), null);
+    assert.strictEqual(await canonical.findByAlbumId(''), null);
+    assert.strictEqual(await canonical.findByAlbumId(undefined), null);
+    assert.strictEqual(mockPool.query.mock.calls.length, 0);
+  });
+
+  it('should find album by album_id', async () => {
+    const existingAlbum = {
+      album_id: 'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679',
+      artist: 'Kêres',
+      album: 'Skryer of the Lighthouse',
+      release_date: '2024',
+    };
+
+    const mockPool = {
+      query: mock.fn(() => Promise.resolve({ rows: [existingAlbum] })),
+    };
+    const canonical = createAlbumCanonical({ pool: mockPool });
+
+    const result = await canonical.findByAlbumId(
+      'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679'
+    );
+
+    assert.deepStrictEqual(result, existingAlbum);
+    assert.strictEqual(mockPool.query.mock.calls.length, 1);
+
+    // Verify the album_id was passed correctly
+    const queryArgs = mockPool.query.mock.calls[0].arguments;
+    assert.strictEqual(
+      queryArgs[1][0],
+      'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679'
+    );
+  });
+
+  it('should return null when no album found by ID', async () => {
+    const mockPool = {
+      query: mock.fn(() => Promise.resolve({ rows: [] })),
+    };
+    const canonical = createAlbumCanonical({ pool: mockPool });
+
+    const result = await canonical.findByAlbumId('nonexistent-id');
 
     assert.strictEqual(result, null);
   });
@@ -234,7 +367,7 @@ describe('smartMergeMetadata', () => {
     assert.strictEqual(merged.genre_2, 'Atmospheric');
   });
 
-  it('should keep existing text fields if not empty', () => {
+  it('should prefer longer/more specific text values', () => {
     const existing = {
       album_id: 'spotify-123',
       artist: 'Aara',
@@ -255,10 +388,10 @@ describe('smartMergeMetadata', () => {
 
     const merged = canonical.smartMergeMetadata(existing, newData);
 
-    // Existing values kept
-    assert.strictEqual(merged.release_date, '2024');
-    assert.strictEqual(merged.country, 'CH');
-    assert.strictEqual(merged.genre_1, 'Metal');
+    // Longer/more specific values preferred
+    assert.strictEqual(merged.release_date, '2024-01-15'); // Full date > year
+    assert.strictEqual(merged.country, 'Switzerland'); // Full name > abbreviation
+    assert.strictEqual(merged.genre_1, 'Black Metal'); // More specific genre
     // Empty field filled
     assert.strictEqual(merged.genre_2, 'Atmospheric');
   });
@@ -530,5 +663,117 @@ describe('upsertCanonical', () => {
     );
 
     assert.strictEqual(result.needsSummaryFetch, false);
+  });
+
+  it('should find existing album by ID when name does not match exactly', async () => {
+    // This test covers the bug fix: when an album exists with the same ID
+    // but slightly different name spelling, we should merge instead of insert
+    const existingAlbum = {
+      album_id: 'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679',
+      artist: 'Kêres',
+      album: 'Skryer of the Lighthouse',
+      release_date: '2024',
+      country: '',
+      genre_1: 'Black Metal',
+      genre_2: '',
+      cover_image: null,
+      cover_image_format: '',
+      tracks: null,
+      summary: null,
+      summary_fetched_at: null,
+      summary_source: null,
+    };
+
+    let updateCalled = false;
+    let queryCount = 0;
+
+    const mockPool = {
+      query: mock.fn((sql) => {
+        queryCount++;
+        // First SELECT: findByNormalizedName - no match (different spelling)
+        if (sql.includes('LOWER(TRIM') && queryCount === 1) {
+          return Promise.resolve({ rows: [] });
+        }
+        // Second SELECT: findByAlbumId - match found
+        if (sql.includes('WHERE album_id = $1')) {
+          return Promise.resolve({ rows: [existingAlbum] });
+        }
+        // UPDATE: merge metadata
+        if (sql.includes('UPDATE')) {
+          updateCalled = true;
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+
+    const canonical = createAlbumCanonical({
+      pool: mockPool,
+      logger: { debug: () => {} },
+    });
+
+    // Adding album with same ID but slightly different name
+    const result = await canonical.upsertCanonical(
+      {
+        album_id: 'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679',
+        artist: 'Keres', // Different: missing accent
+        album: 'Skryer Of The Lighthouse', // Different: capitalization
+        country: 'Italy',
+      },
+      new Date()
+    );
+
+    // Should merge, not insert
+    assert.strictEqual(result.wasInserted, false);
+    assert.strictEqual(result.wasMerged, true);
+    assert.strictEqual(
+      result.albumId,
+      'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679'
+    );
+    assert.ok(updateCalled, 'UPDATE should have been called for merge');
+  });
+
+  it('should insert new album when neither name nor ID matches', async () => {
+    let insertCalled = false;
+    let queryCount = 0;
+
+    const mockPool = {
+      query: mock.fn((sql) => {
+        queryCount++;
+        // First SELECT: findByNormalizedName - no match
+        if (sql.includes('LOWER(TRIM') && queryCount === 1) {
+          return Promise.resolve({ rows: [] });
+        }
+        // Second SELECT: findByAlbumId - no match
+        if (sql.includes('WHERE album_id = $1')) {
+          return Promise.resolve({ rows: [] });
+        }
+        // INSERT: new album
+        if (sql.includes('INSERT')) {
+          insertCalled = true;
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+
+    const canonical = createAlbumCanonical({
+      pool: mockPool,
+      logger: { debug: () => {} },
+    });
+
+    const result = await canonical.upsertCanonical(
+      {
+        album_id: 'new-unique-id',
+        artist: 'New Artist',
+        album: 'New Album',
+      },
+      new Date()
+    );
+
+    assert.strictEqual(result.wasInserted, true);
+    assert.strictEqual(result.wasMerged, false);
+    assert.strictEqual(result.albumId, 'new-unique-id');
+    assert.ok(insertCalled, 'INSERT should have been called');
   });
 });

@@ -1418,6 +1418,38 @@ async function finishManualAdd(album) {
         album: similarCheck.album.album,
       };
       // If the manual album had no cover but canonical has one, the server will use canonical's cover
+
+      // Check if this canonical album is already in the list
+      if (isAlbumInList(albumToAdd, currentListData)) {
+        // Album already in list, but still merge the better metadata to canonical
+        try {
+          await fetch('/api/albums/merge-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              album_id: albumToAdd.album_id,
+              artist: album.artist,
+              album: album.album,
+              cover_image: album.cover_image,
+              cover_image_format: album.cover_image_format,
+              tracks: album.tracks,
+            }),
+          });
+        } catch (err) {
+          console.warn('Failed to merge album metadata:', err);
+        }
+
+        closeAddAlbumModal();
+        showToast(
+          `"${albumToAdd.album}" is already in this list (metadata updated)`,
+          'info'
+        );
+
+        // Refresh list to show updated cover
+        window.selectList(window.currentList);
+        return;
+      }
     }
 
     // Add to current list
@@ -2119,9 +2151,40 @@ async function addAlbumToCurrentList(album) {
       // User confirmed this is the same album - use the existing album's ID
       // but keep the new metadata that might be better (cover, etc.)
       album.album_id = similarCheck.album.album_id;
-      // Optionally sync artist/album names to canonical version
-      // album.artist = similarCheck.album.artist;
-      // album.album = similarCheck.album.album;
+      album.artist = similarCheck.album.artist;
+      album.album = similarCheck.album.album;
+
+      // Check if this canonical album is already in the list
+      if (isAlbumInList(album, currentListData)) {
+        // Album already in list, but still merge the better metadata to canonical
+        try {
+          await fetch('/api/albums/merge-metadata', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+              album_id: album.album_id,
+              artist: album.artist,
+              album: album.album,
+              cover_image: album.cover_image,
+              cover_image_format: album.cover_image_format,
+              tracks: album.tracks,
+            }),
+          });
+        } catch (err) {
+          console.warn('Failed to merge album metadata:', err);
+        }
+
+        closeAddAlbumModal();
+        showToast(
+          `"${album.album}" is already in this list (metadata updated)`,
+          'info'
+        );
+
+        // Refresh list to show updated cover
+        window.selectList(window.currentList);
+        return;
+      }
     }
     // If action === 'add_new', proceed with the new album as-is
 

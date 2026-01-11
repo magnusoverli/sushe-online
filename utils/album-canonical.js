@@ -55,6 +55,46 @@ function isBetterCoverImage(newImage, existingImage) {
 }
 
 /**
+ * Choose the better text value between two options.
+ * "Better" means: non-empty over empty, longer/more specific over shorter.
+ *
+ * @param {string|null|undefined} existing - Existing value
+ * @param {string|null|undefined} newVal - New value
+ * @returns {string} - The better value, or empty string if both empty
+ */
+function chooseBetterText(existing, newVal) {
+  const a = (existing || '').trim();
+  const b = (newVal || '').trim();
+
+  if (!a && !b) return '';
+  if (!a) return b;
+  if (!b) return a;
+
+  // Prefer longer/more specific value
+  return b.length > a.length ? b : a;
+}
+
+/**
+ * Choose the better track list between two options.
+ * Prefers the one with more tracks, or non-null over null.
+ *
+ * @param {Array|null} existing - Existing tracks array
+ * @param {Array|null} newTracks - New tracks array
+ * @returns {Array|null} - The better track list
+ */
+function chooseBetterTracks(existing, newTracks) {
+  const existingArr = Array.isArray(existing) ? existing : null;
+  const newArr = Array.isArray(newTracks) ? newTracks : null;
+
+  if (!existingArr && !newArr) return null;
+  if (!existingArr) return newArr;
+  if (!newArr) return existingArr;
+
+  // Prefer the one with more tracks
+  return newArr.length > existingArr.length ? newArr : existingArr;
+}
+
+/**
  * Factory function to create album canonical utilities with injectable dependencies
  *
  * @param {Object} deps - Dependencies
@@ -62,6 +102,7 @@ function isBetterCoverImage(newImage, existingImage) {
  * @param {Object} deps.logger - Logger instance (optional)
  * @returns {Object} - Album canonical utility functions
  */
+// eslint-disable-next-line max-lines-per-function -- Cohesive utility module with multiple related functions
 function createAlbumCanonical(deps = {}) {
   const log = deps.logger || logger;
   const pool = deps.pool;
@@ -108,13 +149,42 @@ function createAlbumCanonical(deps = {}) {
   }
 
   /**
+   * Find an existing canonical album by album_id
+   *
+   * @param {string} albumId - External album ID (e.g., MusicBrainz, Spotify)
+   * @param {Object} client - Database client (optional, for transactions)
+   * @returns {Promise<Object|null>} - Existing album record or null
+   */
+  async function findByAlbumId(albumId, client = null) {
+    if (!albumId) {
+      return null;
+    }
+
+    const db = client || pool;
+
+    const result = await db.query(
+      `SELECT 
+        album_id, artist, album, release_date, country, 
+        genre_1, genre_2, tracks, cover_image, cover_image_format,
+        summary, summary_fetched_at, summary_source,
+        created_at, updated_at
+      FROM albums 
+      WHERE album_id = $1
+      LIMIT 1`,
+      [albumId]
+    );
+
+    return result.rows[0] || null;
+  }
+
+  /**
    * Smart merge metadata: combine new data with existing, preferring better quality
    *
    * Rules:
-   * - album_id: Prefer non-NULL (external IDs over internal)
-   * - Text fields: Keep existing if present, otherwise use new
+   * - album_id: Prefer external IDs over internal
+   * - Text fields: Prefer longer/more specific value (e.g., full date > year only)
    * - cover_image: Prefer larger file size (higher quality)
-   * - tracks: Keep existing if present, otherwise use new
+   * - tracks: Prefer the list with more tracks
    * - summary fields: Keep existing (don't overwrite fetched summaries)
    *
    * @param {Object} existing - Existing album record from database
@@ -136,25 +206,35 @@ function createAlbumCanonical(deps = {}) {
       existing.cover_image
     );
 
+    // Determine best album_id: prefer external over internal
+    let bestAlbumId;
+    if (existing.album_id && !existing.album_id.startsWith('internal-')) {
+      bestAlbumId = existing.album_id;
+    } else if (newData.album_id && !newData.album_id.startsWith('internal-')) {
+      bestAlbumId = newData.album_id;
+    } else {
+      bestAlbumId = existing.album_id || newData.album_id;
+    }
+
     return {
-      // Prefer external album_id over internal/NULL
-      album_id:
-        existing.album_id && !existing.album_id.startsWith('internal-')
-          ? existing.album_id
-          : newData.album_id || existing.album_id,
+      album_id: bestAlbumId,
 
-      // Text fields: keep existing if non-empty, otherwise use new
-      artist: existing.artist || newData.artist || '',
-      album: existing.album || newData.album || '',
-      release_date: existing.release_date || newData.release_date || '',
-      country: existing.country || newData.country || '',
-      genre_1: existing.genre_1 || newData.genre_1 || newData.genre || '',
-      genre_2: existing.genre_2 || newData.genre_2 || '',
+      // Text fields: prefer longer/more specific value
+      artist: chooseBetterText(existing.artist, newData.artist),
+      album: chooseBetterText(existing.album, newData.album),
+      release_date: chooseBetterText(
+        existing.release_date,
+        newData.release_date
+      ),
+      country: chooseBetterText(existing.country, newData.country),
+      genre_1: chooseBetterText(
+        existing.genre_1,
+        newData.genre_1 || newData.genre
+      ),
+      genre_2: chooseBetterText(existing.genre_2, newData.genre_2),
 
-      // Tracks: keep existing if present
-      tracks:
-        existing.tracks ||
-        (Array.isArray(newData.tracks) ? newData.tracks : null),
+      // Tracks: prefer the list with more tracks
+      tracks: chooseBetterTracks(existing.tracks, newData.tracks),
 
       // Cover image: use better quality (larger file size)
       cover_image: useCoverImage ? newCoverBuffer : existing.cover_image,
@@ -170,37 +250,38 @@ function createAlbumCanonical(deps = {}) {
   }
 
   /**
-   * Upsert an album with canonical deduplication
+   * Upsert an album with canonical deduplication.
+   * Checks by normalized name first, then by album_id. Merges if found, inserts if new.
    *
-   * This is the main entry point. It will:
-   * 1. Check if an album with the same artist/album name already exists
-   * 2. If exists: smart merge metadata and return existing album_id
-   * 3. If new: insert and return new album_id
-   *
-   * @param {Object} albumData - Album data to upsert
-   * @param {string} albumData.album_id - External album ID (optional)
-   * @param {string} albumData.artist - Artist name
-   * @param {string} albumData.album - Album name
-   * @param {string} albumData.release_date - Release date (optional)
-   * @param {string} albumData.country - Country (optional)
-   * @param {string} albumData.genre_1 - Primary genre (optional)
-   * @param {string} albumData.genre_2 - Secondary genre (optional)
-   * @param {Array} albumData.tracks - Track listing (optional)
-   * @param {Buffer|string} albumData.cover_image - Cover image (optional)
-   * @param {string} albumData.cover_image_format - Cover image format (optional)
+   * @param {Object} albumData - Album data (album_id, artist, album, release_date, etc.)
    * @param {Date} timestamp - Timestamp for created_at/updated_at
    * @param {Object} client - Database client (optional, for transactions)
-   * @returns {Promise<Object>} - { albumId, wasInserted, wasMerged }
+   * @returns {Promise<Object>} - { albumId, wasInserted, wasMerged, needsSummaryFetch }
    */
   async function upsertCanonical(albumData, timestamp, client = null) {
     const db = client || pool;
 
-    // Check for existing album by normalized name
-    const existing = await findByNormalizedName(
+    // Check for existing album by normalized name first
+    let existing = await findByNormalizedName(
       albumData.artist,
       albumData.album,
       db
     );
+
+    // If not found by name but has an album_id, check by ID
+    // This handles cases where the same album exists with slightly different name spelling
+    if (!existing && albumData.album_id) {
+      existing = await findByAlbumId(albumData.album_id, db);
+      if (existing) {
+        log.debug('Album found by ID (name mismatch)', {
+          incomingArtist: albumData.artist,
+          incomingAlbum: albumData.album,
+          existingArtist: existing.artist,
+          existingAlbum: existing.album,
+          albumId: albumData.album_id,
+        });
+      }
+    }
 
     if (existing) {
       // Album exists - smart merge metadata
@@ -258,8 +339,7 @@ function createAlbumCanonical(deps = {}) {
       };
     }
 
-    // New album - insert it
-    // Generate internal ID if no external ID provided
+    // New album - generate internal ID if no external ID provided
     const albumId = albumData.album_id || generateInternalAlbumId();
 
     // Convert cover image to Buffer if needed
@@ -311,6 +391,7 @@ function createAlbumCanonical(deps = {}) {
 
   return {
     findByNormalizedName,
+    findByAlbumId,
     smartMergeMetadata,
     upsertCanonical,
     normalizeForLookup,
@@ -325,4 +406,6 @@ module.exports = {
   normalizeForLookup,
   generateInternalAlbumId,
   isBetterCoverImage,
+  chooseBetterText,
+  chooseBetterTracks,
 };
