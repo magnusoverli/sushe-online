@@ -571,13 +571,48 @@ export function createMobileUI(deps = {}) {
   }
 
   /**
+   * Group lists by year for the move submenu (matches desktop logic)
+   * @returns {Object} { listsByYear, sortedYears, listsWithoutYear }
+   */
+  function groupListsForMove() {
+    const currentList = getCurrentList();
+    const lists = getLists();
+    const listsByYear = {};
+    const listsWithoutYear = [];
+
+    Object.keys(lists).forEach((listName) => {
+      // Skip current list
+      if (listName === currentList) return;
+
+      const meta = lists[listName];
+      const year = meta?.year;
+
+      if (year) {
+        if (!listsByYear[year]) {
+          listsByYear[year] = [];
+        }
+        listsByYear[year].push(listName);
+      } else {
+        listsWithoutYear.push(listName);
+      }
+    });
+
+    // Sort years descending (newest first)
+    const sortedYears = Object.keys(listsByYear).sort(
+      (a, b) => parseInt(b) - parseInt(a)
+    );
+
+    return { listsByYear, sortedYears, listsWithoutYear };
+  }
+
+  /**
    * Show mobile sheet to select target list for moving album
+   * Uses year-based accordion grouping to match desktop behavior
    * @param {number} index - Album index
    * @param {string} albumId - Album identity string
    */
   function showMobileMoveToListSheet(index, albumId) {
     const currentList = getCurrentList();
-    const lists = getLists();
 
     // Validate index
     const albumsForMove = getListData(currentList);
@@ -592,7 +627,10 @@ export function createMobileUI(deps = {}) {
     }
 
     const album = albumsForMove[index];
-    const listNames = Object.keys(lists).filter((name) => name !== currentList);
+
+    // Group lists by year
+    const { listsByYear, sortedYears, listsWithoutYear } = groupListsForMove();
+    const hasAnyLists = sortedYears.length > 0 || listsWithoutYear.length > 0;
 
     // Remove any existing sheets
     const existingSheet = document.querySelector(
@@ -605,7 +643,7 @@ export function createMobileUI(deps = {}) {
     const actionSheet = document.createElement('div');
     actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
 
-    if (listNames.length === 0) {
+    if (!hasAnyLists) {
       actionSheet.innerHTML = `
         <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
         <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
@@ -626,16 +664,68 @@ export function createMobileUI(deps = {}) {
         </div>
       `;
     } else {
-      const listButtons = listNames
+      // Build year accordion sections
+      const yearSections = sortedYears
         .map(
-          (listName) => `
-          <button data-target-list="${listName}"
-                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
-            <i class="fas fa-list mr-3 text-gray-400"></i>${listName}
-          </button>
+          (year, idx) => `
+          <div class="year-section" data-year="${year}">
+            <button data-action="toggle-year" data-year="${year}"
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
+              <span class="font-medium text-white">${year}</span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500">${listsByYear[year].length} list${listsByYear[year].length !== 1 ? 's' : ''}</span>
+                <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="${year}"></i>
+              </div>
+            </button>
+            <div data-year-lists="${year}" class="${idx === 0 ? '' : 'hidden'} overflow-hidden transition-all duration-200 ease-out" style="${idx === 0 ? '' : 'max-height: 0;'}">
+              <div class="ml-4 border-l-2 border-gray-700 pl-2">
+                ${listsByYear[year]
+                  .map(
+                    (listName) => `
+                  <button data-target-list="${listName}"
+                          class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
+                    ${listName}
+                  </button>
+                `
+                  )
+                  .join('')}
+              </div>
+            </div>
+          </div>
         `
         )
         .join('');
+
+      // Build "Other" section for lists without year
+      const otherSection =
+        listsWithoutYear.length > 0
+          ? `
+          <div class="year-section" data-year="other">
+            <button data-action="toggle-year" data-year="other"
+                    class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
+              <span class="font-medium text-white">Other</span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-gray-500">${listsWithoutYear.length} list${listsWithoutYear.length !== 1 ? 's' : ''}</span>
+                <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="other"></i>
+              </div>
+            </button>
+            <div data-year-lists="other" class="hidden overflow-hidden transition-all duration-200 ease-out" style="max-height: 0;">
+              <div class="ml-4 border-l-2 border-gray-700 pl-2">
+                ${listsWithoutYear
+                  .map(
+                    (listName) => `
+                  <button data-target-list="${listName}"
+                          class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
+                    ${listName}
+                  </button>
+                `
+                  )
+                  .join('')}
+              </div>
+            </div>
+          </div>
+        `
+          : '';
 
       actionSheet.innerHTML = `
         <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
@@ -645,7 +735,8 @@ export function createMobileUI(deps = {}) {
             <h3 class="font-semibold text-white mb-1">Move to List</h3>
             <p class="text-sm text-gray-400 mb-4 truncate">${album.album} by ${album.artist}</p>
             
-            ${listButtons}
+            ${yearSections}
+            ${otherSection}
             
             <button data-action="cancel"
                     class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
@@ -661,12 +752,64 @@ export function createMobileUI(deps = {}) {
     const backdrop = actionSheet.querySelector('[data-backdrop]');
     const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
 
+    // Track expanded state for each year
+    const expandedYears = new Set();
+    // First year is expanded by default (if any years exist)
+    if (sortedYears.length > 0) {
+      expandedYears.add(sortedYears[0]);
+      // Rotate chevron for first year since it's expanded
+      const firstChevron = actionSheet.querySelector(
+        `[data-year-chevron="${sortedYears[0]}"]`
+      );
+      if (firstChevron) {
+        firstChevron.style.transform = 'rotate(180deg)';
+      }
+    }
+
     const closeSheet = () => {
       actionSheet.remove();
     };
 
     backdrop.addEventListener('click', closeSheet);
     cancelBtn.addEventListener('click', closeSheet);
+
+    // Attach toggle handlers to year headers
+    actionSheet
+      .querySelectorAll('[data-action="toggle-year"]')
+      .forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const year = btn.dataset.year;
+          const listContainer = actionSheet.querySelector(
+            `[data-year-lists="${year}"]`
+          );
+          const chevron = actionSheet.querySelector(
+            `[data-year-chevron="${year}"]`
+          );
+
+          if (!listContainer) return;
+
+          const isExpanded = expandedYears.has(year);
+
+          if (isExpanded) {
+            // Collapse
+            listContainer.style.maxHeight = '0';
+            if (chevron) chevron.style.transform = 'rotate(0deg)';
+            setTimeout(() => {
+              listContainer.classList.add('hidden');
+            }, 200);
+            expandedYears.delete(year);
+          } else {
+            // Expand
+            listContainer.classList.remove('hidden');
+            void listContainer.offsetHeight; // Force reflow
+            listContainer.style.maxHeight = listContainer.scrollHeight + 'px';
+            if (chevron) chevron.style.transform = 'rotate(180deg)';
+            expandedYears.add(year);
+          }
+        });
+      });
 
     // Attach click handlers to list buttons
     actionSheet.querySelectorAll('[data-target-list]').forEach((btn) => {
