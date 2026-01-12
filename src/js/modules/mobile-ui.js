@@ -8,6 +8,7 @@
  */
 
 import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
+import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -1644,21 +1645,6 @@ export function createMobileUI(deps = {}) {
     // Use the existing remove logic with the current index
     setCurrentContextAlbum(result.index);
     document.getElementById('removeAlbumOption').click();
-  }
-
-  /**
-   * Escape HTML special characters for safe attribute values
-   * @param {string} str - String to escape
-   * @returns {string} Escaped string
-   */
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   /**

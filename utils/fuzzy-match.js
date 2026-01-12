@@ -323,6 +323,19 @@ function findPotentialDuplicates(newAlbum, candidates, options = {}) {
     .slice(0, maxResults);
 }
 
+/**
+ * Create a normalized album key for duplicate detection
+ * Consolidated from aggregate-list.js and aggregate-audit.js
+ * @param {string|null|undefined} artist - Artist name
+ * @param {string|null|undefined} album - Album name
+ * @returns {string} Normalized key in format "artist::album"
+ */
+function normalizeAlbumKey(artist, album) {
+  const normalizedArtist = normalizeForComparison(String(artist || ''));
+  const normalizedAlbum = normalizeForComparison(String(album || ''));
+  return `${normalizedArtist}::${normalizedAlbum}`;
+}
+
 module.exports = {
   // Core functions
   levenshteinDistance,
@@ -334,6 +347,7 @@ module.exports = {
   isPotentialDuplicate,
   findPotentialDuplicates,
   isExactMatch,
+  normalizeAlbumKey,
 
   // Constants (for testing)
   STRIP_PATTERNS,

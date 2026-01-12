@@ -5,6 +5,8 @@
  * Shows side-by-side comparison with field diffs, cover images, and action buttons.
  */
 
+import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+
 let modalElement = null;
 let currentPairs = [];
 let currentIndex = 0;
@@ -196,7 +198,7 @@ function renderCurrentPair() {
     ? `/api/albums/${encodeURIComponent(pair.album2.album_id)}/cover`
     : null;
 
-  const placeholderSvg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='1'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Ccircle cx='12' cy='12' r='1'/%3E%3C/svg%3E`;
+  const placeholderSvg = getPlaceholderSvg(200);
 
   // Calculate field diffs
   const diffs = calculateDiffs(pair.album1, pair.album2);
@@ -503,13 +505,6 @@ function showToast(message, type = 'info') {
   } else {
     console.log(`[${type}] ${message}`);
   }
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /**

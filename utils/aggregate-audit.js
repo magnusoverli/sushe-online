@@ -13,10 +13,7 @@
  */
 
 const logger = require('./logger');
-const {
-  findPotentialDuplicates,
-  normalizeForComparison,
-} = require('./fuzzy-match');
+const { findPotentialDuplicates, normalizeAlbumKey } = require('./fuzzy-match');
 
 /**
  * Basic normalization (lowercase + trim only)
@@ -32,19 +29,6 @@ function basicNormalizeAlbumKey(artist, album) {
   const normalizedAlbum = String(album || '')
     .toLowerCase()
     .trim();
-  return `${normalizedArtist}::${normalizedAlbum}`;
-}
-
-/**
- * Sophisticated normalization using fuzzy-match utilities
- * Strips edition suffixes, articles, punctuation differences, etc.
- * @param {string|null|undefined} artist - Artist name
- * @param {string|null|undefined} album - Album name
- * @returns {string} Normalized key in format "artist::album"
- */
-function normalizeAlbumKey(artist, album) {
-  const normalizedArtist = normalizeForComparison(String(artist || ''));
-  const normalizedAlbum = normalizeForComparison(String(album || ''));
   return `${normalizedArtist}::${normalizedAlbum}`;
 }
 

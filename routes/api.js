@@ -162,6 +162,44 @@ module.exports = (app, deps) => {
     }
   }
 
+  // ============ AUTH TOKEN MIDDLEWARE ============
+
+  /**
+   * Middleware to ensure valid Spotify token
+   * Automatically refreshes if needed and attaches to req.spotifyAuth
+   */
+  const requireSpotifyAuth = async (req, res, next) => {
+    const tokenResult = await ensureValidSpotifyToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Spotify auth check failed', { error: tokenResult.error });
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'spotify',
+      });
+    }
+    req.spotifyAuth = tokenResult.spotifyAuth;
+    next();
+  };
+
+  /**
+   * Middleware to ensure valid Tidal token
+   * Automatically refreshes if needed and attaches to req.tidalAuth
+   */
+  const requireTidalAuth = async (req, res, next) => {
+    const tokenResult = await ensureValidTidalToken(req.user, users);
+    if (!tokenResult.success) {
+      logger.warn('Tidal auth check failed', { error: tokenResult.error });
+      return res.status(401).json({
+        error: tokenResult.message,
+        code: tokenResult.error,
+        service: 'tidal',
+      });
+    }
+    req.tidalAuth = tokenResult.tidalAuth;
+    next();
+  };
+
   // ============ API ENDPOINTS FOR LISTS ============
 
   // Get all lists for current user
@@ -2058,167 +2096,152 @@ module.exports = (app, deps) => {
   });
 
   // Get Spotify access token for Web Playback SDK
-  app.get('/api/spotify/token', ensureAuthAPI, async (req, res) => {
-    // Ensure valid Spotify token (auto-refresh if needed)
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Spotify token request failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
+  app.get(
+    '/api/spotify/token',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      res.json({ access_token: req.spotifyAuth.access_token });
     }
-
-    res.json({ access_token: tokenResult.spotifyAuth.access_token });
-  });
+  );
 
   // Get available Spotify Connect devices
-  app.get('/api/spotify/devices', ensureAuthAPI, async (req, res) => {
-    // Ensure valid Spotify token (auto-refresh if needed)
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.get(
+    '/api/spotify/devices',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const spotifyAuth = req.spotifyAuth;
 
-    const spotifyAuth = tokenResult.spotifyAuth;
-
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player/devices', {
-        headers: {
-          Authorization: `Bearer ${spotifyAuth.access_token}`,
-        },
-      });
-
-      if (!resp.ok) {
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(
-          resp,
-          errorData,
-          res,
-          logger,
-          'devices'
+      try {
+        const resp = await fetch(
+          'https://api.spotify.com/v1/me/player/devices',
+          {
+            headers: {
+              Authorization: `Bearer ${spotifyAuth.access_token}`,
+            },
+          }
         );
-      }
 
-      const data = await resp.json();
+        if (!resp.ok) {
+          const errorData = await resp.json().catch(() => ({}));
+          return handleSpotifyPlayerError(
+            resp,
+            errorData,
+            res,
+            logger,
+            'devices'
+          );
+        }
 
-      // Log ALL devices returned by Spotify (before filtering)
-      logger.info('Spotify API returned devices (raw):', {
-        count: data.devices?.length || 0,
-        devices: (data.devices || []).map((d) => ({
-          name: d.name,
-          id: d.id ? `${d.id.substring(0, 8)}...` : null,
-          type: d.type,
-          is_restricted: d.is_restricted,
-          is_active: d.is_active,
-        })),
-      });
+        const data = await resp.json();
 
-      // Filter out restricted devices (can't accept commands)
-      const usableDevices = (data.devices || []).filter(
-        (d) => !d.is_restricted && d.id
-      );
-
-      // Log what was filtered out
-      const filteredOut = (data.devices || []).filter(
-        (d) => d.is_restricted || !d.id
-      );
-      if (filteredOut.length > 0) {
-        logger.info('Devices filtered out:', {
-          devices: filteredOut.map((d) => ({
+        // Log ALL devices returned by Spotify (before filtering)
+        logger.info('Spotify API returned devices (raw):', {
+          count: data.devices?.length || 0,
+          devices: (data.devices || []).map((d) => ({
             name: d.name,
-            reason: !d.id ? 'no device ID' : 'is_restricted',
+            id: d.id ? `${d.id.substring(0, 8)}...` : null,
+            type: d.type,
+            is_restricted: d.is_restricted,
+            is_active: d.is_active,
           })),
         });
-      }
 
-      logger.info(
-        'Spotify devices found:',
-        usableDevices.map((d) => d.name)
-      );
-      res.json({ devices: usableDevices });
-    } catch (err) {
-      logger.error('Spotify devices error', { error: err.message });
-      res.status(500).json({ error: 'Failed to get Spotify devices' });
+        // Filter out restricted devices (can't accept commands)
+        const usableDevices = (data.devices || []).filter(
+          (d) => !d.is_restricted && d.id
+        );
+
+        // Log what was filtered out
+        const filteredOut = (data.devices || []).filter(
+          (d) => d.is_restricted || !d.id
+        );
+        if (filteredOut.length > 0) {
+          logger.info('Devices filtered out:', {
+            devices: filteredOut.map((d) => ({
+              name: d.name,
+              reason: !d.id ? 'no device ID' : 'is_restricted',
+            })),
+          });
+        }
+
+        logger.info(
+          'Spotify devices found:',
+          usableDevices.map((d) => d.name)
+        );
+        res.json({ devices: usableDevices });
+      } catch (err) {
+        logger.error('Spotify devices error', { error: err.message });
+        res.status(500).json({ error: 'Failed to get Spotify devices' });
+      }
     }
-  });
+  );
 
   // Play an album on a specific Spotify Connect device
-  app.put('/api/spotify/play', ensureAuthAPI, async (req, res) => {
-    // Ensure valid Spotify token (auto-refresh if needed)
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.put(
+    '/api/spotify/play',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const spotifyAuth = req.spotifyAuth;
+      const { albumId, deviceId } = req.body;
 
-    const spotifyAuth = tokenResult.spotifyAuth;
-    const { albumId, deviceId } = req.body;
-
-    if (!albumId) {
-      return res.status(400).json({ error: 'albumId is required' });
-    }
-
-    try {
-      const url = deviceId
-        ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`
-        : 'https://api.spotify.com/v1/me/player/play';
-
-      const resp = await fetch(url, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${spotifyAuth.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          context_uri: `spotify:album:${albumId}`,
-        }),
-      });
-
-      // 204 = success, 202 = accepted (device may need to wake up)
-      if (resp.status === 204 || resp.status === 202) {
-        logger.info(
-          'Spotify playback started on device:',
-          deviceId || 'active'
-        );
-        return res.json({ success: true });
+      if (!albumId) {
+        return res.status(400).json({ error: 'albumId is required' });
       }
 
-      // Handle specific errors
-      if (resp.status === 404) {
-        return res.status(404).json({
-          error:
-            'No active device found. Please open Spotify on a device first.',
-          code: 'NO_DEVICE',
-          service: 'spotify',
+      try {
+        const url = deviceId
+          ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`
+          : 'https://api.spotify.com/v1/me/player/play';
+
+        const resp = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${spotifyAuth.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            context_uri: `spotify:album:${albumId}`,
+          }),
         });
-      }
 
-      if (resp.status === 403) {
-        return res.status(403).json({
-          error: 'Spotify Premium is required for playback control.',
-          code: 'PREMIUM_REQUIRED',
-          service: 'spotify',
-        });
-      }
+        // 204 = success, 202 = accepted (device may need to wake up)
+        if (resp.status === 204 || resp.status === 202) {
+          logger.info(
+            'Spotify playback started on device:',
+            deviceId || 'active'
+          );
+          return res.json({ success: true });
+        }
 
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, logger, 'play');
-    } catch (err) {
-      logger.error('Spotify play error', { error: err.message });
-      res.status(500).json({ error: 'Failed to start playback' });
+        // Handle specific errors
+        if (resp.status === 404) {
+          return res.status(404).json({
+            error:
+              'No active device found. Please open Spotify on a device first.',
+            code: 'NO_DEVICE',
+            service: 'spotify',
+          });
+        }
+
+        if (resp.status === 403) {
+          return res.status(403).json({
+            error: 'Spotify Premium is required for playback control.',
+            code: 'PREMIUM_REQUIRED',
+            service: 'spotify',
+          });
+        }
+
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, logger, 'play');
+      } catch (err) {
+        logger.error('Spotify play error', { error: err.message });
+        res.status(500).json({ error: 'Failed to start playback' });
+      }
     }
-  });
+  );
 
   // ============ SPOTIFY PLAYBACK CONTROL ENDPOINTS ============
 
@@ -2267,77 +2290,69 @@ module.exports = (app, deps) => {
   }
 
   // Get current playback state
-  app.get('/api/spotify/playback', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.get(
+    '/api/spotify/playback',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      try {
+        const resp = await fetch('https://api.spotify.com/v1/me/player', {
+          headers: {
+            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+          },
+        });
 
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player', {
-        headers: {
-          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-        },
-      });
+        if (resp.status === 204) {
+          // No active playback
+          return res.json({ is_playing: false, device: null, item: null });
+        }
 
-      if (resp.status === 204) {
-        // No active playback
-        return res.json({ is_playing: false, device: null, item: null });
+        if (!resp.ok) {
+          const errorData = await resp.json().catch(() => ({}));
+          return handleSpotifyPlayerError(
+            resp,
+            errorData,
+            res,
+            logger,
+            'playback state'
+          );
+        }
+
+        const data = await resp.json();
+        res.json(data);
+      } catch (err) {
+        logger.error('Spotify playback state error', { error: err.message });
+        res.status(500).json({ error: 'Failed to get playback state' });
       }
-
-      if (!resp.ok) {
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(
-          resp,
-          errorData,
-          res,
-          logger,
-          'playback state'
-        );
-      }
-
-      const data = await resp.json();
-      res.json(data);
-    } catch (err) {
-      logger.error('Spotify playback state error', { error: err.message });
-      res.status(500).json({ error: 'Failed to get playback state' });
     }
-  });
+  );
 
   // Pause playback
-  app.put('/api/spotify/pause', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.put(
+    '/api/spotify/pause',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      try {
+        const resp = await fetch('https://api.spotify.com/v1/me/player/pause', {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+          },
+        });
 
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player/pause', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-        },
-      });
+        if (resp.ok || resp.status === 204) {
+          return res.json({ success: true });
+        }
 
-      if (resp.ok || resp.status === 204) {
-        return res.json({ success: true });
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, logger, 'pause');
+      } catch (err) {
+        logger.error('Spotify pause error', { error: err.message });
+        res.status(500).json({ error: 'Failed to pause playback' });
       }
-
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, logger, 'pause');
-    } catch (err) {
-      logger.error('Spotify pause error', { error: err.message });
-      res.status(500).json({ error: 'Failed to pause playback' });
     }
-  });
+  );
 
   // Resume playback
   app.put('/api/spotify/resume', ensureAuthAPI, async (req, res) => {
@@ -2558,108 +2573,104 @@ module.exports = (app, deps) => {
   });
 
   // Search Tidal for an album and return the ID
-  app.get('/api/tidal/album', ensureAuthAPI, async (req, res) => {
-    // Ensure valid Tidal token (auto-refresh if needed)
-    const tokenResult = await ensureValidTidalToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Tidal auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'tidal',
+  app.get(
+    '/api/tidal/album',
+    ensureAuthAPI,
+    requireTidalAuth,
+    async (req, res) => {
+      const tidalAuth = req.tidalAuth;
+
+      logger.debug('Tidal token expires at', {
+        expiresAt: tidalAuth.expires_at,
       });
-    }
+      logger.debug(
+        'Using Tidal access token:',
+        (tidalAuth.access_token || '').slice(0, 6) +
+          '...' +
+          (tidalAuth.access_token || '').slice(-4)
+      );
 
-    const tidalAuth = tokenResult.tidalAuth;
+      const { artist, album } = req.query;
+      if (!artist || !album) {
+        return res.status(400).json({ error: 'artist and album are required' });
+      }
 
-    logger.debug('Tidal token expires at', { expiresAt: tidalAuth.expires_at });
-    logger.debug(
-      'Using Tidal access token:',
-      (tidalAuth.access_token || '').slice(0, 6) +
-        '...' +
-        (tidalAuth.access_token || '').slice(-4)
-    );
+      logger.info('Tidal album search:', artist, '-', album);
 
-    const { artist, album } = req.query;
-    if (!artist || !album) {
-      return res.status(400).json({ error: 'artist and album are required' });
-    }
-
-    logger.info('Tidal album search:', artist, '-', album);
-
-    try {
-      let countryCode = req.user.tidalCountry;
-      if (!countryCode) {
-        try {
-          const profileResp = await fetch(
-            'https://openapi.tidal.com/users/v1/me',
-            {
-              headers: {
-                Authorization: `Bearer ${tidalAuth.access_token}`,
-                Accept: 'application/vnd.api+json',
-                'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
-              },
-            }
-          );
-          if (profileResp.ok) {
-            const profile = await profileResp.json();
-            countryCode = profile.countryCode || 'US';
-            users.update(
-              { _id: req.user._id },
-              { $set: { tidalCountry: countryCode, updatedAt: new Date() } },
-              {},
-              () => {}
+      try {
+        let countryCode = req.user.tidalCountry;
+        if (!countryCode) {
+          try {
+            const profileResp = await fetch(
+              'https://openapi.tidal.com/users/v1/me',
+              {
+                headers: {
+                  Authorization: `Bearer ${tidalAuth.access_token}`,
+                  Accept: 'application/vnd.api+json',
+                  'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
+                },
+              }
             );
-            req.user.tidalCountry = countryCode;
-          } else {
-            logger.warn('Tidal profile request failed:', profileResp.status);
+            if (profileResp.ok) {
+              const profile = await profileResp.json();
+              countryCode = profile.countryCode || 'US';
+              users.update(
+                { _id: req.user._id },
+                { $set: { tidalCountry: countryCode, updatedAt: new Date() } },
+                {},
+                () => {}
+              );
+              req.user.tidalCountry = countryCode;
+            } else {
+              logger.warn('Tidal profile request failed:', profileResp.status);
+              countryCode = 'US';
+            }
+          } catch (profileErr) {
+            logger.error('Tidal profile fetch error:', profileErr);
             countryCode = 'US';
           }
-        } catch (profileErr) {
-          logger.error('Tidal profile fetch error:', profileErr);
-          countryCode = 'US';
         }
-      }
 
-      const query = `${album} ${artist}`;
-      // encodeURIComponent does not escape apostrophes, which breaks the
-      // Tidal searchResults path. Replace them manually after encoding.
-      const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
-      const params = new URLSearchParams({ countryCode });
-      const url =
-        `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?` +
-        params.toString();
-      logger.debug('Tidal search URL:', url);
-      logger.debug(
-        'Tidal client ID header:',
-        (process.env.TIDAL_CLIENT_ID || '').slice(0, 6) + '...'
-      );
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${tidalAuth.access_token}`,
-          Accept: 'application/vnd.api+json',
-          'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
-        },
-      });
-      logger.debug('Tidal response status:', resp.status);
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '<body read failed>');
-        logger.warn('Tidal API request failed:', resp.status, body);
-        throw new Error(`Tidal API error ${resp.status}`);
+        const query = `${album} ${artist}`;
+        // encodeURIComponent does not escape apostrophes, which breaks the
+        // Tidal searchResults path. Replace them manually after encoding.
+        const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
+        const params = new URLSearchParams({ countryCode });
+        const url =
+          `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?` +
+          params.toString();
+        logger.debug('Tidal search URL:', url);
+        logger.debug(
+          'Tidal client ID header:',
+          (process.env.TIDAL_CLIENT_ID || '').slice(0, 6) + '...'
+        );
+        const resp = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${tidalAuth.access_token}`,
+            Accept: 'application/vnd.api+json',
+            'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
+          },
+        });
+        logger.debug('Tidal response status:', resp.status);
+        if (!resp.ok) {
+          const body = await resp.text().catch(() => '<body read failed>');
+          logger.warn('Tidal API request failed:', resp.status, body);
+          throw new Error(`Tidal API error ${resp.status}`);
+        }
+        const data = await resp.json();
+        logger.debug('Tidal API response body:', JSON.stringify(data, null, 2));
+        const albumId = data?.data?.[0]?.id;
+        if (!albumId) {
+          return res.status(404).json({ error: 'Album not found' });
+        }
+        logger.info('Tidal search result id:', albumId);
+        res.json({ id: albumId });
+      } catch (err) {
+        logger.error('Tidal search error', { error: err.message });
+        res.status(500).json({ error: 'Failed to search Tidal' });
       }
-      const data = await resp.json();
-      logger.debug('Tidal API response body:', JSON.stringify(data, null, 2));
-      const albumId = data?.data?.[0]?.id;
-      if (!albumId) {
-        return res.status(404).json({ error: 'Album not found' });
-      }
-      logger.info('Tidal search result id:', albumId);
-      res.json({ id: albumId });
-    } catch (err) {
-      logger.error('Tidal search error', { error: err.message });
-      res.status(500).json({ error: 'Failed to search Tidal' });
     }
-  });
+  );
 
   // Search Spotify for a track and return the ID
   app.get('/api/spotify/track', ensureAuthAPI, async (req, res) => {

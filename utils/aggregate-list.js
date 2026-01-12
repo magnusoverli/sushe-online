@@ -1,5 +1,5 @@
 const logger = require('./logger');
-const { normalizeForComparison } = require('./fuzzy-match');
+const { normalizeAlbumKey } = require('./fuzzy-match');
 
 /**
  * Position-based points for weighted aggregation
@@ -54,25 +54,6 @@ const POSITION_POINTS = {
  */
 function getPositionPoints(position) {
   return POSITION_POINTS[position] || 0;
-}
-
-/**
- * Normalize artist and album names for aggregate list deduplication
- * Uses sophisticated normalization from fuzzy-match to catch:
- * - Edition suffixes: "(Deluxe Edition)", "[Remastered]"
- * - Leading articles: "The", "A", "An", etc.
- * - Punctuation differences: "AC/DC" vs "ACDC"
- * - Ampersand variations: "&" vs "and"
- *
- * Only affects the key used for grouping - does not modify display values
- * @param {string|null|undefined} artist - Artist name
- * @param {string|null|undefined} album - Album name
- * @returns {string} Normalized key in format "artist::album"
- */
-function normalizeAlbumKey(artist, album) {
-  const normalizedArtist = normalizeForComparison(String(artist || ''));
-  const normalizedAlbum = normalizeForComparison(String(album || ''));
-  return `${normalizedArtist}::${normalizedAlbum}`;
 }
 
 // ============================================

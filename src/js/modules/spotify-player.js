@@ -5,6 +5,7 @@
  */
 
 import { showToast } from './utils.js';
+import { isAlbumMatchingPlayback } from './playback-utils.js';
 
 // ============ MODULE STATE ============
 let currentPlayback = null;
@@ -56,39 +57,6 @@ function formatTime(ms) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-/**
- * Normalize string for matching (same logic as app.js)
- */
-function normalizeForMatch(str) {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-    .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric (keep spaces)
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
-}
-
-/**
- * Check if a list album matches the currently playing Spotify track
- */
-function isAlbumMatchingPlayback(
-  listAlbum,
-  playingAlbumName,
-  playingArtistName
-) {
-  if (!listAlbum || !playingAlbumName || !playingArtistName) return false;
-
-  const albumMatch =
-    normalizeForMatch(listAlbum.album) === normalizeForMatch(playingAlbumName);
-  const artistMatch =
-    normalizeForMatch(listAlbum.artist) ===
-    normalizeForMatch(playingArtistName);
-
-  return albumMatch && artistMatch;
 }
 
 /**

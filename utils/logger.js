@@ -214,7 +214,7 @@ function createLogger(options = {}) {
 
     /**
      * Request logging middleware
-     * Uses pino-http under the hood but maintains the same interface
+     * Logs request/response details with timing information
      */
     requestLogger() {
       return (req, res, next) => {

@@ -12,6 +12,7 @@ import {
   isYearMismatch,
   extractYearFromDate,
 } from './date-utils.js';
+import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -378,21 +379,6 @@ export function createAlbumDisplay(deps = {}) {
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
     if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
     return count.toString();
-  }
-
-  /**
-   * Escape HTML special characters for safe attribute values
-   * @param {string} str - String to escape
-   * @returns {string} Escaped string
-   */
-  function escapeHtml(str) {
-    if (!str) return '';
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
   }
 
   /**

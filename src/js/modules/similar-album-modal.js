@@ -5,6 +5,8 @@
  * allowing users to confirm if it's the same album or a different one.
  */
 
+import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+
 let modalElement = null;
 let resolveCallback = null;
 
@@ -160,7 +162,7 @@ function populateModal(newAlbum, existingMatch) {
     ? `/api/albums/${encodeURIComponent(existingMatch.album_id)}/cover`
     : null;
 
-  const placeholderSvg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='1'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Ccircle cx='12' cy='12' r='1'/%3E%3C/svg%3E`;
+  const placeholderSvg = getPlaceholderSvg(120);
 
   // Generate match explanation
   const matchExplanation = generateMatchExplanation(newAlbum, existingMatch);
@@ -283,13 +285,6 @@ async function closeModal(action) {
   }
 }
 
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
 /**
  * Generate a human-readable explanation of why two albums matched
  * @param {Object} newAlbum - The album being added
@@ -374,13 +369,4 @@ function stripEditionSuffix(albumName) {
     )
     .replace(/\s+/g, ' ')
     .trim();
-}
-
-// Cleanup on module unload
-export function cleanup() {
-  if (modalElement) {
-    document.removeEventListener('keydown', handleEscapeKey);
-    modalElement.remove();
-    modalElement = null;
-  }
 }

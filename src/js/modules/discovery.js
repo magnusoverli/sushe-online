@@ -8,6 +8,7 @@
  */
 
 import { searchArtistImageRacing } from '../musicbrainz.js';
+import { escapeHtml } from './html-utils.js';
 
 // Module state
 let discoveryModal = null;
@@ -329,17 +330,6 @@ function renderSimilarArtistsList(artists) {
     .join('');
 
   return `<div class="space-y-2">${items}</div>`;
-}
-
-/**
- * Escape HTML to prevent XSS
- * @param {string} str - String to escape
- */
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
 }
 
 /**

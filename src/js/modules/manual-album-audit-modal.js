@@ -6,6 +6,7 @@
  */
 
 import { showToast } from './utils.js';
+import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
 
 let modalElement = null;
 let currentData = null;
@@ -224,7 +225,7 @@ function showCurrentItem() {
     ? `/api/albums/${encodeURIComponent(bestMatch.albumId)}/cover`
     : null;
 
-  const placeholderSvg = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='1'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Ccircle cx='12' cy='12' r='4'/%3E%3Ccircle cx='12' cy='12' r='1'/%3E%3C/svg%3E`;
+  const placeholderSvg = getPlaceholderSvg(120);
 
   // Build usage info
   const usageInfo = album.usedIn
@@ -430,21 +431,5 @@ function setButtonsLoading(loading) {
   } else {
     mergeBtn.innerHTML =
       '<i class="fas fa-compress-arrows-alt"></i> Merge Albums';
-  }
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-// Cleanup
-export function cleanup() {
-  if (modalElement) {
-    document.removeEventListener('keydown', handleEscapeKey);
-    modalElement.remove();
-    modalElement = null;
   }
 }

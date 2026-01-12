@@ -5,6 +5,7 @@
 
 import { apiCall } from './utils.js';
 import { showToast } from './ui-utils.js';
+import { escapeHtml } from './html-utils.js';
 
 // State for the wizard
 let setupData = null;
@@ -349,15 +350,6 @@ function hideWizard() {
   }
   setupData = null;
   pendingUpdates.clear();
-}
-
-/**
- * Escape HTML to prevent XSS
- */
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
 }
 
 // Export for use in app initialization
