@@ -60,7 +60,7 @@ const headerComponent = (user, activeSection = 'home') => `
       </div>
       
       <!-- Current list name (mobile only) -->
-      <span id="mobileCurrentListName" class="lg:hidden text-sm text-gray-300 font-medium truncate max-w-[40%] hidden"></span>
+      <span id="mobileCurrentListName" class="lg:hidden text-base text-gray-300 font-medium truncate max-w-[40%] hidden"></span>
       
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-1">
