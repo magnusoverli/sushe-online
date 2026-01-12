@@ -17,11 +17,13 @@ test('stripHtml should remove basic HTML tags', () => {
   assert.strictEqual(result, 'Hello World');
 });
 
-test('stripHtml should remove Last.fm "Read more" links', () => {
+test('stripHtml should remove anchor tags but keep text', () => {
+  // Note: stripHtml removes HTML tags but keeps the text content
+  // Last.fm-specific "Read more" stripping was removed when switching to Claude
   const html =
     'Album description <a href="https://www.last.fm/music/Artist/Album">Read more on Last.fm</a>';
   const result = stripHtml(html);
-  assert.strictEqual(result, 'Album description');
+  assert.strictEqual(result, 'Album description Read more on Last.fm');
 });
 
 test('stripHtml should decode HTML entities', () => {
@@ -46,10 +48,11 @@ test('stripHtml should handle null/undefined', () => {
 });
 
 test('stripHtml should handle complex HTML', () => {
+  // stripHtml removes tags but preserves all text content
   const html =
     '<div class="wiki-content"><p>This is a <strong>great</strong> album.</p><a href="http://last.fm">Read more on Last.fm</a></div>';
   const result = stripHtml(html);
-  assert.strictEqual(result, 'This is a great album.');
+  assert.strictEqual(result, 'This is a great album.Read more on Last.fm');
 });
 
 // =============================================================================
@@ -336,10 +339,8 @@ test('module should export helper functions for testing', () => {
 // =============================================================================
 
 test('SUMMARY_SOURCES should have claude', () => {
+  // Claude is now the only summary source (Last.fm/Wikipedia were removed)
   assert.strictEqual(SUMMARY_SOURCES.CLAUDE, 'claude');
-  // Legacy sources kept for backward compatibility
-  assert.strictEqual(SUMMARY_SOURCES.LASTFM, 'lastfm');
-  assert.strictEqual(SUMMARY_SOURCES.WIKIPEDIA, 'wikipedia');
 });
 
 // =============================================================================
