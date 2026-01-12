@@ -64,8 +64,7 @@ const headerComponent = (user, activeSection = 'home') => `
       
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-1">
-        <span class="text-xs lg:text-sm text-gray-400 truncate max-w-[120px] lg:max-w-none">${user?.username || user?.email}</span>
-        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-4 lg:ml-6" title="Settings" id="newSettingsButton">
+        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings" id="newSettingsButton">
           <i class="fas fa-sliders-h text-lg"></i>
         </button>
         <a href="/logout" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">

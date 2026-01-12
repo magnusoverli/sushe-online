@@ -698,7 +698,6 @@ describe('templates utilities', () => {
 
       assert.ok(typeof result === 'string');
       assert.ok(result.includes('<header'));
-      assert.ok(result.includes('testuser'));
     });
 
     it('should include SuShe logo link', () => {
@@ -724,20 +723,6 @@ describe('templates utilities', () => {
 
       assert.ok(result.includes('href="/logout"'));
       assert.ok(result.includes('fa-sign-out-alt'));
-    });
-
-    it('should show username when provided', () => {
-      const user = { username: 'john_doe' };
-      const result = templates.headerComponent(user);
-
-      assert.ok(result.includes('john_doe'));
-    });
-
-    it('should show email when username not provided', () => {
-      const user = { email: 'test@example.com' };
-      const result = templates.headerComponent(user);
-
-      assert.ok(result.includes('test@example.com'));
     });
 
     it('should render mobile menu button for home section', () => {
