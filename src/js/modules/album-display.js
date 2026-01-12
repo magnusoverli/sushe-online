@@ -249,7 +249,6 @@ export function createAlbumDisplay(deps = {}) {
    */
   function processAlbumData(album, index) {
     const currentList = getCurrentList();
-    const position = index + 1;
     const albumId = album.album_id || '';
     const albumName = album.album || 'Unknown Album';
     const artist = album.artist || 'Unknown Artist';
@@ -259,6 +258,11 @@ export function createAlbumDisplay(deps = {}) {
     // Check for year mismatch with current list
     const listMeta = getListMetadata(currentList);
     const listYear = listMeta?.year || null;
+
+    // Position/rank only exists for main lists - it has semantic meaning (contributes to aggregate)
+    // For non-main lists, position is just array order with no ranking significance
+    const isMain = listMeta?.isMain || false;
+    const position = isMain ? index + 1 : null;
     const yearMismatch = isYearMismatch(rawReleaseDate, listYear);
     const releaseYear = extractYearFromDate(rawReleaseDate);
     const yearMismatchTooltip = yearMismatch
@@ -482,7 +486,7 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     row.innerHTML = `
-      <div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>
+      ${data.position !== null ? `<div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>` : '<div></div>'}
       <div class="flex items-center">
         <div class="album-cover-container">
           ${
@@ -762,13 +766,37 @@ export function createAlbumDisplay(deps = {}) {
       </div>`;
     }
 
+    // Position badge helper function for mobile
+    const getPositionBadgeHtml = (position) => {
+      if (position === null) return '';
+      const borderClass =
+        position === 1
+          ? 'border-yellow-500'
+          : position === 2
+            ? 'border-gray-400'
+            : position === 3
+              ? 'border-amber-700'
+              : 'border-gray-500';
+      const shadowSize = position <= 3 ? '8px' : '5px';
+      const shadowColor =
+        position === 1
+          ? 'rgba(255,215,0,1.0)'
+          : position === 2
+            ? 'rgba(192,192,192,1.0)'
+            : position === 3
+              ? 'rgba(205,127,50,1.0)'
+              : 'rgba(255,255,255,0.25)';
+      return `
+        <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${borderClass} text-white text-[9px] font-medium rounded-full position-badge" 
+             style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${shadowSize} ${shadowColor};"
+             data-position-element="true">
+          <span style="margin-top: 1px;">${position}</span>
+        </div>
+      `;
+    };
+
     card.innerHTML = `
-      <!-- Position badge (upper right, above action column) -->
-      <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${data.position === 1 ? 'border-yellow-500' : data.position === 2 ? 'border-gray-400' : data.position === 3 ? 'border-amber-700' : 'border-gray-500'} text-white text-[9px] font-medium rounded-full position-badge" 
-           style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${data.position <= 3 ? '8px' : '5px'} ${data.position === 1 ? 'rgba(255,215,0,1.0)' : data.position === 2 ? 'rgba(192,192,192,1.0)' : data.position === 3 ? 'rgba(205,127,50,1.0)' : 'rgba(255,255,255,0.25)'};"
-           data-position-element="true">
-        <span style="margin-top: 1px;">${data.position}</span>
-      </div>
+      ${getPositionBadgeHtml(data.position)}
       <div class="flex items-stretch h-full bg-gray-900">
         <!-- Left section: Album cover and Release date -->
         <div class="shrink-0 flex items-stretch h-full">
@@ -1085,12 +1113,11 @@ export function createAlbumDisplay(deps = {}) {
         // Get cached element references (creates cache if missing)
         const cache = getCachedElements(row, isMobile);
 
-        // Update position number
-        if (
-          cache.position &&
-          cache.position.textContent !== data.position.toString()
-        ) {
-          cache.position.textContent = data.position;
+        // Update position number (only for main lists where position is not null)
+        if (cache.position && data.position !== null) {
+          if (cache.position.textContent !== data.position.toString()) {
+            cache.position.textContent = data.position;
+          }
         }
 
         // Update artist
@@ -1298,10 +1325,16 @@ export function createAlbumDisplay(deps = {}) {
 
   /**
    * Update position numbers after reorder
+   * Only updates positions for main lists (where positions have semantic meaning)
    * @param {HTMLElement} container - Container element
    * @param {boolean} isMobile - Whether mobile view
    */
   function updatePositionNumbers(container, isMobile) {
+    // Check if current list is a main list - positions only exist for main lists
+    const currentList = getCurrentList();
+    const listMeta = getListMetadata(currentList);
+    const isMain = listMeta?.isMain || false;
+
     let rows;
 
     if (isMobile) {
@@ -1314,6 +1347,16 @@ export function createAlbumDisplay(deps = {}) {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const position = i + 1;
+
+      // Always update data-index for drag-drop functionality
+      row.dataset.index = i;
+      const innerCard = row.querySelector('.album-card');
+      if (innerCard) {
+        innerCard.dataset.index = i;
+      }
+
+      // Only update position display for main lists
+      if (!isMain) continue;
 
       let positionEl = positionElementCache.get(row);
       if (!positionEl) {
@@ -1359,11 +1402,6 @@ export function createAlbumDisplay(deps = {}) {
             positionEl.style.boxShadow = '0 0 5px rgba(255,255,255,0.25)';
           }
         }
-      }
-      row.dataset.index = i;
-      const innerCard = row.querySelector('.album-card');
-      if (innerCard) {
-        innerCard.dataset.index = i;
       }
     }
   }

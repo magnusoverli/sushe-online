@@ -26,6 +26,7 @@ export function createRealtimeSync(deps = {}) {
     showToast = () => {},
     apiCall = async () => {},
     updateAlbumSummaryInPlace = async () => {},
+    displayAlbums = () => {},
   } = deps;
 
   let socket = null;
@@ -233,6 +234,17 @@ export function createRealtimeSync(deps = {}) {
 
     // Refresh sidebar to update the main indicator
     refreshListNav();
+
+    // If this is the currently displayed list, re-render to show/hide position numbers
+    // Position numbers only appear on main lists (they have semantic meaning for rankings)
+    const currentList = getCurrentList();
+    if (data.listName === currentList) {
+      const albums = getListData(currentList);
+      if (albums) {
+        // Force full rebuild to add/remove position elements
+        displayAlbums(albums, { forceFullRebuild: true });
+      }
+    }
   }
 
   /**

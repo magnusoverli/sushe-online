@@ -76,7 +76,7 @@ describe('album-display module', () => {
     it('should process album data correctly', () => {
       const mockDeps = {
         getListData: mock.fn(() => []),
-        getListMetadata: mock.fn(() => ({ year: 2024 })),
+        getListMetadata: mock.fn(() => ({ year: 2024, isMain: true })),
         getCurrentList: mock.fn(() => 'test-list'),
         formatReleaseDate: mock.fn((d) => d || ''),
         isYearMismatch: mock.fn(() => false),
@@ -102,6 +102,7 @@ describe('album-display module', () => {
 
       const data = module.processAlbumData(album, 0);
 
+      // Position is only set for main lists
       assert.strictEqual(data.position, 1);
       assert.strictEqual(data.albumName, 'Test Album');
       assert.strictEqual(data.artist, 'Test Artist');
@@ -117,7 +118,7 @@ describe('album-display module', () => {
     it('should handle missing album data with defaults', () => {
       const mockDeps = {
         getListData: mock.fn(() => []),
-        getListMetadata: mock.fn(() => ({})),
+        getListMetadata: mock.fn(() => ({})), // No isMain, so position should be null
         getCurrentList: mock.fn(() => 'test-list'),
         formatReleaseDate: mock.fn(() => ''),
         isYearMismatch: mock.fn(() => false),
@@ -129,7 +130,8 @@ describe('album-display module', () => {
       const album = {};
       const data = module.processAlbumData(album, 0);
 
-      assert.strictEqual(data.position, 1);
+      // Position is null for non-main lists (isMain not set)
+      assert.strictEqual(data.position, null);
       assert.strictEqual(data.albumName, 'Unknown Album');
       assert.strictEqual(data.artist, 'Unknown Artist');
       assert.strictEqual(data.country, '');
@@ -194,6 +196,53 @@ describe('album-display module', () => {
       };
       data = module.processAlbumData(album, 0);
       assert.strictEqual(data.trackPickDisplay, 'Track 5');
+    });
+
+    it('should set position only for main lists', () => {
+      // Test with main list - position should be set
+      let mockDeps = {
+        getListData: mock.fn(() => []),
+        getListMetadata: mock.fn(() => ({ year: 2024, isMain: true })),
+        getCurrentList: mock.fn(() => 'test-list'),
+        formatReleaseDate: mock.fn(() => ''),
+        isYearMismatch: mock.fn(() => false),
+        extractYearFromDate: mock.fn(() => 2024),
+      };
+
+      let module = createAlbumDisplay(mockDeps);
+      let data = module.processAlbumData({ album: 'Test' }, 0);
+      assert.strictEqual(data.position, 1);
+
+      data = module.processAlbumData({ album: 'Test' }, 4);
+      assert.strictEqual(data.position, 5);
+
+      // Test with non-main list - position should be null
+      mockDeps = {
+        getListData: mock.fn(() => []),
+        getListMetadata: mock.fn(() => ({ year: 2024, isMain: false })),
+        getCurrentList: mock.fn(() => 'test-list'),
+        formatReleaseDate: mock.fn(() => ''),
+        isYearMismatch: mock.fn(() => false),
+        extractYearFromDate: mock.fn(() => 2024),
+      };
+
+      module = createAlbumDisplay(mockDeps);
+      data = module.processAlbumData({ album: 'Test' }, 0);
+      assert.strictEqual(data.position, null);
+
+      // Test with list without isMain property - position should be null
+      mockDeps = {
+        getListData: mock.fn(() => []),
+        getListMetadata: mock.fn(() => ({ year: 2024 })), // No isMain
+        getCurrentList: mock.fn(() => 'test-list'),
+        formatReleaseDate: mock.fn(() => ''),
+        isYearMismatch: mock.fn(() => false),
+        extractYearFromDate: mock.fn(() => 2024),
+      };
+
+      module = createAlbumDisplay(mockDeps);
+      data = module.processAlbumData({ album: 'Test' }, 0);
+      assert.strictEqual(data.position, null);
     });
   });
 

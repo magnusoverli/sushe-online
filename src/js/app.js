@@ -503,6 +503,7 @@ function getRealtimeSyncModule() {
         loadLists();
       },
       showToast,
+      displayAlbums,
     });
   }
   return realtimeSyncModule;
@@ -741,6 +742,15 @@ async function toggleMainStatus(listName) {
 
     // Refresh sidebar to show updated star icons
     updateListNav();
+
+    // If this is the currently displayed list, re-render to show/hide position numbers
+    // Position numbers only appear on main lists (they have semantic meaning for rankings)
+    if (listName === currentList) {
+      const albums = getListData(currentList);
+      if (albums) {
+        displayAlbums(albums, { forceFullRebuild: true });
+      }
+    }
 
     // Show appropriate message
     if (newMainStatus) {
