@@ -1744,10 +1744,21 @@ export function createSettingsDrawer(deps = {}) {
                 <label class="settings-label">Scan for Duplicates</label>
                 <p class="settings-description">Find and review albums that may be duplicates based on fuzzy matching</p>
               </div>
-              <div class="flex gap-2">
+              <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2">
+                  <label for="duplicateThreshold" class="text-xs text-gray-400 whitespace-nowrap">Sensitivity:</label>
+                  <select id="duplicateThreshold" class="bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600">
+                    <option value="0.10">Very High (0.10)</option>
+                    <option value="0.15" selected>High (0.15)</option>
+                    <option value="0.20">Medium (0.20)</option>
+                    <option value="0.30">Low (0.30)</option>
+                    <option value="0.45">Very Low (0.45)</option>
+                  </select>
+                </div>
                 <button id="scanDuplicatesBtn" class="settings-button">Scan & Review</button>
               </div>
             </div>
+            <p class="text-xs text-gray-500 mt-1">Lower values = more matches (more false positives). All matches require human review.</p>
             <div id="duplicateScanStatus" class="hidden mt-3 text-sm text-gray-400"></div>
             <div class="settings-row mt-4 pt-4 border-t border-gray-700/50">
               <div class="settings-row-label">
@@ -2327,6 +2338,10 @@ export function createSettingsDrawer(deps = {}) {
   async function handleScanDuplicates() {
     const scanBtn = document.getElementById('scanDuplicatesBtn');
     const statusDiv = document.getElementById('duplicateScanStatus');
+    const thresholdSelect = document.getElementById('duplicateThreshold');
+    const threshold = thresholdSelect
+      ? parseFloat(thresholdSelect.value)
+      : 0.15;
 
     try {
       scanBtn.disabled = true;
@@ -2335,7 +2350,9 @@ export function createSettingsDrawer(deps = {}) {
       statusDiv.innerHTML =
         '<i class="fas fa-spinner fa-spin mr-2"></i>Scanning database for potential duplicates...';
 
-      const response = await apiCall('/admin/api/scan-duplicates');
+      const response = await apiCall(
+        `/admin/api/scan-duplicates?threshold=${threshold}`
+      );
 
       if (response.error) {
         throw new Error(response.error);
@@ -4453,15 +4470,19 @@ export function createSettingsDrawer(deps = {}) {
     try {
       showToast('Running audit...', 'info');
 
-      const response = await apiCall(`/api/admin/aggregate-audit/${year}`);
+      // Fetch both the regular audit and the diagnostic in parallel
+      const [auditResponse, diagnosticResponse] = await Promise.all([
+        apiCall(`/api/admin/aggregate-audit/${year}`),
+        apiCall(`/api/admin/aggregate-audit/${year}/diagnose`),
+      ]);
 
-      if (!response) {
+      if (!auditResponse) {
         showToast('Failed to run audit', 'error');
         return;
       }
 
-      // Create and show the audit results modal
-      await showAuditResultsModal(year, response);
+      // Create and show the audit results modal with diagnostic data
+      await showAuditResultsModal(year, auditResponse, diagnosticResponse);
     } catch (error) {
       console.error('Error auditing aggregate list:', error);
       const errorMsg =
@@ -4472,8 +4493,11 @@ export function createSettingsDrawer(deps = {}) {
 
   /**
    * Show audit results in a modal
+   * @param {number} year - The year being audited
+   * @param {Object} auditData - Regular audit data with duplicates
+   * @param {Object} diagnosticData - Diagnostic data with overlap stats
    */
-  async function showAuditResultsModal(year, auditData) {
+  async function showAuditResultsModal(year, auditData, diagnosticData = null) {
     const modal = document.createElement('div');
     modal.className = 'settings-modal';
     modal.id = `audit-modal-${year}`;
@@ -4481,33 +4505,56 @@ export function createSettingsDrawer(deps = {}) {
     const { summary, duplicates } = auditData;
     const hasDuplicates = duplicates && duplicates.length > 0;
 
-    // Build duplicate items HTML
-    let duplicatesHtml = '';
-    if (hasDuplicates) {
-      duplicatesHtml = duplicates
-        .map(
-          (dup) => `
-        <div class="bg-gray-800 rounded-lg p-3 mb-2">
-          <div class="flex items-start justify-between">
-            <div>
-              <div class="text-white font-medium">${escapeHtml(dup.artist)} - ${escapeHtml(dup.album)}</div>
-              <div class="text-gray-400 text-sm mt-1">
-                ${dup.albumIds.length} different IDs across ${dup.entryCount} list entries
+    // Extract overlap stats from diagnostic if available
+    const overlapStats = diagnosticData?.overlapStats || null;
+    const missedByBasic = diagnosticData?.missedByBasic || [];
+
+    // Build overlap stats HTML if diagnostic data available (NO album details disclosed)
+    const overlapHtml = overlapStats
+      ? `
+          <!-- Overlap Statistics Section -->
+          <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
+            <h4 class="text-white font-semibold mb-3">
+              <i class="fas fa-layer-group mr-2 text-purple-400"></i>Overlap Statistics
+            </h4>
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span class="text-gray-400">Albums on 1 list only:</span>
+                <span class="text-white ml-2">${overlapStats.distribution.appearsOn1List}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Albums on 2+ lists:</span>
+                <span class="text-green-400 ml-2">${overlapStats.distribution.appearsOn2PlusLists}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Albums on 3+ lists:</span>
+                <span class="text-green-400 ml-2">${overlapStats.distribution.appearsOn3PlusLists}</span>
+              </div>
+              <div>
+                <span class="text-gray-400">Albums on 5+ lists:</span>
+                <span class="text-green-400 ml-2">${overlapStats.distribution.appearsOn5PlusLists}</span>
               </div>
             </div>
-            <span class="bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded text-xs">
-              ${dup.albumIds.length} IDs
-            </span>
           </div>
-          <div class="mt-2 text-xs text-gray-500">
-            <div class="font-medium text-gray-400 mb-1">Album IDs:</div>
-            ${dup.albumIds.map((id) => `<code class="bg-gray-900 px-1 rounded mr-1">${escapeHtml(id.substring(0, 20))}${id.length > 20 ? '...' : ''}</code>`).join('')}
+        `
+      : '';
+
+    // Build smart normalization indicator (NO album details disclosed)
+    const missedHtml =
+      missedByBasic.length > 0
+        ? `
+          <!-- Normalization Improvements Section -->
+          <div class="bg-green-900/20 border border-green-800 rounded-lg p-4 mb-4">
+            <h4 class="text-green-400 font-semibold mb-2">
+              <i class="fas fa-magic mr-2"></i>Smart Normalization Active
+            </h4>
+            <p class="text-gray-400 text-sm">
+              ${missedByBasic.length} album(s) with variant names (e.g., deluxe editions, remastered versions) 
+              were correctly merged that would have been counted separately with basic matching.
+            </p>
           </div>
-        </div>
-      `
-        )
-        .join('');
-    }
+        `
+        : '';
 
     modal.innerHTML = `
       <div class="settings-modal-backdrop"></div>
@@ -4528,7 +4575,7 @@ export function createSettingsDrawer(deps = {}) {
             </h4>
             <div class="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span class="text-gray-400">Albums Scanned:</span>
+                <span class="text-gray-400">Total List Entries:</span>
                 <span class="text-white ml-2">${summary.totalAlbumsScanned}</span>
               </div>
               <div>
@@ -4546,21 +4593,22 @@ export function createSettingsDrawer(deps = {}) {
             </div>
           </div>
 
+          ${overlapHtml}
+          ${missedHtml}
+
           ${
             hasDuplicates
               ? `
-          <!-- Duplicates Section -->
-          <div class="mb-4">
-            <h4 class="text-white font-semibold mb-3">
-              <i class="fas fa-exclamation-triangle mr-2 text-yellow-400"></i>Albums with Different IDs
+          <!-- Duplicates Section (no album details) -->
+          <div class="bg-yellow-900/20 border border-yellow-800 rounded-lg p-4 mb-4">
+            <h4 class="text-yellow-400 font-semibold mb-2">
+              <i class="fas fa-exclamation-triangle mr-2"></i>Albums with Different IDs
             </h4>
-            <p class="text-gray-400 text-sm mb-3">
-              These albums were added from different sources (MusicBrainz, Spotify, manual entry) but represent the same album.
-              The aggregation system now groups them correctly, but you can optionally normalize the IDs for cleaner data.
+            <p class="text-gray-400 text-sm">
+              ${duplicates.length} album(s) were added from different sources (MusicBrainz, Spotify, manual entry) 
+              but represent the same album. The aggregation system groups them correctly, but you can optionally 
+              normalize the IDs for cleaner data.
             </p>
-            <div class="max-h-64 overflow-y-auto">
-              ${duplicatesHtml}
-            </div>
           </div>
           `
               : `
@@ -4625,37 +4673,11 @@ export function createSettingsDrawer(deps = {}) {
           );
 
           if (preview.changesRequired) {
-            const changeDetails = preview.changes
-              .map(
-                (c) => `
-              <div class="bg-gray-900 rounded p-2 mb-2 text-sm">
-                <div class="text-white">${escapeHtml(c.artist)} - ${escapeHtml(c.album)}</div>
-                <div class="text-gray-400 text-xs mt-1">
-                  Canonical ID: <code class="bg-gray-800 px-1 rounded">${escapeHtml(c.canonicalAlbumId.substring(0, 25))}...</code>
-                </div>
-                <div class="text-gray-500 text-xs">
-                  ${c.affectedEntries.length} entries would be updated
-                </div>
-              </div>
-            `
-              )
-              .join('');
-
-            showToast(`${preview.totalChanges} changes would be made`, 'info');
-
-            // Update modal body with preview details
-            const detailsContainer = modal.querySelector(
-              '.max-h-64.overflow-y-auto'
+            // Show summary only, no album details
+            showToast(
+              `${preview.totalChanges} entries across ${preview.changes.length} albums would be normalized`,
+              'info'
             );
-            if (detailsContainer) {
-              detailsContainer.innerHTML = `
-                <div class="mb-2 text-sm text-gray-300">
-                  <i class="fas fa-info-circle mr-1"></i>
-                  Preview of ${preview.totalChanges} changes:
-                </div>
-                ${changeDetails}
-              `;
-            }
           } else {
             showToast('No changes needed', 'success');
           }
@@ -4727,8 +4749,10 @@ export function createSettingsDrawer(deps = {}) {
 
   /**
    * Escape HTML to prevent XSS
+   * Currently unused after removing album details from audit modal,
+   * but kept for potential future use.
    */
-  function escapeHtml(text) {
+  function _escapeHtml(text) {
     if (!text) return '';
     const div = document.createElement('div');
     div.textContent = text;

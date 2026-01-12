@@ -13,21 +13,38 @@
  */
 
 const logger = require('./logger');
-const { findPotentialDuplicates } = require('./fuzzy-match');
+const {
+  findPotentialDuplicates,
+  normalizeForComparison,
+} = require('./fuzzy-match');
 
 /**
- * Normalize artist and album names for comparison
+ * Basic normalization (lowercase + trim only)
+ * Used for comparison with sophisticated normalization to detect missed duplicates
  * @param {string|null|undefined} artist - Artist name
  * @param {string|null|undefined} album - Album name
  * @returns {string} Normalized key in format "artist::album"
  */
-function normalizeAlbumKey(artist, album) {
+function basicNormalizeAlbumKey(artist, album) {
   const normalizedArtist = String(artist || '')
     .toLowerCase()
     .trim();
   const normalizedAlbum = String(album || '')
     .toLowerCase()
     .trim();
+  return `${normalizedArtist}::${normalizedAlbum}`;
+}
+
+/**
+ * Sophisticated normalization using fuzzy-match utilities
+ * Strips edition suffixes, articles, punctuation differences, etc.
+ * @param {string|null|undefined} artist - Artist name
+ * @param {string|null|undefined} album - Album name
+ * @returns {string} Normalized key in format "artist::album"
+ */
+function normalizeAlbumKey(artist, album) {
+  const normalizedArtist = normalizeForComparison(String(artist || ''));
+  const normalizedAlbum = normalizeForComparison(String(album || ''));
   return `${normalizedArtist}::${normalizedAlbum}`;
 }
 
@@ -195,6 +212,165 @@ function createAggregateAudit(deps = {}) {
 
     log.info(
       `Aggregate audit for ${year}: Found ${duplicates.length} albums with multiple album_ids`
+    );
+
+    return report;
+  }
+
+  /**
+   * Diagnose normalization effectiveness by comparing basic vs sophisticated normalization
+   *
+   * This helps identify albums that would be missed by simple lowercase+trim
+   * but caught by the full normalization (edition suffixes, articles, punctuation, etc.)
+   *
+   * @param {number} year - The year to diagnose
+   * @returns {Promise<Object>} Diagnostic report
+   */
+  async function diagnoseNormalization(year) {
+    log.info(`Running normalization diagnostic for year ${year}`);
+
+    // Find all list items from contributors for this year
+    const result = await pool.query(
+      `
+      SELECT 
+        li.album_id,
+        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
+        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        li.position,
+        l.user_id,
+        u.username
+      FROM list_items li
+      JOIN lists l ON li.list_id = l._id
+      JOIN users u ON l.user_id = u._id
+      LEFT JOIN albums a ON li.album_id = a.album_id
+      WHERE l.year = $1 
+        AND l.is_main = TRUE
+        AND li.position <= 40
+        AND l.user_id IN (SELECT user_id FROM aggregate_list_contributors WHERE year = $1)
+      ORDER BY li.position
+    `,
+      [year]
+    );
+
+    // Group by BASIC normalization (old method)
+    const basicGroups = new Map();
+    // Group by SOPHISTICATED normalization (new method)
+    const sophisticatedGroups = new Map();
+
+    for (const item of result.rows) {
+      const basicKey = basicNormalizeAlbumKey(item.artist, item.album);
+      const sophisticatedKey = normalizeAlbumKey(item.artist, item.album);
+
+      // Track basic groups
+      if (!basicGroups.has(basicKey)) {
+        basicGroups.set(basicKey, {
+          artist: item.artist,
+          album: item.album,
+          entries: [],
+        });
+      }
+      basicGroups.get(basicKey).entries.push({
+        username: item.username,
+        position: item.position,
+        albumId: item.album_id,
+      });
+
+      // Track sophisticated groups
+      if (!sophisticatedGroups.has(sophisticatedKey)) {
+        sophisticatedGroups.set(sophisticatedKey, {
+          artist: item.artist,
+          album: item.album,
+          basicKeys: new Set(),
+          entries: [],
+        });
+      }
+      const sophGroup = sophisticatedGroups.get(sophisticatedKey);
+      sophGroup.basicKeys.add(basicKey);
+      sophGroup.entries.push({
+        username: item.username,
+        position: item.position,
+        albumId: item.album_id,
+        originalArtist: item.artist,
+        originalAlbum: item.album,
+      });
+    }
+
+    // Find albums that sophisticated normalization merges but basic doesn't
+    const missedByBasic = [];
+    for (const [sophKey, sophGroup] of sophisticatedGroups) {
+      if (sophGroup.basicKeys.size > 1) {
+        // This sophisticated key maps to multiple basic keys = albums that WOULD be duplicated with basic normalization
+        const variants = [];
+        for (const basicKey of sophGroup.basicKeys) {
+          const basicGroup = basicGroups.get(basicKey);
+          variants.push({
+            basicKey,
+            artist: basicGroup.artist,
+            album: basicGroup.album,
+            entryCount: basicGroup.entries.length,
+            entries: basicGroup.entries,
+          });
+        }
+        missedByBasic.push({
+          sophisticatedKey: sophKey,
+          canonicalArtist: sophGroup.artist,
+          canonicalAlbum: sophGroup.album,
+          totalEntries: sophGroup.entries.length,
+          variantCount: sophGroup.basicKeys.size,
+          variants,
+        });
+      }
+    }
+
+    // Calculate overlap statistics
+    const albumsWithMultipleVoters = [];
+    for (const [_sophKey, sophGroup] of sophisticatedGroups) {
+      if (sophGroup.entries.length > 1) {
+        const uniqueVoters = new Set(sophGroup.entries.map((e) => e.username))
+          .size;
+        if (uniqueVoters > 1) {
+          albumsWithMultipleVoters.push({
+            artist: sophGroup.artist,
+            album: sophGroup.album,
+            voterCount: uniqueVoters,
+            entries: sophGroup.entries.length,
+          });
+        }
+      }
+    }
+
+    // Sort by voter count descending
+    albumsWithMultipleVoters.sort((a, b) => b.voterCount - a.voterCount);
+
+    const report = {
+      year,
+      diagnosedAt: new Date().toISOString(),
+      totalListEntries: result.rows.length,
+      uniqueAlbumsBasic: basicGroups.size,
+      uniqueAlbumsSophisticated: sophisticatedGroups.size,
+      albumsMissedByBasicNormalization: missedByBasic.length,
+      missedByBasic,
+      overlapStats: {
+        albumsAppearingOnMultipleLists: albumsWithMultipleVoters.length,
+        topOverlappingAlbums: albumsWithMultipleVoters.slice(0, 20),
+        distribution: {
+          appearsOn1List:
+            sophisticatedGroups.size - albumsWithMultipleVoters.length,
+          appearsOn2PlusLists: albumsWithMultipleVoters.length,
+          appearsOn3PlusLists: albumsWithMultipleVoters.filter(
+            (a) => a.voterCount >= 3
+          ).length,
+          appearsOn5PlusLists: albumsWithMultipleVoters.filter(
+            (a) => a.voterCount >= 5
+          ).length,
+        },
+      },
+    };
+
+    log.info(
+      `Normalization diagnostic for ${year}: Basic found ${basicGroups.size} unique, ` +
+        `Sophisticated found ${sophisticatedGroups.size} unique, ` +
+        `${missedByBasic.length} albums would be duplicated with basic normalization`
     );
 
     return report;
@@ -660,6 +836,7 @@ function createAggregateAudit(deps = {}) {
 
   return {
     findDuplicates,
+    diagnoseNormalization,
     previewFix,
     executeFix,
     getAuditReport,
@@ -667,6 +844,7 @@ function createAggregateAudit(deps = {}) {
     mergeManualAlbum,
     // Export for testing
     normalizeAlbumKey,
+    basicNormalizeAlbumKey,
   };
 }
 
@@ -724,4 +902,5 @@ module.exports = {
   createAggregateAudit,
   selectCanonicalAlbumId,
   normalizeAlbumKey,
+  basicNormalizeAlbumKey,
 };

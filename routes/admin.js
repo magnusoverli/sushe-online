@@ -1741,9 +1741,16 @@ module.exports = (app, deps) => {
     ensureAuth,
     ensureAdmin,
     async (req, res) => {
+      // Parse threshold from query param, default to 0.15 (high sensitivity)
+      const threshold = Math.max(
+        0.05,
+        Math.min(0.5, parseFloat(req.query.threshold) || 0.15)
+      );
+
       try {
         logger.info('Starting duplicate album scan', {
           adminId: req.user?._id,
+          threshold,
         });
 
         // Get all albums from database with extended fields for diff comparison
@@ -1796,7 +1803,7 @@ module.exports = (app, deps) => {
           const candidates = albums.slice(i + 1); // Only check forward to avoid duplicate pairs
 
           const matches = findPotentialDuplicates(album, candidates, {
-            threshold: 0.2, // Very low threshold - human reviews all matches
+            threshold, // Configurable threshold - human reviews all matches
             maxResults: 10,
             excludePairs,
           });
@@ -2124,6 +2131,36 @@ module.exports = (app, deps) => {
         res.json(result);
       } catch (error) {
         logger.error('Error executing aggregate fix', {
+          error: error.message,
+          year: req.params.year,
+        });
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
+  /**
+   * GET /api/admin/aggregate-audit/:year/diagnose
+   * Diagnose normalization effectiveness for a year
+   * Compares basic (lowercase+trim) vs sophisticated normalization
+   * Shows albums that would be missed by basic normalization
+   * and provides detailed overlap statistics
+   */
+  app.get(
+    '/api/admin/aggregate-audit/:year/diagnose',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        const diagnostic = await aggregateAudit.diagnoseNormalization(year);
+        res.json(diagnostic);
+      } catch (error) {
+        logger.error('Error running normalization diagnostic', {
           error: error.message,
           year: req.params.year,
         });

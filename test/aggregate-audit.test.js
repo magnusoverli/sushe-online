@@ -4,6 +4,7 @@ const {
   createAggregateAudit,
   selectCanonicalAlbumId,
   normalizeAlbumKey,
+  basicNormalizeAlbumKey,
 } = require('../utils/aggregate-audit.js');
 
 // =============================================================================
@@ -66,6 +67,60 @@ describe('aggregate-audit', () => {
 
     it('should handle undefined values', () => {
       assert.strictEqual(normalizeAlbumKey(undefined, 'Album'), '::album');
+    });
+
+    // New tests for sophisticated normalization
+    it('should strip edition suffixes', () => {
+      assert.strictEqual(
+        normalizeAlbumKey('Radiohead', 'OK Computer (Deluxe Edition)'),
+        'radiohead::ok computer'
+      );
+      assert.strictEqual(
+        normalizeAlbumKey('Radiohead', 'OK Computer [Remastered]'),
+        'radiohead::ok computer'
+      );
+    });
+
+    it('should remove leading articles from artist', () => {
+      assert.strictEqual(
+        normalizeAlbumKey('The Beatles', 'Abbey Road'),
+        'beatles::abbey road'
+      );
+    });
+
+    it('should handle punctuation differences', () => {
+      // AC/DC vs ACDC
+      assert.strictEqual(
+        normalizeAlbumKey('AC/DC', 'Back in Black'),
+        normalizeAlbumKey('ACDC', 'Back in Black')
+      );
+      // Guns N' Roses vs Guns N Roses
+      assert.strictEqual(
+        normalizeAlbumKey("Guns N' Roses", 'Appetite for Destruction'),
+        normalizeAlbumKey('Guns N Roses', 'Appetite for Destruction')
+      );
+    });
+
+    it('should normalize ampersand to and', () => {
+      assert.strictEqual(
+        normalizeAlbumKey('Simon & Garfunkel', 'Bridge over Troubled Water'),
+        normalizeAlbumKey('Simon and Garfunkel', 'Bridge over Troubled Water')
+      );
+    });
+  });
+
+  describe('basicNormalizeAlbumKey', () => {
+    it('should only lowercase and trim (no sophisticated normalization)', () => {
+      // Basic normalization should NOT strip edition suffixes
+      assert.strictEqual(
+        basicNormalizeAlbumKey('Radiohead', 'OK Computer (Deluxe Edition)'),
+        'radiohead::ok computer (deluxe edition)'
+      );
+      // Basic normalization should NOT remove articles
+      assert.strictEqual(
+        basicNormalizeAlbumKey('The Beatles', 'Abbey Road'),
+        'the beatles::abbey road'
+      );
     });
   });
 
