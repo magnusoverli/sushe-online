@@ -4,16 +4,26 @@ import { showConfirmation } from './ui-utils.js';
 export async function updatePlaylist(listName, listData = []) {
   try {
     // Validate track selection before proceeding
+    // Check for new normalized fields (primary_track) or legacy field (track_pick)
     const totalAlbums = listData.length;
-    const albumsWithTracks = listData.filter(
-      (album) => album.track_pick && album.track_pick.trim() !== ''
-    ).length;
+    const albumsWithTracks = listData.filter((album) => {
+      const primary = album.primary_track || album.track_pick;
+      return primary && primary.trim() !== '';
+    }).length;
+    const albumsWithBothTracks = listData.filter((album) => {
+      const primary = album.primary_track || album.track_pick;
+      const secondary = album.secondary_track;
+      return (
+        primary && primary.trim() !== '' && secondary && secondary.trim() !== ''
+      );
+    }).length;
 
     // If list has albums but not all have tracks selected, warn the user
     if (totalAlbums > 0 && albumsWithTracks < totalAlbums) {
+      const trackCount = albumsWithTracks + albumsWithBothTracks; // Primary + secondary tracks
       const confirmed = await showConfirmation(
         'Incomplete Track Selection',
-        `Only ${albumsWithTracks} of ${totalAlbums} albums in your list have tracks selected.`,
+        `${albumsWithTracks} of ${totalAlbums} albums have tracks selected (${trackCount} total tracks).`,
         'Only selected tracks will be added to your playlist. Do you want to continue?',
         'Continue Anyway'
       );

@@ -384,16 +384,56 @@ class PgDatastore {
    * Find list items with album data in a single JOIN query
    * Optimized for performance - reduces 3 queries to 1
    * @param {string} listId - The list ID to fetch items for
+   * @param {string} userId - Optional user ID to fetch track picks (required for track picks)
    * @returns {Promise<Array>} Array of list items with merged album data
    */
-  async findWithAlbumData(listId) {
+  async findWithAlbumData(listId, userId = null) {
     if (this.table !== 'list_items') {
       throw new Error('findWithAlbumData only available for list_items table');
     }
 
     // Use prepared statement with consistent naming
-    const queryName = 'findListItemsWithAlbumsV3';
-    const queryText = `
+    // V4 includes track_picks joins when userId is provided
+    const queryName = userId
+      ? 'findListItemsWithAlbumsV4_withPicks'
+      : 'findListItemsWithAlbumsV4';
+    const queryText = userId
+      ? `
+      SELECT 
+        li._id,
+        li.list_id,
+        li.position,
+        li.track_pick,
+        li.comments,
+        li.album_id,
+        -- Prefer list_items data, fallback to albums table using COALESCE
+        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
+        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        COALESCE(NULLIF(li.release_date, ''), a.release_date) as release_date,
+        COALESCE(NULLIF(li.country, ''), a.country) as country,
+        COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
+        COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
+        COALESCE(li.tracks, a.tracks) as tracks,
+        -- For cover_image: if list_item has a custom cover (NOT NULL), use it
+        -- Otherwise fall back to album's cover. BYTEA can't be empty string.
+        COALESCE(li.cover_image, a.cover_image) as cover_image,
+        COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
+        -- Album summary (stored on canonical albums table only)
+        a.summary as summary,
+        a.summary_source as summary_source,
+        -- Track picks from normalized table
+        tp_primary.track_identifier as primary_track,
+        tp_secondary.track_identifier as secondary_track
+      FROM list_items li
+      LEFT JOIN albums a ON li.album_id = a.album_id
+      LEFT JOIN track_picks tp_primary ON tp_primary.user_id = $2 
+        AND tp_primary.album_id = li.album_id AND tp_primary.priority = 1
+      LEFT JOIN track_picks tp_secondary ON tp_secondary.user_id = $2 
+        AND tp_secondary.album_id = li.album_id AND tp_secondary.priority = 2
+      WHERE li.list_id = $1
+      ORDER BY li.position
+    `
+      : `
       SELECT 
         li._id,
         li.list_id,
@@ -422,7 +462,8 @@ class PgDatastore {
       ORDER BY li.position
     `;
 
-    const res = await this._preparedQuery(queryName, queryText, [listId]);
+    const params = userId ? [listId, userId] : [listId];
+    const res = await this._preparedQuery(queryName, queryText, params);
 
     // Map result rows to expected format
     return res.rows.map((row) => ({
@@ -436,7 +477,11 @@ class PgDatastore {
       country: row.country || '',
       genre1: row.genre_1 || '',
       genre2: row.genre_2 || '',
+      // Legacy field - keep for backward compatibility during transition
       trackPick: row.track_pick || '',
+      // New normalized track picks
+      primaryTrack: row.primary_track || null,
+      secondaryTrack: row.secondary_track || null,
       comments: row.comments || '',
       tracks: row.tracks || null,
       coverImage: row.cover_image || '',
@@ -459,7 +504,7 @@ class PgDatastore {
       );
     }
 
-    const queryName = 'findAllUserListsWithItemsV3';
+    const queryName = 'findAllUserListsWithItemsV4';
     const queryText = `
       SELECT 
         l._id as list_id,
@@ -481,16 +526,210 @@ class PgDatastore {
         COALESCE(NULLIF(li.cover_image, ''), a.cover_image) as cover_image,
         COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
         a.summary as summary,
-        a.summary_source as summary_source
+        a.summary_source as summary_source,
+        tp_primary.track_identifier as primary_track,
+        tp_secondary.track_identifier as secondary_track
       FROM lists l
       LEFT JOIN list_items li ON li.list_id = l._id
       LEFT JOIN albums a ON li.album_id = a.album_id
+      LEFT JOIN track_picks tp_primary ON tp_primary.user_id = l.user_id 
+        AND tp_primary.album_id = li.album_id AND tp_primary.priority = 1
+      LEFT JOIN track_picks tp_secondary ON tp_secondary.user_id = l.user_id 
+        AND tp_secondary.album_id = li.album_id AND tp_secondary.priority = 2
       WHERE l.user_id = $1
       ORDER BY l.name, li.position
     `;
 
     const res = await this._preparedQuery(queryName, queryText, [userId]);
     return res.rows;
+  }
+
+  /**
+   * Find track picks for a user and specific album IDs
+   * @param {string} userId - The user ID
+   * @param {string[]} albumIds - Array of album IDs to fetch picks for
+   * @returns {Promise<Object>} Map of albumId -> { primary, secondary }
+   */
+  async findTrackPicksForAlbums(userId, albumIds) {
+    if (this.table !== 'track_picks') {
+      throw new Error(
+        'findTrackPicksForAlbums only available for track_picks table'
+      );
+    }
+
+    if (!albumIds || albumIds.length === 0) {
+      return {};
+    }
+
+    const placeholders = albumIds.map((_, i) => `$${i + 2}`).join(',');
+    const queryName = `findTrackPicksForAlbums_${albumIds.length}`;
+    const queryText = `
+      SELECT album_id, track_identifier, priority
+      FROM track_picks
+      WHERE user_id = $1 AND album_id IN (${placeholders})
+      ORDER BY album_id, priority
+    `;
+
+    const res = await this._preparedQuery(queryName, queryText, [
+      userId,
+      ...albumIds,
+    ]);
+
+    // Group by album_id
+    const result = {};
+    for (const row of res.rows) {
+      if (!result[row.album_id]) {
+        result[row.album_id] = { primary: null, secondary: null };
+      }
+      if (row.priority === 1) {
+        result[row.album_id].primary = row.track_identifier;
+      } else if (row.priority === 2) {
+        result[row.album_id].secondary = row.track_identifier;
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Set track pick for a user's album
+   * Handles the click logic: first click = secondary, second click = promote to primary
+   * @param {string} userId - The user ID
+   * @param {string} albumId - The album ID
+   * @param {string} trackIdentifier - The track to set
+   * @param {number} targetPriority - The target priority (1=primary, 2=secondary)
+   * @returns {Promise<Object>} Updated track picks for this album
+   */
+  async setTrackPick(userId, albumId, trackIdentifier, targetPriority) {
+    if (this.table !== 'track_picks') {
+      throw new Error('setTrackPick only available for track_picks table');
+    }
+
+    const crypto = require('crypto');
+
+    // Get current picks for this album
+    const current = await this._query(
+      `SELECT _id, track_identifier, priority FROM track_picks 
+       WHERE user_id = $1 AND album_id = $2`,
+      [userId, albumId]
+    );
+
+    const currentPicks = current.rows;
+    const existingTrack = currentPicks.find(
+      (p) => p.track_identifier === trackIdentifier
+    );
+    const existingAtPriority = currentPicks.find(
+      (p) => p.priority === targetPriority
+    );
+
+    if (existingTrack) {
+      if (existingTrack.priority === targetPriority) {
+        // Clicking same track at same priority = deselect
+        await this._query(`DELETE FROM track_picks WHERE _id = $1`, [
+          existingTrack._id,
+        ]);
+      } else {
+        // Promoting: track exists at different priority (e.g., secondary → primary)
+        // Store the old priority before we modify anything
+        const oldPriority = existingTrack.priority;
+
+        // If there's already something at target priority, we need to swap
+        if (existingAtPriority) {
+          // Use a temporary priority (0) to avoid unique constraint violation
+          // Step 1: Move existing target to temporary priority
+          await this._query(
+            `UPDATE track_picks SET priority = 0, updated_at = NOW() WHERE _id = $1`,
+            [existingAtPriority._id]
+          );
+          // Step 2: Move our track to target priority
+          await this._query(
+            `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
+            [targetPriority, existingTrack._id]
+          );
+          // Step 3: Move the old target to our old priority (demote it)
+          await this._query(
+            `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
+            [oldPriority, existingAtPriority._id]
+          );
+        } else {
+          // No conflict, just update priority directly
+          await this._query(
+            `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
+            [targetPriority, existingTrack._id]
+          );
+        }
+      }
+    } else {
+      // New track selection
+      if (existingAtPriority) {
+        // Replace existing at this priority
+        await this._query(
+          `UPDATE track_picks SET track_identifier = $1, updated_at = NOW() WHERE _id = $2`,
+          [trackIdentifier, existingAtPriority._id]
+        );
+      } else {
+        // Insert new
+        const _id = crypto.randomBytes(12).toString('hex');
+        await this._query(
+          `INSERT INTO track_picks (_id, user_id, album_id, track_identifier, priority, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+          [_id, userId, albumId, trackIdentifier, targetPriority]
+        );
+      }
+    }
+
+    // Return updated state
+    const updated = await this._query(
+      `SELECT track_identifier, priority FROM track_picks 
+       WHERE user_id = $1 AND album_id = $2 ORDER BY priority`,
+      [userId, albumId]
+    );
+
+    return {
+      primary:
+        updated.rows.find((r) => r.priority === 1)?.track_identifier || null,
+      secondary:
+        updated.rows.find((r) => r.priority === 2)?.track_identifier || null,
+    };
+  }
+
+  /**
+   * Remove a track pick
+   * @param {string} userId - The user ID
+   * @param {string} albumId - The album ID
+   * @param {string} trackIdentifier - The track to remove (optional, removes all if not specified)
+   * @returns {Promise<Object>} Updated track picks for this album
+   */
+  async removeTrackPick(userId, albumId, trackIdentifier = null) {
+    if (this.table !== 'track_picks') {
+      throw new Error('removeTrackPick only available for track_picks table');
+    }
+
+    if (trackIdentifier) {
+      await this._query(
+        `DELETE FROM track_picks WHERE user_id = $1 AND album_id = $2 AND track_identifier = $3`,
+        [userId, albumId, trackIdentifier]
+      );
+    } else {
+      await this._query(
+        `DELETE FROM track_picks WHERE user_id = $1 AND album_id = $2`,
+        [userId, albumId]
+      );
+    }
+
+    // Return updated state
+    const updated = await this._query(
+      `SELECT track_identifier, priority FROM track_picks 
+       WHERE user_id = $1 AND album_id = $2 ORDER BY priority`,
+      [userId, albumId]
+    );
+
+    return {
+      primary:
+        updated.rows.find((r) => r.priority === 1)?.track_identifier || null,
+      secondary:
+        updated.rows.find((r) => r.priority === 2)?.track_identifier || null,
+    };
   }
 }
 

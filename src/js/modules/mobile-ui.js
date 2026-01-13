@@ -1302,13 +1302,14 @@ export function createMobileUI(deps = {}) {
             >${album.comments || album.comment || ''}</textarea>
           </div>
 
-          <!-- Track Selection -->
+          <!-- Track Selection (Dual: Primary + Secondary) -->
           <div class="w-full" id="trackPickWrapper">
             <div class="flex items-center justify-between">
-              <label class="block text-gray-400 text-sm mb-2">Selected Track</label>
+              <label class="block text-gray-400 text-sm mb-2">Track Selection</label>
               <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
             </div>
-            <div id="trackPickContainer" data-album-index="${index}">
+            <div class="text-xs text-gray-500 mb-2">Click once = secondary (○) | Click again = primary (★)</div>
+            <div id="trackPickContainer" data-album-index="${index}" data-album-id="${album.album_id || ''}">
             ${
               Array.isArray(album.tracks) && album.tracks.length > 0
                 ? `
@@ -1317,19 +1318,37 @@ export function createMobileUI(deps = {}) {
                   .map((t) => {
                     const trackName = getTrackName(t);
                     const trackLength = formatTrackTime(getTrackLength(t));
+                    const isPrimary =
+                      trackName ===
+                      (album.primary_track || album.track_pick || '');
+                    const isSecondary =
+                      trackName === (album.secondary_track || '');
+                    const indicator = isPrimary
+                      ? '<span class="text-yellow-400 mr-1">★</span>'
+                      : isSecondary
+                        ? '<span class="text-gray-400 mr-1">○</span>'
+                        : '';
+                    const bgClass = isPrimary
+                      ? 'bg-yellow-900/20'
+                      : isSecondary
+                        ? 'bg-gray-700/30'
+                        : '';
                     return `
-                  <li class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox shrink-0" value="${trackName}" ${trackName === (album.track_pick || '') ? 'checked' : ''}>
-                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
+                  <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item" 
+                      data-track="${trackName.replace(/"/g, '&quot;')}"
+                      data-is-primary="${isPrimary}"
+                      data-is-secondary="${isSecondary}">
+                    ${indicator}
+                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors flex-1" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
                   </li>`;
                   })
                   .join('')}
               </ul>
             `
                 : `
-              <input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
+              <input type="number" id="editTrackPickNumber" value="${album.primary_track || album.track_pick || ''}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
-                     placeholder="Enter track number">
+                     placeholder="Enter track number (primary)">
             `
             }
             </div>
@@ -1452,17 +1471,128 @@ export function createMobileUI(deps = {}) {
 
     const trackPickContainer = document.getElementById('trackPickContainer');
 
-    function setupTrackPickCheckboxes() {
+    // Track current selections (will be synced with server)
+    let currentPrimaryTrack = album.primary_track || album.track_pick || '';
+    let currentSecondaryTrack = album.secondary_track || '';
+
+    function updateTrackPickUI() {
       if (!trackPickContainer) return;
-      const boxes = trackPickContainer.querySelectorAll(
-        'input.track-pick-checkbox'
-      );
-      boxes.forEach((box) => {
-        box.onchange = () => {
-          if (box.checked) {
-            boxes.forEach((other) => {
-              if (other !== box) other.checked = false;
-            });
+      const items = trackPickContainer.querySelectorAll('.track-pick-item');
+      items.forEach((item) => {
+        const trackName = item.dataset.track;
+        const isPrimary = trackName === currentPrimaryTrack;
+        const isSecondary = trackName === currentSecondaryTrack;
+
+        // Update data attributes
+        item.dataset.isPrimary = isPrimary;
+        item.dataset.isSecondary = isSecondary;
+
+        // Update visual appearance
+        item.classList.remove('bg-yellow-900/20', 'bg-gray-700/30');
+        if (isPrimary) {
+          item.classList.add('bg-yellow-900/20');
+        } else if (isSecondary) {
+          item.classList.add('bg-gray-700/30');
+        }
+
+        // Update indicator
+        const existingIndicator = item.querySelector(
+          '.text-yellow-400, .text-gray-400'
+        );
+        if (existingIndicator) {
+          existingIndicator.remove();
+        }
+
+        if (isPrimary) {
+          const indicator = document.createElement('span');
+          indicator.className = 'text-yellow-400 mr-1';
+          indicator.textContent = '★';
+          item.insertBefore(indicator, item.firstChild);
+        } else if (isSecondary) {
+          const indicator = document.createElement('span');
+          indicator.className = 'text-gray-400 mr-1';
+          indicator.textContent = '○';
+          item.insertBefore(indicator, item.firstChild);
+        }
+      });
+    }
+
+    function setupTrackPickItems() {
+      if (!trackPickContainer) return;
+      const items = trackPickContainer.querySelectorAll('.track-pick-item');
+      items.forEach((item) => {
+        item.onclick = async (e) => {
+          // Don't trigger if clicking the play link
+          if (e.target.classList.contains('track-play-link')) return;
+
+          const trackName = item.dataset.track;
+          const albumId = trackPickContainer.dataset.albumId;
+          const isPrimary = item.dataset.isPrimary === 'true';
+          const isSecondary = item.dataset.isSecondary === 'true';
+
+          if (!albumId) {
+            showToast('Cannot save - album has no ID', 'error');
+            return;
+          }
+
+          try {
+            if (isPrimary) {
+              // Deselect primary
+              const response = await fetch(`/api/track-picks/${albumId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ trackIdentifier: trackName }),
+              });
+              if (!response.ok) throw new Error('Failed to remove track');
+              const result = await response.json();
+              currentPrimaryTrack = result.primary_track || '';
+              currentSecondaryTrack = result.secondary_track || '';
+              showToast('Primary track removed');
+            } else if (isSecondary) {
+              // Promote to primary
+              const response = await fetch(`/api/track-picks/${albumId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                  trackIdentifier: trackName,
+                  priority: 1,
+                }),
+              });
+              if (!response.ok) throw new Error('Failed to promote track');
+              const result = await response.json();
+              currentPrimaryTrack = result.primary_track || '';
+              currentSecondaryTrack = result.secondary_track || '';
+              showToast(`★ Primary: ${trackName.substring(0, 30)}...`);
+            } else {
+              // New selection as secondary
+              const response = await fetch(`/api/track-picks/${albumId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({
+                  trackIdentifier: trackName,
+                  priority: 2,
+                }),
+              });
+              if (!response.ok) throw new Error('Failed to set track');
+              const result = await response.json();
+              currentPrimaryTrack = result.primary_track || '';
+              currentSecondaryTrack = result.secondary_track || '';
+              showToast(`○ Secondary: ${trackName.substring(0, 30)}...`);
+            }
+
+            // Update UI immediately
+            updateTrackPickUI();
+
+            // Update local album data for save
+            album.primary_track = currentPrimaryTrack;
+            album.secondary_track = currentSecondaryTrack;
+            album.track_pick = currentPrimaryTrack; // Legacy field
+          } catch (err) {
+            console.error('Track pick error:', err);
+            showToast('Error updating track selection', 'error');
           }
         };
       });
@@ -1486,7 +1616,7 @@ export function createMobileUI(deps = {}) {
 
     // Fetch track list when button is clicked
     const fetchBtn = document.getElementById('fetchTracksBtn');
-    setupTrackPickCheckboxes();
+    setupTrackPickItems();
     setupTrackPlayLinks();
 
     if (fetchBtn) {
@@ -1504,17 +1634,32 @@ export function createMobileUI(deps = {}) {
                     .map((t) => {
                       const trackName = getTrackName(t);
                       const trackLength = formatTrackTime(getTrackLength(t));
+                      const isPrimary = trackName === currentPrimaryTrack;
+                      const isSecondary = trackName === currentSecondaryTrack;
+                      const indicator = isPrimary
+                        ? '<span class="text-yellow-400 mr-1">★</span>'
+                        : isSecondary
+                          ? '<span class="text-gray-400 mr-1">○</span>'
+                          : '';
+                      const bgClass = isPrimary
+                        ? 'bg-yellow-900/20'
+                        : isSecondary
+                          ? 'bg-gray-700/30'
+                          : '';
                       return `
-                  <li class="flex items-center space-x-2">
-                    <input type="checkbox" class="track-pick-checkbox shrink-0" value="${trackName}">
-                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
+                  <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item" 
+                      data-track="${trackName.replace(/"/g, '&quot;')}"
+                      data-is-primary="${isPrimary}"
+                      data-is-secondary="${isSecondary}">
+                    ${indicator}
+                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors flex-1" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
                   </li>`;
                     })
                     .join('')}</ul>`
-                : `<input type="number" id="editTrackPickNumber" value="${album.track_pick || ''}"
+                : `<input type="number" id="editTrackPickNumber" value="${currentPrimaryTrack}"
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
-                     placeholder="Enter track number">`;
-            setupTrackPickCheckboxes();
+                     placeholder="Enter track number (primary)">`;
+            setupTrackPickItems();
             setupTrackPlayLinks();
           }
           showToast('Tracks loaded');
@@ -1547,16 +1692,17 @@ export function createMobileUI(deps = {}) {
         genre: document.getElementById('editGenre1').value,
         genre_2: document.getElementById('editGenre2').value,
         tracks: Array.isArray(album.tracks) ? album.tracks : undefined,
-        track_pick: (() => {
-          if (Array.isArray(album.tracks) && album.tracks.length > 0) {
-            const checked = document.querySelector(
-              '#trackPickContainer input[type="checkbox"]:checked'
-            );
-            return checked ? checked.value.trim() : '';
-          }
-          const numInput = document.getElementById('editTrackPickNumber');
-          return numInput ? numInput.value.trim() : '';
-        })(),
+        // Track picks are now managed via API and stored in track_picks table
+        // Keep the current values which were updated by the track pick handlers
+        primary_track: currentPrimaryTrack,
+        secondary_track: currentSecondaryTrack,
+        track_pick:
+          currentPrimaryTrack ||
+          (() => {
+            // Fallback for albums without album_id (can't use API)
+            const numInput = document.getElementById('editTrackPickNumber');
+            return numInput ? numInput.value.trim() : '';
+          })(),
         comments: document.getElementById('editComments').value.trim(),
         comment: document.getElementById('editComments').value.trim(),
       };

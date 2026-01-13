@@ -2885,8 +2885,8 @@ function updateHeaderTitle(listName) {
   }
 }
 
-// Update track cell display without re-rendering entire list
-function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
+// Update track cell display without re-rendering entire list (legacy, kept for reference)
+function _updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   const isMobile = window.innerWidth < 1024;
 
   if (isMobile) {
@@ -2976,6 +2976,136 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   };
 }
 
+// Update track cell display for dual track picks (primary + secondary)
+function updateTrackCellDisplayDual(albumIndex, trackPicks, tracks) {
+  const isMobile = window.innerWidth < 1024;
+
+  // Helper to process a single track
+  function processTrack(trackIdentifier) {
+    if (!trackIdentifier) return { display: '', duration: '', class: '' };
+
+    if (tracks && Array.isArray(tracks)) {
+      const trackMatch = tracks.find(
+        (t) => getTrackName(t) === trackIdentifier
+      );
+      if (trackMatch) {
+        const trackName = getTrackName(trackMatch);
+        const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
+        let display;
+        if (match) {
+          const trackNum = match[1];
+          const displayName = match[2] || '';
+          display = displayName
+            ? `${trackNum}. ${displayName}`
+            : `Track ${trackNum}`;
+        } else {
+          display = trackName;
+        }
+        const length = getTrackLength(trackMatch);
+        const duration = formatTrackTime(length);
+        return { display, duration, class: 'text-gray-300' };
+      }
+    }
+
+    if (trackIdentifier.match(/^\d+$/)) {
+      return {
+        display: `Track ${trackIdentifier}`,
+        duration: '',
+        class: 'text-gray-300',
+      };
+    }
+
+    return { display: trackIdentifier, duration: '', class: 'text-gray-300' };
+  }
+
+  const primaryData = processTrack(trackPicks.primary_track);
+  const secondaryData = processTrack(trackPicks.secondary_track);
+  const hasSecondary = !!trackPicks.secondary_track;
+
+  if (isMobile) {
+    // Mobile: Update the track text spans
+    const container = document.getElementById('albumContainer');
+    const mobileList = container?.querySelector('.mobile-album-list');
+    if (!mobileList) return;
+
+    const card = mobileList.children[albumIndex];
+    if (!card) return;
+
+    const trackText = card.querySelector('[data-field="track-mobile-text"]');
+    if (trackText) {
+      trackText.textContent = primaryData.display || '';
+    }
+
+    const secondaryText = card.querySelector(
+      '[data-field="secondary-track-mobile-text"]'
+    );
+    if (secondaryText) {
+      secondaryText.textContent = secondaryData.display || '';
+    }
+    return;
+  }
+
+  // Desktop: Find the specific track cell and update it
+  const container = document.getElementById('albumContainer');
+  const rowsContainer = container?.querySelector('.album-rows-container');
+  if (!rowsContainer) return;
+
+  const row = rowsContainer.children[albumIndex];
+  if (!row) return;
+
+  const trackCell = row.querySelector('.track-cell');
+  if (!trackCell) return;
+
+  // Build new cell content with stacked display
+  let cellHTML = '';
+
+  if (primaryData.display) {
+    cellHTML += `
+      <div class="flex items-center min-w-0 overflow-hidden w-full">
+        <span class="text-yellow-400 mr-1.5 text-xs shrink-0" title="Primary track">★</span>
+        <span class="album-cell-text ${primaryData.class} truncate hover:text-gray-100 flex-1 min-w-0" title="${trackPicks.primary_track || ''}">${primaryData.display}</span>
+        ${primaryData.duration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${primaryData.duration}</span>` : ''}
+      </div>`;
+  } else {
+    cellHTML += `
+      <div class="flex items-center min-w-0">
+        <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
+      </div>`;
+  }
+
+  if (hasSecondary) {
+    cellHTML += `
+      <div class="flex items-center min-w-0 mt-0.5 overflow-hidden w-full">
+        <span class="text-gray-400 mr-1.5 text-xs shrink-0" title="Secondary track">○</span>
+        <span class="album-cell-text ${secondaryData.class} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${trackPicks.secondary_track || ''}">${secondaryData.display}</span>
+        ${secondaryData.duration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${secondaryData.duration}</span>` : ''}
+      </div>`;
+  }
+
+  trackCell.innerHTML = cellHTML;
+
+  // Re-attach click handler
+  trackCell.onclick = async () => {
+    const currentIndex = parseInt(row.dataset.index);
+    const albumsForTrack = getListData(currentList);
+    const album = albumsForTrack && albumsForTrack[currentIndex];
+    if (!album) return;
+    if (!album.tracks || album.tracks.length === 0) {
+      showToast('Fetching tracks...', 'info');
+      try {
+        await fetchTracksForAlbum(album);
+        await saveList(currentList, albumsForTrack);
+      } catch (_err) {
+        showToast('Error fetching tracks', 'error');
+        return;
+      }
+    }
+
+    const rect = trackCell.getBoundingClientRect();
+    showTrackSelectionMenu(album, currentIndex, rect.left, rect.bottom);
+  };
+}
+
 // Show track selection menu for quick track picking
 function showTrackSelectionMenu(album, albumIndex, x, y) {
   // Remove any existing menu
@@ -2988,7 +3118,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     'absolute z-50 bg-gray-800 rounded-lg shadow-xl border border-gray-700 max-h-96 overflow-y-auto';
   menu.style.left = `${x}px`;
   menu.style.top = `${y}px`;
-  menu.style.minWidth = '250px';
+  menu.style.minWidth = '280px';
 
   if (!album.tracks || album.tracks.length === 0) {
     menu.innerHTML =
@@ -3005,12 +3135,21 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
     const albumsForMenu = getListData(currentList);
     const currentAlbum = albumsForMenu && albumsForMenu[albumIndex];
-    const hasNoSelection = !currentAlbum || !currentAlbum.track_pick;
 
+    // Get current track picks (new normalized fields or legacy)
+    const primaryTrack =
+      currentAlbum?.primary_track || currentAlbum?.track_pick || '';
+    const secondaryTrack = currentAlbum?.secondary_track || '';
+    const hasNoSelection = !primaryTrack && !secondaryTrack;
+
+    // Build menu header with instructions
     let menuHTML = `
-      <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm" data-track-value="">
+      <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-700">
+        Click once = secondary (○) | Click again = primary (★)
+      </div>
+      <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm" data-track-value="" data-action="clear">
         <span class="${hasNoSelection ? 'text-red-500' : 'text-gray-400'}">
-          ${hasNoSelection ? '<i class="fas fa-check mr-2"></i>' : ''}None (clear selection)
+          ${hasNoSelection ? '<i class="fas fa-check mr-2"></i>' : ''}Clear all selections
         </span>
       </div>
       <div class="border-t border-gray-700"></div>
@@ -3018,20 +3157,35 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
     sortedTracks.forEach((track, idx) => {
       const trackName = getTrackName(track);
-      const isSelected =
-        currentAlbum &&
-        (currentAlbum.track_pick === trackName ||
-          currentAlbum.track_pick === (idx + 1).toString());
+      const isPrimary = primaryTrack === trackName;
+      const isSecondary = secondaryTrack === trackName;
       const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
       const trackNum = match ? match[1] : idx + 1;
       const displayName = match ? match[2] : trackName;
       const trackLength = formatTrackTime(getTrackLength(track));
 
+      // Visual indicators
+      let indicator = '';
+      let textClass = 'text-gray-300';
+      let bgClass = '';
+
+      if (isPrimary) {
+        indicator = '<span class="text-yellow-400 mr-2">★</span>';
+        textClass = 'text-yellow-400';
+        bgClass = 'bg-yellow-900/20';
+      } else if (isSecondary) {
+        indicator = '<span class="text-gray-400 mr-2">○</span>';
+        textClass = 'text-gray-300';
+        bgClass = 'bg-gray-700/30';
+      }
+
       menuHTML += `
-        <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm ${isSelected ? 'bg-gray-700/50' : ''}" 
-             data-track-value="${trackName}">
-          <span class="${isSelected ? 'text-red-500' : 'text-gray-300'}">
-            ${isSelected ? '<i class="fas fa-check mr-2"></i>' : ''}
+        <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm ${bgClass}" 
+             data-track-value="${trackName}"
+             data-is-primary="${isPrimary}"
+             data-is-secondary="${isSecondary}">
+          <span class="${textClass}">
+            ${indicator}
             <span class="font-medium">${trackNum}.</span> ${displayName}${trackLength ? ` <span class="text-gray-500 text-xs ml-2">${trackLength}</span>` : ''}
           </span>
         </div>
@@ -3040,40 +3194,128 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
     menu.innerHTML = menuHTML;
 
-    // Add click handlers
+    // Add click handlers with new dual-track logic
     menu.querySelectorAll('.track-menu-option').forEach((option) => {
       option.onclick = async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const trackValue = option.dataset.trackValue;
 
-        const albumsForSelection = getListData(currentList);
-        const freshAlbum = albumsForSelection && albumsForSelection[albumIndex];
-        if (!freshAlbum) {
-          showToast('Album not found - list may have been updated', 'error');
+        const trackValue = option.dataset.trackValue;
+        const action = option.dataset.action;
+        const albumId = album.album_id;
+
+        if (!albumId) {
+          showToast('Cannot save track selection - album has no ID', 'error');
           menu.remove();
           return;
         }
 
-        const previousValue = freshAlbum.track_pick;
-
-        freshAlbum.track_pick = trackValue;
-
         menu.remove();
 
-        updateTrackCellDisplay(albumIndex, trackValue, freshAlbum.tracks);
-
-        showToast(
-          trackValue
-            ? `Selected track: ${trackValue.substring(0, 50)}...`
-            : 'Track selection cleared'
-        );
-
         try {
-          await saveList(currentList, albumsForSelection);
-        } catch (_error) {
-          freshAlbum.track_pick = previousValue;
-          updateTrackCellDisplay(albumIndex, previousValue, freshAlbum.tracks);
+          if (action === 'clear') {
+            // Clear all track picks
+            const response = await fetch(`/api/track-picks/${albumId}`, {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'same-origin',
+            });
+
+            if (!response.ok) throw new Error('Failed to clear track picks');
+
+            const result = await response.json();
+
+            // Update local data
+            const albumsForSelection = getListData(currentList);
+            const freshAlbum =
+              albumsForSelection && albumsForSelection[albumIndex];
+            if (freshAlbum) {
+              freshAlbum.primary_track = null;
+              freshAlbum.secondary_track = null;
+              freshAlbum.track_pick = ''; // Legacy field
+            }
+
+            updateTrackCellDisplayDual(albumIndex, result, album.tracks);
+            showToast('Track selections cleared');
+          } else {
+            // Determine target priority based on current state
+            const isPrimary = option.dataset.isPrimary === 'true';
+            const isSecondary = option.dataset.isSecondary === 'true';
+
+            let targetPriority;
+            if (isPrimary) {
+              // Already primary - deselect by removing
+              const response = await fetch(`/api/track-picks/${albumId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify({ trackIdentifier: trackValue }),
+              });
+
+              if (!response.ok) throw new Error('Failed to remove track pick');
+
+              const result = await response.json();
+
+              const albumsForSelection = getListData(currentList);
+              const freshAlbum =
+                albumsForSelection && albumsForSelection[albumIndex];
+              if (freshAlbum) {
+                freshAlbum.primary_track = result.primary_track;
+                freshAlbum.secondary_track = result.secondary_track;
+                freshAlbum.track_pick = result.primary_track || '';
+              }
+
+              updateTrackCellDisplayDual(albumIndex, result, album.tracks);
+              showToast('Primary track deselected');
+              return;
+            } else if (isSecondary) {
+              // Secondary - promote to primary
+              targetPriority = 1;
+            } else {
+              // Not selected - set as secondary first
+              targetPriority = 2;
+            }
+
+            const response = await fetch(`/api/track-picks/${albumId}`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                trackIdentifier: trackValue,
+                priority: targetPriority,
+              }),
+            });
+
+            if (!response.ok) throw new Error('Failed to set track pick');
+
+            const result = await response.json();
+
+            // Update local data
+            const albumsForSelection = getListData(currentList);
+            const freshAlbum =
+              albumsForSelection && albumsForSelection[albumIndex];
+            if (freshAlbum) {
+              freshAlbum.primary_track = result.primary_track;
+              freshAlbum.secondary_track = result.secondary_track;
+              freshAlbum.track_pick = result.primary_track || ''; // Legacy field
+            }
+
+            updateTrackCellDisplayDual(albumIndex, result, album.tracks);
+
+            if (targetPriority === 1) {
+              showToast(`★ Primary: ${trackValue.substring(0, 40)}...`);
+            } else {
+              showToast(`○ Secondary: ${trackValue.substring(0, 40)}...`);
+            }
+          }
+        } catch (error) {
+          console.error('Track pick error:', error);
           showToast('Error saving track selection', 'error');
         }
       };

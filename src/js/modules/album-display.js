@@ -293,45 +293,75 @@ export function createAlbumDisplay(deps = {}) {
     const coverImage = album.cover_image || '';
     const imageFormat = album.cover_image_format || 'PNG';
 
-    // Process track pick
-    const trackPick = album.track_pick || '';
-    let trackPickDisplay = '';
-    let trackPickClass = 'text-gray-800 italic';
-    let trackPickDuration = '';
+    // Helper to process a single track pick
+    function processTrackPick(trackIdentifier, tracks) {
+      if (!trackIdentifier) {
+        return { display: '', class: 'text-gray-800 italic', duration: '' };
+      }
 
-    if (trackPick && album.tracks && Array.isArray(album.tracks)) {
-      const trackMatch = album.tracks.find(
-        (t) => getTrackName(t) === trackPick
-      );
-      if (trackMatch) {
-        const trackName = getTrackName(trackMatch);
-        const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
-        if (match) {
-          const trackNum = match[1];
-          const displayName = match[2] || '';
-          trackPickDisplay = displayName
-            ? `${trackNum}. ${displayName}`
-            : `Track ${trackNum}`;
-          trackPickClass = 'text-gray-300';
+      if (tracks && Array.isArray(tracks)) {
+        const trackMatch = tracks.find(
+          (t) => getTrackName(t) === trackIdentifier
+        );
+        if (trackMatch) {
+          const trackName = getTrackName(trackMatch);
+          const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
+          let display;
+          if (match) {
+            const trackNum = match[1];
+            const displayName = match[2] || '';
+            display = displayName
+              ? `${trackNum}. ${displayName}`
+              : `Track ${trackNum}`;
+          } else {
+            display = trackName;
+          }
+          const length = getTrackLength(trackMatch);
+          const duration = formatTrackTime(length);
+          return { display, class: 'text-gray-300', duration };
+        } else if (trackIdentifier.match(/^\d+$/)) {
+          return {
+            display: `Track ${trackIdentifier}`,
+            class: 'text-gray-300',
+            duration: '',
+          };
         } else {
-          trackPickDisplay = trackName;
-          trackPickClass = 'text-gray-300';
+          return {
+            display: trackIdentifier,
+            class: 'text-gray-300',
+            duration: '',
+          };
         }
-        // Extract track duration
-        const length = getTrackLength(trackMatch);
-        trackPickDuration = formatTrackTime(length);
-      } else if (trackPick.match(/^\d+$/)) {
-        trackPickDisplay = `Track ${trackPick}`;
-        trackPickClass = 'text-gray-300';
+      } else if (trackIdentifier.match(/^\d+$/)) {
+        return {
+          display: `Track ${trackIdentifier}`,
+          class: 'text-gray-300',
+          duration: '',
+        };
       } else {
-        trackPickDisplay = trackPick;
-        trackPickClass = 'text-gray-300';
+        return {
+          display: trackIdentifier,
+          class: 'text-gray-300',
+          duration: '',
+        };
       }
     }
 
-    if (!trackPickDisplay) {
-      trackPickDisplay = 'Select Track';
-    }
+    // Process primary track pick (new normalized field or legacy)
+    const primaryTrack = album.primary_track || album.track_pick || '';
+    const primaryData = processTrackPick(primaryTrack, album.tracks);
+
+    // Process secondary track pick (new normalized field)
+    const secondaryTrack = album.secondary_track || '';
+    const secondaryData = processTrackPick(secondaryTrack, album.tracks);
+
+    // Legacy compatibility: keep old fields
+    const trackPick = primaryTrack;
+    const trackPickDisplay = primaryData.display || 'Select Track';
+    const trackPickClass = primaryData.display
+      ? primaryData.class
+      : 'text-gray-800 italic';
+    const trackPickDuration = primaryData.duration;
 
     // Album summary (from Claude AI)
     const summary = album.summary || '';
@@ -363,10 +393,25 @@ export function createAlbumDisplay(deps = {}) {
       coverImageUrl,
       coverImage,
       imageFormat,
+      // Legacy track pick fields (for backward compatibility)
       trackPick,
       trackPickDisplay,
       trackPickClass,
       trackPickDuration,
+      // New dual track pick fields
+      primaryTrack,
+      primaryTrackDisplay: primaryData.display,
+      primaryTrackClass: primaryData.display
+        ? primaryData.class
+        : 'text-gray-800 italic',
+      primaryTrackDuration: primaryData.duration,
+      secondaryTrack,
+      secondaryTrackDisplay: secondaryData.display,
+      secondaryTrackClass: secondaryData.display
+        ? secondaryData.class
+        : 'text-gray-800 italic',
+      secondaryTrackDuration: secondaryData.duration,
+      hasSecondaryTrack: !!secondaryTrack,
       itemId,
       playcount,
       playcountDisplay,
@@ -526,8 +571,27 @@ export function createAlbumDisplay(deps = {}) {
       <div class="flex items-center genre-2-cell">
         <span class="album-cell-text ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
       </div>
-      <div class="flex items-center track-cell min-w-0">
-        <span class="album-cell-text ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>${data.trackPickDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2">${data.trackPickDuration}</span>` : ''}
+      <div class="flex flex-col justify-start track-cell min-w-0 cursor-pointer overflow-hidden">
+        ${
+          data.primaryTrackDisplay
+            ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
+            <span class="text-yellow-400 mr-1.5 text-xs shrink-0" title="Primary track">★</span>
+            <span class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
+            ${data.primaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
+          </div>`
+            : `<div class="flex items-center min-w-0">
+            <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
+          </div>`
+        }
+        ${
+          data.hasSecondaryTrack
+            ? `<div class="flex items-center min-w-0 mt-0.5 overflow-hidden w-full">
+            <span class="text-gray-400 mr-1.5 text-xs shrink-0" title="Secondary track">○</span>
+            <span class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
+            ${data.secondaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
+          </div>`
+            : ''
+        }
       </div>
       <div class="flex items-center comment-cell relative">
         <span class="album-cell-text ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
@@ -858,14 +922,30 @@ export function createAlbumDisplay(deps = {}) {
             </span>
           </div>
           
-          <!-- Line 5: Track selection (clickable to play) -->
-          <div class="h-4 flex items-center mt-[3px] ${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'cursor-pointer active:opacity-70' : ''}" 
-               data-track-play-btn="${data.trackPick && data.trackPickDisplay !== 'Select Track' ? 'true' : ''}">
+          <!-- Line 5: Primary track selection (clickable to play) -->
+          <div class="h-4 flex items-center mt-[3px] ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}" 
+               data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
+               data-track-identifier="${data.primaryTrack || ''}">
             <span class="text-[13px] text-green-400 truncate">
               <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
-              <span data-field="track-mobile-text">${data.trackPick && data.trackPickDisplay !== 'Select Track' ? data.trackPickDisplay : ''}</span>
+              <span class="text-yellow-400 mr-1 text-xs">${data.primaryTrackDisplay ? '★' : ''}</span>
+              <span data-field="track-mobile-text">${data.primaryTrackDisplay || ''}</span>
             </span>
           </div>
+          <!-- Line 6: Secondary track (if exists, clickable to play) -->
+          ${
+            data.hasSecondaryTrack
+              ? `<div class="h-4 flex items-center mt-[1px] cursor-pointer active:opacity-70" 
+               data-track-play-btn="true"
+               data-track-identifier="${data.secondaryTrack || ''}">
+            <span class="text-[13px] text-green-400/70 truncate">
+              <i class="fas fa-play fa-xs ml-[2px] mr-[8px] opacity-50"></i>
+              <span class="text-gray-400 mr-1 text-xs">○</span>
+              <span data-field="secondary-track-mobile-text">${data.secondaryTrackDisplay}</span>
+            </span>
+          </div>`
+              : ''
+          }
         </div>
 
         <!-- Actions on the right -->
