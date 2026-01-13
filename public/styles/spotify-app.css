@@ -235,6 +235,7 @@ body {
     rgba(17, 24, 39, 0.4) 100%
   );
   user-select: none;
+  border-radius: 4px;
 }
 
 /* Reduced vertical padding for desktop */
@@ -353,6 +354,7 @@ body {
   background-size: 1.5em 1.5em;
   padding-right: 2.5rem;
   cursor: pointer;
+  border-radius: 4px;
 }
 
 .genre-cell select:focus {
@@ -382,6 +384,7 @@ input[list] {
   background-repeat: no-repeat;
   background-size: 1.5em 1.5em;
   padding-right: 2.5rem;
+  border-radius: 4px;
 }
 
 /* Hide the default browser dropdown arrow for datalist */
@@ -471,6 +474,7 @@ input[list]::-webkit-list-button {
 
 .comment-cell textarea {
   font-family: inherit;
+  border-radius: 4px;
 }
 
 /* Country cell styling */
@@ -658,9 +662,11 @@ input[list]::-webkit-list-button {
 .sortable-chosen {
   opacity: 0.9;
   cursor: grabbing;
+  border-radius: 4px;
 }
 
 .sortable-drag {
   opacity: 0.8;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
 }

@@ -369,7 +369,7 @@ const importConflictModalComponent = () => `
 // Component: Context Menus
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
-  <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50">
+  <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
     <button id="downloadListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
       <span><i class="fas fa-download mr-2 w-4 text-center"></i>Download List...</span>
       <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
@@ -389,7 +389,7 @@ const contextMenusComponent = () => `
   </div>
   
   <!-- Context Menu for Albums -->
-  <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50">
+  <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
     <button id="editAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
     </button>
@@ -413,22 +413,22 @@ const contextMenusComponent = () => `
   </div>
   
   <!-- Submenu for Move to List - Years -->
-  <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+  <div id="albumMoveSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
     <!-- Populated dynamically with years -->
   </div>
   
   <!-- Submenu for Move to List - Lists within a year -->
-  <div id="albumMoveListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+  <div id="albumMoveListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
     <!-- Populated dynamically with lists for selected year -->
   </div>
   
   <!-- Submenu for Play Album (Spotify Connect devices) -->
-  <div id="playAlbumSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
+  <div id="playAlbumSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
     <!-- Populated dynamically with devices -->
   </div>
   
   <!-- Submenu for Download List -->
-  <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-sm shadow-lg py-1 z-50 min-w-44">
+  <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 min-w-44">
     <!-- Populated dynamically -->
   </div>
 `;
@@ -1186,7 +1186,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <div id="miniplayerActive" class="hidden">
           <!-- Track Info -->
           <div class="flex items-center gap-3 mb-1">
-            <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded-sm shrink-0 overflow-hidden">
+            <div id="miniplayerArt" class="w-20 h-20 bg-gray-800 rounded-md shrink-0 overflow-hidden">
               <img src="" alt="" class="w-full h-full object-cover hidden">
             </div>
             <div class="flex-1 min-w-0">
