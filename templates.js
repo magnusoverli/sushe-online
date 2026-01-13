@@ -402,11 +402,11 @@ const contextMenusComponent = () => `
       <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
     </button>
     <!-- Last.fm Discovery Options (shown only when connected) -->
-    <div id="lastfmMenuDivider" class="hidden border-t border-gray-700 my-1"></div>
+    <div id="lastfmMenuDivider" class="hidden context-menu-divider"></div>
     <button id="similarArtistsOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-users mr-2 w-4 text-center text-purple-400"></i>Show Similar Artists
     </button>
-    <div class="border-t border-gray-700 my-1"></div>
+    <div class="context-menu-divider"></div>
     <button id="removeAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-times mr-2 w-4 text-center"></i>Remove from List
     </button>

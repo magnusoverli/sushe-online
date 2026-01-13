@@ -670,3 +670,33 @@ input[list]::-webkit-list-button {
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   border-radius: 6px;
 }
+
+/* Context menu soft edges - desktop only */
+@media (min-width: 1024px) {
+  #contextMenu,
+  #albumContextMenu,
+  #albumMoveSubmenu,
+  #albumMoveListsSubmenu,
+  #playAlbumSubmenu,
+  #downloadListSubmenu {
+    border-color: transparent;
+    box-shadow:
+      0 0 0 1px rgba(55, 65, 81, 0.5),
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      0 0 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Context menu dividers - gradient fade */
+  .context-menu-divider {
+    border: none;
+    height: 1px;
+    margin: 0.25rem 0;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(55, 65, 81, 0.4) 15%,
+      rgba(55, 65, 81, 0.4) 85%,
+      transparent
+    );
+  }
+}
