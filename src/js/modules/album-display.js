@@ -844,7 +844,7 @@ export function createAlbumDisplay(deps = {}) {
               ? 'rgba(205,127,50,1.0)'
               : 'rgba(255,255,255,0.25)';
       return `
-        <div class="absolute top-[6px] right-0.5 w-[17px] h-[17px] flex items-center justify-center border ${borderClass} text-white text-[9px] font-medium rounded-full position-badge" 
+        <div class="absolute top-[6px] right-0 w-[17px] h-[17px] flex items-center justify-center border ${borderClass} text-white text-[9px] font-medium rounded-full position-badge" 
              style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${shadowSize} ${shadowColor};"
              data-position-element="true">
           <span style="margin-top: 1px;">${position}</span>
