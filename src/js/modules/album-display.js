@@ -885,7 +885,7 @@ export function createAlbumDisplay(deps = {}) {
                     box-shadow: 0 0 ${c.size} ${c.shadow};
                     color: white; font-size: 9px; font-weight: 500;"
              data-position-element="true">
-          <span style="transform: translateY(2px)">${position}</span>
+          <span style="transform: translateY(0.5px)">${position}</span>
         </div>`;
     };
 

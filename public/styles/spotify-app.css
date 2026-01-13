@@ -489,28 +489,6 @@ input[list]::-webkit-list-button {
 /* Comment editing styles */
 .comment-cell {
   position: relative;
-  /* Soft blurred left border on the cell container itself */
-}
-
-/* Soft blurred left border - visible on the cell container, not the textarea */
-.comment-cell::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    rgba(255, 255, 255, 0.1) 20%,
-    rgba(255, 255, 255, 0.1) 80%,
-    transparent 100%
-  );
-  filter: blur(0.5px);
-  pointer-events: none;
-  z-index: 1;
-  box-shadow: 2px 0 4px -2px rgba(255, 255, 255, 0.08);
 }
 
 .comment-cell textarea {
