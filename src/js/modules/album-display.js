@@ -844,7 +844,7 @@ export function createAlbumDisplay(deps = {}) {
               ? 'rgba(205,127,50,1.0)'
               : 'rgba(255,255,255,0.25)';
       return `
-        <div class="absolute top-[6px] right-1 w-[17px] h-[17px] flex items-center justify-center border ${borderClass} text-white text-[9px] font-medium rounded-full position-badge" 
+        <div class="absolute top-[6px] right-0.5 w-[17px] h-[17px] flex items-center justify-center border ${borderClass} text-white text-[9px] font-medium rounded-full position-badge" 
              style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${shadowSize} ${shadowColor};"
              data-position-element="true">
           <span style="margin-top: 1px;">${position}</span>
@@ -894,7 +894,7 @@ export function createAlbumDisplay(deps = {}) {
         <div class="flex-1 min-w-0 pt-1 pb-1 pl-[7px] flex flex-col justify-between h-[122px]">
           <!-- Line 1: Album name (always present) -->
           <div class="flex items-center -ml-[2.5px]">
-            <h3 class="font-semibold text-gray-200 text-lg leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
+            <h3 class="font-semibold text-gray-200 text-base leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
           </div>
           
           <!-- Line 2: Artist + Playcount -->
@@ -902,7 +902,7 @@ export function createAlbumDisplay(deps = {}) {
             <p class="text-[13px] text-gray-500 truncate">
               <i class="fas fa-user fa-xs mr-[7px]"></i>
               <span data-field="artist-mobile-text">${data.artist}</span>
-              ${data.playcountDisplay ? `<span class="text-gray-600 ml-2" data-playcount-mobile="${data.itemId}">· <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay}</span>` : `<span class="text-gray-600 ml-2 hidden" data-playcount-mobile="${data.itemId}"></span>`}
+              ${data.playcountDisplay ? `<span class="text-gray-600 ml-2" data-playcount-mobile="${data.itemId}"><span class="opacity-0">·</span> <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay}</span>` : `<span class="text-gray-600 ml-2 hidden" data-playcount-mobile="${data.itemId}"></span>`}
             </p>
           </div>
           
@@ -938,8 +938,8 @@ export function createAlbumDisplay(deps = {}) {
               ? `<div class="flex items-center cursor-pointer active:opacity-70" 
                data-track-play-btn="true"
                data-track-identifier="${data.secondaryTrack || ''}">
-            <span class="text-[13px] text-green-400/70 truncate">
-              <i class="fas fa-play fa-xs ml-[2px] mr-[8px] opacity-50"></i>
+            <span class="text-[13px] text-green-400 truncate">
+              <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
               <span class="text-gray-400 mr-1 text-xs">○</span>
               <span data-field="secondary-track-mobile-text">${data.secondaryTrackDisplay}</span>
             </span>
