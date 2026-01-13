@@ -1,5 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* Main header soft edge - desktop only */
+@media (min-width: 1024px) {
+  header.bg-gray-900 {
+    border-bottom: none !important;
+    box-shadow:
+      0 1px 2px -1px rgba(0, 0, 0, 0.3),
+      0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  }
+}
+
 /* Album grid column configuration with responsive behavior */
 :root {
   /* Default grid for desktop screens - Track column at the end */
@@ -258,7 +268,9 @@ body {
       rgba(31, 41, 55, 1) 0%,
       rgba(17, 24, 39, 1) 100%
     );
-    border-bottom-color: rgba(55, 65, 81, 0.15);
+    /* Soft shadow edge instead of hard border */
+    border-bottom: none;
+    box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.3);
     /* No hover effect - headers should be static */
   }
 }
@@ -518,11 +530,15 @@ input[list]::-webkit-list-button {
   width: 16rem; /* 256px */
   overflow: hidden; /* Clip content during width transition */
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  /* Soft shadow edge instead of hard border */
+  border-right: none !important;
+  box-shadow:
+    1px 0 3px -1px rgba(0, 0, 0, 0.4),
+    2px 0 6px -2px rgba(0, 0, 0, 0.2);
 }
 
 .sidebar.collapsed {
   width: 3rem; /* 48px - just wide enough for the toggle button */
-  border-right: 1px solid #374151;
 }
 
 /* Nav and title transitions - defined on base elements so they work both ways */
