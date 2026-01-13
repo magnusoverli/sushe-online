@@ -240,6 +240,8 @@ export function createAlbumDisplay(deps = {}) {
     initializeUnifiedSorting,
     setContextAlbum,
     getTrackName,
+    getTrackLength,
+    formatTrackTime,
   } = deps;
 
   /**
@@ -295,6 +297,7 @@ export function createAlbumDisplay(deps = {}) {
     const trackPick = album.track_pick || '';
     let trackPickDisplay = '';
     let trackPickClass = 'text-gray-800 italic';
+    let trackPickDuration = '';
 
     if (trackPick && album.tracks && Array.isArray(album.tracks)) {
       const trackMatch = album.tracks.find(
@@ -314,6 +317,9 @@ export function createAlbumDisplay(deps = {}) {
           trackPickDisplay = trackName;
           trackPickClass = 'text-gray-300';
         }
+        // Extract track duration
+        const length = getTrackLength(trackMatch);
+        trackPickDuration = formatTrackTime(length);
       } else if (trackPick.match(/^\d+$/)) {
         trackPickDisplay = `Track ${trackPick}`;
         trackPickClass = 'text-gray-300';
@@ -360,6 +366,7 @@ export function createAlbumDisplay(deps = {}) {
       trackPick,
       trackPickDisplay,
       trackPickClass,
+      trackPickDuration,
       itemId,
       playcount,
       playcountDisplay,
@@ -502,28 +509,28 @@ export function createAlbumDisplay(deps = {}) {
       </div>
       <div class="flex flex-col justify-center">
         <div class="flex items-center gap-2">
-          <span class="font-semibold text-gray-100 truncate">${data.albumName}</span>
+          <span class="album-name font-semibold text-gray-200 truncate">${data.albumName}</span>
           ${data.playcountDisplay ? `<span class="text-xs text-gray-500 shrink-0" data-playcount="${data.itemId}" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay}</span>` : `<span class="text-xs text-gray-500 shrink-0 hidden" data-playcount="${data.itemId}"></span>`}
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
       </div>
       <div class="flex items-center">
-        <span class="text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
+        <span class="album-cell-text ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
       </div>
       <div class="flex items-center country-cell">
-        <span class="text-sm ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
+        <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
       </div>
       <div class="flex items-center genre-1-cell">
-        <span class="text-sm ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
+        <span class="album-cell-text ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
       </div>
       <div class="flex items-center genre-2-cell">
-        <span class="text-sm ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
+        <span class="album-cell-text ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
+      </div>
+      <div class="flex items-center track-cell min-w-0">
+        <span class="album-cell-text ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>${data.trackPickDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2">${data.trackPickDuration}</span>` : ''}
       </div>
       <div class="flex items-center comment-cell relative">
-        <span class="text-sm ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
-      </div>
-      <div class="flex items-center track-cell">
-        <span class="text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${data.trackPick || 'Click to select track'}">${data.trackPickDisplay}</span>
+        <span class="album-cell-text ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
       </div>
     `;
 
@@ -1179,6 +1186,24 @@ export function createAlbumDisplay(deps = {}) {
             cache.trackSpan.textContent = data.trackPickDisplay;
             cache.trackSpan.className = `text-sm ${data.trackPickClass} truncate cursor-pointer hover:text-gray-100`;
             cache.trackSpan.title = data.trackPick || 'Click to select track';
+            // Update duration span (sibling of trackSpan)
+            const trackCell = cache.trackSpan.parentElement;
+            if (trackCell) {
+              const existingDuration = trackCell.querySelector('.shrink-0');
+              if (data.trackPickDuration) {
+                if (existingDuration) {
+                  existingDuration.textContent = data.trackPickDuration;
+                } else {
+                  const durationSpan = document.createElement('span');
+                  durationSpan.className =
+                    'text-xs text-gray-500 shrink-0 ml-2';
+                  durationSpan.textContent = data.trackPickDuration;
+                  trackCell.appendChild(durationSpan);
+                }
+              } else if (existingDuration) {
+                existingDuration.remove();
+              }
+            }
           }
         } else {
           // Mobile: use cached elements
@@ -1682,8 +1707,8 @@ export function createAlbumDisplay(deps = {}) {
         <div>Country</div>
         <div>Genre 1</div>
         <div>Genre 2</div>
-        <div>Comment</div>
         <div>Track</div>
+        <div>Comment</div>
       `;
 
       // Create rows container

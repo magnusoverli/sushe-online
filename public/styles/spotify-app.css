@@ -4,7 +4,7 @@
 :root {
   /* Default grid for desktop screens - Track column at the end */
   /* Position column is fixed at 5px, album image at 80px, rest are flexible */
-  --album-grid-columns: 5px 80px 0.8fr 0.75fr 0.5fr 0.5fr 0.5fr 1.1fr 0.7fr;
+  --album-grid-columns: 5px 80px 0.75fr 0.7fr 0.6fr 0.6fr 0.5fr 0.7fr 1.1fr;
   --cover-art-size: 80px;
 }
 
@@ -68,6 +68,16 @@
   justify-content: flex-end;
 }
 
+/* Add right margin to album cover in rows only */
+.album-row > div:nth-child(2) {
+  margin-right: 0.5rem;
+}
+
+/* Add right margin to position column in rows only */
+.album-row > div:nth-child(1) {
+  margin-right: 1.5rem;
+}
+
 /* Center-align the "Album" text in the header only */
 .album-header > div:nth-child(2) {
   justify-content: center;
@@ -81,7 +91,11 @@
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  margin-left: -0.35rem; /* Reduce gap between album image and album name */
+}
+
+/* Header keeps negative margin for alignment */
+.album-header > div:nth-child(3) {
+  margin-left: -0.35rem;
 }
 
 /* Album name column - use relative positioning for date placement */
@@ -92,8 +106,21 @@
 
   /* Album name - centered on cover, slightly larger font */
   .album-row > div:nth-child(3) > div:first-child {
-    font-size: 0.95rem;
     width: 100%;
+  }
+
+  .album-row .album-name {
+    font-size: 1rem;
+  }
+
+  .album-row .album-cell-text {
+    font-size: 0.9rem;
+  }
+
+  /* Extra space before Track column (8th column) */
+  .album-row .track-cell,
+  .album-header > div:nth-child(8) {
+    margin-left: 1.5rem;
   }
 
   /* Release date - positioned below album name, not affecting centering */

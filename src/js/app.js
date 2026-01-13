@@ -79,6 +79,8 @@ function getAlbumDisplayModule() {
         window.showMobileSummarySheet(summary, albumName, artist),
       playTrackSafe: (albumId) => window.playTrackSafe(albumId),
       getTrackName,
+      getTrackLength,
+      formatTrackTime,
       reapplyNowPlayingBorder,
       initializeUnifiedSorting,
       setContextAlbum: (index, albumId) => {
@@ -2915,6 +2917,7 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   // Process track pick display (same logic as processAlbumData)
   let trackPickDisplay = '';
   let trackPickClass = 'text-gray-800 italic';
+  let trackPickDuration = '';
 
   if (trackValue && tracks && Array.isArray(tracks)) {
     const trackMatch = tracks.find((t) => getTrackName(t) === trackValue);
@@ -2932,6 +2935,9 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
         trackPickDisplay = trackName;
         trackPickClass = 'text-gray-300';
       }
+      // Extract track duration
+      const length = getTrackLength(trackMatch);
+      trackPickDuration = formatTrackTime(length);
     } else if (trackValue.match(/^\d+$/)) {
       trackPickDisplay = `Track ${trackValue}`;
       trackPickClass = 'text-gray-300';
@@ -2946,7 +2952,7 @@ function updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   }
 
   // Update the cell content
-  trackCell.innerHTML = `<span class="text-sm ${trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${trackValue || 'Click to select track'}">${trackPickDisplay}</span>`;
+  trackCell.innerHTML = `<span class="text-sm ${trackPickClass} truncate cursor-pointer hover:text-gray-100" title="${trackValue || 'Click to select track'}">${trackPickDisplay}</span>${trackPickDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2">${trackPickDuration}</span>` : ''}`;
 
   // Re-attach click handler
   trackCell.onclick = async () => {
