@@ -973,7 +973,7 @@ export function createAlbumDisplay(deps = {}) {
                      data-track-identifier="${data.secondaryTrack || ''}">
                   <span class="text-[13px] text-green-400 truncate">
                     <i class="fas fa-play fa-xs mr-2"></i>
-                    <span class="text-gray-400 text-xs mr-1">○</span>
+                    <span class="text-yellow-400 text-xs mr-1">☆</span>
                     <span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
                   </span>
                 </div>`
