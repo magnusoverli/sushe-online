@@ -785,11 +785,11 @@ export function createAlbumDisplay(deps = {}) {
    */
   function createMobileAlbumCard(data, index) {
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[110px]';
+    cardWrapper.className = 'album-card-wrapper h-[118px]';
 
     const card = document.createElement('div');
     card.className =
-      'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[110px]';
+      'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[118px]';
     card.dataset.index = index;
 
     // Determine cover image source:
@@ -891,14 +891,14 @@ export function createAlbumDisplay(deps = {}) {
         </div>
         
         <!-- Main content -->
-        <div class="flex-1 min-w-0 pt-[3px] pb-0.5 pl-[7px] flex flex-col h-[102px]">
+        <div class="flex-1 min-w-0 pt-1 pb-1 pl-[7px] flex flex-col justify-between h-[110px]">
           <!-- Line 1: Album name (always present) -->
-          <div class="h-5 flex items-center -ml-[2.5px]">
+          <div class="flex items-center -ml-[2.5px]">
             <h3 class="font-semibold text-gray-200 text-lg leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
           </div>
           
           <!-- Line 2: Artist + Playcount -->
-          <div class="h-4 flex items-center">
+          <div class="flex items-center">
             <p class="text-[13px] text-gray-500 truncate">
               <i class="fas fa-user fa-xs mr-[7px]"></i>
               <span data-field="artist-mobile-text">${data.artist}</span>
@@ -907,7 +907,7 @@ export function createAlbumDisplay(deps = {}) {
           </div>
           
           <!-- Line 3: Country (may be empty) -->
-          <div class="h-4 flex items-center mt-[3px]">
+          <div class="flex items-center">
             <span class="text-[13px] text-gray-500">
               <i class="fas fa-globe fa-xs mr-[7px]"></i>
               <span data-field="country-mobile-text">${data.country || ''}</span>
@@ -915,7 +915,7 @@ export function createAlbumDisplay(deps = {}) {
           </div>
           
           <!-- Line 4: Genres (may be empty) -->
-          <div class="h-4 flex items-center mt-[3px]">
+          <div class="flex items-center">
             <span class="text-[13px] text-gray-500 truncate">
               <i class="fas fa-music fa-xs mr-[7px]"></i>
               <span data-field="genre-mobile-text">${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || ''}</span>
@@ -923,7 +923,7 @@ export function createAlbumDisplay(deps = {}) {
           </div>
           
           <!-- Line 5: Primary track selection (clickable to play) -->
-          <div class="h-4 flex items-center mt-[3px] ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}" 
+          <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}" 
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.primaryTrack || ''}">
             <span class="text-[13px] text-green-400 truncate">
@@ -935,7 +935,7 @@ export function createAlbumDisplay(deps = {}) {
           <!-- Line 6: Secondary track (if exists, clickable to play) -->
           ${
             data.hasSecondaryTrack
-              ? `<div class="h-4 flex items-center mt-[1px] cursor-pointer active:opacity-70" 
+              ? `<div class="flex items-center cursor-pointer active:opacity-70" 
                data-track-play-btn="true"
                data-track-identifier="${data.secondaryTrack || ''}">
             <span class="text-[13px] text-green-400/70 truncate">
