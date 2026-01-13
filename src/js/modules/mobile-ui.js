@@ -1334,12 +1334,16 @@ export function createMobileUI(deps = {}) {
                         ? 'bg-gray-700/30'
                         : '';
                     return `
-                  <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item" 
+                  <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item cursor-pointer active:bg-gray-700/50" 
                       data-track="${trackName.replace(/"/g, '&quot;')}"
                       data-is-primary="${isPrimary}"
                       data-is-secondary="${isSecondary}">
                     ${indicator}
-                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors flex-1" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
+                    <span class="text-gray-300 flex-1 min-w-0 truncate">${trackName}</span>
+                    ${trackLength ? `<span class="text-gray-500 text-xs shrink-0">${trackLength}</span>` : ''}
+                    <button type="button" class="track-play-btn shrink-0 w-7 h-7 flex items-center justify-center text-green-400 hover:text-green-300 active:scale-95" data-track="${trackName.replace(/"/g, '&quot;')}" title="Play track">
+                      <i class="fas fa-play text-xs"></i>
+                    </button>
                   </li>`;
                   })
                   .join('')}
@@ -1522,8 +1526,12 @@ export function createMobileUI(deps = {}) {
       const items = trackPickContainer.querySelectorAll('.track-pick-item');
       items.forEach((item) => {
         item.onclick = async (e) => {
-          // Don't trigger if clicking the play link
-          if (e.target.classList.contains('track-play-link')) return;
+          // Don't trigger if clicking the play button
+          if (
+            e.target.closest('.track-play-btn') ||
+            e.target.classList.contains('track-play-btn')
+          )
+            return;
 
           const trackName = item.dataset.track;
           const albumId = trackPickContainer.dataset.albumId;
@@ -1598,15 +1606,15 @@ export function createMobileUI(deps = {}) {
       });
     }
 
-    function setupTrackPlayLinks() {
+    function setupTrackPlayButtons() {
       if (!trackPickContainer || !playSpecificTrack) return;
       const albumIndex = parseInt(trackPickContainer.dataset.albumIndex, 10);
-      const links = trackPickContainer.querySelectorAll('.track-play-link');
-      links.forEach((link) => {
-        link.onclick = (e) => {
+      const buttons = trackPickContainer.querySelectorAll('.track-play-btn');
+      buttons.forEach((btn) => {
+        btn.onclick = (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const trackName = link.dataset.track;
+          const trackName = btn.dataset.track;
           if (trackName) {
             playSpecificTrack(albumIndex, trackName);
           }
@@ -1617,7 +1625,7 @@ export function createMobileUI(deps = {}) {
     // Fetch track list when button is clicked
     const fetchBtn = document.getElementById('fetchTracksBtn');
     setupTrackPickItems();
-    setupTrackPlayLinks();
+    setupTrackPlayButtons();
 
     if (fetchBtn) {
       fetchBtn.onclick = async () => {
@@ -1647,12 +1655,16 @@ export function createMobileUI(deps = {}) {
                           ? 'bg-gray-700/30'
                           : '';
                       return `
-                  <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item" 
+                  <li class="flex items-center space-x-2 p-1.5 rounded ${bgClass} track-pick-item cursor-pointer active:bg-gray-700/50" 
                       data-track="${trackName.replace(/"/g, '&quot;')}"
                       data-is-primary="${isPrimary}"
                       data-is-secondary="${isSecondary}">
                     ${indicator}
-                    <span class="track-play-link cursor-pointer text-gray-300 hover:text-green-400 transition-colors flex-1" data-track="${trackName.replace(/"/g, '&quot;')}">${trackName}${trackLength ? ` <span class="text-gray-500 text-xs ml-1">${trackLength}</span>` : ''}</span>
+                    <span class="text-gray-300 flex-1 min-w-0 truncate">${trackName}</span>
+                    ${trackLength ? `<span class="text-gray-500 text-xs shrink-0">${trackLength}</span>` : ''}
+                    <button type="button" class="track-play-btn shrink-0 w-7 h-7 flex items-center justify-center text-green-400 hover:text-green-300 active:scale-95" data-track="${trackName.replace(/"/g, '&quot;')}" title="Play track">
+                      <i class="fas fa-play text-xs"></i>
+                    </button>
                   </li>`;
                     })
                     .join('')}</ul>`
@@ -1660,7 +1672,7 @@ export function createMobileUI(deps = {}) {
                      class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
                      placeholder="Enter track number (primary)">`;
             setupTrackPickItems();
-            setupTrackPlayLinks();
+            setupTrackPlayButtons();
           }
           showToast('Tracks loaded');
         } catch (err) {
