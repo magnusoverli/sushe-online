@@ -783,184 +783,215 @@ export function createAlbumDisplay(deps = {}) {
    * @param {number} index - Album index
    * @returns {HTMLElement} Card element
    */
+  /**
+   * Create mobile album card
+   *
+   * LAYOUT STRUCTURE:
+   * ┌────────────────────────────────────────────────────────────────────────┐
+   * │ cardWrapper (.album-card-wrapper) - h-[130px]                         │
+   * │  └─ card (.album-card.album-row) - relative, h-[130px]               │
+   * │     ├─ positionBadge (absolute, top-right of card)                   │
+   * │     └─ contentRow (flex row, h-full)                                  │
+   * │        ├─ coverSection (w-[88px], flex-shrink-0)                     │
+   * │        │   ├─ albumCover (.mobile-album-cover, 80x80)                │
+   * │        │   │   ├─ coverImage (75x75, .album-cover-blur)              │
+   * │        │   │   └─ summaryBadge (absolute, top-right of cover)        │
+   * │        │   └─ releaseDate (centered below cover)                      │
+   * │        ├─ infoSection (flex-1, min-w-0 for truncation)               │
+   * │        │   ├─ albumName                                               │
+   * │        │   ├─ artist + playcount                                      │
+   * │        │   ├─ country                                                 │
+   * │        │   ├─ genres                                                  │
+   * │        │   ├─ primaryTrack                                           │
+   * │        │   └─ secondaryTrack (optional)                              │
+   * │        └─ menuSection (w-[25px], border-left separator)              │
+   * │            └─ menuButton (three-dot)                                  │
+   * └────────────────────────────────────────────────────────────────────────┘
+   *
+   * CSS DEPENDENCIES (from input.css):
+   * - .album-card-wrapper: Sortable drag states (lines 311-438)
+   * - .album-card: Touch feedback, transitions (lines 171-240, 500-502)
+   * - .album-row: Inset box-shadow separators (lines 492-499)
+   * - .mobile-album-cover: Now-playing animated border (lines 511-592)
+   * - .album-cover-blur: Glow effect on cover (lines 505-513)
+   * - .summary-badge-mobile: AI badge styling (lines 2092-2160)
+   * - .no-drag: Prevents drag on interactive elements (lines 482-488)
+   *
+   * @param {Object} data - Processed album data
+   * @param {number} index - Album index
+   * @returns {HTMLElement} Card wrapper element
+   */
   function createMobileAlbumCard(data, index) {
+    // === WRAPPER ELEMENT ===
+    // Container for sortable drag functionality
     const cardWrapper = document.createElement('div');
     cardWrapper.className = 'album-card-wrapper h-[130px]';
 
+    // === CARD ELEMENT ===
+    // Main card with:
+    // - album-card: Touch feedback, box-shadow transitions
+    // - album-row: Inset top/bottom separators (subtle white lines)
+    // - relative: Positioning context for absolute children
+    // - h-[130px]: Fixed height matching wrapper
     const card = document.createElement('div');
-    card.className =
-      'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[130px]';
+    card.className = 'album-card album-row relative h-[130px] bg-gray-900';
     card.dataset.index = index;
 
-    // Determine cover image source:
-    // 1. Base64 cover (takes priority - may be locally edited or custom cover)
-    // 2. URL-based loading - uses coverImageUrl from API (efficient for unmodified covers)
-    // 3. Placeholder if no cover available
+    // === COVER IMAGE SOURCE ===
     const mobileCoverSrc = data.coverImage
       ? `data:image/${data.imageFormat};base64,${data.coverImage}`
-      : data.coverImageUrl
-        ? data.coverImageUrl
-        : null;
+      : data.coverImageUrl || null;
 
-    // Summary badge HTML (shown if album has a summary from any source)
-    // All summaries now use Claude badge (even if originally from Last.fm/Wikipedia)
-    let mobileSummaryBadgeHtml = '';
+    // === SUMMARY BADGE (AI indicator on cover) ===
+    let summaryBadgeHtml = '';
     if (data.summary) {
-      const source = data.summarySource || '';
-      // Always show Claude badge for all summaries
-      const badgeClass = 'claude-badge';
-      const iconClass = 'fas fa-robot';
-      // No source URL for Claude summaries
-      const sourceUrl = null;
-
-      mobileSummaryBadgeHtml = `<div class="summary-badge summary-badge-mobile ${badgeClass}" 
-        data-summary="${escapeHtml(data.summary)}" 
-        data-source-url="${escapeHtml(sourceUrl || '')}" 
-        data-source="${escapeHtml(source)}"
-        data-album-name="${escapeHtml(data.albumName)}" 
-        data-artist="${escapeHtml(data.artist)}">
-        <i class="${iconClass}"></i>
-      </div>`;
+      summaryBadgeHtml = `
+        <div class="summary-badge summary-badge-mobile claude-badge" 
+             data-summary="${escapeHtml(data.summary)}" 
+             data-source-url="${escapeHtml('')}" 
+             data-source="${escapeHtml(data.summarySource || '')}"
+             data-album-name="${escapeHtml(data.albumName)}" 
+             data-artist="${escapeHtml(data.artist)}">
+          <i class="fas fa-robot"></i>
+        </div>`;
     }
 
-    // Position badge helper function for mobile
+    // === POSITION BADGE ===
+    // Circular badge showing album rank, positioned in top-right of menu section
     const getPositionBadgeHtml = (position) => {
       if (position === null) return '';
-      const borderClass =
-        position === 1
-          ? 'border-yellow-500'
-          : position === 2
-            ? 'border-gray-400'
-            : position === 3
-              ? 'border-amber-700'
-              : 'border-gray-500';
-      const shadowSize = position <= 3 ? '8px' : '5px';
-      const shadowColor =
-        position === 1
-          ? 'rgba(255,215,0,1.0)'
-          : position === 2
-            ? 'rgba(192,192,192,1.0)'
-            : position === 3
-              ? 'rgba(205,127,50,1.0)'
-              : 'rgba(255,255,255,0.25)';
+
+      // Color coding: gold (1st), silver (2nd), bronze (3rd), gray (rest)
+      const colors = {
+        1: { border: '#eab308', shadow: 'rgba(255,215,0,1.0)', size: '8px' },
+        2: { border: '#9ca3af', shadow: 'rgba(192,192,192,1.0)', size: '8px' },
+        3: { border: '#b45309', shadow: 'rgba(205,127,50,1.0)', size: '8px' },
+        default: {
+          border: '#6b7280',
+          shadow: 'rgba(255,255,255,0.25)',
+          size: '5px',
+        },
+      };
+      const c = colors[position] || colors.default;
+
+      // Positioned absolute within the card (which has position: relative)
       return `
-        <div class="absolute top-[6px] right-0 w-[17px] h-[17px] flex items-center justify-center border ${borderClass} text-white text-[9px] font-medium rounded-full position-badge" 
-             style="background-color: rgba(17, 24, 39, 0.4); box-shadow: 0 0 ${shadowSize} ${shadowColor};"
+        <div class="mobile-position-badge"
+             style="position: absolute; top: 8px; right: -20px; z-index: 10;
+                    width: 17px; height: 17px;
+                    display: flex; align-items: center; justify-content: center;
+                    border: 1px solid ${c.border}; border-radius: 50%;
+                    background: rgba(17, 24, 39, 0.7);
+                    box-shadow: 0 0 ${c.size} ${c.shadow};
+                    color: white; font-size: 9px; font-weight: 500;"
              data-position-element="true">
-          <span style="margin-top: 1px;">${position}</span>
-        </div>
-      `;
+          <span style="transform: translateY(2px)">${position}</span>
+        </div>`;
     };
 
+    // === BUILD CARD HTML ===
     card.innerHTML = `
+      <!-- POSITION BADGE (positioned relative to card) -->
       ${getPositionBadgeHtml(data.position)}
-      <div class="flex items-stretch h-full bg-gray-900">
-        <!-- Left section: Album cover and Release date -->
-        <div class="shrink-0 flex items-stretch h-full">
-          <!-- Album cover with release date below -->
-          <div class="flex flex-col items-center pl-[4px] pt-2 self-stretch">
-            <div class="shrink-0">
-              ${
-                mobileCoverSrc
-                  ? `
-                <div class="mobile-album-cover w-20 h-20 flex items-center justify-center relative">
-                  <img src="${PLACEHOLDER_GIF}"
-                      data-lazy-src="${mobileCoverSrc}"
-                      alt="${data.albumName}"
-                      class="w-[75px] h-[75px] rounded-lg object-cover album-cover-blur"
-                      loading="lazy"
-                      decoding="async">
-                  ${mobileSummaryBadgeHtml}
-                </div>
-              `
-                  : `
-                <div class="mobile-album-cover w-20 h-20 bg-gray-800 rounded-lg shadow-md flex items-center justify-center relative">
-                  <i class="fas fa-compact-disc text-xl text-gray-600"></i>
-                  ${mobileSummaryBadgeHtml}
-                </div>
-              `
-              }
-            </div>
-            <!-- Release date centered in remaining space below image -->
-            <div class="flex-1 flex items-center">
-              <div class="text-xs whitespace-nowrap release-date-display ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>
-                ${data.releaseDate}
-              </div>
-            </div>
+      
+      <div class="flex items-stretch h-full">
+        
+        <!-- COVER SECTION -->
+        <div class="shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1">
+          <!-- Album cover with optional summary badge -->
+          <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center ${!mobileCoverSrc ? 'bg-gray-800 rounded-lg' : ''}">
+            ${
+              mobileCoverSrc
+                ? `<img src="${PLACEHOLDER_GIF}"
+                       data-lazy-src="${mobileCoverSrc}"
+                       alt="${escapeHtml(data.albumName)}"
+                       class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
+                       loading="lazy" decoding="async">`
+                : `<i class="fas fa-compact-disc text-xl text-gray-600"></i>`
+            }
+            ${summaryBadgeHtml}
+          </div>
+          <!-- Release date -->
+          <div class="flex-1 flex items-center mt-1">
+            <span class="release-date-display text-xs whitespace-nowrap ${data.yearMismatch ? 'text-red-500' : 'text-gray-500'}"
+                  ${data.yearMismatch ? `title="${escapeHtml(data.yearMismatchTooltip || '')}"` : ''}>
+              ${data.releaseDate}
+            </span>
           </div>
         </div>
         
-        <!-- Main content -->
-        <div class="flex-1 min-w-0 pt-1 pb-1 pl-[7px] flex flex-col justify-between h-[122px]">
-          <!-- Line 1: Album name (always present) -->
-          <div class="flex items-center -ml-[2.5px]">
-            <h3 class="font-semibold text-gray-200 text-base leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
+        <!-- INFO SECTION -->
+        <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
+          <!-- Album name -->
+          <div class="flex items-center">
+            <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
+              <i class="fas fa-compact-disc fa-xs mr-2"></i>${escapeHtml(data.albumName)}
+            </h3>
           </div>
-          
-          <!-- Line 2: Artist + Playcount -->
+          <!-- Artist + playcount -->
           <div class="flex items-center">
             <p class="text-[13px] text-gray-500 truncate">
-              <i class="fas fa-user fa-xs mr-[7px]"></i>
-              <span data-field="artist-mobile-text">${data.artist}</span>
-              ${data.playcountDisplay ? `<span class="text-gray-600 ml-2" data-playcount-mobile="${data.itemId}"><span class="opacity-0">·</span> <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay}</span>` : `<span class="text-gray-600 ml-2 hidden" data-playcount-mobile="${data.itemId}"></span>`}
+              <i class="fas fa-user fa-xs mr-2"></i>
+              <span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
+              ${
+                data.playcountDisplay
+                  ? `<span class="text-gray-600 ml-4" data-playcount-mobile="${data.itemId}">
+                     <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay}</span>`
+                  : `<span class="text-gray-600 ml-4 hidden" data-playcount-mobile="${data.itemId}"></span>`
+              }
             </p>
           </div>
-          
-          <!-- Line 3: Country (may be empty) -->
+          <!-- Country -->
           <div class="flex items-center">
             <span class="text-[13px] text-gray-500">
-              <i class="fas fa-globe fa-xs mr-[7px]"></i>
-              <span data-field="country-mobile-text">${data.country || ''}</span>
+              <i class="fas fa-globe fa-xs mr-2"></i>
+              <span data-field="country-mobile-text">${escapeHtml(data.country || '')}</span>
             </span>
           </div>
-          
-          <!-- Line 4: Genres (may be empty) -->
+          <!-- Genres -->
           <div class="flex items-center">
             <span class="text-[13px] text-gray-500 truncate">
-              <i class="fas fa-music fa-xs mr-[7px]"></i>
-              <span data-field="genre-mobile-text">${data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || ''}</span>
+              <i class="fas fa-music fa-xs mr-2"></i>
+              <span data-field="genre-mobile-text">${escapeHtml(data.genre1 && data.genre2 ? `${data.genre1} / ${data.genre2}` : data.genre1 || data.genre2 || '')}</span>
             </span>
           </div>
-          
-          <!-- Line 5: Primary track selection (clickable to play) -->
-          <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}" 
+          <!-- Primary track -->
+          <div class="flex items-center ${data.primaryTrackDisplay ? 'cursor-pointer active:opacity-70' : ''}"
                data-track-play-btn="${data.primaryTrackDisplay ? 'true' : ''}"
                data-track-identifier="${data.primaryTrack || ''}">
             <span class="text-[13px] text-green-400 truncate">
-              <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
-              <span class="text-yellow-400 mr-1 text-xs">${data.primaryTrackDisplay ? '★' : ''}</span>
-              <span data-field="track-mobile-text">${data.primaryTrackDisplay || ''}</span>
+              <i class="fas fa-play fa-xs mr-2"></i>
+              ${data.primaryTrackDisplay ? '<span class="text-yellow-400 text-xs mr-1">★</span>' : ''}
+              <span data-field="track-mobile-text">${escapeHtml(data.primaryTrackDisplay || '')}</span>
             </span>
           </div>
-          <!-- Line 6: Secondary track (if exists, clickable to play) -->
+          <!-- Secondary track (optional) -->
           ${
             data.hasSecondaryTrack
-              ? `<div class="flex items-center cursor-pointer active:opacity-70" 
-               data-track-play-btn="true"
-               data-track-identifier="${data.secondaryTrack || ''}">
-            <span class="text-[13px] text-green-400 truncate">
-              <i class="fas fa-play fa-xs ml-[2px] mr-[8px]"></i>
-              <span class="text-gray-400 mr-1 text-xs">○</span>
-              <span data-field="secondary-track-mobile-text">${data.secondaryTrackDisplay}</span>
-            </span>
-          </div>`
+              ? `<div class="flex items-center cursor-pointer active:opacity-70"
+                     data-track-play-btn="true"
+                     data-track-identifier="${data.secondaryTrack || ''}">
+                  <span class="text-[13px] text-green-400 truncate">
+                    <i class="fas fa-play fa-xs mr-2"></i>
+                    <span class="text-gray-400 text-xs mr-1">○</span>
+                    <span data-field="secondary-track-mobile-text">${escapeHtml(data.secondaryTrackDisplay || '')}</span>
+                  </span>
+                </div>`
               : ''
           }
         </div>
-
-        <!-- Actions on the right -->
-        <div class="flex items-center justify-center shrink-0 w-[25px] border-l border-gray-800/50">
-          <button data-album-menu-btn
-                  class="p-2 text-gray-400 active:text-gray-200 no-drag">
-            <i class="fas fa-ellipsis-v"></i>
+        
+        <!-- MENU SECTION -->
+        <div class="shrink-0 w-[25px] border-l border-gray-800/50" style="display: flex; align-items: center; justify-content: center;">
+          <button data-album-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform: translateX(7px);">
+            <i class="fas fa-ellipsis-v fa-fw"></i>
           </button>
         </div>
+        
       </div>
     `;
 
     cardWrapper.appendChild(card);
-
-    // Add shared event handlers
     attachMobileEventHandlers(card, index);
     return cardWrapper;
   }
@@ -1037,9 +1068,9 @@ export function createAlbumDisplay(deps = {}) {
       });
     }
 
-    // Attach track play button handler (only if track is selected)
-    const trackPlayBtn = card.querySelector('[data-track-play-btn="true"]');
-    if (trackPlayBtn) {
+    // Attach track play button handlers (for both primary and secondary tracks)
+    const trackPlayBtns = card.querySelectorAll('[data-track-play-btn="true"]');
+    trackPlayBtns.forEach((trackPlayBtn) => {
       trackPlayBtn.addEventListener(
         'touchstart',
         (e) => {
@@ -1059,16 +1090,23 @@ export function createAlbumDisplay(deps = {}) {
       trackPlayBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         e.preventDefault();
-        const albumsForTrackPlay = getListData(getCurrentList());
-        const albumForTrackPlay =
-          albumsForTrackPlay && albumsForTrackPlay[index];
-        if (albumForTrackPlay) {
-          const albumId =
-            `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
-          playTrackSafe(albumId);
+        const trackIdentifier = trackPlayBtn.dataset.trackIdentifier;
+        if (trackIdentifier && window.playSpecificTrack) {
+          // Play the specific track using its identifier
+          window.playSpecificTrack(index, trackIdentifier);
+        } else {
+          // Fallback to album's default track
+          const albumsForTrackPlay = getListData(getCurrentList());
+          const albumForTrackPlay =
+            albumsForTrackPlay && albumsForTrackPlay[index];
+          if (albumForTrackPlay) {
+            const albumId =
+              `${albumForTrackPlay.artist}::${albumForTrackPlay.album}::${albumForTrackPlay.release_date || ''}`.toLowerCase();
+            playTrackSafe(albumId);
+          }
         }
       });
-    }
+    });
   }
 
   /**
@@ -1926,7 +1964,7 @@ export function createAlbumDisplay(deps = {}) {
         `[data-playcount-mobile="${itemId}"]`
       );
       if (mobileEl) {
-        mobileEl.innerHTML = `· <i class="fas fa-headphones text-[10px]"></i> ${display}`;
+        mobileEl.innerHTML = `<i class="fas fa-headphones text-[10px]"></i> ${display}`;
         mobileEl.classList.remove('hidden');
       }
     }
