@@ -785,11 +785,11 @@ export function createAlbumDisplay(deps = {}) {
    */
   function createMobileAlbumCard(data, index) {
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[118px]';
+    cardWrapper.className = 'album-card-wrapper h-[130px]';
 
     const card = document.createElement('div');
     card.className =
-      'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[118px]';
+      'album-card album-row bg-gray-900 transition-all relative overflow-hidden h-[130px]';
     card.dataset.index = index;
 
     // Determine cover image source:
@@ -891,7 +891,7 @@ export function createAlbumDisplay(deps = {}) {
         </div>
         
         <!-- Main content -->
-        <div class="flex-1 min-w-0 pt-1 pb-1 pl-[7px] flex flex-col justify-between h-[110px]">
+        <div class="flex-1 min-w-0 pt-1 pb-1 pl-[7px] flex flex-col justify-between h-[122px]">
           <!-- Line 1: Album name (always present) -->
           <div class="flex items-center -ml-[2.5px]">
             <h3 class="font-semibold text-gray-200 text-lg leading-tight truncate"><i class="fas fa-compact-disc fa-xs mr-1"></i>${data.albumName}</h3>
