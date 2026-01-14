@@ -575,7 +575,7 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.primaryTrackDisplay
             ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
-            <span class="text-yellow-400 mr-1.5 text-xs shrink-0" title="Primary track">★</span>
+            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Primary track">★</span>
             <span class="album-cell-text ${data.primaryTrackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${data.primaryTrack || ''}">${data.primaryTrackDisplay}</span>
             ${data.primaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.primaryTrackDuration}</span>` : ''}
           </div>`
@@ -585,15 +585,15 @@ export function createAlbumDisplay(deps = {}) {
         }
         ${
           data.hasSecondaryTrack
-            ? `<div class="flex items-center min-w-0 mt-0.5 overflow-hidden w-full">
-            <span class="text-yellow-400 mr-1.5 text-xs shrink-0" title="Secondary track">☆</span>
+            ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
+            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Secondary track">☆</span>
             <span class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
             ${data.secondaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
           </div>`
             : ''
         }
       </div>
-      <div class="flex items-center comment-cell relative">
+      <div class="flex items-center comment-cell relative border-l border-gray-700 pl-4">
         <span class="album-cell-text ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
       </div>
     `;
