@@ -2365,3 +2365,20 @@ body.now-playing-bar-visible #addAlbumFAB {
   overflow-wrap: break-word;
   max-width: 100%;
 }
+
+/* Album cover preview - blur background when preview is active */
+#albumContainer.album-cover-preview-active .album-row {
+  filter: blur(8px);
+  opacity: 0.3;
+  transition:
+    filter 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#albumContainer.album-cover-preview-active .album-header {
+  filter: blur(8px);
+  opacity: 0.3;
+  transition:
+    filter 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}

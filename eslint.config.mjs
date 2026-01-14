@@ -14,6 +14,9 @@ export default [
       'public/js/chunks/**',
       'dist/**',
       'node_modules/**',
+      'playwright-report/**',
+      'coverage/**',
+      'test-results/**',
     ],
   },
   {

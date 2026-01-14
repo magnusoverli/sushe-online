@@ -35,6 +35,9 @@ let coverImageObserver = null;
 const PLACEHOLDER_GIF =
   'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
+// Album cover preview state
+let coverPreviewActive = null; // Stores { overlay, clone, originalRect }
+
 /**
  * Initialize the IntersectionObserver for lazy loading cover images
  * Images with data-lazy-src will have their src swapped when visible
@@ -610,6 +613,16 @@ export function createAlbumDisplay(deps = {}) {
    */
   function attachDesktopEventHandlers(row, index) {
     const currentList = getCurrentList();
+
+    // Add click handler to album cover for preview
+    const coverImage = row.querySelector('.album-cover');
+    if (coverImage) {
+      coverImage.style.cursor = 'zoom-in';
+      coverImage.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openCoverPreview(coverImage);
+      });
+    }
 
     // Add click handler to track cell for quick selection
     const trackCell = row.querySelector('.track-cell');
@@ -1739,6 +1752,152 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
+   * Open album cover preview with smooth animation
+   * @param {HTMLElement} coverImage - The cover image element clicked
+   */
+  function openCoverPreview(coverImage) {
+    // Don't open if already active or image is placeholder
+    if (coverPreviewActive || coverImage.src === PLACEHOLDER_GIF) return;
+
+    // Get high-quality image source
+    const highQualitySrc = coverImage.dataset.lazySrc || coverImage.src;
+    if (!highQualitySrc || highQualitySrc === PLACEHOLDER_GIF) return;
+
+    // Get original position
+    const originalRect = coverImage.getBoundingClientRect();
+
+    // Create overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'album-cover-preview-overlay';
+    overlay.style.cssText = `
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0);
+      z-index: 9998;
+      cursor: zoom-out;
+      transition: background 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    `;
+
+    // Create clone
+    const clone = document.createElement('img');
+    clone.src = highQualitySrc;
+    clone.className = 'album-cover-preview-clone';
+    clone.style.cssText = `
+      position: fixed;
+      left: ${originalRect.left}px;
+      top: ${originalRect.top}px;
+      width: ${originalRect.width}px;
+      height: ${originalRect.height}px;
+      object-fit: contain;
+      z-index: 9999;
+      cursor: zoom-out;
+      border-radius: 0.125rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.appendChild(clone);
+
+    // Store state
+    coverPreviewActive = { overlay, clone, originalRect };
+
+    // Blur background rows
+    const albumContainer = document.getElementById('albumContainer');
+    if (albumContainer) {
+      albumContainer.classList.add('album-cover-preview-active');
+    }
+
+    // Prevent body scroll
+    document.body.style.overflow = 'hidden';
+
+    // Animate after paint
+    requestAnimationFrame(() => {
+      // Calculate centered position
+      const maxHeight = window.innerHeight * 0.85;
+      const maxWidth = window.innerWidth * 0.85;
+
+      // Determine final size (maintain aspect ratio)
+      const aspectRatio = originalRect.width / originalRect.height;
+      let finalWidth, finalHeight;
+
+      if (aspectRatio > 1) {
+        // Landscape
+        finalWidth = Math.min(maxWidth, maxHeight * aspectRatio);
+        finalHeight = finalWidth / aspectRatio;
+      } else {
+        // Portrait or square
+        finalHeight = Math.min(maxHeight, maxWidth / aspectRatio);
+        finalWidth = finalHeight * aspectRatio;
+      }
+
+      const finalLeft = (window.innerWidth - finalWidth) / 2;
+      const finalTop = (window.innerHeight - finalHeight) / 2;
+
+      // Animate overlay
+      overlay.style.background = 'rgba(0, 0, 0, 0.85)';
+
+      // Animate clone
+      clone.style.left = `${finalLeft}px`;
+      clone.style.top = `${finalTop}px`;
+      clone.style.width = `${finalWidth}px`;
+      clone.style.height = `${finalHeight}px`;
+      clone.style.borderRadius = '0.5rem';
+      clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.8)';
+    });
+
+    // Close on click
+    const closePreview = () => closeCoverPreview();
+    overlay.addEventListener('click', closePreview);
+    clone.addEventListener('click', closePreview);
+  }
+
+  /**
+   * Close album cover preview with smooth animation
+   */
+  function closeCoverPreview() {
+    if (!coverPreviewActive) return;
+
+    const { overlay, clone, originalRect } = coverPreviewActive;
+
+    // Animate back to original position
+    overlay.style.background = 'rgba(0, 0, 0, 0)';
+    clone.style.left = `${originalRect.left}px`;
+    clone.style.top = `${originalRect.top}px`;
+    clone.style.width = `${originalRect.width}px`;
+    clone.style.height = `${originalRect.height}px`;
+    clone.style.borderRadius = '0.125rem';
+    clone.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.25)';
+
+    // Remove blur from background
+    const albumContainer = document.getElementById('albumContainer');
+    if (albumContainer) {
+      albumContainer.classList.remove('album-cover-preview-active');
+    }
+
+    // Restore body scroll
+    document.body.style.overflow = '';
+
+    // Remove elements after animation
+    setTimeout(() => {
+      if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+      if (clone.parentNode) clone.parentNode.removeChild(clone);
+    }, 400);
+
+    coverPreviewActive = null;
+  }
+
+  /**
+   * Handle ESC key to close cover preview
+   * @param {KeyboardEvent} e - Keyboard event
+   */
+  function handleCoverPreviewKeydown(e) {
+    if (e.key === 'Escape' && coverPreviewActive) {
+      closeCoverPreview();
+    }
+  }
+
+  /**
    * Main display function - renders albums to the container
    * @param {Array} albums - Album array to display
    * @param {Object} options - Display options
@@ -2135,6 +2294,9 @@ export function createAlbumDisplay(deps = {}) {
       }
     }
   }
+
+  // Set up global event listeners for cover preview
+  document.addEventListener('keydown', handleCoverPreviewKeydown);
 
   // Return public API
   return {
