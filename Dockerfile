@@ -24,13 +24,9 @@ RUN echo "Cache bust: ${CACHE_BUST}"
 COPY . .
 RUN npm run build
 
-# Remove node_modules and dev-only files before copying to runtime
-# This reduces final image size by ~3MB
-RUN rm -rf node_modules \
-    && rm -rf test browser-extension .github scripts screenshots .cursor .opencode \
-    && rm -f AGENTS.md TESTING.md CHANGELOG.md playwright.config.js \
-    && rm -f vite.config.js postcss.config.js tailwind.config.js \
-    && rm -f eslint.config.mjs .prettierrc .prettierignore
+# Remove node_modules before copying to runtime
+# Other dev-only files are handled conditionally during COPY
+RUN rm -rf node_modules
 
 # ----- Runtime stage -----
 FROM base AS runtime
@@ -63,6 +59,15 @@ RUN if [ "$INSTALL_DEV_DEPS" = "true" ]; then \
 
 # Copy application files and built assets from the builder stage
 COPY --chown=node:node --from=builder /app ./
+
+# Clean up files not needed for production (only if not installing dev deps)
+# This reduces final image size by ~3MB
+RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
+      rm -rf test browser-extension .github scripts screenshots .cursor .opencode \
+      && rm -f AGENTS.md TESTING.md CHANGELOG.md playwright.config.js \
+      && rm -f vite.config.js postcss.config.js tailwind.config.js \
+      && rm -f eslint.config.mjs .prettierrc .prettierignore; \
+    fi
 
 # Runtime configuration
 ENV NODE_ENV=production

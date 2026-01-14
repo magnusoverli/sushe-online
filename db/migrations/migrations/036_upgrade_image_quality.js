@@ -204,7 +204,9 @@ async function processListItemsTable(pool) {
 module.exports = {
   async up(pool) {
     logger.info('Starting image quality upgrade migration (256x256 → 512x512)');
-    logger.info(`Target: ${TARGET_SIZE}x${TARGET_SIZE} @ ${JPEG_QUALITY}% JPEG`);
+    logger.info(
+      `Target: ${TARGET_SIZE}x${TARGET_SIZE} @ ${JPEG_QUALITY}% JPEG`
+    );
 
     try {
       await processAlbumsTable(pool);
@@ -225,12 +227,6 @@ module.exports = {
         albums: stats.albums,
         listItems: stats.listItems,
       });
-
-      // Run VACUUM ANALYZE to reclaim space and update statistics
-      logger.info('Running VACUUM ANALYZE to optimize tables...');
-      await pool.query('VACUUM ANALYZE albums');
-      await pool.query('VACUUM ANALYZE list_items');
-      logger.info('Database optimization complete');
     } catch (error) {
       logger.error('Image quality upgrade migration failed', {
         error: error.message,
@@ -240,7 +236,7 @@ module.exports = {
     }
   },
 
-  async down(pool) {
+  async down(_pool) {
     // This migration cannot be easily reversed as it would require
     // re-fetching original images or downgrading quality
     logger.warn(
@@ -251,6 +247,12 @@ module.exports = {
       'To revert, you would need to restore from a database backup or re-fetch images'
     );
   },
+
+  // Post-migration hook runs OUTSIDE the transaction (required for VACUUM)
+  async postMigrate(pool) {
+    logger.info('Running VACUUM ANALYZE to optimize tables...');
+    await pool.query('VACUUM ANALYZE albums');
+    await pool.query('VACUUM ANALYZE list_items');
+    logger.info('Database optimization complete');
+  },
 };
-
-
