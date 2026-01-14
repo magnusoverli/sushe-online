@@ -1813,9 +1813,9 @@ export function createAlbumDisplay(deps = {}) {
 
     // Animate after paint
     requestAnimationFrame(() => {
-      // Calculate centered position
-      const maxHeight = window.innerHeight * 0.85;
-      const maxWidth = window.innerWidth * 0.85;
+      // Calculate centered position (0.64 = 75% of original 0.85)
+      const maxHeight = window.innerHeight * 0.64;
+      const maxWidth = window.innerWidth * 0.64;
 
       // Determine final size (maintain aspect ratio)
       const aspectRatio = originalRect.width / originalRect.height;

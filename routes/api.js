@@ -2136,15 +2136,15 @@ module.exports = (app, deps) => {
 
           const buffer = await response.arrayBuffer();
 
-          // Resize image to 256x256 pixels using sharp
+          // Resize image to 512x512 pixels using sharp
           // Use 'inside' fit to maintain aspect ratio without cropping
           // Convert to JPEG for consistent format and smaller file size
           const resizedBuffer = await sharp(Buffer.from(buffer))
-            .resize(256, 256, {
+            .resize(512, 512, {
               fit: 'inside', // Maintain aspect ratio
               withoutEnlargement: true, // Don't upscale small images
             })
-            .jpeg({ quality: 85 }) // Convert to JPEG with good quality
+            .jpeg({ quality: 100 }) // Convert to JPEG with maximum quality
             .toBuffer();
 
           const base64 = resizedBuffer.toString('base64');

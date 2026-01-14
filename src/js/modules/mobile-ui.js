@@ -1417,16 +1417,16 @@ export function createMobileUI(deps = {}) {
             editCoverPreview.innerHTML = `<img src="${event.target.result}" alt="Cover preview" class="w-full h-full object-cover">`;
           }
 
-          // Process and resize to 256x256
+          // Process and resize to 512x512
           const img = new Image();
           img.onload = function () {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
 
-            // Calculate dimensions to maintain aspect ratio (fit inside 256x256)
+            // Calculate dimensions to maintain aspect ratio (fit inside 512x512)
             let width = img.width;
             let height = img.height;
-            const maxSize = 256;
+            const maxSize = 512;
 
             if (width > height) {
               if (width > maxSize) {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Migration script to resize all existing album cover images to 256x256 pixels
+ * Migration script to resize all existing album cover images to 512x512 pixels
  * Processes both albums and list_items tables
  *
  * NOTE: This script now works with BYTEA columns (binary data) instead of
@@ -17,9 +17,9 @@ const pool = new Pool({
 });
 
 const BATCH_SIZE = 50; // Process 50 images at a time
-const TARGET_SIZE = 256;
-const JPEG_QUALITY = 85;
-const MAX_SIZE_BYTES = 50 * 1024; // 50KB - skip images smaller than this
+const TARGET_SIZE = 512;
+const JPEG_QUALITY = 100;
+const MAX_SIZE_BYTES = 200 * 1024; // 200KB - skip images smaller than this
 
 // Statistics tracking
 const stats = {
@@ -28,7 +28,7 @@ const stats = {
 };
 
 /**
- * Resize a binary image buffer to 256x256 pixels
+ * Resize a binary image buffer to 512x512 pixels
  * @param {Buffer} imageBuffer - Raw image binary data
  * @returns {Promise<{buffer: Buffer, savedBytes: number}>}
  */
