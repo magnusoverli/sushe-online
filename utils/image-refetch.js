@@ -18,6 +18,11 @@ const JPEG_QUALITY = 100;
 const RATE_LIMIT_MS = 200; // 200ms between requests (5 req/sec)
 const BATCH_SIZE = 50;
 
+// Skip thresholds - images meeting these criteria are considered good quality
+// Skip if: dimensions >= 512x512 OR file size >= 100KB
+const SKIP_SIZE_THRESHOLD_KB = 100;
+const SKIP_DIMENSION_THRESHOLD = 512;
+
 // Cover art providers configuration
 const COVER_ART_ARCHIVE_BASE = 'https://coverartarchive.org';
 const ITUNES_API_BASE = 'https://itunes.apple.com/search';
@@ -238,6 +243,7 @@ function createImageRefetchService(deps = {}) {
   // Job state
   let isRunning = false;
   let shouldStop = false;
+  let currentProgress = null;
 
   /**
    * Get statistics about album images
@@ -287,6 +293,61 @@ function createImageRefetchService(deps = {}) {
   }
 
   /**
+   * Get current job progress
+   * @returns {Object|null} - Current progress or null if not running
+   */
+  function getProgress() {
+    if (!isRunning || !currentProgress) {
+      return null;
+    }
+    return { ...currentProgress };
+  }
+
+  /**
+   * Check if an album should be skipped based on existing image quality
+   * Skip if: file size >= 145KB OR dimensions >= 512x512
+   * @param {string} albumId - Album ID
+   * @param {number} imageSizeBytes - Current image size in bytes
+   * @returns {Promise<boolean>} - True if album should be skipped
+   */
+  async function shouldSkipAlbum(albumId, imageSizeBytes) {
+    const imageSizeKb = imageSizeBytes / 1024;
+
+    // Quick check: file size threshold
+    if (imageSizeKb >= SKIP_SIZE_THRESHOLD_KB) {
+      return true;
+    }
+
+    // No image - don't skip
+    if (imageSizeBytes === 0) {
+      return false;
+    }
+
+    // Has image but under size threshold - check dimensions
+    try {
+      const imageResult = await pool.query(
+        'SELECT cover_image FROM albums WHERE album_id = $1',
+        [albumId]
+      );
+      if (imageResult.rows[0]?.cover_image) {
+        const metadata = await sharp(
+          imageResult.rows[0].cover_image
+        ).metadata();
+        if (
+          metadata.width >= SKIP_DIMENSION_THRESHOLD &&
+          metadata.height >= SKIP_DIMENSION_THRESHOLD
+        ) {
+          return true;
+        }
+      }
+    } catch {
+      // If we can't read the image, don't skip - try to refetch
+    }
+
+    return false;
+  }
+
+  /**
    * Refetch all album images
    * @returns {Promise<Object>} - Summary of the operation
    */
@@ -309,17 +370,30 @@ function createImageRefetchService(deps = {}) {
       stoppedEarly: false,
     };
 
+    // Initialize progress tracking
+    currentProgress = {
+      total: 0,
+      processed: 0,
+      success: 0,
+      failed: 0,
+      skipped: 0,
+      percentComplete: 0,
+      startedAt: summary.startedAt,
+    };
+
     try {
       log.info('Starting image refetch job');
 
-      // Get all albums
+      // Get all albums with their current image size
       const albumsResult = await pool.query(`
-        SELECT album_id, artist, album
+        SELECT album_id, artist, album, 
+               COALESCE(OCTET_LENGTH(cover_image), 0) as image_size_bytes
         FROM albums
         ORDER BY album_id
       `);
 
       summary.total = albumsResult.rows.length;
+      currentProgress.total = summary.total;
       log.info(`Found ${summary.total} albums to process`);
 
       // Process in batches
@@ -338,6 +412,27 @@ function createImageRefetchService(deps = {}) {
             break;
           }
 
+          // Skip albums that already have good quality images
+          // Skip if: file size >= 145KB OR dimensions >= 512x512
+          const shouldSkip = await shouldSkipAlbum(
+            album.album_id,
+            album.image_size_bytes
+          );
+
+          if (shouldSkip) {
+            summary.skipped++;
+            currentProgress.skipped++;
+            // Update progress
+            const processed =
+              summary.success + summary.failed + summary.skipped;
+            currentProgress.processed = processed;
+            currentProgress.percentComplete =
+              summary.total > 0
+                ? Math.round((processed / summary.total) * 100)
+                : 0;
+            continue;
+          }
+
           try {
             // Fetch new cover art
             const imageBuffer = await fetchCoverArt(album.artist, album.album);
@@ -351,8 +446,10 @@ function createImageRefetchService(deps = {}) {
                 [imageBuffer, album.album_id]
               );
               summary.success++;
+              currentProgress.success++;
             } else {
               summary.failed++;
+              currentProgress.failed++;
             }
           } catch (error) {
             log.error('Error processing album image', {
@@ -362,7 +459,17 @@ function createImageRefetchService(deps = {}) {
               error: error.message,
             });
             summary.failed++;
+            currentProgress.failed++;
           }
+
+          // Update progress (after fetch attempt)
+          const processedAfterFetch =
+            summary.success + summary.failed + summary.skipped;
+          currentProgress.processed = processedAfterFetch;
+          currentProgress.percentComplete =
+            summary.total > 0
+              ? Math.round((processedAfterFetch / summary.total) * 100)
+              : 0;
 
           // Rate limiting between albums
           await sleep(RATE_LIMIT_MS);
@@ -390,6 +497,7 @@ function createImageRefetchService(deps = {}) {
     } finally {
       isRunning = false;
       shouldStop = false;
+      currentProgress = null;
     }
   }
 
@@ -397,6 +505,7 @@ function createImageRefetchService(deps = {}) {
     getStats,
     isJobRunning,
     stopJob,
+    getProgress,
     refetchAllImages,
   };
 }

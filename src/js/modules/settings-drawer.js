@@ -1745,11 +1745,20 @@ export function createSettingsDrawer(deps = {}) {
             <div class="settings-row">
               <div class="settings-row-label">
                 <label class="settings-label">Refetch Album Images</label>
-                <p class="settings-description">Re-download cover art from external sources (Cover Art Archive, iTunes) and process at 512x512 quality</p>
+                <p class="settings-description">Re-download cover art from external sources (Cover Art Archive, iTunes) and process at 512x512 quality. Skips albums with 512x512+ images or >= 100KB.</p>
               </div>
               <div class="flex gap-2">
                 <button id="refetchAlbumImagesBtn" class="settings-button">Refetch Images</button>
                 <button id="stopRefetchImagesBtn" class="settings-button settings-button-danger hidden">Stop</button>
+              </div>
+            </div>
+            <div id="imageRefetchProgress" class="hidden mt-4">
+              <div class="flex justify-between text-sm text-gray-400 mb-1">
+                <span id="imageRefetchProgressLabel">Processing...</span>
+                <span id="imageRefetchProgressPercent">0%</span>
+              </div>
+              <div class="w-full bg-gray-700 rounded-full h-2.5">
+                <div id="imageRefetchProgressBar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
               </div>
             </div>
             <div id="imageRefetchResult" class="hidden mt-4 p-3 bg-gray-800/50 rounded text-sm">
@@ -3988,6 +3997,12 @@ export function createSettingsDrawer(deps = {}) {
 
   let albumSummaryPollInterval = null;
 
+  // ============ IMAGE REFETCH HANDLERS ============
+
+  let imageRefetchPollInterval = null;
+  let imageRefetchPollCount = 0;
+  const STATS_REFRESH_INTERVAL = 10; // Refresh stats every N polls (~15 seconds)
+
   /**
    * Load and display album summary statistics
    */
@@ -4202,7 +4217,17 @@ export function createSettingsDrawer(deps = {}) {
       `;
 
       // Update button states based on running status
-      updateImageRefetchUI(isRunning);
+      // If running, fetch progress to show current state
+      if (isRunning) {
+        try {
+          const progressResponse = await apiCall('/api/admin/images/progress');
+          updateImageRefetchUI(isRunning, progressResponse.progress);
+        } catch {
+          updateImageRefetchUI(isRunning, null);
+        }
+      } else {
+        updateImageRefetchUI(isRunning);
+      }
     } catch (error) {
       console.error('Error loading album image stats:', error);
       statsEl.innerHTML =
@@ -4211,20 +4236,128 @@ export function createSettingsDrawer(deps = {}) {
   }
 
   /**
-   * Update image refetch UI based on running status
+   * Update image refetch UI based on running status and progress
    */
-  function updateImageRefetchUI(isRunning) {
+  function updateImageRefetchUI(isRunning, progress = null) {
     const refetchBtn = document.getElementById('refetchAlbumImagesBtn');
     const stopBtn = document.getElementById('stopRefetchImagesBtn');
+    const progressContainer = document.getElementById('imageRefetchProgress');
+    const progressBar = document.getElementById('imageRefetchProgressBar');
+    const progressPercent = document.getElementById(
+      'imageRefetchProgressPercent'
+    );
+    const progressLabel = document.getElementById('imageRefetchProgressLabel');
 
     if (!refetchBtn || !stopBtn) return;
 
     if (isRunning) {
       refetchBtn.classList.add('hidden');
       stopBtn.classList.remove('hidden');
+
+      // Show progress bar
+      if (progressContainer) {
+        progressContainer.classList.remove('hidden');
+      }
+
+      // Update progress if available
+      if (progress && progressBar) {
+        const percent = progress.percentComplete || 0;
+        progressBar.style.width = `${percent}%`;
+        if (progressPercent) {
+          progressPercent.textContent = `${percent}%`;
+        }
+        if (progressLabel) {
+          const skippedInfo = progress.skipped
+            ? ` (${progress.skipped} skipped)`
+            : '';
+          progressLabel.textContent = `Processing ${progress.processed || 0} of ${progress.total || 0}...${skippedInfo}`;
+        }
+      }
+
+      // Start polling if not already
+      if (!imageRefetchPollInterval) {
+        imageRefetchPollCount = 0;
+        imageRefetchPollInterval = setInterval(pollImageRefetchProgress, 1500);
+      }
     } else {
       refetchBtn.classList.remove('hidden');
       stopBtn.classList.add('hidden');
+
+      // Hide progress bar when not running
+      if (progressContainer) {
+        progressContainer.classList.add('hidden');
+      }
+
+      // Stop polling
+      if (imageRefetchPollInterval) {
+        clearInterval(imageRefetchPollInterval);
+        imageRefetchPollInterval = null;
+      }
+    }
+  }
+
+  /**
+   * Poll for image refetch progress
+   */
+  async function pollImageRefetchProgress() {
+    try {
+      const response = await apiCall('/api/admin/images/progress');
+      const { isRunning, progress } = response;
+
+      updateImageRefetchUI(isRunning, progress);
+      imageRefetchPollCount++;
+
+      // Refresh stats periodically while running (every ~15 seconds)
+      if (isRunning && imageRefetchPollCount % STATS_REFRESH_INTERVAL === 0) {
+        await refreshImageStatsOnly();
+      }
+
+      // If no longer running, stop polling and reload stats
+      if (!isRunning && imageRefetchPollInterval) {
+        clearInterval(imageRefetchPollInterval);
+        imageRefetchPollInterval = null;
+        imageRefetchPollCount = 0;
+        await loadAlbumImageStats();
+      }
+    } catch (error) {
+      console.error('Error polling image refetch progress:', error);
+    }
+  }
+
+  /**
+   * Refresh just the stats display without affecting UI state
+   */
+  async function refreshImageStatsOnly() {
+    const statsEl = document.getElementById('albumImageStats');
+    if (!statsEl) return;
+
+    try {
+      const response = await apiCall('/api/admin/images/stats');
+      const { stats } = response;
+
+      if (!stats) return;
+
+      statsEl.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-green-400 text-lg">${stats.withImage || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">With Image</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-yellow-400 text-lg">${stats.withoutImage || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Without Image</div>
+          </div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">
+          Avg size: ${stats.avgSizeKb || 0} KB | Min: ${stats.minSizeKb || 0} KB | Max: ${stats.maxSizeKb || 0} KB
+        </div>
+      `;
+    } catch (error) {
+      console.error('Error refreshing image stats:', error);
     }
   }
 
@@ -4233,14 +4366,13 @@ export function createSettingsDrawer(deps = {}) {
    */
   async function handleRefetchAlbumImages() {
     const refetchBtn = document.getElementById('refetchAlbumImagesBtn');
-    const stopBtn = document.getElementById('stopRefetchImagesBtn');
     const resultEl = document.getElementById('imageRefetchResult');
     const resultTextEl = document.getElementById('imageRefetchResultText');
 
     const confirmed = await showConfirmation(
-      'Refetch All Album Images',
-      'This will re-download cover art for ALL albums from external sources.',
-      'This may take a long time depending on the number of albums. The operation can be stopped at any time.',
+      'Refetch Album Images',
+      'This will re-download cover art from external sources for albums missing images or with low-quality images.',
+      'Albums with 512x512+ images or >= 100KB are skipped. The operation can be stopped at any time.',
       'Start Refetch'
     );
 
@@ -4249,11 +4381,17 @@ export function createSettingsDrawer(deps = {}) {
     try {
       refetchBtn.disabled = true;
       refetchBtn.textContent = 'Starting...';
-      refetchBtn.classList.add('hidden');
-      stopBtn.classList.remove('hidden');
 
       // Hide any previous results
       resultEl.classList.add('hidden');
+
+      // Show initial UI state (will start polling)
+      updateImageRefetchUI(true, {
+        total: 0,
+        processed: 0,
+        percentComplete: 0,
+        currentAlbum: null,
+      });
 
       showToast('Image refetch started. This may take a while...', 'info');
 
@@ -4274,12 +4412,14 @@ export function createSettingsDrawer(deps = {}) {
             <div><span class="text-gray-400">Duration:</span> ${duration}</div>
             <div><span class="text-green-400">Success:</span> ${s.success}</div>
             <div><span class="text-red-400">Failed:</span> ${s.failed}</div>
+            <div><span class="text-blue-400">Skipped:</span> ${s.skipped || 0}</div>
           </div>
         `;
         resultEl.classList.remove('hidden');
 
+        const skippedMsg = s.skipped ? `, ${s.skipped} skipped` : '';
         showToast(
-          `Image refetch ${s.stoppedEarly ? 'stopped' : 'completed'}: ${s.success} updated, ${s.failed} failed`,
+          `Image refetch ${s.stoppedEarly ? 'stopped' : 'completed'}: ${s.success} updated, ${s.failed} failed${skippedMsg}`,
           s.stoppedEarly ? 'warning' : 'success'
         );
 
@@ -4292,8 +4432,7 @@ export function createSettingsDrawer(deps = {}) {
     } finally {
       refetchBtn.disabled = false;
       refetchBtn.textContent = 'Refetch Images';
-      refetchBtn.classList.remove('hidden');
-      stopBtn.classList.add('hidden');
+      updateImageRefetchUI(false);
     }
   }
 

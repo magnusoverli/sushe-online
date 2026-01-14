@@ -2311,6 +2311,13 @@ module.exports = (app, deps) => {
     }
   );
 
+  // Get image refetch job progress
+  app.get('/api/admin/images/progress', ensureAuth, ensureAdmin, (req, res) => {
+    const isRunning = imageRefetchService.isJobRunning();
+    const progress = imageRefetchService.getProgress();
+    res.json({ isRunning, progress });
+  });
+
   // Start image refetch job
   app.post(
     '/api/admin/images/refetch',
