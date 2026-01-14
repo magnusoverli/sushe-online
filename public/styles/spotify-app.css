@@ -140,6 +140,12 @@
     padding-bottom: 0.25rem;
   }
 
+  /* Comment cell border spans full height */
+  .album-row .comment-cell {
+    align-self: stretch;
+    min-height: 2.5rem; /* Match track cell height */
+  }
+
   /* Release date - positioned below album name, not affecting centering */
   .album-row > div:nth-child(3) > div.release-date-display {
     position: absolute;

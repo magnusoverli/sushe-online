@@ -406,10 +406,10 @@ export function createEditableFields(deps = {}) {
         let displayComment = newComment;
         let displayClass = 'text-gray-300';
 
-        // If comment is empty, show placeholder
+        // If comment is empty, show placeholder with almost invisible styling
         if (!displayComment) {
           displayComment = 'Comment';
-          displayClass = 'text-gray-500';
+          displayClass = 'text-gray-800 italic';
         }
 
         commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${displayComment}</span>`;

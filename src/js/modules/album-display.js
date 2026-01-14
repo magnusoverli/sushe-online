@@ -593,7 +593,7 @@ export function createAlbumDisplay(deps = {}) {
             : ''
         }
       </div>
-      <div class="flex items-center comment-cell relative border-l border-gray-700 pl-4">
+      <div class="flex items-center comment-cell relative border-l border-gray-700 pl-4 self-stretch">
         <span class="album-cell-text ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
       </div>
     `;
