@@ -1735,6 +1735,29 @@ export function createSettingsDrawer(deps = {}) {
           </div>
         </div>
 
+        <!-- Album Images -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Album Images</h3>
+          <div class="settings-group-content">
+            <div id="albumImageStats" class="mb-4">
+              <div class="text-gray-400 text-sm">Loading stats...</div>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Refetch Album Images</label>
+                <p class="settings-description">Re-download cover art from external sources (Cover Art Archive, iTunes) and process at 512x512 quality</p>
+              </div>
+              <div class="flex gap-2">
+                <button id="refetchAlbumImagesBtn" class="settings-button">Refetch Images</button>
+                <button id="stopRefetchImagesBtn" class="settings-button settings-button-danger hidden">Stop</button>
+              </div>
+            </div>
+            <div id="imageRefetchResult" class="hidden mt-4 p-3 bg-gray-800/50 rounded text-sm">
+              <div id="imageRefetchResultText" class="text-gray-300"></div>
+            </div>
+          </div>
+        </div>
+
         <!-- Duplicate Album Scanner -->
         <div class="settings-group">
           <h3 class="settings-group-title">Duplicate Album Scanner</h3>
@@ -2316,6 +2339,25 @@ export function createSettingsDrawer(deps = {}) {
 
     // Load album summary stats on admin panel load
     loadAlbumSummaryStats();
+
+    // Album image refetch handlers
+    const refetchAlbumImagesBtn = document.getElementById(
+      'refetchAlbumImagesBtn'
+    );
+    const stopRefetchImagesBtn = document.getElementById(
+      'stopRefetchImagesBtn'
+    );
+
+    if (refetchAlbumImagesBtn) {
+      refetchAlbumImagesBtn.addEventListener('click', handleRefetchAlbumImages);
+    }
+
+    if (stopRefetchImagesBtn) {
+      stopRefetchImagesBtn.addEventListener('click', handleStopRefetchImages);
+    }
+
+    // Load album image stats on admin panel load
+    loadAlbumImageStats();
 
     // Duplicate scanner handlers
     const scanDuplicatesBtn = document.getElementById('scanDuplicatesBtn');
@@ -4117,6 +4159,184 @@ export function createSettingsDrawer(deps = {}) {
     } finally {
       stopBtn.disabled = false;
       stopBtn.textContent = 'Stop';
+    }
+  }
+
+  // ============ ALBUM IMAGE HANDLERS ============
+
+  /**
+   * Load and display album image statistics
+   */
+  async function loadAlbumImageStats() {
+    const statsEl = document.getElementById('albumImageStats');
+    if (!statsEl) return;
+
+    try {
+      const response = await apiCall('/api/admin/images/stats');
+      const { stats, isRunning } = response;
+
+      if (!stats) {
+        statsEl.innerHTML =
+          '<div class="text-gray-400 text-sm">No stats available</div>';
+        return;
+      }
+
+      statsEl.innerHTML = `
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Total Albums</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-green-400 text-lg">${stats.withImage || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">With Image</div>
+          </div>
+          <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+            <div class="font-bold text-yellow-400 text-lg">${stats.withoutImage || 0}</div>
+            <div class="text-xs text-gray-400 uppercase">Without Image</div>
+          </div>
+        </div>
+        <div class="text-xs text-gray-500 mt-2">
+          Avg size: ${stats.avgSizeKb || 0} KB | Min: ${stats.minSizeKb || 0} KB | Max: ${stats.maxSizeKb || 0} KB
+        </div>
+      `;
+
+      // Update button states based on running status
+      updateImageRefetchUI(isRunning);
+    } catch (error) {
+      console.error('Error loading album image stats:', error);
+      statsEl.innerHTML =
+        '<div class="text-red-400 text-sm">Failed to load stats</div>';
+    }
+  }
+
+  /**
+   * Update image refetch UI based on running status
+   */
+  function updateImageRefetchUI(isRunning) {
+    const refetchBtn = document.getElementById('refetchAlbumImagesBtn');
+    const stopBtn = document.getElementById('stopRefetchImagesBtn');
+
+    if (!refetchBtn || !stopBtn) return;
+
+    if (isRunning) {
+      refetchBtn.classList.add('hidden');
+      stopBtn.classList.remove('hidden');
+    } else {
+      refetchBtn.classList.remove('hidden');
+      stopBtn.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Handle refetch album images button
+   */
+  async function handleRefetchAlbumImages() {
+    const refetchBtn = document.getElementById('refetchAlbumImagesBtn');
+    const stopBtn = document.getElementById('stopRefetchImagesBtn');
+    const resultEl = document.getElementById('imageRefetchResult');
+    const resultTextEl = document.getElementById('imageRefetchResultText');
+
+    const confirmed = await showConfirmation(
+      'Refetch All Album Images',
+      'This will re-download cover art for ALL albums from external sources.',
+      'This may take a long time depending on the number of albums. The operation can be stopped at any time.',
+      'Start Refetch'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      refetchBtn.disabled = true;
+      refetchBtn.textContent = 'Starting...';
+      refetchBtn.classList.add('hidden');
+      stopBtn.classList.remove('hidden');
+
+      // Hide any previous results
+      resultEl.classList.add('hidden');
+
+      showToast('Image refetch started. This may take a while...', 'info');
+
+      const response = await apiCall('/api/admin/images/refetch', {
+        method: 'POST',
+      });
+
+      if (response.success && response.summary) {
+        const s = response.summary;
+        const duration = formatDuration(s.durationSeconds);
+
+        resultTextEl.innerHTML = `
+          <div class="font-semibold text-white mb-2">
+            ${s.stoppedEarly ? 'Refetch Stopped Early' : 'Refetch Complete'}
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div><span class="text-gray-400">Total:</span> ${s.total}</div>
+            <div><span class="text-gray-400">Duration:</span> ${duration}</div>
+            <div><span class="text-green-400">Success:</span> ${s.success}</div>
+            <div><span class="text-red-400">Failed:</span> ${s.failed}</div>
+          </div>
+        `;
+        resultEl.classList.remove('hidden');
+
+        showToast(
+          `Image refetch ${s.stoppedEarly ? 'stopped' : 'completed'}: ${s.success} updated, ${s.failed} failed`,
+          s.stoppedEarly ? 'warning' : 'success'
+        );
+
+        // Reload stats
+        await loadAlbumImageStats();
+      }
+    } catch (error) {
+      console.error('Error refetching album images:', error);
+      showToast(error.data?.error || 'Failed to refetch images', 'error');
+    } finally {
+      refetchBtn.disabled = false;
+      refetchBtn.textContent = 'Refetch Images';
+      refetchBtn.classList.remove('hidden');
+      stopBtn.classList.add('hidden');
+    }
+  }
+
+  /**
+   * Handle stop refetch images button
+   */
+  async function handleStopRefetchImages() {
+    const stopBtn = document.getElementById('stopRefetchImagesBtn');
+
+    try {
+      stopBtn.disabled = true;
+      stopBtn.textContent = 'Stopping...';
+
+      const response = await apiCall('/api/admin/images/stop', {
+        method: 'POST',
+      });
+
+      if (response.success) {
+        showToast('Image refetch stopping...', 'info');
+      }
+    } catch (error) {
+      console.error('Error stopping image refetch:', error);
+      showToast('Failed to stop refetch', 'error');
+    } finally {
+      stopBtn.disabled = false;
+      stopBtn.textContent = 'Stop';
+    }
+  }
+
+  /**
+   * Format duration in seconds to human readable string
+   */
+  function formatDuration(seconds) {
+    if (seconds < 60) {
+      return `${seconds}s`;
+    } else if (seconds < 3600) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}m ${secs}s`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const mins = Math.floor((seconds % 3600) / 60);
+      return `${hours}h ${mins}m`;
     }
   }
 

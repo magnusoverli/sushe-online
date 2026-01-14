@@ -1,0 +1,410 @@
+/**
+ * Image Refetch Service
+ *
+ * Refetches album cover images from external sources and reprocesses them
+ * at higher quality (512x512 @ 100% JPEG).
+ *
+ * Uses Cover Art Archive and iTunes as image sources (no auth required).
+ */
+
+const sharp = require('sharp');
+const logger = require('./logger');
+
+// Image processing settings (matching migration 036)
+const TARGET_SIZE = 512;
+const JPEG_QUALITY = 100;
+
+// Rate limiting for external APIs
+const RATE_LIMIT_MS = 200; // 200ms between requests (5 req/sec)
+const BATCH_SIZE = 50;
+
+// Cover art providers configuration
+const COVER_ART_ARCHIVE_BASE = 'https://coverartarchive.org';
+const ITUNES_API_BASE = 'https://itunes.apple.com/search';
+const ITUNES_IMAGE_SIZE = 600; // Request 600x600 from iTunes
+
+/**
+ * Sleep for a specified duration
+ * @param {number} ms - Milliseconds to sleep
+ */
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch image from URL and process it
+ * @param {string} url - Image URL
+ * @returns {Promise<Buffer|null>} - Processed image buffer or null
+ */
+async function fetchAndProcessImage(url) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'SuSheBot/1.0 (album-art-fetcher)',
+      },
+      signal: globalThis.AbortSignal.timeout(10000), // 10 second timeout
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.startsWith('image/')) {
+      return null;
+    }
+
+    const buffer = await response.arrayBuffer();
+
+    // Process with sharp: resize and convert to JPEG
+    const processedBuffer = await sharp(Buffer.from(buffer))
+      .resize(TARGET_SIZE, TARGET_SIZE, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: JPEG_QUALITY })
+      .toBuffer();
+
+    return processedBuffer;
+  } catch (_error) {
+    // Silently return null for fetch errors
+    return null;
+  }
+}
+
+/**
+ * Try to fetch cover art from Cover Art Archive using MusicBrainz data
+ * @param {string} artist - Artist name
+ * @param {string} album - Album name
+ * @returns {Promise<Buffer|null>} - Image buffer or null
+ */
+async function fetchFromCoverArtArchive(artist, album) {
+  try {
+    // First, search MusicBrainz for the release group
+    const searchQuery = encodeURIComponent(
+      `artist:"${artist}" AND release:"${album}"`
+    );
+    const mbUrl = `https://musicbrainz.org/ws/2/release-group?query=${searchQuery}&limit=1&fmt=json`;
+
+    const mbResponse = await fetch(mbUrl, {
+      headers: {
+        'User-Agent': 'SuSheBot/1.0 (album-art-fetcher)',
+      },
+      signal: globalThis.AbortSignal.timeout(10000),
+    });
+
+    if (!mbResponse.ok) {
+      return null;
+    }
+
+    const mbData = await mbResponse.json();
+    const releaseGroup = mbData['release-groups']?.[0];
+
+    if (!releaseGroup?.id) {
+      return null;
+    }
+
+    // Fetch cover art from Cover Art Archive
+    // Try front-500 first for better quality, fall back to front-250
+    const sizes = ['500', '250'];
+    for (const size of sizes) {
+      const coverUrl = `${COVER_ART_ARCHIVE_BASE}/release-group/${releaseGroup.id}/front-${size}`;
+      const imageBuffer = await fetchAndProcessImage(coverUrl);
+      if (imageBuffer) {
+        return imageBuffer;
+      }
+    }
+
+    return null;
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
+ * Try to fetch cover art from iTunes
+ * @param {string} artist - Artist name
+ * @param {string} album - Album name
+ * @returns {Promise<Buffer|null>} - Image buffer or null
+ */
+async function fetchFromItunes(artist, album) {
+  try {
+    const searchTerm = `${artist} ${album}`;
+    const url = `${ITUNES_API_BASE}?term=${encodeURIComponent(searchTerm)}&media=music&entity=album&limit=5`;
+
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'SuSheBot/1.0 (album-art-fetcher)',
+      },
+      signal: globalThis.AbortSignal.timeout(10000),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+
+    if (!data.results || data.results.length === 0) {
+      return null;
+    }
+
+    // Find best matching result (simple case-insensitive match)
+    const normalizedArtist = artist.toLowerCase().trim();
+    const normalizedAlbum = album.toLowerCase().trim();
+
+    let bestMatch = null;
+    for (const result of data.results) {
+      const resultArtist = (result.artistName || '').toLowerCase().trim();
+      const resultAlbum = (result.collectionName || '').toLowerCase().trim();
+
+      // Check for reasonable match
+      if (
+        resultArtist.includes(normalizedArtist) ||
+        normalizedArtist.includes(resultArtist)
+      ) {
+        if (
+          resultAlbum.includes(normalizedAlbum) ||
+          normalizedAlbum.includes(resultAlbum)
+        ) {
+          bestMatch = result;
+          break;
+        }
+      }
+    }
+
+    // Fall back to first result if no good match
+    if (!bestMatch && data.results[0]?.artworkUrl100) {
+      bestMatch = data.results[0];
+    }
+
+    if (!bestMatch?.artworkUrl100) {
+      return null;
+    }
+
+    // Convert artwork URL to higher resolution
+    const artworkUrl = bestMatch.artworkUrl100.replace(
+      /\/\d+x\d+bb\./,
+      `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
+    );
+
+    return await fetchAndProcessImage(artworkUrl);
+  } catch (_error) {
+    return null;
+  }
+}
+
+/**
+ * Fetch cover art for an album from external sources
+ * Tries Cover Art Archive first, then iTunes
+ * @param {string} artist - Artist name
+ * @param {string} album - Album name
+ * @returns {Promise<Buffer|null>} - Image buffer or null
+ */
+async function fetchCoverArt(artist, album) {
+  if (!artist || !album) {
+    return null;
+  }
+
+  // Try Cover Art Archive first (generally better quality)
+  let imageBuffer = await fetchFromCoverArtArchive(artist, album);
+  if (imageBuffer) {
+    return imageBuffer;
+  }
+
+  // Rate limit before trying next source
+  await sleep(RATE_LIMIT_MS);
+
+  // Try iTunes as fallback
+  imageBuffer = await fetchFromItunes(artist, album);
+  return imageBuffer;
+}
+
+/**
+ * Create the image refetch service
+ * @param {Object} deps - Dependencies
+ * @param {Object} deps.pool - PostgreSQL pool
+ * @param {Object} deps.logger - Logger instance (optional)
+ * @returns {Object} - Image refetch service
+ */
+function createImageRefetchService(deps = {}) {
+  const pool = deps.pool;
+  const log = deps.logger || logger;
+
+  if (!pool) {
+    throw new Error('PostgreSQL pool is required');
+  }
+
+  // Job state
+  let isRunning = false;
+  let shouldStop = false;
+
+  /**
+   * Get statistics about album images
+   * @returns {Promise<Object>} - Image statistics
+   */
+  async function getStats() {
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) as total_albums,
+        COUNT(cover_image) as with_image,
+        COUNT(*) - COUNT(cover_image) as without_image,
+        ROUND(AVG(OCTET_LENGTH(cover_image)) / 1024, 1) as avg_size_kb,
+        ROUND(MAX(OCTET_LENGTH(cover_image)) / 1024, 1) as max_size_kb,
+        ROUND(MIN(NULLIF(OCTET_LENGTH(cover_image), 0)) / 1024, 1) as min_size_kb
+      FROM albums
+    `);
+
+    const row = result.rows[0];
+    return {
+      totalAlbums: parseInt(row.total_albums, 10),
+      withImage: parseInt(row.with_image, 10),
+      withoutImage: parseInt(row.without_image, 10),
+      avgSizeKb: parseFloat(row.avg_size_kb) || 0,
+      maxSizeKb: parseFloat(row.max_size_kb) || 0,
+      minSizeKb: parseFloat(row.min_size_kb) || 0,
+    };
+  }
+
+  /**
+   * Check if a job is currently running
+   * @returns {boolean}
+   */
+  function isJobRunning() {
+    return isRunning;
+  }
+
+  /**
+   * Stop the current job
+   * @returns {boolean} - True if a job was running and will be stopped
+   */
+  function stopJob() {
+    if (isRunning) {
+      shouldStop = true;
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Refetch all album images
+   * @returns {Promise<Object>} - Summary of the operation
+   */
+  async function refetchAllImages() {
+    if (isRunning) {
+      throw new Error('Image refetch job is already running');
+    }
+
+    isRunning = true;
+    shouldStop = false;
+
+    const summary = {
+      total: 0,
+      success: 0,
+      failed: 0,
+      skipped: 0,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      durationSeconds: 0,
+      stoppedEarly: false,
+    };
+
+    try {
+      log.info('Starting image refetch job');
+
+      // Get all albums
+      const albumsResult = await pool.query(`
+        SELECT album_id, artist, album
+        FROM albums
+        ORDER BY album_id
+      `);
+
+      summary.total = albumsResult.rows.length;
+      log.info(`Found ${summary.total} albums to process`);
+
+      // Process in batches
+      for (let i = 0; i < albumsResult.rows.length; i += BATCH_SIZE) {
+        if (shouldStop) {
+          summary.stoppedEarly = true;
+          log.info('Image refetch job stopped by user');
+          break;
+        }
+
+        const batch = albumsResult.rows.slice(i, i + BATCH_SIZE);
+
+        for (const album of batch) {
+          if (shouldStop) {
+            summary.stoppedEarly = true;
+            break;
+          }
+
+          try {
+            // Fetch new cover art
+            const imageBuffer = await fetchCoverArt(album.artist, album.album);
+
+            if (imageBuffer) {
+              // Update the album with new image
+              await pool.query(
+                `UPDATE albums 
+                 SET cover_image = $1, cover_image_format = 'JPEG', updated_at = NOW()
+                 WHERE album_id = $2`,
+                [imageBuffer, album.album_id]
+              );
+              summary.success++;
+            } else {
+              summary.failed++;
+            }
+          } catch (error) {
+            log.error('Error processing album image', {
+              albumId: album.album_id,
+              artist: album.artist,
+              album: album.album,
+              error: error.message,
+            });
+            summary.failed++;
+          }
+
+          // Rate limiting between albums
+          await sleep(RATE_LIMIT_MS);
+        }
+
+        // Log progress every batch
+        const processed = summary.success + summary.failed + summary.skipped;
+        log.info('Image refetch progress', {
+          processed,
+          total: summary.total,
+          success: summary.success,
+          failed: summary.failed,
+          progress: `${Math.round((processed / summary.total) * 100)}%`,
+        });
+      }
+
+      summary.completedAt = new Date().toISOString();
+      summary.durationSeconds = Math.round(
+        (new Date(summary.completedAt) - new Date(summary.startedAt)) / 1000
+      );
+
+      log.info('Image refetch job completed', summary);
+
+      return summary;
+    } finally {
+      isRunning = false;
+      shouldStop = false;
+    }
+  }
+
+  return {
+    getStats,
+    isJobRunning,
+    stopJob,
+    refetchAllImages,
+  };
+}
+
+module.exports = {
+  createImageRefetchService,
+  fetchCoverArt,
+  fetchAndProcessImage,
+  TARGET_SIZE,
+  JPEG_QUALITY,
+};
