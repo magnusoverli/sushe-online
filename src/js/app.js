@@ -3076,7 +3076,7 @@ function updateTrackCellDisplayDual(albumIndex, trackPicks, tracks) {
   if (hasSecondary) {
     cellHTML += `
       <div class="flex items-center min-w-0 mt-0.5 overflow-hidden w-full">
-        <span class="text-gray-400 mr-1.5 text-xs shrink-0" title="Secondary track">○</span>
+        <span class="text-yellow-400 mr-1.5 text-xs shrink-0" title="Secondary track">☆</span>
         <span class="album-cell-text ${secondaryData.class} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${trackPicks.secondary_track || ''}">${secondaryData.display}</span>
         ${secondaryData.duration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${secondaryData.duration}</span>` : ''}
       </div>`;
@@ -3145,7 +3145,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
     // Build menu header with instructions
     let menuHTML = `
       <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-700">
-        Click once = secondary (○) | Click again = primary (★)
+        Click once = secondary (☆) | Click again = primary (★)
       </div>
       <div class="track-menu-option px-4 py-2 hover:bg-gray-700 cursor-pointer text-sm" data-track-value="" data-action="clear">
         <span class="${hasNoSelection ? 'text-red-500' : 'text-gray-400'}">
@@ -3174,7 +3174,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         textClass = 'text-yellow-400';
         bgClass = 'bg-yellow-900/20';
       } else if (isSecondary) {
-        indicator = '<span class="text-gray-400 mr-2">○</span>';
+        indicator = '<span class="text-yellow-400 mr-2">☆</span>';
         textClass = 'text-gray-300';
         bgClass = 'bg-gray-700/30';
       }
@@ -3311,7 +3311,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
             if (targetPriority === 1) {
               showToast(`★ Primary: ${trackValue.substring(0, 40)}...`);
             } else {
-              showToast(`○ Secondary: ${trackValue.substring(0, 40)}...`);
+              showToast(`☆ Secondary: ${trackValue.substring(0, 40)}...`);
             }
           }
         } catch (error) {

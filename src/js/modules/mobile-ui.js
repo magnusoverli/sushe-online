@@ -1308,7 +1308,7 @@ export function createMobileUI(deps = {}) {
               <label class="block text-gray-400 text-sm mb-2">Track Selection</label>
               <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
             </div>
-            <div class="text-xs text-gray-500 mb-2">Click once = secondary (○) | Click again = primary (★)</div>
+            <div class="text-xs text-gray-500 mb-2">Click once = secondary (☆) | Click again = primary (★)</div>
             <div id="trackPickContainer" data-album-index="${index}" data-album-id="${album.album_id || ''}">
             ${
               Array.isArray(album.tracks) && album.tracks.length > 0
@@ -1326,7 +1326,7 @@ export function createMobileUI(deps = {}) {
                     const indicator = isPrimary
                       ? '<span class="text-yellow-400 mr-1">★</span>'
                       : isSecondary
-                        ? '<span class="text-gray-400 mr-1">○</span>'
+                        ? '<span class="text-yellow-400 mr-1">☆</span>'
                         : '';
                     const bgClass = isPrimary
                       ? 'bg-yellow-900/20'
@@ -1514,8 +1514,8 @@ export function createMobileUI(deps = {}) {
           item.insertBefore(indicator, item.firstChild);
         } else if (isSecondary) {
           const indicator = document.createElement('span');
-          indicator.className = 'text-gray-400 mr-1';
-          indicator.textContent = '○';
+          indicator.className = 'text-yellow-400 mr-1';
+          indicator.textContent = '☆';
           item.insertBefore(indicator, item.firstChild);
         }
       });
@@ -1588,7 +1588,7 @@ export function createMobileUI(deps = {}) {
               const result = await response.json();
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
-              showToast(`○ Secondary: ${trackName.substring(0, 30)}...`);
+              showToast(`☆ Secondary: ${trackName.substring(0, 30)}...`);
             }
 
             // Update UI immediately
@@ -1647,7 +1647,7 @@ export function createMobileUI(deps = {}) {
                       const indicator = isPrimary
                         ? '<span class="text-yellow-400 mr-1">★</span>'
                         : isSecondary
-                          ? '<span class="text-gray-400 mr-1">○</span>'
+                          ? '<span class="text-yellow-400 mr-1">☆</span>'
                           : '';
                       const bgClass = isPrimary
                         ? 'bg-yellow-900/20'

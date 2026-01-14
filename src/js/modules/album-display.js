@@ -586,7 +586,7 @@ export function createAlbumDisplay(deps = {}) {
         ${
           data.hasSecondaryTrack
             ? `<div class="flex items-center min-w-0 mt-0.5 overflow-hidden w-full">
-            <span class="text-gray-400 mr-1.5 text-xs shrink-0" title="Secondary track">○</span>
+            <span class="text-yellow-400 mr-1.5 text-xs shrink-0" title="Secondary track">☆</span>
             <span class="album-cell-text ${data.secondaryTrackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${data.secondaryTrack || ''}">${data.secondaryTrackDisplay}</span>
             ${data.secondaryTrackDuration ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${data.secondaryTrackDuration}</span>` : ''}
           </div>`
