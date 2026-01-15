@@ -5342,14 +5342,32 @@ async function refreshPlaycountsInBackground(
 
     const batchPromises = batch.map(async (album) => {
       try {
+        logger.debug('Fetching Last.fm playcount', {
+          artist: album.artist,
+          album: album.album,
+          albumId: album.albumId,
+          lastfmUsername,
+        });
+
+        // Pass MusicBrainz ID if available for more reliable matching
         const info = await getLastfmAlbumInfoBg(
           album.artist,
           album.album,
           lastfmUsername,
-          process.env.LASTFM_API_KEY
+          process.env.LASTFM_API_KEY,
+          album.albumId || null
         );
 
         const playcount = parseInt(info.userplaycount || 0);
+
+        // Log if Last.fm returned a different artist name (indicates potential mismatch)
+        if (info.artist && info.artist !== album.artist) {
+          logger.info('Last.fm artist name differs from request', {
+            requested: album.artist,
+            returned: info.artist,
+            album: album.album,
+          });
+        }
 
         // Generate normalized key for consistent matching with app's deduplication strategy
         const normalizedKey = normalizeAlbumKeyBg(album.artist, album.album);

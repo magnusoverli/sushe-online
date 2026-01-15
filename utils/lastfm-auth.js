@@ -96,14 +96,21 @@ function createCoreUserDataMethods(fetchFn, log, env) {
     return data.topalbums?.album || [];
   }
 
-  async function getAlbumInfo(artist, album, username, apiKey) {
+  async function getAlbumInfo(artist, album, username, apiKey, mbid = null) {
     const params = new URLSearchParams({
       method: 'album.getInfo',
-      artist,
-      album,
       api_key: apiKey || env.LASTFM_API_KEY,
       format: 'json',
+      autocorrect: '1', // Enable autocorrect to handle artist name variations
     });
+
+    // Prefer MusicBrainz ID if available (more reliable than artist/album names)
+    if (mbid) {
+      params.set('mbid', mbid);
+    } else {
+      params.set('artist', artist);
+      params.set('album', album);
+    }
 
     // Only include username if provided (for user-specific playcount data)
     if (username) {
@@ -118,7 +125,19 @@ function createCoreUserDataMethods(fetchFn, log, env) {
 
     if (data.error) {
       if (data.error === 6) {
-        return { userplaycount: '0', playcount: '0', listeners: '0' };
+        // Album not found - log for debugging artist/album name mismatches
+        log.debug('Last.fm album not found', {
+          artist,
+          album,
+          errorCode: data.error,
+          message: data.message,
+        });
+        return {
+          userplaycount: '0',
+          playcount: '0',
+          listeners: '0',
+          notFound: true,
+        };
       }
       log.error('Last.fm getAlbumInfo failed:', {
         error: data.error,
