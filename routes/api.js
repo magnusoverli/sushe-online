@@ -5067,10 +5067,19 @@ module.exports = (app, deps) => {
         }
 
         // Trigger background refresh for stale/missing albums
+        // Always refresh both missing AND stale albums to keep data current
+        // The refresh=true param now forces refresh of ALL albums (even non-stale)
         const albumsToRefresh =
           refresh === 'true'
-            ? [...missingAlbums, ...staleAlbums]
-            : missingAlbums;
+            ? [
+                ...listItems.map((item) => ({
+                  itemId: item._id,
+                  artist: item.artist,
+                  album: item.album,
+                  albumId: item.album_id,
+                })),
+              ]
+            : [...missingAlbums, ...staleAlbums];
 
         if (albumsToRefresh.length > 0) {
           logger.info('Triggering background playcount refresh', {
