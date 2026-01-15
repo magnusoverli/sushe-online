@@ -61,6 +61,80 @@ async function parseJsonWithRateLimitRetry(response, log, retryFn) {
 // ============================================
 
 /**
+ * Normalize strings for Last.fm API compatibility
+ * - Replace ellipsis character (…) with three dots (...)
+ * - Replace curly quotes with straight quotes
+ */
+const normalizeForLastfm = (str) =>
+  str.replace(/\u2026/g, '...').replace(/[\u2018\u2019]/g, "'");
+
+/**
+ * Search for album on Last.fm and find best match
+ * Used as fallback when exact album name doesn't match (e.g., "Album" vs "Album (Deluxe Edition)")
+ */
+async function searchAlbumOnLastfm(
+  fetchFn,
+  log,
+  artistName,
+  albumName,
+  apiKey
+) {
+  const params = new URLSearchParams({
+    method: 'album.search',
+    album: `${artistName} ${albumName}`,
+    api_key: apiKey,
+    format: 'json',
+    limit: '10',
+  });
+
+  const url = `${API_URL}?${params}`;
+  const response = await fetchFn(url);
+  const data = await parseJsonWithRateLimitRetry(response, log, () =>
+    fetchFn(url)
+  );
+
+  const results = data.results?.albummatches?.album || [];
+  if (results.length === 0) return null;
+
+  // Normalize for comparison
+  const normalizeStr = (s) =>
+    s
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .trim();
+  const targetArtist = normalizeStr(artistName);
+  const targetAlbum = normalizeStr(albumName);
+
+  // Find best match - album name should contain our search term, artist should match
+  for (const result of results) {
+    const resultArtist = normalizeStr(result.artist || '');
+    const resultAlbum = normalizeStr(result.name || '');
+
+    // Check if artist matches and album contains our search term
+    // This handles cases like "Album" matching "Album (Deluxe Edition)"
+    if (
+      resultArtist.includes(targetArtist) ||
+      targetArtist.includes(resultArtist)
+    ) {
+      if (
+        resultAlbum.includes(targetAlbum) ||
+        targetAlbum.includes(resultAlbum)
+      ) {
+        log.debug('Last.fm search found match', {
+          searchArtist: artistName,
+          searchAlbum: albumName,
+          foundArtist: result.artist,
+          foundAlbum: result.name,
+        });
+        return { artist: result.artist, album: result.name };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * Create core user data fetching methods (individual endpoints)
  */
 function createCoreUserDataMethods(fetchFn, log, env) {
@@ -97,33 +171,59 @@ function createCoreUserDataMethods(fetchFn, log, env) {
   }
 
   async function getAlbumInfo(artist, album, username, apiKey) {
-    const params = new URLSearchParams({
-      method: 'album.getInfo',
-      artist,
-      album,
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
-      autocorrect: '1', // Enable autocorrect to handle artist name variations
-    });
+    const key = apiKey || env.LASTFM_API_KEY;
 
-    if (username) {
-      params.set('username', username);
+    const normalizedArtist = normalizeForLastfm(artist);
+    const normalizedAlbum = normalizeForLastfm(album);
+
+    // Helper to fetch album info by exact artist/album name
+    async function fetchExact(artistName, albumName) {
+      const params = new URLSearchParams({
+        method: 'album.getInfo',
+        artist: artistName,
+        album: albumName,
+        api_key: key,
+        format: 'json',
+        autocorrect: '1',
+      });
+
+      if (username) {
+        params.set('username', username);
+      }
+
+      const url = `${API_URL}?${params}`;
+      const response = await fetchFn(url);
+      return parseJsonWithRateLimitRetry(response, log, () => fetchFn(url));
     }
 
-    const url = `${API_URL}?${params}`;
-    const response = await fetchFn(url);
-    const data = await parseJsonWithRateLimitRetry(response, log, () =>
-      fetchFn(url)
-    );
+    // Try exact match first
+    let data = await fetchExact(normalizedArtist, normalizedAlbum);
+
+    // If not found, try searching
+    if (data.error === 6) {
+      log.debug('Last.fm exact match not found, trying search', {
+        artist: normalizedArtist,
+        album: normalizedAlbum,
+      });
+
+      const searchResult = await searchAlbumOnLastfm(
+        fetchFn,
+        log,
+        normalizedArtist,
+        normalizedAlbum,
+        key
+      );
+      if (searchResult) {
+        // Retry with the found album name
+        data = await fetchExact(searchResult.artist, searchResult.album);
+      }
+    }
 
     if (data.error) {
       if (data.error === 6) {
-        // Album not found - log for debugging
-        log.debug('Last.fm album not found', {
+        log.debug('Last.fm album not found even after search', {
           artist,
           album,
-          errorCode: data.error,
-          message: data.message,
         });
         return {
           userplaycount: '0',
