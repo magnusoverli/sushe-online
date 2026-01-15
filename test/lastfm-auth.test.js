@@ -233,7 +233,14 @@ test('getTopAlbums should return empty array when no albums', async () => {
 // =============================================================================
 
 test('getAlbumInfo should fetch album with user playcount', async () => {
-  const mockResponse = {
+  // Mock responses for the two-step lookup (artist.getTopAlbums then album.getInfo)
+  const topAlbumsResponse = {
+    topalbums: {
+      album: [{ name: 'Test Album', artist: { name: 'Test Artist' } }],
+      '@attr': { artist: 'Test Artist' },
+    },
+  };
+  const albumInfoResponse = {
     album: {
       name: 'Test Album',
       artist: 'Test Artist',
@@ -244,12 +251,18 @@ test('getAlbumInfo should fetch album with user playcount', async () => {
   };
 
   const mockFetch = async (url) => {
-    assert.ok(url.includes('album.getInfo'), 'Should call getAlbumInfo method');
+    if (url.includes('artist.getTopAlbums')) {
+      return { json: async () => topAlbumsResponse };
+    }
+    assert.ok(
+      url.includes('album.getInfo'),
+      'Should call album.getInfo method'
+    );
     assert.ok(
       url.includes('username=testuser'),
       'Should include username for playcount'
     );
-    return { json: async () => mockResponse };
+    return { json: async () => albumInfoResponse };
   };
 
   const { getAlbumInfo } = createLastfmAuth({
@@ -288,7 +301,9 @@ test('getAlbumInfo should return zeros for album not found', async () => {
   assert.strictEqual(info.playcount, '0');
 });
 
-test('getAlbumInfo should throw on non-404 errors', async () => {
+test('getAlbumInfo should return zeros when artist.getTopAlbums fails and album.getInfo also fails', async () => {
+  // With the new variant-detection logic, getAlbumInfo now first tries artist.getTopAlbums,
+  // then falls back to album.getInfo. If both fail, it returns zeros (doesn't throw).
   const mockResponse = {
     error: 8,
     message: 'Operation failed',
@@ -301,10 +316,11 @@ test('getAlbumInfo should throw on non-404 errors', async () => {
     fetch: mockFetch,
   });
 
-  await assert.rejects(
-    async () => await getAlbumInfo('Artist', 'Album', 'testuser', 'apikey'),
-    /Operation failed/
-  );
+  // Should return zeros (not found) when all lookups fail
+  const info = await getAlbumInfo('Artist', 'Album', 'testuser', 'apikey');
+  assert.strictEqual(info.userplaycount, '0');
+  assert.strictEqual(info.playcount, '0');
+  assert.strictEqual(info.notFound, true);
 });
 
 // =============================================================================

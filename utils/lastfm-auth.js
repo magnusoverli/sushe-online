@@ -88,17 +88,25 @@ const stripEditionSuffix = (str) => {
 };
 
 /**
- * Find album on Last.fm using artist.getTopAlbums as fallback
- * Used when exact album name doesn't match (e.g., "Album" vs "Album (Deluxe Edition)")
+ * Find album on Last.fm using artist.getTopAlbums
+ * Used to find album variants (e.g., "Album" and "Album (Deluxe Edition)")
+ * @param {boolean} returnAll - If true, return all matching variants; otherwise return first match
  */
-async function findAlbumByArtist(fetchFn, log, artistName, albumName, apiKey) {
+async function findAlbumByArtist(
+  fetchFn,
+  log,
+  artistName,
+  albumName,
+  apiKey,
+  returnAll = false
+) {
   const params = new URLSearchParams({
     method: 'artist.getTopAlbums',
     artist: artistName,
     api_key: apiKey,
     format: 'json',
     autocorrect: '1',
-    limit: '50', // Get top 50 albums to search through
+    limit: '100', // Get more albums to find all variants
   });
 
   const url = `${API_URL}?${params}`;
@@ -108,40 +116,45 @@ async function findAlbumByArtist(fetchFn, log, artistName, albumName, apiKey) {
   );
 
   const albums = data.topalbums?.album || [];
-  if (albums.length === 0) return null;
+  if (albums.length === 0) return returnAll ? [] : null;
 
   // Get the corrected artist name from the response
   const correctedArtist = data.topalbums?.['@attr']?.artist || artistName;
 
-  // Normalize for comparison
+  // Normalize for comparison (strip edition suffixes for matching)
   const normalizeStr = (s) =>
     s
       .toLowerCase()
       .replace(/[^\w\s]/g, '')
       .trim();
   const targetAlbum = normalizeStr(albumName);
+  const matches = [];
 
-  // Find best match - album name should contain our search term
+  // Find all albums that match (base name matches)
   for (const album of albums) {
     const resultAlbum = normalizeStr(album.name || '');
+    const resultStripped = normalizeStr(stripEditionSuffix(album.name || ''));
 
-    // Check if album name contains our search term or vice versa
-    // This handles cases like "Album" matching "Album (Deluxe Edition)"
+    // Match if: normalized names match, or one contains the other
     if (
+      resultStripped === targetAlbum ||
       resultAlbum.includes(targetAlbum) ||
-      targetAlbum.includes(resultAlbum)
+      targetAlbum.includes(resultStripped)
     ) {
-      log.debug('Last.fm artist.getTopAlbums found match', {
-        searchArtist: artistName,
-        searchAlbum: albumName,
-        foundArtist: correctedArtist,
-        foundAlbum: album.name,
-      });
-      return { artist: correctedArtist, album: album.name };
+      matches.push({ artist: correctedArtist, album: album.name });
     }
   }
 
-  return null;
+  if (matches.length > 0) {
+    log.debug('Last.fm artist.getTopAlbums found matches', {
+      searchArtist: artistName,
+      searchAlbum: albumName,
+      matchCount: matches.length,
+      matches: matches.map((m) => m.album),
+    });
+  }
+
+  return returnAll ? matches : matches[0] || null;
 }
 
 /**
@@ -163,14 +176,79 @@ async function fetchAlbumInfoExact(
     format: 'json',
     autocorrect: '1',
   });
-
-  if (username) {
-    params.set('username', username);
-  }
-
+  if (username) params.set('username', username);
   const url = `${API_URL}?${params}`;
   const response = await fetchFn(url);
   return parseJsonWithRateLimitRetry(response, log, () => fetchFn(url));
+}
+
+/**
+ * Get album info with variant detection and combined playcounts
+ */
+async function getAlbumInfoWithVariants(
+  fetchFn,
+  log,
+  artist,
+  album,
+  username,
+  apiKey
+) {
+  const normalizedArtist = normalizeForLastfm(artist);
+  const normalizedAlbum = normalizeForLastfm(album);
+  const strippedAlbum = stripEditionSuffix(normalizedAlbum);
+  const fetchExact = (a, b) =>
+    fetchAlbumInfoExact(fetchFn, log, a, b, username, apiKey);
+
+  // Find all album variants and sum playcounts
+  const artistAlbums = await findAlbumByArtist(
+    fetchFn,
+    log,
+    normalizedArtist,
+    strippedAlbum,
+    apiKey,
+    true
+  );
+  if (artistAlbums && artistAlbums.length > 0) {
+    let totalUserPlaycount = 0,
+      totalPlaycount = 0,
+      totalListeners = 0,
+      primaryAlbum = null;
+    for (const v of artistAlbums) {
+      const vd = await fetchExact(v.artist, v.album);
+      if (!vd.error && vd.album) {
+        const up = parseInt(vd.album.userplaycount || 0);
+        totalUserPlaycount += up;
+        totalPlaycount += parseInt(vd.album.playcount || 0);
+        totalListeners = Math.max(
+          totalListeners,
+          parseInt(vd.album.listeners || 0)
+        );
+        if (!primaryAlbum || up > 0) primaryAlbum = vd.album;
+      }
+    }
+    if (primaryAlbum) {
+      log.debug('Last.fm combined playcounts', {
+        variants: artistAlbums.length,
+        totalUserPlaycount,
+      });
+      return {
+        ...primaryAlbum,
+        userplaycount: String(totalUserPlaycount),
+        playcount: String(totalPlaycount),
+        listeners: String(totalListeners),
+      };
+    }
+  }
+
+  // Fallback: try exact match, then without edition suffix
+  const data = await fetchExact(normalizedArtist, normalizedAlbum);
+  if (!data.error) return data.album || {};
+  if (strippedAlbum !== normalizedAlbum) {
+    const sd = await fetchExact(normalizedArtist, strippedAlbum);
+    if (!sd.error) return sd.album || {};
+  }
+  log.debug('Last.fm album not found', { artist, album });
+  return { userplaycount: '0', playcount: '0', listeners: '0', notFound: true };
 }
 
 /**
@@ -210,67 +288,14 @@ function createCoreUserDataMethods(fetchFn, log, env) {
   }
 
   async function getAlbumInfo(artist, album, username, apiKey) {
-    const key = apiKey || env.LASTFM_API_KEY;
-    const normalizedArtist = normalizeForLastfm(artist);
-    const normalizedAlbum = normalizeForLastfm(album);
-    const strippedAlbum = stripEditionSuffix(normalizedAlbum);
-
-    // Helper using external function
-    const fetchExact = (a, b) =>
-      fetchAlbumInfoExact(fetchFn, log, a, b, username, key);
-
-    // Try exact match first
-    let data = await fetchExact(normalizedArtist, normalizedAlbum);
-
-    // If not found and album has edition suffix, try without it
-    if (data.error === 6 && strippedAlbum !== normalizedAlbum) {
-      log.debug('Last.fm trying without edition suffix', {
-        original: normalizedAlbum,
-        stripped: strippedAlbum,
-      });
-      data = await fetchExact(normalizedArtist, strippedAlbum);
-    }
-
-    // If still not found, try artist.getTopAlbums to find fuzzy match
-    if (data.error === 6) {
-      log.debug('Last.fm exact match not found, trying artist.getTopAlbums', {
-        artist: normalizedArtist,
-        album: normalizedAlbum,
-      });
-      const searchResult = await findAlbumByArtist(
-        fetchFn,
-        log,
-        normalizedArtist,
-        strippedAlbum, // Use stripped album for better matching
-        key
-      );
-      if (searchResult) {
-        // Retry with the found album name
-        data = await fetchExact(searchResult.artist, searchResult.album);
-      }
-    }
-
-    if (data.error) {
-      if (data.error === 6) {
-        log.debug('Last.fm album not found even after search', {
-          artist,
-          album,
-        });
-        return {
-          userplaycount: '0',
-          playcount: '0',
-          listeners: '0',
-          notFound: true,
-        };
-      }
-      log.error('Last.fm getAlbumInfo failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch album info');
-    }
-
-    return data.album || {};
+    return getAlbumInfoWithVariants(
+      fetchFn,
+      log,
+      artist,
+      album,
+      username,
+      apiKey || env.LASTFM_API_KEY
+    );
   }
 
   async function getRecentTracks(username, limit = 50, apiKey) {
@@ -389,6 +414,7 @@ function createCoreUserDataMethods(fetchFn, log, env) {
     }
 
     const user = data.user || {};
+    const reg = user.registered?.unixtime;
     return {
       username: user.name,
       realname: user.realname || null,
@@ -396,9 +422,7 @@ function createCoreUserDataMethods(fetchFn, log, env) {
       artist_count: parseInt(user.artist_count, 10) || 0,
       album_count: parseInt(user.album_count, 10) || 0,
       track_count: parseInt(user.track_count, 10) || 0,
-      registered: user.registered?.unixtime
-        ? new Date(parseInt(user.registered.unixtime, 10) * 1000)
-        : null,
+      registered: reg ? new Date(parseInt(reg, 10) * 1000) : null,
       country: user.country || null,
       url: user.url,
       image: user.image || [],
