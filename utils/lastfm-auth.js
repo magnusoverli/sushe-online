@@ -35,6 +35,27 @@ function wrapFetchWithMetrics(fetchFn) {
   };
 }
 
+/**
+ * Parse JSON response with retry on rate limit (error 29)
+ * Last.fm error 29 = rate limit exceeded
+ * @param {Response} response - Fetch response object
+ * @param {Object} log - Logger instance
+ * @param {Function} retryFn - Function to call for retry (should return response)
+ * @returns {Object} - Parsed JSON data
+ */
+async function parseJsonWithRateLimitRetry(response, log, retryFn) {
+  const data = await response.json();
+
+  if (data.error === 29 && retryFn) {
+    log.warn('Last.fm rate limit hit, retrying after 1.5s delay');
+    await new Promise((r) => setTimeout(r, 1500));
+    const retryResponse = await retryFn();
+    return retryResponse.json();
+  }
+
+  return data;
+}
+
 // ============================================
 // USER DATA API METHODS - CORE
 // ============================================
@@ -58,8 +79,11 @@ function createCoreUserDataMethods(fetchFn, log, env) {
       format: 'json',
     });
 
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
+    const url = `${API_URL}?${params}`;
+    const response = await fetchFn(url);
+    const data = await parseJsonWithRateLimitRetry(response, log, () =>
+      fetchFn(url)
+    );
 
     if (data.error) {
       log.error('Last.fm getTopAlbums failed:', {
@@ -86,8 +110,11 @@ function createCoreUserDataMethods(fetchFn, log, env) {
       params.set('username', username);
     }
 
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
+    const url = `${API_URL}?${params}`;
+    const response = await fetchFn(url);
+    const data = await parseJsonWithRateLimitRetry(response, log, () =>
+      fetchFn(url)
+    );
 
     if (data.error) {
       if (data.error === 6) {
@@ -141,8 +168,11 @@ function createCoreUserDataMethods(fetchFn, log, env) {
       format: 'json',
     });
 
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
+    const url = `${API_URL}?${params}`;
+    const response = await fetchFn(url);
+    const data = await parseJsonWithRateLimitRetry(response, log, () =>
+      fetchFn(url)
+    );
 
     if (data.error) {
       log.error('Last.fm getTopArtists failed:', {
@@ -329,6 +359,7 @@ function createDiscoveryMethods(fetchFn, log, env) {
     const data = await response.json();
 
     if (data.error) {
+      if (data.error === 6) return []; // Artist not found
       log.error('Last.fm getSimilarArtists failed:', {
         error: data.error,
         message: data.message,
@@ -372,30 +403,44 @@ function createDiscoveryMethods(fetchFn, log, env) {
     artists,
     tagsPerArtist = 5,
     apiKey,
-    delayMs = 200
+    delayMs = 1100
   ) {
     const results = new Map();
     const artistNames = artists.map((a) =>
       typeof a === 'string' ? a : a.name
     );
 
-    for (const artistName of artistNames) {
-      try {
-        const tags = await getArtistTopTags(artistName, tagsPerArtist, apiKey);
-        results.set(artistName, tags);
+    // Process in parallel batches (~5 req/sec for Last.fm rate limit)
+    const BATCH_SIZE = 5;
 
-        if (
-          delayMs > 0 &&
-          artistNames.indexOf(artistName) < artistNames.length - 1
-        ) {
-          await new Promise((r) => setTimeout(r, delayMs));
+    for (let i = 0; i < artistNames.length; i += BATCH_SIZE) {
+      const batch = artistNames.slice(i, i + BATCH_SIZE);
+
+      const batchPromises = batch.map(async (artistName) => {
+        try {
+          const tags = await getArtistTopTags(
+            artistName,
+            tagsPerArtist,
+            apiKey
+          );
+          return { artistName, tags };
+        } catch (err) {
+          log.warn('Failed to fetch tags for artist:', {
+            artist: artistName,
+            error: err.message,
+          });
+          return { artistName, tags: [] };
         }
-      } catch (err) {
-        log.warn('Failed to fetch tags for artist:', {
-          artist: artistName,
-          error: err.message,
-        });
-        results.set(artistName, []);
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      for (const { artistName, tags } of batchResults) {
+        results.set(artistName, tags);
+      }
+
+      // Rate limit delay between batches (except for last batch)
+      if (delayMs > 0 && i + BATCH_SIZE < artistNames.length) {
+        await new Promise((r) => setTimeout(r, delayMs));
       }
     }
 
@@ -463,6 +508,7 @@ function createDiscoveryMethods(fetchFn, log, env) {
     const data = await response.json();
 
     if (data.error) {
+      if (data.error === 6) return []; // Artist not found
       log.error('Last.fm getArtistTopAlbums failed:', {
         error: data.error,
         message: data.message,

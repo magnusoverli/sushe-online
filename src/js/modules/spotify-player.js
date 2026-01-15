@@ -29,6 +29,8 @@ let lastfmNowPlayingSent = null; // Track ID for which we sent "now playing"
 let lastfmScrobbledTrack = null; // Track ID we already scrobbled
 let trackPlayStartTime = 0; // When current track started playing
 let accumulatedPlayTime = 0; // Total play time for current track (handles pause/resume)
+let scrobbleConsecutiveFailures = 0; // Track consecutive failures for user notification
+const SCROBBLE_FAILURE_THRESHOLD = 5; // Show warning after this many consecutive failures
 
 // Polling configuration
 const POLL_INTERVAL_PLAYING = 1500; // 1.5s when playing (interpolation fills gaps)
@@ -183,11 +185,22 @@ async function sendLastfmNowPlaying(track) {
 
     if (response.ok) {
       lastfmNowPlayingSent = trackId;
+      scrobbleConsecutiveFailures = 0; // Reset on success
       console.log('Last.fm now playing:', track.name);
+    } else {
+      scrobbleConsecutiveFailures++;
+      if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
+        showToast('Last.fm connection may have issues', 'warning');
+        scrobbleConsecutiveFailures = 0; // Reset to avoid spam
+      }
     }
   } catch (err) {
-    // Silently fail - scrobbling is not critical
+    scrobbleConsecutiveFailures++;
     console.warn('Last.fm now-playing failed:', err);
+    if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
+      showToast('Last.fm connection may have issues', 'warning');
+      scrobbleConsecutiveFailures = 0; // Reset to avoid spam
+    }
   }
 }
 
@@ -218,11 +231,22 @@ async function submitLastfmScrobble(track, timestamp) {
 
     if (response.ok) {
       lastfmScrobbledTrack = trackId;
+      scrobbleConsecutiveFailures = 0; // Reset on success
       console.log('Last.fm scrobbled:', track.name);
+    } else {
+      scrobbleConsecutiveFailures++;
+      if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
+        showToast('Last.fm connection may have issues', 'warning');
+        scrobbleConsecutiveFailures = 0; // Reset to avoid spam
+      }
     }
   } catch (err) {
-    // Silently fail - scrobbling is not critical
+    scrobbleConsecutiveFailures++;
     console.warn('Last.fm scrobble failed:', err);
+    if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
+      showToast('Last.fm connection may have issues', 'warning');
+      scrobbleConsecutiveFailures = 0; // Reset to avoid spam
+    }
   }
 }
 
@@ -291,6 +315,7 @@ function resetScrobbleState() {
   lastfmScrobbledTrack = null;
   trackPlayStartTime = 0;
   accumulatedPlayTime = 0;
+  scrobbleConsecutiveFailures = 0;
 }
 
 // ============ API FUNCTIONS ============

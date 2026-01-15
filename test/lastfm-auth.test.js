@@ -641,7 +641,7 @@ test('getRecentTracks should throw on API errors', async () => {
   );
 });
 
-test('getSimilarArtists should throw on API errors', async () => {
+test('getSimilarArtists should return empty array for unknown artist (error 6)', async () => {
   const mockResponse = {
     error: 6,
     message: 'Artist not found',
@@ -654,13 +654,30 @@ test('getSimilarArtists should throw on API errors', async () => {
     fetch: mockFetch,
   });
 
+  const result = await getSimilarArtists('Unknown Artist', 10, 'apikey');
+  assert.deepStrictEqual(result, []);
+});
+
+test('getSimilarArtists should throw on non-404 API errors', async () => {
+  const mockResponse = {
+    error: 8,
+    message: 'Operation failed',
+  };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getSimilarArtists } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
   await assert.rejects(
-    async () => await getSimilarArtists('Unknown Artist', 10, 'apikey'),
-    /Artist not found/
+    async () => await getSimilarArtists('Test Artist', 10, 'apikey'),
+    /Operation failed/
   );
 });
 
-test('getArtistTopAlbums should throw on API errors', async () => {
+test('getArtistTopAlbums should return empty array for unknown artist (error 6)', async () => {
   const mockResponse = {
     error: 6,
     message: 'Artist not found',
@@ -673,9 +690,26 @@ test('getArtistTopAlbums should throw on API errors', async () => {
     fetch: mockFetch,
   });
 
+  const result = await getArtistTopAlbums('Unknown Artist', 10, 'apikey');
+  assert.deepStrictEqual(result, []);
+});
+
+test('getArtistTopAlbums should throw on non-404 API errors', async () => {
+  const mockResponse = {
+    error: 8,
+    message: 'Operation failed',
+  };
+
+  const mockFetch = async () => ({ json: async () => mockResponse });
+
+  const { getArtistTopAlbums } = createLastfmAuth({
+    logger: createMockLogger(),
+    fetch: mockFetch,
+  });
+
   await assert.rejects(
-    async () => await getArtistTopAlbums('Unknown Artist', 10, 'apikey'),
-    /Artist not found/
+    async () => await getArtistTopAlbums('Test Artist', 10, 'apikey'),
+    /Operation failed/
   );
 });
 

@@ -28,8 +28,11 @@ const { createAggregateList } = require('../utils/aggregate-list');
 // Import album canonical utilities for deduplication
 const { createAlbumCanonical } = require('../utils/album-canonical');
 
-// Import fuzzy matching utilities for similar album detection
-const { findPotentialDuplicates } = require('../utils/fuzzy-match');
+// Import fuzzy matching utilities for similar album detection and normalization
+const {
+  findPotentialDuplicates,
+  normalizeAlbumKey,
+} = require('../utils/fuzzy-match');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
@@ -43,6 +46,14 @@ module.exports = (app, deps) => {
   } = require('../middleware/rate-limit');
   const { ensureValidSpotifyToken } = require('../utils/spotify-auth');
   const { ensureValidTidalToken } = require('../utils/tidal-auth');
+  const {
+    getTopAlbums: getLastfmTopAlbums,
+    getAlbumInfo: getLastfmAlbumInfo,
+    scrobble: lastfmScrobble,
+    updateNowPlaying: lastfmUpdateNowPlaying,
+    getSimilarArtists: getLastfmSimilarArtists,
+    getRecentTracks: getLastfmRecentTracks,
+  } = require('../utils/lastfm-auth');
   const { URLSearchParams } = require('url');
   const {
     htmlTemplate,
@@ -4684,8 +4695,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { getTopAlbums } = require('../utils/lastfm-auth');
-      const albums = await getTopAlbums(
+      const albums = await getLastfmTopAlbums(
         req.user.lastfmUsername,
         period,
         Math.min(parseInt(limit) || 50, 200),
@@ -4726,8 +4736,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { getAlbumInfo } = require('../utils/lastfm-auth');
-      const info = await getAlbumInfo(
+      const info = await getLastfmAlbumInfo(
         artist,
         album,
         req.user.lastfmUsername,
@@ -4762,27 +4771,40 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { getAlbumInfo } = require('../utils/lastfm-auth');
-
-      // Limit to 50 per request to avoid rate limits
+      // Limit to 50 per request to avoid excessive processing
       const albumsToFetch = albums.slice(0, 50);
 
-      // Fetch in parallel with rate limiting via Promise.allSettled
-      const results = await Promise.allSettled(
-        albumsToFetch.map(async (album) => {
-          const info = await getAlbumInfo(
-            album.artist,
-            album.title,
-            req.user.lastfmUsername,
-            process.env.LASTFM_API_KEY
-          );
-          return {
-            artist: album.artist,
-            title: album.title,
-            playcount: parseInt(info.userplaycount || 0),
-          };
-        })
-      );
+      // Process in batches with rate limiting (~5 req/sec for Last.fm)
+      const BATCH_SIZE = 5;
+      const DELAY_MS = 1100; // Just over 1 second between batches
+      const results = [];
+
+      for (let i = 0; i < albumsToFetch.length; i += BATCH_SIZE) {
+        const batch = albumsToFetch.slice(i, i + BATCH_SIZE);
+
+        const batchResults = await Promise.allSettled(
+          batch.map(async (album) => {
+            const info = await getLastfmAlbumInfo(
+              album.artist,
+              album.title,
+              req.user.lastfmUsername,
+              process.env.LASTFM_API_KEY
+            );
+            return {
+              artist: album.artist,
+              title: album.title,
+              playcount: parseInt(info.userplaycount || 0),
+            };
+          })
+        );
+
+        results.push(...batchResults);
+
+        // Rate limit delay between batches (except for last batch)
+        if (i + BATCH_SIZE < albumsToFetch.length) {
+          await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
+        }
+      }
 
       const playcounts = results
         .filter((r) => r.status === 'fulfilled')
@@ -4812,8 +4834,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { scrobble } = require('../utils/lastfm-auth');
-      const result = await scrobble(
+      const result = await lastfmScrobble(
         { artist, track, album, duration, timestamp },
         req.user.lastfmAuth.session_key,
         process.env.LASTFM_API_KEY,
@@ -4848,8 +4869,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { updateNowPlaying } = require('../utils/lastfm-auth');
-      const result = await updateNowPlaying(
+      const result = await lastfmUpdateNowPlaying(
         { artist, track, album, duration },
         req.user.lastfmAuth.session_key,
         process.env.LASTFM_API_KEY,
@@ -4880,8 +4900,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { getSimilarArtists } = require('../utils/lastfm-auth');
-      const similarArtists = await getSimilarArtists(
+      const similarArtists = await getLastfmSimilarArtists(
         artist,
         Math.min(parseInt(limit) || 20, 50),
         process.env.LASTFM_API_KEY
@@ -4921,8 +4940,7 @@ module.exports = (app, deps) => {
     }
 
     try {
-      const { getRecentTracks } = require('../utils/lastfm-auth');
-      const tracks = await getRecentTracks(
+      const tracks = await getLastfmRecentTracks(
         req.user.lastfmUsername,
         Math.min(parseInt(limit) || 50, 200),
         process.env.LASTFM_API_KEY
@@ -4996,26 +5014,29 @@ module.exports = (app, deps) => {
         // Stale threshold: 24 hours
         const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-        // Query all stats for this user at once
+        // Query all stats for this user at once (including normalized_key if available)
         const statsResult = await pool.query(
-          `SELECT artist, album_name, album_id, lastfm_playcount, lastfm_updated_at
+          `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_updated_at
          FROM user_album_stats
          WHERE user_id = $1`,
           [userId]
         );
 
-        // Build a lookup map (lowercase artist+album for matching)
+        // Build a lookup map using normalized artist+album keys
+        // This aligns with the app's deduplication strategy (handles editions, articles, diacritics)
+        // Use stored normalized_key if available, otherwise compute it
         const statsMap = new Map();
         for (const row of statsResult.rows) {
-          const key = `${row.artist.toLowerCase()}|||${row.album_name.toLowerCase()}`;
+          const key =
+            row.normalized_key || normalizeAlbumKey(row.artist, row.album_name);
           statsMap.set(key, row);
         }
 
-        // Match list items to cached stats
+        // Match list items to cached stats using normalized keys
         for (const item of listItems) {
           if (!item.artist || !item.album) continue;
 
-          const key = `${item.artist.toLowerCase()}|||${item.album.toLowerCase()}`;
+          const key = normalizeAlbumKey(item.artist, item.album);
           const cached = statsMap.get(key);
 
           if (cached) {
@@ -5289,6 +5310,11 @@ module.exports = (app, deps) => {
 };
 
 // Background function to refresh playcounts from Last.fm API
+const { getAlbumInfo: getLastfmAlbumInfoBg } = require('../utils/lastfm-auth');
+const {
+  normalizeAlbumKey: normalizeAlbumKeyBg,
+} = require('../utils/fuzzy-match');
+
 async function refreshPlaycountsInBackground(
   userId,
   lastfmUsername,
@@ -5296,7 +5322,6 @@ async function refreshPlaycountsInBackground(
   pool,
   logger
 ) {
-  const { getAlbumInfo } = require('../utils/lastfm-auth');
   const results = {};
 
   // Process in batches with rate limiting (~5 req/sec for Last.fm)
@@ -5308,7 +5333,7 @@ async function refreshPlaycountsInBackground(
 
     const batchPromises = batch.map(async (album) => {
       try {
-        const info = await getAlbumInfo(
+        const info = await getLastfmAlbumInfoBg(
           album.artist,
           album.album,
           lastfmUsername,
@@ -5317,19 +5342,31 @@ async function refreshPlaycountsInBackground(
 
         const playcount = parseInt(info.userplaycount || 0);
 
+        // Generate normalized key for consistent matching with app's deduplication strategy
+        const normalizedKey = normalizeAlbumKeyBg(album.artist, album.album);
+
         // Upsert into user_album_stats
         // Use LOWER() for artist/album_name to ensure case-insensitive matching
+        // Also store normalized_key for advanced matching (editions, articles, diacritics)
         // ON CONFLICT uses the unique index on (user_id, LOWER(artist), LOWER(album_name))
         await pool.query(
-          `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, lastfm_playcount, lastfm_updated_at, updated_at)
-           VALUES ($1, $2, LOWER($3), LOWER($4), $5, NOW(), NOW())
+          `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_updated_at, updated_at)
+           VALUES ($1, $2, LOWER($3), LOWER($4), $5, $6, NOW(), NOW())
            ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
            DO UPDATE SET
              album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
+             normalized_key = EXCLUDED.normalized_key,
              lastfm_playcount = EXCLUDED.lastfm_playcount,
              lastfm_updated_at = NOW(),
              updated_at = NOW()`,
-          [userId, album.albumId || null, album.artist, album.album, playcount]
+          [
+            userId,
+            album.albumId || null,
+            album.artist,
+            album.album,
+            normalizedKey,
+            playcount,
+          ]
         );
 
         results[album.itemId] = playcount;
