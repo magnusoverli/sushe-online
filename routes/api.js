@@ -5308,17 +5308,14 @@ async function refreshPlaycountsInBackground(
         logger.debug('Fetching Last.fm playcount', {
           artist: album.artist,
           album: album.album,
-          albumId: album.albumId,
           lastfmUsername,
         });
 
-        // Pass MusicBrainz ID if available for more reliable matching
         const info = await getLastfmAlbumInfoBg(
           album.artist,
           album.album,
           lastfmUsername,
-          process.env.LASTFM_API_KEY,
-          album.albumId || null
+          process.env.LASTFM_API_KEY
         );
 
         const playcount = parseInt(info.userplaycount || 0);
