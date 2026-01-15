@@ -79,6 +79,18 @@ const EDITION_PATTERNS = [
   /\s*\(\s*\d{4}\s*(remaster|reissue|edition)?\s*\)$/i,
 ];
 
+/**
+ * Common edition suffixes to try when looking for album variants
+ * Used as fallback when artist.getTopAlbums doesn't find matches
+ */
+const EDITION_SUFFIXES_TO_TRY = [
+  '(Deluxe Edition)',
+  '(Deluxe)',
+  '(Remastered)',
+  '(Expanded Edition)',
+  '(Special Edition)',
+];
+
 const stripEditionSuffix = (str) => {
   let result = str;
   for (const pattern of EDITION_PATTERNS) {
@@ -86,6 +98,20 @@ const stripEditionSuffix = (str) => {
   }
   return result.trim();
 };
+
+/**
+ * Generate album name variations to try for Last.fm lookup
+ * @param {string} albumName - Base album name (should already have edition suffix stripped)
+ * @returns {string[]} - Array of album name variations
+ */
+function generateAlbumVariations(albumName) {
+  if (!albumName) return [];
+  const variations = [];
+  for (const suffix of EDITION_SUFFIXES_TO_TRY) {
+    variations.push(`${albumName} ${suffix}`);
+  }
+  return variations;
+}
 
 /**
  * Find album on Last.fm using artist.getTopAlbums
@@ -183,6 +209,57 @@ async function fetchAlbumInfoExact(
 }
 
 /**
+ * Try to fetch album info and return it if playcount > 0
+ * @returns {Object|null} - Album data if found with plays, null otherwise
+ */
+async function tryFetchWithPlaycount(fetchExact, artist, albumName) {
+  const data = await fetchExact(artist, albumName);
+  if (!data.error && data.album) {
+    const up = parseInt(data.album.userplaycount || 0);
+    if (up > 0) return data.album;
+  }
+  return null;
+}
+
+/**
+ * Combine playcounts from multiple album variants
+ */
+async function combineVariantPlaycounts(fetchExact, artistAlbums, log) {
+  let totalUserPlaycount = 0;
+  let totalPlaycount = 0;
+  let totalListeners = 0;
+  let primaryAlbum = null;
+
+  for (const v of artistAlbums) {
+    const vd = await fetchExact(v.artist, v.album);
+    if (!vd.error && vd.album) {
+      const up = parseInt(vd.album.userplaycount || 0);
+      totalUserPlaycount += up;
+      totalPlaycount += parseInt(vd.album.playcount || 0);
+      totalListeners = Math.max(
+        totalListeners,
+        parseInt(vd.album.listeners || 0)
+      );
+      if (!primaryAlbum || up > 0) primaryAlbum = vd.album;
+    }
+  }
+
+  if (!primaryAlbum) return null;
+
+  log.debug('Last.fm combined playcounts', {
+    variants: artistAlbums.length,
+    totalUserPlaycount,
+  });
+
+  return {
+    ...primaryAlbum,
+    userplaycount: String(totalUserPlaycount),
+    playcount: String(totalPlaycount),
+    listeners: String(totalListeners),
+  };
+}
+
+/**
  * Get album info with variant detection and combined playcounts
  */
 async function getAlbumInfoWithVariants(
@@ -199,7 +276,7 @@ async function getAlbumInfoWithVariants(
   const fetchExact = (a, b) =>
     fetchAlbumInfoExact(fetchFn, log, a, b, username, apiKey);
 
-  // Find all album variants and sum playcounts
+  // Find all album variants via artist.getTopAlbums and sum playcounts
   const artistAlbums = await findAlbumByArtist(
     fetchFn,
     log,
@@ -208,45 +285,56 @@ async function getAlbumInfoWithVariants(
     apiKey,
     true
   );
+
   if (artistAlbums && artistAlbums.length > 0) {
-    let totalUserPlaycount = 0,
-      totalPlaycount = 0,
-      totalListeners = 0,
-      primaryAlbum = null;
-    for (const v of artistAlbums) {
-      const vd = await fetchExact(v.artist, v.album);
-      if (!vd.error && vd.album) {
-        const up = parseInt(vd.album.userplaycount || 0);
-        totalUserPlaycount += up;
-        totalPlaycount += parseInt(vd.album.playcount || 0);
-        totalListeners = Math.max(
-          totalListeners,
-          parseInt(vd.album.listeners || 0)
-        );
-        if (!primaryAlbum || up > 0) primaryAlbum = vd.album;
-      }
-    }
-    if (primaryAlbum) {
-      log.debug('Last.fm combined playcounts', {
-        variants: artistAlbums.length,
-        totalUserPlaycount,
+    const combined = await combineVariantPlaycounts(
+      fetchExact,
+      artistAlbums,
+      log
+    );
+    if (combined) return combined;
+  }
+
+  // Fallback: try exact match first
+  const exactResult = await tryFetchWithPlaycount(
+    fetchExact,
+    normalizedArtist,
+    normalizedAlbum
+  );
+  if (exactResult) return exactResult;
+
+  // Try without edition suffix if different
+  if (strippedAlbum !== normalizedAlbum) {
+    const strippedResult = await tryFetchWithPlaycount(
+      fetchExact,
+      normalizedArtist,
+      strippedAlbum
+    );
+    if (strippedResult) return strippedResult;
+  }
+
+  // Try common variations (Deluxe Edition, Remastered, etc.)
+  const variations = generateAlbumVariations(strippedAlbum);
+  for (const variation of variations) {
+    const varResult = await tryFetchWithPlaycount(
+      fetchExact,
+      normalizedArtist,
+      variation
+    );
+    if (varResult) {
+      log.debug('Last.fm matched via variation', {
+        original: album,
+        matched: variation,
+        playcount: varResult.userplaycount,
       });
-      return {
-        ...primaryAlbum,
-        userplaycount: String(totalUserPlaycount),
-        playcount: String(totalPlaycount),
-        listeners: String(totalListeners),
-      };
+      return varResult;
     }
   }
 
-  // Fallback: try exact match, then without edition suffix
-  const data = await fetchExact(normalizedArtist, normalizedAlbum);
-  if (!data.error) return data.album || {};
-  if (strippedAlbum !== normalizedAlbum) {
-    const sd = await fetchExact(normalizedArtist, strippedAlbum);
-    if (!sd.error) return sd.album || {};
-  }
+  // Return whatever we found (even with 0 plays) or not found
+  const fallbackData = await fetchExact(normalizedArtist, normalizedAlbum);
+  if (!fallbackData.error && fallbackData.album) return fallbackData.album;
+
   log.debug('Last.fm album not found', { artist, album });
   return { userplaycount: '0', playcount: '0', listeners: '0', notFound: true };
 }
