@@ -4962,14 +4962,14 @@ module.exports = (app, deps) => {
     }
   });
 
-  // GET /api/lastfm/list-playcounts/:listId - Get cached playcounts for albums in a list
-  // Returns cached data immediately, triggers background refresh for stale entries
+  // GET /api/lastfm/list-playcounts/:listId - Get playcounts for albums in a list
+  // Returns cached data immediately, then refreshes ALL albums in background
+  // Frontend polls for updates and updates playcount display without full list reload
   app.get(
     '/api/lastfm/list-playcounts/:listId',
     ensureAuthAPI,
     async (req, res) => {
       const { listId } = req.params;
-      const { refresh = 'false' } = req.query;
 
       if (!req.user.lastfmUsername) {
         return res.status(401).json({
@@ -5002,17 +5002,12 @@ module.exports = (app, deps) => {
         const listItems = listItemsResult.rows;
 
         if (listItems.length === 0) {
-          return res.json({ playcounts: {}, staleCount: 0 });
+          return res.json({ playcounts: {}, refreshing: 0 });
         }
 
         // Get cached playcounts from user_album_stats
         const userId = req.user._id;
         const playcounts = {};
-        const staleAlbums = [];
-        const missingAlbums = [];
-
-        // Stale threshold: 24 hours
-        const staleThreshold = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
         // Query all stats for this user at once (including normalized_key if available)
         const statsResult = await pool.query(
@@ -5039,53 +5034,23 @@ module.exports = (app, deps) => {
           const key = normalizeAlbumKey(item.artist, item.album);
           const cached = statsMap.get(key);
 
-          if (cached) {
-            playcounts[item._id] = cached.lastfm_playcount || 0;
-
-            // Check if stale
-            if (
-              !cached.lastfm_updated_at ||
-              new Date(cached.lastfm_updated_at) < staleThreshold
-            ) {
-              staleAlbums.push({
-                itemId: item._id,
-                artist: item.artist,
-                album: item.album,
-                albumId: item.album_id,
-              });
-            }
-          } else {
-            // No cached data
-            playcounts[item._id] = null;
-            missingAlbums.push({
-              itemId: item._id,
-              artist: item.artist,
-              album: item.album,
-              albumId: item.album_id,
-            });
-          }
+          // Return cached playcount (or null if not yet fetched)
+          playcounts[item._id] = cached ? cached.lastfm_playcount || 0 : null;
         }
 
-        // Trigger background refresh for stale/missing albums
-        // Always refresh both missing AND stale albums to keep data current
-        // The refresh=true param now forces refresh of ALL albums (even non-stale)
-        const albumsToRefresh =
-          refresh === 'true'
-            ? [
-                ...listItems.map((item) => ({
-                  itemId: item._id,
-                  artist: item.artist,
-                  album: item.album,
-                  albumId: item.album_id,
-                })),
-              ]
-            : [...missingAlbums, ...staleAlbums];
+        // Always refresh ALL albums in background on every list render
+        // Cached data is returned immediately, fresh data updates via polling
+        // This ensures playcounts are always current without blocking the UI
+        const albumsToRefresh = listItems.map((item) => ({
+          itemId: item._id,
+          artist: item.artist,
+          album: item.album,
+          albumId: item.album_id,
+        }));
 
         if (albumsToRefresh.length > 0) {
-          logger.info('Triggering background playcount refresh', {
+          logger.debug('Triggering background playcount refresh', {
             albumCount: albumsToRefresh.length,
-            missingCount: missingAlbums.length,
-            staleCount: staleAlbums.length,
             lastfmUsername: req.user.lastfmUsername,
           });
           // Don't await - let it run in background
@@ -5102,8 +5067,6 @@ module.exports = (app, deps) => {
 
         res.json({
           playcounts,
-          staleCount: staleAlbums.length,
-          missingCount: missingAlbums.length,
           refreshing: albumsToRefresh.length,
         });
       } catch (error) {
