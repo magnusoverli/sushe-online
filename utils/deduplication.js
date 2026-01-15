@@ -8,9 +8,13 @@
  * Special handling:
  * - Genres (genre_1, genre_2): Always return NULL - genres are canonical and
  *   stored only in albums table, never as per-list overrides.
+ * - Artist/Album: Sanitized before storage to ensure consistent encoding
+ *   (e.g., ellipsis → three periods)
  *
  * Follows dependency injection pattern for testability.
  */
+
+const { sanitizeForStorage } = require('./album-canonical');
 
 /**
  * Factory function to create deduplication helpers with injectable cache
@@ -155,19 +159,28 @@ function createDeduplicationHelpers(deps = {}) {
       return null;
     }
 
-    // No album reference or no value - store as-is
-    if (!albumId || listItemValue === null || listItemValue === undefined) {
-      return field === 'cover_image'
-        ? toBuffer(listItemValue)
-        : listItemValue || null;
+    // Sanitize artist/album names for consistent encoding
+    // (e.g., ellipsis "…" → three periods "...")
+    const shouldSanitize = field === 'artist' || field === 'album';
+    const sanitizedValue = shouldSanitize
+      ? sanitizeForStorage(listItemValue)
+      : listItemValue;
+
+    // No album reference or no value - store as-is (sanitized if applicable)
+    if (!albumId || sanitizedValue === null || sanitizedValue === undefined) {
+      if (field === 'cover_image') {
+        return toBuffer(listItemValue);
+      }
+      return sanitizedValue || null;
     }
 
     // Fetch album data
     const albumData = await getAlbumData(albumId, pool);
     if (!albumData) {
-      return field === 'cover_image'
-        ? toBuffer(listItemValue)
-        : listItemValue || null;
+      if (field === 'cover_image') {
+        return toBuffer(listItemValue);
+      }
+      return sanitizedValue || null;
     }
 
     // Special handling for cover_image
@@ -177,14 +190,14 @@ function createDeduplicationHelpers(deps = {}) {
 
     // Compare values: if identical, return NULL (save space)
     const albumValue = albumData[field];
-    const normalizedListValue = listItemValue === '' ? null : listItemValue;
+    const normalizedListValue = sanitizedValue === '' ? null : sanitizedValue;
     const normalizedAlbumValue = albumValue === '' ? null : albumValue;
 
     if (normalizedListValue === normalizedAlbumValue) {
       return null; // Duplicate
     }
 
-    return listItemValue; // Different - store custom value
+    return sanitizedValue; // Different - store custom value (sanitized)
   }
 
   /**

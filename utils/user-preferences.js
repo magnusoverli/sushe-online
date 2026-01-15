@@ -20,9 +20,46 @@ function normalizeArtistName(name) {
     name
       .toLowerCase()
       .trim()
+      // Convert ellipsis (…) to three periods for consistent matching
+      // e.g., "…and Oceans" -> "...and Oceans"
+      .replace(/…/g, '...')
       // Remove "the " prefix (e.g., "The Beatles" -> "beatles")
       .replace(/^the\s+/, '')
       // Remove common suffixes like "(band)", "[US]", etc.
+      .replace(/\s*\([^)]*\)\s*/g, '')
+      .replace(/\s*\[[^\]]*\]\s*/g, '')
+      // Normalize special characters
+      .replace(/[''`]/g, "'")
+      .replace(/[""]/g, '"')
+      // Remove diacritics (é -> e, ü -> u)
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      // Remove punctuation except essential ones
+      .replace(/[.,!?;:]/g, '')
+      // Normalize whitespace
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/**
+ * Normalize album name for cross-source matching
+ * Handles common variations in album titles across sources
+ * @param {string} name - Album name to normalize
+ * @returns {string} - Normalized name
+ */
+function normalizeAlbumName(name) {
+  if (!name) return '';
+
+  return (
+    name
+      .toLowerCase()
+      .trim()
+      // Convert ellipsis (…) to three periods for consistent matching
+      .replace(/…/g, '...')
+      // Remove "the " prefix for consistency across sources
+      .replace(/^the\s+/, '')
+      // Remove common suffixes like "(Deluxe Edition)", "[Remaster]", etc.
       .replace(/\s*\([^)]*\)\s*/g, '')
       .replace(/\s*\[[^\]]*\]\s*/g, '')
       // Normalize special characters
@@ -987,6 +1024,7 @@ module.exports = {
   getPositionPoints,
   // Artist/genre normalization utilities
   normalizeArtistName,
+  normalizeAlbumName,
   normalizeGenre,
   artistNamesMatch,
   findArtistInMap,

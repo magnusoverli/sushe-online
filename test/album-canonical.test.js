@@ -7,6 +7,7 @@ const assert = require('node:assert');
 
 const {
   createAlbumCanonical,
+  sanitizeForStorage,
   normalizeForLookup,
   generateInternalAlbumId,
   isBetterCoverImage,
@@ -35,6 +36,63 @@ describe('normalizeForLookup', () => {
 
   it('should convert numbers to string', () => {
     assert.strictEqual(normalizeForLookup(123), '123');
+  });
+
+  it('should convert ellipsis to three periods before lowercasing', () => {
+    // Ellipsis (U+2026) should become three periods
+    assert.strictEqual(normalizeForLookup('…and Oceans'), '...and oceans');
+    assert.strictEqual(normalizeForLookup('...and Oceans'), '...and oceans');
+    // Both should normalize identically
+    assert.strictEqual(
+      normalizeForLookup('…and Oceans'),
+      normalizeForLookup('...and Oceans')
+    );
+  });
+});
+
+describe('sanitizeForStorage', () => {
+  it('should convert ellipsis (U+2026) to three periods', () => {
+    assert.strictEqual(sanitizeForStorage('…and Oceans'), '...and Oceans');
+    // Preserves original casing (unlike normalizeForLookup)
+    assert.strictEqual(sanitizeForStorage('Sigur…Rós'), 'Sigur...Rós');
+  });
+
+  it('should convert en-dash and em-dash to hyphen', () => {
+    assert.strictEqual(sanitizeForStorage('Album – Title'), 'Album - Title'); // en-dash
+    assert.strictEqual(sanitizeForStorage('Album — Title'), 'Album - Title'); // em-dash
+  });
+
+  it('should normalize smart quotes to straight quotes', () => {
+    // Regular apostrophe stays the same
+    assert.strictEqual(sanitizeForStorage("Rock 'n' Roll"), "Rock 'n' Roll");
+    // Smart/curly quotes should be converted to straight quotes
+    assert.strictEqual(
+      sanitizeForStorage('Rock \u2018n\u2019 Roll'),
+      "Rock 'n' Roll"
+    );
+    assert.strictEqual(sanitizeForStorage('\u201cAlbum\u201d'), '"Album"');
+  });
+
+  it('should normalize multiple spaces to single space', () => {
+    assert.strictEqual(sanitizeForStorage('Artist   Name'), 'Artist Name');
+  });
+
+  it('should trim whitespace', () => {
+    assert.strictEqual(sanitizeForStorage('  Artist Name  '), 'Artist Name');
+  });
+
+  it('should handle null/undefined/empty values', () => {
+    assert.strictEqual(sanitizeForStorage(null), '');
+    assert.strictEqual(sanitizeForStorage(undefined), '');
+    assert.strictEqual(sanitizeForStorage(''), '');
+  });
+
+  it('should preserve valid characters', () => {
+    // Diacritics should be preserved (for proper display)
+    assert.strictEqual(sanitizeForStorage('Björk'), 'Björk');
+    assert.strictEqual(sanitizeForStorage('Sigur Rós'), 'Sigur Rós');
+    // Regular punctuation preserved
+    assert.strictEqual(sanitizeForStorage("Guns N' Roses"), "Guns N' Roses");
   });
 });
 

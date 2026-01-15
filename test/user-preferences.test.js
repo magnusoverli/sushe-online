@@ -5,6 +5,7 @@ const {
   POSITION_POINTS,
   getPositionPoints,
   normalizeArtistName,
+  normalizeAlbumName,
   normalizeGenre,
   artistNamesMatch,
   filterGenreTags,
@@ -710,10 +711,74 @@ describe('normalizeArtistName', () => {
     assert.strictEqual(normalizeArtistName('Artist   Name'), 'artist name');
   });
 
+  it('should convert ellipsis (…) to three periods for consistent matching', () => {
+    // Unicode ellipsis (U+2026) should become three periods and then be stripped
+    assert.strictEqual(normalizeArtistName('…and Oceans'), 'and oceans');
+    // Three periods should also be stripped (same result)
+    assert.strictEqual(normalizeArtistName('...and Oceans'), 'and oceans');
+    // Both should normalize to the same value
+    assert.strictEqual(
+      normalizeArtistName('…and Oceans'),
+      normalizeArtistName('...and Oceans')
+    );
+    // Ellipsis in middle of name
+    assert.strictEqual(normalizeArtistName('Artist…Name'), 'artistname');
+  });
+
   it('should handle empty/null input', () => {
     assert.strictEqual(normalizeArtistName(''), '');
     assert.strictEqual(normalizeArtistName(null), '');
     assert.strictEqual(normalizeArtistName(undefined), '');
+  });
+});
+
+describe('normalizeAlbumName', () => {
+  it('should lowercase and trim', () => {
+    assert.strictEqual(normalizeAlbumName('  Album Name  '), 'album name');
+  });
+
+  it('should remove "the" prefix', () => {
+    assert.strictEqual(normalizeAlbumName('The Wall'), 'wall');
+  });
+
+  it('should remove parenthetical suffixes', () => {
+    // Example: edition suffixes or remaster notes
+    assert.strictEqual(
+      normalizeAlbumName('In Rainbows (Deluxe Edition)'),
+      'in rainbows'
+    );
+  });
+
+  it('should remove bracket suffixes', () => {
+    assert.strictEqual(
+      normalizeAlbumName('Nevermind [Remastered]'),
+      'nevermind'
+    );
+  });
+
+  it('should remove diacritics', () => {
+    assert.strictEqual(normalizeAlbumName('Björk - Debut'), 'bjork - debut');
+  });
+
+  it('should normalize whitespace', () => {
+    assert.strictEqual(normalizeAlbumName('Album   Name'), 'album name');
+  });
+
+  it('should handle empty/null input', () => {
+    assert.strictEqual(normalizeAlbumName(''), '');
+    assert.strictEqual(normalizeAlbumName(null), '');
+    assert.strictEqual(normalizeAlbumName(undefined), '');
+  });
+
+  it('should convert ellipsis (…) to three periods for consistent matching', () => {
+    // Unicode ellipsis should become three periods and then be stripped
+    assert.strictEqual(normalizeAlbumName('…And Beyond'), 'and beyond');
+    assert.strictEqual(normalizeAlbumName('...And Beyond'), 'and beyond');
+    // Both should normalize to the same value
+    assert.strictEqual(
+      normalizeAlbumName('…And Beyond'),
+      normalizeAlbumName('...And Beyond')
+    );
   });
 });
 

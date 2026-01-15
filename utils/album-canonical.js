@@ -18,16 +18,52 @@ const crypto = require('crypto');
 const logger = require('./logger');
 
 /**
+ * Sanitize artist/album names for consistent storage.
+ * Converts Unicode variants to ASCII equivalents for better cross-source matching.
+ *
+ * This is applied at storage time to ensure data from different sources
+ * (Spotify, MusicBrainz, manual entry) uses consistent character encoding.
+ *
+ * Examples:
+ * - "…and Oceans" (ellipsis U+2026) → "...and Oceans" (three periods)
+ * - "Mötley Crüe" → preserved (diacritics are intentional for display)
+ * - "  Artist  " → "Artist" (trimmed whitespace)
+ *
+ * @param {string|null|undefined} value - Value to sanitize
+ * @returns {string} - Sanitized value
+ */
+function sanitizeForStorage(value) {
+  if (!value) return '';
+
+  return (
+    String(value)
+      .trim()
+      // Convert ellipsis (…) to three periods for consistent matching
+      // e.g., "…and Oceans" → "...and Oceans"
+      .replace(/…/g, '...')
+      // Convert en-dash (–) and em-dash (—) to hyphen
+      .replace(/[–—]/g, '-')
+      // Normalize smart quotes to straight quotes
+      // U+2018 ('), U+2019 ('), U+0060 (`) -> straight single quote
+      .replace(/[\u2018\u2019`]/g, "'")
+      // U+201C ("), U+201D (") -> straight double quote
+      .replace(/[\u201c\u201d]/g, '"')
+      // Normalize multiple spaces to single space
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
+}
+
+/**
  * Normalize artist and album names for canonical lookup
  * Used to find existing albums regardless of casing or whitespace
  *
  * @param {string|null|undefined} value - Value to normalize
- * @returns {string} - Normalized value (lowercase, trimmed)
+ * @returns {string} - Normalized value (lowercase, trimmed, sanitized)
  */
 function normalizeForLookup(value) {
-  return String(value || '')
-    .toLowerCase()
-    .trim();
+  // First sanitize, then lowercase for lookup
+  return sanitizeForStorage(value).toLowerCase();
 }
 
 /**
@@ -219,9 +255,13 @@ function createAlbumCanonical(deps = {}) {
     return {
       album_id: bestAlbumId,
 
-      // Text fields: prefer longer/more specific value
-      artist: chooseBetterText(existing.artist, newData.artist),
-      album: chooseBetterText(existing.album, newData.album),
+      // Text fields: prefer longer/more specific value, sanitize artist/album for consistency
+      artist: sanitizeForStorage(
+        chooseBetterText(existing.artist, newData.artist)
+      ),
+      album: sanitizeForStorage(
+        chooseBetterText(existing.album, newData.album)
+      ),
       release_date: chooseBetterText(
         existing.release_date,
         newData.release_date
@@ -350,6 +390,10 @@ function createAlbumCanonical(deps = {}) {
         : Buffer.from(albumData.cover_image, 'base64');
     }
 
+    // Sanitize artist and album names for consistent storage
+    const sanitizedArtist = sanitizeForStorage(albumData.artist);
+    const sanitizedAlbum = sanitizeForStorage(albumData.album);
+
     await db.query(
       `INSERT INTO albums (
         album_id, artist, album, release_date, country,
@@ -358,8 +402,8 @@ function createAlbumCanonical(deps = {}) {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         albumId,
-        albumData.artist || '',
-        albumData.album || '',
+        sanitizedArtist,
+        sanitizedAlbum,
         albumData.release_date || '',
         albumData.country || '',
         albumData.genre_1 || albumData.genre || '',
@@ -403,6 +447,7 @@ function createAlbumCanonical(deps = {}) {
 // Export factory and helper functions
 module.exports = {
   createAlbumCanonical,
+  sanitizeForStorage,
   normalizeForLookup,
   generateInternalAlbumId,
   isBetterCoverImage,

@@ -379,6 +379,54 @@ describe('deduplication helpers', () => {
       );
       assert.strictEqual(result, null);
     });
+
+    it('should sanitize artist name (convert ellipsis to three periods)', async () => {
+      // Ellipsis (U+2026) should be converted to three periods for storage
+      const result = await helpers.getStorableValue(
+        '…and Oceans', // Unicode ellipsis
+        null,
+        'artist',
+        mockPool
+      );
+      assert.strictEqual(result, '...and Oceans');
+    });
+
+    it('should sanitize album name (convert ellipsis to three periods)', async () => {
+      const result = await helpers.getStorableValue(
+        '…And Beyond', // Unicode ellipsis
+        null,
+        'album',
+        mockPool
+      );
+      assert.strictEqual(result, '...And Beyond');
+    });
+
+    it('should return null when sanitized artist matches album data', async () => {
+      // Album has "...and Oceans" (three periods), list item has "…and Oceans" (ellipsis)
+      // After sanitization, they should match
+      const albumData = { artist: '...and Oceans', album: 'Test Album' };
+      mockPool.query = mock.fn(() => Promise.resolve({ rows: [albumData] }));
+
+      const result = await helpers.getStorableValue(
+        '…and Oceans', // Unicode ellipsis - should match after sanitization
+        'album123',
+        'artist',
+        mockPool
+      );
+
+      assert.strictEqual(result, null); // Should be null because they match after sanitization
+    });
+
+    it('should not sanitize non-artist/album fields', async () => {
+      // release_date with ellipsis should NOT be sanitized
+      const result = await helpers.getStorableValue(
+        '2024…01…01',
+        null,
+        'release_date',
+        mockPool
+      );
+      assert.strictEqual(result, '2024…01…01'); // Unchanged
+    });
   });
 
   // ===========================================================================
