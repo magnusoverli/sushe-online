@@ -4989,11 +4989,11 @@ module.exports = (app, deps) => {
         // Get all albums in the list with a JOIN to albums table
         // Prefer albums table (MusicBrainz) data for Last.fm lookups since it's more
         // likely to match Last.fm's database (proper diacritics, canonical spelling)
-        // Fall back to list_items data if albums table has NULL
+        // Fall back to list_items data if albums table has NULL or empty string
         const listItemsResult = await pool.query(
           `SELECT li._id, li.album_id,
-                  COALESCE(a.artist, li.artist) as artist,
-                  COALESCE(a.album, li.album) as album
+                  COALESCE(NULLIF(a.artist, ''), li.artist) as artist,
+                  COALESCE(NULLIF(a.album, ''), li.album) as album
            FROM list_items li
            LEFT JOIN albums a ON li.album_id = a.album_id
            WHERE li.list_id = $1`,
@@ -5389,7 +5389,33 @@ async function refreshPlaycountsInBackground(
           `Failed to fetch playcount for ${album.artist} - ${album.album}:`,
           err.message
         );
-        results[album.itemId] = null;
+
+        // Store 0 playcount on failure so the album is not retried every request
+        // It will be marked as stale and retried after 24 hours
+        try {
+          const normalizedKey = normalizeAlbumKeyBg(album.artist, album.album);
+          await pool.query(
+            `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_updated_at, updated_at)
+             VALUES ($1, $2, LOWER($3), LOWER($4), $5, 0, NOW(), NOW())
+             ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
+             DO UPDATE SET
+               album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
+               normalized_key = EXCLUDED.normalized_key,
+               lastfm_updated_at = NOW(),
+               updated_at = NOW()`,
+            [
+              userId,
+              album.albumId || null,
+              album.artist,
+              album.album,
+              normalizedKey,
+            ]
+          );
+          results[album.itemId] = 0;
+        } catch (dbErr) {
+          logger.error('Failed to store fallback playcount:', dbErr.message);
+          results[album.itemId] = null;
+        }
       }
     });
 
