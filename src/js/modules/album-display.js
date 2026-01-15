@@ -2136,8 +2136,9 @@ export function createAlbumDisplay(deps = {}) {
    */
   async function pollForRefreshedPlaycounts(listId, expectedCount) {
     // Calculate expected time: ~5 albums per batch, ~1.1s per batch
-    const estimatedBatches = Math.ceil(expectedCount / 5);
-    const estimatedTimeMs = estimatedBatches * 1100 + 2000; // Add 2s buffer
+    // With variant detection, each album may take longer (multiple API calls)
+    const estimatedBatches = Math.ceil(expectedCount / 3);
+    const estimatedTimeMs = estimatedBatches * 1500 + 3000; // Add buffer for variant lookups
 
     // Poll interval and max attempts
     const POLL_INTERVAL = 3000; // Poll every 3 seconds
@@ -2146,8 +2147,12 @@ export function createAlbumDisplay(deps = {}) {
       Math.ceil(estimatedTimeMs / POLL_INTERVAL) + 2
     );
 
+    // Minimum polls to ensure we catch background refresh updates
+    // Even if no nulls, we should poll at least a few times for stale data updates
+    const MIN_POLLS = 3;
+
     let pollCount = 0;
-    let lastMissingCount = expectedCount;
+    let previousPlaycounts = { ...playcountCache };
 
     const poll = async () => {
       pollCount++;
@@ -2156,32 +2161,52 @@ export function createAlbumDisplay(deps = {}) {
         const response = await apiCall(`/api/lastfm/list-playcounts/${listId}`);
 
         if (response.playcounts) {
+          // Check if any values changed since last poll
+          let changedCount = 0;
+          for (const [itemId, count] of Object.entries(response.playcounts)) {
+            if (previousPlaycounts[itemId] !== count) {
+              changedCount++;
+            }
+          }
+
+          // Update cache and DOM
           Object.assign(playcountCache, response.playcounts);
           updatePlaycountElements(response.playcounts);
+          previousPlaycounts = { ...response.playcounts };
 
           // Count how many are still null/missing
           const missingCount = Object.values(response.playcounts).filter(
             (v) => v === null
           ).length;
 
-          // If all loaded or no progress being made, stop polling
-          if (missingCount === 0) {
+          // Log progress
+          if (changedCount > 0) {
+            console.log(
+              `Playcounts updated: ${changedCount} changed, ${missingCount} missing`
+            );
+          }
+
+          // Stop conditions:
+          // 1. All loaded (no nulls) AND no changes AND polled at least MIN_POLLS times
+          // 2. Reached MAX_POLLS
+          if (
+            missingCount === 0 &&
+            changedCount === 0 &&
+            pollCount >= MIN_POLLS
+          ) {
             console.log('All playcounts loaded');
             return;
           }
 
-          // If still making progress and under max polls, continue
-          if (pollCount < MAX_POLLS && missingCount < lastMissingCount) {
-            lastMissingCount = missingCount;
-            setTimeout(poll, POLL_INTERVAL);
-          } else if (
-            pollCount < MAX_POLLS &&
-            missingCount === lastMissingCount
-          ) {
-            // No progress - maybe API rate limited, try a couple more times
-            if (pollCount < MAX_POLLS - 2) {
-              setTimeout(poll, POLL_INTERVAL * 2); // Slower poll
-            }
+          // Continue polling if under max
+          if (pollCount < MAX_POLLS) {
+            // If values are still changing or nulls remain, poll at normal rate
+            // Otherwise slow down
+            const interval =
+              changedCount > 0 || missingCount > 0
+                ? POLL_INTERVAL
+                : POLL_INTERVAL * 1.5;
+            setTimeout(poll, interval);
           }
         }
       } catch (err) {
