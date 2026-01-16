@@ -141,14 +141,25 @@ function wrapSessionStore(store, cache, options = {}) {
   };
 
   // Optional: Log stats periodically
+  let statsInterval = null;
   if (options.logStats) {
-    setInterval(() => {
+    statsInterval = setInterval(() => {
       const stats = cache.getStats();
       if (stats.hits + stats.misses > 0) {
         logger.debug('Session cache stats', stats);
       }
     }, 60000); // Every minute
+    // Unref the interval so it doesn't prevent Node.js from exiting
+    statsInterval.unref();
   }
+
+  // Expose cleanup method for graceful shutdown
+  store._sessionCacheCleanup = () => {
+    if (statsInterval) {
+      clearInterval(statsInterval);
+      statsInterval = null;
+    }
+  };
 
   return store;
 }

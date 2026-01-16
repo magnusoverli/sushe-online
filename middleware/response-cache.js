@@ -133,7 +133,10 @@ function createCacheMiddleware(options = {}) {
         'X-Cache-Key': cacheKey,
       });
 
-      return res.json(cached.data);
+      // Deep clone to prevent prototype pollution from cached data with __proto__ properties
+      // JSON.parse(JSON.stringify()) safely strips __proto__ and constructor properties
+      const safeData = JSON.parse(JSON.stringify(cached.data));
+      return res.json(safeData);
     }
 
     // Cache miss - intercept response
@@ -194,7 +197,30 @@ const cacheConfigs = {
   // Album cover images with very long TTL (URLs don't change)
   images: createCacheMiddleware({
     ttl: 3600000, // 1 hour - images rarely change
-    keyGenerator: (req) => `image:${req.query.url}`, // Key by image URL only
+    keyGenerator: (req) => {
+      // Validate URL to prevent cache poisoning
+      const url = req.query.url || '';
+      // Only allow known image CDN domains to be cached
+      const allowedDomains = [
+        'i.scdn.co', // Spotify
+        'mosaic.scdn.co', // Spotify mosaic
+        'resources.tidal.com', // Tidal
+        'coverartarchive.org', // MusicBrainz
+        'archive.org', // MusicBrainz fallback
+      ];
+      try {
+        const parsedUrl = new URL(url);
+        if (!allowedDomains.some((d) => parsedUrl.hostname.endsWith(d))) {
+          // Return a unique non-cacheable key for disallowed domains
+          return `image:invalid:${Date.now()}`;
+        }
+        // Use normalized URL as key (protocol + host + pathname)
+        return `image:${parsedUrl.protocol}//${parsedUrl.host}${parsedUrl.pathname}`;
+      } catch {
+        // Invalid URL - return non-cacheable key
+        return `image:invalid:${Date.now()}`;
+      }
+    },
     shouldCache: (req) => {
       return req.path === '/api/proxy/image';
     },

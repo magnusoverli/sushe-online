@@ -405,23 +405,28 @@ if (process.env.DATABASE_URL) {
     );
     for (const row of itemsRes.rows) {
       if (!row.album_id) continue;
-      const existing = await albums.findOne({ albumId: row.album_id });
-      if (!existing) {
-        await albums.insert({
-          albumId: row.album_id,
-          artist: row.artist || '',
-          album: row.album || '',
-          releaseDate: row.release_date || '',
-          country: row.country || '',
-          genre1: row.genre_1 || '',
-          genre2: row.genre_2 || '',
-          tracks: row.tracks || null,
-          coverImage: row.cover_image || '',
-          coverImageFormat: row.cover_image_format || '',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-      }
+      // Use INSERT ON CONFLICT to prevent race condition on concurrent startup
+      // Note: tracks is JSONB, need to stringify if it's an object
+      const tracksValue = row.tracks ? JSON.stringify(row.tracks) : null;
+      await pool.query(
+        `INSERT INTO albums (album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         ON CONFLICT (album_id) DO NOTHING`,
+        [
+          row.album_id,
+          row.artist || '',
+          row.album || '',
+          row.release_date || '',
+          row.country || '',
+          row.genre_1 || '',
+          row.genre_2 || '',
+          tracksValue,
+          row.cover_image || null,
+          row.cover_image_format || '',
+          new Date(),
+          new Date(),
+        ]
+      );
     }
   }
 

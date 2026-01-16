@@ -153,6 +153,7 @@ let adminCodeExpiry = null;
 // Reduces database queries by caching user objects with 5-minute TTL
 const userCache = new Map();
 const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const USER_CACHE_MAX_SIZE = 1000; // Maximum cached users to prevent unbounded growth
 
 function getCachedUser(id) {
   const cached = userCache.get(id);
@@ -164,6 +165,11 @@ function getCachedUser(id) {
 }
 
 function setCachedUser(id, user) {
+  // Evict oldest entry if cache is full
+  if (userCache.size >= USER_CACHE_MAX_SIZE) {
+    const firstKey = userCache.keys().next().value;
+    userCache.delete(firstKey);
+  }
   userCache.set(id, { user, timestamp: Date.now() });
 }
 

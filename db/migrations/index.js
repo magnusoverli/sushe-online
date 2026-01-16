@@ -55,36 +55,40 @@ class MigrationManager {
   async executeMigration(migration) {
     const { version, filePath } = migration;
 
+    // Acquire a dedicated client for transaction isolation
+    const client = await this.pool.connect();
+
     try {
       logger.info(`Executing migration: ${version}`);
 
       const migrationModule = require(filePath);
       const checksum = await this.calculateChecksum(filePath);
 
-      // Start transaction
-      await this.pool.query('BEGIN');
+      // Start transaction on dedicated client
+      await client.query('BEGIN');
 
-      // Execute the migration
+      // Execute the migration using the same client
       if (typeof migrationModule.up === 'function') {
-        await migrationModule.up(this.pool);
+        await migrationModule.up(client);
       } else {
         throw new Error(
           `Migration ${version} does not export an 'up' function`
         );
       }
 
-      // Record the migration
-      await this.pool.query(
+      // Record the migration on the same client
+      await client.query(
         `INSERT INTO ${this.migrationTableName} (version, name, checksum) VALUES ($1, $2, $3)`,
         [version, path.basename(filePath, '.js'), checksum]
       );
 
       // Commit transaction
-      await this.pool.query('COMMIT');
+      await client.query('COMMIT');
 
       logger.info(`Migration ${version} executed successfully`);
 
       // Run post-migration hook outside transaction (for VACUUM, etc.)
+      // Use pool here since transaction is complete
       if (typeof migrationModule.postMigrate === 'function') {
         try {
           logger.info(`Running post-migration hook for ${version}...`);
@@ -101,50 +105,59 @@ class MigrationManager {
         }
       }
     } catch (error) {
-      // Rollback transaction
-      await this.pool.query('ROLLBACK');
+      // Rollback transaction on the same client
+      await client.query('ROLLBACK');
       logger.error(`Migration ${version} failed:`, { error: error.message });
       throw error;
+    } finally {
+      // Always release the client back to the pool
+      client.release();
     }
   }
 
   async rollbackMigration(migration) {
     const { version, filePath } = migration;
 
+    // Acquire a dedicated client for transaction isolation
+    const client = await this.pool.connect();
+
     try {
       logger.info(`Rolling back migration: ${version}`);
 
       const migrationModule = require(filePath);
 
-      // Start transaction
-      await this.pool.query('BEGIN');
+      // Start transaction on dedicated client
+      await client.query('BEGIN');
 
-      // Execute the rollback
+      // Execute the rollback using the same client
       if (typeof migrationModule.down === 'function') {
-        await migrationModule.down(this.pool);
+        await migrationModule.down(client);
       } else {
         throw new Error(
           `Migration ${version} does not export a 'down' function`
         );
       }
 
-      // Remove the migration record
-      await this.pool.query(
+      // Remove the migration record on the same client
+      await client.query(
         `DELETE FROM ${this.migrationTableName} WHERE version = $1`,
         [version]
       );
 
       // Commit transaction
-      await this.pool.query('COMMIT');
+      await client.query('COMMIT');
 
       logger.info(`Migration ${version} rolled back successfully`);
     } catch (error) {
-      // Rollback transaction
-      await this.pool.query('ROLLBACK');
+      // Rollback transaction on the same client
+      await client.query('ROLLBACK');
       logger.error(`Rollback of migration ${version} failed:`, {
         error: error.message,
       });
       throw error;
+    } finally {
+      // Always release the client back to the pool
+      client.release();
     }
   }
 

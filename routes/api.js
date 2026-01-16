@@ -180,17 +180,22 @@ module.exports = (app, deps) => {
    * Automatically refreshes if needed and attaches to req.spotifyAuth
    */
   const requireSpotifyAuth = async (req, res, next) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
+    try {
+      const tokenResult = await ensureValidSpotifyToken(req.user, users);
+      if (!tokenResult.success) {
+        logger.warn('Spotify auth check failed', { error: tokenResult.error });
+        return res.status(401).json({
+          error: tokenResult.message,
+          code: tokenResult.error,
+          service: 'spotify',
+        });
+      }
+      req.spotifyAuth = tokenResult.spotifyAuth;
+      next();
+    } catch (err) {
+      logger.error('Spotify auth middleware error', { error: err.message });
+      return res.status(500).json({ error: 'Authentication service error' });
     }
-    req.spotifyAuth = tokenResult.spotifyAuth;
-    next();
   };
 
   /**
@@ -198,17 +203,22 @@ module.exports = (app, deps) => {
    * Automatically refreshes if needed and attaches to req.tidalAuth
    */
   const requireTidalAuth = async (req, res, next) => {
-    const tokenResult = await ensureValidTidalToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Tidal auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'tidal',
-      });
+    try {
+      const tokenResult = await ensureValidTidalToken(req.user, users);
+      if (!tokenResult.success) {
+        logger.warn('Tidal auth check failed', { error: tokenResult.error });
+        return res.status(401).json({
+          error: tokenResult.message,
+          code: tokenResult.error,
+          service: 'tidal',
+        });
+      }
+      req.tidalAuth = tokenResult.tidalAuth;
+      next();
+    } catch (err) {
+      logger.error('Tidal auth middleware error', { error: err.message });
+      return res.status(500).json({ error: 'Authentication service error' });
     }
-    req.tidalAuth = tokenResult.tidalAuth;
-    next();
   };
 
   // ============ API ENDPOINTS FOR LISTS ============
@@ -1913,10 +1923,11 @@ module.exports = (app, deps) => {
         res.status(500).json({ error: 'Database error' });
       } finally {
         client.release();
+        client = null; // Mark as released to prevent double-release
       }
     } catch (err) {
       logger.error('Error in list update', { error: err.message });
-      // Only release client if it was acquired
+      // Only release client if it was acquired and not already released
       if (client) {
         client.release();
       }

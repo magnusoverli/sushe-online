@@ -49,6 +49,7 @@ class PgDatastore {
     );
     this.cache = new Map();
     this.cacheTimeout = 60000; // 1 minute cache for static data
+    this.maxCacheSize = 500; // Maximum cache entries to prevent unbounded growth
   }
 
   _prepareValue(val) {
@@ -388,7 +389,12 @@ class PgDatastore {
       const res = await this._preparedQuery(queryName, queryText, albumIds);
       const result = res.rows.map((r) => this._mapRow(r));
 
-      // Cache result
+      // Cache result with size limit (evict oldest entries if needed)
+      if (this.cache.size >= this.maxCacheSize) {
+        // Remove oldest entry (first key in Map iteration order)
+        const firstKey = this.cache.keys().next().value;
+        this.cache.delete(firstKey);
+      }
       this.cache.set(cacheKey, { data: result, timestamp: Date.now() });
 
       return result;
