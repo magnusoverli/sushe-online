@@ -242,7 +242,6 @@ export function createListNav(deps = {}) {
   /**
    * Generate HTML for group section header
    * @param {string} name - Group name
-   * @param {number} count - Number of lists in this group
    * @param {boolean} isExpanded - Whether section is expanded
    * @param {boolean} isYearGroup - Whether this is a year-based group
    * @param {boolean} isMobile - Whether rendering for mobile
@@ -251,7 +250,6 @@ export function createListNav(deps = {}) {
    */
   function createGroupHeaderHTML(
     name,
-    count,
     isExpanded,
     isYearGroup,
     isMobile = false,
@@ -260,13 +258,13 @@ export function createListNav(deps = {}) {
     const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
     const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
 
-    // For mobile: show menu button instead of count
-    // For desktop: show count (menu accessed via right-click)
+    // For mobile: show menu button (menu accessed via click)
+    // For desktop: no right-side element (menu accessed via right-click)
     const rightSide = isMobile
       ? `<button data-category-menu-btn="${groupId}" class="p-1 text-gray-400 active:text-gray-200 no-drag shrink-0 category-menu-btn" aria-label="Category options">
           <i class="fas fa-ellipsis-v text-xs"></i>
         </button>`
-      : `<span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded-sm font-normal">${count}</span>`;
+      : '';
 
     return `
       <div class="flex items-center flex-1 min-w-0">
@@ -281,7 +279,6 @@ export function createListNav(deps = {}) {
   /**
    * Legacy: Generate HTML for year section header
    * @param {string} year - Year label
-   * @param {number} count - Number of lists in this year
    * @param {boolean} isExpanded - Whether section is expanded
    * @param {boolean} isMobile - Whether rendering for mobile
    * @param {string} groupId - Group ID for menu button
@@ -289,19 +286,11 @@ export function createListNav(deps = {}) {
    */
   function createYearHeaderHTML(
     year,
-    count,
     isExpanded,
     isMobile = false,
     groupId = ''
   ) {
-    return createGroupHeaderHTML(
-      year,
-      count,
-      isExpanded,
-      true,
-      isMobile,
-      groupId
-    );
+    return createGroupHeaderHTML(year, isExpanded, true, isMobile, groupId);
   }
 
   /**
@@ -491,10 +480,9 @@ export function createListNav(deps = {}) {
 
     const header = document.createElement('button');
     const paddingClass = isMobile ? 'py-2' : 'py-1.5';
-    header.className = `group-header-btn flex-1 text-left px-3 ${paddingClass} rounded-sm text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+    header.className = `group-header-btn flex-1 text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-white flex items-center justify-between font-bold`;
     header.innerHTML = createGroupHeaderHTML(
       name,
-      groupLists.length,
       isExpanded,
       isYearGroup,
       isMobile,
