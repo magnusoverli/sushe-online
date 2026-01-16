@@ -866,7 +866,7 @@ async function addAlbumToList(info, tab, listName) {
     console.log('Searching MusicBrainz for album...');
 
     const searchQuery = `${albumData.artist} ${albumData.album}`;
-    const mbEndpoint = `release-group/?query=${encodeURIComponent(searchQuery)}&type=album|ep&fmt=json&limit=5`;
+    const mbEndpoint = `release-group/?query=${searchQuery}&type=album|ep&fmt=json&limit=5`;
 
     const mbResponse = await fetchWithTimeout(
       `${SUSHE_API_BASE}/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=high`,

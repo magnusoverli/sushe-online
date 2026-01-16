@@ -494,6 +494,53 @@ const createListModalComponent = () => `
   </div>
 `;
 
+// Component: Create Collection Modal
+const createCollectionModalComponent = () => `
+  <div id="createCollectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-2xl font-bold text-white">Create Collection</h3>
+        <p class="text-sm text-gray-400 mt-1">Collections let you organize lists without a year</p>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-6 space-y-4">
+        <div>
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newCollectionName">
+            Collection Name <span class="text-red-500">*</span>
+          </label>
+          <input 
+            type="text" 
+            id="newCollectionName" 
+            placeholder="e.g. Favorites, To Review, Throwbacks..." 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            maxlength="50"
+          >
+          <p class="text-xs text-gray-500 mt-2">Give your collection a unique name (cannot be a year)</p>
+          <p id="createCollectionError" class="text-xs text-red-500 mt-1 hidden"></p>
+        </div>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
+        <button 
+          id="cancelCreateCollectionBtn" 
+          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
+        >
+          Cancel
+        </button>
+        <button 
+          id="confirmCreateCollectionBtn" 
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
+        >
+          Create Collection
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
 // Component: Edit List Details Modal (formerly Rename List Modal)
 const renameListModalComponent = () => `
   <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -932,6 +979,7 @@ const listSetupWizardComponent = () => `
 const modalPortalComponent = () => `
   <div id="modalPortal">
     ${createListModalComponent()}
+    ${createCollectionModalComponent()}
     ${renameListModalComponent()}
     ${addAlbumModalComponent()}
     ${importConflictModalComponent()}
@@ -1122,7 +1170,16 @@ const spotifyTemplate = (user, csrfToken = '') => `
     <aside id="sidebar" class="sidebar bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300">
       <!-- Sidebar Toggle Button -->
       <div class="flex items-center justify-between p-4">
-        <h2 class="sidebar-title text-lg font-bold text-white transition-opacity duration-300">Lists</h2>
+        <div class="flex items-center gap-2">
+          <h2 class="sidebar-title text-lg font-bold text-white transition-opacity duration-300">Lists</h2>
+          <button 
+            id="createCollectionBtn" 
+            class="p-1.5 hover:bg-gray-800 rounded-sm transition-colors sidebar-action-btn"
+            title="Create collection"
+          >
+            <i class="fas fa-folder-plus text-gray-400 text-sm"></i>
+          </button>
+        </div>
         <button 
           id="sidebarToggle" 
           class="p-2 hover:bg-gray-800 rounded-sm transition-colors"

@@ -555,6 +555,8 @@ module.exports = (app, deps) => {
                 year: list.year || null,
                 isMain: list.isMain || false,
                 count: list.itemCount,
+                groupId: list.group?._id || null,
+                sortOrder: list.sortOrder || 0,
                 updatedAt: list.updatedAt,
                 createdAt: list.createdAt,
               };
@@ -569,6 +571,8 @@ module.exports = (app, deps) => {
                 year: list.year || null,
                 isMain: list.isMain || false,
                 count: count,
+                groupId: list.groupId || null,
+                sortOrder: list.sortOrder || 0,
                 updatedAt: list.updatedAt,
                 createdAt: list.createdAt,
               };
@@ -586,6 +590,556 @@ module.exports = (app, deps) => {
       }
     }
   );
+
+  // ============ LIST GROUPS API ============
+
+  // Get all groups for the current user (with list counts)
+  app.get('/api/groups', ensureAuthAPI, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT 
+          g._id,
+          g.name,
+          g.year,
+          g.sort_order,
+          g.created_at,
+          g.updated_at,
+          COUNT(l.id) as list_count
+        FROM list_groups g
+        LEFT JOIN lists l ON l.group_id = g.id
+        WHERE g.user_id = $1
+        GROUP BY g.id
+        ORDER BY g.sort_order ASC`,
+        [req.user._id]
+      );
+
+      res.json(
+        result.rows.map((row) => ({
+          _id: row._id,
+          name: row.name,
+          year: row.year,
+          sortOrder: row.sort_order,
+          listCount: parseInt(row.list_count, 10),
+          isYearGroup: row.year !== null,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }))
+      );
+    } catch (err) {
+      logger.error('Error fetching groups', {
+        error: err.message,
+        userId: req.user._id,
+      });
+      res.status(500).json({ error: 'Failed to fetch groups' });
+    }
+  });
+
+  // Create a new collection (custom group without year)
+  app.post('/api/groups', ensureAuthAPI, async (req, res) => {
+    const { name } = req.body;
+
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: 'Collection name is required' });
+    }
+
+    const trimmedName = name.trim();
+
+    // Check if name looks like a year (we don't allow creating year-groups manually)
+    if (/^\d{4}$/.test(trimmedName)) {
+      return res.status(400).json({
+        error:
+          'Collection name cannot be a year. Year groups are created automatically.',
+      });
+    }
+
+    try {
+      // Check for duplicate name
+      const existing = await pool.query(
+        `SELECT 1 FROM list_groups WHERE user_id = $1 AND name = $2`,
+        [req.user._id, trimmedName]
+      );
+
+      if (existing.rows.length > 0) {
+        return res
+          .status(409)
+          .json({ error: 'A group with this name already exists' });
+      }
+
+      // Get max sort_order to append at the end
+      const maxOrder = await pool.query(
+        `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
+        [req.user._id]
+      );
+
+      const groupId = crypto.randomBytes(12).toString('hex');
+      const timestamp = new Date();
+
+      await pool.query(
+        `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+         VALUES ($1, $2, $3, NULL, $4, $5, $6)`,
+        [
+          groupId,
+          req.user._id,
+          trimmedName,
+          maxOrder.rows[0].next_order,
+          timestamp,
+          timestamp,
+        ]
+      );
+
+      res.status(201).json({
+        _id: groupId,
+        name: trimmedName,
+        year: null,
+        sortOrder: maxOrder.rows[0].next_order,
+        listCount: 0,
+        isYearGroup: false,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+    } catch (err) {
+      logger.error('Error creating collection', {
+        error: err.message,
+        userId: req.user._id,
+        name: trimmedName,
+      });
+      res.status(500).json({ error: 'Failed to create collection' });
+    }
+  });
+
+  // Update a group (rename or change sort_order)
+  app.patch('/api/groups/:id', ensureAuthAPI, async (req, res) => {
+    const { id } = req.params;
+    const { name, sortOrder } = req.body;
+
+    try {
+      // Get the group and verify ownership
+      const groupResult = await pool.query(
+        `SELECT id, name, year, sort_order FROM list_groups WHERE _id = $1 AND user_id = $2`,
+        [id, req.user._id]
+      );
+
+      if (groupResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Group not found' });
+      }
+
+      const group = groupResult.rows[0];
+
+      // Year-groups cannot be renamed (their name is the year)
+      if (name !== undefined && group.year !== null) {
+        return res.status(400).json({ error: 'Year groups cannot be renamed' });
+      }
+
+      // Validate new name if provided
+      if (name !== undefined) {
+        if (typeof name !== 'string' || name.trim().length === 0) {
+          return res.status(400).json({ error: 'Collection name is required' });
+        }
+        if (/^\d{4}$/.test(name.trim())) {
+          return res
+            .status(400)
+            .json({ error: 'Collection name cannot be a year' });
+        }
+        // Check for duplicate name
+        const existing = await pool.query(
+          `SELECT 1 FROM list_groups WHERE user_id = $1 AND name = $2 AND _id != $3`,
+          [req.user._id, name.trim(), id]
+        );
+        if (existing.rows.length > 0) {
+          return res
+            .status(409)
+            .json({ error: 'A group with this name already exists' });
+        }
+      }
+
+      // Build update query
+      const updates = [];
+      const values = [];
+      let paramIndex = 1;
+
+      if (name !== undefined) {
+        updates.push(`name = $${paramIndex++}`);
+        values.push(name.trim());
+      }
+
+      if (sortOrder !== undefined) {
+        if (typeof sortOrder !== 'number' || sortOrder < 0) {
+          return res.status(400).json({ error: 'Invalid sort order' });
+        }
+        updates.push(`sort_order = $${paramIndex++}`);
+        values.push(sortOrder);
+      }
+
+      if (updates.length === 0) {
+        return res.status(400).json({ error: 'No updates provided' });
+      }
+
+      updates.push(`updated_at = $${paramIndex++}`);
+      values.push(new Date());
+
+      values.push(group.id);
+
+      await pool.query(
+        `UPDATE list_groups SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+        values
+      );
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error updating group', {
+        error: err.message,
+        userId: req.user._id,
+        groupId: id,
+      });
+      res.status(500).json({ error: 'Failed to update group' });
+    }
+  });
+
+  // Delete a collection (must be empty, cannot delete year-groups)
+  app.delete('/api/groups/:id', ensureAuthAPI, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+      // Get the group and verify ownership
+      const groupResult = await pool.query(
+        `SELECT id, name, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
+        [id, req.user._id]
+      );
+
+      if (groupResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Group not found' });
+      }
+
+      const group = groupResult.rows[0];
+
+      // Cannot delete year-groups (they auto-delete when empty)
+      if (group.year !== null) {
+        return res.status(400).json({
+          error:
+            'Year groups cannot be deleted manually. They are removed automatically when empty.',
+        });
+      }
+
+      // Check if collection has lists
+      const listCount = await pool.query(
+        `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
+        [group.id]
+      );
+
+      if (parseInt(listCount.rows[0].count, 10) > 0) {
+        return res.status(400).json({
+          error:
+            'Cannot delete a collection that contains lists. Move or delete the lists first.',
+        });
+      }
+
+      await pool.query(`DELETE FROM list_groups WHERE id = $1`, [group.id]);
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error deleting group', {
+        error: err.message,
+        userId: req.user._id,
+        groupId: id,
+      });
+      res.status(500).json({ error: 'Failed to delete group' });
+    }
+  });
+
+  // Reorder groups (bulk update sort_order)
+  app.post('/api/groups/reorder', ensureAuthAPI, async (req, res) => {
+    const { order } = req.body;
+
+    if (!Array.isArray(order)) {
+      return res
+        .status(400)
+        .json({ error: 'Order must be an array of group IDs' });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Verify all groups belong to user
+      const groupsResult = await client.query(
+        `SELECT _id FROM list_groups WHERE user_id = $1`,
+        [req.user._id]
+      );
+
+      const userGroupIds = new Set(groupsResult.rows.map((r) => r._id));
+
+      for (const groupId of order) {
+        if (!userGroupIds.has(groupId)) {
+          await client.query('ROLLBACK');
+          return res
+            .status(400)
+            .json({ error: `Invalid group ID: ${groupId}` });
+        }
+      }
+
+      // Update sort_order for each group
+      for (let i = 0; i < order.length; i++) {
+        await client.query(
+          `UPDATE list_groups SET sort_order = $1, updated_at = NOW() WHERE _id = $2 AND user_id = $3`,
+          [i, order[i], req.user._id]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.json({ success: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      logger.error('Error reordering groups', {
+        error: err.message,
+        userId: req.user._id,
+      });
+      res.status(500).json({ error: 'Failed to reorder groups' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // Move a list to a different group
+  app.post('/api/lists/:name/move', ensureAuthAPI, async (req, res) => {
+    const { name } = req.params;
+    const { groupId, year } = req.body;
+
+    // Either groupId or year must be provided, not both
+    if (groupId && year !== undefined) {
+      return res
+        .status(400)
+        .json({ error: 'Provide either groupId or year, not both' });
+    }
+
+    if (!groupId && year === undefined) {
+      return res
+        .status(400)
+        .json({ error: 'Either groupId or year is required' });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Get the list
+      const listResult = await client.query(
+        `SELECT l.id, l._id, l.year, l.is_main, l.group_id, g.year as current_group_year
+         FROM lists l
+         LEFT JOIN list_groups g ON l.group_id = g.id
+         WHERE l.user_id = $1 AND l.name = $2`,
+        [req.user._id, name]
+      );
+
+      if (listResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      const list = listResult.rows[0];
+      const oldYear = list.current_group_year;
+      let targetGroupId;
+      let targetYear = null;
+
+      if (year !== undefined) {
+        // Moving to a year-group
+        const yearValidation = validateYear(year);
+        if (!yearValidation.valid) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: yearValidation.error });
+        }
+
+        targetYear = yearValidation.value;
+
+        // Find or create year-group
+        let yearGroupResult = await client.query(
+          `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
+          [req.user._id, targetYear]
+        );
+
+        if (yearGroupResult.rows.length === 0) {
+          // Create year-group
+          const newGroupId = crypto.randomBytes(12).toString('hex');
+          const maxOrder = await client.query(
+            `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
+            [req.user._id]
+          );
+
+          await client.query(
+            `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+            [
+              newGroupId,
+              req.user._id,
+              String(targetYear),
+              targetYear,
+              maxOrder.rows[0].next_order,
+            ]
+          );
+
+          yearGroupResult = await client.query(
+            `SELECT id FROM list_groups WHERE _id = $1`,
+            [newGroupId]
+          );
+        }
+
+        targetGroupId = yearGroupResult.rows[0].id;
+      } else {
+        // Moving to an existing group (collection)
+        const groupResult = await client.query(
+          `SELECT id, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
+          [groupId, req.user._id]
+        );
+
+        if (groupResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Target group not found' });
+        }
+
+        targetGroupId = groupResult.rows[0].id;
+        targetYear = groupResult.rows[0].year;
+      }
+
+      // If moving to a collection (no year), must clear is_main flag
+      if (targetYear === null && list.is_main) {
+        await client.query(`UPDATE lists SET is_main = FALSE WHERE id = $1`, [
+          list.id,
+        ]);
+      }
+
+      // Get max sort_order in target group
+      const maxOrder = await client.query(
+        `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM lists WHERE group_id = $1`,
+        [targetGroupId]
+      );
+
+      // Update the list
+      await client.query(
+        `UPDATE lists SET group_id = $1, year = $2, sort_order = $3, updated_at = NOW() WHERE id = $4`,
+        [targetGroupId, targetYear, maxOrder.rows[0].next_order, list.id]
+      );
+
+      // Clean up empty year-groups
+      if (list.group_id) {
+        const oldGroupCount = await client.query(
+          `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
+          [list.group_id]
+        );
+
+        if (parseInt(oldGroupCount.rows[0].count, 10) === 0) {
+          // Check if old group was a year-group
+          const oldGroupResult = await client.query(
+            `SELECT year FROM list_groups WHERE id = $1`,
+            [list.group_id]
+          );
+
+          if (
+            oldGroupResult.rows.length > 0 &&
+            oldGroupResult.rows[0].year !== null
+          ) {
+            // Auto-delete empty year-group
+            await client.query(`DELETE FROM list_groups WHERE id = $1`, [
+              list.group_id,
+            ]);
+          }
+        }
+      }
+
+      await client.query('COMMIT');
+
+      // Trigger aggregate recompute for affected years
+      if (oldYear) triggerAggregateListRecompute(oldYear);
+      if (targetYear && targetYear !== oldYear)
+        triggerAggregateListRecompute(targetYear);
+
+      res.json({ success: true, year: targetYear, groupId: targetGroupId });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      logger.error('Error moving list', {
+        error: err.message,
+        userId: req.user._id,
+        listName: name,
+      });
+      res.status(500).json({ error: 'Failed to move list' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // Reorder lists within a group
+  app.post('/api/lists/reorder', ensureAuthAPI, async (req, res) => {
+    const { groupId, order } = req.body;
+
+    if (!groupId) {
+      return res.status(400).json({ error: 'groupId is required' });
+    }
+
+    if (!Array.isArray(order)) {
+      return res
+        .status(400)
+        .json({ error: 'order must be an array of list names' });
+    }
+
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // Verify group belongs to user
+      const groupResult = await client.query(
+        `SELECT id FROM list_groups WHERE _id = $1 AND user_id = $2`,
+        [groupId, req.user._id]
+      );
+
+      if (groupResult.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Group not found' });
+      }
+
+      const dbGroupId = groupResult.rows[0].id;
+
+      // Verify all lists belong to user and group
+      const listsResult = await client.query(
+        `SELECT name FROM lists WHERE user_id = $1 AND group_id = $2`,
+        [req.user._id, dbGroupId]
+      );
+
+      const groupListNames = new Set(listsResult.rows.map((r) => r.name));
+
+      for (const listName of order) {
+        if (!groupListNames.has(listName)) {
+          await client.query('ROLLBACK');
+          return res
+            .status(400)
+            .json({ error: `List '${listName}' is not in this group` });
+        }
+      }
+
+      // Update sort_order for each list
+      for (let i = 0; i < order.length; i++) {
+        await client.query(
+          `UPDATE lists SET sort_order = $1, updated_at = NOW() WHERE name = $2 AND user_id = $3`,
+          [i, order[i], req.user._id]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.json({ success: true });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      logger.error('Error reordering lists', {
+        error: err.message,
+        userId: req.user._id,
+        groupId,
+      });
+      res.status(500).json({ error: 'Failed to reorder lists' });
+    } finally {
+      client.release();
+    }
+  });
+
+  // ============ END LIST GROUPS API ============
 
   // Check if user needs to complete list setup (year assignment + main list designation)
   app.get('/api/lists/setup-status', ensureAuthAPI, async (req, res) => {
@@ -1045,7 +1599,7 @@ module.exports = (app, deps) => {
   // Create or update a list
   app.post('/api/lists/:name', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
-    const { data, year } = req.body;
+    const { data, year, groupId } = req.body;
 
     if (!data || !Array.isArray(data)) {
       return res.status(400).json({ error: 'Invalid list data' });
@@ -1062,11 +1616,11 @@ module.exports = (app, deps) => {
       // Check if list exists
       const existingList = await lists.findOne({ userId: req.user._id, name });
 
-      // For new lists, year is required
-      if (!existingList && yearValidation.value === null) {
+      // For new lists, either year or groupId is required
+      if (!existingList && yearValidation.value === null && !groupId) {
         return res
           .status(400)
-          .json({ error: 'Year is required for new lists' });
+          .json({ error: 'Year or collection is required for new lists' });
       }
 
       const timestamp = new Date();
@@ -1075,12 +1629,67 @@ module.exports = (app, deps) => {
       try {
         await client.query('BEGIN');
         let listId = existingList ? existingList._id : null;
+        let targetGroupId = null;
+        let targetYear = yearValidation.value;
+
+        // Determine group assignment for new lists or year changes
+        if (!existingList || yearValidation.value !== null || groupId) {
+          if (groupId) {
+            // Assigning to a specific collection
+            const groupResult = await client.query(
+              `SELECT id, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
+              [groupId, req.user._id]
+            );
+            if (groupResult.rows.length === 0) {
+              await client.query('ROLLBACK');
+              return res.status(404).json({ error: 'Collection not found' });
+            }
+            targetGroupId = groupResult.rows[0].id;
+            targetYear = groupResult.rows[0].year; // Inherit year from group (null for collections)
+          } else if (yearValidation.value !== null) {
+            // Find or create year-group
+            let yearGroupResult = await client.query(
+              `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
+              [req.user._id, yearValidation.value]
+            );
+
+            if (yearGroupResult.rows.length === 0) {
+              // Create year-group
+              const newGroupId = crypto.randomBytes(12).toString('hex');
+              const maxOrder = await client.query(
+                `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
+                [req.user._id]
+              );
+
+              await client.query(
+                `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+                 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+                [
+                  newGroupId,
+                  req.user._id,
+                  String(yearValidation.value),
+                  yearValidation.value,
+                  maxOrder.rows[0].next_order,
+                ]
+              );
+
+              yearGroupResult = await client.query(
+                `SELECT id FROM list_groups WHERE _id = $1`,
+                [newGroupId]
+              );
+            }
+
+            targetGroupId = yearGroupResult.rows[0].id;
+          }
+        }
+
         if (existingList) {
-          // Update existing list - only update year if provided
-          if (yearValidation.value !== null) {
+          // Update existing list
+          if (targetGroupId !== null) {
+            // Update year and group assignment
             await client.query(
-              'UPDATE lists SET updated_at=$1, year=$2 WHERE _id=$3',
-              [timestamp, yearValidation.value, listId]
+              'UPDATE lists SET updated_at=$1, year=$2, group_id=$3 WHERE _id=$4',
+              [timestamp, targetYear, targetGroupId, listId]
             );
           } else {
             await client.query('UPDATE lists SET updated_at=$1 WHERE _id=$2', [
@@ -1092,14 +1701,22 @@ module.exports = (app, deps) => {
             listId,
           ]);
         } else {
-          // Create new list with year (required)
+          // Get max sort_order in target group
+          const maxListOrder = await client.query(
+            `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM lists WHERE group_id = $1`,
+            [targetGroupId]
+          );
+
+          // Create new list with year and group
           const resList = await client.query(
-            'INSERT INTO lists (_id, user_id, name, year, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING _id',
+            'INSERT INTO lists (_id, user_id, name, year, group_id, sort_order, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING _id',
             [
               crypto.randomBytes(12).toString('hex'),
               req.user._id,
               name,
-              yearValidation.value,
+              targetYear,
+              targetGroupId,
+              maxListOrder.rows[0].next_order,
               timestamp,
               timestamp,
             ]

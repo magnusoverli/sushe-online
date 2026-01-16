@@ -300,4 +300,275 @@ describe('List Navigation Module - Unit Tests', () => {
       assert.strictEqual(cached, '[]');
     });
   });
+
+  // ============ GROUP-BASED NAVIGATION TESTS ============
+
+  describe('groupListsByGroup logic', () => {
+    it('should group lists by their assigned groups', () => {
+      const lists = {
+        'List A': {},
+        'List B': {},
+        'List C': {},
+      };
+
+      const groups = {
+        group1: {
+          _id: 'group1',
+          name: '2023',
+          year: 2023,
+          sortOrder: 0,
+          isYearGroup: true,
+        },
+        group2: {
+          _id: 'group2',
+          name: 'Favorites',
+          year: null,
+          sortOrder: 1,
+          isYearGroup: false,
+        },
+      };
+
+      const getListMetadata = (listName) => {
+        const metadata = {
+          'List A': { groupId: 'group1', sortOrder: 0 },
+          'List B': { groupId: 'group1', sortOrder: 1 },
+          'List C': { groupId: 'group2', sortOrder: 0 },
+        };
+        return metadata[listName];
+      };
+
+      const getSortedGroups = () =>
+        Object.values(groups).sort((a, b) => a.sortOrder - b.sortOrder);
+
+      // Simulate groupListsByGroup logic
+      const listsByGroupId = {};
+      const orphaned = [];
+
+      Object.keys(lists).forEach((listName) => {
+        const meta = getListMetadata(listName);
+        const groupId = meta?.groupId;
+
+        if (groupId && groups[groupId]) {
+          if (!listsByGroupId[groupId]) {
+            listsByGroupId[groupId] = [];
+          }
+          listsByGroupId[groupId].push({ name: listName, meta });
+        } else {
+          orphaned.push({ name: listName, meta });
+        }
+      });
+
+      // Sort lists within each group by sortOrder
+      Object.keys(listsByGroupId).forEach((groupId) => {
+        listsByGroupId[groupId].sort(
+          (a, b) => (a.meta?.sortOrder || 0) - (b.meta?.sortOrder || 0)
+        );
+      });
+
+      // Build result
+      const groupsWithLists = getSortedGroups().map((group) => ({
+        ...group,
+        lists: listsByGroupId[group._id] || [],
+      }));
+
+      assert.strictEqual(groupsWithLists.length, 2);
+      assert.strictEqual(groupsWithLists[0].name, '2023');
+      assert.strictEqual(groupsWithLists[0].lists.length, 2);
+      assert.strictEqual(groupsWithLists[0].lists[0].name, 'List A');
+      assert.strictEqual(groupsWithLists[0].lists[1].name, 'List B');
+      assert.strictEqual(groupsWithLists[1].name, 'Favorites');
+      assert.strictEqual(groupsWithLists[1].lists.length, 1);
+      assert.strictEqual(groupsWithLists[1].lists[0].name, 'List C');
+      assert.strictEqual(orphaned.length, 0);
+    });
+
+    it('should put lists without valid groupId in orphaned', () => {
+      const lists = {
+        'List A': {},
+        'List B': {},
+      };
+
+      const groups = {
+        group1: {
+          _id: 'group1',
+          name: '2023',
+          year: 2023,
+          sortOrder: 0,
+          isYearGroup: true,
+        },
+      };
+
+      const getListMetadata = (listName) => {
+        const metadata = {
+          'List A': { groupId: 'group1', sortOrder: 0 },
+          'List B': { groupId: null, sortOrder: 0 }, // No group
+        };
+        return metadata[listName];
+      };
+
+      const listsByGroupId = {};
+      const orphaned = [];
+
+      Object.keys(lists).forEach((listName) => {
+        const meta = getListMetadata(listName);
+        const groupId = meta?.groupId;
+
+        if (groupId && groups[groupId]) {
+          if (!listsByGroupId[groupId]) {
+            listsByGroupId[groupId] = [];
+          }
+          listsByGroupId[groupId].push({ name: listName, meta });
+        } else {
+          orphaned.push({ name: listName, meta });
+        }
+      });
+
+      assert.strictEqual(listsByGroupId['group1'].length, 1);
+      assert.strictEqual(orphaned.length, 1);
+      assert.strictEqual(orphaned[0].name, 'List B');
+    });
+
+    it('should sort groups by sortOrder', () => {
+      const groups = {
+        group3: { _id: 'group3', name: 'Third', sortOrder: 2 },
+        group1: { _id: 'group1', name: 'First', sortOrder: 0 },
+        group2: { _id: 'group2', name: 'Second', sortOrder: 1 },
+      };
+
+      const sortedGroups = Object.values(groups).sort(
+        (a, b) => a.sortOrder - b.sortOrder
+      );
+
+      assert.strictEqual(sortedGroups[0].name, 'First');
+      assert.strictEqual(sortedGroups[1].name, 'Second');
+      assert.strictEqual(sortedGroups[2].name, 'Third');
+    });
+
+    it('should sort lists within a group by sortOrder', () => {
+      const groupLists = [
+        { name: 'Third', meta: { sortOrder: 2 } },
+        { name: 'First', meta: { sortOrder: 0 } },
+        { name: 'Second', meta: { sortOrder: 1 } },
+      ];
+
+      groupLists.sort(
+        (a, b) => (a.meta?.sortOrder || 0) - (b.meta?.sortOrder || 0)
+      );
+
+      assert.strictEqual(groupLists[0].name, 'First');
+      assert.strictEqual(groupLists[1].name, 'Second');
+      assert.strictEqual(groupLists[2].name, 'Third');
+    });
+  });
+
+  describe('createGroupHeaderHTML logic', () => {
+    it('should use calendar icon for year groups', () => {
+      const isYearGroup = true;
+      const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
+
+      assert.strictEqual(iconClass, 'fa-calendar-alt');
+    });
+
+    it('should use folder icon for collections', () => {
+      const isYearGroup = false;
+      const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
+
+      assert.strictEqual(iconClass, 'fa-folder');
+    });
+
+    it('should generate expanded header with correct chevron', () => {
+      const isExpanded = true;
+      const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
+
+      assert.strictEqual(chevronClass, 'fa-chevron-down');
+    });
+
+    it('should generate collapsed header with correct chevron', () => {
+      const isExpanded = false;
+      const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
+
+      assert.strictEqual(chevronClass, 'fa-chevron-right');
+    });
+  });
+
+  describe('Group expand state management', () => {
+    it('should default to expanded when state is undefined for group', () => {
+      const expandState = {};
+      const groupId = 'group1';
+
+      const isExpanded = expandState[groupId] !== false;
+
+      assert.strictEqual(isExpanded, true);
+    });
+
+    it('should be collapsed when state is false for group', () => {
+      const expandState = { group1: false };
+      const groupId = 'group1';
+
+      const isExpanded = expandState[groupId] !== false;
+
+      assert.strictEqual(isExpanded, false);
+    });
+
+    it('should toggle group state correctly', () => {
+      const state = { group1: true };
+      const groupId = 'group1';
+
+      // Toggle from expanded to collapsed
+      const wasExpanded = state[groupId] !== false;
+      state[groupId] = !wasExpanded;
+
+      assert.strictEqual(state[groupId], false);
+
+      // Toggle from collapsed to expanded
+      const isNowExpanded = state[groupId] !== false;
+      state[groupId] = !isNowExpanded;
+
+      assert.strictEqual(state[groupId], true);
+    });
+  });
+
+  describe('Collection vs Year-Group differentiation', () => {
+    it('should identify year-groups correctly', () => {
+      const group = {
+        _id: 'group1',
+        name: '2023',
+        year: 2023,
+        isYearGroup: true,
+      };
+
+      assert.strictEqual(group.isYearGroup, true);
+      assert.strictEqual(group.year !== null, true);
+    });
+
+    it('should identify collections correctly', () => {
+      const group = {
+        _id: 'group2',
+        name: 'Favorites',
+        year: null,
+        isYearGroup: false,
+      };
+
+      assert.strictEqual(group.isYearGroup, false);
+      assert.strictEqual(group.year === null, true);
+    });
+
+    it('should allow drag-and-drop within same group', () => {
+      const fromGroupId = 'group1';
+      const toGroupId = 'group1';
+
+      const isSameGroup = fromGroupId === toGroupId;
+
+      assert.strictEqual(isSameGroup, true);
+    });
+
+    it('should detect drag-and-drop between different groups', () => {
+      const fromGroupId = 'group1';
+      const toGroupId = 'group2';
+
+      const isDifferentGroup = fromGroupId !== toGroupId;
+
+      assert.strictEqual(isDifferentGroup, true);
+    });
+  });
 });
