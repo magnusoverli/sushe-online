@@ -1549,7 +1549,7 @@ module.exports = (app, deps) => {
    */
   app.delete('/api/track-picks/:albumId', ensureAuthAPI, async (req, res) => {
     const { albumId } = req.params;
-    const { trackIdentifier } = req.body;
+    const { trackIdentifier } = req.body || {};
 
     if (!albumId) {
       return res.status(400).json({ error: 'Album ID is required' });
@@ -1643,6 +1643,19 @@ module.exports = (app, deps) => {
           .json({ error: 'Year or collection is required for new lists' });
       }
 
+      // Pre-validate groupId before acquiring transaction client to avoid connection leaks
+      let preValidatedGroup = null;
+      if (groupId) {
+        const groupCheck = await pool.query(
+          `SELECT id, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
+          [groupId, req.user._id]
+        );
+        if (groupCheck.rows.length === 0) {
+          return res.status(404).json({ error: 'Collection not found' });
+        }
+        preValidatedGroup = groupCheck.rows[0];
+      }
+
       const timestamp = new Date();
       client = await pool.connect();
 
@@ -1655,17 +1668,9 @@ module.exports = (app, deps) => {
         // Determine group assignment for new lists or year changes
         if (!existingList || yearValidation.value !== null || groupId) {
           if (groupId) {
-            // Assigning to a specific collection
-            const groupResult = await client.query(
-              `SELECT id, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
-              [groupId, req.user._id]
-            );
-            if (groupResult.rows.length === 0) {
-              await client.query('ROLLBACK');
-              return res.status(404).json({ error: 'Collection not found' });
-            }
-            targetGroupId = groupResult.rows[0].id;
-            targetYear = groupResult.rows[0].year; // Inherit year from group (null for collections)
+            // Use pre-validated group data
+            targetGroupId = preValidatedGroup.id;
+            targetYear = preValidatedGroup.year; // Inherit year from group (null for collections)
           } else if (yearValidation.value !== null) {
             // Find or create year-group
             let yearGroupResult = await client.query(

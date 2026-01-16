@@ -371,7 +371,7 @@ function createPreferenceSyncService(deps = {}) {
    * Get users who need preference sync
    */
   async function getUsersNeedingSync(limit = 50) {
-    const staleInterval = `${Math.floor(staleThresholdMs / 1000)} seconds`;
+    const staleIntervalSeconds = Math.floor(staleThresholdMs / 1000);
 
     const query = `
       SELECT 
@@ -389,15 +389,15 @@ function createPreferenceSyncService(deps = {}) {
       WHERE (u.spotify_auth IS NOT NULL OR u.lastfm_auth IS NOT NULL)
         AND (
           p.user_id IS NULL
-          OR p.updated_at < NOW() - INTERVAL '${staleInterval}'
-          OR (u.spotify_auth IS NOT NULL AND (p.spotify_synced_at IS NULL OR p.spotify_synced_at < NOW() - INTERVAL '${staleInterval}'))
-          OR (u.lastfm_auth IS NOT NULL AND (p.lastfm_synced_at IS NULL OR p.lastfm_synced_at < NOW() - INTERVAL '${staleInterval}'))
+          OR p.updated_at < NOW() - make_interval(secs => $2)
+          OR (u.spotify_auth IS NOT NULL AND (p.spotify_synced_at IS NULL OR p.spotify_synced_at < NOW() - make_interval(secs => $2)))
+          OR (u.lastfm_auth IS NOT NULL AND (p.lastfm_synced_at IS NULL OR p.lastfm_synced_at < NOW() - make_interval(secs => $2)))
         )
       ORDER BY COALESCE(p.updated_at, '1970-01-01') ASC
       LIMIT $1
     `;
 
-    const result = await pool.query(query, [limit]);
+    const result = await pool.query(query, [limit, staleIntervalSeconds]);
     return result.rows;
   }
 

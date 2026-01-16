@@ -6,6 +6,26 @@ const ejs = require('ejs');
 const assetVersion = process.env.ASSET_VERSION || Date.now().toString();
 const asset = (p) => `${p}?v=${assetVersion}`;
 
+// HTML escape function to prevent XSS in server-rendered templates
+const escapeHtml = (str) => {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+};
+
+// Safe JSON serialization for embedding in <script> tags
+// Escapes </script> and <!-- sequences to prevent XSS breakout
+const safeJsonStringify = (obj) => {
+  return JSON.stringify(obj)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026');
+};
+
 const formatDate = (date, format = 'MM/DD/YYYY') => {
   if (!date) return '';
   const locale = format === 'DD/MM/YYYY' ? 'en-GB' : 'en-US';
@@ -169,7 +189,7 @@ const registerTemplate = (req, flash) =>
       </button>
     </form>
     
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center flash-message" data-flash="error">${flash.error[0]}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center flash-message" data-flash="error">${escapeHtml(flash.error[0])}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -217,8 +237,8 @@ const forgotPasswordTemplate = (req, flash) => `
       </button>
     </form>
     
-    ${flash.info && flash.info.length ? `<p class="text-blue-400 text-sm mt-4 text-center flash-message" data-flash="info">${flash.info[0]}</p>` : ''}
-    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center flash-message" data-flash="error">${flash.error[0]}</p>` : ''}
+    ${flash.info && flash.info.length ? `<p class="text-blue-400 text-sm mt-4 text-center flash-message" data-flash="info">${escapeHtml(flash.info[0])}</p>` : ''}
+    ${flash.error && flash.error.length ? `<p class="text-red-500 text-sm mt-4 text-center flash-message" data-flash="error">${escapeHtml(flash.error[0])}</p>` : ''}
     
     <div class="mt-8 pt-6 border-t border-gray-800">
       <p class="text-center text-gray-500 text-sm">
@@ -1486,9 +1506,9 @@ const spotifyTemplate = (user, csrfToken = '') => `
   
   <script>
     // Global state - must be set before bundle.js loads
-    window.currentUser = ${JSON.stringify(user)};
-    window.lastSelectedList = ${JSON.stringify(user.lastSelectedList || null)};
-    window.csrfToken = ${JSON.stringify(csrfToken)};
+    window.currentUser = ${safeJsonStringify(user)};
+    window.lastSelectedList = ${safeJsonStringify(user.lastSelectedList || null)};
+    window.csrfToken = ${safeJsonStringify(csrfToken)};
   </script>
   
   <script type="module" src="${asset('/js/bundle.js')}"></script>

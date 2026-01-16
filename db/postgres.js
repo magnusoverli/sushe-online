@@ -623,90 +623,103 @@ class PgDatastore {
 
     const crypto = require('crypto');
 
-    // Get current picks for this album
-    const current = await this._query(
-      `SELECT _id, track_identifier, priority FROM track_picks 
-       WHERE user_id = $1 AND album_id = $2`,
-      [userId, albumId]
-    );
+    // Use a transaction to prevent race conditions with concurrent calls
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    const currentPicks = current.rows;
-    const existingTrack = currentPicks.find(
-      (p) => p.track_identifier === trackIdentifier
-    );
-    const existingAtPriority = currentPicks.find(
-      (p) => p.priority === targetPriority
-    );
+      // Get current picks for this album (with FOR UPDATE lock)
+      const current = await client.query(
+        `SELECT _id, track_identifier, priority FROM track_picks 
+         WHERE user_id = $1 AND album_id = $2 FOR UPDATE`,
+        [userId, albumId]
+      );
 
-    if (existingTrack) {
-      if (existingTrack.priority === targetPriority) {
-        // Clicking same track at same priority = deselect
-        await this._query(`DELETE FROM track_picks WHERE _id = $1`, [
-          existingTrack._id,
-        ]);
+      const currentPicks = current.rows;
+      const existingTrack = currentPicks.find(
+        (p) => p.track_identifier === trackIdentifier
+      );
+      const existingAtPriority = currentPicks.find(
+        (p) => p.priority === targetPriority
+      );
+
+      if (existingTrack) {
+        if (existingTrack.priority === targetPriority) {
+          // Clicking same track at same priority = deselect
+          await client.query(`DELETE FROM track_picks WHERE _id = $1`, [
+            existingTrack._id,
+          ]);
+        } else {
+          // Promoting: track exists at different priority (e.g., secondary → primary)
+          // Store the old priority before we modify anything
+          const oldPriority = existingTrack.priority;
+
+          // If there's already something at target priority, we need to swap
+          if (existingAtPriority) {
+            // Use a temporary priority (0) to avoid unique constraint violation
+            // Step 1: Move existing target to temporary priority
+            await client.query(
+              `UPDATE track_picks SET priority = 0, updated_at = NOW() WHERE _id = $1`,
+              [existingAtPriority._id]
+            );
+            // Step 2: Move our track to target priority
+            await client.query(
+              `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
+              [targetPriority, existingTrack._id]
+            );
+            // Step 3: Move the old target to our old priority (demote it)
+            await client.query(
+              `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
+              [oldPriority, existingAtPriority._id]
+            );
+          } else {
+            // No conflict, just update priority directly
+            await client.query(
+              `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
+              [targetPriority, existingTrack._id]
+            );
+          }
+        }
       } else {
-        // Promoting: track exists at different priority (e.g., secondary → primary)
-        // Store the old priority before we modify anything
-        const oldPriority = existingTrack.priority;
-
-        // If there's already something at target priority, we need to swap
+        // New track selection
         if (existingAtPriority) {
-          // Use a temporary priority (0) to avoid unique constraint violation
-          // Step 1: Move existing target to temporary priority
-          await this._query(
-            `UPDATE track_picks SET priority = 0, updated_at = NOW() WHERE _id = $1`,
-            [existingAtPriority._id]
-          );
-          // Step 2: Move our track to target priority
-          await this._query(
-            `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
-            [targetPriority, existingTrack._id]
-          );
-          // Step 3: Move the old target to our old priority (demote it)
-          await this._query(
-            `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
-            [oldPriority, existingAtPriority._id]
+          // Replace existing at this priority
+          await client.query(
+            `UPDATE track_picks SET track_identifier = $1, updated_at = NOW() WHERE _id = $2`,
+            [trackIdentifier, existingAtPriority._id]
           );
         } else {
-          // No conflict, just update priority directly
-          await this._query(
-            `UPDATE track_picks SET priority = $1, updated_at = NOW() WHERE _id = $2`,
-            [targetPriority, existingTrack._id]
+          // Insert new
+          const _id = crypto.randomBytes(12).toString('hex');
+          await client.query(
+            `INSERT INTO track_picks (_id, user_id, album_id, track_identifier, priority, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+            [_id, userId, albumId, trackIdentifier, targetPriority]
           );
         }
       }
-    } else {
-      // New track selection
-      if (existingAtPriority) {
-        // Replace existing at this priority
-        await this._query(
-          `UPDATE track_picks SET track_identifier = $1, updated_at = NOW() WHERE _id = $2`,
-          [trackIdentifier, existingAtPriority._id]
-        );
-      } else {
-        // Insert new
-        const _id = crypto.randomBytes(12).toString('hex');
-        await this._query(
-          `INSERT INTO track_picks (_id, user_id, album_id, track_identifier, priority, created_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-          [_id, userId, albumId, trackIdentifier, targetPriority]
-        );
-      }
+
+      // Return updated state
+      const updated = await client.query(
+        `SELECT track_identifier, priority FROM track_picks 
+         WHERE user_id = $1 AND album_id = $2 ORDER BY priority`,
+        [userId, albumId]
+      );
+
+      await client.query('COMMIT');
+
+      return {
+        primary:
+          updated.rows.find((r) => r.priority === 1)?.track_identifier || null,
+        secondary:
+          updated.rows.find((r) => r.priority === 2)?.track_identifier || null,
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    // Return updated state
-    const updated = await this._query(
-      `SELECT track_identifier, priority FROM track_picks 
-       WHERE user_id = $1 AND album_id = $2 ORDER BY priority`,
-      [userId, albumId]
-    );
-
-    return {
-      primary:
-        updated.rows.find((r) => r.priority === 1)?.track_identifier || null,
-      secondary:
-        updated.rows.find((r) => r.priority === 2)?.track_identifier || null,
-    };
   }
 
   /**

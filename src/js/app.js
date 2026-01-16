@@ -3827,17 +3827,9 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         try {
           if (action === 'clear') {
             // Clear all track picks
-            const response = await fetch(`/api/track-picks/${albumId}`, {
+            const result = await apiCall(`/api/track-picks/${albumId}`, {
               method: 'DELETE',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              credentials: 'same-origin',
             });
-
-            if (!response.ok) throw new Error('Failed to clear track picks');
-
-            const result = await response.json();
 
             // Update local data
             const albumsForSelection = getListData(currentList);
@@ -3859,18 +3851,10 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
             let targetPriority;
             if (isPrimary) {
               // Already primary - deselect by removing
-              const response = await fetch(`/api/track-picks/${albumId}`, {
+              const result = await apiCall(`/api/track-picks/${albumId}`, {
                 method: 'DELETE',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                credentials: 'same-origin',
                 body: JSON.stringify({ trackIdentifier: trackValue }),
               });
-
-              if (!response.ok) throw new Error('Failed to remove track pick');
-
-              const result = await response.json();
 
               const albumsForSelection = getListData(currentList);
               const freshAlbum =
@@ -3892,21 +3876,13 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
               targetPriority = 2;
             }
 
-            const response = await fetch(`/api/track-picks/${albumId}`, {
+            const result = await apiCall(`/api/track-picks/${albumId}`, {
               method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              credentials: 'same-origin',
               body: JSON.stringify({
                 trackIdentifier: trackValue,
                 priority: targetPriority,
               }),
             });
-
-            if (!response.ok) throw new Error('Failed to set track pick');
-
-            const result = await response.json();
 
             // Update local data
             const albumsForSelection = getListData(currentList);
