@@ -1231,13 +1231,6 @@ const spotifyTemplate = (user, csrfToken = '') => `
       <div class="flex items-center justify-between p-4">
         <div class="flex items-center gap-2">
           <h2 class="sidebar-title text-lg font-bold text-white transition-opacity duration-300">Lists</h2>
-          <button 
-            id="createCollectionBtn" 
-            class="p-1.5 hover:bg-gray-800 rounded-sm transition-colors sidebar-action-btn"
-            title="Create collection"
-          >
-            <i class="fas fa-folder-plus text-gray-400 text-sm"></i>
-          </button>
         </div>
         <button 
           id="sidebarToggle" 
@@ -1258,6 +1251,9 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <div class="mt-4 pt-4 border-t border-gray-800 shrink-0">
           <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
             <i class="fas fa-plus mr-2"></i><span>Create List</span>
+          </button>
+          <button id="createCollectionBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 mt-2 flex items-center">
+            <i class="fas fa-folder-plus mr-2"></i><span>Create Collection</span>
           </button>
           <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 mt-2 flex items-center">
             <i class="fas fa-file-import mr-2"></i><span>Import List</span>
