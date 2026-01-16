@@ -455,6 +455,7 @@ function getImportConflictModule() {
       getListData,
       getLists: () => lists,
       saveList,
+      importList,
       selectList,
       updateListNav,
       getPendingImport: () => ({
@@ -1330,6 +1331,128 @@ async function loadLists() {
   } catch (error) {
     console.error('Error loading lists:', error);
     showToast('Error loading lists', 'error');
+  }
+}
+
+// Import list with full data support (track picks, summaries, metadata)
+// @param {string} name - List name
+// @param {Array} albums - Album array
+// @param {Object|null} metadata - Optional metadata from export (year, groupId, groupName)
+async function importList(name, albums, metadata = null) {
+  try {
+    // Extract year and groupId from metadata
+    let year = undefined;
+    let groupId = null;
+
+    if (metadata) {
+      // Prefer year from metadata, or derive from group if it's a year-group
+      if (metadata.year !== null && metadata.year !== undefined) {
+        year = metadata.year;
+      }
+      // groupId will be resolved on the server side based on group_id or year
+      if (metadata.group_id) {
+        groupId = metadata.group_id;
+      }
+    }
+
+    // Clean albums data (remove rank/points, keep everything else)
+    const cleanedAlbums = albums.map((album) => {
+      const cleaned = { ...album };
+      delete cleaned.points;
+      delete cleaned.rank;
+      delete cleaned._id; // Remove list item ID (will be regenerated)
+      return cleaned;
+    });
+
+    // Save the list first
+    const body = { data: cleanedAlbums };
+    if (year !== undefined) {
+      body.year = year;
+    }
+    if (groupId) {
+      body.groupId = groupId;
+    }
+
+    await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+
+    // Update in-memory list data
+    setListData(name, cleanedAlbums);
+    if (year !== undefined) {
+      updateListMetadata(name, { year: year });
+    }
+
+    // Import track picks and summaries for each album
+    // Do this after the list is saved so album_id is available
+    let trackPicksImported = 0;
+    let summariesImported = 0;
+
+    for (const album of albums) {
+      const albumId = album.album_id;
+      if (!albumId) continue;
+
+      // Import track picks (primary_track, secondary_track)
+      if (album.primary_track || album.secondary_track) {
+        try {
+          // Set primary track if present
+          if (album.primary_track) {
+            await apiCall(`/api/track-picks/${albumId}`, {
+              method: 'POST',
+              body: JSON.stringify({
+                trackIdentifier: album.primary_track,
+                priority: 1,
+              }),
+            });
+            trackPicksImported++;
+          }
+          // Set secondary track if present
+          if (album.secondary_track) {
+            await apiCall(`/api/track-picks/${albumId}`, {
+              method: 'POST',
+              body: JSON.stringify({
+                trackIdentifier: album.secondary_track,
+                priority: 2,
+              }),
+            });
+            trackPicksImported++;
+          }
+        } catch (err) {
+          console.warn('Failed to import track picks for album', albumId, err);
+        }
+      }
+
+      // Import summary fields if present
+      if (album.summary || album.summary_source) {
+        try {
+          await apiCall(`/api/albums/${albumId}/summary`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              summary: album.summary || '',
+              summary_source: album.summary_source || '',
+            }),
+          });
+          summariesImported++;
+        } catch (err) {
+          console.warn('Failed to import summary for album', albumId, err);
+        }
+      }
+    }
+
+    // Refresh mobile bar visibility if this is the current list
+    if (name === currentList && window.refreshMobileBarVisibility) {
+      window.refreshMobileBarVisibility();
+    }
+
+    if (trackPicksImported > 0 || summariesImported > 0) {
+      console.log(
+        `Imported ${trackPicksImported} track picks and ${summariesImported} summaries`
+      );
+    }
+  } catch (error) {
+    showToast('Error importing list', 'error');
+    throw error;
   }
 }
 
@@ -4278,13 +4401,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const reader = new FileReader();
             reader.onload = async (e) => {
               try {
-                const data = JSON.parse(e.target.result);
-                const fileName = file.name.replace(/\.json$/, '');
+                const parsed = JSON.parse(e.target.result);
+
+                // Handle both old format (array) and new format (wrapped with metadata)
+                let albums, metadata, fileName;
+                if (Array.isArray(parsed)) {
+                  // Old format: just an array of albums
+                  albums = parsed;
+                  metadata = null;
+                  fileName = file.name.replace(/\.json$/, '');
+                } else if (parsed.albums && Array.isArray(parsed.albums)) {
+                  // New format: wrapped with metadata
+                  albums = parsed.albums;
+                  metadata = parsed._metadata || null;
+                  fileName =
+                    metadata?.list_name || file.name.replace(/\.json$/, '');
+                } else {
+                  throw new Error(
+                    'Invalid JSON format: expected array or object with albums array'
+                  );
+                }
 
                 // Check for existing list
                 if (lists[fileName]) {
                   // Show import conflict modal
-                  pendingImportData = data;
+                  pendingImportData = { albums, metadata };
                   pendingImportFilename = fileName;
                   document.getElementById('conflictListName').textContent =
                     fileName;
@@ -4293,10 +4434,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     .classList.remove('hidden');
                 } else {
                   // Import directly
-                  await saveList(fileName, data);
+                  await importList(fileName, albums, metadata);
                   updateListNav();
                   selectList(fileName);
-                  showToast(`Successfully imported ${data.length} albums`);
+                  showToast(`Successfully imported ${albums.length} albums`);
                 }
               } catch (err) {
                 showToast('Error importing file: ' + err.message, 'error');

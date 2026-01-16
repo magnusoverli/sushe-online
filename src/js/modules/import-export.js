@@ -382,6 +382,7 @@ export function createImportConflictHandler(deps = {}) {
     getListData,
     getLists,
     saveList,
+    importList,
     selectList,
     updateListNav,
     getPendingImport,
@@ -429,11 +430,21 @@ export function createImportConflictHandler(deps = {}) {
       conflictModal.classList.add('hidden');
 
       try {
-        await saveList(pendingImportFilename, pendingImportData);
+        // Handle both old format (array) and new format (object with albums/metadata)
+        let albums, metadata;
+        if (Array.isArray(pendingImportData)) {
+          albums = pendingImportData;
+          metadata = null;
+        } else {
+          albums = pendingImportData.albums || [];
+          metadata = pendingImportData.metadata || null;
+        }
+
+        await importList(pendingImportFilename, albums, metadata);
         updateListNav();
         selectList(pendingImportFilename);
         showToast(
-          `Overwritten "${pendingImportFilename}" with ${pendingImportData.length} albums`
+          `Overwritten "${pendingImportFilename}" with ${albums.length} albums`
         );
       } catch (err) {
         console.error('Import overwrite error:', err);
@@ -477,24 +488,92 @@ export function createImportConflictHandler(deps = {}) {
       conflictModal.classList.add('hidden');
 
       try {
+        // Handle both old format (array) and new format (object with albums/metadata)
+        let albums;
+        if (Array.isArray(pendingImportData)) {
+          albums = pendingImportData;
+        } else {
+          albums = pendingImportData.albums || [];
+          // Note: metadata not used in merge (existing list keeps its organization)
+        }
+
         // Get existing list data using helper function
         const existingList = getListData(pendingImportFilename) || [];
 
         // Merge the lists (avoiding duplicates based on artist + album)
         const existingKeys = new Set(existingList.map(getAlbumKey));
 
-        const newAlbums = pendingImportData.filter(
+        const newAlbums = albums.filter(
           (album) => !existingKeys.has(getAlbumKey(album))
         );
 
         const mergedList = [...existingList, ...newAlbums];
 
+        // Use saveList for merge (don't import track picks/summaries for existing albums)
         await saveList(pendingImportFilename, mergedList);
+
+        // Import track picks and summaries for new albums only
+        for (const album of newAlbums) {
+          const albumId = album.album_id;
+          if (!albumId) continue;
+
+          // Import track picks
+          if (album.primary_track || album.secondary_track) {
+            try {
+              if (album.primary_track) {
+                await fetch(`/api/track-picks/${albumId}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    trackIdentifier: album.primary_track,
+                    priority: 1,
+                  }),
+                });
+              }
+              if (album.secondary_track) {
+                await fetch(`/api/track-picks/${albumId}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    trackIdentifier: album.secondary_track,
+                    priority: 2,
+                  }),
+                });
+              }
+            } catch (err) {
+              console.warn(
+                'Failed to import track picks for album',
+                albumId,
+                err
+              );
+            }
+          }
+
+          // Import summary
+          if (album.summary || album.summary_source) {
+            try {
+              await fetch(`/api/albums/${albumId}/summary`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  summary: album.summary || '',
+                  summary_source: album.summary_source || '',
+                }),
+              });
+            } catch (err) {
+              console.warn('Failed to import summary for album', albumId, err);
+            }
+          }
+        }
+
         updateListNav();
         selectList(pendingImportFilename);
 
         const addedCount = newAlbums.length;
-        const skippedCount = pendingImportData.length - addedCount;
+        const skippedCount = albums.length - addedCount;
 
         if (skippedCount > 0) {
           showToast(
@@ -538,12 +617,20 @@ export function createImportConflictHandler(deps = {}) {
         renameModal.classList.add('hidden');
 
         try {
-          await saveList(newName, pendingImportData);
+          // Handle both old format (array) and new format (object with albums/metadata)
+          let albums, metadata;
+          if (Array.isArray(pendingImportData)) {
+            albums = pendingImportData;
+            metadata = null;
+          } else {
+            albums = pendingImportData.albums || [];
+            metadata = pendingImportData.metadata || null;
+          }
+
+          await importList(newName, albums, metadata);
           updateListNav();
           selectList(newName);
-          showToast(
-            `Imported as "${newName}" with ${pendingImportData.length} albums`
-          );
+          showToast(`Imported as "${newName}" with ${albums.length} albums`);
         } catch (err) {
           console.error('Import with rename error:', err);
           showToast('Error importing list', 'error');

@@ -298,6 +298,42 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Update album summary (for import)
+  app.put('/api/albums/:albumId/summary', ensureAuthAPI, async (req, res) => {
+    try {
+      const { albumId } = req.params;
+      const { summary, summary_source } = req.body;
+
+      // Check if album exists
+      const checkResult = await pool.query(
+        `SELECT album_id FROM albums WHERE album_id = $1`,
+        [albumId]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+
+      // Update summary if provided
+      await pool.query(
+        `UPDATE albums 
+         SET summary = COALESCE($1, summary),
+             summary_source = COALESCE($2, summary_source),
+             updated_at = NOW()
+         WHERE album_id = $3`,
+        [summary || null, summary_source || null, albumId]
+      );
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error updating album summary', {
+        error: err.message,
+        albumId: req.params.albumId,
+      });
+      res.status(500).json({ error: 'Error updating summary' });
+    }
+  });
+
   // Check for similar albums before adding (fuzzy duplicate detection)
   app.post('/api/albums/check-similar', ensureAuthAPI, async (req, res) => {
     try {
@@ -1485,7 +1521,38 @@ module.exports = (app, deps) => {
               })()),
         }));
 
-        res.json(data);
+        // For export mode, wrap data with list metadata (year, groupId, groupName)
+        // This allows import to restore the list's organization
+        if (isExport) {
+          let groupInfo = null;
+          if (list.groupId) {
+            // Fetch group information
+            const groupResult = await pool.query(
+              `SELECT _id, name, year FROM list_groups WHERE id = $1`,
+              [list.groupId]
+            );
+            if (groupResult.rows.length > 0) {
+              const group = groupResult.rows[0];
+              groupInfo = {
+                _id: group._id,
+                name: group.name,
+                year: group.year,
+              };
+            }
+          }
+
+          res.json({
+            _metadata: {
+              list_name: name,
+              year: list.year || null,
+              group_id: groupInfo?._id || null,
+              group_name: groupInfo?.name || null,
+            },
+            albums: data,
+          });
+        } else {
+          res.json(data);
+        }
       } catch (err) {
         logger.error('Error fetching list:', {
           error: err.message,
