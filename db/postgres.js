@@ -335,13 +335,17 @@ class PgDatastore {
     }
 
     const { text, values } = this._buildWhere(query);
-    const queryName = `findWithCounts_lists_${Object.keys(query).join('_')}`;
+    // Prefix column references with 'l.' to disambiguate from joined tables
+    const prefixedText = text.replace(/WHERE /i, 'WHERE l.');
+    const queryName = `findWithCounts_lists_v3_${Object.keys(query).join('_')}`;
     const queryText = `
-      SELECT l.*, COUNT(li._id) as item_count
+      SELECT l.*, COUNT(li._id) as item_count,
+             g._id as group_external_id, g.name as group_name, g.year as group_year, g.sort_order as group_sort_order
       FROM lists l
       LEFT JOIN list_items li ON li.list_id = l._id
-      ${text}
-      GROUP BY l.id
+      LEFT JOIN list_groups g ON l.group_id = g.id
+      ${prefixedText}
+      GROUP BY l.id, g.id
       ORDER BY l.name
     `;
 
@@ -350,6 +354,18 @@ class PgDatastore {
       const mapped = this._mapRow(row);
       // Add itemCount as a number (COUNT returns string in some drivers)
       mapped.itemCount = parseInt(row.item_count, 10) || 0;
+      // Add group info if available
+      if (row.group_external_id) {
+        mapped.group = {
+          _id: row.group_external_id,
+          name: row.group_name,
+          year: row.group_year,
+          sortOrder: row.group_sort_order,
+          isYearGroup: row.group_year !== null,
+        };
+      } else {
+        mapped.group = null;
+      }
       return mapped;
     });
   }

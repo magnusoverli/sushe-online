@@ -581,6 +581,15 @@ input[list]::-webkit-list-button {
     width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Sidebar action buttons base transition */
+.sidebar .sidebar-action-btn {
+  transition:
+    opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 /* Toggle button container transition */
 .sidebar > div:first-child {
   transition:
@@ -604,6 +613,14 @@ input[list]::-webkit-list-button {
   opacity: 0;
   visibility: hidden;
   width: 0;
+}
+
+/* Hide sidebar action buttons when collapsed */
+.sidebar.collapsed .sidebar-action-btn {
+  opacity: 0;
+  visibility: hidden;
+  width: 0;
+  padding: 0;
 }
 
 /* Center the toggle button when collapsed */

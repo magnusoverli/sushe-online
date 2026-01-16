@@ -285,11 +285,62 @@ window.removeAlbumSafe = removeAlbumSafe;
  * Get or initialize the list navigation module
  * Uses lazy initialization to avoid dependency ordering issues
  */
+/**
+ * Refresh groups and lists from server
+ * Used after drag-and-drop reordering
+ */
+async function refreshGroupsAndLists() {
+  try {
+    const [fetchedLists, fetchedGroups] = await Promise.all([
+      apiCall('/api/lists'),
+      apiCall('/api/groups'),
+    ]);
+
+    // Update groups
+    updateGroupsFromServer(fetchedGroups);
+
+    // Update lists metadata (preserve loaded _data)
+    Object.keys(fetchedLists).forEach((name) => {
+      const meta = fetchedLists[name];
+      if (lists[name]) {
+        // Preserve existing _data if loaded
+        lists[name] = {
+          ...lists[name],
+          year: meta.year || null,
+          isMain: meta.isMain || false,
+          count: meta.count || 0,
+          groupId: meta.groupId || null,
+          sortOrder: meta.sortOrder || 0,
+          updatedAt: meta.updatedAt || null,
+        };
+      } else {
+        lists[name] = {
+          _id: meta._id || null,
+          name: meta.name || name,
+          year: meta.year || null,
+          isMain: meta.isMain || false,
+          count: meta.count || 0,
+          groupId: meta.groupId || null,
+          sortOrder: meta.sortOrder || 0,
+          _data: null,
+          updatedAt: meta.updatedAt || null,
+          createdAt: meta.createdAt || null,
+        };
+      }
+    });
+    window.lists = lists;
+  } catch (err) {
+    console.error('Failed to refresh groups and lists:', err);
+  }
+}
+
 function getListNavModule() {
   if (!listNavModule) {
     listNavModule = createListNav({
       getLists: () => lists,
       getListMetadata,
+      getGroups,
+      getSortedGroups,
       getCurrentList: () => currentList,
       selectList,
       getListMenuConfig,
@@ -299,6 +350,9 @@ function getListNavModule() {
       setCurrentContextList: (listName) => {
         currentContextList = listName;
       },
+      apiCall,
+      showToast,
+      refreshGroupsAndLists,
     });
   }
   return listNavModule;
@@ -526,6 +580,7 @@ function initializeRealtimeSync() {
 
 // Global variables
 let lists = {};
+let groups = {}; // List groups (years and collections)
 let currentList = '';
 let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
@@ -708,6 +763,58 @@ function isListDataLoaded(listName) {
     (listEntry._data.length > 0 || listEntry.count === 0)
   );
 }
+
+// ============ GROUP DATA ACCESS HELPERS ============
+
+/**
+ * Get all groups
+ * @returns {Object} - Map of group ID to group data
+ */
+function getGroups() {
+  return groups;
+}
+
+/**
+ * Get a group by ID
+ * @param {string} groupId - The group ID
+ * @returns {Object|null} - The group data or null
+ */
+function getGroup(groupId) {
+  return groups[groupId] || null;
+}
+// Export for future use in UI components
+window.getGroup = getGroup;
+
+/**
+ * Get groups sorted by sort_order
+ * @returns {Array} - Sorted array of groups
+ */
+function getSortedGroups() {
+  return Object.values(groups).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/**
+ * Update groups from server data
+ * @param {Array} groupsArray - Array of group objects from server
+ */
+function updateGroupsFromServer(groupsArray) {
+  groups = {};
+  groupsArray.forEach((group) => {
+    groups[group._id] = {
+      _id: group._id,
+      name: group.name,
+      year: group.year,
+      sortOrder: group.sortOrder,
+      listCount: group.listCount,
+      isYearGroup: group.isYearGroup,
+      createdAt: group.createdAt,
+      updatedAt: group.updatedAt,
+    };
+  });
+  window.groups = groups;
+}
+// Export for future use in realtime sync
+window.updateGroupsFromServer = updateGroupsFromServer;
 
 /**
  * Toggle main status for a list
@@ -1106,20 +1213,42 @@ async function loadLists() {
     const serverLastList = window.lastSelectedList;
     const targetList = localLastList || serverLastList;
 
-    // OPTIMIZATION: Parallel execution - fetch metadata and target list simultaneously
+    // OPTIMIZATION: Parallel execution - fetch metadata, groups, and target list simultaneously
     // This dramatically improves page refresh performance by:
     // 1. Loading only metadata (tiny payload) for the sidebar
-    // 2. Loading the target list data in parallel (only what's needed)
+    // 2. Loading groups (tiny payload) for sidebar organization
+    // 3. Loading the target list data in parallel (only what's needed)
     const metadataPromise = apiCall('/api/lists'); // Metadata only (default)
+    const groupsPromise = apiCall('/api/groups'); // Groups for sidebar
     const listDataPromise = targetList
       ? apiCall(`/api/lists/${encodeURIComponent(targetList)}`)
       : null;
 
-    // Wait for metadata (fast - just list names, years, and counts)
-    const fetchedLists = await metadataPromise;
+    // Wait for metadata and groups (fast - small payloads)
+    const [fetchedLists, fetchedGroups] = await Promise.all([
+      metadataPromise,
+      groupsPromise,
+    ]);
+
+    // Initialize groups object
+    // Structure: { _id, name, year, sortOrder, listCount, isYearGroup }
+    groups = {};
+    fetchedGroups.forEach((group) => {
+      groups[group._id] = {
+        _id: group._id,
+        name: group.name,
+        year: group.year,
+        sortOrder: group.sortOrder,
+        listCount: group.listCount,
+        isYearGroup: group.isYearGroup,
+        createdAt: group.createdAt,
+        updatedAt: group.updatedAt,
+      };
+    });
+    window.groups = groups;
 
     // Initialize lists object with metadata objects (not arrays)
-    // Structure: { _id, name, year, isMain, count, _data, updatedAt, createdAt }
+    // Structure: { _id, name, year, isMain, count, groupId, sortOrder, _data, updatedAt, createdAt }
     lists = {};
     Object.keys(fetchedLists).forEach((name) => {
       const meta = fetchedLists[name];
@@ -1129,6 +1258,8 @@ async function loadLists() {
         year: meta.year || null,
         isMain: meta.isMain || false,
         count: meta.count || 0,
+        groupId: meta.groupId || null,
+        sortOrder: meta.sortOrder || 0,
         _data: null, // Data not loaded yet (lazy load)
         updatedAt: meta.updatedAt || null,
         createdAt: meta.createdAt || null,
@@ -2530,6 +2661,102 @@ function initializeCreateList() {
   });
 }
 
+// Create collection functionality
+function initializeCreateCollection() {
+  const createBtn = document.getElementById('createCollectionBtn');
+  const modal = document.getElementById('createCollectionModal');
+  const nameInput = document.getElementById('newCollectionName');
+  const cancelBtn = document.getElementById('cancelCreateCollectionBtn');
+  const confirmBtn = document.getElementById('confirmCreateCollectionBtn');
+  const errorEl = document.getElementById('createCollectionError');
+
+  if (!createBtn || !modal) return;
+
+  // Open modal
+  createBtn.onclick = () => {
+    modal.classList.remove('hidden');
+    nameInput.value = '';
+    if (errorEl) errorEl.classList.add('hidden');
+    nameInput.focus();
+  };
+
+  // Close modal
+  const closeModal = () => {
+    modal.classList.add('hidden');
+    nameInput.value = '';
+    if (errorEl) errorEl.classList.add('hidden');
+  };
+
+  cancelBtn.onclick = closeModal;
+
+  // Click outside to close
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  };
+
+  // Create collection
+  const createCollection = async () => {
+    const collectionName = nameInput.value.trim();
+
+    if (!collectionName) {
+      showToast('Please enter a collection name', 'error');
+      nameInput.focus();
+      return;
+    }
+
+    // Check if name looks like a year
+    if (/^\d{4}$/.test(collectionName)) {
+      const error = 'Collection name cannot be a year';
+      if (errorEl) {
+        errorEl.textContent = error;
+        errorEl.classList.remove('hidden');
+      }
+      showToast(error, 'error');
+      nameInput.focus();
+      return;
+    }
+
+    try {
+      await apiCall('/api/groups', {
+        method: 'POST',
+        body: JSON.stringify({ name: collectionName }),
+      });
+
+      // Refresh groups and update navigation
+      await refreshGroupsAndLists();
+      updateListNav();
+
+      closeModal();
+      showToast(`Created collection "${collectionName}"`);
+    } catch (err) {
+      const errorMsg = err.message || 'Error creating collection';
+      if (errorEl) {
+        errorEl.textContent = errorMsg;
+        errorEl.classList.remove('hidden');
+      }
+      showToast(errorMsg, 'error');
+    }
+  };
+
+  confirmBtn.onclick = createCollection;
+
+  // Enter key to create
+  nameInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      createCollection();
+    }
+  };
+
+  // ESC key to close
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
+      closeModal();
+    }
+  });
+}
+
 // Edit list details functionality (formerly Rename list)
 function initializeRenameList() {
   const modal = document.getElementById('renameListModal');
@@ -3546,6 +3773,7 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeAlbumContextMenu();
       hideSubmenuOnLeave();
       initializeCreateList();
+      initializeCreateCollection();
       initializeRenameList();
       initializeImportConflictHandling();
 
