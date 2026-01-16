@@ -22,6 +22,7 @@
  * @param {Function} deps.positionContextMenu - Position a context menu
  * @param {Function} deps.toggleMobileLists - Toggle mobile list panel
  * @param {Function} deps.setCurrentContextList - Set current context list
+ * @param {Function} deps.setCurrentContextGroup - Set current context group for category menus
  * @param {Function} deps.apiCall - Make API calls
  * @param {Function} deps.showToast - Show toast notifications
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists from server
@@ -40,6 +41,7 @@ export function createListNav(deps = {}) {
     positionContextMenu,
     toggleMobileLists,
     setCurrentContextList,
+    setCurrentContextGroup,
     apiCall,
     showToast,
     refreshGroupsAndLists,
@@ -243,18 +245,36 @@ export function createListNav(deps = {}) {
    * @param {number} count - Number of lists in this group
    * @param {boolean} isExpanded - Whether section is expanded
    * @param {boolean} isYearGroup - Whether this is a year-based group
+   * @param {boolean} isMobile - Whether rendering for mobile
+   * @param {string} groupId - Group ID for menu button
    * @returns {string} HTML string
    */
-  function createGroupHeaderHTML(name, count, isExpanded, isYearGroup) {
+  function createGroupHeaderHTML(
+    name,
+    count,
+    isExpanded,
+    isYearGroup,
+    isMobile = false,
+    groupId = ''
+  ) {
     const chevronClass = isExpanded ? 'fa-chevron-down' : 'fa-chevron-right';
     const iconClass = isYearGroup ? 'fa-calendar-alt' : 'fa-folder';
+
+    // For mobile: show menu button instead of count
+    // For desktop: show count (menu accessed via right-click)
+    const rightSide = isMobile
+      ? `<button data-category-menu-btn="${groupId}" class="p-1 text-gray-400 active:text-gray-200 no-drag shrink-0 category-menu-btn" aria-label="Category options">
+          <i class="fas fa-ellipsis-v text-xs"></i>
+        </button>`
+      : `<span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded-sm font-normal">${count}</span>`;
+
     return `
-      <div class="flex items-center">
-        <i class="fas ${chevronClass} mr-2 text-xs group-chevron"></i>
-        <i class="fas ${iconClass} mr-2 text-xs text-gray-500"></i>
-        <span>${name}</span>
+      <div class="flex items-center flex-1 min-w-0">
+        <i class="fas ${chevronClass} mr-2 text-xs group-chevron shrink-0"></i>
+        <i class="fas ${iconClass} mr-2 text-xs text-gray-500 shrink-0"></i>
+        <span class="truncate">${name}</span>
       </div>
-      <span class="text-xs text-gray-400 bg-gray-800 px-1 py-px rounded-sm font-normal">${count}</span>
+      ${rightSide}
     `;
   }
 
@@ -263,10 +283,25 @@ export function createListNav(deps = {}) {
    * @param {string} year - Year label
    * @param {number} count - Number of lists in this year
    * @param {boolean} isExpanded - Whether section is expanded
+   * @param {boolean} isMobile - Whether rendering for mobile
+   * @param {string} groupId - Group ID for menu button
    * @returns {string} HTML string
    */
-  function createYearHeaderHTML(year, count, isExpanded) {
-    return createGroupHeaderHTML(year, count, isExpanded, true);
+  function createYearHeaderHTML(
+    year,
+    count,
+    isExpanded,
+    isMobile = false,
+    groupId = ''
+  ) {
+    return createGroupHeaderHTML(
+      year,
+      count,
+      isExpanded,
+      true,
+      isMobile,
+      groupId
+    );
   }
 
   /**
@@ -450,23 +485,59 @@ export function createListNav(deps = {}) {
       section.setAttribute('data-year-section', year); // Legacy support
     }
 
-    // Group header
+    // Group header - use div wrapper for proper layout with menu button
+    const headerWrapper = document.createElement('div');
+    headerWrapper.className = 'group-header-wrapper flex items-center';
+
     const header = document.createElement('button');
     const paddingClass = isMobile ? 'py-2' : 'py-1.5';
-    header.className = `w-full text-left px-3 ${paddingClass} rounded-sm text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
+    header.className = `group-header-btn flex-1 text-left px-3 ${paddingClass} rounded-sm text-sm hover:bg-gray-800 transition duration-200 text-white flex items-center justify-between font-bold`;
     header.innerHTML = createGroupHeaderHTML(
       name,
       groupLists.length,
       isExpanded,
-      isYearGroup
+      isYearGroup,
+      isMobile,
+      _id || ''
     );
+
+    // Click handler for expand/collapse (not on the menu button)
     header.onclick = (e) => {
+      // Don't toggle if clicking the menu button
+      if (e.target.closest('[data-category-menu-btn]')) {
+        return;
+      }
       e.preventDefault();
       toggleGroupSection(stateKey, container);
     };
-    header.oncontextmenu = (e) => e.preventDefault();
 
-    section.appendChild(header);
+    // Desktop: right-click context menu on header
+    if (!isMobile && _id) {
+      header.oncontextmenu = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showCategoryContextMenu(_id, name, isYearGroup, e.clientX, e.clientY);
+      };
+    } else {
+      header.oncontextmenu = (e) => e.preventDefault();
+    }
+
+    headerWrapper.appendChild(header);
+
+    // Mobile: attach click handler to menu button
+    if (isMobile && _id) {
+      // Use event delegation - attach handler after appending to section
+      setTimeout(() => {
+        const menuBtn = header.querySelector(
+          `[data-category-menu-btn="${_id}"]`
+        );
+        if (menuBtn) {
+          attachCategoryMenuButton(menuBtn, _id, name, isYearGroup);
+        }
+      }, 0);
+    }
+
+    section.appendChild(headerWrapper);
 
     // Lists container
     const listsContainer = document.createElement('ul');
@@ -483,6 +554,79 @@ export function createListNav(deps = {}) {
 
     section.appendChild(listsContainer);
     return section;
+  }
+
+  /**
+   * Show category context menu (desktop)
+   * @param {string} groupId - Group ID
+   * @param {string} groupName - Group name
+   * @param {boolean} isYearGroup - Whether this is a year group
+   * @param {number} x - X position
+   * @param {number} y - Y position
+   */
+  function showCategoryContextMenu(groupId, groupName, isYearGroup, x, y) {
+    hideAllContextMenus();
+
+    if (setCurrentContextGroup) {
+      setCurrentContextGroup({ id: groupId, name: groupName, isYearGroup });
+    }
+
+    const contextMenu = document.getElementById('categoryContextMenu');
+    if (!contextMenu) return;
+
+    // Update menu options based on group type
+    const deleteOption = document.getElementById('deleteCategoryOption');
+    if (deleteOption) {
+      // Year groups can't be manually deleted
+      if (isYearGroup) {
+        deleteOption.classList.add('hidden');
+      } else {
+        deleteOption.classList.remove('hidden');
+      }
+    }
+
+    positionContextMenu(contextMenu, x, y);
+  }
+
+  /**
+   * Attach mobile menu button handlers for category
+   * @param {HTMLElement} menuButton - Menu button element
+   * @param {string} groupId - Group ID
+   * @param {string} groupName - Group name
+   * @param {boolean} isYearGroup - Whether this is a year group
+   */
+  function attachCategoryMenuButton(
+    menuButton,
+    groupId,
+    groupName,
+    isYearGroup
+  ) {
+    if (!menuButton) return;
+
+    // Prevent touch events from bubbling to parent (which would toggle expand)
+    menuButton.addEventListener(
+      'touchstart',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    menuButton.addEventListener(
+      'touchend',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    menuButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (window.showMobileCategoryMenu) {
+        window.showMobileCategoryMenu(groupId, groupName, isYearGroup);
+      }
+    });
   }
 
   /**

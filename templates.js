@@ -431,6 +431,16 @@ const contextMenusComponent = () => `
   <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 min-w-44">
     <!-- Populated dynamically -->
   </div>
+  
+  <!-- Context Menu for Categories (Groups) -->
+  <div id="categoryContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
+    <button id="renameCategoryOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-edit mr-2 w-4 text-center"></i>Rename
+    </button>
+    <button id="deleteCategoryOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
+      <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete
+    </button>
+  </div>
 `;
 
 // Component: Create List Modal
@@ -459,20 +469,49 @@ const createListModalComponent = () => `
         </div>
         
         <div>
-          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListYear">
-            Year <span class="text-red-500">*</span>
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newListCategory">
+            Category <span class="text-red-500">*</span>
+          </label>
+          <select 
+            id="newListCategory" 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white focus:outline-hidden focus:border-gray-500 transition duration-200 cursor-pointer"
+          >
+            <option value="" disabled selected>Select a category...</option>
+            <!-- Options populated dynamically by JavaScript -->
+          </select>
+          <p class="text-xs text-gray-500 mt-2">Choose a year or collection for this list</p>
+        </div>
+        
+        <!-- Dynamic input for new year (hidden by default) -->
+        <div id="newYearInputContainer" class="hidden">
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newYearInput">
+            New Year
           </label>
           <input 
             type="number" 
-            id="newListYear" 
+            id="newYearInput" 
             placeholder="e.g. 2025" 
             class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
             min="1000"
             max="9999"
           >
-          <p class="text-xs text-gray-500 mt-2">Year this list represents (e.g. "Best of 2024")</p>
-          <p id="createYearError" class="text-xs text-red-500 mt-1 hidden"></p>
         </div>
+        
+        <!-- Dynamic input for new collection (hidden by default) -->
+        <div id="newCollectionInputContainer" class="hidden">
+          <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="newCollectionInput">
+            Collection Name
+          </label>
+          <input 
+            type="text" 
+            id="newCollectionInput" 
+            placeholder="e.g. Favorites, To Review..." 
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+            maxlength="50"
+          >
+        </div>
+        
+        <p id="createCategoryError" class="text-xs text-red-500 hidden"></p>
       </div>
       
       <!-- Modal Footer -->

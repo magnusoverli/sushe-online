@@ -229,6 +229,7 @@ function getMobileUIModule() {
         });
       },
       playSpecificTrack,
+      refreshGroupsAndLists,
     });
   }
   return mobileUIModule;
@@ -245,6 +246,14 @@ function showMobileMoveToListSheet(index, albumId) {
 
 function showMobileListMenu(listName) {
   return getMobileUIModule().showMobileListMenu(listName);
+}
+
+function showMobileCategoryMenu(groupId, groupName, isYearGroup) {
+  return getMobileUIModule().showMobileCategoryMenu(
+    groupId,
+    groupName,
+    isYearGroup
+  );
 }
 
 function showMobileEditForm(index) {
@@ -275,11 +284,13 @@ function findAlbumByIdentity(albumId) {
 window.showMobileAlbumMenu = showMobileAlbumMenu;
 window.showMobileMoveToListSheet = showMobileMoveToListSheet;
 window.showMobileListMenu = showMobileListMenu;
+window.showMobileCategoryMenu = showMobileCategoryMenu;
 window.showMobileEditForm = showMobileEditForm;
 window.showMobileEditFormSafe = showMobileEditFormSafe;
 window.showMobileSummarySheet = showMobileSummarySheet;
 window.playAlbumSafe = playAlbumSafe;
 window.removeAlbumSafe = removeAlbumSafe;
+// openRenameCategoryModal is exposed later after it's defined
 
 /**
  * Get or initialize the list navigation module
@@ -329,6 +340,9 @@ async function refreshGroupsAndLists() {
       }
     });
     window.lists = lists;
+
+    // Re-render the sidebar navigation
+    updateListNav();
   } catch (err) {
     console.error('Failed to refresh groups and lists:', err);
   }
@@ -349,6 +363,9 @@ function getListNavModule() {
       toggleMobileLists,
       setCurrentContextList: (listName) => {
         currentContextList = listName;
+      },
+      setCurrentContextGroup: (group) => {
+        currentContextGroup = group;
       },
       apiCall,
       showToast,
@@ -585,6 +602,7 @@ let currentList = '';
 let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null;
+let currentContextGroup = null; // { id, name, isYearGroup }
 
 // Process static data at module load time
 const availableGenres = genresText
@@ -1149,8 +1167,23 @@ export async function apiCall(url, options = {}) {
           return;
         }
       }
-      const error = new Error(`HTTP error! status: ${response.status}`);
+      // Try to parse error response body for additional details
+      let errorData = null;
+      try {
+        errorData = await response.json();
+      } catch (_parseErr) {
+        // Response body wasn't JSON, continue with generic error
+      }
+
+      const error = new Error(
+        errorData?.error || `HTTP error! status: ${response.status}`
+      );
       error.response = response;
+      error.status = response.status;
+      // Spread error data onto the error object for easy access
+      if (errorData) {
+        Object.assign(error, errorData);
+      }
       throw error;
     }
 
@@ -1687,6 +1720,204 @@ function initializeAlbumContextMenu() {
     };
   }
 }
+
+// Initialize category (group) context menu
+function initializeCategoryContextMenu() {
+  const contextMenu = document.getElementById('categoryContextMenu');
+  const renameOption = document.getElementById('renameCategoryOption');
+  const deleteOption = document.getElementById('deleteCategoryOption');
+
+  if (!contextMenu || !renameOption || !deleteOption) return;
+
+  // Handle rename option click
+  renameOption.onclick = () => {
+    contextMenu.classList.add('hidden');
+
+    if (!currentContextGroup) return;
+
+    const { id, name } = currentContextGroup;
+    openRenameCategoryModal(id, name);
+  };
+
+  // Handle delete option click
+  deleteOption.onclick = async () => {
+    contextMenu.classList.add('hidden');
+
+    if (!currentContextGroup) return;
+
+    const { id, name, isYearGroup } = currentContextGroup;
+
+    // Year groups can't be deleted manually
+    if (isYearGroup) {
+      showToast('Year groups are removed automatically when empty', 'info');
+      currentContextGroup = null;
+      return;
+    }
+
+    try {
+      // First try to delete - API will return 409 if collection has lists
+      await apiCall(`/api/groups/${id}`, { method: 'DELETE' });
+      showToast(`Collection "${name}" deleted`);
+      await refreshGroupsAndLists();
+    } catch (error) {
+      // Check if this is a "has lists" conflict that needs confirmation
+      if (error.requiresConfirmation && error.listCount > 0) {
+        const listWord = error.listCount === 1 ? 'list' : 'lists';
+        const confirmed = await showConfirmation(
+          'Delete Collection',
+          `The collection "${name}" contains ${error.listCount} ${listWord}.`,
+          `Deleting this collection will move the ${listWord} to "Uncategorized". This cannot be undone.`,
+          'Delete Anyway'
+        );
+
+        if (confirmed) {
+          try {
+            // Force delete with confirmation
+            await apiCall(`/api/groups/${id}?force=true`, { method: 'DELETE' });
+            showToast(`Collection "${name}" deleted`);
+            await refreshGroupsAndLists();
+          } catch (forceError) {
+            console.error('Error force-deleting collection:', forceError);
+            showToast(
+              forceError.message || 'Failed to delete collection',
+              'error'
+            );
+          }
+        }
+      } else {
+        console.error('Error deleting collection:', error);
+        showToast(error.message || 'Failed to delete collection', 'error');
+      }
+    }
+
+    currentContextGroup = null;
+  };
+
+  // Hide context menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!contextMenu.contains(e.target)) {
+      contextMenu.classList.add('hidden');
+    }
+  });
+}
+
+// Open rename category modal
+function openRenameCategoryModal(groupId, currentName) {
+  // Escape HTML for safe insertion
+  const escapedName = currentName
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  // Use the existing confirmation modal pattern with an input
+  const modal = document.createElement('div');
+  modal.className =
+    'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+  modal.id = 'renameCategoryModal';
+  modal.innerHTML = `
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-xl font-bold text-white">Rename Category</h3>
+      </div>
+      <div class="p-6">
+        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2">
+          New Name
+        </label>
+        <input 
+          type="text" 
+          id="newCategoryName" 
+          value="${escapedName}"
+          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
+          maxlength="50"
+          autofocus
+        >
+        <p id="renameCategoryError" class="text-xs text-red-500 mt-2 hidden"></p>
+      </div>
+      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
+        <button id="cancelRenameCategoryBtn" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200">
+          Cancel
+        </button>
+        <button id="confirmRenameCategoryBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-sm transition duration-200">
+          Rename
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  const input = modal.querySelector('#newCategoryName');
+  const errorEl = modal.querySelector('#renameCategoryError');
+  const cancelBtn = modal.querySelector('#cancelRenameCategoryBtn');
+  const confirmBtn = modal.querySelector('#confirmRenameCategoryBtn');
+
+  // Focus and select all text
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 50);
+
+  const closeModal = () => {
+    modal.remove();
+  };
+
+  const doRename = async () => {
+    const newName = input.value.trim();
+
+    if (!newName) {
+      errorEl.textContent = 'Name is required';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    if (newName === currentName) {
+      closeModal();
+      return;
+    }
+
+    try {
+      await apiCall(`/api/groups/${groupId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: newName }),
+      });
+
+      showToast(`Category renamed to "${newName}"`);
+      closeModal();
+
+      // Refresh groups and lists
+      await refreshGroupsAndLists();
+    } catch (error) {
+      console.error('Error renaming category:', error);
+      errorEl.textContent = error.message || 'Failed to rename category';
+      errorEl.classList.remove('hidden');
+    }
+  };
+
+  cancelBtn.onclick = closeModal;
+  confirmBtn.onclick = doRename;
+
+  // Handle enter key
+  input.onkeydown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      doRename();
+    } else if (e.key === 'Escape') {
+      closeModal();
+    }
+  };
+
+  // Close on backdrop click
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      closeModal();
+    }
+  };
+}
+
+// Expose openRenameCategoryModal to window for mobile-ui.js access
+window.openRenameCategoryModal = openRenameCategoryModal;
 
 // Track the currently highlighted year in the move submenu
 let currentHighlightedYear = null;
@@ -2541,20 +2772,92 @@ function initializeCreateList() {
   const createBtn = document.getElementById('createListBtn');
   const modal = document.getElementById('createListModal');
   const nameInput = document.getElementById('newListName');
+  const categorySelect = document.getElementById('newListCategory');
   const cancelBtn = document.getElementById('cancelCreateBtn');
   const confirmBtn = document.getElementById('confirmCreateBtn');
+  const categoryError = document.getElementById('createCategoryError');
+
+  // Dynamic input containers
+  const newYearContainer = document.getElementById('newYearInputContainer');
+  const newYearInput = document.getElementById('newYearInput');
+  const newCollectionContainer = document.getElementById(
+    'newCollectionInputContainer'
+  );
+  const newCollectionInput = document.getElementById('newCollectionInput');
 
   if (!createBtn || !modal) return;
 
-  const yearInput = document.getElementById('newListYear');
-  const yearError = document.getElementById('createYearError');
+  /**
+   * Populate the category dropdown with years and collections
+   */
+  function populateCategoryDropdown() {
+    const sortedGroups = getSortedGroups();
+
+    // Separate into years and collections
+    const yearGroups = sortedGroups.filter((g) => g.isYearGroup);
+    const collections = sortedGroups.filter((g) => !g.isYearGroup);
+
+    // Sort years descending (most recent first)
+    yearGroups.sort((a, b) => (b.year || 0) - (a.year || 0));
+
+    // Build dropdown HTML
+    let html =
+      '<option value="" disabled selected>Select a category...</option>';
+
+    // Years section
+    html += '<optgroup label="Years">';
+    for (const group of yearGroups) {
+      html += `<option value="year:${group._id}">${group.name}</option>`;
+    }
+    html += '<option value="new-year">+ New year...</option>';
+    html += '</optgroup>';
+
+    // Collections section
+    html += '<optgroup label="Collections">';
+    for (const group of collections) {
+      html += `<option value="collection:${group._id}">${group.name}</option>`;
+    }
+    html += '<option value="new-collection">+ New collection...</option>';
+    html += '</optgroup>';
+
+    categorySelect.innerHTML = html;
+  }
+
+  /**
+   * Handle category selection change
+   */
+  function handleCategoryChange() {
+    const value = categorySelect.value;
+
+    // Hide both dynamic inputs
+    newYearContainer.classList.add('hidden');
+    newCollectionContainer.classList.add('hidden');
+    if (categoryError) categoryError.classList.add('hidden');
+
+    if (value === 'new-year') {
+      newYearContainer.classList.remove('hidden');
+      newYearInput.value = '';
+      newYearInput.focus();
+    } else if (value === 'new-collection') {
+      newCollectionContainer.classList.remove('hidden');
+      newCollectionInput.value = '';
+      newCollectionInput.focus();
+    }
+  }
+
+  categorySelect.addEventListener('change', handleCategoryChange);
 
   // Open modal
   createBtn.onclick = () => {
+    populateCategoryDropdown();
     modal.classList.remove('hidden');
     nameInput.value = '';
-    yearInput.value = '';
-    if (yearError) yearError.classList.add('hidden');
+    categorySelect.value = '';
+    newYearInput.value = '';
+    newCollectionInput.value = '';
+    newYearContainer.classList.add('hidden');
+    newCollectionContainer.classList.add('hidden');
+    if (categoryError) categoryError.classList.add('hidden');
     nameInput.focus();
   };
 
@@ -2562,8 +2865,12 @@ function initializeCreateList() {
   const closeModal = () => {
     modal.classList.add('hidden');
     nameInput.value = '';
-    yearInput.value = '';
-    if (yearError) yearError.classList.add('hidden');
+    categorySelect.value = '';
+    newYearInput.value = '';
+    newCollectionInput.value = '';
+    newYearContainer.classList.add('hidden');
+    newCollectionContainer.classList.add('hidden');
+    if (categoryError) categoryError.classList.add('hidden');
   };
 
   cancelBtn.onclick = closeModal;
@@ -2575,41 +2882,42 @@ function initializeCreateList() {
     }
   };
 
-  // Validate year input
-  const validateYear = (yearValue) => {
+  /**
+   * Validate a year value
+   */
+  function validateYear(yearValue) {
     if (!yearValue || yearValue === '') {
-      return { valid: false, error: 'Year is required for new lists' };
+      return { valid: false, error: 'Year is required' };
     }
     const year = parseInt(yearValue, 10);
     if (!Number.isInteger(year) || year < 1000 || year > 9999) {
       return { valid: false, error: 'Year must be between 1000 and 9999' };
     }
     return { valid: true, value: year };
-  };
+  }
+
+  /**
+   * Show error message
+   */
+  function showError(message) {
+    if (categoryError) {
+      categoryError.textContent = message;
+      categoryError.classList.remove('hidden');
+    }
+    showToast(message, 'error');
+  }
 
   // Create list
   const createList = async () => {
     const listName = nameInput.value.trim();
-    const yearValue = yearInput.value.trim();
+    const categoryValue = categorySelect.value;
 
+    // Validate list name
     if (!listName) {
       showToast('Please enter a list name', 'error');
       nameInput.focus();
       return;
     }
-
-    // Validate year
-    const yearValidation = validateYear(yearValue);
-    if (!yearValidation.valid) {
-      if (yearError) {
-        yearError.textContent = yearValidation.error;
-        yearError.classList.remove('hidden');
-      }
-      showToast(yearValidation.error, 'error');
-      yearInput.focus();
-      return;
-    }
-    if (yearError) yearError.classList.add('hidden');
 
     // Check if list already exists
     if (lists[listName]) {
@@ -2618,11 +2926,78 @@ function initializeCreateList() {
       return;
     }
 
-    try {
-      // Create empty list with year
-      await saveList(listName, [], yearValidation.value);
+    // Validate category selection
+    if (!categoryValue) {
+      showError('Please select a category');
+      categorySelect.focus();
+      return;
+    }
 
-      // Update navigation
+    if (categoryError) categoryError.classList.add('hidden');
+
+    let year = null;
+    let groupId = null;
+
+    try {
+      if (categoryValue === 'new-year') {
+        // Creating a new year
+        const yearValidation = validateYear(newYearInput.value.trim());
+        if (!yearValidation.valid) {
+          showError(yearValidation.error);
+          newYearInput.focus();
+          return;
+        }
+        year = yearValidation.value;
+        // Year-group will be auto-created by the backend
+      } else if (categoryValue === 'new-collection') {
+        // Creating a new collection
+        const collectionName = newCollectionInput.value.trim();
+        if (!collectionName) {
+          showError('Please enter a collection name');
+          newCollectionInput.focus();
+          return;
+        }
+        if (/^\d{4}$/.test(collectionName)) {
+          showError('Collection name cannot be a year');
+          newCollectionInput.focus();
+          return;
+        }
+
+        // Create the collection first
+        const newGroup = await apiCall('/api/groups', {
+          method: 'POST',
+          body: JSON.stringify({ name: collectionName }),
+        });
+        groupId = newGroup._id;
+      } else if (categoryValue.startsWith('year:')) {
+        // Existing year-group selected
+        const selectedGroupId = categoryValue.replace('year:', '');
+        const group = getGroup(selectedGroupId);
+        if (group) {
+          year = group.year;
+        }
+      } else if (categoryValue.startsWith('collection:')) {
+        // Existing collection selected
+        groupId = categoryValue.replace('collection:', '');
+      }
+
+      // Create the list
+      if (groupId) {
+        // Create in collection (no year)
+        await apiCall(`/api/lists/${encodeURIComponent(listName)}`, {
+          method: 'POST',
+          body: JSON.stringify({ data: [], groupId }),
+        });
+      } else if (year) {
+        // Create with year
+        await saveList(listName, [], year);
+      } else {
+        showError('Invalid category selection');
+        return;
+      }
+
+      // Refresh groups and lists, update navigation
+      await refreshGroupsAndLists();
       updateListNav();
 
       // Select the new list
@@ -2631,23 +3006,33 @@ function initializeCreateList() {
       // Close modal
       closeModal();
 
-      showToast(`Created list "${listName}" (${yearValidation.value})`);
-    } catch (_error) {
-      showToast('Error creating list', 'error');
+      const categoryLabel = year ? `${year}` : 'collection';
+      showToast(`Created list "${listName}" in ${categoryLabel}`);
+    } catch (err) {
+      showError(err.message || 'Error creating list');
     }
   };
 
   confirmBtn.onclick = createList;
 
-  // Enter key to create (on name input)
+  // Enter key handling
   nameInput.onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      if (!categorySelect.value) {
+        categorySelect.focus();
+      } else {
+        createList();
+      }
+    }
+  };
+
+  newYearInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
       createList();
     }
   };
 
-  // Enter key to create (on year input)
-  yearInput.onkeypress = (e) => {
+  newCollectionInput.onkeypress = (e) => {
     if (e.key === 'Enter') {
       createList();
     }
@@ -3771,6 +4156,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(() => {
       initializeContextMenu();
       initializeAlbumContextMenu();
+      initializeCategoryContextMenu();
       hideSubmenuOnLeave();
       initializeCreateList();
       initializeCreateCollection();

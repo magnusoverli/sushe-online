@@ -798,6 +798,7 @@ module.exports = (app, deps) => {
   // Delete a collection (must be empty, cannot delete year-groups)
   app.delete('/api/groups/:id', ensureAuthAPI, async (req, res) => {
     const { id } = req.params;
+    const { force } = req.query;
 
     try {
       // Get the group and verify ownership
@@ -821,21 +822,33 @@ module.exports = (app, deps) => {
       }
 
       // Check if collection has lists
-      const listCount = await pool.query(
+      const listCountResult = await pool.query(
         `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
         [group.id]
       );
+      const listCount = parseInt(listCountResult.rows[0].count, 10);
 
-      if (parseInt(listCount.rows[0].count, 10) > 0) {
-        return res.status(400).json({
-          error:
-            'Cannot delete a collection that contains lists. Move or delete the lists first.',
+      if (listCount > 0 && force !== 'true') {
+        // Return conflict status with list count so frontend can show confirmation
+        return res.status(409).json({
+          error: 'Collection contains lists',
+          listCount,
+          requiresConfirmation: true,
         });
+      }
+
+      // If force=true or no lists, delete the group
+      // First, unassign all lists from this group (set group_id to null)
+      if (listCount > 0) {
+        await pool.query(
+          `UPDATE lists SET group_id = NULL WHERE group_id = $1`,
+          [group.id]
+        );
       }
 
       await pool.query(`DELETE FROM list_groups WHERE id = $1`, [group.id]);
 
-      res.json({ success: true });
+      res.json({ success: true, listsUnassigned: listCount });
     } catch (err) {
       logger.error('Error deleting group', {
         error: err.message,
@@ -1144,14 +1157,21 @@ module.exports = (app, deps) => {
   // Check if user needs to complete list setup (year assignment + main list designation)
   app.get('/api/lists/setup-status', ensureAuthAPI, async (req, res) => {
     try {
-      // Get all user's lists
+      // Get all user's lists with their group info
       const result = await pool.query(
-        `SELECT _id, name, year, is_main FROM lists WHERE user_id = $1`,
+        `SELECT l._id, l.name, l.year, l.is_main, l.group_id, g.year as group_year
+         FROM lists l
+         LEFT JOIN list_groups g ON l.group_id = g.id
+         WHERE l.user_id = $1`,
         [req.user._id]
       );
 
       const lists = result.rows;
-      const listsWithoutYear = lists.filter((l) => l.year === null);
+      // Only include lists that need a year: lists without a year that are NOT in a collection
+      // A list is in a collection if it has a group_id and that group has no year (group_year is null)
+      const listsWithoutYear = lists.filter(
+        (l) => l.year === null && !(l.group_id && l.group_year === null)
+      );
       const yearsWithLists = [
         ...new Set(lists.filter((l) => l.year !== null).map((l) => l.year)),
       ];

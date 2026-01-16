@@ -79,6 +79,7 @@ export function createMobileUI(deps = {}) {
     refreshMobileBarVisibility,
     showDiscoveryModal,
     playSpecificTrack,
+    refreshGroupsAndLists,
   } = deps;
 
   /**
@@ -1090,6 +1091,153 @@ export function createMobileUI(deps = {}) {
   }
 
   /**
+   * Show mobile action sheet for category (group) context menu
+   * @param {string} groupId - Group ID
+   * @param {string} groupName - Group name
+   * @param {boolean} isYearGroup - Whether this is a year group
+   */
+  function showMobileCategoryMenu(groupId, groupName, isYearGroup) {
+    const currentList = getCurrentList();
+
+    // Remove any existing action sheets first
+    const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
+    if (existingSheet) {
+      existingSheet.remove();
+    }
+
+    // Hide FAB when mobile action sheet is shown
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = 'none';
+    }
+
+    const actionSheet = document.createElement('div');
+    actionSheet.className = 'fixed inset-0 z-60';
+    actionSheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          <h3 class="font-semibold text-white mb-4">${groupName}</h3>
+          
+          <button data-action="rename"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-edit mr-3 text-gray-400"></i>Rename
+          </button>
+          
+          ${
+            !isYearGroup
+              ? `
+          <button data-action="delete"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm text-red-500">
+            <i class="fas fa-trash mr-3"></i>Delete
+          </button>
+          `
+              : `
+          <div class="py-3 px-4 text-gray-500 text-sm">
+            <i class="fas fa-info-circle mr-3"></i>Year groups are removed automatically when empty
+          </div>
+          `
+          }
+          
+          <button data-action="cancel"
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(actionSheet);
+
+    // Attach event listeners
+    const backdrop = actionSheet.querySelector('[data-backdrop]');
+    const renameBtn = actionSheet.querySelector('[data-action="rename"]');
+    const deleteBtn = actionSheet.querySelector('[data-action="delete"]');
+    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+
+    const closeSheet = () => {
+      actionSheet.remove();
+      const fabElement = document.getElementById('addAlbumFAB');
+      if (fabElement && currentList) {
+        fabElement.style.display = 'flex';
+      }
+    };
+
+    backdrop.addEventListener('click', closeSheet);
+    cancelBtn.addEventListener('click', closeSheet);
+
+    // Handle rename
+    if (renameBtn) {
+      renameBtn.addEventListener('click', () => {
+        closeSheet();
+        // Use the global function from app.js
+        if (window.openRenameCategoryModal) {
+          window.openRenameCategoryModal(groupId, groupName);
+        }
+      });
+    }
+
+    // Handle delete
+    if (deleteBtn) {
+      deleteBtn.addEventListener('click', async () => {
+        closeSheet();
+
+        // Year groups can't be deleted manually (shouldn't reach here due to UI)
+        if (isYearGroup) {
+          showToast('Year groups are removed automatically when empty', 'info');
+          return;
+        }
+
+        try {
+          // First try to delete - API will return 409 if collection has lists
+          await apiCall(`/api/groups/${groupId}`, { method: 'DELETE' });
+          showToast(`Collection "${groupName}" deleted`);
+          if (refreshGroupsAndLists) {
+            await refreshGroupsAndLists();
+          } else {
+            updateListNav();
+          }
+        } catch (error) {
+          // Check if this is a "has lists" conflict that needs confirmation
+          if (error.requiresConfirmation && error.listCount > 0) {
+            const listWord = error.listCount === 1 ? 'list' : 'lists';
+            const confirmed = await showConfirmation(
+              'Delete Collection',
+              `The collection "${groupName}" contains ${error.listCount} ${listWord}.`,
+              `Deleting this collection will move the ${listWord} to "Uncategorized". This cannot be undone.`,
+              'Delete Anyway'
+            );
+
+            if (confirmed) {
+              try {
+                // Force delete with confirmation
+                await apiCall(`/api/groups/${groupId}?force=true`, {
+                  method: 'DELETE',
+                });
+                showToast(`Collection "${groupName}" deleted`);
+                if (refreshGroupsAndLists) {
+                  await refreshGroupsAndLists();
+                } else {
+                  updateListNav();
+                }
+              } catch (forceError) {
+                console.error('Error force-deleting collection:', forceError);
+                showToast(
+                  forceError.message || 'Failed to delete collection',
+                  'error'
+                );
+              }
+            }
+          } else {
+            console.error('Error deleting collection:', error);
+            showToast(error.message || 'Failed to delete collection', 'error');
+          }
+        }
+      });
+    }
+  }
+
+  /**
    * Show mobile edit form (full-screen modal)
    * @param {number} index - Album index
    */
@@ -1892,6 +2040,7 @@ export function createMobileUI(deps = {}) {
     showMobileAlbumMenu,
     showMobileMoveToListSheet,
     showMobileListMenu,
+    showMobileCategoryMenu,
     showMobileEditForm,
     showMobileEditFormSafe,
     playAlbumSafe,
