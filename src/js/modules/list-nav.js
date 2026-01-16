@@ -520,8 +520,9 @@ export function createListNav(deps = {}) {
       const { groups: groupsWithLists, orphaned } = groupListsByGroup();
 
       // Render each group section
+      // Show all collections (even empty), but only show year-groups with lists
       groupsWithLists.forEach((group) => {
-        if (group.lists.length > 0) {
+        if (group.lists.length > 0 || !group.isYearGroup) {
           const section = createGroupSection(group, isMobile, container);
           container.appendChild(section);
         }
