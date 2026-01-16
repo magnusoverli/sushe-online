@@ -1390,6 +1390,10 @@ const spotifyTemplate = (user, csrfToken = '') => `
                   class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
             <i class="fas fa-plus mr-2"></i>Create List
           </button>
+          <button onclick="document.getElementById('createCollectionBtn').click(); toggleMobileMenu();" 
+                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
+            <i class="fas fa-folder-plus mr-2"></i>Create Collection
+          </button>
           <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
                   class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
             <i class="fas fa-file-import mr-2"></i>Import List
