@@ -347,7 +347,7 @@ class PgDatastore {
       LEFT JOIN list_groups g ON l.group_id = g.id
       ${prefixedText}
       GROUP BY l.id, g.id
-      ORDER BY l.name
+      ORDER BY l.sort_order, l.name
     `;
 
     const res = await this._preparedQuery(queryName, queryText, values);
@@ -559,7 +559,7 @@ class PgDatastore {
       LEFT JOIN track_picks tp_secondary ON tp_secondary.user_id = l.user_id 
         AND tp_secondary.album_id = li.album_id AND tp_secondary.priority = 2
       WHERE l.user_id = $1
-      ORDER BY l.name, li.position
+      ORDER BY l.sort_order, l.name, li.position
     `;
 
     const res = await this._preparedQuery(queryName, queryText, [userId]);
