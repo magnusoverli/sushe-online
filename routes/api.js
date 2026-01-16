@@ -1148,6 +1148,10 @@ module.exports = (app, deps) => {
       }
 
       await client.query('COMMIT');
+
+      // Invalidate cache so next fetch gets updated order
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
       res.json({ success: true });
     } catch (err) {
       await client.query('ROLLBACK');

@@ -779,6 +779,19 @@ body.now-playing-bar-visible #addAlbumFAB {
   opacity: 1;
 }
 
+/* Sidebar group types - subtle visual distinction */
+.group-section.year-group .group-header-btn {
+  border-left: 2px solid rgba(59, 130, 246, 0.4); /* blue-500 at 40% */
+  padding-left: 10px;
+  margin-left: -8px;
+}
+
+.group-section.collection-group .group-header-btn {
+  border-left: 2px solid rgba(168, 85, 247, 0.4); /* purple-500 at 40% */
+  padding-left: 10px;
+  margin-left: -8px;
+}
+
 /* Sidebar scrollbar - hidden by default, visible on hover */
 @media (min-width: 769px) {
   #sidebar nav {
