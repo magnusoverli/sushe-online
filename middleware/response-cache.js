@@ -198,27 +198,15 @@ const cacheConfigs = {
   images: createCacheMiddleware({
     ttl: 3600000, // 1 hour - images rarely change
     keyGenerator: (req) => {
-      // Validate URL to prevent cache poisoning
       const url = req.query.url || '';
-      // Only allow known image CDN domains to be cached
-      const allowedDomains = [
-        'i.scdn.co', // Spotify
-        'mosaic.scdn.co', // Spotify mosaic
-        'resources.tidal.com', // Tidal
-        'coverartarchive.org', // MusicBrainz
-        'archive.org', // MusicBrainz fallback
-      ];
       try {
         const parsedUrl = new URL(url);
-        if (!allowedDomains.some((d) => parsedUrl.hostname.endsWith(d))) {
-          // Return a unique non-cacheable key for disallowed domains
-          return `image:invalid:${Date.now()}`;
-        }
         // Use normalized URL as key (protocol + host + pathname)
+        // This ensures the same URL always gets the same cache key
         return `image:${parsedUrl.protocol}//${parsedUrl.host}${parsedUrl.pathname}`;
       } catch {
-        // Invalid URL - return non-cacheable key
-        return `image:invalid:${Date.now()}`;
+        // Invalid URL - use the raw URL string as key
+        return `image:invalid:${url}`;
       }
     },
     shouldCache: (req) => {
