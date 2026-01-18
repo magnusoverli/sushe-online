@@ -61,12 +61,23 @@ async function parseJsonWithRateLimitRetry(response, log, retryFn) {
 // ============================================
 
 /**
- * Normalize strings for Last.fm API compatibility
- * - Replace ellipsis character (…) with three dots (...)
- * - Replace curly quotes with straight quotes
+ * Normalize strings for Last.fm API compatibility and for comparing Last.fm
+ * responses to our data. Use this whenever "same logical string" must match
+ * across our DB (e.g. MusicBrainz … U+2026) and Last.fm (typically ASCII ...).
+ *
+ * Mappings:
+ * - U+2026 (…) → "..."
+ * - U+2018/U+2019 (''') → "'"
+ *
+ * @param {string|null|undefined} str - Input string
+ * @returns {string} Normalized string, or '' if str is null/undefined
  */
-const normalizeForLastfm = (str) =>
-  str.replace(/\u2026/g, '...').replace(/[\u2018\u2019]/g, "'");
+function normalizeForLastfm(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/\u2026/g, '...')
+    .replace(/[\u2018\u2019]/g, "'");
+}
 
 /**
  * Strip edition suffixes from album names for better Last.fm matching
@@ -986,6 +997,8 @@ const defaultInstance = createLastfmAuth();
 module.exports = {
   // Factory for testing
   createLastfmAuth,
+  // String normalization for Last.fm (used by API requests and by api.js when comparing artist names)
+  normalizeForLastfm,
   // Default instance exports for app usage
   generateSignature: defaultInstance.generateSignature,
   isSessionValid: defaultInstance.isSessionValid,

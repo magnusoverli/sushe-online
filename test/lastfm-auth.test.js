@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { createLastfmAuth } = require('../utils/lastfm-auth.js');
+const {
+  createLastfmAuth,
+  normalizeForLastfm,
+} = require('../utils/lastfm-auth.js');
 
 // Mock logger
 const createMockLogger = () => ({
@@ -110,6 +113,48 @@ test('isSessionValid should return false for empty object', () => {
   const { isSessionValid } = createLastfmAuth({ logger: createMockLogger() });
 
   assert.strictEqual(isSessionValid({}), false);
+});
+
+// =============================================================================
+// normalizeForLastfm tests (Last.fm string normalization for API + comparison)
+// =============================================================================
+
+test('normalizeForLastfm converts U+2026 ellipsis to ASCII ...', () => {
+  assert.strictEqual(normalizeForLastfm('\u2026and Oceans'), '...and Oceans');
+  assert.strictEqual(normalizeForLastfm('…and Oceans'), '...and Oceans');
+});
+
+test('normalizeForLastfm leaves ASCII ... unchanged', () => {
+  assert.strictEqual(normalizeForLastfm('...and Oceans'), '...and Oceans');
+});
+
+test('normalizeForLastfm converts curly quotes to straight quote', () => {
+  assert.strictEqual(normalizeForLastfm('\u2018hi\u2019'), "'hi'");
+  assert.strictEqual(normalizeForLastfm("'hello'"), "'hello'");
+});
+
+test('normalizeForLastfm treats … and ... as equal for comparison', () => {
+  const requested = '\u2026and Oceans';
+  const returned = '...and Oceans';
+  assert.strictEqual(
+    normalizeForLastfm(requested),
+    normalizeForLastfm(returned),
+    '… and ... should normalize to same string'
+  );
+});
+
+test('normalizeForLastfm returns empty string for null and undefined', () => {
+  assert.strictEqual(normalizeForLastfm(null), '');
+  assert.strictEqual(normalizeForLastfm(undefined), '');
+});
+
+test('normalizeForLastfm returns empty string for empty string', () => {
+  assert.strictEqual(normalizeForLastfm(''), '');
+});
+
+test('normalizeForLastfm leaves string without special chars unchanged', () => {
+  assert.strictEqual(normalizeForLastfm('AC/DC'), 'AC/DC');
+  assert.strictEqual(normalizeForLastfm('The Beatles'), 'The Beatles');
 });
 
 // =============================================================================

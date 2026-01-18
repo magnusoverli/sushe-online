@@ -5829,14 +5829,31 @@ module.exports = (app, deps) => {
           [userId]
         );
 
-        // Build a lookup map using normalized artist+album keys
-        // This aligns with the app's deduplication strategy (handles editions, articles, diacritics)
-        // Use stored normalized_key if available, otherwise compute it
+        // Build a lookup map using normalized artist+album keys.
+        // This aligns with the app's deduplication strategy (handles editions, articles, diacritics).
+        // Use stored normalized_key if available, otherwise compute it.
+        // When multiple rows produce the same key (e.g. "…and oceans" vs "...and oceans" vs " and oceans"),
+        // keep the row with the highest playcount, or if tied the most recently updated.
         const statsMap = new Map();
         for (const row of statsResult.rows) {
           const key =
             row.normalized_key || normalizeAlbumKey(row.artist, row.album_name);
-          statsMap.set(key, row);
+          const existing = statsMap.get(key);
+          const rowCount = row.lastfm_playcount ?? 0;
+          const existingCount = existing?.lastfm_playcount ?? 0;
+          const rowNewer =
+            existing &&
+            row.lastfm_updated_at &&
+            existing.lastfm_updated_at &&
+            new Date(row.lastfm_updated_at) >
+              new Date(existing.lastfm_updated_at);
+          if (
+            !existing ||
+            rowCount > existingCount ||
+            (rowCount === existingCount && rowNewer)
+          ) {
+            statsMap.set(key, row);
+          }
         }
 
         // Match list items to cached stats using normalized keys
@@ -6094,7 +6111,10 @@ module.exports = (app, deps) => {
 };
 
 // Background function to refresh playcounts from Last.fm API
-const { getAlbumInfo: getLastfmAlbumInfoBg } = require('../utils/lastfm-auth');
+const {
+  getAlbumInfo: getLastfmAlbumInfoBg,
+  normalizeForLastfm,
+} = require('../utils/lastfm-auth');
 const {
   normalizeAlbumKey: normalizeAlbumKeyBg,
 } = require('../utils/fuzzy-match');
@@ -6132,8 +6152,13 @@ async function refreshPlaycountsInBackground(
 
         const playcount = parseInt(info.userplaycount || 0);
 
-        // Log if Last.fm returned a different artist name (indicates potential mismatch)
-        if (info.artist && info.artist !== album.artist) {
+        // Log if Last.fm returned a different artist name (indicates potential mismatch).
+        // Compare using normalizeForLastfm so encoding-only differences (e.g. U+2026 … vs ...)
+        // are not reported as differs.
+        if (
+          info.artist &&
+          normalizeForLastfm(info.artist) !== normalizeForLastfm(album.artist)
+        ) {
           logger.info('Last.fm artist name differs from request', {
             requested: album.artist,
             returned: info.artist,
@@ -6141,16 +6166,24 @@ async function refreshPlaycountsInBackground(
           });
         }
 
-        // Generate normalized key for consistent matching with app's deduplication strategy
-        const normalizedKey = normalizeAlbumKeyBg(album.artist, album.album);
+        // Canonicalize artist/album so "…and oceans", "...and oceans", " and oceans" etc.
+        // all map to one row. Prevents duplicate rows for the same logical album.
+        const canonicalArtist = normalizeForLastfm(album.artist)
+          .toLowerCase()
+          .trim();
+        const canonicalAlbum = normalizeForLastfm(album.album)
+          .toLowerCase()
+          .trim();
+        const normalizedKey = normalizeAlbumKeyBg(
+          canonicalArtist,
+          canonicalAlbum
+        );
 
-        // Upsert into user_album_stats
-        // Use LOWER() for artist/album_name to ensure case-insensitive matching
-        // Also store normalized_key for advanced matching (editions, articles, diacritics)
-        // ON CONFLICT uses the unique index on (user_id, LOWER(artist), LOWER(album_name))
+        // Upsert into user_album_stats. Store canonical artist/album so the unique
+        // (user_id, LOWER(artist), LOWER(album_name)) maps one row per logical album.
         await pool.query(
           `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_updated_at, updated_at)
-           VALUES ($1, $2, LOWER($3), LOWER($4), $5, $6, NOW(), NOW())
+           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
            ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
            DO UPDATE SET
              album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
@@ -6161,8 +6194,8 @@ async function refreshPlaycountsInBackground(
           [
             userId,
             album.albumId || null,
-            album.artist,
-            album.album,
+            canonicalArtist,
+            canonicalAlbum,
             normalizedKey,
             playcount,
           ]
@@ -6181,12 +6214,22 @@ async function refreshPlaycountsInBackground(
         );
 
         // Store 0 playcount on failure so the album is not retried every request
-        // It will be marked as stale and retried after 24 hours
+        // It will be marked as stale and retried after 24 hours.
+        // Use same canonical artist/album as success path.
         try {
-          const normalizedKey = normalizeAlbumKeyBg(album.artist, album.album);
+          const canonicalArtist = normalizeForLastfm(album.artist)
+            .toLowerCase()
+            .trim();
+          const canonicalAlbum = normalizeForLastfm(album.album)
+            .toLowerCase()
+            .trim();
+          const normalizedKey = normalizeAlbumKeyBg(
+            canonicalArtist,
+            canonicalAlbum
+          );
           await pool.query(
             `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_updated_at, updated_at)
-             VALUES ($1, $2, LOWER($3), LOWER($4), $5, 0, NOW(), NOW())
+             VALUES ($1, $2, $3, $4, $5, 0, NOW(), NOW())
              ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
              DO UPDATE SET
                album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
@@ -6196,8 +6239,8 @@ async function refreshPlaycountsInBackground(
             [
               userId,
               album.albumId || null,
-              album.artist,
-              album.album,
+              canonicalArtist,
+              canonicalAlbum,
               normalizedKey,
             ]
           );
