@@ -2,6 +2,10 @@ module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const { recordAuthAttempt } = require('../utils/metrics');
   const {
+    saveSessionAsync,
+    saveSessionSafe,
+  } = require('../utils/session-helpers');
+  const {
     loginRateLimit,
     registerRateLimit,
     sensitiveSettingsRateLimit,
@@ -201,7 +205,7 @@ module.exports = (app, deps) => {
 
         // Update the session user object
         req.user.lastSelectedList = listName;
-        req.session.save();
+        saveSessionSafe(req, 'lastSelectedList update');
 
         res.json({ success: true });
       }
@@ -256,17 +260,15 @@ module.exports = (app, deps) => {
         req.flash('error', info.message || 'Invalid credentials');
 
         // Force session save before redirect to ensure flash messages persist
-        await new Promise((resolve) => {
-          req.session.save((err) => {
-            if (err) {
-              logger.error('Session save error', {
-                error: err.message,
-                requestId: req.id,
-              });
-            }
-            resolve();
+        try {
+          await saveSessionAsync(req);
+        } catch (err) {
+          // Log but don't fail the redirect
+          logger.error('Session save error', {
+            error: err.message,
+            requestId: req.id,
           });
-        });
+        }
 
         return res.redirect('/login');
       }
@@ -304,15 +306,12 @@ module.exports = (app, deps) => {
       );
 
       // Force session save and handle errors
-      await new Promise((resolve) => {
-        req.session.save((err) => {
-          if (err) {
-            logger.error('Session save error', { error: err.message });
-            // Continue anyway - session might still work
-          }
-          resolve();
-        });
-      });
+      try {
+        await saveSessionAsync(req);
+      } catch (err) {
+        logger.error('Session save error', { error: err.message });
+        // Continue anyway - session might still work
+      }
 
       // Check if this login was for extension authorization
       if (req.session.extensionAuth) {
@@ -370,10 +369,8 @@ module.exports = (app, deps) => {
 
           // Update session
           req.user.accentColor = accentColor;
-          req.session.save((err) => {
-            if (err) logger.error('Session save error', { error: err.message });
-            res.json({ success: true });
-          });
+          saveSessionSafe(req, 'accentColor update');
+          res.json({ success: true });
 
           logger.info(
             `User ${req.user.email} updated accent color to ${accentColor}`
@@ -413,10 +410,8 @@ module.exports = (app, deps) => {
           }
 
           req.user.timeFormat = timeFormat;
-          req.session.save((err) => {
-            if (err) logger.error('Session save error', { error: err.message });
-            res.json({ success: true });
-          });
+          saveSessionSafe(req, 'timeFormat update');
+          res.json({ success: true });
 
           logger.info(
             `User ${req.user.email} updated time format to ${timeFormat}`
@@ -456,10 +451,8 @@ module.exports = (app, deps) => {
           }
 
           req.user.dateFormat = dateFormat;
-          req.session.save((err) => {
-            if (err) logger.error('Session save error', { error: err.message });
-            res.json({ success: true });
-          });
+          saveSessionSafe(req, 'dateFormat update');
+          res.json({ success: true });
 
           logger.info(
             `User ${req.user.email} updated date format to ${dateFormat}`
@@ -499,10 +492,8 @@ module.exports = (app, deps) => {
           }
 
           req.user.musicService = musicService || null;
-          req.session.save((err) => {
-            if (err) logger.error('Session save error', { error: err.message });
-            res.json({ success: true });
-          });
+          saveSessionSafe(req, 'musicService update');
+          res.json({ success: true });
 
           logger.info(
             `User ${req.user.email} updated music service to ${musicService}`
@@ -694,18 +685,15 @@ module.exports = (app, deps) => {
 
             // Update the session
             req.user.role = 'admin';
-            req.session.save((err) => {
-              if (err)
-                logger.error('Session save error', { error: err.message });
-              if (req.accepts('json')) {
-                return res.json({
-                  success: true,
-                  message: 'Admin access granted!',
-                });
-              }
-              req.flash('success', 'Admin access granted!');
-              res.redirect('/');
-            });
+            saveSessionSafe(req, 'admin role update');
+            if (req.accepts('json')) {
+              return res.json({
+                success: true,
+                message: 'Admin access granted!',
+              });
+            }
+            req.flash('success', 'Admin access granted!');
+            res.redirect('/');
           }
         );
       } catch (error) {
@@ -770,12 +758,9 @@ module.exports = (app, deps) => {
 
               // Update session
               req.user.email = email.trim();
-              req.session.save((err) => {
-                if (err)
-                  logger.error('Session save error', { error: err.message });
-                req.flash('success', 'Email updated successfully');
-                res.json({ success: true });
-              });
+              saveSessionSafe(req, 'email update');
+              req.flash('success', 'Email updated successfully');
+              res.json({ success: true });
             }
           );
         }
@@ -840,12 +825,9 @@ module.exports = (app, deps) => {
 
               // Update session
               req.user.username = username.trim();
-              req.session.save((err) => {
-                if (err)
-                  logger.error('Session save error', { error: err.message });
-                req.flash('success', 'Username updated successfully');
-                res.json({ success: true });
-              });
+              saveSessionSafe(req, 'username update');
+              req.flash('success', 'Username updated successfully');
+              res.json({ success: true });
             }
           );
         }
@@ -862,18 +844,17 @@ module.exports = (app, deps) => {
   // ============ EXTENSION AUTHENTICATION ============
 
   // Extension login page - redirects user to login, then generates token
-  app.get('/extension/auth', (req, res) => {
+  app.get('/extension/auth', async (req, res) => {
     if (!req.isAuthenticated()) {
       // Save the extension auth intent in session
       req.session.extensionAuth = true;
       // Force session save before redirect to ensure flag persists
-      req.session.save((err) => {
-        if (err) {
-          logger.error('Session save error:', err);
-        }
-        res.redirect('/login');
-      });
-      return;
+      try {
+        await saveSessionAsync(req);
+      } catch (err) {
+        logger.error('Session save error:', err);
+      }
+      return res.redirect('/login');
     }
 
     // User is already logged in, render token generation page

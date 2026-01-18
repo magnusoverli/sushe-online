@@ -7,117 +7,14 @@ const {
   getPointsForPosition: getPositionPoints,
 } = require('./scoring');
 
-// ============================================
-// Artist Name Normalization
-// ============================================
-
-/**
- * Normalize artist name for cross-source matching
- * Handles common variations in artist names across Spotify, Last.fm, and internal data
- * @param {string} name - Artist name to normalize
- * @returns {string} - Normalized name (lowercase, stripped of common variations)
- */
-function normalizeArtistName(name) {
-  if (!name) return '';
-
-  return (
-    name
-      .toLowerCase()
-      .trim()
-      // Convert ellipsis (…) to three periods for consistent matching
-      // e.g., "…and Oceans" -> "...and Oceans"
-      .replace(/…/g, '...')
-      // Remove "the " prefix (e.g., "The Beatles" -> "beatles")
-      .replace(/^the\s+/, '')
-      // Remove common suffixes like "(band)", "[US]", etc.
-      .replace(/\s*\([^)]*\)\s*/g, '')
-      .replace(/\s*\[[^\]]*\]\s*/g, '')
-      // Normalize special characters
-      .replace(/[''`]/g, "'")
-      .replace(/[""]/g, '"')
-      // Remove diacritics (é -> e, ü -> u)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // Remove punctuation except essential ones
-      .replace(/[.,!?;:]/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
-/**
- * Normalize album name for cross-source matching
- * Handles common variations in album titles across sources
- * @param {string} name - Album name to normalize
- * @returns {string} - Normalized name
- */
-function normalizeAlbumName(name) {
-  if (!name) return '';
-
-  return (
-    name
-      .toLowerCase()
-      .trim()
-      // Convert ellipsis (…) to three periods for consistent matching
-      .replace(/…/g, '...')
-      // Remove "the " prefix for consistency across sources
-      .replace(/^the\s+/, '')
-      // Remove common suffixes like "(Deluxe Edition)", "[Remaster]", etc.
-      .replace(/\s*\([^)]*\)\s*/g, '')
-      .replace(/\s*\[[^\]]*\]\s*/g, '')
-      // Normalize special characters
-      .replace(/[''`]/g, "'")
-      .replace(/[""]/g, '"')
-      // Remove diacritics (é -> e, ü -> u)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // Remove punctuation except essential ones
-      .replace(/[.,!?;:]/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
-/**
- * Normalize genre/tag name for matching
- * @param {string} genre - Genre/tag name
- * @returns {string} - Normalized genre
- */
-function normalizeGenre(genre) {
-  if (!genre) return '';
-
-  return (
-    genre
-      .toLowerCase()
-      .trim()
-      // Normalize hyphens and spaces
-      .replace(/[-_]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
-/**
- * Check if two artist names match (after normalization)
- * @param {string} name1 - First artist name
- * @param {string} name2 - Second artist name
- * @returns {boolean} - True if names match
- */
-function artistNamesMatch(name1, name2) {
-  return normalizeArtistName(name1) === normalizeArtistName(name2);
-}
-
-/**
- * Find matching artist in a map by normalized name
- * @param {Map} map - Map with normalized keys
- * @param {string} artistName - Artist name to look up
- * @returns {*} - Value from map or undefined
- */
-function findArtistInMap(map, artistName) {
-  return map.get(normalizeArtistName(artistName));
-}
+// Import shared normalization functions
+const {
+  normalizeArtistName,
+  normalizeAlbumName,
+  normalizeGenre,
+  artistNamesMatch,
+  findArtistInMap,
+} = require('./normalization');
 
 /**
  * Common genre mappings to standardize Last.fm tags

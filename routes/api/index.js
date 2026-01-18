@@ -84,6 +84,7 @@ module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
     users,
+    usersAsync,
     lists,
     listsAsync,
     listItemsAsync,
@@ -127,6 +128,7 @@ module.exports = (app, deps) => {
 
     // Database accessors
     users,
+    usersAsync,
     lists,
     listsAsync,
     listItemsAsync,

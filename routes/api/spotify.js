@@ -14,14 +14,7 @@
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const {
-    ensureAuthAPI,
-    users,
-    logger,
-    fetch,
-    ensureValidSpotifyToken,
-    requireSpotifyAuth,
-  } = deps;
+  const { ensureAuthAPI, logger, fetch, requireSpotifyAuth } = deps;
 
   // Helper to handle Spotify player API errors (Premium-required endpoints)
   function handleSpotifyPlayerError(resp, errorData, res, action) {
@@ -67,77 +60,72 @@ module.exports = (app, deps) => {
   }
 
   // Search Spotify for an album and return the ID
-  app.get('/api/spotify/album', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.get(
+    '/api/spotify/album',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const spotifyAuth = req.spotifyAuth;
+      const { artist, album } = req.query;
+      if (!artist || !album) {
+        return res.status(400).json({ error: 'artist and album are required' });
+      }
+      logger.info('Spotify album search', { artist, album });
 
-    const spotifyAuth = tokenResult.spotifyAuth;
-    const { artist, album } = req.query;
-    if (!artist || !album) {
-      return res.status(400).json({ error: 'artist and album are required' });
-    }
-    logger.info('Spotify album search', { artist, album });
+      try {
+        const query = `album:${album} artist:${artist}`;
+        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
+        const resp = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${spotifyAuth.access_token}`,
+          },
+        });
+        if (!resp.ok) {
+          const errorData = await resp.json().catch(() => ({}));
+          const errorMsg =
+            errorData?.error?.message || `Spotify API error ${resp.status}`;
+          logger.error('Spotify search API error:', {
+            status: resp.status,
+            statusText: resp.statusText,
+            error: errorMsg,
+            artist,
+            album,
+          });
 
-    try {
-      const query = `album:${album} artist:${artist}`;
-      const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${spotifyAuth.access_token}`,
-        },
-      });
-      if (!resp.ok) {
-        const errorData = await resp.json().catch(() => ({}));
-        const errorMsg =
-          errorData?.error?.message || `Spotify API error ${resp.status}`;
-        logger.error('Spotify search API error:', {
-          status: resp.status,
-          statusText: resp.statusText,
-          error: errorMsg,
+          if (resp.status === 401) {
+            return res.status(401).json({
+              error: 'Spotify authentication expired',
+              code: 'TOKEN_EXPIRED',
+              service: 'spotify',
+            });
+          }
+          return res
+            .status(resp.status >= 400 && resp.status < 500 ? resp.status : 502)
+            .json({
+              error: errorMsg,
+              code: 'SPOTIFY_ERROR',
+              service: 'spotify',
+            });
+        }
+        const data = await resp.json();
+        if (!data.albums || !data.albums.items.length) {
+          logger.info('Album not found on Spotify', { artist, album });
+          return res.status(404).json({ error: 'Album not found' });
+        }
+        const albumId = data.albums.items[0].id;
+        logger.info('Spotify search result', { albumId, artist, album });
+        res.json({ id: albumId });
+      } catch (err) {
+        logger.error('Spotify search error:', {
+          error: err.message,
+          stack: err.stack,
           artist,
           album,
         });
-
-        if (resp.status === 401) {
-          return res.status(401).json({
-            error: 'Spotify authentication expired',
-            code: 'TOKEN_EXPIRED',
-            service: 'spotify',
-          });
-        }
-        return res
-          .status(resp.status >= 400 && resp.status < 500 ? resp.status : 502)
-          .json({
-            error: errorMsg,
-            code: 'SPOTIFY_ERROR',
-            service: 'spotify',
-          });
+        res.status(500).json({ error: 'Failed to search Spotify' });
       }
-      const data = await resp.json();
-      if (!data.albums || !data.albums.items.length) {
-        logger.info('Album not found on Spotify', { artist, album });
-        return res.status(404).json({ error: 'Album not found' });
-      }
-      const albumId = data.albums.items[0].id;
-      logger.info('Spotify search result', { albumId, artist, album });
-      res.json({ id: albumId });
-    } catch (err) {
-      logger.error('Spotify search error:', {
-        error: err.message,
-        stack: err.stack,
-        artist,
-        album,
-      });
-      res.status(500).json({ error: 'Failed to search Spotify' });
     }
-  });
+  );
 
   // Get Spotify access token for Web Playback SDK
   app.get(
@@ -341,386 +329,357 @@ module.exports = (app, deps) => {
   );
 
   // Resume playback
-  app.put('/api/spotify/resume', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.put(
+    '/api/spotify/resume',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      try {
+        const resp = await fetch('https://api.spotify.com/v1/me/player/play', {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+          },
+        });
 
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player/play', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-        },
-      });
+        if (resp.ok || resp.status === 204) {
+          return res.json({ success: true });
+        }
 
-      if (resp.ok || resp.status === 204) {
-        return res.json({ success: true });
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'resume');
+      } catch (err) {
+        logger.error('Spotify resume error', { error: err.message });
+        res.status(500).json({ error: 'Failed to resume playback' });
       }
-
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, 'resume');
-    } catch (err) {
-      logger.error('Spotify resume error', { error: err.message });
-      res.status(500).json({ error: 'Failed to resume playback' });
     }
-  });
+  );
 
   // Skip to previous track
-  app.post('/api/spotify/previous', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.post(
+    '/api/spotify/previous',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      try {
+        const resp = await fetch(
+          'https://api.spotify.com/v1/me/player/previous',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+            },
+          }
+        );
 
-    try {
-      const resp = await fetch(
-        'https://api.spotify.com/v1/me/player/previous',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-          },
+        if (resp.ok || resp.status === 204) {
+          return res.json({ success: true });
         }
-      );
 
-      if (resp.ok || resp.status === 204) {
-        return res.json({ success: true });
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'previous');
+      } catch (err) {
+        logger.error('Spotify previous track error', { error: err.message });
+        res.status(500).json({ error: 'Failed to skip to previous' });
       }
-
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, 'previous');
-    } catch (err) {
-      logger.error('Spotify previous track error', { error: err.message });
-      res.status(500).json({ error: 'Failed to skip to previous' });
     }
-  });
+  );
 
   // Skip to next track
-  app.post('/api/spotify/next', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
+  app.post(
+    '/api/spotify/next',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      try {
+        const resp = await fetch('https://api.spotify.com/v1/me/player/next', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+          },
+        });
 
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player/next', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-        },
-      });
+        if (resp.ok || resp.status === 204) {
+          return res.json({ success: true });
+        }
 
-      if (resp.ok || resp.status === 204) {
-        return res.json({ success: true });
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'next');
+      } catch (err) {
+        logger.error('Spotify next track error', { error: err.message });
+        res.status(500).json({ error: 'Failed to skip to next' });
       }
-
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, 'next');
-    } catch (err) {
-      logger.error('Spotify next track error', { error: err.message });
-      res.status(500).json({ error: 'Failed to skip to next' });
     }
-  });
+  );
 
   // Seek to position
-  app.put('/api/spotify/seek', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
-
-    const { position_ms } = req.body;
-    if (position_ms === undefined || isNaN(parseInt(position_ms))) {
-      return res.status(400).json({ error: 'position_ms is required' });
-    }
-
-    try {
-      const resp = await fetch(
-        `https://api.spotify.com/v1/me/player/seek?position_ms=${parseInt(position_ms)}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-          },
-        }
-      );
-
-      if (resp.ok || resp.status === 204) {
-        return res.json({ success: true });
+  app.put(
+    '/api/spotify/seek',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const { position_ms } = req.body;
+      if (position_ms === undefined || isNaN(parseInt(position_ms))) {
+        return res.status(400).json({ error: 'position_ms is required' });
       }
 
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, 'seek');
-    } catch (err) {
-      logger.error('Spotify seek error', { error: err.message });
-      res.status(500).json({ error: 'Failed to seek' });
+      try {
+        const resp = await fetch(
+          `https://api.spotify.com/v1/me/player/seek?position_ms=${parseInt(position_ms)}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+            },
+          }
+        );
+
+        if (resp.ok || resp.status === 204) {
+          return res.json({ success: true });
+        }
+
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'seek');
+      } catch (err) {
+        logger.error('Spotify seek error', { error: err.message });
+        res.status(500).json({ error: 'Failed to seek' });
+      }
     }
-  });
+  );
 
   // Set volume
-  app.put('/api/spotify/volume', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
-
-    const { volume_percent } = req.body;
-    if (volume_percent === undefined || isNaN(parseInt(volume_percent))) {
-      return res.status(400).json({ error: 'volume_percent is required' });
-    }
-
-    const vol = Math.max(0, Math.min(100, parseInt(volume_percent)));
-
-    try {
-      const resp = await fetch(
-        `https://api.spotify.com/v1/me/player/volume?volume_percent=${vol}`,
-        {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-          },
-        }
-      );
-
-      if (resp.ok || resp.status === 204) {
-        return res.json({ success: true });
+  app.put(
+    '/api/spotify/volume',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const { volume_percent } = req.body;
+      if (volume_percent === undefined || isNaN(parseInt(volume_percent))) {
+        return res.status(400).json({ error: 'volume_percent is required' });
       }
 
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, 'volume');
-    } catch (err) {
-      logger.error('Spotify volume error', { error: err.message });
-      res.status(500).json({ error: 'Failed to set volume' });
+      const vol = Math.max(0, Math.min(100, parseInt(volume_percent)));
+
+      try {
+        const resp = await fetch(
+          `https://api.spotify.com/v1/me/player/volume?volume_percent=${vol}`,
+          {
+            method: 'PUT',
+            headers: {
+              Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+            },
+          }
+        );
+
+        if (resp.ok || resp.status === 204) {
+          return res.json({ success: true });
+        }
+
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'volume');
+      } catch (err) {
+        logger.error('Spotify volume error', { error: err.message });
+        res.status(500).json({ error: 'Failed to set volume' });
+      }
     }
-  });
+  );
 
   // Transfer playback to a device
-  app.put('/api/spotify/transfer', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
-
-    const { device_id, play } = req.body;
-    if (!device_id) {
-      return res.status(400).json({ error: 'device_id is required' });
-    }
-
-    try {
-      const resp = await fetch('https://api.spotify.com/v1/me/player', {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${tokenResult.spotifyAuth.access_token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          device_ids: [device_id],
-          play: play === true,
-        }),
-      });
-
-      if (resp.ok || resp.status === 204) {
-        logger.info('Spotify playback transferred', { deviceId: device_id });
-        return res.json({ success: true });
+  app.put(
+    '/api/spotify/transfer',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const { device_id, play } = req.body;
+      if (!device_id) {
+        return res.status(400).json({ error: 'device_id is required' });
       }
 
-      const errorData = await resp.json().catch(() => ({}));
-      return handleSpotifyPlayerError(resp, errorData, res, 'transfer');
-    } catch (err) {
-      logger.error('Spotify transfer error', { error: err.message });
-      res.status(500).json({ error: 'Failed to transfer playback' });
+      try {
+        const resp = await fetch('https://api.spotify.com/v1/me/player', {
+          method: 'PUT',
+          headers: {
+            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            device_ids: [device_id],
+            play: play === true,
+          }),
+        });
+
+        if (resp.ok || resp.status === 204) {
+          logger.info('Spotify playback transferred', { deviceId: device_id });
+          return res.json({ success: true });
+        }
+
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'transfer');
+      } catch (err) {
+        logger.error('Spotify transfer error', { error: err.message });
+        res.status(500).json({ error: 'Failed to transfer playback' });
+      }
     }
-  });
+  );
 
   // Search Spotify for a track and return the ID
-  app.get('/api/spotify/track', ensureAuthAPI, async (req, res) => {
-    const tokenResult = await ensureValidSpotifyToken(req.user, users);
-    if (!tokenResult.success) {
-      logger.warn('Spotify auth check failed', { error: tokenResult.error });
-      return res.status(401).json({
-        error: tokenResult.message,
-        code: tokenResult.error,
-        service: 'spotify',
-      });
-    }
-
-    const spotifyAuth = tokenResult.spotifyAuth;
-    const { artist, album, track } = req.query;
-    if (!artist || !album || !track) {
-      return res
-        .status(400)
-        .json({ error: 'artist, album, and track are required' });
-    }
-    logger.info('Spotify track search:', {
-      artist,
-      album,
-      track,
-      user_scopes: spotifyAuth.scope,
-      scope_count: spotifyAuth.scope?.split(' ').length || 0,
-    });
-
-    const headers = {
-      Authorization: `Bearer ${spotifyAuth.access_token}`,
-    };
-
-    try {
-      // First, find the album
-      const albumQuery = `album:${album} artist:${artist}`;
-      const albumResp = await fetch(
-        `https://api.spotify.com/v1/search?q=${encodeURIComponent(albumQuery)}&type=album&limit=1`,
-        { headers }
-      );
-      if (!albumResp.ok) {
-        const errorText = await albumResp.text();
-        logger.error('Spotify album search failed:', {
-          status: albumResp.status,
-          statusText: albumResp.statusText,
-          error: errorText,
-          query: albumQuery,
-        });
-
-        if (albumResp.status === 403) {
-          return res.status(403).json({
-            error:
-              'Spotify access denied. You may need to reconnect your Spotify account.',
-            code: 'SPOTIFY_FORBIDDEN',
-            service: 'spotify',
-            action: 'reauth',
-          });
-        }
-
-        if (albumResp.status === 401) {
-          return res.status(401).json({
-            error: 'Spotify authentication expired',
-            code: 'TOKEN_EXPIRED',
-            service: 'spotify',
-          });
-        }
-
-        if (albumResp.status === 429) {
-          return res.status(429).json({
-            error: 'Spotify rate limit exceeded. Please try again later.',
-            code: 'RATE_LIMITED',
-            service: 'spotify',
-          });
-        }
-
-        return res.status(502).json({
-          error: `Spotify API error: ${albumResp.statusText}`,
-          code: 'SPOTIFY_API_ERROR',
-          service: 'spotify',
-        });
+  app.get(
+    '/api/spotify/track',
+    ensureAuthAPI,
+    requireSpotifyAuth,
+    async (req, res) => {
+      const spotifyAuth = req.spotifyAuth;
+      const { artist, album, track } = req.query;
+      if (!artist || !album || !track) {
+        return res
+          .status(400)
+          .json({ error: 'artist, album, and track are required' });
       }
-      const albumData = await albumResp.json();
-      if (!albumData.albums || !albumData.albums.items.length) {
-        logger.info('Album not found on Spotify', { artist, album });
-        return res.status(404).json({ error: 'Album not found' });
-      }
-      const spotifyAlbumId = albumData.albums.items[0].id;
-
-      // Get album tracks
-      const tracksResp = await fetch(
-        `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks?limit=50`,
-        { headers }
-      );
-      if (!tracksResp.ok) {
-        return res.status(502).json({
-          error: `Spotify API error: ${tracksResp.statusText}`,
-          code: 'SPOTIFY_API_ERROR',
-          service: 'spotify',
-        });
-      }
-      const tracksData = await tracksResp.json();
-      const tracks = tracksData.items;
-
-      if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
-        return res.status(404).json({ error: 'Album has no tracks' });
-      }
-
-      // Try to match by track number first
-      const trackNum = parseInt(track);
-      if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
-        const matchedTrack = tracks[trackNum - 1];
-        logger.info('Spotify track matched by number:', {
-          trackId: matchedTrack.id,
-          trackName: matchedTrack.name,
-        });
-        return res.json({ id: matchedTrack.id });
-      }
-
-      // Extract track name from format like "3. Track Name"
-      const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
-      const searchName = trackNameMatch ? trackNameMatch[1] : track;
-
-      // Try to match by track name
-      const matchingTrack = tracks.find(
-        (t) =>
-          t.name.toLowerCase() === searchName.toLowerCase() ||
-          t.name.toLowerCase().includes(searchName.toLowerCase()) ||
-          searchName.toLowerCase().includes(t.name.toLowerCase())
-      );
-      if (matchingTrack) {
-        logger.info('Spotify track matched by name:', {
-          trackId: matchingTrack.id,
-          trackName: matchingTrack.name,
-        });
-        return res.json({ id: matchingTrack.id });
-      }
-
-      // Fallback: general track search
-      const fallbackQuery = `track:${searchName} album:${album} artist:${artist}`;
-      const fallbackResp = await fetch(
-        `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=1`,
-        { headers }
-      );
-      if (fallbackResp.ok) {
-        const fallbackData = await fallbackResp.json();
-        if (fallbackData.tracks.items.length > 0) {
-          logger.info('Spotify track matched by fallback search:', {
-            trackId: fallbackData.tracks.items[0].id,
-            trackName: fallbackData.tracks.items[0].name,
-          });
-          return res.json({ id: fallbackData.tracks.items[0].id });
-        }
-      }
-
-      logger.info('Track not found on Spotify:', { artist, album, track });
-      return res.status(404).json({ error: 'Track not found' });
-    } catch (err) {
-      logger.error('Spotify track search error:', {
-        error: err.message,
-        stack: err.stack,
+      logger.info('Spotify track search:', {
         artist,
         album,
         track,
+        user_scopes: spotifyAuth.scope,
+        scope_count: spotifyAuth.scope?.split(' ').length || 0,
       });
-      res.status(500).json({ error: 'Failed to search Spotify' });
+
+      const headers = {
+        Authorization: `Bearer ${spotifyAuth.access_token}`,
+      };
+
+      try {
+        // First, find the album
+        const albumQuery = `album:${album} artist:${artist}`;
+        const albumResp = await fetch(
+          `https://api.spotify.com/v1/search?q=${encodeURIComponent(albumQuery)}&type=album&limit=1`,
+          { headers }
+        );
+        if (!albumResp.ok) {
+          const errorText = await albumResp.text();
+          logger.error('Spotify album search failed:', {
+            status: albumResp.status,
+            statusText: albumResp.statusText,
+            error: errorText,
+            query: albumQuery,
+          });
+
+          if (albumResp.status === 403) {
+            return res.status(403).json({
+              error:
+                'Spotify access denied. You may need to reconnect your Spotify account.',
+              code: 'SPOTIFY_FORBIDDEN',
+              service: 'spotify',
+              action: 'reauth',
+            });
+          }
+
+          if (albumResp.status === 401) {
+            return res.status(401).json({
+              error: 'Spotify authentication expired',
+              code: 'TOKEN_EXPIRED',
+              service: 'spotify',
+            });
+          }
+
+          if (albumResp.status === 429) {
+            return res.status(429).json({
+              error: 'Spotify rate limit exceeded. Please try again later.',
+              code: 'RATE_LIMITED',
+              service: 'spotify',
+            });
+          }
+
+          return res.status(502).json({
+            error: `Spotify API error: ${albumResp.statusText}`,
+            code: 'SPOTIFY_API_ERROR',
+            service: 'spotify',
+          });
+        }
+        const albumData = await albumResp.json();
+        if (!albumData.albums || !albumData.albums.items.length) {
+          logger.info('Album not found on Spotify', { artist, album });
+          return res.status(404).json({ error: 'Album not found' });
+        }
+        const spotifyAlbumId = albumData.albums.items[0].id;
+
+        // Get album tracks
+        const tracksResp = await fetch(
+          `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks?limit=50`,
+          { headers }
+        );
+        if (!tracksResp.ok) {
+          return res.status(502).json({
+            error: `Spotify API error: ${tracksResp.statusText}`,
+            code: 'SPOTIFY_API_ERROR',
+            service: 'spotify',
+          });
+        }
+        const tracksData = await tracksResp.json();
+        const tracks = tracksData.items;
+
+        if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+          return res.status(404).json({ error: 'Album has no tracks' });
+        }
+
+        // Try to match by track number first
+        const trackNum = parseInt(track);
+        if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
+          const matchedTrack = tracks[trackNum - 1];
+          logger.info('Spotify track matched by number:', {
+            trackId: matchedTrack.id,
+            trackName: matchedTrack.name,
+          });
+          return res.json({ id: matchedTrack.id });
+        }
+
+        // Extract track name from format like "3. Track Name"
+        const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
+        const searchName = trackNameMatch ? trackNameMatch[1] : track;
+
+        // Try to match by track name
+        const matchingTrack = tracks.find(
+          (t) =>
+            t.name.toLowerCase() === searchName.toLowerCase() ||
+            t.name.toLowerCase().includes(searchName.toLowerCase()) ||
+            searchName.toLowerCase().includes(t.name.toLowerCase())
+        );
+        if (matchingTrack) {
+          logger.info('Spotify track matched by name:', {
+            trackId: matchingTrack.id,
+            trackName: matchingTrack.name,
+          });
+          return res.json({ id: matchingTrack.id });
+        }
+
+        // Fallback: general track search
+        const fallbackQuery = `track:${searchName} album:${album} artist:${artist}`;
+        const fallbackResp = await fetch(
+          `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=1`,
+          { headers }
+        );
+        if (fallbackResp.ok) {
+          const fallbackData = await fallbackResp.json();
+          if (fallbackData.tracks.items.length > 0) {
+            logger.info('Spotify track matched by fallback search:', {
+              trackId: fallbackData.tracks.items[0].id,
+              trackName: fallbackData.tracks.items[0].name,
+            });
+            return res.json({ id: fallbackData.tracks.items[0].id });
+          }
+        }
+
+        logger.info('Track not found on Spotify:', { artist, album, track });
+        return res.status(404).json({ error: 'Track not found' });
+      } catch (err) {
+        logger.error('Spotify track search error:', {
+          error: err.message,
+          stack: err.stack,
+          artist,
+          album,
+          track,
+        });
+        res.status(500).json({ error: 'Failed to search Spotify' });
+      }
     }
-  });
+  );
 };

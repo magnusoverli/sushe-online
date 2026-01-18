@@ -186,10 +186,172 @@ const notFoundHandler = (req, res, next) => {
 // Default error handler using the real logger
 const errorHandler = createErrorHandler();
 
+/**
+ * Standard error codes for API responses
+ * Used to provide machine-readable error identification
+ */
+const ErrorCodes = {
+  // Authentication/Authorization
+  NOT_AUTHENTICATED: 'NOT_AUTHENTICATED',
+  TOKEN_EXPIRED: 'TOKEN_EXPIRED',
+  TOKEN_INVALID: 'TOKEN_INVALID',
+  NOT_CONNECTED: 'NOT_CONNECTED',
+  FORBIDDEN: 'FORBIDDEN',
+  CSRF_INVALID: 'CSRF_INVALID',
+
+  // Validation
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  MISSING_FIELD: 'MISSING_FIELD',
+  INVALID_INPUT: 'INVALID_INPUT',
+
+  // Resources
+  NOT_FOUND: 'NOT_FOUND',
+  ALREADY_EXISTS: 'ALREADY_EXISTS',
+  CONFLICT: 'CONFLICT',
+
+  // External Services
+  SPOTIFY_ERROR: 'SPOTIFY_ERROR',
+  TIDAL_ERROR: 'TIDAL_ERROR',
+  LASTFM_ERROR: 'LASTFM_ERROR',
+  MUSICBRAINZ_ERROR: 'MUSICBRAINZ_ERROR',
+  PREMIUM_REQUIRED: 'PREMIUM_REQUIRED',
+  RATE_LIMITED: 'RATE_LIMITED',
+  NO_DEVICE: 'NO_DEVICE',
+
+  // Server
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  DATABASE_ERROR: 'DATABASE_ERROR',
+  SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
+};
+
+/**
+ * Send a standardized error response
+ *
+ * New error format:
+ * {
+ *   success: false,
+ *   error: {
+ *     message: "Human-readable message",
+ *     code: "MACHINE_READABLE_CODE",
+ *     type: "ERROR_TYPE" (optional),
+ *     service: "spotify" | "tidal" | etc (optional)
+ *   }
+ * }
+ *
+ * @param {Object} res - Express response object
+ * @param {number} statusCode - HTTP status code
+ * @param {string} message - Human-readable error message
+ * @param {string} code - Machine-readable error code from ErrorCodes
+ * @param {Object} options - Additional options
+ * @param {string} options.type - Error type from ErrorTypes
+ * @param {string} options.service - Service name (spotify, tidal, etc)
+ * @param {*} options.details - Additional error details (dev only)
+ */
+function sendErrorResponse(res, statusCode, message, code, options = {}) {
+  const response = {
+    success: false,
+    error: {
+      message,
+      code: code || ErrorCodes.INTERNAL_ERROR,
+    },
+  };
+
+  // Add optional fields
+  if (options.type) {
+    response.error.type = options.type;
+  }
+  if (options.service) {
+    response.error.service = options.service;
+  }
+
+  // Include details in development
+  if (process.env.NODE_ENV === 'development' && options.details) {
+    response.error.details = options.details;
+  }
+
+  return res.status(statusCode).json(response);
+}
+
+/**
+ * Create common error response helpers
+ * These are convenience functions for frequent error patterns
+ */
+const errorResponses = {
+  // 400 Bad Request
+  badRequest: (
+    res,
+    message = 'Bad request',
+    code = ErrorCodes.VALIDATION_ERROR
+  ) => sendErrorResponse(res, 400, message, code),
+
+  // 401 Unauthorized
+  unauthorized: (
+    res,
+    message = 'Authentication required',
+    code = ErrorCodes.NOT_AUTHENTICATED
+  ) => sendErrorResponse(res, 401, message, code),
+
+  // 403 Forbidden
+  forbidden: (res, message = 'Access denied', code = ErrorCodes.FORBIDDEN) =>
+    sendErrorResponse(res, 403, message, code),
+
+  // 404 Not Found
+  notFound: (
+    res,
+    message = 'Resource not found',
+    code = ErrorCodes.NOT_FOUND
+  ) => sendErrorResponse(res, 404, message, code),
+
+  // 409 Conflict
+  conflict: (res, message = 'Resource conflict', code = ErrorCodes.CONFLICT) =>
+    sendErrorResponse(res, 409, message, code),
+
+  // 429 Too Many Requests
+  rateLimited: (
+    res,
+    message = 'Rate limit exceeded',
+    code = ErrorCodes.RATE_LIMITED
+  ) => sendErrorResponse(res, 429, message, code),
+
+  // 500 Internal Server Error
+  internal: (
+    res,
+    message = 'Internal server error',
+    code = ErrorCodes.INTERNAL_ERROR
+  ) => sendErrorResponse(res, 500, message, code),
+
+  // 502 Bad Gateway (external API failure)
+  badGateway: (res, message = 'External service error', code, options = {}) =>
+    sendErrorResponse(
+      res,
+      502,
+      message,
+      code || ErrorCodes.INTERNAL_ERROR,
+      options
+    ),
+
+  // 503 Service Unavailable
+  unavailable: (
+    res,
+    message = 'Service temporarily unavailable',
+    code = ErrorCodes.SERVICE_UNAVAILABLE
+  ) => sendErrorResponse(res, 503, message, code),
+
+  // Service-specific auth errors
+  spotifyAuthError: (res, message, code) =>
+    sendErrorResponse(res, 401, message, code, { service: 'spotify' }),
+
+  tidalAuthError: (res, message, code) =>
+    sendErrorResponse(res, 401, message, code, { service: 'tidal' }),
+};
+
 module.exports = {
   ErrorTypes,
+  ErrorCodes,
   AppError,
   createErrorHandler,
   errorHandler,
   notFoundHandler,
+  sendErrorResponse,
+  errorResponses,
 };

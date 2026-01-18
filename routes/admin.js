@@ -146,18 +146,18 @@ module.exports = (app, deps) => {
       if (token && token.expires_in) {
         token.expires_at = Date.now() + token.expires_in * 1000;
       }
-      users.update(
-        { _id: req.user._id },
-        { $set: { spotifyAuth: token, updatedAt: new Date() } },
-        {},
-        (err) => {
-          if (err)
-            logger.error('Spotify auth update error', {
-              error: err.message,
-              userId: req.user._id,
-            });
-        }
-      );
+      // Fire-and-forget async update with error logging
+      usersAsync
+        .update(
+          { _id: req.user._id },
+          { $set: { spotifyAuth: token, updatedAt: new Date() } }
+        )
+        .catch((err) =>
+          logger.error('Spotify auth update error', {
+            error: err.message,
+            userId: req.user._id,
+          })
+        );
       req.user.spotifyAuth = token;
       req.flash('success', 'Spotify connected');
     } catch (e) {
@@ -179,18 +179,18 @@ module.exports = (app, deps) => {
       email: req.user.email,
       userId: req.user._id,
     });
-    users.update(
-      { _id: req.user._id },
-      { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } },
-      {},
-      (err) => {
-        if (err)
-          logger.error('Spotify disconnect error', {
-            error: err.message,
-            userId: req.user._id,
-          });
-      }
-    );
+    // Fire-and-forget async update with error logging
+    usersAsync
+      .update(
+        { _id: req.user._id },
+        { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } }
+      )
+      .catch((err) =>
+        logger.error('Spotify disconnect error', {
+          error: err.message,
+          userId: req.user._id,
+        })
+      );
     delete req.user.spotifyAuth;
     req.flash('success', 'Spotify disconnected');
     res.redirect('/');
@@ -304,30 +304,16 @@ module.exports = (app, deps) => {
         });
       }
 
-      await new Promise((resolve, reject) => {
-        users.update(
-          { _id: req.user._id },
-          {
-            $set: {
-              tidalAuth: token,
-              tidalCountry: countryCode,
-              updatedAt: new Date(),
-            },
+      await usersAsync.update(
+        { _id: req.user._id },
+        {
+          $set: {
+            tidalAuth: token,
+            tidalCountry: countryCode,
+            updatedAt: new Date(),
           },
-          {},
-          (err) => {
-            if (err) {
-              logger.error('Tidal auth update error', {
-                error: err.message,
-                userId: req.user._id,
-              });
-              reject(err);
-            } else {
-              resolve();
-            }
-          }
-        );
-      });
+        }
+      );
       req.user.tidalAuth = token;
       req.user.tidalCountry = countryCode;
       req.flash('success', 'Tidal connected');
@@ -347,24 +333,10 @@ module.exports = (app, deps) => {
 
   app.get('/auth/tidal/disconnect', ensureAuth, async (req, res) => {
     try {
-      await new Promise((resolve, reject) => {
-        users.update(
-          { _id: req.user._id },
-          { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } },
-          {},
-          (err) => {
-            if (err) {
-              logger.error('Tidal disconnect error', {
-                error: err.message,
-                userId: req.user._id,
-              });
-              reject(err);
-            } else {
-              resolve();
-            }
-          }
-        );
-      });
+      await usersAsync.update(
+        { _id: req.user._id },
+        { $unset: { tidalAuth: true }, $set: { updatedAt: new Date() } }
+      );
       delete req.user.tidalAuth;
       req.flash('success', 'Tidal disconnected');
     } catch (e) {
@@ -485,39 +457,35 @@ module.exports = (app, deps) => {
   });
 
   // Admin: Make user admin
-  app.post('/admin/make-admin', ensureAuth, ensureAdmin, (req, res) => {
+  app.post('/admin/make-admin', ensureAuth, ensureAdmin, async (req, res) => {
     const { userId } = req.body;
 
-    users.update(
-      { _id: userId },
-      { $set: { role: 'admin', adminGrantedAt: new Date() } },
-      {},
-      (err, numUpdated) => {
-        if (err) {
-          logger.error('Error granting admin', {
-            error: err.message,
-            targetUserId: userId,
-            adminId: req.user._id,
-          });
-          return res
-            .status(500)
-            .json({ error: 'Error granting admin privileges' });
-        }
+    try {
+      const numUpdated = await usersAsync.update(
+        { _id: userId },
+        { $set: { role: 'admin', adminGrantedAt: new Date() } }
+      );
 
-        if (numUpdated === 0) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-
-        logger.info(
-          `Admin ${req.user.email} granted admin to user ID: ${userId}`
-        );
-        res.json({ success: true });
+      if (numUpdated === 0) {
+        return res.status(404).json({ error: 'User not found' });
       }
-    );
+
+      logger.info(
+        `Admin ${req.user.email} granted admin to user ID: ${userId}`
+      );
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error granting admin', {
+        error: err.message,
+        targetUserId: userId,
+        adminId: req.user._id,
+      });
+      return res.status(500).json({ error: 'Error granting admin privileges' });
+    }
   });
 
   // Admin: Revoke admin
-  app.post('/admin/revoke-admin', ensureAuth, ensureAdmin, (req, res) => {
+  app.post('/admin/revoke-admin', ensureAuth, ensureAdmin, async (req, res) => {
     const { userId } = req.body;
 
     // Prevent revoking your own admin rights
@@ -527,32 +495,28 @@ module.exports = (app, deps) => {
         .json({ error: 'Cannot revoke your own admin privileges' });
     }
 
-    users.update(
-      { _id: userId },
-      { $unset: { role: true, adminGrantedAt: true } },
-      {},
-      (err, numUpdated) => {
-        if (err) {
-          logger.error('Error revoking admin', {
-            error: err.message,
-            targetUserId: userId,
-            adminId: req.user._id,
-          });
-          return res
-            .status(500)
-            .json({ error: 'Error revoking admin privileges' });
-        }
+    try {
+      const numUpdated = await usersAsync.update(
+        { _id: userId },
+        { $unset: { role: true, adminGrantedAt: true } }
+      );
 
-        if (numUpdated === 0) {
-          return res.status(404).json({ error: 'User not found' });
-        }
-
-        logger.info(
-          `Admin ${req.user.email} revoked admin from user ID: ${userId}`
-        );
-        res.json({ success: true });
+      if (numUpdated === 0) {
+        return res.status(404).json({ error: 'User not found' });
       }
-    );
+
+      logger.info(
+        `Admin ${req.user.email} revoked admin from user ID: ${userId}`
+      );
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error revoking admin', {
+        error: err.message,
+        targetUserId: userId,
+        adminId: req.user._id,
+      });
+      return res.status(500).json({ error: 'Error revoking admin privileges' });
+    }
   });
 
   // Admin: Get user lists

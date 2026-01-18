@@ -248,6 +248,8 @@ const ITUNES_IMAGE_SIZE = 600;
 
 // Normalize string for fuzzy matching (lowercase, remove special chars)
 function normalizeForMatch(str) {
+  if (!str) return '';
+
   return str
     .toLowerCase()
     .replace(/[^\w\s]/g, '') // Remove special characters
