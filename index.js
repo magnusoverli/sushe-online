@@ -678,7 +678,7 @@ const rateLimitAdminRequest = createRateLimitAdminRequest({
 
 const authRoutes = require('./routes/auth');
 const adminRoutes = require('./routes/admin');
-const apiRoutes = require('./routes/api');
+const apiRoutes = require('./routes/api/index');
 const preferencesRoutes = require('./routes/preferences');
 const aggregateListRoutes = require('./routes/aggregate-list');
 

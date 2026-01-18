@@ -2,6 +2,10 @@
 // Utilities for aggregating and managing user music preferences
 
 const logger = require('./logger');
+const {
+  POSITION_POINTS,
+  getPointsForPosition: getPositionPoints,
+} = require('./scoring');
 
 // ============================================
 // Artist Name Normalization
@@ -216,61 +220,6 @@ function filterGenreTags(tags) {
       };
     })
     .slice(0, 5); // Top 5 genre tags per artist
-}
-
-/**
- * Position-based points for weighted aggregation
- * Albums ranked higher contribute more to preference scores
- * Same scoring as aggregate-list.js for consistency
- */
-const POSITION_POINTS = {
-  1: 60,
-  2: 54,
-  3: 50,
-  4: 46,
-  5: 43,
-  6: 40,
-  7: 38,
-  8: 36,
-  9: 34,
-  10: 32,
-  11: 30,
-  12: 29,
-  13: 28,
-  14: 27,
-  15: 26,
-  16: 25,
-  17: 24,
-  18: 23,
-  19: 22,
-  20: 21,
-  21: 20,
-  22: 19,
-  23: 18,
-  24: 17,
-  25: 16,
-  26: 15,
-  27: 14,
-  28: 13,
-  29: 12,
-  30: 11,
-  31: 10,
-  32: 9,
-  33: 8,
-  34: 7,
-  35: 6,
-  36: 5,
-  37: 4,
-  38: 3,
-  39: 2,
-  40: 1,
-};
-
-/**
- * Get points for a position (1 point for positions beyond 40)
- */
-function getPositionPoints(position) {
-  return POSITION_POINTS[position] || 1;
 }
 
 // ============================================
