@@ -10,6 +10,111 @@ const {
 } = require('./metrics');
 
 /**
+ * Create broadcast helpers that emit to a user's room
+ * @param {Function} getIO - () => io (Socket.io server)
+ * @param {Object} logger - Logger instance
+ * @returns {Object} Broadcast methods
+ */
+function createBroadcast(getIO, logger) {
+  function emitToUser(event, warnMsg, userId, payload, options = {}) {
+    const io = getIO();
+    if (!io) {
+      logger.warn(warnMsg);
+      return;
+    }
+    const userRoom = `user:${userId}`;
+    if (options.excludeSocketId) {
+      io.to(userRoom).except(options.excludeSocketId).emit(event, payload);
+    } else {
+      io.to(userRoom).emit(event, payload);
+    }
+  }
+
+  return {
+    listUpdated(userId, listName, options = {}) {
+      emitToUser(
+        'list:updated',
+        'WebSocket not initialized, cannot broadcast list:updated',
+        userId,
+        { listName, updatedAt: new Date().toISOString() },
+        options
+      );
+      logger.debug('Broadcast list:updated', { userId, listName });
+    },
+    listCreated(userId, listName, year) {
+      emitToUser(
+        'list:created',
+        'WebSocket not initialized, cannot broadcast list:created',
+        userId,
+        { listName, year, createdAt: new Date().toISOString() }
+      );
+      logger.debug('Broadcast list:created', { userId, listName, year });
+    },
+    listDeleted(userId, listName) {
+      emitToUser(
+        'list:deleted',
+        'WebSocket not initialized, cannot broadcast list:deleted',
+        userId,
+        { listName, deletedAt: new Date().toISOString() }
+      );
+      logger.debug('Broadcast list:deleted', { userId, listName });
+    },
+    listRenamed(userId, oldName, newName) {
+      emitToUser(
+        'list:renamed',
+        'WebSocket not initialized, cannot broadcast list:renamed',
+        userId,
+        { oldName, newName, renamedAt: new Date().toISOString() }
+      );
+      logger.debug('Broadcast list:renamed', { userId, oldName, newName });
+    },
+    listMainChanged(userId, listName, isMain) {
+      emitToUser(
+        'list:main-changed',
+        'WebSocket not initialized, cannot broadcast list:main-changed',
+        userId,
+        { listName, isMain, changedAt: new Date().toISOString() }
+      );
+      logger.debug('Broadcast list:main-changed', { userId, listName, isMain });
+    },
+    listReordered(userId, listName, order, options = {}) {
+      emitToUser(
+        'list:reordered',
+        'WebSocket not initialized, cannot broadcast list:reordered',
+        userId,
+        { listName, order, reorderedAt: new Date().toISOString() },
+        options
+      );
+      logger.debug('Broadcast list:reordered', { userId, listName });
+    },
+    albumSummaryUpdated(userId, albumId) {
+      const io = getIO();
+      if (!io) {
+        logger.warn(
+          'WebSocket not initialized, cannot broadcast album:summary-updated',
+          { userId, albumId }
+        );
+        return;
+      }
+      const userRoom = `user:${userId}`;
+      const payload = {
+        albumId,
+        updatedAt: new Date().toISOString(),
+      };
+      const room = io.sockets.adapter.rooms.get(userRoom);
+      const clientCount = room ? room.size : 0;
+      io.to(userRoom).emit('album:summary-updated', payload);
+      logger.info('Broadcast album:summary-updated', {
+        userId,
+        albumId,
+        clientCount,
+        userRoom,
+      });
+    },
+  };
+}
+
+/**
  * Create the WebSocket service with dependency injection
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
@@ -150,165 +255,7 @@ function createWebSocketService(deps = {}) {
     return io;
   }
 
-  /**
-   * Broadcast service for emitting events to connected clients
-   */
-  const broadcast = {
-    /**
-     * Notify all clients of a user that a list was updated
-     * @param {string} userId - User ID
-     * @param {string} listName - Name of the updated list
-     * @param {Object} options - Additional options
-     * @param {string} options.excludeSocketId - Socket ID to exclude from broadcast
-     */
-    listUpdated(userId, listName, options = {}) {
-      if (!io) {
-        logger.warn('WebSocket not initialized, cannot broadcast list:updated');
-        return;
-      }
-
-      const userRoom = `user:${userId}`;
-      const payload = {
-        listName,
-        updatedAt: new Date().toISOString(),
-      };
-
-      if (options.excludeSocketId) {
-        io.to(userRoom)
-          .except(options.excludeSocketId)
-          .emit('list:updated', payload);
-      } else {
-        io.to(userRoom).emit('list:updated', payload);
-      }
-
-      logger.debug('Broadcast list:updated', { userId, listName });
-    },
-
-    /**
-     * Notify all clients of a user that a new list was created
-     * @param {string} userId - User ID
-     * @param {string} listName - Name of the new list
-     * @param {number} year - Year of the list
-     */
-    listCreated(userId, listName, year) {
-      if (!io) {
-        logger.warn('WebSocket not initialized, cannot broadcast list:created');
-        return;
-      }
-
-      const userRoom = `user:${userId}`;
-      const payload = {
-        listName,
-        year,
-        createdAt: new Date().toISOString(),
-      };
-
-      io.to(userRoom).emit('list:created', payload);
-      logger.debug('Broadcast list:created', { userId, listName, year });
-    },
-
-    /**
-     * Notify all clients of a user that a list was deleted
-     * @param {string} userId - User ID
-     * @param {string} listName - Name of the deleted list
-     */
-    listDeleted(userId, listName) {
-      if (!io) {
-        logger.warn('WebSocket not initialized, cannot broadcast list:deleted');
-        return;
-      }
-
-      const userRoom = `user:${userId}`;
-      const payload = {
-        listName,
-        deletedAt: new Date().toISOString(),
-      };
-
-      io.to(userRoom).emit('list:deleted', payload);
-      logger.debug('Broadcast list:deleted', { userId, listName });
-    },
-
-    /**
-     * Notify all clients of a user that a list was renamed
-     * @param {string} userId - User ID
-     * @param {string} oldName - Previous name of the list
-     * @param {string} newName - New name of the list
-     */
-    listRenamed(userId, oldName, newName) {
-      if (!io) {
-        logger.warn('WebSocket not initialized, cannot broadcast list:renamed');
-        return;
-      }
-
-      const userRoom = `user:${userId}`;
-      const payload = {
-        oldName,
-        newName,
-        renamedAt: new Date().toISOString(),
-      };
-
-      io.to(userRoom).emit('list:renamed', payload);
-      logger.debug('Broadcast list:renamed', { userId, oldName, newName });
-    },
-
-    /**
-     * Notify all clients of a user that a list's main status changed
-     * @param {string} userId - User ID
-     * @param {string} listName - Name of the list
-     * @param {boolean} isMain - Whether the list is now the main list
-     */
-    listMainChanged(userId, listName, isMain) {
-      if (!io) {
-        logger.warn(
-          'WebSocket not initialized, cannot broadcast list:main-changed'
-        );
-        return;
-      }
-
-      const userRoom = `user:${userId}`;
-      const payload = {
-        listName,
-        isMain,
-        changedAt: new Date().toISOString(),
-      };
-
-      io.to(userRoom).emit('list:main-changed', payload);
-      logger.debug('Broadcast list:main-changed', { userId, listName, isMain });
-    },
-
-    /**
-     * Notify all clients of a user that an album summary was updated
-     * @param {string} userId - User ID
-     * @param {string} albumId - Album ID that was updated
-     */
-    albumSummaryUpdated(userId, albumId) {
-      if (!io) {
-        logger.warn(
-          'WebSocket not initialized, cannot broadcast album:summary-updated',
-          { userId, albumId }
-        );
-        return;
-      }
-
-      const userRoom = `user:${userId}`;
-      const payload = {
-        albumId,
-        updatedAt: new Date().toISOString(),
-      };
-
-      // Get count of clients in the room for logging
-      const room = io.sockets.adapter.rooms.get(userRoom);
-      const clientCount = room ? room.size : 0;
-
-      io.to(userRoom).emit('album:summary-updated', payload);
-      logger.info('Broadcast album:summary-updated', {
-        userId,
-        albumId,
-        clientCount,
-        userRoom,
-      });
-    },
-  };
+  const broadcast = createBroadcast(() => io, logger);
 
   /**
    * Get the Socket.io server instance

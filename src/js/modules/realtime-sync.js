@@ -68,6 +68,7 @@ export function createRealtimeSync(deps = {}) {
 
       // Re-register event listeners on reconnect (Socket.io should preserve them, but be explicit)
       socket.on('list:updated', handleListUpdated);
+      socket.on('list:reordered', handleListReordered);
       socket.on('list:created', handleListCreated);
       socket.on('list:deleted', handleListDeleted);
       socket.on('list:renamed', handleListRenamed);
@@ -102,6 +103,7 @@ export function createRealtimeSync(deps = {}) {
 
     // List update events
     socket.on('list:updated', handleListUpdated);
+    socket.on('list:reordered', handleListReordered);
     socket.on('list:created', handleListCreated);
     socket.on('list:deleted', handleListDeleted);
     socket.on('list:renamed', handleListRenamed);
@@ -168,6 +170,32 @@ export function createRealtimeSync(deps = {}) {
       // For non-current lists, always refresh sidebar
       refreshListNav();
     }
+  }
+
+  /**
+   * Handle list reordered event
+   * @param {Object} data - Event payload
+   * @param {string} data.listName - Name of the reordered list
+   * @param {Array<string>} data.order - New order of album IDs
+   */
+  async function handleListReordered(data) {
+    console.log('[RealtimeSync] List reordered:', data);
+
+    const currentList = getCurrentList();
+    if (data.listName === currentList) {
+      // Refresh the current list to get new order
+      try {
+        await refreshListData(data.listName);
+        // Optionally show notification (can be commented out if too noisy)
+        // showToast('List order updated', 'info');
+      } catch (error) {
+        console.error(
+          '[RealtimeSync] Failed to refresh reordered list:',
+          error
+        );
+      }
+    }
+    // No need to refresh sidebar for reorders (list metadata unchanged)
   }
 
   /**

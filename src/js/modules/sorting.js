@@ -13,7 +13,8 @@
  * @param {Object} deps - Dependencies
  * @param {Function} deps.getListData - Get album array for a list
  * @param {Function} deps.getCurrentList - Get current list name
- * @param {Function} deps.debouncedSaveList - Debounced save function
+ * @param {Function} deps.debouncedSaveList - Debounced save function (full data)
+ * @param {Function} deps.saveReorder - Lightweight reorder function (only album IDs)
  * @param {Function} deps.updatePositionNumbers - Update position numbers in UI
  * @param {Function} deps.showToast - Show toast notification
  * @returns {Object} Sorting module API
@@ -23,6 +24,7 @@ export function createSorting(deps = {}) {
     getListData,
     getCurrentList,
     debouncedSaveList,
+    saveReorder,
     updatePositionNumbers,
     showToast,
   } = deps;
@@ -127,8 +129,14 @@ export function createSorting(deps = {}) {
             // Immediate optimistic UI update
             updatePositionNumbers(sortableContainer, isMobile);
 
-            // Debounced server save to batch rapid changes
-            debouncedSaveList(currentList, list);
+            // Use lightweight reorder endpoint (only sends album IDs, not full data)
+            // This prevents "payload too large" errors for lists with many albums
+            if (saveReorder) {
+              await saveReorder(currentList, list);
+            } else {
+              // Fallback to full save if reorder function not available
+              debouncedSaveList(currentList, list);
+            }
           } catch (error) {
             console.error('Error saving reorder:', error);
             if (showToast) {

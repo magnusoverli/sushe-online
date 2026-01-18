@@ -1697,6 +1697,80 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Reorder list items (lightweight endpoint for drag-and-drop)
+  app.post('/api/lists/:name/reorder', ensureAuthAPI, async (req, res) => {
+    const { name } = req.params;
+    const { order } = req.body; // Array of album_ids in new order
+
+    if (!order || !Array.isArray(order)) {
+      return res.status(400).json({ error: 'Invalid order array' });
+    }
+
+    let client;
+    try {
+      // Verify list ownership
+      const list = await lists.findOne({ userId: req.user._id, name });
+      if (!list) {
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Update each item's position based on the new order
+        for (let i = 0; i < order.length; i++) {
+          const albumId = order[i];
+          const newPosition = i + 1;
+
+          await client.query(
+            'UPDATE list_items SET position = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4',
+            [newPosition, new Date(), list._id, albumId]
+          );
+        }
+
+        await client.query('COMMIT');
+
+        // Invalidate cache
+        responseCache.invalidate(
+          `GET:/api/lists/${encodeURIComponent(name)}:${req.user._id}`
+        );
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+        // Broadcast real-time update
+        const broadcast = req.app.locals.broadcast;
+        if (broadcast) {
+          const excludeSocketId = req.headers['x-socket-id'];
+          broadcast.listReordered(req.user._id, name, order, {
+            excludeSocketId,
+          });
+        }
+
+        logger.info('List reordered', {
+          userId: req.user._id,
+          listName: name,
+          itemCount: order.length,
+        });
+
+        res.json({ success: true });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      }
+    } catch (err) {
+      logger.error('Error reordering list', {
+        error: err.message,
+        userId: req.user._id,
+        listName: name,
+      });
+      res.status(500).json({ error: 'Failed to reorder list' });
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  });
+
   // Create or update a list
   app.post('/api/lists/:name', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;

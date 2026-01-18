@@ -424,6 +424,33 @@ function makeCommentEditable(commentDiv, albumIndex) {
 }
 
 /**
+ * Lightweight reorder function for drag-and-drop (only sends album IDs)
+ * @param {string} listName - Name of the list to reorder
+ * @param {Array} list - Array of album objects in new order
+ */
+async function saveReorder(listName, list) {
+  if (!list || !Array.isArray(list)) {
+    console.error('List data not found:', listName);
+    return;
+  }
+
+  try {
+    // Extract just the album IDs in current order
+    const order = list.map((album) => album.album_id).filter(Boolean);
+
+    await apiCall(`/api/lists/${encodeURIComponent(listName)}/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ order }),
+    });
+
+    console.log('List reordered successfully:', listName);
+  } catch (error) {
+    console.error('Error reordering list:', error);
+    throw error;
+  }
+}
+
+/**
  * Get or initialize the sorting module
  * Uses lazy initialization to avoid dependency ordering issues
  */
@@ -433,6 +460,7 @@ function getSortingModule() {
       getListData,
       getCurrentList: () => currentList,
       debouncedSaveList,
+      saveReorder, // Add lightweight reorder function
       updatePositionNumbers,
       showToast,
     });
