@@ -424,9 +424,13 @@ function makeCommentEditable(commentDiv, albumIndex) {
 }
 
 /**
- * Lightweight reorder function for drag-and-drop (only sends album IDs)
+ * Lightweight reorder function for drag-and-drop.
+ * Sends album_id (or albumId) when present; falls back to list item _id for
+ * legacy items without album_id. Preserves array indices so unidentifiable
+ * items are skipped without shifting others' positions.
+ *
  * @param {string} listName - Name of the list to reorder
- * @param {Array} list - Array of album objects in new order
+ * @param {Array} list - Array of album objects in new order (may have _id, album_id, or albumId)
  */
 async function saveReorder(listName, list) {
   if (!list || !Array.isArray(list)) {
@@ -435,8 +439,14 @@ async function saveReorder(listName, list) {
   }
 
   try {
-    // Extract just the album IDs in current order
-    const order = list.map((album) => album.album_id).filter(Boolean);
+    // Prefer album_id, then albumId; if neither, use list item _id for legacy rows.
+    // null preserves the index so the server can skip unidentifiable items without shifting positions.
+    const order = list.map((a) => {
+      const id = a.album_id || a.albumId;
+      if (id) return id;
+      if (a._id) return { _id: a._id };
+      return null;
+    });
 
     await apiCall(`/api/lists/${encodeURIComponent(listName)}/reorder`, {
       method: 'POST',

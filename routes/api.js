@@ -1698,9 +1698,13 @@ module.exports = (app, deps) => {
   });
 
   // Reorder list items (lightweight endpoint for drag-and-drop)
+  // order: array of string (album_id) | { _id: list item _id } | null
+  // - string: update by list_id + album_id (normal case, incl. manual albums)
+  // - { _id }: update by list item _id (legacy rows without album_id)
+  // - null: skip (unidentifiable); effective position only increments on actual updates
   app.post('/api/lists/:name/reorder', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
-    const { order } = req.body; // Array of album_ids in new order
+    const { order } = req.body;
 
     if (!order || !Array.isArray(order)) {
       return res.status(400).json({ error: 'Invalid order array' });
@@ -1718,15 +1722,25 @@ module.exports = (app, deps) => {
       try {
         await client.query('BEGIN');
 
-        // Update each item's position based on the new order
+        let effectivePos = 0;
         for (let i = 0; i < order.length; i++) {
-          const albumId = order[i];
-          const newPosition = i + 1;
+          const entry = order[i];
+          const now = new Date();
 
-          await client.query(
-            'UPDATE list_items SET position = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4',
-            [newPosition, new Date(), list._id, albumId]
-          );
+          if (typeof entry === 'string') {
+            effectivePos += 1;
+            await client.query(
+              'UPDATE list_items SET position = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4',
+              [effectivePos, now, list._id, entry]
+            );
+          } else if (entry && typeof entry === 'object' && entry._id) {
+            effectivePos += 1;
+            await client.query(
+              'UPDATE list_items SET position = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4',
+              [effectivePos, now, entry._id, list._id]
+            );
+          }
+          // null or other: skip; don't increment so positions stay correct
         }
 
         await client.query('COMMIT');
@@ -1749,7 +1763,7 @@ module.exports = (app, deps) => {
         logger.info('List reordered', {
           userId: req.user._id,
           listName: name,
-          itemCount: order.length,
+          itemCount: effectivePos,
         });
 
         res.json({ success: true });
