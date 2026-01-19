@@ -1396,8 +1396,233 @@ export function createMobileUI(deps = {}) {
   }
 
   /**
-   * Show mobile edit form (full-screen modal)
-   * @param {number} index - Album index
+   * Initialize a searchable genre select component
+   * Features: search/filter with highlight, matches float to top, non-matches dimmed but visible
+   * @param {string} containerId - ID of the container element
+   * @param {string[]} options - Array of genre options
+   * @param {string} initialValue - Initial selected value
+   * @param {string} placeholder - Placeholder text when no value selected
+   */
+  function initSearchableGenreSelect(
+    containerId,
+    options,
+    initialValue,
+    placeholder
+  ) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    let currentValue = initialValue || '';
+
+    // Create the button that shows current selection
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className =
+      'w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-left focus:outline-hidden focus:border-gray-500 transition duration-200 flex items-center justify-between';
+    button.innerHTML = `
+      <span class="genre-select-text ${currentValue ? 'text-white' : 'text-gray-500'}">${currentValue || placeholder}</span>
+      <svg class="w-5 h-5 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+      </svg>
+    `;
+
+    // Create hidden input for form value
+    const hiddenInput = document.createElement('input');
+    hiddenInput.type = 'hidden';
+    hiddenInput.id = containerId.replace('Container', '');
+    hiddenInput.value = currentValue;
+
+    // Create the dropdown overlay
+    const overlay = document.createElement('div');
+    overlay.className =
+      'fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm hidden';
+    overlay.style.display = 'none';
+
+    // Create the dropdown panel
+    const panel = document.createElement('div');
+    panel.className =
+      'fixed inset-x-4 top-1/2 -translate-y-1/2 z-[61] bg-gray-800 rounded-xl shadow-2xl max-h-[70vh] flex flex-col overflow-hidden';
+    panel.innerHTML = `
+      <div class="p-4 border-b border-gray-700 shrink-0">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-white font-medium">Select Genre</h4>
+          <button type="button" class="genre-select-close p-2 -m-2 text-gray-400 hover:text-white">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+        <input type="text" class="genre-search-input w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500" placeholder="Search genres...">
+      </div>
+      <div class="genre-options-list flex-1 overflow-y-auto overscroll-contain"></div>
+    `;
+
+    const searchInput = panel.querySelector('.genre-search-input');
+    const optionsList = panel.querySelector('.genre-options-list');
+    const closeBtn = panel.querySelector('.genre-select-close');
+
+    /**
+     * Render options list with filtering and highlighting
+     */
+    const renderOptions = (searchTerm = '') => {
+      const term = searchTerm.toLowerCase().trim();
+      optionsList.innerHTML = '';
+
+      // Add "Clear" option if there's a current value
+      if (currentValue) {
+        const clearItem = document.createElement('div');
+        clearItem.className =
+          'px-4 py-3 text-gray-500 border-b border-gray-700 cursor-pointer active:bg-gray-700 italic';
+        clearItem.textContent = 'Clear selection';
+        clearItem.onclick = () => {
+          currentValue = '';
+          hiddenInput.value = '';
+          button.querySelector('.genre-select-text').textContent = placeholder;
+          button.querySelector('.genre-select-text').className =
+            'genre-select-text text-gray-500';
+          closeDropdown();
+        };
+        optionsList.appendChild(clearItem);
+      }
+
+      // Separate matches and non-matches
+      const matches = [];
+      const nonMatches = [];
+
+      options.forEach((genre) => {
+        const lowerGenre = genre.toLowerCase();
+        if (term === '' || lowerGenre.includes(term)) {
+          matches.push({ genre, isMatch: true });
+        } else {
+          nonMatches.push({ genre, isMatch: false });
+        }
+      });
+
+      // Sort matches: exact matches first, then starts-with, then contains
+      if (term) {
+        matches.sort((a, b) => {
+          const aLower = a.genre.toLowerCase();
+          const bLower = b.genre.toLowerCase();
+          const aExact = aLower === term;
+          const bExact = bLower === term;
+          const aStarts = aLower.startsWith(term);
+          const bStarts = bLower.startsWith(term);
+
+          if (aExact && !bExact) return -1;
+          if (!aExact && bExact) return 1;
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          return a.genre.localeCompare(b.genre);
+        });
+      }
+
+      // Combine: matches first, then non-matches
+      const allOptions = [...matches, ...nonMatches];
+
+      // Add separator if we have both matches and non-matches
+      let separatorAdded = false;
+
+      allOptions.forEach((item) => {
+        // Add separator between matches and non-matches
+        if (!separatorAdded && !item.isMatch && matches.length > 0 && term) {
+          const separator = document.createElement('div');
+          separator.className =
+            'px-4 py-2 text-xs text-gray-600 bg-gray-900 border-t border-gray-700';
+          separator.textContent = 'Other genres';
+          optionsList.appendChild(separator);
+          separatorAdded = true;
+        }
+
+        const optionItem = document.createElement('div');
+        optionItem.className = item.isMatch
+          ? 'px-4 py-3 cursor-pointer active:bg-gray-600'
+          : 'px-4 py-3 cursor-pointer active:bg-gray-600 text-gray-600';
+
+        // Highlight matching text
+        let displayText = item.genre;
+        if (term && item.isMatch) {
+          const matchIndex = item.genre.toLowerCase().indexOf(term);
+          if (matchIndex !== -1) {
+            const before = item.genre.slice(0, matchIndex);
+            const match = item.genre.slice(
+              matchIndex,
+              matchIndex + term.length
+            );
+            const after = item.genre.slice(matchIndex + term.length);
+            displayText = `${before}<span class="text-green-400 font-medium">${match}</span>${after}`;
+          }
+        }
+
+        // Mark current selection
+        if (item.genre === currentValue) {
+          optionItem.className += ' bg-gray-700/50';
+          displayText +=
+            ' <span class="text-green-500 text-sm ml-2">&#x2713;</span>';
+        }
+
+        optionItem.innerHTML = `<span class="${item.isMatch ? 'text-white' : ''}">${displayText}</span>`;
+
+        optionItem.onclick = () => {
+          currentValue = item.genre;
+          hiddenInput.value = item.genre;
+          button.querySelector('.genre-select-text').textContent = item.genre;
+          button.querySelector('.genre-select-text').className =
+            'genre-select-text text-white';
+          closeDropdown();
+        };
+
+        optionsList.appendChild(optionItem);
+      });
+    };
+
+    const openDropdown = () => {
+      overlay.style.display = 'block';
+      document.body.appendChild(panel);
+      searchInput.value = '';
+      renderOptions();
+      // Focus search input after a small delay for mobile
+      setTimeout(() => searchInput.focus(), 100);
+    };
+
+    const closeDropdown = () => {
+      overlay.style.display = 'none';
+      if (panel.parentNode) {
+        panel.parentNode.removeChild(panel);
+      }
+    };
+
+    // Event handlers
+    button.onclick = (e) => {
+      e.preventDefault();
+      openDropdown();
+    };
+
+    overlay.onclick = () => closeDropdown();
+    closeBtn.onclick = () => closeDropdown();
+
+    searchInput.addEventListener('input', (e) => {
+      renderOptions(e.target.value);
+    });
+
+    // Keyboard support
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeDropdown();
+      }
+    });
+
+    // Assemble
+    container.appendChild(button);
+    container.appendChild(hiddenInput);
+    document.body.appendChild(overlay);
+
+    // Store value getter on container for external access
+    container.getValue = () => currentValue;
+  }
+
+  /**
+   * Show mobile edit form for an album
+   * @param {number} index - Album index in list
    */
   function showMobileEditForm(index) {
     const currentList = getCurrentList();
@@ -1544,57 +1769,16 @@ export function createMobileUI(deps = {}) {
             </div>
           </div>
           
-          <!-- Genre 1 - Native Select -->
+          <!-- Genre 1 - Searchable Select -->
           <div class="w-full">
             <label class="block text-gray-400 text-sm mb-2">Primary Genre</label>
-            <div class="relative">
-              <select 
-                id="editGenre1" 
-                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-hidden focus:border-gray-500 transition duration-200 appearance-none pr-10"
-              >
-                <option value="">Select a genre...</option>
-                ${availableGenres
-                  .map(
-                    (genre) =>
-                      `<option value="${genre}" ${genre === (album.genre_1 || album.genre) ? 'selected' : ''}>${genre}</option>`
-                  )
-                  .join('')}
-              </select>
-              <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-              </div>
-            </div>
+            <div id="editGenre1Container" class="searchable-genre-select" data-value="${album.genre_1 || album.genre || ''}" data-placeholder="Select a genre..."></div>
           </div>
           
-          <!-- Genre 2 - Native Select -->
+          <!-- Genre 2 - Searchable Select -->
           <div class="w-full">
             <label class="block text-gray-400 text-sm mb-2">Secondary Genre</label>
-            <div class="relative">
-              <select 
-                id="editGenre2" 
-                class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-hidden focus:border-gray-500 transition duration-200 appearance-none pr-10"
-              >
-                <option value="">None (optional)</option>
-                ${availableGenres
-                  .map((genre) => {
-                    const currentGenre2 =
-                      album.genre_2 &&
-                      album.genre_2 !== 'Genre 2' &&
-                      album.genre_2 !== '-'
-                        ? album.genre_2
-                        : '';
-                    return `<option value="${genre}" ${genre === currentGenre2 ? 'selected' : ''}>${genre}</option>`;
-                  })
-                  .join('')}
-              </select>
-              <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-              </div>
-            </div>
+            <div id="editGenre2Container" class="searchable-genre-select" data-value="${album.genre_2 && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-' ? album.genre_2 : ''}" data-placeholder="None (optional)"></div>
           </div>
           
           <!-- Comments -->
@@ -1778,6 +1962,22 @@ export function createMobileUI(deps = {}) {
         reader.readAsDataURL(file);
       });
     }
+
+    // Initialize searchable genre selects
+    initSearchableGenreSelect(
+      'editGenre1Container',
+      availableGenres,
+      album.genre_1 || album.genre || '',
+      'Select a genre...'
+    );
+    initSearchableGenreSelect(
+      'editGenre2Container',
+      availableGenres,
+      album.genre_2 && album.genre_2 !== 'Genre 2' && album.genre_2 !== '-'
+        ? album.genre_2
+        : '',
+      'None (optional)'
+    );
 
     const trackPickContainer = document.getElementById('trackPickContainer');
 

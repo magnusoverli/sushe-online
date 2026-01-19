@@ -186,7 +186,8 @@ export function createEditableFields(deps = {}) {
   }
 
   /**
-   * Make genre field editable with datalist autocomplete
+   * Make genre field editable with searchable dropdown
+   * Features: search/filter with highlight, matches float to top, non-matches dimmed but visible
    * @param {HTMLElement} genreDiv - Genre container element
    * @param {number} albumIndex - Album index in list
    * @param {string} genreField - Field name ('genre_1' or 'genre_2')
@@ -205,39 +206,34 @@ export function createEditableFields(deps = {}) {
     if (!albumsForGenre || !albumsForGenre[albumIndex]) return;
     const currentGenre = albumsForGenre[albumIndex][genreField] || '';
 
-    // Create input with datalist
+    // Track highlighted index for keyboard navigation
+    let highlightedIndex = -1;
+    let isDropdownOpen = false;
+
+    // Create container for input + dropdown
+    const container = document.createElement('div');
+    container.className = 'relative';
+    container.style.zIndex = '1000';
+
+    // Create input
     const input = document.createElement('input');
     input.type = 'text';
     input.className =
       'w-full bg-gray-800 text-gray-300 text-sm p-1 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500';
     input.value = currentGenre;
-    input.placeholder = `Type to search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
-    input.setAttribute(
-      'list',
-      `genre-list-${currentList}-${albumIndex}-${genreField}`
-    );
+    input.placeholder = `Search ${genreField === 'genre_1' ? 'primary' : 'secondary'} genre...`;
+    input.autocomplete = 'off';
 
-    // Create datalist
-    const datalist = document.createElement('datalist');
-    datalist.id = `genre-list-${currentList}-${albumIndex}-${genreField}`;
-
-    // Add all available genres
-    availableGenres.forEach((genre) => {
-      const option = document.createElement('option');
-      option.value = genre;
-      datalist.appendChild(option);
-    });
+    // Create dropdown list
+    const dropdown = document.createElement('div');
+    dropdown.className =
+      'absolute left-0 right-0 top-full mt-1 bg-gray-800 border border-gray-700 rounded-sm shadow-lg max-h-48 overflow-y-auto';
+    dropdown.style.display = 'none';
+    dropdown.style.zIndex = '1001';
 
     // Store the original onclick handler
     const originalOnClick = genreDiv.onclick;
     genreDiv.onclick = null; // Temporarily remove click handler
-
-    // Replace content with input and datalist
-    genreDiv.innerHTML = '';
-    genreDiv.appendChild(input);
-    genreDiv.appendChild(datalist);
-    input.focus();
-    input.select();
 
     // Create handleClickOutside function so we can reference it for removal
     let handleClickOutside;
@@ -328,33 +324,246 @@ export function createEditableFields(deps = {}) {
       }
     };
 
-    // Handle input change (when selecting from datalist)
-    input.addEventListener('change', (e) => {
-      saveGenre(e.target.value);
+    /**
+     * Render the dropdown with filtered/sorted options
+     * Matches appear at top (highlighted), non-matches below (dimmed)
+     */
+    const renderDropdown = (searchTerm) => {
+      const term = searchTerm.toLowerCase().trim();
+      dropdown.innerHTML = '';
+
+      // Add "Clear" option at top if there's a current value
+      if (currentGenre || input.value) {
+        const clearOption = document.createElement('div');
+        clearOption.className =
+          'px-2 py-1.5 text-sm cursor-pointer text-gray-500 hover:bg-gray-700 hover:text-gray-300 border-b border-gray-700 italic';
+        clearOption.textContent = 'Clear selection';
+        clearOption.dataset.value = '';
+        clearOption.dataset.index = '0';
+        dropdown.appendChild(clearOption);
+      }
+
+      // Separate matches and non-matches
+      const matches = [];
+      const nonMatches = [];
+
+      availableGenres.forEach((genre) => {
+        const lowerGenre = genre.toLowerCase();
+        if (term === '' || lowerGenre.includes(term)) {
+          matches.push({ genre, isMatch: true });
+        } else {
+          nonMatches.push({ genre, isMatch: false });
+        }
+      });
+
+      // Sort matches: exact matches first, then starts-with, then contains
+      if (term) {
+        matches.sort((a, b) => {
+          const aLower = a.genre.toLowerCase();
+          const bLower = b.genre.toLowerCase();
+          const aExact = aLower === term;
+          const bExact = bLower === term;
+          const aStarts = aLower.startsWith(term);
+          const bStarts = bLower.startsWith(term);
+
+          if (aExact && !bExact) return -1;
+          if (!aExact && bExact) return 1;
+          if (aStarts && !bStarts) return -1;
+          if (!aStarts && bStarts) return 1;
+          return a.genre.localeCompare(b.genre);
+        });
+      }
+
+      // Combine: matches first, then non-matches
+      const allOptions = [...matches, ...nonMatches];
+
+      // Add separator if we have both matches and non-matches
+      let separatorAdded = false;
+      const clearOptionOffset = currentGenre || input.value ? 1 : 0;
+
+      allOptions.forEach((item, idx) => {
+        // Add separator between matches and non-matches
+        if (!separatorAdded && !item.isMatch && matches.length > 0 && term) {
+          const separator = document.createElement('div');
+          separator.className =
+            'px-2 py-1 text-xs text-gray-600 bg-gray-900 border-t border-gray-700';
+          separator.textContent = 'Other genres';
+          dropdown.appendChild(separator);
+          separatorAdded = true;
+        }
+
+        const option = document.createElement('div');
+        option.dataset.value = item.genre;
+        option.dataset.index = String(idx + clearOptionOffset);
+
+        // Highlight matching text in the genre name
+        let displayText = item.genre;
+        if (term && item.isMatch) {
+          const matchIndex = item.genre.toLowerCase().indexOf(term);
+          if (matchIndex !== -1) {
+            const before = item.genre.slice(0, matchIndex);
+            const match = item.genre.slice(
+              matchIndex,
+              matchIndex + term.length
+            );
+            const after = item.genre.slice(matchIndex + term.length);
+            displayText = `${before}<span class="text-green-400 font-medium">${match}</span>${after}`;
+          }
+        }
+
+        // Style based on match status
+        if (item.isMatch) {
+          option.className =
+            'px-2 py-1.5 text-sm cursor-pointer text-gray-300 hover:bg-gray-700';
+        } else {
+          option.className =
+            'px-2 py-1.5 text-sm cursor-pointer text-gray-600 hover:bg-gray-700 hover:text-gray-400';
+        }
+
+        // Mark current selection
+        if (item.genre === currentGenre) {
+          option.className += ' bg-gray-700/50';
+          displayText += ' <span class="text-green-500 text-xs ml-1">●</span>';
+        }
+
+        option.innerHTML = displayText;
+        dropdown.appendChild(option);
+      });
+
+      // Reset highlight
+      highlightedIndex = -1;
+      updateHighlight();
+    };
+
+    /**
+     * Update visual highlight for keyboard navigation
+     */
+    const updateHighlight = () => {
+      const options = dropdown.querySelectorAll('[data-value]');
+      options.forEach((opt, idx) => {
+        if (idx === highlightedIndex) {
+          opt.classList.add('bg-gray-600');
+          opt.scrollIntoView({ block: 'nearest' });
+        } else {
+          opt.classList.remove('bg-gray-600');
+        }
+      });
+    };
+
+    /**
+     * Get total number of selectable options
+     */
+    const getOptionCount = () => {
+      return dropdown.querySelectorAll('[data-value]').length;
+    };
+
+    /**
+     * Get value at highlighted index
+     */
+    const getHighlightedValue = () => {
+      const options = dropdown.querySelectorAll('[data-value]');
+      if (highlightedIndex >= 0 && highlightedIndex < options.length) {
+        return options[highlightedIndex].dataset.value;
+      }
+      return null;
+    };
+
+    const showDropdown = () => {
+      if (!isDropdownOpen) {
+        dropdown.style.display = 'block';
+        isDropdownOpen = true;
+        renderDropdown(input.value);
+      }
+    };
+
+    const hideDropdown = () => {
+      dropdown.style.display = 'none';
+      isDropdownOpen = false;
+      highlightedIndex = -1;
+    };
+
+    // Event: Input changes - filter dropdown
+    input.addEventListener('input', () => {
+      showDropdown();
+      renderDropdown(input.value);
     });
 
-    // Handle blur (when clicking away)
-    input.addEventListener('blur', () => {
-      saveGenre(input.value);
+    // Event: Focus - show dropdown
+    input.addEventListener('focus', () => {
+      showDropdown();
     });
 
-    // Handle keyboard
+    // Event: Click on dropdown option
+    dropdown.addEventListener('click', (e) => {
+      const option = e.target.closest('[data-value]');
+      if (option) {
+        const value = option.dataset.value;
+        input.value = value;
+        hideDropdown();
+        saveGenre(value);
+      }
+    });
+
+    // Event: Keyboard navigation
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+      const optionCount = getOptionCount();
+
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
-        saveGenre(input.value);
+        if (!isDropdownOpen) {
+          showDropdown();
+        } else {
+          highlightedIndex = Math.min(highlightedIndex + 1, optionCount - 1);
+          updateHighlight();
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (isDropdownOpen) {
+          highlightedIndex = Math.max(highlightedIndex - 1, 0);
+          updateHighlight();
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isDropdownOpen && highlightedIndex >= 0) {
+          const value = getHighlightedValue();
+          if (value !== null) {
+            input.value = value;
+            hideDropdown();
+            saveGenre(value);
+          }
+        } else {
+          // Save current input value
+          saveGenre(input.value);
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault();
-        restoreDisplay(currentGenre);
+        if (isDropdownOpen) {
+          hideDropdown();
+        } else {
+          restoreDisplay(currentGenre);
+        }
+      } else if (e.key === 'Tab') {
+        // Allow tab to save and move focus
+        hideDropdown();
+        saveGenre(input.value);
       }
     });
 
     // Define handleClickOutside
     handleClickOutside = (e) => {
-      if (!genreDiv.contains(e.target)) {
+      if (!container.contains(e.target)) {
+        hideDropdown();
         saveGenre(input.value);
       }
     };
+
+    // Assemble and render
+    container.appendChild(input);
+    container.appendChild(dropdown);
+    genreDiv.innerHTML = '';
+    genreDiv.appendChild(container);
+    input.focus();
+    input.select();
 
     // Small delay to prevent immediate trigger
     setTimeout(() => {
