@@ -1897,6 +1897,13 @@ function initializeCategoryContextMenu() {
     if (!currentContextGroup) return;
 
     const { id, name } = currentContextGroup;
+
+    // Virtual "Uncategorized" group (orphaned lists) can't be renamed
+    if (id === 'orphaned') {
+      showToast('The "Uncategorized" section cannot be renamed', 'info');
+      return;
+    }
+
     openRenameCategoryModal(id, name);
   };
 
@@ -1911,6 +1918,13 @@ function initializeCategoryContextMenu() {
     // Year groups can't be deleted manually
     if (isYearGroup) {
       showToast('Year groups are removed automatically when empty', 'info');
+      currentContextGroup = null;
+      return;
+    }
+
+    // Virtual "Uncategorized" group (orphaned lists) can't be deleted
+    if (id === 'orphaned') {
+      showToast('The "Uncategorized" section cannot be deleted', 'info');
       currentContextGroup = null;
       return;
     }

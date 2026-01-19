@@ -260,11 +260,13 @@ export function createListNav(deps = {}) {
 
     // For mobile: show menu button (menu accessed via click)
     // For desktop: no right-side element (menu accessed via right-click)
-    const rightSide = isMobile
-      ? `<button data-category-menu-btn="${groupId}" class="p-1 text-gray-400 active:text-gray-200 no-drag shrink-0 category-menu-btn" aria-label="Category options">
+    // Don't show menu button for virtual "Uncategorized" group (orphaned lists)
+    const rightSide =
+      isMobile && groupId && groupId !== 'orphaned'
+        ? `<button data-category-menu-btn="${groupId}" class="p-1 text-gray-400 active:text-gray-200 no-drag shrink-0 category-menu-btn" aria-label="Category options">
           <i class="fas fa-ellipsis-v text-xs"></i>
         </button>`
-      : '';
+        : '';
 
     return `
       <div class="flex items-center flex-1 min-w-0">
@@ -500,7 +502,8 @@ export function createListNav(deps = {}) {
     };
 
     // Desktop: right-click context menu on header
-    if (!isMobile && _id) {
+    // Don't show context menu for virtual "Uncategorized" group (orphaned lists)
+    if (!isMobile && _id && _id !== 'orphaned') {
       header.oncontextmenu = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -513,7 +516,8 @@ export function createListNav(deps = {}) {
     headerWrapper.appendChild(header);
 
     // Mobile: attach click handler to menu button
-    if (isMobile && _id) {
+    // Don't show menu button for virtual "Uncategorized" group (orphaned lists)
+    if (isMobile && _id && _id !== 'orphaned') {
       // Use event delegation - attach handler after appending to section
       setTimeout(() => {
         const menuBtn = header.querySelector(
@@ -553,6 +557,11 @@ export function createListNav(deps = {}) {
    * @param {number} y - Y position
    */
   function showCategoryContextMenu(groupId, groupName, isYearGroup, x, y) {
+    // Don't show menu for virtual "Uncategorized" group (orphaned lists)
+    if (groupId === 'orphaned') {
+      return;
+    }
+
     hideAllContextMenus();
 
     if (setCurrentContextGroup) {
@@ -590,6 +599,11 @@ export function createListNav(deps = {}) {
     isYearGroup
   ) {
     if (!menuButton) return;
+
+    // Don't attach menu for virtual "Uncategorized" group (orphaned lists)
+    if (groupId === 'orphaned') {
+      return;
+    }
 
     // Prevent touch events from bubbling to parent (which would toggle expand)
     menuButton.addEventListener(

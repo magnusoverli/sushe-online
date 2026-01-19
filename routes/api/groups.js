@@ -270,14 +270,23 @@ module.exports = (app, deps) => {
 
       // If force=true or no lists, delete the group
       // First, unassign all lists from this group (set group_id to null)
+      // Also clear is_main flag and year since orphaned lists can't be main
       if (listCount > 0) {
         await pool.query(
-          `UPDATE lists SET group_id = NULL WHERE group_id = $1`,
+          `UPDATE lists SET group_id = NULL, is_main = FALSE, year = NULL, updated_at = NOW() 
+           WHERE group_id = $1`,
           [group.id]
         );
       }
 
       await pool.query(`DELETE FROM list_groups WHERE id = $1`, [group.id]);
+
+      logger.info('Collection deleted', {
+        userId: req.user._id,
+        groupId: id,
+        groupName: group.name,
+        listsUnassigned: listCount,
+      });
 
       res.json({ success: true, listsUnassigned: listCount });
     } catch (err) {

@@ -535,16 +535,22 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Set main list for a year
+  // Toggle main list status for a year
   app.post('/api/lists/:name/main', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
+    const { isMain } = req.body;
+
+    // Validate isMain parameter
+    if (typeof isMain !== 'boolean') {
+      return res.status(400).json({ error: 'isMain must be a boolean' });
+    }
 
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
 
       const listResult = await client.query(
-        `SELECT l.id, l.year, g.year as group_year
+        `SELECT l.id, l.year, l.is_main, g.year as group_year
          FROM lists l
          LEFT JOIN list_groups g ON l.group_id = g.id
          WHERE l.user_id = $1 AND l.name = $2`,
@@ -559,12 +565,43 @@ module.exports = (app, deps) => {
       const list = listResult.rows[0];
       const year = list.year || list.group_year;
 
+      // Handle UNSETTING main status (allow for any list, including orphaned)
+      if (isMain === false) {
+        await client.query(
+          `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1`,
+          [list.id]
+        );
+        await client.query('COMMIT');
+
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+        // Trigger aggregate recompute if list had a year
+        if (year) {
+          triggerAggregateListRecompute(year);
+        }
+
+        logger.info('Main status removed from list', {
+          userId: req.user._id,
+          listName: name,
+          year: year || null,
+        });
+
+        return res.json({ success: true, year: year || null });
+      }
+
+      // Handle SETTING main status (requires year)
       if (!year) {
         await client.query('ROLLBACK');
         return res.status(400).json({
-          error: 'List must be assigned to a year first',
+          error: 'List must be assigned to a year to be marked as main',
         });
       }
+
+      // Find previous main list for this year
+      const previousMainResult = await client.query(
+        `SELECT name FROM lists WHERE user_id = $1 AND year = $2 AND is_main = TRUE`,
+        [req.user._id, year]
+      );
 
       // Unset is_main for all other lists in the same year
       await client.query(
@@ -588,15 +625,33 @@ module.exports = (app, deps) => {
       // Trigger aggregate recompute
       triggerAggregateListRecompute(year);
 
-      res.json({ success: true, year });
+      logger.info('Main status set for list', {
+        userId: req.user._id,
+        listName: name,
+        year,
+        previousMainList:
+          previousMainResult.rows.length > 0
+            ? previousMainResult.rows[0].name
+            : null,
+      });
+
+      res.json({
+        success: true,
+        year,
+        previousMainList:
+          previousMainResult.rows.length > 0
+            ? previousMainResult.rows[0].name
+            : null,
+      });
     } catch (err) {
       await client.query('ROLLBACK');
-      logger.error('Error setting main list', {
+      logger.error('Error toggling main list status', {
         error: err.message,
         userId: req.user._id,
         listName: name,
+        isMain,
       });
-      res.status(500).json({ error: 'Failed to set main list' });
+      res.status(500).json({ error: 'Failed to update main list status' });
     } finally {
       client.release();
     }

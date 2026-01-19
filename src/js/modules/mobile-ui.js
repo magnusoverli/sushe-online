@@ -1097,6 +1097,11 @@ export function createMobileUI(deps = {}) {
    * @param {boolean} isYearGroup - Whether this is a year group
    */
   function showMobileCategoryMenu(groupId, groupName, isYearGroup) {
+    // Don't show menu for virtual "Uncategorized" group (orphaned lists)
+    if (groupId === 'orphaned') {
+      return;
+    }
+
     const currentList = getCurrentList();
 
     // Remove any existing action sheets first
