@@ -4196,6 +4196,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return;
   }
 
+  // PERFORMANCE: Start loading list data immediately - this is the critical path
+  // Other UI initializations run in parallel while data is fetched
+  const listLoadPromise = loadLists();
+
   // Initialize settings drawer
   function initializeSettingsDrawer() {
     const settingsDrawer = createSettingsDrawer({
@@ -4304,9 +4308,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Load all required data and initialize features
-  // Note: Genres and countries are now loaded synchronously at module initialization
-  loadLists()
+  // Initialize features after list data is loaded
+  // Note: loadLists() was started immediately after auth check for faster loading
+  listLoadPromise
     .then(() => {
       initializeContextMenu();
       initializeAlbumContextMenu();
