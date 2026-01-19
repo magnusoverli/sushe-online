@@ -159,6 +159,12 @@ function createDeduplicationHelpers(deps = {}) {
       return null;
     }
 
+    // User-specific fields - always store directly, never deduplicate against albums table
+    // These are per-user overrides that should persist regardless of canonical album data
+    if (field === 'comments' || field === 'track_pick') {
+      return listItemValue || null;
+    }
+
     // Sanitize artist/album names for consistent encoding
     // (e.g., ellipsis "…" → three periods "...")
     const shouldSanitize = field === 'artist' || field === 'album';

@@ -92,7 +92,7 @@ function isBetterCoverImage(newImage, existingImage) {
 
 /**
  * Choose the better text value between two options.
- * "Better" means: non-empty over empty, longer/more specific over shorter.
+ * Prefers longer/more specific values (e.g., "The Beatles" over "Beatles").
  *
  * @param {string|null|undefined} existing - Existing value
  * @param {string|null|undefined} newVal - New value
@@ -108,6 +108,24 @@ function chooseBetterText(existing, newVal) {
 
   // Prefer longer/more specific value
   return b.length > a.length ? b : a;
+}
+
+/**
+ * Choose genre value - prefers new value when explicitly provided.
+ * Unlike chooseBetterText, this allows users to change genres to shorter values
+ * or clear them entirely. Only falls back to existing if new is undefined/null.
+ *
+ * @param {string|null|undefined} existing - Existing genre value
+ * @param {string|null|undefined} newVal - New genre value from user
+ * @returns {string} - The chosen genre, or empty string if both empty
+ */
+function chooseGenre(existing, newVal) {
+  // If new value is explicitly provided (including empty string to clear), use it
+  if (newVal !== undefined && newVal !== null) {
+    return (newVal || '').trim();
+  }
+  // Fall back to existing only if new value is not provided
+  return (existing || '').trim();
 }
 
 /**
@@ -267,11 +285,9 @@ function createAlbumCanonical(deps = {}) {
         newData.release_date
       ),
       country: chooseBetterText(existing.country, newData.country),
-      genre_1: chooseBetterText(
-        existing.genre_1,
-        newData.genre_1 || newData.genre
-      ),
-      genre_2: chooseBetterText(existing.genre_2, newData.genre_2),
+      // Genres: prefer user's explicit choice over "better text" heuristics
+      genre_1: chooseGenre(existing.genre_1, newData.genre_1 ?? newData.genre),
+      genre_2: chooseGenre(existing.genre_2, newData.genre_2),
 
       // Tracks: prefer the list with more tracks
       tracks: chooseBetterTracks(existing.tracks, newData.tracks),

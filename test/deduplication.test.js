@@ -370,6 +370,54 @@ describe('deduplication helpers', () => {
       assert.strictEqual(result, null);
     });
 
+    it('should always store comments directly (user-specific, never deduplicate)', async () => {
+      // Comments are user-specific and should always be stored directly
+      const albumData = { comments: 'Album comment in canonical table' };
+      mockPool.query = mock.fn(() => Promise.resolve({ rows: [albumData] }));
+
+      // Even if there's matching album data, comments should be stored directly
+      const result = await helpers.getStorableValue(
+        'My personal comment',
+        'album123',
+        'comments',
+        mockPool
+      );
+
+      assert.strictEqual(result, 'My personal comment');
+      // Should not query database - comments bypass deduplication
+      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+    });
+
+    it('should return null for empty comments (but not deduplicate)', async () => {
+      const result = await helpers.getStorableValue(
+        '',
+        'album123',
+        'comments',
+        mockPool
+      );
+
+      assert.strictEqual(result, null);
+      // Should not query database
+      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+    });
+
+    it('should always store track_pick directly (user-specific, never deduplicate)', async () => {
+      // track_pick is user-specific and should always be stored directly
+      const albumData = { track_pick: 'Some Track' };
+      mockPool.query = mock.fn(() => Promise.resolve({ rows: [albumData] }));
+
+      const result = await helpers.getStorableValue(
+        'My Favorite Track',
+        'album123',
+        'track_pick',
+        mockPool
+      );
+
+      assert.strictEqual(result, 'My Favorite Track');
+      // Should not query database - track_pick bypasses deduplication
+      assert.strictEqual(mockPool.query.mock.calls.length, 0);
+    });
+
     it('should return null (not empty string) when listItemValue is empty and no albumId', async () => {
       const result = await helpers.getStorableValue(
         '',
