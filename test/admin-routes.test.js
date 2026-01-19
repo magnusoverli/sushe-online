@@ -144,6 +144,15 @@ function createTestApp(options = {}) {
   };
 
   // Mock async datastores
+  const mockUsersAsync = {
+    update:
+      options.usersAsyncUpdate ||
+      mock.fn((_query, _update) => {
+        // Simulate successful update - returns number of updated docs
+        return Promise.resolve(1);
+      }),
+  };
+
   const mockListsAsync = {
     find:
       options.listsAsyncFind ||
@@ -201,6 +210,7 @@ function createTestApp(options = {}) {
     ensureAuth,
     ensureAdmin,
     users: mockUsers,
+    usersAsync: mockUsersAsync,
     lists: mockLists,
     listsAsync: mockListsAsync,
     listItemsAsync: mockListItemsAsync,
@@ -219,7 +229,14 @@ function createTestApp(options = {}) {
     res.status(err.status || 500).json({ error: err.message });
   });
 
-  return { app, mockUsers, mockLists, mockListsAsync, mockListItemsAsync };
+  return {
+    app,
+    mockUsers,
+    mockUsersAsync,
+    mockLists,
+    mockListsAsync,
+    mockListItemsAsync,
+  };
 }
 
 // ============ DELETE USER TESTS ============
@@ -336,7 +353,7 @@ describe('POST /admin/delete-user', () => {
 
 describe('POST /admin/make-admin', () => {
   it('should grant admin role', async () => {
-    const { app, mockUsers } = createTestApp();
+    const { app, mockUsersAsync } = createTestApp();
 
     const response = await request(app)
       .post('/admin/make-admin')
@@ -344,17 +361,17 @@ describe('POST /admin/make-admin', () => {
 
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.body.success, true);
-    assert.strictEqual(mockUsers.update.mock.calls.length, 1);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
   });
 
   it('should set adminGrantedAt timestamp', async () => {
-    const { app, mockUsers } = createTestApp();
+    const { app, mockUsersAsync } = createTestApp();
 
     await request(app)
       .post('/admin/make-admin')
       .send({ userId: 'target-user-123' });
 
-    const updateCall = mockUsers.update.mock.calls[0];
+    const updateCall = mockUsersAsync.update.mock.calls[0];
     const updateData = updateCall.arguments[1].$set;
     assert.strictEqual(updateData.role, 'admin');
     assert.ok(updateData.adminGrantedAt instanceof Date);
@@ -362,9 +379,7 @@ describe('POST /admin/make-admin', () => {
 
   it('should return 404 for non-existent user', async () => {
     const { app } = createTestApp({
-      usersUpdate: mock.fn((query, update, opts, callback) => {
-        callback(null, 0); // No user found
-      }),
+      usersAsyncUpdate: mock.fn(() => Promise.resolve(0)), // No user found
     });
 
     const response = await request(app)
@@ -398,9 +413,9 @@ describe('POST /admin/make-admin', () => {
 
   it('should handle database errors', async () => {
     const { app } = createTestApp({
-      usersUpdate: mock.fn((query, update, opts, callback) => {
-        callback(new Error('Database error'));
-      }),
+      usersAsyncUpdate: mock.fn(() =>
+        Promise.reject(new Error('Database error'))
+      ),
     });
 
     const response = await request(app)
@@ -416,7 +431,7 @@ describe('POST /admin/make-admin', () => {
 
 describe('POST /admin/revoke-admin', () => {
   it('should revoke admin role', async () => {
-    const { app, mockUsers } = createTestApp();
+    const { app, mockUsersAsync } = createTestApp();
 
     const response = await request(app)
       .post('/admin/revoke-admin')
@@ -424,17 +439,17 @@ describe('POST /admin/revoke-admin', () => {
 
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.body.success, true);
-    assert.strictEqual(mockUsers.update.mock.calls.length, 1);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
   });
 
   it('should unset role and adminGrantedAt', async () => {
-    const { app, mockUsers } = createTestApp();
+    const { app, mockUsersAsync } = createTestApp();
 
     await request(app)
       .post('/admin/revoke-admin')
       .send({ userId: 'other-admin-456' });
 
-    const updateCall = mockUsers.update.mock.calls[0];
+    const updateCall = mockUsersAsync.update.mock.calls[0];
     const updateData = updateCall.arguments[1].$unset;
     assert.strictEqual(updateData.role, true);
     assert.strictEqual(updateData.adminGrantedAt, true);
@@ -463,9 +478,7 @@ describe('POST /admin/revoke-admin', () => {
 
   it('should return 404 for non-existent user', async () => {
     const { app } = createTestApp({
-      usersUpdate: mock.fn((query, update, opts, callback) => {
-        callback(null, 0); // No user found
-      }),
+      usersAsyncUpdate: mock.fn(() => Promise.resolve(0)), // No user found
     });
 
     const response = await request(app)
@@ -499,9 +512,9 @@ describe('POST /admin/revoke-admin', () => {
 
   it('should handle database errors', async () => {
     const { app } = createTestApp({
-      usersUpdate: mock.fn((query, update, opts, callback) => {
-        callback(new Error('Database error'));
-      }),
+      usersAsyncUpdate: mock.fn(() =>
+        Promise.reject(new Error('Database error'))
+      ),
     });
 
     const response = await request(app)
