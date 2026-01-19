@@ -190,8 +190,17 @@ module.exports = (app, deps) => {
       );
 
       const listRows = result.rows;
+
+      // Lists need year assignment ONLY if:
+      // 1. The list has no year set (l.year === null)
+      // 2. AND the list is in a group (l.group_id !== null)
+      // 3. AND that group is a year-group (l.group_year !== null)
+      //
+      // This catches edge cases where a list is in a year-group but the year
+      // wasn't synced. Lists in collections (groups without years) and orphaned
+      // lists (no group - "Uncategorized") should NOT require year assignment.
       const listsWithoutYear = listRows.filter(
-        (l) => l.year === null && !(l.group_id && l.group_year === null)
+        (l) => l.year === null && l.group_id !== null && l.group_year !== null
       );
       const yearsWithLists = [
         ...new Set(listRows.filter((l) => l.year !== null).map((l) => l.year)),
