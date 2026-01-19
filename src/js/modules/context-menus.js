@@ -945,7 +945,7 @@ export function createContextMenus(deps = {}) {
           downloadSubmenu.classList.add('hidden');
           downloadOption.classList.remove('bg-gray-700', 'text-white');
         }
-      }, 200);
+      }, 100);
     };
 
     const cancelHideDownloadSubmenu = () => {
@@ -960,7 +960,7 @@ export function createContextMenus(deps = {}) {
             moveListOption.classList.remove('bg-gray-700', 'text-white');
           }
         }
-      }, 200);
+      }, 100);
     };
 
     const cancelHideMoveListSubmenu = () => {
