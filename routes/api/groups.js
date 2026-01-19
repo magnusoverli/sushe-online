@@ -501,6 +501,10 @@ module.exports = (app, deps) => {
 
       await client.query('COMMIT');
 
+      // Invalidate caches so frontend gets updated data
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+      responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+
       // Trigger aggregate recompute for affected years
       if (oldYear) triggerAggregateListRecompute(oldYear);
       if (targetYear && targetYear !== oldYear)

@@ -929,30 +929,15 @@ export function createContextMenus(deps = {}) {
       setContextState({ list: null });
     };
 
-    // Handle move list option click - show collection submenu
+    // Get submenu elements
     const moveListOption = document.getElementById('moveListOption');
     const moveListSubmenu = document.getElementById('moveListSubmenu');
-
-    if (moveListOption && moveListSubmenu) {
-      moveListOption.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showMoveListSubmenu();
-      };
-
-      // Show submenu on mouse enter
-      moveListOption.addEventListener('mouseenter', () => {
-        cancelHideMoveListSubmenu();
-        const { list: currentContextList } = getContextState();
-        if (currentContextList) {
-          showMoveListSubmenu();
-        }
-      });
-    }
-
-    // Setup mouse handlers for download submenu
     const downloadSubmenu = document.getElementById('downloadListSubmenu');
+
+    // Define all submenu timeout variables and helper functions FIRST
+    // (before they're used in event handlers)
     let downloadSubmenuTimeout;
+    let moveListSubmenuTimeout;
 
     const hideDownloadSubmenu = () => {
       downloadSubmenuTimeout = setTimeout(() => {
@@ -966,35 +951,6 @@ export function createContextMenus(deps = {}) {
     const cancelHideDownloadSubmenu = () => {
       if (downloadSubmenuTimeout) clearTimeout(downloadSubmenuTimeout);
     };
-
-    // Show submenu on mouse enter
-    downloadOption.addEventListener('mouseenter', () => {
-      cancelHideDownloadSubmenu();
-      const { list: currentContextList } = getContextState();
-      if (currentContextList) {
-        showDownloadListSubmenu();
-      }
-    });
-
-    // Hide submenu when mouse leaves context menu (unless moving to submenu)
-    contextMenu.addEventListener('mouseleave', (e) => {
-      const toDownloadSubmenu =
-        downloadSubmenu &&
-        (e.relatedTarget === downloadSubmenu ||
-          downloadSubmenu.contains(e.relatedTarget));
-
-      if (!toDownloadSubmenu) {
-        hideDownloadSubmenu();
-      }
-    });
-
-    if (downloadSubmenu) {
-      downloadSubmenu.addEventListener('mouseenter', cancelHideDownloadSubmenu);
-      downloadSubmenu.addEventListener('mouseleave', hideDownloadSubmenu);
-    }
-
-    // Setup mouse handlers for move list submenu
-    let moveListSubmenuTimeout;
 
     const hideMoveListSubmenu = () => {
       moveListSubmenuTimeout = setTimeout(() => {
@@ -1011,22 +967,90 @@ export function createContextMenus(deps = {}) {
       if (moveListSubmenuTimeout) clearTimeout(moveListSubmenuTimeout);
     };
 
-    // Update context menu mouseleave to also handle move list submenu
+    // Now set up event handlers that use these functions
+
+    // Handle move list option - show collection submenu
+    if (moveListOption && moveListSubmenu) {
+      moveListOption.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMoveListSubmenu();
+      };
+
+      // Show submenu on mouse enter
+      moveListOption.addEventListener('mouseenter', () => {
+        cancelHideMoveListSubmenu();
+        // Also hide download submenu when entering move option
+        hideDownloadSubmenu();
+        const { list: currentContextList } = getContextState();
+        if (currentContextList) {
+          showMoveListSubmenu();
+        }
+      });
+
+      // Hide submenu when mouse leaves the option (unless moving to submenu)
+      moveListOption.addEventListener('mouseleave', (e) => {
+        const toSubmenu =
+          moveListSubmenu &&
+          (e.relatedTarget === moveListSubmenu ||
+            moveListSubmenu.contains(e.relatedTarget));
+        if (!toSubmenu) {
+          hideMoveListSubmenu();
+        }
+      });
+
+      // Submenu mouse handlers
+      moveListSubmenu.addEventListener('mouseenter', cancelHideMoveListSubmenu);
+      moveListSubmenu.addEventListener('mouseleave', hideMoveListSubmenu);
+    }
+
+    // Handle download option submenu
+    if (downloadSubmenu) {
+      // Show submenu on mouse enter
+      downloadOption.addEventListener('mouseenter', () => {
+        cancelHideDownloadSubmenu();
+        // Also hide move list submenu when entering download option
+        hideMoveListSubmenu();
+        const { list: currentContextList } = getContextState();
+        if (currentContextList) {
+          showDownloadListSubmenu();
+        }
+      });
+
+      // Hide submenu when mouse leaves the option (unless moving to submenu)
+      downloadOption.addEventListener('mouseleave', (e) => {
+        const toSubmenu =
+          downloadSubmenu &&
+          (e.relatedTarget === downloadSubmenu ||
+            downloadSubmenu.contains(e.relatedTarget));
+        if (!toSubmenu) {
+          hideDownloadSubmenu();
+        }
+      });
+
+      // Submenu mouse handlers
+      downloadSubmenu.addEventListener('mouseenter', cancelHideDownloadSubmenu);
+      downloadSubmenu.addEventListener('mouseleave', hideDownloadSubmenu);
+    }
+
+    // Hide all submenus when mouse leaves context menu entirely
     contextMenu.addEventListener('mouseleave', (e) => {
+      const toDownloadSubmenu =
+        downloadSubmenu &&
+        (e.relatedTarget === downloadSubmenu ||
+          downloadSubmenu.contains(e.relatedTarget));
       const toMoveListSubmenu =
         moveListSubmenu &&
         (e.relatedTarget === moveListSubmenu ||
           moveListSubmenu.contains(e.relatedTarget));
 
+      if (!toDownloadSubmenu) {
+        hideDownloadSubmenu();
+      }
       if (!toMoveListSubmenu) {
         hideMoveListSubmenu();
       }
     });
-
-    if (moveListSubmenu) {
-      moveListSubmenu.addEventListener('mouseenter', cancelHideMoveListSubmenu);
-      moveListSubmenu.addEventListener('mouseleave', hideMoveListSubmenu);
-    }
   }
 
   /**
