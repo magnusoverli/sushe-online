@@ -13,7 +13,7 @@
  * @param {Object} deps - Dependencies
  * @param {Function} deps.getListData - Get album array for a list
  * @param {Function} deps.getCurrentList - Get current list name
- * @param {Function} deps.saveList - Save list to server
+ * @param {Function} deps.apiCall - Make API calls
  * @param {Function} deps.showToast - Show toast notification
  * @param {Function} deps.getAvailableCountries - Get available countries list
  * @param {Function} deps.getAvailableGenres - Get available genres list
@@ -24,7 +24,7 @@ export function createEditableFields(deps = {}) {
   const {
     getListData,
     getCurrentList,
-    saveList,
+    apiCall,
     showToast,
     getAvailableCountries,
     getAvailableGenres,
@@ -135,13 +135,30 @@ export function createEditableFields(deps = {}) {
       // Update the data
       const albumsToUpdate = getListData(currentList);
       if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-      albumsToUpdate[albumIndex].country = newCountry;
+
+      // Get album_id for canonical update
+      const album = albumsToUpdate[albumIndex];
+      const albumId = album.album_id || album.albumId;
+
+      if (!albumId) {
+        showToast('Cannot update - album not linked', 'error');
+        restoreDisplay(currentCountry);
+        return;
+      }
 
       // Close the dropdown immediately for better UX
       restoreDisplay(newCountry);
 
       try {
-        await saveList(currentList, albumsToUpdate);
+        // Use lightweight endpoint to update canonical country
+        await apiCall(`/api/albums/${encodeURIComponent(albumId)}/country`, {
+          method: 'PATCH',
+          body: JSON.stringify({ country: newCountry || null }),
+        });
+
+        // Update local state
+        albumsToUpdate[albumIndex].country = newCountry;
+
         showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
       } catch (_error) {
         showToast('Error saving country', 'error');
@@ -308,13 +325,34 @@ export function createEditableFields(deps = {}) {
       // Update the data
       const albumsToUpdate = getListData(currentList);
       if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
-      albumsToUpdate[albumIndex][genreField] = newGenre;
+
+      // Get album_id for canonical update
+      const album = albumsToUpdate[albumIndex];
+      const albumId = album.album_id || album.albumId;
+
+      if (!albumId) {
+        showToast('Cannot update - album not linked', 'error');
+        restoreDisplay(currentGenre);
+        return;
+      }
 
       // Close the dropdown immediately for better UX
       restoreDisplay(newGenre);
 
       try {
-        await saveList(currentList, albumsToUpdate);
+        // Use lightweight endpoint to update canonical genre
+        // Build request body with only the field being updated
+        const body = {};
+        body[genreField] = newGenre || null;
+
+        await apiCall(`/api/albums/${encodeURIComponent(albumId)}/genres`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        });
+
+        // Update local state
+        albumsToUpdate[albumIndex][genreField] = newGenre;
+
         showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
       } catch (_error) {
         showToast('Error saving genre', 'error');
@@ -497,9 +535,11 @@ export function createEditableFields(deps = {}) {
     dropdown.addEventListener('click', (e) => {
       const option = e.target.closest('[data-value]');
       if (option) {
+        e.stopPropagation(); // Prevent event from bubbling to document
         const value = option.dataset.value;
         input.value = value;
-        hideDropdown();
+        hideDropdown(); // Close dropdown immediately on selection
+        // saveGenre will call restoreDisplay() which replaces the entire content
         saveGenre(value);
       }
     });
@@ -528,11 +568,13 @@ export function createEditableFields(deps = {}) {
           const value = getHighlightedValue();
           if (value !== null) {
             input.value = value;
-            hideDropdown();
+            hideDropdown(); // Close dropdown immediately on selection
+            // saveGenre will call restoreDisplay() which replaces the entire content
             saveGenre(value);
           }
         } else {
           // Save current input value
+          hideDropdown(); // Close dropdown before saving
           saveGenre(input.value);
         }
       } else if (e.key === 'Escape') {
@@ -605,11 +647,29 @@ export function createEditableFields(deps = {}) {
       if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
 
       const newComment = textarea.value.trim();
-      albumsToUpdate[albumIndex].comments = newComment;
-      albumsToUpdate[albumIndex].comment = newComment;
+      const album = albumsToUpdate[albumIndex];
+
+      // Get identifier (prefer album_id, fallback to _id for legacy albums)
+      const identifier = album.album_id || album.albumId || album._id;
+
+      if (!identifier) {
+        showToast('Cannot update - album not identified', 'error');
+        return;
+      }
 
       try {
-        await saveList(currentList, albumsToUpdate);
+        // Use lightweight endpoint to update comment
+        await apiCall(
+          `/api/lists/${encodeURIComponent(currentList)}/items/${encodeURIComponent(identifier)}/comment`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ comment: newComment || null }),
+          }
+        );
+
+        // Update local state
+        albumsToUpdate[albumIndex].comments = newComment;
+        albumsToUpdate[albumIndex].comment = newComment;
 
         // Update display without re-rendering everything
         let displayComment = newComment;

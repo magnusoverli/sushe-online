@@ -399,7 +399,7 @@ function getEditableFieldsModule() {
     editableFieldsModule = createEditableFields({
       getListData,
       getCurrentList: () => currentList,
-      saveList,
+      apiCall,
       showToast,
       getAvailableCountries: () => availableCountries,
       getAvailableGenres: () => availableGenres,

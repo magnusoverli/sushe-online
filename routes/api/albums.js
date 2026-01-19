@@ -20,7 +20,7 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     pool,
     logger,
-    helpers: { upsertAlbumRecord },
+    helpers: { upsertAlbumRecord, invalidateCachesForAlbumUsers },
   } = deps;
 
   // Get album cover image
@@ -130,6 +130,130 @@ module.exports = (app, deps) => {
         albumId: req.params.albumId,
       });
       res.status(500).json({ error: 'Error updating summary' });
+    }
+  });
+
+  // Update canonical album country (lightweight endpoint for inline editing)
+  app.patch('/api/albums/:albumId/country', ensureAuthAPI, async (req, res) => {
+    try {
+      const { albumId } = req.params;
+      const { country } = req.body;
+
+      // Validate country (string, empty string, or null)
+      if (
+        country !== null &&
+        country !== undefined &&
+        typeof country !== 'string'
+      ) {
+        return res.status(400).json({ error: 'Invalid country value' });
+      }
+
+      // Check if album exists
+      const checkResult = await pool.query(
+        'SELECT album_id FROM albums WHERE album_id = $1',
+        [albumId]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+
+      const trimmedCountry = country ? country.trim() : null;
+
+      await pool.query(
+        'UPDATE albums SET country = $1, updated_at = $2 WHERE album_id = $3',
+        [trimmedCountry, new Date(), albumId]
+      );
+
+      // Invalidate caches for ALL users who have this album
+      await invalidateCachesForAlbumUsers(albumId);
+
+      logger.info('Album country updated', {
+        userId: req.user._id,
+        albumId,
+        country: trimmedCountry,
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error updating album country', {
+        error: err.message,
+        albumId: req.params.albumId,
+      });
+      res.status(500).json({ error: 'Error updating country' });
+    }
+  });
+
+  // Update canonical album genres (lightweight endpoint for inline editing)
+  app.patch('/api/albums/:albumId/genres', ensureAuthAPI, async (req, res) => {
+    try {
+      const { albumId } = req.params;
+      const { genre_1, genre_2 } = req.body;
+
+      // Validate genres (must be strings, empty string, or null)
+      if (
+        (genre_1 !== undefined &&
+          genre_1 !== null &&
+          typeof genre_1 !== 'string') ||
+        (genre_2 !== undefined &&
+          genre_2 !== null &&
+          typeof genre_2 !== 'string')
+      ) {
+        return res.status(400).json({ error: 'Invalid genre values' });
+      }
+
+      // Check if album exists
+      const checkResult = await pool.query(
+        'SELECT album_id FROM albums WHERE album_id = $1',
+        [albumId]
+      );
+
+      if (checkResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+
+      // Build dynamic update query
+      const updates = [];
+      const params = [];
+      let paramIndex = 1;
+
+      if (genre_1 !== undefined) {
+        updates.push(`genre_1 = $${paramIndex++}`);
+        params.push(genre_1 ? genre_1.trim() : null);
+      }
+
+      if (genre_2 !== undefined) {
+        updates.push(`genre_2 = $${paramIndex++}`);
+        params.push(genre_2 ? genre_2.trim() : null);
+      }
+
+      updates.push(`updated_at = $${paramIndex++}`);
+      params.push(new Date());
+
+      params.push(albumId);
+
+      await pool.query(
+        `UPDATE albums SET ${updates.join(', ')} WHERE album_id = $${paramIndex}`,
+        params
+      );
+
+      // Invalidate caches for ALL users who have this album
+      await invalidateCachesForAlbumUsers(albumId);
+
+      logger.info('Album genres updated', {
+        userId: req.user._id,
+        albumId,
+        genre_1,
+        genre_2,
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      logger.error('Error updating album genres', {
+        error: err.message,
+        albumId: req.params.albumId,
+      });
+      res.status(500).json({ error: 'Error updating genres' });
     }
   });
 

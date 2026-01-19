@@ -544,6 +544,86 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Update single album's comment (lightweight endpoint for inline editing)
+  app.patch(
+    '/api/lists/:name/items/:identifier/comment',
+    ensureAuthAPI,
+    async (req, res) => {
+      const { name, identifier } = req.params;
+      const { comment } = req.body;
+
+      // Validate comment (string or null)
+      if (
+        comment !== null &&
+        comment !== undefined &&
+        typeof comment !== 'string'
+      ) {
+        return res.status(400).json({ error: 'Invalid comment value' });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Find list
+        const list = await lists.findOne({ userId: req.user._id, name });
+        if (!list) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'List not found' });
+        }
+
+        // Update list_item by album_id (preferred) or _id (legacy)
+        const trimmedComment = comment ? comment.trim() : null;
+        let result;
+
+        // Try album_id first (modern albums)
+        result = await client.query(
+          'UPDATE list_items SET comments = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id',
+          [trimmedComment, new Date(), list._id, identifier]
+        );
+
+        // Fallback to _id (legacy albums without album_id)
+        if (result.rowCount === 0) {
+          result = await client.query(
+            'UPDATE list_items SET comments = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id',
+            [trimmedComment, new Date(), identifier, list._id]
+          );
+        }
+
+        if (result.rowCount === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ error: 'Album not found in list' });
+        }
+
+        await client.query('COMMIT');
+
+        // Invalidate cache
+        responseCache.invalidate(
+          `GET:/api/lists/${encodeURIComponent(name)}:${req.user._id}`
+        );
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+
+        logger.info('Comment updated', {
+          userId: req.user._id,
+          listName: name,
+          identifier,
+        });
+
+        res.json({ success: true });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        logger.error('Error updating comment', {
+          error: err.message,
+          userId: req.user._id,
+          listName: name,
+        });
+        res.status(500).json({ error: 'Error updating comment' });
+      } finally {
+        client.release();
+      }
+    }
+  );
+
   // Toggle main list status for a year
   app.post('/api/lists/:name/main', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;
