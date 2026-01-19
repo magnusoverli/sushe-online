@@ -403,6 +403,10 @@ const contextMenusComponent = () => `
     <button id="updatePlaylistOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-paper-plane mr-2 w-4 text-center"></i><span id="updatePlaylistText">Send to Music Service</span>
     </button>
+    <button id="moveListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-folder-open mr-2 w-4 text-center"></i>Move to Collection</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
+    </button>
     <button id="deleteListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
     </button>
@@ -450,6 +454,11 @@ const contextMenusComponent = () => `
   <!-- Submenu for Download List -->
   <div id="downloadListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 min-w-44">
     <!-- Populated dynamically -->
+  </div>
+  
+  <!-- Submenu for Move List to Collection -->
+  <div id="moveListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
+    <!-- Populated dynamically with collections -->
   </div>
   
   <!-- Context Menu for Categories (Groups) -->

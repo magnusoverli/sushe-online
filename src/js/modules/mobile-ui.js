@@ -43,12 +43,14 @@ import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
  * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
  * @param {Function} deps.showDiscoveryModal - Show discovery modal for Last.fm features
  * @param {Function} deps.playSpecificTrack - Play a specific track by name
+ * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
+ * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
  * @returns {Object} Mobile UI module API
  */
 export function createMobileUI(deps = {}) {
   const {
     getListData,
-    getListMetadata: _getListMetadata,
+    getListMetadata,
     getCurrentList,
     getLists,
     setListData,
@@ -79,6 +81,7 @@ export function createMobileUI(deps = {}) {
     refreshMobileBarVisibility,
     showDiscoveryModal,
     playSpecificTrack,
+    getSortedGroups,
     refreshGroupsAndLists,
   } = deps;
 
@@ -908,6 +911,17 @@ export function createMobileUI(deps = {}) {
             <i class="fas fa-paper-plane mr-3 text-gray-400"></i>${menuConfig.musicServiceText}
           </button>
           
+          ${
+            menuConfig.isInCollection
+              ? `
+          <button data-action="move-to-collection"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-folder-open mr-3 text-gray-400"></i>Move to Collection
+          </button>
+          `
+              : ''
+          }
+          
           <button data-action="delete"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm text-red-500">
             <i class="fas fa-trash mr-3"></i>Delete List
@@ -1038,6 +1052,19 @@ export function createMobileUI(deps = {}) {
       }
     });
 
+    // Handle move to collection button
+    const moveToCollectionBtn = actionSheet.querySelector(
+      '[data-action="move-to-collection"]'
+    );
+    if (moveToCollectionBtn) {
+      moveToCollectionBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSheet();
+        showMobileCollectionPicker(listName);
+      });
+    }
+
     deleteBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1088,6 +1115,132 @@ export function createMobileUI(deps = {}) {
         }
       }
     });
+  }
+
+  /**
+   * Show mobile collection picker for moving a list
+   * @param {string} listName - Name of the list to move
+   */
+  function showMobileCollectionPicker(listName) {
+    const currentList = getCurrentList();
+
+    // Get current list's group ID
+    const listMeta = getListMetadata(listName);
+    const currentGroupId = listMeta?.groupId;
+
+    // Get all collections (groups without years)
+    const groups = getSortedGroups ? getSortedGroups() : [];
+    const collections = groups.filter((g) => !g.isYearGroup);
+
+    // Remove any existing action sheets first
+    const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
+    if (existingSheet) {
+      existingSheet.remove();
+    }
+
+    // Hide FAB when mobile action sheet is shown
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = 'none';
+    }
+
+    let collectionsHtml = '';
+    if (collections.length === 0) {
+      collectionsHtml = `
+        <div class="py-3 px-4 text-gray-500 text-sm">
+          <i class="fas fa-info-circle mr-3"></i>No collections available
+        </div>
+      `;
+    } else {
+      collections.forEach((collection) => {
+        const isCurrentGroup = collection._id === currentGroupId;
+        const checkmark = isCurrentGroup
+          ? '<i class="fas fa-check text-green-500 ml-2"></i>'
+          : '';
+        const disabledClass = isCurrentGroup ? 'opacity-50' : '';
+
+        collectionsHtml += `
+          <button data-action="select-collection" 
+                  data-group-id="${collection._id}"
+                  data-group-name="${collection.name}"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm flex items-center justify-between ${disabledClass}"
+                  ${isCurrentGroup ? 'disabled' : ''}>
+            <span>
+              <i class="fas fa-folder mr-3 text-gray-400"></i>${collection.name}
+            </span>
+            ${checkmark}
+          </button>
+        `;
+      });
+    }
+
+    const actionSheet = document.createElement('div');
+    actionSheet.className = 'fixed inset-0 z-60';
+    actionSheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[70vh] overflow-y-auto">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          <h3 class="font-semibold text-white mb-2">Move "${listName}"</h3>
+          <p class="text-sm text-gray-500 mb-4">Select a collection</p>
+          
+          ${collectionsHtml}
+          
+          <button data-action="cancel"
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(actionSheet);
+
+    // Attach event listeners
+    const backdrop = actionSheet.querySelector('[data-backdrop]');
+    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+
+    const closeSheet = () => {
+      actionSheet.remove();
+      const fabElement = document.getElementById('addAlbumFAB');
+      if (fabElement && currentList) {
+        fabElement.style.display = 'flex';
+      }
+    };
+
+    backdrop.addEventListener('click', closeSheet);
+    cancelBtn.addEventListener('click', closeSheet);
+
+    // Handle collection selection
+    actionSheet
+      .querySelectorAll('[data-action="select-collection"]:not([disabled])')
+      .forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const groupId = btn.dataset.groupId;
+          const groupName = btn.dataset.groupName;
+          closeSheet();
+
+          try {
+            await apiCall(`/api/lists/${encodeURIComponent(listName)}/move`, {
+              method: 'POST',
+              body: JSON.stringify({ groupId }),
+            });
+
+            showToast(`Moved "${listName}" to "${groupName}"`, 'success');
+
+            // Refresh groups and lists to update sidebar
+            if (refreshGroupsAndLists) {
+              await refreshGroupsAndLists();
+            } else {
+              updateListNav();
+            }
+          } catch (err) {
+            console.error('Failed to move list:', err);
+            showToast('Failed to move list', 'error');
+          }
+        });
+      });
   }
 
   /**

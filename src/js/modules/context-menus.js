@@ -36,6 +36,8 @@
  * @param {Function} deps.setContextState - Set context menu state
  * @param {Function} deps.setCurrentList - Set current list (for delete)
  * @param {Function} deps.refreshMobileBarVisibility - Refresh mobile bar visibility
+ * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
+ * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
  * @returns {Object} Context menus module API
  */
 export function createContextMenus(deps = {}) {
@@ -65,6 +67,8 @@ export function createContextMenus(deps = {}) {
     setContextState,
     setCurrentList,
     refreshMobileBarVisibility,
+    getSortedGroups,
+    refreshGroupsAndLists,
   } = deps;
 
   // Track loading performance optimization
@@ -208,6 +212,22 @@ export function createContextMenus(deps = {}) {
       musicServiceText = 'Send to Tidal';
     }
 
+    // Determine if list is in a collection (not a year-group)
+    // Lists in collections (or orphaned/uncategorized) can be moved to other collections
+    // Lists in year-groups cannot be moved via this menu (they're organized by year)
+    const groupId = meta?.groupId;
+    let isInCollection = false;
+
+    if (!groupId) {
+      // Orphaned/uncategorized lists can be moved
+      isInCollection = true;
+    } else if (getSortedGroups) {
+      // Check if the group is a collection (not a year-group)
+      const groups = getSortedGroups();
+      const group = groups.find((g) => g._id === groupId);
+      isInCollection = group ? !group.isYearGroup : false;
+    }
+
     return {
       hasYear: !!meta?.year,
       isMain: !!meta?.isMain,
@@ -216,6 +236,7 @@ export function createContextMenus(deps = {}) {
       musicServiceText,
       hasSpotify,
       hasTidal,
+      isInCollection,
     };
   }
 
@@ -908,6 +929,27 @@ export function createContextMenus(deps = {}) {
       setContextState({ list: null });
     };
 
+    // Handle move list option click - show collection submenu
+    const moveListOption = document.getElementById('moveListOption');
+    const moveListSubmenu = document.getElementById('moveListSubmenu');
+
+    if (moveListOption && moveListSubmenu) {
+      moveListOption.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showMoveListSubmenu();
+      };
+
+      // Show submenu on mouse enter
+      moveListOption.addEventListener('mouseenter', () => {
+        cancelHideMoveListSubmenu();
+        const { list: currentContextList } = getContextState();
+        if (currentContextList) {
+          showMoveListSubmenu();
+        }
+      });
+    }
+
     // Setup mouse handlers for download submenu
     const downloadSubmenu = document.getElementById('downloadListSubmenu');
     let downloadSubmenuTimeout;
@@ -950,6 +992,161 @@ export function createContextMenus(deps = {}) {
       downloadSubmenu.addEventListener('mouseenter', cancelHideDownloadSubmenu);
       downloadSubmenu.addEventListener('mouseleave', hideDownloadSubmenu);
     }
+
+    // Setup mouse handlers for move list submenu
+    let moveListSubmenuTimeout;
+
+    const hideMoveListSubmenu = () => {
+      moveListSubmenuTimeout = setTimeout(() => {
+        if (moveListSubmenu) {
+          moveListSubmenu.classList.add('hidden');
+          if (moveListOption) {
+            moveListOption.classList.remove('bg-gray-700', 'text-white');
+          }
+        }
+      }, 200);
+    };
+
+    const cancelHideMoveListSubmenu = () => {
+      if (moveListSubmenuTimeout) clearTimeout(moveListSubmenuTimeout);
+    };
+
+    // Update context menu mouseleave to also handle move list submenu
+    contextMenu.addEventListener('mouseleave', (e) => {
+      const toMoveListSubmenu =
+        moveListSubmenu &&
+        (e.relatedTarget === moveListSubmenu ||
+          moveListSubmenu.contains(e.relatedTarget));
+
+      if (!toMoveListSubmenu) {
+        hideMoveListSubmenu();
+      }
+    });
+
+    if (moveListSubmenu) {
+      moveListSubmenu.addEventListener('mouseenter', cancelHideMoveListSubmenu);
+      moveListSubmenu.addEventListener('mouseleave', hideMoveListSubmenu);
+    }
+  }
+
+  /**
+   * Show the move list to collection submenu
+   */
+  function showMoveListSubmenu() {
+    const moveListOption = document.getElementById('moveListOption');
+    const moveListSubmenu = document.getElementById('moveListSubmenu');
+    const { list: currentContextList } = getContextState();
+
+    if (!moveListSubmenu || !moveListOption || !currentContextList) return;
+
+    // Get the current list's metadata to know which collection it's in
+    const currentMeta = getListMetadata(currentContextList);
+    const currentGroupId = currentMeta?.groupId;
+
+    // Get all collections (groups without years) - exclude year-groups
+    const groups = getSortedGroups ? getSortedGroups() : [];
+    const collections = groups.filter((g) => !g.isYearGroup);
+
+    // Build submenu content
+    let html = '';
+
+    if (collections.length === 0) {
+      html = `
+        <div class="px-4 py-2 text-sm text-gray-500">
+          No collections available
+        </div>
+      `;
+    } else {
+      collections.forEach((collection) => {
+        const isCurrentGroup = collection._id === currentGroupId;
+        const checkmark = isCurrentGroup
+          ? '<i class="fas fa-check text-green-500 ml-2"></i>'
+          : '';
+        const disabledClass = isCurrentGroup
+          ? 'opacity-50 cursor-not-allowed'
+          : 'hover:bg-gray-700 cursor-pointer';
+
+        html += `
+          <button 
+            class="w-full text-left px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors whitespace-nowrap ${disabledClass}"
+            data-group-id="${collection._id}"
+            data-group-name="${collection.name}"
+            ${isCurrentGroup ? 'disabled' : ''}
+          >
+            <i class="fas fa-folder mr-2 w-4 text-center text-gray-500"></i>
+            ${collection.name}
+            ${checkmark}
+          </button>
+        `;
+      });
+    }
+
+    moveListSubmenu.innerHTML = html;
+
+    // Add click handlers for each collection option
+    moveListSubmenu
+      .querySelectorAll('button:not([disabled])')
+      .forEach((btn) => {
+        btn.onclick = async () => {
+          const groupId = btn.dataset.groupId;
+          const groupName = btn.dataset.groupName;
+          await moveListToCollection(currentContextList, groupId, groupName);
+        };
+      });
+
+    // Position the submenu next to the option
+    const optionRect = moveListOption.getBoundingClientRect();
+    moveListSubmenu.style.left = `${optionRect.right}px`;
+    moveListSubmenu.style.top = `${optionRect.top}px`;
+    moveListSubmenu.classList.remove('hidden');
+    moveListOption.classList.add('bg-gray-700', 'text-white');
+
+    // Adjust if off-screen
+    requestAnimationFrame(() => {
+      const submenuRect = moveListSubmenu.getBoundingClientRect();
+      if (submenuRect.right > window.innerWidth) {
+        moveListSubmenu.style.left = `${optionRect.left - submenuRect.width}px`;
+      }
+      if (submenuRect.bottom > window.innerHeight) {
+        moveListSubmenu.style.top = `${window.innerHeight - submenuRect.height - 10}px`;
+      }
+    });
+  }
+
+  /**
+   * Move a list to a different collection
+   * @param {string} listName - Name of the list to move
+   * @param {string} groupId - Target group ID
+   * @param {string} groupName - Target group name (for toast message)
+   */
+  async function moveListToCollection(listName, groupId, groupName) {
+    const contextMenu = document.getElementById('contextMenu');
+    const moveListSubmenu = document.getElementById('moveListSubmenu');
+
+    // Hide menus
+    if (contextMenu) contextMenu.classList.add('hidden');
+    if (moveListSubmenu) moveListSubmenu.classList.add('hidden');
+
+    try {
+      await apiCall(`/api/lists/${encodeURIComponent(listName)}/move`, {
+        method: 'POST',
+        body: JSON.stringify({ groupId }),
+      });
+
+      showToast(`Moved "${listName}" to "${groupName}"`, 'success');
+
+      // Refresh groups and lists to update sidebar
+      if (refreshGroupsAndLists) {
+        await refreshGroupsAndLists();
+      } else {
+        updateListNav();
+      }
+    } catch (err) {
+      console.error('Failed to move list:', err);
+      showToast('Failed to move list', 'error');
+    }
+
+    setContextState({ list: null });
   }
 
   // Return public API

@@ -414,6 +414,16 @@ export function createListNav(deps = {}) {
         }
       }
 
+      // Show/hide move to collection option based on whether list is in a collection
+      const moveListOption = document.getElementById('moveListOption');
+      if (moveListOption) {
+        if (menuConfig.isInCollection) {
+          moveListOption.classList.remove('hidden');
+        } else {
+          moveListOption.classList.add('hidden');
+        }
+      }
+
       // Position the menu at cursor
       positionContextMenu(contextMenu, e.clientX, e.clientY);
     });

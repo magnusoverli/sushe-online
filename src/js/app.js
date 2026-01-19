@@ -162,6 +162,8 @@ function getContextMenusModule() {
         }
       },
       toggleMainStatus,
+      getSortedGroups,
+      refreshGroupsAndLists,
     });
   }
   return contextMenusModule;
@@ -229,6 +231,7 @@ function getMobileUIModule() {
         });
       },
       playSpecificTrack,
+      getSortedGroups,
       refreshGroupsAndLists,
     });
   }
