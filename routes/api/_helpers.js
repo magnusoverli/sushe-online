@@ -101,8 +101,11 @@ function createHelpers(deps) {
       // Invalidate list caches for each affected user
       for (const row of result.rows) {
         // Invalidate all list-related caches for this user
-        // The pattern match will catch /api/lists and /api/lists/:name
-        responseCache.invalidate(`GET:/api/lists:${row.user_id}`);
+        // Need to invalidate BOTH patterns:
+        // 1. Metadata endpoint: GET:/api/lists:userId
+        // 2. Specific list endpoints: GET:/api/lists/*:userId
+        // Using just the userId pattern will match both since they all end with :userId
+        responseCache.invalidate(`:${row.user_id}`);
       }
 
       if (result.rows.length > 0) {
