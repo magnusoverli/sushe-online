@@ -4808,9 +4808,47 @@ export function createSettingsDrawer(deps = {}) {
           'success'
         );
 
-        // Reload admin data
-        categoryData.admin = null;
-        await loadCategoryData('admin');
+        // Partial update: only update the stats for this year without collapsing the accordion
+        if (response.status && categoryData.admin?.aggregateStatus) {
+          // Update cached data
+          const yearIndex = categoryData.admin.aggregateStatus.findIndex(
+            (s) => s.year === year
+          );
+          if (yearIndex !== -1) {
+            categoryData.admin.aggregateStatus[yearIndex] = response.status;
+          }
+
+          // Update stats display in the DOM
+          const yearContent = document.getElementById(
+            `aggregate-year-content-${year}`
+          );
+          if (yearContent) {
+            const stats = response.status.stats;
+            const statsGrid = yearContent.querySelector(
+              '.grid.grid-cols-2.sm\\:grid-cols-4'
+            );
+            if (statsGrid && stats) {
+              statsGrid.innerHTML = `
+                <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                  <div class="font-bold text-white text-lg">${stats.participantCount || 0}</div>
+                  <div class="text-xs text-gray-400 uppercase">Contributors</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                  <div class="font-bold text-white text-lg">${stats.totalAlbums || 0}</div>
+                  <div class="text-xs text-gray-400 uppercase">Albums</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                  <div class="font-bold text-white text-lg">${stats.albumsWith3PlusVoters || 0}</div>
+                  <div class="text-xs text-gray-400 uppercase">3+ Votes</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-sm p-2 text-center border border-gray-700/50">
+                  <div class="font-bold text-white text-lg">${stats.albumsWith2Voters || 0}</div>
+                  <div class="text-xs text-gray-400 uppercase">2 Votes</div>
+                </div>
+              `;
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Error recomputing aggregate list:', error);
