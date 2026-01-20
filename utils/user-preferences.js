@@ -593,17 +593,18 @@ function createUserPreferences(deps = {}) {
 
     log.info('Aggregating preferences from lists for user:', userId);
 
-    // Query all albums from user's lists with merged data
+    // Query all albums from user's lists
+    // All album metadata comes from canonical albums table
     const query = `
       SELECT 
         l.name as list_name,
         l.year as list_year,
         l.is_main,
         li.position,
-        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
-        COALESCE(NULLIF(li.country, ''), a.country) as country,
-        COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
-        COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2
+        a.artist,
+        a.country,
+        a.genre_1,
+        a.genre_2
       FROM lists l
       JOIN list_items li ON li.list_id = l._id
       LEFT JOIN albums a ON li.album_id = a.album_id

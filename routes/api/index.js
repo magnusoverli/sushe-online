@@ -16,13 +16,7 @@ const {
   createMbFetch,
 } = require('../../utils/request-queue');
 
-// Import deduplication helpers
-const {
-  clearAlbumCache,
-  prefetchAlbums,
-  getStorableValue,
-  getStorableTracksValue,
-} = require('../../utils/deduplication');
+// Deduplication helpers removed - list_items no longer stores album metadata
 
 // Import other utilities
 const { normalizeAlbumKey } = require('../../utils/fuzzy-match');
@@ -164,12 +158,6 @@ module.exports = (app, deps) => {
     normalizeAlbumKey,
     validateYear,
     URLSearchParams,
-
-    // Deduplication
-    clearAlbumCache,
-    prefetchAlbums,
-    getStorableValue,
-    getStorableTracksValue,
 
     // Templates
     htmlTemplate,

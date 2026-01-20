@@ -1,10 +1,11 @@
 /**
  * Track Picks API Routes
  *
- * Handles track selection for albums:
+ * Handles track selection for list items:
  * - Set/update primary and secondary tracks
  * - Remove track picks
- * - Bulk fetch track picks
+ *
+ * Track picks are now stored directly on list_items (per-list, not per-user-album)
  */
 
 /**
@@ -16,16 +17,16 @@ module.exports = (app, deps) => {
   const { ensureAuthAPI, logger } = deps;
 
   /**
-   * Set or update a track pick for an album
+   * Set or update a track pick for a list item
    * Click logic: first click = secondary (priority 2), second click = promote to primary (priority 1)
    * If promoting and a primary exists, the old primary becomes secondary
    */
-  app.post('/api/track-picks/:albumId', ensureAuthAPI, async (req, res) => {
-    const { albumId } = req.params;
+  app.post('/api/track-picks/:listItemId', ensureAuthAPI, async (req, res) => {
+    const { listItemId } = req.params;
     const { trackIdentifier, priority } = req.body;
 
-    if (!albumId) {
-      return res.status(400).json({ error: 'Album ID is required' });
+    if (!listItemId) {
+      return res.status(400).json({ error: 'List item ID is required' });
     }
 
     if (!trackIdentifier || typeof trackIdentifier !== 'string') {
@@ -36,17 +37,28 @@ module.exports = (app, deps) => {
     const targetPriority = priority === 1 ? 1 : 2;
 
     try {
-      const { trackPicks } = require('../../db');
-      const result = await trackPicks.setTrackPick(
-        req.user._id,
-        albumId,
+      const { listItemsAsync, listsAsync } = require('../../db');
+
+      // Verify the list item belongs to the user
+      const listItem = await listItemsAsync.findOne({ _id: listItemId });
+      if (!listItem) {
+        return res.status(404).json({ error: 'List item not found' });
+      }
+
+      const list = await listsAsync.findOne({ _id: listItem.listId });
+      if (!list || list.userId !== req.user._id) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+
+      const result = await listItemsAsync.setTrackPick(
+        listItemId,
         trackIdentifier.trim(),
         targetPriority
       );
 
       logger.debug('Track pick updated', {
         userId: req.user._id,
-        albumId,
+        listItemId,
         trackIdentifier,
         targetPriority,
         result,
@@ -54,7 +66,7 @@ module.exports = (app, deps) => {
 
       res.json({
         success: true,
-        albumId,
+        listItemId,
         primary_track: result.primary,
         secondary_track: result.secondary,
       });
@@ -63,83 +75,69 @@ module.exports = (app, deps) => {
         error: err.message,
         stack: err.stack,
         userId: req.user._id,
-        albumId,
+        listItemId,
       });
       return res.status(500).json({ error: 'Error setting track pick' });
     }
   });
 
   /**
-   * Remove a track pick for an album
+   * Remove a track pick for a list item
    * If trackIdentifier is provided, removes that specific track
-   * If not provided, removes all track picks for the album
+   * If not provided, removes all track picks for the list item
    */
-  app.delete('/api/track-picks/:albumId', ensureAuthAPI, async (req, res) => {
-    const { albumId } = req.params;
-    const { trackIdentifier } = req.body || {};
+  app.delete(
+    '/api/track-picks/:listItemId',
+    ensureAuthAPI,
+    async (req, res) => {
+      const { listItemId } = req.params;
+      const { trackIdentifier } = req.body || {};
 
-    if (!albumId) {
-      return res.status(400).json({ error: 'Album ID is required' });
+      if (!listItemId) {
+        return res.status(400).json({ error: 'List item ID is required' });
+      }
+
+      try {
+        const { listItemsAsync, listsAsync } = require('../../db');
+
+        // Verify the list item belongs to the user
+        const listItem = await listItemsAsync.findOne({ _id: listItemId });
+        if (!listItem) {
+          return res.status(404).json({ error: 'List item not found' });
+        }
+
+        const list = await listsAsync.findOne({ _id: listItem.listId });
+        if (!list || list.userId !== req.user._id) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const result = await listItemsAsync.removeTrackPick(
+          listItemId,
+          trackIdentifier || null
+        );
+
+        logger.debug('Track pick removed', {
+          userId: req.user._id,
+          listItemId,
+          trackIdentifier,
+          result,
+        });
+
+        res.json({
+          success: true,
+          listItemId,
+          primary_track: result.primary,
+          secondary_track: result.secondary,
+        });
+      } catch (err) {
+        logger.error('Error removing track pick', {
+          error: err.message,
+          stack: err.stack,
+          userId: req.user._id,
+          listItemId,
+        });
+        return res.status(500).json({ error: 'Error removing track pick' });
+      }
     }
-
-    try {
-      const { trackPicks } = require('../../db');
-      const result = await trackPicks.removeTrackPick(
-        req.user._id,
-        albumId,
-        trackIdentifier || null
-      );
-
-      logger.debug('Track pick removed', {
-        userId: req.user._id,
-        albumId,
-        trackIdentifier,
-        result,
-      });
-
-      res.json({
-        success: true,
-        albumId,
-        primary_track: result.primary,
-        secondary_track: result.secondary,
-      });
-    } catch (err) {
-      logger.error('Error removing track pick', {
-        error: err.message,
-        stack: err.stack,
-        userId: req.user._id,
-        albumId,
-      });
-      return res.status(500).json({ error: 'Error removing track pick' });
-    }
-  });
-
-  /**
-   * Get track picks for specific albums
-   * Used to fetch track picks for albums in a list
-   */
-  app.post('/api/track-picks/bulk', ensureAuthAPI, async (req, res) => {
-    const { albumIds } = req.body;
-
-    if (!albumIds || !Array.isArray(albumIds)) {
-      return res.status(400).json({ error: 'Album IDs array is required' });
-    }
-
-    try {
-      const { trackPicks } = require('../../db');
-      const result = await trackPicks.findTrackPicksForAlbums(
-        req.user._id,
-        albumIds
-      );
-
-      res.json(result);
-    } catch (err) {
-      logger.error('Error fetching track picks', {
-        error: err.message,
-        stack: err.stack,
-        userId: req.user._id,
-      });
-      return res.status(500).json({ error: 'Error fetching track picks' });
-    }
-  });
+  );
 };

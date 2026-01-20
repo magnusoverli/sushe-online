@@ -163,13 +163,11 @@ let users,
   lists,
   listItems,
   albums,
-  trackPicks,
   listGroups,
   usersAsync,
   listsAsync,
   listItemsAsync,
   albumsAsync,
-  trackPicksAsync,
   listGroupsAsync,
   pool;
 let ready = Promise.resolve();
@@ -226,22 +224,16 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };
+  // Simplified list_items: junction table + user-specific data (comments, track picks)
+  // All album metadata comes from canonical albums table
   const listItemsMap = {
     _id: '_id',
     listId: 'list_id',
     position: 'position',
-    artist: 'artist',
-    album: 'album',
     albumId: 'album_id',
-    releaseDate: 'release_date',
-    country: 'country',
-    genre1: 'genre_1',
-    genre2: 'genre_2',
     comments: 'comments',
-    tracks: 'tracks',
-    trackPick: 'track_pick',
-    coverImage: 'cover_image',
-    coverImageFormat: 'cover_image_format',
+    primaryTrack: 'primary_track',
+    secondaryTrack: 'secondary_track',
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };
@@ -260,15 +252,7 @@ if (process.env.DATABASE_URL) {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
   };
-  const trackPicksMap = {
-    _id: '_id',
-    userId: 'user_id',
-    albumId: 'album_id',
-    trackIdentifier: 'track_identifier',
-    priority: 'priority',
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
-  };
+  // track_picks table removed - track picks now stored in list_items
   const listGroupsMap = {
     _id: '_id',
     userId: 'user_id',
@@ -282,13 +266,11 @@ if (process.env.DATABASE_URL) {
   lists = new PgDatastore(pool, 'lists', listsMap);
   listItems = new PgDatastore(pool, 'list_items', listItemsMap);
   albums = new PgDatastore(pool, 'albums', albumsMap);
-  trackPicks = new PgDatastore(pool, 'track_picks', trackPicksMap);
   listGroups = new PgDatastore(pool, 'list_groups', listGroupsMap);
   usersAsync = users;
   listsAsync = lists;
   listItemsAsync = listItems;
   albumsAsync = albums;
-  trackPicksAsync = trackPicks;
   listGroupsAsync = listGroups;
   async function migrateUsers() {
     try {
@@ -338,96 +320,17 @@ if (process.env.DATABASE_URL) {
     }
   }
   async function migrateLists() {
-    try {
-      // Check if data column exists (for legacy migration)
-      const columnCheck = await pool.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'lists' AND column_name = 'data'
-      `);
-
-      if (columnCheck.rows.length === 0) {
-        logger.info(
-          'No legacy data column found in lists table, skipping migration'
-        );
-        return;
-      }
-
-      const listsRes = await pool.query('SELECT _id, data FROM lists');
-      for (const row of listsRes.rows) {
-        const countRes = await pool.query(
-          'SELECT COUNT(*) FROM list_items WHERE list_id=$1',
-          [row._id]
-        );
-        if (
-          parseInt(countRes.rows[0].count, 10) === 0 &&
-          Array.isArray(row.data)
-        ) {
-          for (let i = 0; i < row.data.length; i++) {
-            const album = row.data[i];
-            await pool.query(
-              `INSERT INTO list_items (_id, list_id, position, artist, album, album_id, release_date, country, genre_1, genre_2, comments, tracks, track_pick, cover_image, cover_image_format, created_at, updated_at)
-               VALUES (gen_random_uuid()::text, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())`,
-              [
-                row._id,
-                i + 1,
-                album.artist || '',
-                album.album || '',
-                album.album_id || '',
-                album.release_date || '',
-                album.country || '',
-                album.genre_1 || album.genre || '',
-                album.genre_2 || '',
-                album.comments || album.comment || '',
-                Array.isArray(album.tracks) ? album.tracks : null,
-                album.track_pick || null,
-                album.cover_image || '',
-                album.cover_image_format || '',
-              ]
-            );
-          }
-          await pool.query('UPDATE lists SET data = NULL WHERE _id=$1', [
-            row._id,
-          ]);
-        }
-      }
-    } catch (err) {
-      logger.error('List migration error', {
-        error: err.message,
-        stack: err.stack,
-      });
-    }
+    // Legacy migration function - no longer needed.
+    // This used to migrate data from lists.data JSONB column to list_items table.
+    // Album metadata columns have been removed from list_items (migration 042).
+    // This function is kept as a no-op for backward compatibility.
   }
 
   async function migrateAlbums() {
-    const itemsRes = await pool.query(
-      'SELECT DISTINCT album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format FROM list_items'
-    );
-    for (const row of itemsRes.rows) {
-      if (!row.album_id) continue;
-      // Use INSERT ON CONFLICT to prevent race condition on concurrent startup
-      // Note: tracks is JSONB, need to stringify if it's an object
-      const tracksValue = row.tracks ? JSON.stringify(row.tracks) : null;
-      await pool.query(
-        `INSERT INTO albums (album_id, artist, album, release_date, country, genre_1, genre_2, tracks, cover_image, cover_image_format, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-         ON CONFLICT (album_id) DO NOTHING`,
-        [
-          row.album_id,
-          row.artist || '',
-          row.album || '',
-          row.release_date || '',
-          row.country || '',
-          row.genre_1 || '',
-          row.genre_2 || '',
-          tracksValue,
-          row.cover_image || null,
-          row.cover_image_format || '',
-          new Date(),
-          new Date(),
-        ]
-      );
-    }
+    // Legacy migration function - no longer needed.
+    // Album metadata columns have been removed from list_items (migration 042).
+    // All album data now lives exclusively in the albums table.
+    // This function is kept as a no-op for backward compatibility.
   }
 
   async function ensureAdminUser() {
@@ -531,13 +434,11 @@ module.exports = {
   lists,
   listItems,
   albums,
-  trackPicks,
   listGroups,
   usersAsync,
   listsAsync,
   listItemsAsync,
   albumsAsync,
-  trackPicksAsync,
   listGroupsAsync,
   dataDir,
   ready,

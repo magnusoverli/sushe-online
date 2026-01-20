@@ -97,27 +97,32 @@ test.describe('API Contract Tests - Groups', () => {
 });
 
 test.describe('API Contract Tests - Track Picks', () => {
-  test('POST /api/track-picks/:albumId should accept trackIdentifier and priority', async ({
+  test('POST /api/track-picks/:listItemId should accept trackIdentifier and priority', async ({
     request,
   }) => {
-    const response = await request.post('/api/track-picks/test-album-123', {
+    // Track picks API now uses list item ID instead of album ID
+    const response = await request.post('/api/track-picks/test-list-item-123', {
       data: {
         trackIdentifier: 'Track Name',
-        priority: 'primary',
+        priority: 1, // 1=primary, 2=secondary
       },
     });
 
     expect(response.status()).toBe(401);
   });
 
-  test('DELETE /api/track-picks/:albumId should accept trackIdentifier in body', async ({
+  test('DELETE /api/track-picks/:listItemId should accept trackIdentifier in body', async ({
     request,
   }) => {
-    const response = await request.delete('/api/track-picks/test-album-123', {
-      data: {
-        trackIdentifier: 'Track To Remove',
-      },
-    });
+    // Track picks API now uses list item ID instead of album ID
+    const response = await request.delete(
+      '/api/track-picks/test-list-item-123',
+      {
+        data: {
+          trackIdentifier: 'Track To Remove',
+        },
+      }
+    );
 
     expect(response.status()).toBe(401);
   });

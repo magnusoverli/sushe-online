@@ -116,12 +116,13 @@ function createAggregateAudit(deps = {}) {
     log.info(`Running aggregate audit for year ${year}`);
 
     // Find all list items from contributors for this year
+    // All album metadata comes from canonical albums table
     const result = await pool.query(
       `
       SELECT 
         li.album_id,
-        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
-        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        a.artist,
+        a.album,
         li.position,
         l.user_id,
         u.username,
@@ -214,12 +215,13 @@ function createAggregateAudit(deps = {}) {
     log.info(`Running normalization diagnostic for year ${year}`);
 
     // Find all list items from contributors for this year
+    // All album metadata comes from canonical albums table
     const result = await pool.query(
       `
       SELECT 
         li.album_id,
-        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
-        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        a.artist,
+        a.album,
         li.position,
         l.user_id,
         u.username
@@ -503,11 +505,12 @@ function createAggregateAudit(deps = {}) {
     log.info('Finding manual albums for reconciliation');
 
     // 1. Find all manual albums in list_items
+    // All album metadata comes from canonical albums table
     const manualItemsResult = await pool.query(`
       SELECT DISTINCT ON (li.album_id)
         li.album_id,
-        COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
-        COALESCE(NULLIF(li.album, ''), a.album) as album,
+        a.artist,
+        a.album,
         a.cover_image IS NOT NULL as has_cover
       FROM list_items li
       LEFT JOIN albums a ON li.album_id = a.album_id
@@ -723,38 +726,17 @@ function createAggregateAudit(deps = {}) {
       await client.query('BEGIN');
 
       // Update list_items to use canonical album_id
-      if (syncMetadata) {
-        // Also sync artist/album names
-        const updateResult = await client.query(
-          `
-          UPDATE list_items
-          SET 
-            album_id = $1,
-            artist = $2,
-            album = $3,
-            updated_at = NOW()
-          WHERE album_id = $4
-        `,
-          [
-            canonicalAlbumId,
-            canonicalAlbum.artist,
-            canonicalAlbum.album,
-            manualAlbumId,
-          ]
-        );
-        updatedCount = updateResult.rowCount;
-      } else {
-        // Just update album_id
-        const updateResult = await client.query(
-          `
-          UPDATE list_items
-          SET album_id = $1, updated_at = NOW()
-          WHERE album_id = $2
-        `,
-          [canonicalAlbumId, manualAlbumId]
-        );
-        updatedCount = updateResult.rowCount;
-      }
+      // Note: syncMetadata option is now a no-op since list_items no longer stores
+      // album metadata - all metadata comes from the canonical albums table
+      const updateResult = await client.query(
+        `
+        UPDATE list_items
+        SET album_id = $1, updated_at = NOW()
+        WHERE album_id = $2
+      `,
+        [canonicalAlbumId, manualAlbumId]
+      );
+      updatedCount = updateResult.rowCount;
 
       // Delete manual album from albums table if it exists
       await client.query(`DELETE FROM albums WHERE album_id = $1`, [

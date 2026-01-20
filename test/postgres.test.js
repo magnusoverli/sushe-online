@@ -710,10 +710,12 @@ describe('PgDatastore', () => {
   describe('findWithAlbumData', () => {
     beforeEach(() => {
       // Create a list_items datastore
+      // V6: Track picks now stored directly on list_items as primary_track/secondary_track
       datastore = new PgDatastore(mockPool, 'list_items', {
         listId: 'list_id',
         albumId: 'album_id',
-        trackPick: 'track_pick',
+        primaryTrack: 'primary_track',
+        secondaryTrack: 'secondary_track',
         coverImage: 'cover_image',
         coverImageFormat: 'cover_image_format',
         releaseDate: 'release_date',
@@ -723,12 +725,14 @@ describe('PgDatastore', () => {
     });
 
     it('should join list_items with albums table', async () => {
+      // V6: Track picks now stored directly on list_items
       const mockRows = [
         {
           _id: 'item1',
           list_id: 'list123',
           position: 1,
-          track_pick: 'Track 1',
+          primary_track: 'Track 1',
+          secondary_track: 'Track 2',
           comments: 'Great album',
           album_id: 'abc',
           artist: 'Artist Name',
@@ -741,6 +745,7 @@ describe('PgDatastore', () => {
           cover_image: 'image.jpg',
           cover_image_format: 'jpg',
           summary: 'A great rock album from the 2020s.',
+          summary_source: 'manual',
         },
       ];
       mockPool.query = mock.fn(() =>
@@ -754,17 +759,19 @@ describe('PgDatastore', () => {
       assert.strictEqual(result[0].listId, 'list123');
       assert.strictEqual(result[0].artist, 'Artist Name');
       assert.strictEqual(result[0].album, 'Album Title');
-      assert.strictEqual(result[0].trackPick, 'Track 1');
+      // V6: Now uses primaryTrack/secondaryTrack instead of trackPick
+      assert.strictEqual(result[0].primaryTrack, 'Track 1');
+      assert.strictEqual(result[0].secondaryTrack, 'Track 2');
       assert.strictEqual(
         result[0].summary,
         'A great rock album from the 2020s.'
       );
 
-      // Check that prepared query was used
+      // Check that prepared query was used (V6 query)
       const queryCall = mockPool.query.mock.calls[0].arguments[0];
-      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV3');
+      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV6');
       assert.ok(queryCall.text.includes('LEFT JOIN albums'));
-      assert.ok(queryCall.text.includes('COALESCE'));
+      // V6: No longer uses COALESCE - reads directly from albums table
     });
 
     it('should throw error if not list_items table', async () => {
@@ -796,7 +803,8 @@ describe('PgDatastore', () => {
           _id: 'item1',
           list_id: 'list123',
           position: 1,
-          track_pick: null,
+          primary_track: null,
+          secondary_track: null,
           comments: null,
           album_id: 'abc',
           artist: 'Artist',
@@ -808,6 +816,8 @@ describe('PgDatastore', () => {
           tracks: null,
           cover_image: null,
           cover_image_format: null,
+          summary: null,
+          summary_source: null,
         },
       ];
       mockPool.query = mock.fn(() =>
@@ -816,7 +826,8 @@ describe('PgDatastore', () => {
 
       const result = await datastore.findWithAlbumData('list123');
 
-      assert.strictEqual(result[0].trackPick, '');
+      assert.strictEqual(result[0].primaryTrack, null);
+      assert.strictEqual(result[0].secondaryTrack, null);
       assert.strictEqual(result[0].comments, '');
       assert.strictEqual(result[0].releaseDate, '');
       assert.strictEqual(result[0].country, '');
@@ -829,11 +840,12 @@ describe('PgDatastore', () => {
           _id: 'item1',
           list_id: 'list123',
           position: 1,
-          track_pick: null,
+          primary_track: null,
+          secondary_track: null,
           comments: null,
           album_id: null, // Test null album_id
-          artist: null, // Test null artist (line 328)
-          album: null, // Test null album (line 329)
+          artist: null, // Test null artist
+          album: null, // Test null album
           release_date: null,
           country: null,
           genre_1: null,
@@ -841,6 +853,8 @@ describe('PgDatastore', () => {
           tracks: null,
           cover_image: null,
           cover_image_format: null,
+          summary: null,
+          summary_source: null,
         },
       ];
       mockPool.query = mock.fn(() =>
@@ -850,18 +864,20 @@ describe('PgDatastore', () => {
       const result = await datastore.findWithAlbumData('list123');
 
       // All || operators should use the fallback values
-      assert.strictEqual(result[0].artist, ''); // Line 328: row.artist || ''
-      assert.strictEqual(result[0].album, ''); // Line 329: row.album || ''
-      assert.strictEqual(result[0].albumId, ''); // Line 330: row.album_id || ''
+      assert.strictEqual(result[0].artist, '');
+      assert.strictEqual(result[0].album, '');
+      assert.strictEqual(result[0].albumId, '');
       assert.strictEqual(result[0].releaseDate, '');
       assert.strictEqual(result[0].country, '');
       assert.strictEqual(result[0].genre1, '');
       assert.strictEqual(result[0].genre2, '');
-      assert.strictEqual(result[0].trackPick, '');
+      // V6: Track picks return null when not set
+      assert.strictEqual(result[0].primaryTrack, null);
+      assert.strictEqual(result[0].secondaryTrack, null);
       assert.strictEqual(result[0].comments, '');
       assert.strictEqual(result[0].coverImage, '');
       assert.strictEqual(result[0].coverImageFormat, '');
-      assert.strictEqual(result[0].tracks, null); // tracks uses || null
+      assert.strictEqual(result[0].tracks, null);
     });
 
     it('should handle non-null values to cover truthy branches', async () => {
@@ -870,7 +886,8 @@ describe('PgDatastore', () => {
           _id: 'item1',
           list_id: 'list123',
           position: 1,
-          track_pick: 'Track 1',
+          primary_track: 'Track 1',
+          secondary_track: 'Track 2',
           comments: 'Great album',
           album_id: 'album123',
           artist: 'The Beatles', // Non-null artist
@@ -882,6 +899,8 @@ describe('PgDatastore', () => {
           tracks: 17,
           cover_image: 'cover.jpg',
           cover_image_format: 'jpg',
+          summary: 'Classic album',
+          summary_source: 'manual',
         },
       ];
       mockPool.query = mock.fn(() =>
@@ -898,7 +917,9 @@ describe('PgDatastore', () => {
       assert.strictEqual(result[0].country, 'UK');
       assert.strictEqual(result[0].genre1, 'Rock');
       assert.strictEqual(result[0].genre2, 'Pop');
-      assert.strictEqual(result[0].trackPick, 'Track 1');
+      // V6: Track picks now use primaryTrack/secondaryTrack
+      assert.strictEqual(result[0].primaryTrack, 'Track 1');
+      assert.strictEqual(result[0].secondaryTrack, 'Track 2');
       assert.strictEqual(result[0].comments, 'Great album');
       assert.strictEqual(result[0].coverImage, 'cover.jpg');
       assert.strictEqual(result[0].coverImageFormat, 'jpg');

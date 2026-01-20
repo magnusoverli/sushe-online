@@ -344,11 +344,10 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'List not found' });
         }
 
-        // Get all albums in the list with a JOIN to albums table
+        // Get all albums in the list
+        // All album metadata comes from canonical albums table
         const listItemsResult = await pool.query(
-          `SELECT li._id, li.album_id,
-                  COALESCE(NULLIF(a.artist, ''), li.artist) as artist,
-                  COALESCE(NULLIF(a.album, ''), li.album) as album
+          `SELECT li._id, li.album_id, a.artist, a.album
            FROM list_items li
            LEFT JOIN albums a ON li.album_id = a.album_id
            WHERE li.list_id = $1`,

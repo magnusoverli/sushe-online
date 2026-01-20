@@ -512,16 +512,36 @@ export function createImportConflictHandler(deps = {}) {
         // Use saveList for merge (don't import track picks/summaries for existing albums)
         await saveList(pendingImportFilename, mergedList);
 
+        // Fetch the saved list to get list item IDs (needed for track picks API)
+        const savedListResponse = await fetch(
+          `/api/lists/${encodeURIComponent(pendingImportFilename)}`,
+          {
+            credentials: 'include',
+          }
+        );
+        const savedList = savedListResponse.ok
+          ? await savedListResponse.json()
+          : [];
+
+        // Build a map from album_id to list_item_id for track picks
+        const albumToListItemMap = new Map();
+        for (const item of savedList) {
+          if (item.album_id && item._id) {
+            albumToListItemMap.set(item.album_id, item._id);
+          }
+        }
+
         // Import track picks and summaries for new albums only
         for (const album of newAlbums) {
           const albumId = album.album_id;
           if (!albumId) continue;
 
-          // Import track picks
-          if (album.primary_track || album.secondary_track) {
+          // Import track picks (now uses list item ID, not album ID)
+          const listItemId = albumToListItemMap.get(albumId);
+          if (listItemId && (album.primary_track || album.secondary_track)) {
             try {
               if (album.primary_track) {
-                await fetch(`/api/track-picks/${albumId}`, {
+                await fetch(`/api/track-picks/${listItemId}`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   credentials: 'include',
@@ -532,7 +552,7 @@ export function createImportConflictHandler(deps = {}) {
                 });
               }
               if (album.secondary_track) {
-                await fetch(`/api/track-picks/${albumId}`, {
+                await fetch(`/api/track-picks/${listItemId}`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   credentials: 'include',
@@ -544,14 +564,14 @@ export function createImportConflictHandler(deps = {}) {
               }
             } catch (err) {
               console.warn(
-                'Failed to import track picks for album',
-                albumId,
+                'Failed to import track picks for list item',
+                listItemId,
                 err
               );
             }
           }
 
-          // Import summary
+          // Import summary (still uses album_id)
           if (album.summary || album.summary_source) {
             try {
               await fetch(`/api/albums/${albumId}/summary`, {

@@ -1799,7 +1799,7 @@ export function createMobileUI(deps = {}) {
               <button type="button" id="fetchTracksBtn" class="text-xs text-red-500 hover:underline">Get</button>
             </div>
             <div class="text-xs text-gray-500 mb-2">Click once = secondary (☆) | Click again = primary (★)</div>
-            <div id="trackPickContainer" data-album-index="${index}" data-album-id="${album.album_id || ''}">
+            <div id="trackPickContainer" data-album-index="${index}" data-list-item-id="${album._id || ''}">
             ${
               Array.isArray(album.tracks) && album.tracks.length > 0
                 ? `
@@ -2040,19 +2040,19 @@ export function createMobileUI(deps = {}) {
             return;
 
           const trackName = item.dataset.track;
-          const albumId = trackPickContainer.dataset.albumId;
+          const listItemId = trackPickContainer.dataset.listItemId;
           const isPrimary = item.dataset.isPrimary === 'true';
           const isSecondary = item.dataset.isSecondary === 'true';
 
-          if (!albumId) {
-            showToast('Cannot save - album has no ID', 'error');
+          if (!listItemId) {
+            showToast('Cannot save - missing list item ID', 'error');
             return;
           }
 
           try {
             if (isPrimary) {
               // Deselect primary
-              const response = await fetch(`/api/track-picks/${albumId}`, {
+              const response = await fetch(`/api/track-picks/${listItemId}`, {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
@@ -2065,7 +2065,7 @@ export function createMobileUI(deps = {}) {
               showToast('Primary track removed');
             } else if (isSecondary) {
               // Promote to primary
-              const response = await fetch(`/api/track-picks/${albumId}`, {
+              const response = await fetch(`/api/track-picks/${listItemId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
@@ -2081,7 +2081,7 @@ export function createMobileUI(deps = {}) {
               showToast(`★ Primary: ${trackName.substring(0, 30)}...`);
             } else {
               // New selection as secondary
-              const response = await fetch(`/api/track-picks/${albumId}`, {
+              const response = await fetch(`/api/track-picks/${listItemId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',

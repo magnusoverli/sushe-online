@@ -2,9 +2,9 @@
 
 /**
  * Migration script to resize all existing album cover images to 512x512 pixels
- * Processes both albums and list_items tables
+ * Processes the albums table only (list_items no longer stores cover images)
  *
- * NOTE: This script now works with BYTEA columns (binary data) instead of
+ * NOTE: This script works with BYTEA columns (binary data) instead of
  * base64-encoded TEXT. The cover_image columns store raw binary data.
  */
 
@@ -24,7 +24,6 @@ const MAX_SIZE_BYTES = 200 * 1024; // 200KB - skip images smaller than this
 // Statistics tracking
 const stats = {
   albums: { total: 0, processed: 0, failed: 0, skipped: 0, savedBytes: 0 },
-  listItems: { total: 0, processed: 0, failed: 0, skipped: 0, savedBytes: 0 },
 };
 
 /**
@@ -122,72 +121,8 @@ async function processAlbumsTable() {
   }
 }
 
-/**
- * Process images in the list_items table
- */
-async function processListItemsTable() {
-  console.log('\n📋 Processing list_items table...\n');
-
-  // Get count - BYTEA columns use IS NOT NULL (no empty string check)
-  const countResult = await pool.query(
-    'SELECT COUNT(*) FROM list_items WHERE cover_image IS NOT NULL'
-  );
-  stats.listItems.total = parseInt(countResult.rows[0].count);
-  console.log(`Found ${stats.listItems.total} images to process\n`);
-
-  let offset = 0;
-
-  while (offset < stats.listItems.total) {
-    const result = await pool.query(
-      `SELECT _id, cover_image, cover_image_format 
-       FROM list_items 
-       WHERE cover_image IS NOT NULL
-       ORDER BY _id
-       LIMIT $1 OFFSET $2`,
-      [BATCH_SIZE, offset]
-    );
-
-    for (const row of result.rows) {
-      try {
-        // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
-        const imageBuffer = Buffer.isBuffer(row.cover_image)
-          ? row.cover_image
-          : Buffer.from(row.cover_image, 'base64');
-
-        // Skip if already appears to be resized
-        if (imageBuffer.length < MAX_SIZE_BYTES) {
-          console.log(
-            `  ⏭️  Skipping ${row._id} (already small: ${Math.round(imageBuffer.length / 1024)}KB)`
-          );
-          stats.listItems.skipped++;
-          continue;
-        }
-
-        const { buffer: resizedBuffer, savedBytes } =
-          await resizeImage(imageBuffer);
-
-        // Store as BYTEA (Buffer) directly
-        await pool.query(
-          'UPDATE list_items SET cover_image = $1, cover_image_format = $2 WHERE _id = $3',
-          [resizedBuffer, 'JPEG', row._id]
-        );
-
-        stats.listItems.processed++;
-        stats.listItems.savedBytes += savedBytes;
-
-        const savedKB = Math.round(savedBytes / 1024);
-        console.log(
-          `  ✓ Resized ${row._id} (saved ${savedKB} KB) [${stats.listItems.processed}/${stats.listItems.total}]`
-        );
-      } catch (error) {
-        stats.listItems.failed++;
-        console.error(`  ✗ Failed to resize ${row._id}:`, error.message);
-      }
-    }
-
-    offset += BATCH_SIZE;
-  }
-}
+// Note: processListItemsTable removed - list_items no longer stores cover images
+// All cover images are stored in the canonical albums table only
 
 /**
  * Print final statistics
@@ -202,21 +137,8 @@ function printStats() {
   console.log(`  Processed: ${stats.albums.processed}`);
   console.log(`  Skipped: ${stats.albums.skipped}`);
   console.log(`  Failed: ${stats.albums.failed}`);
-  console.log(
-    `  Space saved: ${Math.round(stats.albums.savedBytes / 1024 / 1024)} MB`
-  );
 
-  console.log('\n📋 List Items Table:');
-  console.log(`  Total images: ${stats.listItems.total}`);
-  console.log(`  Processed: ${stats.listItems.processed}`);
-  console.log(`  Skipped: ${stats.listItems.skipped}`);
-  console.log(`  Failed: ${stats.listItems.failed}`);
-  console.log(
-    `  Space saved: ${Math.round(stats.listItems.savedBytes / 1024 / 1024)} MB`
-  );
-
-  const totalSaved =
-    (stats.albums.savedBytes + stats.listItems.savedBytes) / 1024 / 1024;
+  const totalSaved = stats.albums.savedBytes / 1024 / 1024;
   console.log(`\n💾 Total space saved: ${Math.round(totalSaved)} MB`);
   console.log('='.repeat(60) + '\n');
 }
@@ -237,9 +159,8 @@ async function main() {
     await pool.query('SELECT 1');
     console.log('✓ Database connection established');
 
-    // Process both tables
+    // Process albums table (list_items no longer has cover images)
     await processAlbumsTable();
-    await processListItemsTable();
 
     // Print statistics
     printStats();
@@ -247,7 +168,6 @@ async function main() {
     // Vacuum analyze to reclaim space and update statistics
     console.log('🧹 Running VACUUM ANALYZE to reclaim space...');
     await pool.query('VACUUM ANALYZE albums');
-    await pool.query('VACUUM ANALYZE list_items');
     console.log('✓ Database optimization complete\n');
 
     process.exit(0);

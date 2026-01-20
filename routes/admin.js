@@ -952,13 +952,9 @@ module.exports = (app, deps) => {
         listsAsync.find({}),
         pool.query(
           `
-            WITH album_genres AS (
-              SELECT DISTINCT li.album_id, li.genre_1, li.genre_2 
-              FROM list_items li
-            ),
-            unique_albums AS (
+            WITH unique_albums AS (
               SELECT COUNT(DISTINCT album_id) as total 
-              FROM album_genres 
+              FROM list_items 
               WHERE album_id IS NOT NULL AND album_id != ''
             ),
             active_users AS (

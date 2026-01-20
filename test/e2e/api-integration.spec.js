@@ -310,33 +310,37 @@ test.describe('Track Picks API Integration', () => {
       },
     });
 
-    // Get the list to find album_id
+    // Get the list to find _id (list item ID) - track picks now use list item ID
     const listsResponse = await page.request.get('/api/lists?full=true');
     const listsBody = await listsResponse.json();
     const album = listsBody['Track Pick List']?.[0];
 
-    if (!album?.album_id) {
-      // New albums may not have album_id yet - skip this test
+    if (!album?._id) {
+      // List item must have _id for track picks API
       await page.request.delete('/api/lists/Track%20Pick%20List');
       test.skip();
       return;
     }
 
-    const albumId = album.album_id;
+    const listItemId = album._id;
 
-    // SET track pick
-    const setResponse = await page.request.post(`/api/track-picks/${albumId}`, {
-      data: {
-        trackIdentifier: 'My Favorite Track',
-        priority: 'primary',
-      },
-    });
+    // SET track pick (now uses list item ID instead of album ID)
+    const setResponse = await page.request.post(
+      `/api/track-picks/${listItemId}`,
+      {
+        data: {
+          trackIdentifier: 'My Favorite Track',
+          priority: 1, // 1=primary, 2=secondary
+        },
+      }
+    );
     expect(setResponse.status()).toBe(200);
-    expect((await setResponse.json()).success).toBe(true);
+    const setBody = await setResponse.json();
+    expect(setBody.primary_track).toBe('My Favorite Track');
 
     // REMOVE track pick
     const removeResponse = await page.request.delete(
-      `/api/track-picks/${albumId}`,
+      `/api/track-picks/${listItemId}`,
       {
         data: { trackIdentifier: 'My Favorite Track' },
       }

@@ -242,20 +242,21 @@ async function fetchMainListsForYear(pool, year) {
  * Only includes items in positions 1-40 (top 40 albums per list)
  */
 async function fetchListItemsForLists(pool, listIds) {
+  // All album metadata comes from canonical albums table
   const itemsResult = await pool.query(
     `
     SELECT 
       li.list_id,
       li.position,
       li.album_id,
-      COALESCE(NULLIF(li.artist, ''), a.artist) as artist,
-      COALESCE(NULLIF(li.album, ''), a.album) as album,
-      COALESCE(NULLIF(li.release_date, ''), a.release_date) as release_date,
-      COALESCE(NULLIF(li.country, ''), a.country) as country,
-      COALESCE(NULLIF(li.genre_1, ''), a.genre_1) as genre_1,
-      COALESCE(NULLIF(li.genre_2, ''), a.genre_2) as genre_2,
-      COALESCE(li.cover_image, a.cover_image) as cover_image,
-      COALESCE(NULLIF(li.cover_image_format, ''), a.cover_image_format) as cover_image_format,
+      a.artist,
+      a.album,
+      a.release_date,
+      a.country,
+      a.genre_1,
+      a.genre_2,
+      a.cover_image,
+      a.cover_image_format,
       l.user_id
     FROM list_items li
     JOIN lists l ON li.list_id = l._id

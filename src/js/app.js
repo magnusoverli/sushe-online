@@ -1419,14 +1419,24 @@ async function importList(name, albums, metadata = null) {
       body: JSON.stringify(body),
     });
 
-    // Update in-memory list data
-    setListData(name, cleanedAlbums);
+    // Fetch the saved list to get list item IDs (needed for track picks API)
+    const savedList = await apiCall(`/api/lists/${encodeURIComponent(name)}`);
+
+    // Update in-memory list data with the saved list (includes _id for each item)
+    setListData(name, savedList);
     if (year !== undefined) {
       updateListMetadata(name, { year: year });
     }
 
+    // Build a map from album_id to list_item_id for track picks
+    const albumToListItemMap = new Map();
+    for (const item of savedList) {
+      if (item.album_id && item._id) {
+        albumToListItemMap.set(item.album_id, item._id);
+      }
+    }
+
     // Import track picks and summaries for each album
-    // Do this after the list is saved so album_id is available
     let trackPicksImported = 0;
     let summariesImported = 0;
 
@@ -1435,11 +1445,13 @@ async function importList(name, albums, metadata = null) {
       if (!albumId) continue;
 
       // Import track picks (primary_track, secondary_track)
-      if (album.primary_track || album.secondary_track) {
+      // Track picks now use list item ID, not album ID
+      const listItemId = albumToListItemMap.get(albumId);
+      if (listItemId && (album.primary_track || album.secondary_track)) {
         try {
           // Set primary track if present
           if (album.primary_track) {
-            await apiCall(`/api/track-picks/${albumId}`, {
+            await apiCall(`/api/track-picks/${listItemId}`, {
               method: 'POST',
               body: JSON.stringify({
                 trackIdentifier: album.primary_track,
@@ -1450,7 +1462,7 @@ async function importList(name, albums, metadata = null) {
           }
           // Set secondary track if present
           if (album.secondary_track) {
-            await apiCall(`/api/track-picks/${albumId}`, {
+            await apiCall(`/api/track-picks/${listItemId}`, {
               method: 'POST',
               body: JSON.stringify({
                 trackIdentifier: album.secondary_track,
@@ -1460,11 +1472,15 @@ async function importList(name, albums, metadata = null) {
             trackPicksImported++;
           }
         } catch (err) {
-          console.warn('Failed to import track picks for album', albumId, err);
+          console.warn(
+            'Failed to import track picks for list item',
+            listItemId,
+            err
+          );
         }
       }
 
-      // Import summary fields if present
+      // Import summary fields if present (still uses album_id)
       if (album.summary || album.summary_source) {
         try {
           await apiCall(`/api/albums/${albumId}/summary`, {
@@ -3992,10 +4008,13 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
         const trackValue = option.dataset.trackValue;
         const action = option.dataset.action;
-        const albumId = album.album_id;
+        const listItemId = album._id; // Use list item ID for track picks API
 
-        if (!albumId) {
-          showToast('Cannot save track selection - album has no ID', 'error');
+        if (!listItemId) {
+          showToast(
+            'Cannot save track selection - missing list item ID',
+            'error'
+          );
           menu.remove();
           return;
         }
@@ -4005,7 +4024,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
         try {
           if (action === 'clear') {
             // Clear all track picks
-            const result = await apiCall(`/api/track-picks/${albumId}`, {
+            const result = await apiCall(`/api/track-picks/${listItemId}`, {
               method: 'DELETE',
             });
 
@@ -4029,7 +4048,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
             let targetPriority;
             if (isPrimary) {
               // Already primary - deselect by removing
-              const result = await apiCall(`/api/track-picks/${albumId}`, {
+              const result = await apiCall(`/api/track-picks/${listItemId}`, {
                 method: 'DELETE',
                 body: JSON.stringify({ trackIdentifier: trackValue }),
               });
@@ -4054,7 +4073,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
               targetPriority = 2;
             }
 
-            const result = await apiCall(`/api/track-picks/${albumId}`, {
+            const result = await apiCall(`/api/track-picks/${listItemId}`, {
               method: 'POST',
               body: JSON.stringify({
                 trackIdentifier: trackValue,

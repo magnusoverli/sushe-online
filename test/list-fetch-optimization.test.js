@@ -56,7 +56,9 @@ describe('List Fetch Optimization', () => {
       genre2: 'genre_2',
       comments: 'comments',
       tracks: 'tracks',
-      trackPick: 'track_pick',
+      // V6: Track picks now stored directly on list_items
+      primaryTrack: 'primary_track',
+      secondaryTrack: 'secondary_track',
       coverImage: 'cover_image',
       coverImageFormat: 'cover_image_format',
       createdAt: 'created_at',

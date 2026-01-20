@@ -27,10 +27,6 @@ module.exports = (app, deps) => {
     cacheConfigs,
     responseCache,
     getPointsForPosition,
-    clearAlbumCache,
-    prefetchAlbums,
-    getStorableValue,
-    getStorableTracksValue,
     crypto,
     validateYear,
     helpers: { triggerAggregateListRecompute, upsertAlbumRecord },
@@ -62,6 +58,7 @@ module.exports = (app, deps) => {
               }
               if (row.position !== null && row.item_id !== null) {
                 listsObj[row.list_name].push({
+                  _id: row.item_id, // List item ID for track picks API
                   artist: row.artist || '',
                   album: row.album || '',
                   album_id: row.album_id || '',
@@ -69,7 +66,7 @@ module.exports = (app, deps) => {
                   country: row.country || '',
                   genre_1: row.genre_1 || '',
                   genre_2: row.genre_2 || '',
-                  track_pick: row.track_pick || '',
+                  track_pick: row.primary_track || '', // Legacy: use primary_track as track_pick
                   primary_track: row.primary_track || null,
                   secondary_track: row.secondary_track || null,
                   comments: row.comments || '',
@@ -111,6 +108,7 @@ module.exports = (app, deps) => {
                   ? albumsMap.get(item.albumId)
                   : null;
                 mapped.push({
+                  _id: item._id, // List item ID for track picks API
                   artist: item.artist || albumData?.artist,
                   album: item.album || albumData?.album,
                   album_id: item.albumId,
@@ -118,12 +116,16 @@ module.exports = (app, deps) => {
                   country: item.country || albumData?.country,
                   genre_1: item.genre1 || albumData?.genre1,
                   genre_2: item.genre2 || albumData?.genre2,
-                  track_pick: item.trackPick,
+                  track_pick: item.primaryTrack || '', // Legacy: use primaryTrack
+                  primary_track: item.primaryTrack || null,
+                  secondary_track: item.secondaryTrack || null,
                   comments: item.comments,
                   tracks: item.tracks || albumData?.tracks,
                   cover_image: item.coverImage || albumData?.coverImage,
                   cover_image_format:
                     item.coverImageFormat || albumData?.coverImageFormat,
+                  summary: albumData?.summary || '',
+                  summary_source: albumData?.summarySource || '',
                 });
               }
               listsObj[list.name] = mapped;
@@ -389,7 +391,7 @@ module.exports = (app, deps) => {
           country: item.country,
           genre_1: item.genre1,
           genre_2: item.genre2,
-          track_pick: item.trackPick,
+          track_pick: item.primaryTrack || '', // Legacy: use primaryTrack
           primary_track: item.primaryTrack || null,
           secondary_track: item.secondaryTrack || null,
           comments: item.comments,
@@ -755,17 +757,6 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'Invalid albums array' });
     }
 
-    // Clear local album cache before processing
-    clearAlbumCache();
-
-    // Prefetch all albums in the list for efficient deduplication
-    const albumIds = rawAlbums
-      .map((a) => a.album_id)
-      .filter((id) => id != null);
-    if (albumIds.length > 0) {
-      await prefetchAlbums(albumIds, pool);
-    }
-
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -863,71 +854,18 @@ module.exports = (app, deps) => {
         const albumId = await upsertAlbumRecord(album, timestamp, client);
 
         const itemId = crypto.randomBytes(12).toString('hex');
+        // Simplified INSERT: only store junction table data + user-specific comments
+        // All album metadata comes from canonical albums table
         await client.query(
           `INSERT INTO list_items (
-            _id, list_id, album_id, position, artist, album,
-            release_date, country, genre_1, genre_2, track_pick,
-            comments, tracks, cover_image, cover_image_format,
-            created_at, updated_at
-          ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
-          )`,
+            _id, list_id, album_id, position, comments, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
           [
             itemId,
             list._id,
             albumId,
             i + 1,
-            await getStorableValue(
-              album.artist || null,
-              albumId,
-              'artist',
-              client
-            ),
-            await getStorableValue(
-              album.album || null,
-              albumId,
-              'album',
-              client
-            ),
-            await getStorableValue(
-              album.release_date || null,
-              albumId,
-              'release_date',
-              client
-            ),
-            await getStorableValue(
-              album.country || null,
-              albumId,
-              'country',
-              client
-            ),
-            await getStorableValue(
-              album.genre_1 || null,
-              albumId,
-              'genre_1',
-              client
-            ),
-            await getStorableValue(
-              album.genre_2 || null,
-              albumId,
-              'genre_2',
-              client
-            ),
-            await getStorableValue(
-              album.track_pick || null,
-              albumId,
-              'track_pick',
-              client
-            ),
-            await getStorableValue(
-              album.comments || null,
-              albumId,
-              'comments',
-              client
-            ),
-            await getStorableTracksValue(album.tracks || null, albumId, client),
-            null, // cover_image - use canonical from albums table
-            null, // cover_image_format - use canonical from albums table
+            album.comments || null,
             timestamp,
             timestamp,
           ]
