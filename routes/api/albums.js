@@ -389,19 +389,30 @@ module.exports = (app, deps) => {
 
       const newAlbum = { artist, album, album_id };
       const matches = findPotentialDuplicates(newAlbum, candidates, {
-        threshold: 0.2, // Very low threshold - human reviews all matches
+        // Thresholds:
+        // - >= 98% confidence: auto-merge (shouldAutoMerge: true)
+        // - 10-97% confidence: show modal for user decision
+        // - < 10% confidence: treat as distinct (not included in results)
+        threshold: 0.1,
+        autoMergeThreshold: 0.98,
         maxResults: 3,
         excludePairs,
       });
 
+      // Check if the best match should be auto-merged (>= 98% confidence)
+      const bestMatch = matches[0];
+      const shouldAutoMerge = bestMatch?.shouldAutoMerge || false;
+
       res.json({
         hasSimilar: matches.length > 0,
+        shouldAutoMerge,
         matches: matches.map((m) => ({
           album_id: m.candidate.album_id,
           artist: m.candidate.artist,
           album: m.candidate.album,
           hasCover: m.candidate.hasCover,
           confidence: Math.round(m.confidence * 100),
+          shouldAutoMerge: m.shouldAutoMerge,
         })),
       });
     } catch (err) {

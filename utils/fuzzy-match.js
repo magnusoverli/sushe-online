@@ -7,8 +7,19 @@
  * - Token-based matching for word reordering
  * - Normalization for punctuation, articles, edition suffixes
  *
+ * Threshold Configuration:
+ * - AUTO_MERGE_THRESHOLD (0.98): Albums with >=98% confidence are auto-merged silently
+ * - MODAL_THRESHOLD (0.10): Albums with 10-97% confidence trigger manual review modal
+ * - Below 10%: Treated as distinct albums, no modal shown
+ *
  * Follows dependency injection pattern for testability.
  */
+
+/**
+ * Threshold constants for album matching behavior
+ */
+const AUTO_MERGE_THRESHOLD = 0.98; // >= 98% confidence: auto-merge silently
+const MODAL_THRESHOLD = 0.1; // >= 10% confidence: show manual review modal
 
 /**
  * Calculate Levenshtein distance between two strings
@@ -252,9 +263,24 @@ function calculateSimilarity(a, b) {
  *
  * @param {Object} album1 - First album { artist, album }
  * @param {Object} album2 - Second album { artist, album }
- * @param {number} threshold - Minimum combined score to consider a match (default: 0.20)
+ * @param {Object} options - Matching options
+ * @param {number} options.threshold - Minimum combined score to consider a match (default: MODAL_THRESHOLD)
+ * @param {number} options.autoMergeThreshold - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
+ * @returns {Object} - { isPotentialMatch, shouldAutoMerge, confidence, artistScore, albumScore }
  */
-function isPotentialDuplicate(album1, album2, threshold = 0.2) {
+function isPotentialDuplicate(album1, album2, options = {}) {
+  // Support legacy call signature: isPotentialDuplicate(a, b, 0.2)
+  const opts =
+    typeof options === 'number'
+      ? { threshold: options }
+      : {
+          threshold: MODAL_THRESHOLD,
+          autoMergeThreshold: AUTO_MERGE_THRESHOLD,
+          ...options,
+        };
+
+  const { threshold, autoMergeThreshold = AUTO_MERGE_THRESHOLD } = opts;
+
   const artistScore = calculateSimilarity(album1.artist, album2.artist);
   const albumScore = calculateSimilarity(album1.album, album2.album);
 
@@ -266,14 +292,18 @@ function isPotentialDuplicate(album1, album2, threshold = 0.2) {
   // - Album name must be somewhat similar (>0.5)
   // - Artist name must be somewhat similar (>0.5)
   // - Combined score must meet threshold
-  // Using lower thresholds since we want "very fuzzy" matching
   const isPotentialMatch =
     albumScore.score > 0.5 &&
     artistScore.score > 0.5 &&
     combinedConfidence >= threshold;
 
+  // Auto-merge: confidence >= 98% means this is almost certainly the same album
+  const shouldAutoMerge =
+    isPotentialMatch && combinedConfidence >= autoMergeThreshold;
+
   return {
     isPotentialMatch,
+    shouldAutoMerge,
     confidence: combinedConfidence,
     artistScore,
     albumScore,
@@ -286,14 +316,19 @@ function isPotentialDuplicate(album1, album2, threshold = 0.2) {
  * @param {Object} newAlbum - Album to check { artist, album }
  * @param {Array<Object>} candidates - List of existing albums to check against
  * @param {Object} options - Options
- * @param {number} options.threshold - Minimum confidence to include (default: 0.45)
+ * @param {number} options.threshold - Minimum confidence to include (default: MODAL_THRESHOLD)
+ * @param {number} options.autoMergeThreshold - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
  * @param {number} options.maxResults - Maximum results to return (default: 5)
  * @param {Set<string>} options.excludePairs - Set of "id1::id2" pairs to exclude (already confirmed different)
- * @returns {Array<Object>} - Sorted array of potential matches with confidence scores
+ * @returns {Array<Object>} - Sorted array of potential matches with confidence scores and shouldAutoMerge flags
  */
 function findPotentialDuplicates(newAlbum, candidates, options = {}) {
-  // Very low threshold since human reviews all matches - better to show false positives than miss real duplicates
-  const { threshold = 0.2, maxResults = 5, excludePairs = new Set() } = options;
+  const {
+    threshold = MODAL_THRESHOLD,
+    autoMergeThreshold = AUTO_MERGE_THRESHOLD,
+    maxResults = 5,
+    excludePairs = new Set(),
+  } = options;
 
   const results = [];
 
@@ -307,7 +342,10 @@ function findPotentialDuplicates(newAlbum, candidates, options = {}) {
       }
     }
 
-    const result = isPotentialDuplicate(newAlbum, candidate, threshold);
+    const result = isPotentialDuplicate(newAlbum, candidate, {
+      threshold,
+      autoMergeThreshold,
+    });
 
     if (result.isPotentialMatch) {
       results.push({
@@ -352,4 +390,8 @@ module.exports = {
   // Constants (for testing)
   STRIP_PATTERNS,
   ARTICLES,
+
+  // Threshold constants
+  AUTO_MERGE_THRESHOLD,
+  MODAL_THRESHOLD,
 };

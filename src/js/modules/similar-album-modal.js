@@ -13,8 +13,13 @@ let resolveCallback = null;
 /**
  * Check if a similar album exists and show modal if needed
  *
+ * Threshold behavior:
+ * - >= 98% confidence: Auto-merge silently (no modal shown)
+ * - 10-97% confidence: Show modal for user decision
+ * - < 10% confidence: Treat as distinct (no modal shown)
+ *
  * @param {Object} newAlbum - The album being added { artist, album, album_id?, cover_image? }
- * @returns {Promise<{action: 'use_existing'|'add_new'|'cancelled', album?: Object}>}
+ * @returns {Promise<{action: 'use_existing'|'add_new'|'cancelled', album?: Object, autoMerged?: boolean}>}
  */
 export async function checkAndPromptSimilar(newAlbum) {
   try {
@@ -41,8 +46,25 @@ export async function checkAndPromptSimilar(newAlbum) {
       return { action: 'add_new' };
     }
 
-    // Show modal for the best match
     const bestMatch = data.matches[0];
+
+    // Auto-merge for >= 98% confidence matches (skip modal entirely)
+    if (data.shouldAutoMerge) {
+      console.log(
+        `Auto-merging album "${newAlbum.album}" with existing "${bestMatch.album}" (${bestMatch.confidence}% match)`
+      );
+      return {
+        action: 'use_existing',
+        album: {
+          album_id: bestMatch.album_id,
+          artist: bestMatch.artist,
+          album: bestMatch.album,
+        },
+        autoMerged: true,
+      };
+    }
+
+    // Show modal for 10-97% confidence matches
     const result = await showSimilarAlbumModal(newAlbum, bestMatch);
 
     return result;

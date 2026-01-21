@@ -15,6 +15,8 @@ const {
   isPotentialDuplicate,
   findPotentialDuplicates,
   isExactMatch,
+  AUTO_MERGE_THRESHOLD,
+  MODAL_THRESHOLD,
 } = require('../utils/fuzzy-match');
 
 // ============================================
@@ -215,6 +217,20 @@ describe('calculateSimilarity', () => {
 });
 
 // ============================================
+// THRESHOLD CONSTANTS TESTS
+// ============================================
+
+describe('Threshold constants', () => {
+  it('should export AUTO_MERGE_THRESHOLD as 0.98', () => {
+    assert.strictEqual(AUTO_MERGE_THRESHOLD, 0.98);
+  });
+
+  it('should export MODAL_THRESHOLD as 0.10', () => {
+    assert.strictEqual(MODAL_THRESHOLD, 0.1);
+  });
+});
+
+// ============================================
 // IS POTENTIAL DUPLICATE TESTS
 // ============================================
 
@@ -262,6 +278,59 @@ describe('isPotentialDuplicate', () => {
 
     const result = isPotentialDuplicate(album1, album2);
     assert.ok(!result.isPotentialMatch);
+  });
+
+  it('should return shouldAutoMerge=true for identical albums (>=98%)', () => {
+    const album1 = { artist: 'Pink Floyd', album: 'The Wall' };
+    const album2 = { artist: 'Pink Floyd', album: 'The Wall' };
+
+    const result = isPotentialDuplicate(album1, album2);
+    assert.ok(result.isPotentialMatch);
+    assert.ok(result.shouldAutoMerge);
+    assert.strictEqual(result.confidence, 1.0);
+  });
+
+  it('should return shouldAutoMerge=true for 98%+ matches (articles stripped)', () => {
+    const album1 = { artist: 'The Beatles', album: 'Abbey Road' };
+    const album2 = { artist: 'Beatles', album: 'Abbey Road' };
+
+    const result = isPotentialDuplicate(album1, album2);
+    assert.ok(result.isPotentialMatch);
+    assert.ok(result.shouldAutoMerge);
+    assert.ok(result.confidence >= 0.98);
+  });
+
+  it('should return shouldAutoMerge=false for <98% matches (typos)', () => {
+    const album1 = { artist: 'Metallica', album: 'Master of Puppets' };
+    const album2 = { artist: 'Metalica', album: 'Master of Pupets' };
+
+    const result = isPotentialDuplicate(album1, album2);
+    assert.ok(result.isPotentialMatch);
+    assert.ok(!result.shouldAutoMerge);
+    assert.ok(result.confidence < 0.98);
+  });
+
+  it('should support legacy numeric threshold parameter', () => {
+    const album1 = { artist: 'Metallica', album: 'Master of Puppets' };
+    const album2 = { artist: 'Metalica', album: 'Master of Pupets' };
+
+    // Using legacy call signature with numeric threshold
+    const result = isPotentialDuplicate(album1, album2, 0.5);
+    assert.ok(result.isPotentialMatch);
+    assert.ok('shouldAutoMerge' in result);
+  });
+
+  it('should respect custom autoMergeThreshold option', () => {
+    const album1 = { artist: 'Metallica', album: 'Master of Puppets' };
+    const album2 = { artist: 'Metalica', album: 'Master of Pupets' };
+
+    // With a very low autoMergeThreshold, even typos should auto-merge
+    const result = isPotentialDuplicate(album1, album2, {
+      threshold: 0.1,
+      autoMergeThreshold: 0.7,
+    });
+    assert.ok(result.isPotentialMatch);
+    assert.ok(result.shouldAutoMerge);
   });
 });
 
@@ -321,6 +390,54 @@ describe('findPotentialDuplicates', () => {
     const results = findPotentialDuplicates(newAlbum, candidates);
 
     assert.strictEqual(results.length, 0);
+  });
+
+  it('should include shouldAutoMerge flag for exact matches', () => {
+    const newAlbum = { artist: 'Pink Floyd', album: 'The Wall' };
+    const results = findPotentialDuplicates(newAlbum, candidates);
+
+    assert.ok(results.length >= 1);
+    const exactMatch = results.find((r) => r.candidate.album_id === '2');
+    assert.ok(exactMatch);
+    assert.ok(exactMatch.shouldAutoMerge);
+    assert.strictEqual(exactMatch.confidence, 1.0);
+  });
+
+  it('should include shouldAutoMerge=false for typo matches', () => {
+    const newAlbum = { artist: 'Metallica', album: 'Master of Puppets' };
+    const results = findPotentialDuplicates(newAlbum, candidates);
+
+    // Find the typo match (not exact)
+    const typoMatch = results.find((r) => r.candidate.album_id === '3');
+    assert.ok(typoMatch);
+    assert.ok(!typoMatch.shouldAutoMerge);
+  });
+
+  it('should use default thresholds (0.10 for modal, 0.98 for auto-merge)', () => {
+    // Test that a ~15% match is included (above default 0.10 threshold)
+    // and that only 100% matches have shouldAutoMerge=true
+    const newAlbum = { artist: 'Pink Floyd', album: 'The Wall' };
+    const results = findPotentialDuplicates(newAlbum, candidates);
+
+    // The exact match should be found and marked for auto-merge
+    const exactMatch = results.find((r) => r.candidate.album_id === '2');
+    assert.ok(exactMatch);
+    assert.ok(exactMatch.shouldAutoMerge);
+  });
+
+  it('should respect custom threshold options', () => {
+    const newAlbum = { artist: 'Metallica', album: 'Master of Puppets' };
+
+    // With a very high threshold, only exact matches should be found
+    const results = findPotentialDuplicates(newAlbum, candidates, {
+      threshold: 0.99,
+    });
+
+    // Only the exact match should pass the 99% threshold
+    assert.ok(results.length <= 1);
+    if (results.length > 0) {
+      assert.strictEqual(results[0].candidate.album_id, '1');
+    }
   });
 });
 
