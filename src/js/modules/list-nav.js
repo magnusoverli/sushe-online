@@ -869,10 +869,10 @@ export function createListNav(deps = {}) {
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
       onEnd: async (evt) => {
-        const listName = evt.item
-          .querySelector('[data-list-name]')
-          ?.getAttribute('data-list-name');
-        if (!listName) return;
+        const listId = evt.item
+          .querySelector('[data-list-id]')
+          ?.getAttribute('data-list-id');
+        if (!listId) return;
 
         const fromGroupId = evt.from
           .closest('.group-section')
@@ -885,7 +885,7 @@ export function createListNav(deps = {}) {
         if (fromGroupId !== toGroupId && toGroupId) {
           // Move list to new group
           try {
-            await apiCall(`/api/lists/${encodeURIComponent(listName)}/move`, {
+            await apiCall(`/api/lists/${encodeURIComponent(listId)}/move`, {
               method: 'POST',
               body: JSON.stringify({ groupId: toGroupId }),
             });
@@ -910,9 +910,7 @@ export function createListNav(deps = {}) {
           const listItems = evt.to.querySelectorAll('li');
           const newOrder = Array.from(listItems)
             .map((li) =>
-              li
-                .querySelector('[data-list-name]')
-                ?.getAttribute('data-list-name')
+              li.querySelector('[data-list-id]')?.getAttribute('data-list-id')
             )
             .filter(Boolean);
 
