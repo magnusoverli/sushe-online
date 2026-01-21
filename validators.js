@@ -47,9 +47,49 @@ function validateYear(year) {
   return { valid: true, value: numYear };
 }
 
+// Validate list ID format (24-char hex string)
+// Returns { valid: boolean, error?: string }
+function validateListId(listId) {
+  if (!listId || typeof listId !== 'string') {
+    return { valid: false, error: 'List ID is required' };
+  }
+
+  // List IDs are 24-character hex strings (12 random bytes encoded as hex)
+  const hexRegex = /^[a-f0-9]{24}$/;
+  if (!hexRegex.test(listId)) {
+    return { valid: false, error: 'Invalid list ID format' };
+  }
+
+  return { valid: true };
+}
+
+// Validate list name for creation/renaming
+// Returns { valid: boolean, error?: string }
+function validateListName(name) {
+  if (!name || typeof name !== 'string') {
+    return { valid: false, error: 'List name is required' };
+  }
+
+  const trimmed = name.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'List name cannot be empty' };
+  }
+
+  if (trimmed.length > 200) {
+    return {
+      valid: false,
+      error: 'List name is too long (max 200 characters)',
+    };
+  }
+
+  return { valid: true, value: trimmed };
+}
+
 module.exports = {
   isValidEmail,
   isValidUsername,
   isValidPassword,
   validateYear,
+  validateListId,
+  validateListName,
 };

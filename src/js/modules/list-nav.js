@@ -139,6 +139,7 @@ export function createListNav(deps = {}) {
 
   /**
    * Group lists by their assigned groups
+   * Lists are now keyed by _id (not name) to support duplicate names in different categories
    * @returns {Object} { groups: Array of group objects with lists, orphaned: Array }
    */
   function groupListsByGroup() {
@@ -150,17 +151,23 @@ export function createListNav(deps = {}) {
     const listsByGroupId = {};
     const orphaned = [];
 
-    Object.keys(lists).forEach((listName) => {
-      const meta = getListMetadata(listName);
+    // lists is now keyed by listId, not name
+    Object.keys(lists).forEach((listId) => {
+      const meta = getListMetadata(listId);
       const groupId = meta?.groupId;
 
       if (groupId && allGroups[groupId]) {
         if (!listsByGroupId[groupId]) {
           listsByGroupId[groupId] = [];
         }
-        listsByGroupId[groupId].push({ name: listName, meta });
+        // Include both _id and name for use in rendering
+        listsByGroupId[groupId].push({
+          _id: listId,
+          name: meta?.name || 'Unknown',
+          meta,
+        });
       } else {
-        orphaned.push({ name: listName, meta });
+        orphaned.push({ _id: listId, name: meta?.name || 'Unknown', meta });
       }
     });
 
@@ -211,21 +218,30 @@ export function createListNav(deps = {}) {
     }
 
     // Fallback to old behavior if groups not available
+    // lists is now keyed by listId, not name
     const lists = getLists();
     const listsByYear = {};
     const uncategorized = [];
 
-    Object.keys(lists).forEach((listName) => {
-      const meta = getListMetadata(listName);
+    Object.keys(lists).forEach((listId) => {
+      const meta = getListMetadata(listId);
       const year = meta?.year;
 
       if (year) {
         if (!listsByYear[year]) {
           listsByYear[year] = [];
         }
-        listsByYear[year].push({ name: listName, meta });
+        listsByYear[year].push({
+          _id: listId,
+          name: meta?.name || 'Unknown',
+          meta,
+        });
       } else {
-        uncategorized.push({ name: listName, meta });
+        uncategorized.push({
+          _id: listId,
+          name: meta?.name || 'Unknown',
+          meta,
+        });
       }
     });
 
@@ -297,13 +313,14 @@ export function createListNav(deps = {}) {
 
   /**
    * Generate HTML for list button
-   * @param {string} listName - List name
+   * @param {string} listId - List ID
+   * @param {string} listName - List name (for display)
    * @param {boolean} isActive - Whether list is currently selected
    * @param {boolean} isMain - Whether list is marked as main
    * @param {boolean} isMobile - Whether rendering for mobile
    * @returns {string} HTML string
    */
-  function createListButtonHTML(listName, isActive, isMain, isMobile) {
+  function createListButtonHTML(listId, listName, isActive, isMain, isMobile) {
     const paddingClass = isMobile ? 'py-3' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
@@ -311,8 +328,9 @@ export function createListNav(deps = {}) {
       ? '<i class="fas fa-star text-yellow-500 ml-1 shrink-0 text-xs" title="Main list"></i>'
       : '';
 
+    // Use data-list-id for the ID, keep data-list-name for display/logging purposes
     const buttonHTML = `
-      <button data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
+      <button data-list-id="${listId}" data-list-name="${listName}" class="sidebar-list-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
         <i class="fas fa-list mr-2 shrink-0"></i>
         <span class="truncate flex-1">${listName}</span>
         ${mainBadge}
@@ -322,7 +340,7 @@ export function createListNav(deps = {}) {
     if (isMobile) {
       return `
         ${buttonHTML}
-        <button data-list-menu-btn="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag shrink-0" aria-label="List options">
+        <button data-list-menu-btn="${listId}" data-list-menu-name="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag shrink-0" aria-label="List options">
           <i class="fas fa-ellipsis-v"></i>
         </button>
       `;
@@ -335,37 +353,44 @@ export function createListNav(deps = {}) {
 
   /**
    * Create a list button element with event handlers
-   * @param {string} listName - List name
+   * @param {string} listId - List ID
    * @param {boolean} isMobile - Whether rendering for mobile
    * @param {HTMLElement} _container - Parent container (unused but kept for signature compatibility)
    * @returns {HTMLElement} List item element
    */
-  function createListButton(listName, isMobile, _container) {
-    const meta = getListMetadata(listName);
+  function createListButton(listId, isMobile, _container) {
+    const meta = getListMetadata(listId);
+    const listName = meta?.name || 'Unknown';
     const isMain = meta?.isMain || false;
-    const currentList = getCurrentList();
-    const isActive = currentList === listName;
+    const currentListId = getCurrentList();
+    const isActive = currentListId === listId;
     const li = document.createElement('li');
 
     if (isMobile) {
       li.className = 'flex items-center';
     }
-    li.innerHTML = createListButtonHTML(listName, isActive, isMain, isMobile);
+    li.innerHTML = createListButtonHTML(
+      listId,
+      listName,
+      isActive,
+      isMain,
+      isMobile
+    );
 
-    const button = li.querySelector('[data-list-name]');
+    const button = li.querySelector('[data-list-id]');
     const menuButton = li.querySelector('[data-list-menu-btn]');
 
     if (!isMobile) {
       // Desktop: attach right-click context menu
-      attachDesktopContextMenu(button, listName);
+      attachDesktopContextMenu(button, listId);
     } else {
       // Mobile: attach click handler to three-dot menu button
-      attachMobileMenuButton(menuButton, listName);
+      attachMobileMenuButton(menuButton, listId);
     }
 
     // Click handler for selecting the list
     button.onclick = () => {
-      selectList(listName);
+      selectList(listId);
       if (isMobile) toggleMobileLists();
     };
 
@@ -375,21 +400,21 @@ export function createListNav(deps = {}) {
   /**
    * Attach desktop context menu to button
    * @param {HTMLElement} button - Button element
-   * @param {string} listName - List name
+   * @param {string} listId - List ID
    */
-  function attachDesktopContextMenu(button, listName) {
+  function attachDesktopContextMenu(button, listId) {
     button.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
 
       hideAllContextMenus();
-      setCurrentContextList(listName);
+      setCurrentContextList(listId);
 
       const contextMenu = document.getElementById('contextMenu');
       if (!contextMenu) return;
 
       // Get shared menu configuration
-      const menuConfig = getListMenuConfig(listName);
+      const menuConfig = getListMenuConfig(listId);
 
       // Update the playlist option text based on user's music service
       const updatePlaylistText = document.getElementById('updatePlaylistText');
@@ -432,9 +457,9 @@ export function createListNav(deps = {}) {
   /**
    * Attach mobile menu button handlers
    * @param {HTMLElement} menuButton - Menu button element
-   * @param {string} listName - List name
+   * @param {string} listId - List ID
    */
-  function attachMobileMenuButton(menuButton, listName) {
+  function attachMobileMenuButton(menuButton, listId) {
     if (!menuButton) return;
 
     // Prevent touch events from bubbling to parent
@@ -458,7 +483,7 @@ export function createListNav(deps = {}) {
       e.stopPropagation();
       e.preventDefault();
       if (window.showMobileListMenu) {
-        window.showMobileListMenu(listName);
+        window.showMobileListMenu(listId);
       }
     });
   }
@@ -549,8 +574,8 @@ export function createListNav(deps = {}) {
       listsContainer.classList.add('year-lists');
     }
 
-    groupLists.forEach(({ name: listName }) => {
-      const li = createListButton(listName, isMobile, container);
+    groupLists.forEach(({ _id: listId }) => {
+      const li = createListButton(listId, isMobile, container);
       listsContainer.appendChild(li);
     });
 
@@ -954,22 +979,22 @@ export function createListNav(deps = {}) {
 
   /**
    * Update only the active state in sidebar (optimized - no DOM rebuild)
-   * @param {string} activeListName - Name of the active list
+   * @param {string} activeListId - ID of the active list
    */
-  function updateListNavActiveState(activeListName) {
+  function updateListNavActiveState(activeListId) {
     const nav = document.getElementById('listNav');
     const mobileNav = document.getElementById('mobileListNav');
 
     const updateActiveState = (container) => {
       if (!container) return;
 
-      // Find only list buttons inside .year-lists containers (not year header buttons)
-      const buttons = container.querySelectorAll('.year-lists button');
+      // Find only list buttons (those with data-list-id attribute)
+      const buttons = container.querySelectorAll('[data-list-id]');
       buttons.forEach((button) => {
-        const listName = button.querySelector('span')?.textContent;
-        if (!listName) return;
+        const listId = button.dataset.listId;
+        if (!listId) return;
 
-        const isActive = listName === activeListName;
+        const isActive = listId === activeListId;
 
         // Toggle active class - background is handled by ::before pseudo-element in CSS
         if (isActive) {

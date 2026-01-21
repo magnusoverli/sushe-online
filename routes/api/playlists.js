@@ -21,13 +21,13 @@ module.exports = (app, deps) => {
     ensureValidTidalToken,
   } = deps;
 
-  // Playlist management endpoint
-  app.post('/api/playlists/:listName', ensureAuthAPI, async (req, res) => {
-    const { listName } = req.params;
+  // Playlist management endpoint (by list ID)
+  app.post('/api/playlists/:listId', ensureAuthAPI, async (req, res) => {
+    const { listId } = req.params;
     const { action = 'update', service } = req.body;
 
     logger.info('Playlist endpoint called:', {
-      listName,
+      listId,
       action,
       service,
       body: req.body,
@@ -96,9 +96,22 @@ module.exports = (app, deps) => {
         auth = tokenResult.tidalAuth;
       }
 
+      // Get the list first to get its name
+      const list = await listsAsync.findOne({
+        userId: req.user._id,
+        _id: listId,
+      });
+
+      if (!list) {
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      const listName = list.name;
+
       // Check if playlist exists (for confirmation dialog)
       if (action === 'check') {
         logger.info('Playlist check action received:', {
+          listId,
           listName,
           targetService,
         });
@@ -109,16 +122,6 @@ module.exports = (app, deps) => {
         );
         logger.info('Playlist check result:', { listName, exists });
         return res.json({ exists, playlistName: listName });
-      }
-
-      // Get the list and its items
-      const list = await listsAsync.findOne({
-        userId: req.user._id,
-        name: listName,
-      });
-
-      if (!list) {
-        return res.status(404).json({ error: 'List not found' });
       }
 
       // Pass userId to get track picks from normalized table
@@ -167,7 +170,7 @@ module.exports = (app, deps) => {
         error: err.message,
         stack: err.stack,
         userId: req.user?._id,
-        listName,
+        listId,
         targetService,
       });
 

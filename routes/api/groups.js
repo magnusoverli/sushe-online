@@ -353,9 +353,9 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Move a list to a different group
-  app.post('/api/lists/:name/move', ensureAuthAPI, async (req, res) => {
-    const { name } = req.params;
+  // Move a list to a different group (by list ID)
+  app.post('/api/lists/:id/move', ensureAuthAPI, async (req, res) => {
+    const { id } = req.params;
     const { groupId, year } = req.body;
 
     // Either groupId or year must be provided, not both
@@ -376,13 +376,13 @@ module.exports = (app, deps) => {
     try {
       await client.query('BEGIN');
 
-      // Get the list
+      // Get the list by ID
       const listResult = await client.query(
-        `SELECT l.id, l._id, l.year, l.is_main, l.group_id, g.year as current_group_year
+        `SELECT l.id, l._id, l.name, l.year, l.is_main, l.group_id, g.year as current_group_year
          FROM lists l
          LEFT JOIN list_groups g ON l.group_id = g.id
-         WHERE l.user_id = $1 AND l.name = $2`,
-        [req.user._id, name]
+         WHERE l.user_id = $1 AND l._id = $2`,
+        [req.user._id, id]
       );
 
       if (listResult.rows.length === 0) {
@@ -516,7 +516,7 @@ module.exports = (app, deps) => {
       logger.error('Error moving list', {
         error: err.message,
         userId: req.user._id,
-        listName: name,
+        listId: id,
       });
       res.status(500).json({ error: 'Failed to move list' });
     } finally {
@@ -524,7 +524,7 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Reorder lists within a group
+  // Reorder lists within a group (by list IDs)
   app.post('/api/lists/reorder', ensureAuthAPI, async (req, res) => {
     const { groupId, order } = req.body;
 
@@ -535,7 +535,7 @@ module.exports = (app, deps) => {
     if (!Array.isArray(order)) {
       return res
         .status(400)
-        .json({ error: 'order must be an array of list names' });
+        .json({ error: 'order must be an array of list IDs' });
     }
 
     const client = await pool.connect();
@@ -558,25 +558,25 @@ module.exports = (app, deps) => {
 
       // Verify all lists belong to user and group
       const listsResult = await client.query(
-        `SELECT name FROM lists WHERE user_id = $1 AND group_id = $2`,
+        `SELECT _id FROM lists WHERE user_id = $1 AND group_id = $2`,
         [req.user._id, dbGroupId]
       );
 
-      const groupListNames = new Set(listsResult.rows.map((r) => r.name));
+      const groupListIds = new Set(listsResult.rows.map((r) => r._id));
 
-      for (const listName of order) {
-        if (!groupListNames.has(listName)) {
+      for (const listId of order) {
+        if (!groupListIds.has(listId)) {
           await client.query('ROLLBACK');
           return res
             .status(400)
-            .json({ error: `List '${listName}' is not in this group` });
+            .json({ error: `List '${listId}' is not in this group` });
         }
       }
 
       // Update sort_order for each list
       for (let i = 0; i < order.length; i++) {
         await client.query(
-          `UPDATE lists SET sort_order = $1, updated_at = NOW() WHERE name = $2 AND user_id = $3`,
+          `UPDATE lists SET sort_order = $1, updated_at = NOW() WHERE _id = $2 AND user_id = $3`,
           [i, order[i], req.user._id]
         );
       }

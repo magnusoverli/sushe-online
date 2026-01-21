@@ -57,9 +57,7 @@ module.exports = (app, deps) => {
       );
 
       // Invalidate cache for this list so refreshes show updated track picks
-      responseCache.invalidate(
-        `GET:/api/lists/${encodeURIComponent(list.name)}:${req.user._id}`
-      );
+      responseCache.invalidate(`GET:/api/lists/${list._id}:${req.user._id}`);
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
       responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
 
@@ -124,9 +122,7 @@ module.exports = (app, deps) => {
         );
 
         // Invalidate cache for this list so refreshes show updated track picks
-        responseCache.invalidate(
-          `GET:/api/lists/${encodeURIComponent(list.name)}:${req.user._id}`
-        );
+        responseCache.invalidate(`GET:/api/lists/${list._id}:${req.user._id}`);
         responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
         responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
 

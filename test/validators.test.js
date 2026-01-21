@@ -5,6 +5,8 @@ const {
   isValidUsername,
   isValidPassword,
   validateYear,
+  validateListId,
+  validateListName,
 } = require('../validators.js');
 
 // =============================================================================
@@ -166,4 +168,82 @@ test('validateYear should handle edge cases', () => {
 
   // String with leading zeros (still parses correctly)
   assert.deepStrictEqual(validateYear('2024'), { valid: true, value: 2024 });
+});
+
+// =============================================================================
+// validateListId tests
+// =============================================================================
+
+test('validateListId should return valid for 24-char hex strings', () => {
+  assert.deepStrictEqual(validateListId('a1b2c3d4e5f6a1b2c3d4e5f6'), {
+    valid: true,
+  });
+  assert.deepStrictEqual(validateListId('000000000000000000000000'), {
+    valid: true,
+  });
+  assert.deepStrictEqual(validateListId('ffffffffffffffffffffffff'), {
+    valid: true,
+  });
+});
+
+test('validateListId should return invalid for wrong length strings', () => {
+  const tooShort = validateListId('a1b2c3d4e5f6a1b2c3d4e5f');
+  assert.strictEqual(tooShort.valid, false);
+  assert.ok(tooShort.error.includes('Invalid list ID format'));
+
+  const tooLong = validateListId('a1b2c3d4e5f6a1b2c3d4e5f6a');
+  assert.strictEqual(tooLong.valid, false);
+});
+
+test('validateListId should return invalid for non-hex characters', () => {
+  const withUppercase = validateListId('A1B2C3D4E5F6A1B2C3D4E5F6');
+  assert.strictEqual(withUppercase.valid, false);
+
+  const withInvalidChars = validateListId('g1b2c3d4e5f6a1b2c3d4e5f6');
+  assert.strictEqual(withInvalidChars.valid, false);
+
+  const withSpaces = validateListId('a1b2c3d4e5f6 a1b2c3d4e5f');
+  assert.strictEqual(withSpaces.valid, false);
+});
+
+test('validateListId should return invalid for null/undefined/empty', () => {
+  assert.strictEqual(validateListId(null).valid, false);
+  assert.strictEqual(validateListId(undefined).valid, false);
+  assert.strictEqual(validateListId('').valid, false);
+});
+
+// =============================================================================
+// validateListName tests
+// =============================================================================
+
+test('validateListName should return valid for normal names', () => {
+  const result = validateListName('My List 2024');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'My List 2024');
+});
+
+test('validateListName should trim whitespace', () => {
+  const result = validateListName('  Trimmed Name  ');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'Trimmed Name');
+});
+
+test('validateListName should return invalid for empty names', () => {
+  assert.strictEqual(validateListName('').valid, false);
+  assert.strictEqual(validateListName('   ').valid, false);
+  assert.strictEqual(validateListName(null).valid, false);
+  assert.strictEqual(validateListName(undefined).valid, false);
+});
+
+test('validateListName should return invalid for names over 200 chars', () => {
+  const longName = 'a'.repeat(201);
+  const result = validateListName(longName);
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('too long'));
+});
+
+test('validateListName should allow exactly 200 chars', () => {
+  const maxName = 'a'.repeat(200);
+  const result = validateListName(maxName);
+  assert.strictEqual(result.valid, true);
 });

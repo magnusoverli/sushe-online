@@ -832,10 +832,12 @@ export function createMobileUI(deps = {}) {
    * Show mobile action sheet for list context menu
    * @param {string} listName - List name
    */
-  function showMobileListMenu(listName) {
+  function showMobileListMenu(listId) {
     const currentList = getCurrentList();
     const lists = getLists();
-    const menuConfig = getListMenuConfig(listName);
+    const listMeta = getListMetadata(listId);
+    const listName = listMeta?.name || listId;
+    const menuConfig = getListMenuConfig(listId);
 
     // Remove any existing action sheets first
     const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
@@ -1007,28 +1009,28 @@ export function createMobileUI(deps = {}) {
       e.preventDefault();
       e.stopPropagation();
       closeSheet();
-      downloadListAsJSON(listName);
+      downloadListAsJSON(listId);
     });
 
     downloadPdfBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       closeSheet();
-      downloadListAsPDF(listName);
+      downloadListAsPDF(listId);
     });
 
     downloadCsvBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       closeSheet();
-      downloadListAsCSV(listName);
+      downloadListAsCSV(listId);
     });
 
     editBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       closeSheet();
-      openRenameModal(listName);
+      openRenameModal(listId);
     });
 
     if (toggleMainBtn) {
@@ -1036,7 +1038,7 @@ export function createMobileUI(deps = {}) {
         e.preventDefault();
         e.stopPropagation();
         closeSheet();
-        toggleMainStatus(listName);
+        toggleMainStatus(listId);
       });
     }
 
@@ -1045,8 +1047,8 @@ export function createMobileUI(deps = {}) {
       e.stopPropagation();
       closeSheet();
       try {
-        const listData = getListData(listName) || [];
-        await updatePlaylist(listName, listData);
+        const listData = getListData(listId) || [];
+        await updatePlaylist(listId, listData);
       } catch (err) {
         console.error('Update playlist failed', err);
       }
@@ -1061,7 +1063,7 @@ export function createMobileUI(deps = {}) {
         e.preventDefault();
         e.stopPropagation();
         closeSheet();
-        showMobileCollectionPicker(listName);
+        showMobileCollectionPicker(listId);
       });
     }
 
@@ -1079,13 +1081,13 @@ export function createMobileUI(deps = {}) {
 
       if (confirmed) {
         try {
-          await apiCall(`/api/lists/${encodeURIComponent(listName)}`, {
+          await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
             method: 'DELETE',
           });
 
-          delete lists[listName];
+          delete lists[listId];
 
-          if (currentList === listName) {
+          if (currentList === listId) {
             const remainingLists = Object.keys(lists);
             if (remainingLists.length > 0) {
               selectList(remainingLists[0]);

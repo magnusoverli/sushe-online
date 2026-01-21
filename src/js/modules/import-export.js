@@ -12,15 +12,15 @@ import { jsPDF } from 'jspdf';
 
 /**
  * Download list as JSON file with embedded images
- * @param {string} listName - Name of the list to export
+ * @param {string} listId - ID of the list to export
  */
-export async function downloadListAsJSON(listName) {
+export async function downloadListAsJSON(listId) {
   try {
     // Fetch list with embedded base64 images from server
     showToast('Preparing export with images...', 'info', 2000);
 
     const response = await fetch(
-      `/api/lists/${encodeURIComponent(listName)}?export=true`,
+      `/api/lists/${encodeURIComponent(listId)}?export=true`,
       { credentials: 'include' }
     );
 
@@ -34,6 +34,9 @@ export async function downloadListAsJSON(listName) {
 
     // Server returns data with rank, points, and cover_image already included
     const exportData = await response.json();
+
+    // Get list name from metadata for filename
+    const listName = exportData._metadata?.list_name || listId;
 
     const jsonStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -73,15 +76,15 @@ export async function downloadListAsJSON(listName) {
 
 /**
  * Download list as PDF file with embedded images
- * @param {string} listName - Name of the list to export
+ * @param {string} listId - ID of the list to export
  */
-export async function downloadListAsPDF(listName) {
+export async function downloadListAsPDF(listId) {
   try {
     // Fetch list with embedded base64 images from server
     showToast('Preparing PDF export...', 'info', 2000);
 
     const response = await fetch(
-      `/api/lists/${encodeURIComponent(listName)}?export=true`,
+      `/api/lists/${encodeURIComponent(listId)}?export=true`,
       { credentials: 'include' }
     );
 
@@ -96,8 +99,13 @@ export async function downloadListAsPDF(listName) {
     // Server returns data with rank, points, and cover_image already included
     const exportData = await response.json();
 
+    // Get list name from metadata for filename and header
+    const listName = exportData._metadata?.list_name || listId;
+
     // Filter out comments and points as specified
-    const albums = exportData.map((album) => {
+    // Export data structure: { _metadata: {...}, albums: [...] }
+    const rawAlbums = exportData.albums || [];
+    const albums = rawAlbums.map((album) => {
       const {
         comments: _unusedComments,
         points: _unusedPoints,
@@ -269,15 +277,15 @@ function escapeCSVField(value) {
 
 /**
  * Download list as CSV file with all album data
- * @param {string} listName - Name of the list to export
+ * @param {string} listId - ID of the list to export
  */
-export async function downloadListAsCSV(listName) {
+export async function downloadListAsCSV(listId) {
   try {
     // Fetch list with embedded base64 images from server
     showToast('Preparing CSV export...', 'info', 2000);
 
     const response = await fetch(
-      `/api/lists/${encodeURIComponent(listName)}?export=true`,
+      `/api/lists/${encodeURIComponent(listId)}?export=true`,
       { credentials: 'include' }
     );
 
@@ -291,6 +299,12 @@ export async function downloadListAsCSV(listName) {
 
     // Server returns data with rank, points, and cover_image already included
     const exportData = await response.json();
+
+    // Get list name from metadata for filename
+    const listName = exportData._metadata?.list_name || listId;
+
+    // Export data structure: { _metadata: {...}, albums: [...] }
+    const albums = exportData.albums || [];
 
     // CSV column headers
     const headers = [
@@ -313,7 +327,7 @@ export async function downloadListAsCSV(listName) {
     // Build CSV rows
     const rows = [headers.map(escapeCSVField).join(',')];
 
-    for (const album of exportData) {
+    for (const album of albums) {
       // Serialize tracks array as JSON string if it exists
       let tracksValue = '';
       if (album.tracks) {
@@ -368,10 +382,11 @@ export async function downloadListAsCSV(listName) {
  * Factory function to create import conflict handling with injected dependencies
  *
  * @param {Object} deps - Dependencies
- * @param {Function} deps.getListData - Get album array for a list
- * @param {Function} deps.getLists - Get all lists object
- * @param {Function} deps.saveList - Save list to server
- * @param {Function} deps.selectList - Select a list
+ * @param {Function} deps.getListData - Get album array for a list by ID
+ * @param {Function} deps.getLists - Get all lists object (keyed by ID)
+ * @param {Function} deps.findListByName - Find a list by name, returns list object with _id
+ * @param {Function} deps.saveList - Save list to server (by ID)
+ * @param {Function} deps.selectList - Select a list (by ID)
  * @param {Function} deps.updateListNav - Update list navigation
  * @param {Function} deps.getPendingImport - Get pending import state
  * @param {Function} deps.setPendingImport - Set pending import state
@@ -380,7 +395,8 @@ export async function downloadListAsCSV(listName) {
 export function createImportConflictHandler(deps = {}) {
   const {
     getListData,
-    getLists,
+    getLists: _getLists, // Available but not currently used
+    findListByName,
     saveList,
     importList,
     selectList,
@@ -431,18 +447,42 @@ export function createImportConflictHandler(deps = {}) {
 
       try {
         // Handle both old format (array) and new format (object with albums/metadata)
-        let albums, metadata;
+        let albums;
         if (Array.isArray(pendingImportData)) {
           albums = pendingImportData;
-          metadata = null;
         } else {
           albums = pendingImportData.albums || [];
-          metadata = pendingImportData.metadata || null;
         }
 
-        await importList(pendingImportFilename, albums, metadata);
+        // Find the existing list by name to get its ID
+        const existingList = findListByName(pendingImportFilename);
+        if (!existingList) {
+          showToast('List not found for overwrite', 'error');
+          setPendingImport(null, null);
+          return;
+        }
+
+        const listId = existingList._id;
+
+        // Clean albums data (remove rank/points)
+        const cleanedAlbums = albums.map((album) => {
+          const cleaned = { ...album };
+          delete cleaned.points;
+          delete cleaned.rank;
+          delete cleaned._id;
+          return cleaned;
+        });
+
+        // Replace list items using PUT
+        await fetch(`/api/lists/${encodeURIComponent(listId)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ data: cleanedAlbums }),
+        });
+
         updateListNav();
-        selectList(pendingImportFilename);
+        selectList(listId);
         showToast(
           `Overwritten "${pendingImportFilename}" with ${albums.length} albums`
         );
@@ -457,15 +497,14 @@ export function createImportConflictHandler(deps = {}) {
     // Rename option
     importRenameBtn.onclick = () => {
       const { filename: pendingImportFilename } = getPendingImport();
-      const lists = getLists();
 
       conflictModal.classList.add('hidden');
       originalImportNameSpan.textContent = pendingImportFilename;
 
-      // Suggest a new name
+      // Suggest a new name - check by name, not by ID
       let suggestedName = pendingImportFilename;
       let counter = 1;
-      while (lists[suggestedName]) {
+      while (findListByName(suggestedName)) {
         suggestedName = `${pendingImportFilename} (${counter})`;
         counter++;
       }
@@ -497,24 +536,34 @@ export function createImportConflictHandler(deps = {}) {
           // Note: metadata not used in merge (existing list keeps its organization)
         }
 
-        // Get existing list data using helper function
-        const existingList = getListData(pendingImportFilename) || [];
+        // Find existing list by name to get its ID
+        const existingListMeta = findListByName(pendingImportFilename);
+        if (!existingListMeta) {
+          showToast('List not found for merge', 'error');
+          setPendingImport(null, null);
+          return;
+        }
+
+        const listId = existingListMeta._id;
+
+        // Get existing list data using helper function with ID
+        const existingListData = getListData(listId) || [];
 
         // Merge the lists (avoiding duplicates based on artist + album)
-        const existingKeys = new Set(existingList.map(getAlbumKey));
+        const existingKeys = new Set(existingListData.map(getAlbumKey));
 
         const newAlbums = albums.filter(
           (album) => !existingKeys.has(getAlbumKey(album))
         );
 
-        const mergedList = [...existingList, ...newAlbums];
+        const mergedList = [...existingListData, ...newAlbums];
 
         // Use saveList for merge (don't import track picks/summaries for existing albums)
-        await saveList(pendingImportFilename, mergedList);
+        await saveList(listId, mergedList);
 
         // Fetch the saved list to get list item IDs (needed for track picks API)
         const savedListResponse = await fetch(
-          `/api/lists/${encodeURIComponent(pendingImportFilename)}`,
+          `/api/lists/${encodeURIComponent(listId)}`,
           {
             credentials: 'include',
           }
@@ -590,7 +639,7 @@ export function createImportConflictHandler(deps = {}) {
         }
 
         updateListNav();
-        selectList(pendingImportFilename);
+        selectList(listId);
 
         const addedCount = newAlbums.length;
         const skippedCount = albums.length - addedCount;
@@ -621,7 +670,6 @@ export function createImportConflictHandler(deps = {}) {
     if (confirmImportRenameBtn) {
       confirmImportRenameBtn.onclick = async () => {
         const { data: pendingImportData } = getPendingImport();
-        const lists = getLists();
         const newName = importNewNameInput.value.trim();
 
         if (!newName) {
@@ -629,7 +677,8 @@ export function createImportConflictHandler(deps = {}) {
           return;
         }
 
-        if (lists[newName]) {
+        // Check if a list with this name already exists
+        if (findListByName(newName)) {
           showToast('A list with this name already exists', 'error');
           return;
         }
@@ -647,9 +696,10 @@ export function createImportConflictHandler(deps = {}) {
             metadata = pendingImportData.metadata || null;
           }
 
-          await importList(newName, albums, metadata);
+          // importList returns the new list ID
+          const newListId = await importList(newName, albums, metadata);
           updateListNav();
-          selectList(newName);
+          selectList(newListId);
           showToast(`Imported as "${newName}" with ${albums.length} albums`);
         } catch (err) {
           console.error('Import with rename error:', err);

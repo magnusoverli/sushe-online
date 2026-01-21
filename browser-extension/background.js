@@ -373,19 +373,21 @@ async function fetchUserLists(forceRefresh = false) {
     const listsData = await response.json();
 
     // Group lists by year for submenu structure
+    // NOTE: listsData is now keyed by list ID, not list name
     userListsByYear = {};
     userLists = []; // Flat list for backward compatibility
 
-    for (const [listName, metadata] of Object.entries(listsData)) {
+    for (const [listId, metadata] of Object.entries(listsData)) {
       const year = metadata.year || 'Uncategorized';
       if (!userListsByYear[year]) {
         userListsByYear[year] = [];
       }
       userListsByYear[year].push({
-        name: listName,
+        _id: listId,
+        name: metadata.name || 'Unknown',
         count: metadata.count || 0,
       });
-      userLists.push(listName);
+      userLists.push({ _id: listId, name: metadata.name || 'Unknown' });
     }
 
     // Sort lists within each year alphabetically
@@ -744,15 +746,18 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       `Menu item clicked: ${info.menuItemId}, year: ${year}, index: ${index}`
     );
 
-    // Look up the list name from userListsByYear
+    // Look up the list from userListsByYear
     const listsForYear = userListsByYear[year];
     const listData = listsForYear ? listsForYear[index] : null;
+    const listId = listData?._id;
     const listName = listData?.name;
 
-    console.log(`List name for ${year}[${index}]: "${listName}"`);
+    console.log(
+      `List for ${year}[${index}]: id="${listId}", name="${listName}"`
+    );
 
-    if (listName && typeof listName === 'string') {
-      await addAlbumToList(info, tab, listName);
+    if (listId && typeof listId === 'string') {
+      await addAlbumToList(info, tab, listId, listName);
     } else {
       console.error('List not found:', { year, index, userListsByYear });
       showNotification('Error', 'List not found. Try refreshing lists.');
@@ -760,9 +765,9 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// Extract album data and add to list
-async function addAlbumToList(info, tab, listName) {
-  log('Adding album to list:', listName);
+// Extract album data and add to list (now uses list ID instead of name)
+async function addAlbumToList(info, tab, listId, listName) {
+  log('Adding album to list:', listId, listName);
 
   // Ensure state is loaded in case service worker restarted
   await ensureStateLoaded();
@@ -943,12 +948,12 @@ async function addAlbumToList(info, tab, listName) {
       }
     }
 
-    // Get current list data
+    // Get current list data (now using list ID instead of name)
     console.log(
-      `Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`
+      `Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}`
     );
     const listResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
+      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}`,
       { headers: getAuthHeaders() },
       15000 // 15 second timeout
     );
@@ -1042,12 +1047,12 @@ async function addAlbumToList(info, tab, listName) {
       genre_2: albumData.genre_2,
     });
 
-    // Save updated list
+    // Save updated list (now using PUT with list ID)
     console.log('Saving list with', currentList.length, 'albums');
     const saveResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listName)}`,
+      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}`,
       {
-        method: 'POST',
+        method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ data: currentList }),
       },

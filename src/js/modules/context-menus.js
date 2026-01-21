@@ -58,7 +58,7 @@ export function createContextMenus(deps = {}) {
     updatePlaylist,
     openRenameModal,
     updateListNav,
-    updateListMetadata,
+    updateListMetadata: _updateListMetadata,
     showMobileEditForm: _showMobileEditForm,
     playAlbum: _playAlbum,
     playAlbumSafe: _playAlbumSafe,
@@ -69,6 +69,7 @@ export function createContextMenus(deps = {}) {
     refreshMobileBarVisibility,
     getSortedGroups,
     refreshGroupsAndLists,
+    toggleMainStatus,
   } = deps;
 
   // Track loading performance optimization
@@ -217,6 +218,7 @@ export function createContextMenus(deps = {}) {
     // Lists in year-groups cannot be moved via this menu (they're organized by year)
     const groupId = meta?.groupId;
     let isInCollection = false;
+    let isInYearGroup = false;
 
     if (!groupId) {
       // Orphaned/uncategorized lists can be moved
@@ -225,11 +227,18 @@ export function createContextMenus(deps = {}) {
       // Check if the group is a collection (not a year-group)
       const groups = getSortedGroups();
       const group = groups.find((g) => g._id === groupId);
-      isInCollection = group ? !group.isYearGroup : false;
+      if (group) {
+        isInCollection = !group.isYearGroup;
+        isInYearGroup = group.isYearGroup;
+      }
     }
 
+    // A list can have main status only if it's in a year-group or has a year directly
+    // Lists in collections cannot have main status
+    const hasYear = !!meta?.year || isInYearGroup;
+
     return {
-      hasYear: !!meta?.year,
+      hasYear,
       isMain: !!meta?.isMain,
       mainToggleText: meta?.isMain ? 'Remove Main Status' : 'Set as Main',
       mainIconClass: meta?.isMain ? 'fa-star' : 'fa-star',
@@ -781,68 +790,14 @@ export function createContextMenus(deps = {}) {
     };
 
     // Handle toggle main option click
-    toggleMainOption.onclick = async () => {
+    toggleMainOption.onclick = () => {
       const { list: currentContextList } = getContextState();
       contextMenu.classList.add('hidden');
-
-      if (!currentContextList) return;
-
-      const meta = getListMetadata(currentContextList);
-      if (!meta) return;
-
-      // Check if list has a year assigned
-      if (!meta.year) {
-        showToast('List must have a year to be marked as main', 'error');
-        setContextState({ list: null });
-        return;
-      }
-
-      const newMainStatus = !meta.isMain;
-
-      try {
-        const response = await apiCall(
-          `/api/lists/${encodeURIComponent(currentContextList)}/main`,
-          {
-            method: 'POST',
-            body: JSON.stringify({ isMain: newMainStatus }),
-          }
-        );
-
-        // Update local metadata
-        updateListMetadata(currentContextList, {
-          isMain: newMainStatus,
-        });
-
-        // If another list lost its main status, update it too
-        if (response.previousMainList) {
-          updateListMetadata(response.previousMainList, {
-            isMain: false,
-          });
-        }
-
-        // Refresh sidebar to show updated star icons
-        updateListNav();
-
-        // Show appropriate message
-        if (newMainStatus) {
-          if (response.previousMainList) {
-            showToast(
-              `"${currentContextList}" is now your main ${meta.year} list (replaced "${response.previousMainList}")`
-            );
-          } else {
-            showToast(
-              `"${currentContextList}" is now your main ${meta.year} list`
-            );
-          }
-        } else {
-          showToast(`"${currentContextList}" is no longer marked as main`);
-        }
-      } catch (error) {
-        console.error('Error toggling main status:', error);
-        showToast('Error updating main status', 'error');
-      }
-
       setContextState({ list: null });
+
+      if (currentContextList) {
+        toggleMainStatus(currentContextList);
+      }
     };
 
     // Handle update playlist option click

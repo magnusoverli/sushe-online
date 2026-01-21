@@ -63,7 +63,7 @@ function getAlbumDisplayModule() {
     albumDisplayModule = createAlbumDisplay({
       getListData,
       getListMetadata,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       saveList,
       showToast,
       apiCall,
@@ -124,7 +124,7 @@ function getContextMenusModule() {
     contextMenusModule = createContextMenus({
       getListData,
       getListMetadata,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       getLists: () => lists,
       saveList,
       selectList,
@@ -154,7 +154,7 @@ function getContextMenusModule() {
         if ('list' in state) currentContextList = state.list;
       },
       setCurrentList: (listName) => {
-        currentList = listName;
+        currentListId = listName;
       },
       refreshMobileBarVisibility: () => {
         if (window.refreshMobileBarVisibility) {
@@ -191,7 +191,7 @@ function getMobileUIModule() {
     mobileUIModule = createMobileUI({
       getListData,
       getListMetadata,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       getLists: () => lists,
       setListData,
       saveList,
@@ -314,12 +314,14 @@ async function refreshGroupsAndLists() {
     updateGroupsFromServer(fetchedGroups);
 
     // Update lists metadata (preserve loaded _data)
-    Object.keys(fetchedLists).forEach((name) => {
-      const meta = fetchedLists[name];
-      if (lists[name]) {
-        // Preserve existing _data if loaded
-        lists[name] = {
-          ...lists[name],
+    // Note: fetchedLists is now keyed by _id, not name
+    Object.keys(fetchedLists).forEach((listId) => {
+      const meta = fetchedLists[listId];
+      if (lists[listId]) {
+        // Preserve existing _data if loaded, but update all metadata including name
+        lists[listId] = {
+          ...lists[listId],
+          name: meta.name || lists[listId].name || 'Unknown',
           year: meta.year || null,
           isMain: meta.isMain || false,
           count: meta.count || 0,
@@ -328,9 +330,9 @@ async function refreshGroupsAndLists() {
           updatedAt: meta.updatedAt || null,
         };
       } else {
-        lists[name] = {
-          _id: meta._id || null,
-          name: meta.name || name,
+        lists[listId] = {
+          _id: listId,
+          name: meta.name || 'Unknown',
           year: meta.year || null,
           isMain: meta.isMain || false,
           count: meta.count || 0,
@@ -358,7 +360,7 @@ function getListNavModule() {
       getListMetadata,
       getGroups,
       getSortedGroups,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       selectList,
       getListMenuConfig,
       hideAllContextMenus,
@@ -398,7 +400,7 @@ function getEditableFieldsModule() {
   if (!editableFieldsModule) {
     editableFieldsModule = createEditableFields({
       getListData,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       apiCall,
       showToast,
       getAvailableCountries: () => availableCountries,
@@ -471,7 +473,7 @@ function getSortingModule() {
   if (!sortingModule) {
     sortingModule = createSorting({
       getListData,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       debouncedSaveList,
       saveReorder, // Add lightweight reorder function
       updatePositionNumbers,
@@ -495,6 +497,7 @@ function getImportConflictModule() {
     importConflictModule = createImportConflictHandler({
       getListData,
       getLists: () => lists,
+      findListByName,
       saveList,
       importList,
       selectList,
@@ -525,7 +528,7 @@ function getNowPlayingModule() {
   if (!nowPlayingModule) {
     nowPlayingModule = createNowPlaying({
       getListData,
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
     });
     // Initialize event listeners
     nowPlayingModule.initialize();
@@ -578,7 +581,7 @@ function wasRecentLocalSave(listName) {
 function getRealtimeSyncModule() {
   if (!realtimeSyncModule) {
     realtimeSyncModule = createRealtimeSync({
-      getCurrentList: () => currentList,
+      getCurrentList: () => currentListId,
       getListData,
       apiCall,
       updateAlbumSummaryInPlace: (albumId, summaryData) =>
@@ -598,7 +601,7 @@ function getRealtimeSyncModule() {
           `/api/lists/${encodeURIComponent(listName)}`
         );
         setListData(listName, data);
-        if (currentList === listName) {
+        if (currentListId === listName) {
           displayAlbums(data, { forceFullRebuild: true });
         }
         return { wasLocalSave: false };
@@ -609,7 +612,7 @@ function getRealtimeSyncModule() {
           `/api/lists/${encodeURIComponent(listName)}`
         );
         setListData(listName, data);
-        if (currentList === listName) {
+        if (currentListId === listName) {
           displayAlbums(data, { forceFullRebuild: true });
         }
       },
@@ -638,13 +641,31 @@ function initializeRealtimeSync() {
 }
 
 // Global variables
+// NOTE: lists is now keyed by _id instead of name to support duplicate names
 let lists = {};
 let groups = {}; // List groups (years and collections)
-let currentList = '';
+let currentListId = ''; // Now stores list ID instead of name
 let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
-let currentContextList = null;
+let currentContextList = null; // Now stores list ID
 let currentContextGroup = null; // { id, name, isYearGroup }
+
+// Legacy compatibility - expose currentList as alias for currentListId (for external code)
+Object.defineProperty(window, 'currentList', {
+  get: () => currentListId,
+  set: (val) => {
+    currentListId = val;
+  },
+  configurable: true,
+});
+// Also expose currentListId directly
+Object.defineProperty(window, 'currentListId', {
+  get: () => currentListId,
+  set: (val) => {
+    currentListId = val;
+  },
+  configurable: true,
+});
 
 // Process static data at module load time
 const availableGenres = genresText
@@ -683,24 +704,25 @@ let pendingImportFilename = null;
 
 // ============ LIST DATA ACCESS HELPERS ============
 // These helpers provide a clean abstraction for accessing list data
-// Lists now use metadata objects: { name, year, count, _data, updatedAt, createdAt }
+// Lists are now keyed by _id (not name) to support duplicate names in different categories
+// Structure: { _id, name, year, count, _data, updatedAt, createdAt, groupId, sortOrder }
 
 /**
- * Get the album array for a list
- * @param {string} listName - The name of the list
+ * Get the album array for a list by ID
+ * @param {string} listId - The ID of the list
  * @returns {Array|null} - The album array or null if not found/loaded
  */
-function getListData(listName) {
-  if (!listName || !lists[listName]) {
+function getListData(listId) {
+  if (!listId || !lists[listId]) {
     return null;
   }
 
-  const listEntry = lists[listName];
+  const listEntry = lists[listId];
 
   // Handle legacy array format (for backward compatibility during transition)
   if (Array.isArray(listEntry)) {
     console.warn(
-      `Legacy array format detected for list "${listName}". Consider reloading.`
+      `Legacy array format detected for list "${listId}". Consider reloading.`
     );
     return listEntry;
   }
@@ -710,19 +732,49 @@ function getListData(listName) {
 }
 
 /**
+ * Find a list by name (and optionally groupId for disambiguation)
+ * @param {string} name - The name of the list
+ * @param {string|null} groupId - Optional group ID for disambiguation
+ * @returns {Object|null} - The list metadata or null if not found
+ */
+function findListByName(name, groupId = null) {
+  for (const listId of Object.keys(lists)) {
+    const list = lists[listId];
+    if (list.name === name) {
+      if (groupId === null || list.groupId === groupId) {
+        return list;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Get the current list's name (helper for display purposes)
+ * @returns {string} - The current list's name or empty string
+ */
+function getCurrentListName() {
+  if (!currentListId || !lists[currentListId]) {
+    return '';
+  }
+  return lists[currentListId].name || '';
+}
+
+/**
  * Set the album array for a list, preserving metadata
  * Also updates the snapshot for diff-based saves
- * @param {string} listName - The name of the list
+ * @param {string} listId - The ID of the list
  * @param {Array} albums - The album array to set
  * @param {boolean} updateSnapshot - Whether to update the saved snapshot (default: true)
  */
-function setListData(listName, albums, updateSnapshot = true) {
-  if (!listName) return;
+function setListData(listId, albums, updateSnapshot = true) {
+  if (!listId) return;
 
-  if (!lists[listName]) {
+  if (!lists[listId]) {
     // Create new metadata object if list doesn't exist
-    lists[listName] = {
-      name: listName,
+    lists[listId] = {
+      _id: listId,
+      name: 'Unknown',
       year: null,
       isMain: false,
       count: albums ? albums.length : 0,
@@ -730,13 +782,14 @@ function setListData(listName, albums, updateSnapshot = true) {
       updatedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     };
-  } else if (Array.isArray(lists[listName])) {
+  } else if (Array.isArray(lists[listId])) {
     // Handle legacy array format - convert to metadata object
     console.warn(
-      `Converting legacy array format for list "${listName}" to metadata object.`
+      `Converting legacy array format for list "${listId}" to metadata object.`
     );
-    lists[listName] = {
-      name: listName,
+    lists[listId] = {
+      _id: listId,
+      name: 'Unknown',
       year: null,
       isMain: false,
       count: albums ? albums.length : 0,
@@ -746,32 +799,33 @@ function setListData(listName, albums, updateSnapshot = true) {
     };
   } else {
     // Update existing metadata object
-    lists[listName]._data = albums || [];
-    lists[listName].count = albums ? albums.length : 0;
+    lists[listId]._data = albums || [];
+    lists[listId].count = albums ? albums.length : 0;
   }
 
   // Update snapshot for diff-based saves (when data is fetched from server)
   if (updateSnapshot && albums) {
-    lastSavedSnapshots.set(listName, createListSnapshot(albums));
+    lastSavedSnapshots.set(listId, createListSnapshot(albums));
   }
 }
 
 /**
- * Get metadata for a list (name, year, count, etc.)
- * @param {string} listName - The name of the list
+ * Get metadata for a list by ID (name, year, count, etc.)
+ * @param {string} listId - The ID of the list
  * @returns {Object|null} - The metadata object or null
  */
-function getListMetadata(listName) {
-  if (!listName || !lists[listName]) {
+function getListMetadata(listId) {
+  if (!listId || !lists[listId]) {
     return null;
   }
 
-  const listEntry = lists[listName];
+  const listEntry = lists[listId];
 
   // Handle legacy array format
   if (Array.isArray(listEntry)) {
     return {
-      name: listName,
+      _id: listId,
+      name: 'Unknown',
       year: null,
       isMain: false,
       count: listEntry.length,
@@ -786,18 +840,19 @@ function getListMetadata(listName) {
 
 /**
  * Update metadata for a list (year, name, etc.)
- * @param {string} listName - The name of the list
+ * @param {string} listId - The ID of the list
  * @param {Object} updates - The metadata fields to update
  */
-function updateListMetadata(listName, updates) {
-  if (!listName || !lists[listName]) return;
+function updateListMetadata(listId, updates) {
+  if (!listId || !lists[listId]) return;
 
-  const listEntry = lists[listName];
+  const listEntry = lists[listId];
 
   // Handle legacy array format - convert first
   if (Array.isArray(listEntry)) {
-    lists[listName] = {
-      name: listName,
+    lists[listId] = {
+      _id: listId,
+      name: 'Unknown',
       year: null,
       isMain: false,
       count: listEntry.length,
@@ -808,18 +863,18 @@ function updateListMetadata(listName, updates) {
   }
 
   // Apply updates
-  Object.assign(lists[listName], updates);
+  Object.assign(lists[listId], updates);
 }
 
 /**
  * Check if list data has been loaded
- * @param {string} listName - The name of the list
+ * @param {string} listId - The ID of the list
  * @returns {boolean}
  */
-function isListDataLoaded(listName) {
-  if (!listName || !lists[listName]) return false;
+function isListDataLoaded(listId) {
+  if (!listId || !lists[listId]) return false;
 
-  const listEntry = lists[listName];
+  const listEntry = lists[listId];
 
   // Legacy array format is always "loaded"
   if (Array.isArray(listEntry)) return true;
@@ -887,13 +942,23 @@ window.updateGroupsFromServer = updateGroupsFromServer;
  * Toggle main status for a list
  * @param {string} listName - The name of the list
  */
-async function toggleMainStatus(listName) {
-  const meta = getListMetadata(listName);
+async function toggleMainStatus(listId) {
+  const meta = getListMetadata(listId);
   if (!meta) return;
 
-  // Check if list has a year assigned
-  if (!meta.year) {
-    showToast('List must have a year to be marked as main', 'error');
+  const listName = meta.name || listId;
+
+  // Check if list is in a year-group or has a year directly
+  let isInYearGroup = false;
+  if (meta.groupId) {
+    const sortedGroups = getSortedGroups();
+    const group = sortedGroups.find((g) => g._id === meta.groupId);
+    isInYearGroup = group?.isYearGroup || false;
+  }
+
+  // List must have a year (either directly or via year-group) to be marked as main
+  if (!meta.year && !isInYearGroup) {
+    showToast('List must be in a year category to be marked as main', 'error');
     return;
   }
 
@@ -901,7 +966,7 @@ async function toggleMainStatus(listName) {
 
   try {
     const response = await apiCall(
-      `/api/lists/${encodeURIComponent(listName)}/main`,
+      `/api/lists/${encodeURIComponent(listId)}/main`,
       {
         method: 'POST',
         body: JSON.stringify({ isMain: newMainStatus }),
@@ -909,11 +974,11 @@ async function toggleMainStatus(listName) {
     );
 
     // Update local metadata
-    updateListMetadata(listName, { isMain: newMainStatus });
+    updateListMetadata(listId, { isMain: newMainStatus });
 
     // If another list lost its main status, update it too
-    if (response.previousMainList) {
-      updateListMetadata(response.previousMainList, { isMain: false });
+    if (response.previousMainListId) {
+      updateListMetadata(response.previousMainListId, { isMain: false });
     }
 
     // Refresh sidebar to show updated star icons
@@ -921,8 +986,8 @@ async function toggleMainStatus(listName) {
 
     // If this is the currently displayed list, re-render to show/hide position numbers
     // Position numbers only appear on main lists (they have semantic meaning for rankings)
-    if (listName === currentList) {
-      const albums = getListData(currentList);
+    if (listId === currentListId) {
+      const albums = getListData(currentListId);
       if (albums) {
         displayAlbums(albums, { forceFullRebuild: true });
       }
@@ -996,7 +1061,7 @@ function hideAllContextMenus() {
 
   // Restore FAB visibility if a list is selected
   const fab = document.getElementById('addAlbumFAB');
-  if (fab && currentList) {
+  if (fab && currentListId) {
     fab.style.display = 'flex';
   }
 }
@@ -1047,13 +1112,16 @@ async function downloadListAsCSV(listName) {
   return importExportModule.downloadListAsCSV(listName);
 }
 
-async function updatePlaylist(listName, listData = null) {
+async function updatePlaylist(listId, listData = null) {
   if (!musicServicesModule) {
     showToast('Loading playlist integration...', 'info', 1000);
     musicServicesModule = await import('./modules/music-services.js');
   }
   // If listData not provided, get it from global lists
-  const data = listData !== null ? listData : getListData(listName) || [];
+  const data = listData !== null ? listData : getListData(listId) || [];
+  // Get list name for display in music service
+  const meta = getListMetadata(listId);
+  const listName = meta?.name || listId;
   return musicServicesModule.updatePlaylist(listName, data);
 }
 window.updatePlaylist = updatePlaylist;
@@ -1290,10 +1358,10 @@ function attachLinkPreview(container, comment) {
 // Load lists from server
 async function loadLists() {
   try {
-    // OPTIMIZATION: Determine which list to load
-    const localLastList = localStorage.getItem('lastSelectedList');
-    const serverLastList = window.lastSelectedList;
-    const targetList = localLastList || serverLastList;
+    // OPTIMIZATION: Determine which list to load (now by ID)
+    const localLastListId = localStorage.getItem('lastSelectedList');
+    const serverLastListId = window.lastSelectedList;
+    const targetListId = localLastListId || serverLastListId;
 
     // OPTIMIZATION: Parallel execution - fetch metadata, groups, and target list simultaneously
     // This dramatically improves page refresh performance by:
@@ -1302,8 +1370,8 @@ async function loadLists() {
     // 3. Loading the target list data in parallel (only what's needed)
     const metadataPromise = apiCall('/api/lists'); // Metadata only (default)
     const groupsPromise = apiCall('/api/groups'); // Groups for sidebar
-    const listDataPromise = targetList
-      ? apiCall(`/api/lists/${encodeURIComponent(targetList)}`)
+    const listDataPromise = targetListId
+      ? apiCall(`/api/lists/${encodeURIComponent(targetListId)}`)
       : null;
 
     // Wait for metadata and groups (fast - small payloads)
@@ -1329,14 +1397,14 @@ async function loadLists() {
     });
     window.groups = groups;
 
-    // Initialize lists object with metadata objects (not arrays)
+    // Initialize lists object with metadata objects (keyed by _id, not name)
     // Structure: { _id, name, year, isMain, count, groupId, sortOrder, _data, updatedAt, createdAt }
     lists = {};
-    Object.keys(fetchedLists).forEach((name) => {
-      const meta = fetchedLists[name];
-      lists[name] = {
-        _id: meta._id || null, // List ID - needed for playcount API
-        name: meta.name || name,
+    Object.keys(fetchedLists).forEach((listId) => {
+      const meta = fetchedLists[listId];
+      lists[listId] = {
+        _id: listId,
+        name: meta.name || 'Unknown',
         year: meta.year || null,
         isMain: meta.isMain || false,
         count: meta.count || 0,
@@ -1353,19 +1421,19 @@ async function loadLists() {
     updateListNav();
 
     // If we're loading a specific list, wait for it and display
-    if (listDataPromise && targetList) {
+    if (listDataPromise && targetListId) {
       try {
         const listData = await listDataPromise;
         // Store the actual data in the metadata object
-        setListData(targetList, listData);
+        setListData(targetListId, listData);
 
         // Only auto-select if no list is currently selected
-        if (!window.currentList) {
-          selectList(targetList);
+        if (!currentListId) {
+          selectList(targetListId);
           // Sync localStorage if we used server preference
-          if (!localLastList && serverLastList) {
+          if (!localLastListId && serverLastListId) {
             try {
-              localStorage.setItem('lastSelectedList', serverLastList);
+              localStorage.setItem('lastSelectedList', serverLastListId);
             } catch (_e) {
               // Silently fail if localStorage is full
             }
@@ -1386,6 +1454,7 @@ async function loadLists() {
 // @param {string} name - List name
 // @param {Array} albums - Album array
 // @param {Object|null} metadata - Optional metadata from export (year, groupId, groupName)
+// @returns {string} - The created list ID
 async function importList(name, albums, metadata = null) {
   try {
     // Extract year and groupId from metadata
@@ -1412,8 +1481,8 @@ async function importList(name, albums, metadata = null) {
       return cleaned;
     });
 
-    // Save the list first
-    const body = { data: cleanedAlbums };
+    // Create the list using the new POST /api/lists endpoint
+    const body = { name, data: cleanedAlbums };
     if (year !== undefined) {
       body.year = year;
     }
@@ -1421,19 +1490,30 @@ async function importList(name, albums, metadata = null) {
       body.groupId = groupId;
     }
 
-    await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
+    const createResult = await apiCall('/api/lists', {
       method: 'POST',
       body: JSON.stringify(body),
     });
 
-    // Fetch the saved list to get list item IDs (needed for track picks API)
-    const savedList = await apiCall(`/api/lists/${encodeURIComponent(name)}`);
+    const listId = createResult._id;
 
-    // Update in-memory list data with the saved list (includes _id for each item)
-    setListData(name, savedList);
-    if (year !== undefined) {
-      updateListMetadata(name, { year: year });
-    }
+    // Fetch the saved list to get list item IDs (needed for track picks API)
+    const savedList = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
+
+    // Add the new list to in-memory lists object
+    lists[listId] = {
+      _id: listId,
+      name: name,
+      year: year || null,
+      isMain: false,
+      count: savedList.length,
+      groupId: groupId,
+      sortOrder: 0,
+      _data: savedList,
+      updatedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+    window.lists = lists;
 
     // Build a map from album_id to list_item_id for track picks
     const albumToListItemMap = new Map();
@@ -1505,7 +1585,7 @@ async function importList(name, albums, metadata = null) {
     }
 
     // Refresh mobile bar visibility if this is the current list
-    if (name === currentList && window.refreshMobileBarVisibility) {
+    if (listId === currentListId && window.refreshMobileBarVisibility) {
       window.refreshMobileBarVisibility();
     }
 
@@ -1514,6 +1594,8 @@ async function importList(name, albums, metadata = null) {
         `Imported ${trackPicksImported} track picks and ${summariesImported} summaries`
       );
     }
+
+    return listId;
   } catch (error) {
     showToast('Error importing list', 'error');
     throw error;
@@ -1521,7 +1603,7 @@ async function importList(name, albums, metadata = null) {
 }
 
 // Store snapshots of last saved state for diff-based saves
-// Key: listName, Value: Array of album_ids in order
+// Key: listId, Value: Array of album_ids in order
 const lastSavedSnapshots = new Map();
 
 /**
@@ -1605,10 +1687,10 @@ function computeListDiff(oldSnapshot, newData) {
 }
 
 // Save list to server
-// @param {string} name - List name
+// @param {string} listId - List ID
 // @param {Array} data - Album array
 // @param {number|null} year - Optional year for the list (required for new lists)
-async function saveList(name, data, year = undefined) {
+async function saveList(listId, data, year = undefined) {
   try {
     const cleanedData = data.map((album) => {
       const cleaned = { ...album };
@@ -1619,15 +1701,15 @@ async function saveList(name, data, year = undefined) {
 
     // Mark this as a local save BEFORE the API call to prevent race condition
     // The WebSocket broadcast can arrive before the HTTP response
-    markLocalSave(name);
+    markLocalSave(listId);
 
     // Try incremental save if we have a previous snapshot
-    const oldSnapshot = lastSavedSnapshots.get(name);
+    const oldSnapshot = lastSavedSnapshots.get(listId);
     const diff = computeListDiff(oldSnapshot, cleanedData);
 
     if (diff && diff.totalChanges > 0) {
-      // Use incremental endpoint
-      await apiCall(`/api/lists/${encodeURIComponent(name)}/items`, {
+      // Use incremental endpoint (now ID-based)
+      await apiCall(`/api/lists/${encodeURIComponent(listId)}/items`, {
         method: 'PATCH',
         body: JSON.stringify({
           added: diff.added,
@@ -1636,44 +1718,34 @@ async function saveList(name, data, year = undefined) {
         }),
       });
 
+      const listName = lists[listId]?.name || listId;
       console.log(
-        `List "${name}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
+        `List "${listName}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
       );
     } else {
-      // Fall back to full save
+      // Fall back to full save using PUT (update items only)
       const body = { data: cleanedData };
 
-      // Include year if provided (required for new lists)
-      if (year !== undefined) {
-        body.year = year;
-      } else {
-        // For existing lists, preserve current year if not explicitly provided
-        const existingMeta = getListMetadata(name);
-        if (existingMeta && existingMeta.year) {
-          body.year = existingMeta.year;
-        }
-      }
-
-      await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
-        method: 'POST',
+      await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
+        method: 'PUT',
         body: JSON.stringify(body),
       });
     }
 
     // Update snapshot after successful save
-    lastSavedSnapshots.set(name, createListSnapshot(cleanedData));
+    lastSavedSnapshots.set(listId, createListSnapshot(cleanedData));
 
     // Update in-memory list data using helper (preserves metadata)
-    setListData(name, cleanedData);
+    setListData(listId, cleanedData);
 
     // Update year in metadata if provided
     if (year !== undefined) {
-      updateListMetadata(name, { year: year });
+      updateListMetadata(listId, { year: year });
     }
 
     // Refresh mobile bar visibility if this is the current list
     // (albums may have been added/removed, affecting whether current track is in list)
-    if (name === currentList && window.refreshMobileBarVisibility) {
+    if (listId === currentListId && window.refreshMobileBarVisibility) {
       window.refreshMobileBarVisibility();
     }
   } catch (error) {
@@ -1755,7 +1827,7 @@ function updateMobileHeader() {
     headerContainer.innerHTML = window.headerComponent(
       window.currentUser,
       'home',
-      currentList || ''
+      currentListId || ''
     );
   }
 }
@@ -1776,7 +1848,7 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
-    const albumsForEdit = getListData(currentList);
+    const albumsForEdit = getListData(currentListId);
     const expectedAlbum = albumsForEdit && albumsForEdit[currentContextAlbum];
     if (expectedAlbum && currentContextAlbumId) {
       const expectedId =
@@ -1830,7 +1902,7 @@ function initializeAlbumContextMenu() {
     if (currentContextAlbum === null) return;
 
     // Verify the album is still at the expected index, fallback to identity search
-    const albumsForRemove = getListData(currentList);
+    const albumsForRemove = getListData(currentListId);
     let album = albumsForRemove && albumsForRemove[currentContextAlbum];
     let indexToRemove = currentContextAlbum;
 
@@ -1864,7 +1936,7 @@ function initializeAlbumContextMenu() {
       async () => {
         try {
           // Remove from the list using the correct index
-          const albumsToModify = getListData(currentList);
+          const albumsToModify = getListData(currentListId);
           if (!albumsToModify) {
             showToast('Error: List data not found', 'error');
             return;
@@ -1872,10 +1944,10 @@ function initializeAlbumContextMenu() {
           albumsToModify.splice(indexToRemove, 1);
 
           // Save to server
-          await saveList(currentList, albumsToModify);
+          await saveList(currentListId, albumsToModify);
 
           // Update display
-          selectList(currentList);
+          selectList(currentListId);
 
           showToast(`Removed "${album.album}" from the list`);
         } catch (error) {
@@ -1884,7 +1956,7 @@ function initializeAlbumContextMenu() {
 
           // Reload the list to ensure consistency
           await loadLists();
-          selectList(currentList);
+          selectList(currentListId);
         }
 
         currentContextAlbum = null;
@@ -1940,7 +2012,7 @@ function initializeAlbumContextMenu() {
       contextMenu.classList.add('hidden');
 
       // Get the artist name from the currently selected album
-      const albumsData = getListData(currentList);
+      const albumsData = getListData(currentListId);
       let album = albumsData && albumsData[currentContextAlbum];
 
       if (album && currentContextAlbumId) {
@@ -2189,7 +2261,7 @@ function groupListsForMove() {
 
   Object.keys(lists).forEach((listName) => {
     // Skip current list
-    if (listName === currentList) return;
+    if (listName === currentListId) return;
 
     const meta = lists[listName];
     const year = meta?.year;
@@ -2655,7 +2727,7 @@ function positionPlaySubmenu() {
 function triggerPlayAlbum() {
   if (currentContextAlbum === null) return;
 
-  const albumsForPlay = getListData(currentList);
+  const albumsForPlay = getListData(currentListId);
   const expectedAlbum = albumsForPlay && albumsForPlay[currentContextAlbum];
   if (expectedAlbum && currentContextAlbumId) {
     const expectedId =
@@ -2681,7 +2753,7 @@ async function playAlbumOnSpotifyDevice(deviceId) {
   }
 
   // Get the album data
-  const albumsForPlay = getListData(currentList);
+  const albumsForPlay = getListData(currentListId);
   let album = albumsForPlay && albumsForPlay[currentContextAlbum];
 
   // Verify album identity
@@ -2793,7 +2865,7 @@ async function playAlbumOnDeviceMobile(albumId, deviceId) {
 
 // Play the selected album on the connected music service
 function playAlbum(index) {
-  const albums = getListData(currentList);
+  const albums = getListData(currentListId);
   const album = albums && albums[index];
   if (!album) return;
 
@@ -2864,7 +2936,7 @@ function playAlbum(index) {
 
 // Play the selected track on the connected music service
 function playTrack(index) {
-  const albums = getListData(currentList);
+  const albums = getListData(currentListId);
   const album = albums && albums[index];
   if (!album) return;
 
@@ -2952,7 +3024,7 @@ window.playTrackSafe = function (albumId) {
 
 // Play a specific track by name (for use in edit modal track list)
 function playSpecificTrack(index, trackName) {
-  const albums = getListData(currentList);
+  const albums = getListData(currentListId);
   const album = albums && albums[index];
   if (!album) return;
 
@@ -3179,12 +3251,8 @@ function initializeCreateList() {
       return;
     }
 
-    // Check if list already exists
-    if (lists[listName]) {
-      showToast('A list with this name already exists', 'error');
-      nameInput.focus();
-      return;
-    }
+    // Note: Duplicate name checking is now done server-side per group
+    // The new unique constraint is (user_id, name, group_id)
 
     // Validate category selection
     if (!categoryValue) {
@@ -3241,27 +3309,30 @@ function initializeCreateList() {
         groupId = categoryValue.replace('collection:', '');
       }
 
-      // Create the list
+      // Create the list using the new POST /api/lists endpoint
+      const createBody = { name: listName, data: [] };
       if (groupId) {
-        // Create in collection (no year)
-        await apiCall(`/api/lists/${encodeURIComponent(listName)}`, {
-          method: 'POST',
-          body: JSON.stringify({ data: [], groupId }),
-        });
+        createBody.groupId = groupId;
       } else if (year) {
-        // Create with year
-        await saveList(listName, [], year);
+        createBody.year = year;
       } else {
         showError('Invalid category selection');
         return;
       }
 
+      const result = await apiCall('/api/lists', {
+        method: 'POST',
+        body: JSON.stringify(createBody),
+      });
+
+      const newListId = result._id;
+
       // Refresh groups and lists, update navigation
       await refreshGroupsAndLists();
       updateListNav();
 
-      // Select the new list
-      selectList(listName);
+      // Select the new list by ID
+      selectList(newListId);
 
       // Close modal
       closeModal();
@@ -3405,7 +3476,7 @@ function initializeCreateCollection() {
 // Edit list details functionality (formerly Rename list)
 function initializeRenameList() {
   const modal = document.getElementById('renameListModal');
-  const currentNameSpan = document.getElementById('currentListName');
+  const _currentNameSpan = document.getElementById('currentListIdName'); // Used in openRenameModal
   const nameInput = document.getElementById('newListNameInput');
   const yearInput = document.getElementById('editListYear');
   const yearError = document.getElementById('editYearError');
@@ -3445,7 +3516,15 @@ function initializeRenameList() {
 
   // Edit list function
   const editList = async () => {
-    const oldName = currentNameSpan.textContent;
+    // Get the list ID from the modal's dataset (set by openRenameModal)
+    const listId = modal.dataset.listId;
+    if (!listId) {
+      showToast('No list selected', 'error');
+      return;
+    }
+
+    const oldMeta = getListMetadata(listId);
+    const oldName = oldMeta?.name || '';
     const newName = nameInput.value.trim();
     const yearValue = yearInput ? yearInput.value.trim() : '';
 
@@ -3468,15 +3547,20 @@ function initializeRenameList() {
     }
     if (yearError) yearError.classList.add('hidden');
 
-    // Check if new name already exists (only if renaming)
-    if (newName !== oldName && lists[newName]) {
-      showToast('A list with this name already exists', 'error');
-      nameInput.focus();
-      return;
+    // Check if new name already exists in the same group (only if renaming)
+    // The server will do the actual duplicate check, but we can do a quick client-side check
+    if (newName !== oldName) {
+      const existingWithSameName = findListByName(newName, oldMeta?.groupId);
+      if (existingWithSameName && existingWithSameName._id !== listId) {
+        showToast(
+          'A list with this name already exists in this category',
+          'error'
+        );
+        nameInput.focus();
+        return;
+      }
     }
 
-    // Determine what changed
-    const oldMeta = getListMetadata(oldName);
     const nameChanged = newName !== oldName;
     const yearChanged = yearValidation.value !== (oldMeta?.year || null);
 
@@ -3489,40 +3573,30 @@ function initializeRenameList() {
     try {
       // Use PATCH endpoint to update name and/or year
       const patchData = {};
-      if (nameChanged) patchData.newName = newName;
+      if (nameChanged) patchData.name = newName;
       if (yearChanged) patchData.year = yearValidation.value;
 
-      await apiCall(`/api/lists/${encodeURIComponent(oldName)}`, {
+      await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
         method: 'PATCH',
         body: JSON.stringify(patchData),
       });
 
-      // Update local state
-      if (nameChanged) {
-        // Move the list entry to new key
-        lists[newName] = lists[oldName];
-        lists[newName].name = newName;
-        delete lists[oldName];
-
-        if (currentList === oldName) {
-          currentList = newName;
-          window.currentList = currentList;
+      // Update local state (lists remain keyed by ID)
+      if (lists[listId]) {
+        if (nameChanged) {
+          lists[listId].name = newName;
         }
-      }
-
-      // Update year in metadata
-      if (yearChanged) {
-        const listToUpdate = nameChanged ? lists[newName] : lists[oldName];
-        if (listToUpdate) {
-          listToUpdate.year = yearValidation.value;
+        if (yearChanged) {
+          lists[listId].year = yearValidation.value;
         }
       }
 
       updateListNav();
 
-      // Update display if current list was renamed
-      if (nameChanged && currentList === newName) {
-        selectList(newName);
+      // Refresh display if current list was modified
+      if (currentListId === listId) {
+        // Re-select to update any displayed name
+        selectList(listId);
       }
 
       closeModal();
@@ -3562,20 +3636,25 @@ function initializeRenameList() {
 }
 
 // Open edit list details modal (formerly rename modal)
-function openRenameModal(listName) {
+function openRenameModal(listId) {
   const modal = document.getElementById('renameListModal');
-  const currentNameSpan = document.getElementById('currentListName');
+  const currentNameSpan = document.getElementById('currentListIdName');
   const nameInput = document.getElementById('newListNameInput');
   const yearInput = document.getElementById('editListYear');
   const yearError = document.getElementById('editYearError');
 
   if (!modal || !currentNameSpan || !nameInput) return;
 
+  // Get metadata to display the list name
+  const meta = getListMetadata(listId);
+  const listName = meta?.name || listId;
+
   currentNameSpan.textContent = listName;
   nameInput.value = listName;
 
-  // Populate year from metadata
-  const meta = getListMetadata(listName);
+  // Store the list ID for the save handler
+  modal.dataset.listId = listId;
+
   if (yearInput) {
     yearInput.value = meta?.year || '';
   }
@@ -3606,31 +3685,33 @@ function showLoadingSpinner(container) {
   container.appendChild(spinner);
 }
 
-// Select and display a list
-async function selectList(listName) {
+// Select and display a list by ID
+async function selectList(listId) {
   try {
     // Track previous list for realtime sync unsubscription
-    const previousList = currentList;
+    const previousListId = currentListId;
 
-    currentList = listName;
-    window.currentList = currentList;
+    currentListId = listId;
 
     // Update realtime sync subscriptions
     if (realtimeSyncModule) {
-      if (previousList && previousList !== listName) {
-        realtimeSyncModule.unsubscribeFromList(previousList);
+      if (previousListId && previousListId !== listId) {
+        realtimeSyncModule.unsubscribeFromList(previousListId);
       }
-      if (listName) {
-        realtimeSyncModule.subscribeToList(listName);
+      if (listId) {
+        realtimeSyncModule.subscribeToList(listId);
       }
     }
 
     // Clear playcount cache when switching lists (playcounts are list-item specific)
     clearPlaycountCache();
 
+    // Get the list name for display purposes
+    const listName = lists[listId]?.name || '';
+
     // === IMMEDIATE UI UPDATES (before network call) ===
     // Update active state in sidebar immediately (optimized - no full rebuild)
-    updateListNavActiveState(listName);
+    updateListNavActiveState(listId);
 
     // Update the header title immediately
     updateHeaderTitle(listName);
@@ -3641,19 +3722,19 @@ async function selectList(listName) {
     // Show/hide FAB based on whether a list is selected (mobile only)
     const fab = document.getElementById('addAlbumFAB');
     if (fab) {
-      fab.style.display = listName ? 'flex' : 'none';
+      fab.style.display = listId ? 'flex' : 'none';
     }
 
     // Show loading spinner immediately to provide instant visual feedback
     const container = document.getElementById('albumContainer');
-    if (container && listName) {
+    if (container && listId) {
       showLoadingSpinner(container);
     }
 
-    // Save to localStorage immediately (synchronous)
-    if (listName) {
+    // Save to localStorage immediately (synchronous) - now stores ID
+    if (listId) {
       try {
-        localStorage.setItem('lastSelectedList', listName);
+        localStorage.setItem('lastSelectedList', listId);
       } catch (e) {
         // Silently fail if localStorage is full - not critical
         if (e.name === 'QuotaExceededError') {
@@ -3666,29 +3747,28 @@ async function selectList(listName) {
 
     // === FETCH AND RENDER DATA ===
     // Fetch list data from server (server caches for 5min)
-    if (listName) {
+    if (listId) {
       try {
         // Use helper to check if data is loaded
-        let data = getListData(listName);
+        let data = getListData(listId);
 
         // OPTIMIZATION: Only fetch if data is missing or not loaded
         // This avoids duplicate fetches when loadLists() already loaded the data
-        const needsFetch = !isListDataLoaded(listName);
+        const needsFetch = !isListDataLoaded(listId);
 
         if (needsFetch) {
-          data = await apiCall(`/api/lists/${encodeURIComponent(listName)}`);
+          data = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
           // Use helper to store data (preserves metadata)
-          setListData(listName, data);
+          setListData(listId, data);
         }
 
         // Display the fetched data with images (single render)
         // Pass forceFullRebuild flag to skip incremental update checks when switching lists
-        if (currentList === listName) {
+        if (currentListId === listId) {
           displayAlbums(data, { forceFullRebuild: true });
           // Fetch Last.fm playcounts in background (non-blocking)
-          const listMeta = getListMetadata(listName);
-          if (listMeta?._id) {
-            fetchAndDisplayPlaycounts(listMeta._id).catch((err) => {
+          if (listId) {
+            fetchAndDisplayPlaycounts(listId).catch((err) => {
               console.warn('Background playcount fetch failed:', err);
             });
           }
@@ -3706,14 +3786,14 @@ async function selectList(listName) {
     // Tracks are fetched only when: (1) adding an album, (2) opening the track
     // cell / mobile fetch when tracks are missing. No list-wide pre-fetch.
 
-    // Persist the selection without blocking UI if changed
-    if (listName && listName !== window.lastSelectedList) {
+    // Persist the selection without blocking UI if changed (now by ID)
+    if (listId && listId !== window.lastSelectedList) {
       apiCall('/api/user/last-list', {
         method: 'POST',
-        body: JSON.stringify({ listName }),
+        body: JSON.stringify({ listId }),
       })
         .then(() => {
-          window.lastSelectedList = listName;
+          window.lastSelectedList = listId;
         })
         .catch((error) => {
           console.warn('Failed to save list preference:', error);
@@ -3727,6 +3807,10 @@ async function selectList(listName) {
 // Expose selectList to window after it's defined
 window.selectList = selectList;
 window.loadLists = loadLists;
+// Helper to get current list name (for display)
+window.getCurrentListName = getCurrentListName;
+// Helper to find list by name
+window.findListByName = findListByName;
 
 function updateHeaderTitle(listName) {
   const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');
@@ -3823,14 +3907,14 @@ function _updateTrackCellDisplay(albumIndex, trackValue, tracks) {
   // Re-attach click handler
   trackCell.onclick = async () => {
     const currentIndex = parseInt(row.dataset.index);
-    const albumsForTrack = getListData(currentList);
+    const albumsForTrack = getListData(currentListId);
     const album = albumsForTrack && albumsForTrack[currentIndex];
     if (!album) return;
     if (!album.tracks || album.tracks.length === 0) {
       showToast('Fetching tracks...', 'info');
       try {
         await fetchTracksForAlbum(album);
-        await saveList(currentList, albumsForTrack);
+        await saveList(currentListId, albumsForTrack);
       } catch (_err) {
         showToast('Error fetching tracks', 'error');
         return;
@@ -3953,14 +4037,14 @@ function updateTrackCellDisplayDual(albumIndex, trackPicks, tracks) {
   // Re-attach click handler
   trackCell.onclick = async () => {
     const currentIndex = parseInt(row.dataset.index);
-    const albumsForTrack = getListData(currentList);
+    const albumsForTrack = getListData(currentListId);
     const album = albumsForTrack && albumsForTrack[currentIndex];
     if (!album) return;
     if (!album.tracks || album.tracks.length === 0) {
       showToast('Fetching tracks...', 'info');
       try {
         await fetchTracksForAlbum(album);
-        await saveList(currentList, albumsForTrack);
+        await saveList(currentListId, albumsForTrack);
       } catch (_err) {
         showToast('Error fetching tracks', 'error');
         return;
@@ -3999,7 +4083,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
       return numA && numB ? numA - numB : 0;
     });
 
-    const albumsForMenu = getListData(currentList);
+    const albumsForMenu = getListData(currentListId);
     const currentAlbum = albumsForMenu && albumsForMenu[albumIndex];
 
     // Get current track picks (new normalized fields or legacy)
@@ -4151,7 +4235,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
             });
 
             // Update local data
-            const albumsForSelection = getListData(currentList);
+            const albumsForSelection = getListData(currentListId);
             const freshAlbum =
               albumsForSelection && albumsForSelection[albumIndex];
             if (freshAlbum) {
@@ -4180,7 +4264,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
                 body: JSON.stringify({ trackIdentifier: trackValue }),
               });
 
-              const albumsForSelection = getListData(currentList);
+              const albumsForSelection = getListData(currentListId);
               const freshAlbum =
                 albumsForSelection && albumsForSelection[albumIndex];
               if (freshAlbum) {
@@ -4214,7 +4298,7 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
             });
 
             // Update local data
-            const albumsForSelection = getListData(currentList);
+            const albumsForSelection = getListData(currentListId);
             const freshAlbum =
               albumsForSelection && albumsForSelection[albumIndex];
             if (freshAlbum) {
@@ -4583,7 +4667,7 @@ document.addEventListener('DOMContentLoaded', () => {
           await saveList(listName, targetListData);
 
           // Refresh if viewing the same list
-          if (currentList === listName) {
+          if (currentListId === listName) {
             selectList(listName);
           }
 
@@ -4684,9 +4768,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // Add this right after the DOMContentLoaded event listener
 window.addEventListener('beforeunload', () => {
-  if (currentList) {
+  if (currentListId) {
     try {
-      localStorage.setItem('lastSelectedList', currentList);
+      localStorage.setItem('lastSelectedList', currentListId);
     } catch (e) {
       // Silently fail - not critical during page unload
       console.warn('Failed to save last selected list on unload:', e.name);

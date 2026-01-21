@@ -31,61 +31,72 @@ function createBroadcast(getIO, logger) {
   }
 
   return {
-    listUpdated(userId, listName, options = {}) {
+    // NOTE: Events now use listId instead of listName to support duplicate names
+    listUpdated(userId, listId, options = {}) {
       emitToUser(
         'list:updated',
         'WebSocket not initialized, cannot broadcast list:updated',
         userId,
-        { listName, updatedAt: new Date().toISOString() },
+        { listId, updatedAt: new Date().toISOString() },
         options
       );
-      logger.debug('Broadcast list:updated', { userId, listName });
+      logger.debug('Broadcast list:updated', { userId, listId });
     },
-    listCreated(userId, listName, year) {
+    listCreated(userId, listId, listName, year) {
       emitToUser(
         'list:created',
         'WebSocket not initialized, cannot broadcast list:created',
         userId,
-        { listName, year, createdAt: new Date().toISOString() }
+        { listId, listName, year, createdAt: new Date().toISOString() }
       );
-      logger.debug('Broadcast list:created', { userId, listName, year });
+      logger.debug('Broadcast list:created', {
+        userId,
+        listId,
+        listName,
+        year,
+      });
     },
-    listDeleted(userId, listName) {
+    listDeleted(userId, listId) {
       emitToUser(
         'list:deleted',
         'WebSocket not initialized, cannot broadcast list:deleted',
         userId,
-        { listName, deletedAt: new Date().toISOString() }
+        { listId, deletedAt: new Date().toISOString() }
       );
-      logger.debug('Broadcast list:deleted', { userId, listName });
+      logger.debug('Broadcast list:deleted', { userId, listId });
     },
-    listRenamed(userId, oldName, newName) {
+    listRenamed(userId, listId, oldName, newName) {
       emitToUser(
         'list:renamed',
         'WebSocket not initialized, cannot broadcast list:renamed',
         userId,
-        { oldName, newName, renamedAt: new Date().toISOString() }
+        { listId, oldName, newName, renamedAt: new Date().toISOString() }
       );
-      logger.debug('Broadcast list:renamed', { userId, oldName, newName });
+      logger.debug('Broadcast list:renamed', {
+        userId,
+        listId,
+        oldName,
+        newName,
+      });
     },
-    listMainChanged(userId, listName, isMain) {
+    listMainChanged(userId, listId, isMain) {
       emitToUser(
         'list:main-changed',
         'WebSocket not initialized, cannot broadcast list:main-changed',
         userId,
-        { listName, isMain, changedAt: new Date().toISOString() }
+        { listId, isMain, changedAt: new Date().toISOString() }
       );
-      logger.debug('Broadcast list:main-changed', { userId, listName, isMain });
+      logger.debug('Broadcast list:main-changed', { userId, listId, isMain });
     },
-    listReordered(userId, listName, order, options = {}) {
+    listReordered(userId, listId, order, options = {}) {
       emitToUser(
         'list:reordered',
         'WebSocket not initialized, cannot broadcast list:reordered',
         userId,
-        { listName, order, reorderedAt: new Date().toISOString() },
+        { listId, order, reorderedAt: new Date().toISOString() },
         options
       );
-      logger.debug('Broadcast list:reordered', { userId, listName });
+      logger.debug('Broadcast list:reordered', { userId, listId });
     },
     albumSummaryUpdated(userId, albumId) {
       const io = getIO();

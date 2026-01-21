@@ -1587,13 +1587,13 @@ const spotifyTemplate = (user, csrfToken = '') => `
     document.addEventListener('DOMContentLoaded', () => {
       // Override selectList to handle responsive behavior
       const originalSelectList = window.selectList;
-      window.selectList = async function(listName) {
-        await originalSelectList(listName);
+      window.selectList = async function(listId) {
+        await originalSelectList(listId);
         
         // Show/hide FAB
         const fab = document.getElementById('addAlbumFAB');
         if (fab) {
-          fab.style.display = listName ? 'flex' : 'none';
+          fab.style.display = listId ? 'flex' : 'none';
         }
       };
       
@@ -1608,8 +1608,12 @@ const spotifyTemplate = (user, csrfToken = '') => `
       if (isMobile !== lastIsMobile) {
         lastIsMobile = isMobile;
         if (typeof updateListNav === 'function') updateListNav();
-        if (typeof currentList !== 'undefined' && typeof lists !== 'undefined' && lists[currentList]) {
-          displayAlbums(lists[currentList]);
+        // currentListId is the current list ID (lists are now keyed by ID)
+        if (typeof currentListId !== 'undefined' && currentListId && typeof lists !== 'undefined' && lists[currentListId]) {
+          const listData = lists[currentListId]._data || lists[currentListId];
+          if (listData && Array.isArray(listData)) {
+            displayAlbums(listData);
+          }
         }
       }
     });

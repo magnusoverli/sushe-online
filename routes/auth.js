@@ -185,12 +185,18 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Update last selected list (now by list ID instead of name)
   app.post('/api/user/last-list', ensureAuthAPI, (req, res) => {
-    const { listName } = req.body;
+    // Support both listId (new) and listName (legacy) for backward compatibility
+    const listId = req.body.listId || req.body.listName;
+
+    if (!listId) {
+      return res.status(400).json({ error: 'listId is required' });
+    }
 
     users.update(
       { _id: req.user._id },
-      { $set: { lastSelectedList: listName, updatedAt: new Date() } },
+      { $set: { lastSelectedList: listId, updatedAt: new Date() } },
       {},
       (err) => {
         if (err) {
@@ -204,7 +210,7 @@ module.exports = (app, deps) => {
         }
 
         // Update the session user object
-        req.user.lastSelectedList = listName;
+        req.user.lastSelectedList = listId;
         saveSessionSafe(req, 'lastSelectedList update');
 
         res.json({ success: true });
