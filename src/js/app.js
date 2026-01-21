@@ -4000,6 +4000,70 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
 
     menu.innerHTML = menuHTML;
 
+    // Track current selections for UI updates
+    let currentPrimaryTrack =
+      currentAlbum?.primary_track || currentAlbum?.track_pick || '';
+    let currentSecondaryTrack = currentAlbum?.secondary_track || '';
+
+    // Function to update menu UI after selection changes
+    function updateMenuUI() {
+      menu.querySelectorAll('.track-menu-option').forEach((item) => {
+        const trackValue = item.dataset.trackValue;
+        if (item.dataset.action === 'clear') {
+          // Update "clear" option
+          const hasNoSelection = !currentPrimaryTrack && !currentSecondaryTrack;
+          const span = item.querySelector('span');
+          if (span) {
+            span.className = hasNoSelection ? 'text-red-500' : 'text-gray-400';
+            span.innerHTML = `${hasNoSelection ? '<i class="fas fa-check mr-2"></i>' : ''}Clear all selections`;
+          }
+          return;
+        }
+
+        const isPrimary = trackValue === currentPrimaryTrack;
+        const isSecondary = trackValue === currentSecondaryTrack;
+
+        // Update data attributes
+        item.dataset.isPrimary = isPrimary;
+        item.dataset.isSecondary = isSecondary;
+
+        // Update visual appearance
+        item.classList.remove('bg-yellow-900/20', 'bg-gray-700/30');
+        if (isPrimary) {
+          item.classList.add('bg-yellow-900/20');
+        } else if (isSecondary) {
+          item.classList.add('bg-gray-700/30');
+        }
+
+        // Update the span content with indicator
+        const span = item.querySelector('span');
+        if (span) {
+          const match = trackValue.match(/^(\d+)[.\s-]?\s*(.*)$/);
+          const trackNum = match ? match[1] : '';
+          const displayName = match ? match[2] : trackValue;
+          const trackObj = sortedTracks.find(
+            (t) => getTrackName(t) === trackValue
+          );
+          const trackLength = trackObj
+            ? formatTrackTime(getTrackLength(trackObj))
+            : '';
+
+          let indicator = '';
+          let textClass = 'text-gray-300';
+          if (isPrimary) {
+            indicator = '<span class="text-yellow-400 mr-2">★</span>';
+            textClass = 'text-yellow-400';
+          } else if (isSecondary) {
+            indicator = '<span class="text-yellow-400 mr-2">☆</span>';
+            textClass = 'text-gray-300';
+          }
+
+          span.className = textClass;
+          span.innerHTML = `${indicator}<span class="font-medium">${trackNum}.</span> ${displayName}${trackLength ? ` <span class="text-gray-500 text-xs ml-2">${trackLength}</span>` : ''}`;
+        }
+      });
+    }
+
     // Add click handlers with new dual-track logic
     menu.querySelectorAll('.track-menu-option').forEach((option) => {
       option.onclick = async (e) => {
@@ -4019,8 +4083,6 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
           return;
         }
 
-        menu.remove();
-
         try {
           if (action === 'clear') {
             // Clear all track picks
@@ -4037,6 +4099,11 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
               freshAlbum.secondary_track = null;
               freshAlbum.track_pick = ''; // Legacy field
             }
+
+            // Update tracking variables and menu UI
+            currentPrimaryTrack = '';
+            currentSecondaryTrack = '';
+            updateMenuUI();
 
             updateTrackCellDisplayDual(albumIndex, result, album.tracks);
             showToast('Track selections cleared');
@@ -4061,6 +4128,11 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
                 freshAlbum.secondary_track = result.secondary_track;
                 freshAlbum.track_pick = result.primary_track || '';
               }
+
+              // Update tracking variables and menu UI
+              currentPrimaryTrack = result.primary_track || '';
+              currentSecondaryTrack = result.secondary_track || '';
+              updateMenuUI();
 
               updateTrackCellDisplayDual(albumIndex, result, album.tracks);
               showToast('Primary track deselected');
@@ -4090,6 +4162,11 @@ function showTrackSelectionMenu(album, albumIndex, x, y) {
               freshAlbum.secondary_track = result.secondary_track;
               freshAlbum.track_pick = result.primary_track || ''; // Legacy field
             }
+
+            // Update tracking variables and menu UI
+            currentPrimaryTrack = result.primary_track || '';
+            currentSecondaryTrack = result.secondary_track || '';
+            updateMenuUI();
 
             updateTrackCellDisplayDual(albumIndex, result, album.tracks);
 
