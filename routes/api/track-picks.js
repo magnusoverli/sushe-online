@@ -14,7 +14,7 @@
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, logger } = deps;
+  const { ensureAuthAPI, logger, responseCache } = deps;
 
   /**
    * Set or update a track pick for a list item
@@ -54,6 +54,11 @@ module.exports = (app, deps) => {
         listItemId,
         trackIdentifier.trim(),
         targetPriority
+      );
+
+      // Invalidate cache for this list so refreshes show updated track picks
+      responseCache.invalidate(
+        `GET:/api/lists/${encodeURIComponent(list.name)}:${req.user._id}`
       );
 
       logger.debug('Track pick updated', {
@@ -114,6 +119,11 @@ module.exports = (app, deps) => {
         const result = await listItemsAsync.removeTrackPick(
           listItemId,
           trackIdentifier || null
+        );
+
+        // Invalidate cache for this list so refreshes show updated track picks
+        responseCache.invalidate(
+          `GET:/api/lists/${encodeURIComponent(list.name)}:${req.user._id}`
         );
 
         logger.debug('Track pick removed', {

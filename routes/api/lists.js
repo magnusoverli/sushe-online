@@ -858,14 +858,16 @@ module.exports = (app, deps) => {
         // All album metadata comes from canonical albums table
         await client.query(
           `INSERT INTO list_items (
-            _id, list_id, album_id, position, comments, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             itemId,
             list._id,
             albumId,
             i + 1,
             album.comments || null,
+            album.primary_track || null,
+            album.secondary_track || null,
             timestamp,
             timestamp,
           ]
