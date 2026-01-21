@@ -56,6 +56,7 @@ const { createHelpers } = require('./_helpers');
 const mbQueue = new MusicBrainzQueue({ fetch });
 const mbFetch = createMbFetch(mbQueue);
 const imageProxyQueue = new RequestQueue(10); // Max 10 concurrent image fetches
+const itunesProxyQueue = new RequestQueue(5); // Limit iTunes API concurrency (~20 req/min)
 
 /**
  * Register all API routes
@@ -155,6 +156,7 @@ module.exports = (app, deps) => {
     sharp,
     mbFetch,
     imageProxyQueue,
+    itunesProxyQueue,
     normalizeAlbumKey,
     validateYear,
     URLSearchParams,

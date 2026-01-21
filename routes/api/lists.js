@@ -626,6 +626,145 @@ module.exports = (app, deps) => {
     }
   );
 
+  // Incremental list update (add/remove/update items without full rebuild)
+  // More efficient than POST /api/lists/:name for small changes
+  app.patch('/api/lists/:name/items', ensureAuthAPI, async (req, res) => {
+    const { name } = req.params;
+    const { added, removed, updated } = req.body;
+
+    // Validate input
+    if (!added && !removed && !updated) {
+      return res.status(400).json({ error: 'No changes specified' });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Find list
+      const list = await listsAsync.findOne({ userId: req.user._id, name });
+      if (!list) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'List not found' });
+      }
+
+      const timestamp = new Date();
+      let changeCount = 0;
+
+      // Process removals first (by album_id)
+      if (removed && Array.isArray(removed)) {
+        for (const albumId of removed) {
+          if (!albumId) continue;
+          const result = await client.query(
+            'DELETE FROM list_items WHERE list_id = $1 AND album_id = $2',
+            [list._id, albumId]
+          );
+          changeCount += result.rowCount;
+        }
+      }
+
+      // Process additions (with position)
+      if (added && Array.isArray(added)) {
+        for (const item of added) {
+          if (!item) continue;
+
+          // Upsert album record to get/create canonical album_id
+          const albumId = await upsertAlbumRecord(item, timestamp, client);
+
+          // Check if item already exists (prevent duplicates)
+          const existing = await client.query(
+            'SELECT _id FROM list_items WHERE list_id = $1 AND album_id = $2',
+            [list._id, albumId]
+          );
+
+          if (existing.rows.length === 0) {
+            const itemId = crypto.randomBytes(12).toString('hex');
+            await client.query(
+              `INSERT INTO list_items (
+                _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [
+                itemId,
+                list._id,
+                albumId,
+                item.position || 0,
+                item.comments || null,
+                item.primary_track || null,
+                item.secondary_track || null,
+                timestamp,
+                timestamp,
+              ]
+            );
+            changeCount++;
+          }
+        }
+      }
+
+      // Process position updates (for reordering existing items)
+      if (updated && Array.isArray(updated)) {
+        for (const item of updated) {
+          if (!item || !item.album_id) continue;
+
+          const result = await client.query(
+            'UPDATE list_items SET position = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4',
+            [item.position, timestamp, list._id, item.album_id]
+          );
+          changeCount += result.rowCount;
+        }
+      }
+
+      // Update list timestamp
+      await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
+        timestamp,
+        list._id,
+      ]);
+
+      await client.query('COMMIT');
+
+      // Invalidate caches
+      responseCache.invalidate(
+        `GET:/api/lists/${encodeURIComponent(name)}:${req.user._id}`
+      );
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+      responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
+
+      // Broadcast update
+      const broadcast = req.app.locals.broadcast;
+      if (broadcast) {
+        const excludeSocketId = req.headers['x-socket-id'];
+        broadcast.listUpdated(req.user._id, name, { excludeSocketId });
+      }
+
+      // Trigger aggregate recompute if list has a year
+      const listMeta = await listsAsync.findOne({ userId: req.user._id, name });
+      if (listMeta && listMeta.year) {
+        triggerAggregateListRecompute(listMeta.year);
+      }
+
+      logger.info('List incrementally updated', {
+        userId: req.user._id,
+        listName: name,
+        added: added?.length || 0,
+        removed: removed?.length || 0,
+        updated: updated?.length || 0,
+        totalChanges: changeCount,
+      });
+
+      res.json({ success: true, changes: changeCount });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      logger.error('Error incrementally updating list', {
+        error: err.message,
+        stack: err.stack,
+        userId: req.user._id,
+        listName: name,
+      });
+      res.status(500).json({ error: 'Error updating list' });
+    } finally {
+      client.release();
+    }
+  });
+
   // Toggle main list status for a year
   app.post('/api/lists/:name/main', ensureAuthAPI, async (req, res) => {
     const { name } = req.params;

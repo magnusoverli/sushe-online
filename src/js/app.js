@@ -711,10 +711,12 @@ function getListData(listName) {
 
 /**
  * Set the album array for a list, preserving metadata
+ * Also updates the snapshot for diff-based saves
  * @param {string} listName - The name of the list
  * @param {Array} albums - The album array to set
+ * @param {boolean} updateSnapshot - Whether to update the saved snapshot (default: true)
  */
-function setListData(listName, albums) {
+function setListData(listName, albums, updateSnapshot = true) {
   if (!listName) return;
 
   if (!lists[listName]) {
@@ -746,6 +748,11 @@ function setListData(listName, albums) {
     // Update existing metadata object
     lists[listName]._data = albums || [];
     lists[listName].count = albums ? albums.length : 0;
+  }
+
+  // Update snapshot for diff-based saves (when data is fetched from server)
+  if (updateSnapshot && albums) {
+    lastSavedSnapshots.set(listName, createListSnapshot(albums));
   }
 }
 
@@ -1513,6 +1520,90 @@ async function importList(name, albums, metadata = null) {
   }
 }
 
+// Store snapshots of last saved state for diff-based saves
+// Key: listName, Value: Array of album_ids in order
+const lastSavedSnapshots = new Map();
+
+/**
+ * Create a lightweight snapshot of album IDs for diff comparison
+ * @param {Array} albums - Album array
+ * @returns {Array} Array of album_id strings
+ */
+function createListSnapshot(albums) {
+  if (!albums || !Array.isArray(albums)) return [];
+  return albums.map((a) => a.album_id || a.albumId || null).filter(Boolean);
+}
+
+/**
+ * Compute diff between old and new list states
+ * Returns null if diff is too complex for incremental update
+ * @param {Array} oldSnapshot - Previous album_id array
+ * @param {Array} newData - New album array
+ * @returns {Object|null} Diff object with added/removed/updated arrays, or null
+ */
+function computeListDiff(oldSnapshot, newData) {
+  if (!oldSnapshot || oldSnapshot.length === 0) {
+    // No previous snapshot - can't compute diff
+    return null;
+  }
+
+  const newSnapshot = createListSnapshot(newData);
+  const oldSet = new Set(oldSnapshot);
+  const newSet = new Set(newSnapshot);
+
+  // Find removed albums (in old but not in new)
+  const removed = oldSnapshot.filter((id) => !newSet.has(id));
+
+  // Find added albums (in new but not in old)
+  const added = newData.filter((album) => {
+    const id = album.album_id || album.albumId;
+    return id && !oldSet.has(id);
+  });
+
+  // Find position changes for existing albums
+  const updated = [];
+  newData.forEach((album, newIndex) => {
+    const id = album.album_id || album.albumId;
+    if (id && oldSet.has(id)) {
+      const oldIndex = oldSnapshot.indexOf(id);
+      if (oldIndex !== newIndex) {
+        updated.push({
+          album_id: id,
+          position: newIndex + 1,
+        });
+      }
+    }
+  });
+
+  // Calculate total changes
+  const totalChanges = removed.length + added.length + updated.length;
+
+  // If too many changes, fall back to full save
+  // Threshold: more than 50% of list changed or more than 20 individual changes
+  const threshold = Math.max(20, Math.floor(oldSnapshot.length * 0.5));
+  if (totalChanges > threshold) {
+    return null;
+  }
+
+  // Prepare added items with position
+  const addedWithPosition = added.map((album) => {
+    const newIndex = newData.findIndex(
+      (a) => (a.album_id || a.albumId) === (album.album_id || album.albumId)
+    );
+    return {
+      ...album,
+      position: newIndex + 1,
+    };
+  });
+
+  return {
+    added: addedWithPosition,
+    removed,
+    updated,
+    totalChanges,
+  };
+}
+
 // Save list to server
 // @param {string} name - List name
 // @param {Array} data - Album array
@@ -1526,27 +1617,51 @@ async function saveList(name, data, year = undefined) {
       return cleaned;
     });
 
-    const body = { data: cleanedData };
-
-    // Include year if provided (required for new lists)
-    if (year !== undefined) {
-      body.year = year;
-    } else {
-      // For existing lists, preserve current year if not explicitly provided
-      const existingMeta = getListMetadata(name);
-      if (existingMeta && existingMeta.year) {
-        body.year = existingMeta.year;
-      }
-    }
-
     // Mark this as a local save BEFORE the API call to prevent race condition
     // The WebSocket broadcast can arrive before the HTTP response
     markLocalSave(name);
 
-    await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
+    // Try incremental save if we have a previous snapshot
+    const oldSnapshot = lastSavedSnapshots.get(name);
+    const diff = computeListDiff(oldSnapshot, cleanedData);
+
+    if (diff && diff.totalChanges > 0) {
+      // Use incremental endpoint
+      await apiCall(`/api/lists/${encodeURIComponent(name)}/items`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          added: diff.added,
+          removed: diff.removed,
+          updated: diff.updated,
+        }),
+      });
+
+      console.log(
+        `List "${name}" saved incrementally: +${diff.added.length} -${diff.removed.length} ~${diff.updated.length}`
+      );
+    } else {
+      // Fall back to full save
+      const body = { data: cleanedData };
+
+      // Include year if provided (required for new lists)
+      if (year !== undefined) {
+        body.year = year;
+      } else {
+        // For existing lists, preserve current year if not explicitly provided
+        const existingMeta = getListMetadata(name);
+        if (existingMeta && existingMeta.year) {
+          body.year = existingMeta.year;
+        }
+      }
+
+      await apiCall(`/api/lists/${encodeURIComponent(name)}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      });
+    }
+
+    // Update snapshot after successful save
+    lastSavedSnapshots.set(name, createListSnapshot(cleanedData));
 
     // Update in-memory list data using helper (preserves metadata)
     setListData(name, cleanedData);
@@ -1633,55 +1748,6 @@ window.fetchTracksForAlbum = fetchTracksForAlbum;
 window.getTrackName = getTrackName;
 window.getTrackLength = getTrackLength;
 window.formatTrackTime = formatTrackTime;
-
-// Performance: Concurrency limiter for parallel requests
-async function pLimit(concurrency, tasks) {
-  const results = [];
-  const executing = [];
-
-  for (const task of tasks) {
-    const promise = task().then((result) => {
-      executing.splice(executing.indexOf(promise), 1);
-      return result;
-    });
-
-    results.push(promise);
-    executing.push(promise);
-
-    if (executing.length >= concurrency) {
-      await Promise.race(executing);
-    }
-  }
-
-  return Promise.allSettled(results);
-}
-
-// Fix #3: Add concurrency limiting to track fetching (3-5 concurrent requests)
-// This prevents overwhelming the backend while still being much faster than sequential
-async function autoFetchTracksForList(name) {
-  const list = getListData(name);
-  if (!list || !Array.isArray(list)) return;
-
-  const toFetch = list.filter((album) => {
-    // Fetch if missing/empty
-    if (!Array.isArray(album.tracks) || album.tracks.length === 0) return true;
-    // Also fetch if tracks exist but are in old string format (need upgrade)
-    // Safety check: ensure array has elements before checking type
-    return album.tracks.length > 0 && typeof album.tracks[0] === 'string';
-  });
-  if (toFetch.length === 0) return;
-
-  // Fetch up to 5 tracks concurrently instead of sequentially
-  // This reduces load time from N × 300ms to (N/5) × 300ms
-  const tasks = toFetch.map((album) => () => {
-    return fetchTracksForAlbum(album).catch((err) => {
-      console.error('Auto track fetch failed:', err);
-      return null; // Return null on error to continue with other fetches
-    });
-  });
-
-  await pLimit(5, tasks);
-}
 
 function updateMobileHeader() {
   const headerContainer = document.getElementById('dynamicHeader');
@@ -3637,14 +3703,8 @@ async function selectList(listName) {
       }
     }
 
-    // === BACKGROUND TASKS (non-blocking) ===
-    // Fix #1: Make track fetching non-blocking - run in background without await
-    // This prevents blocking the UI for 4-10 seconds waiting for MusicBrainz API
-    if (listName) {
-      autoFetchTracksForList(listName).catch((err) => {
-        console.error('Background track fetch failed:', err);
-      });
-    }
+    // Tracks are fetched only when: (1) adding an album, (2) opening the track
+    // cell / mobile fetch when tracks are missing. No list-wide pre-fetch.
 
     // Persist the selection without blocking UI if changed
     if (listName && listName !== window.lastSelectedList) {

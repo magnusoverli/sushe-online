@@ -29,6 +29,44 @@ export function createSorting(deps = {}) {
     showToast,
   } = deps;
 
+  // Debounce state for rapid reorders (prevents API spam during quick successive drags)
+  let reorderDebounceTimeout = null;
+  let pendingReorder = null;
+
+  /**
+   * Debounced reorder save - batches rapid reorders into a single API call
+   * @param {string} listName - List name to reorder
+   * @param {Array} list - Album array in new order
+   * @param {number} delay - Debounce delay in ms (default 500ms)
+   */
+  async function debouncedSaveReorder(listName, list, delay = 500) {
+    // Store pending reorder data
+    pendingReorder = { listName, list: [...list] };
+
+    // Clear existing timeout
+    clearTimeout(reorderDebounceTimeout);
+
+    // Schedule save
+    return new Promise((resolve, reject) => {
+      reorderDebounceTimeout = setTimeout(async () => {
+        if (!pendingReorder) {
+          resolve();
+          return;
+        }
+
+        const { listName: name, list: data } = pendingReorder;
+        pendingReorder = null;
+
+        try {
+          await saveReorder(name, data);
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      }, delay);
+    });
+  }
+
   /**
    * Initialize unified sorting using SortableJS for both desktop and mobile
    * @param {HTMLElement} container - Container element
@@ -131,8 +169,9 @@ export function createSorting(deps = {}) {
 
             // Use lightweight reorder endpoint (only sends album IDs, not full data)
             // This prevents "payload too large" errors for lists with many albums
+            // Debounced to prevent API spam during rapid successive drags
             if (saveReorder) {
-              await saveReorder(currentList, list);
+              await debouncedSaveReorder(currentList, list);
             } else {
               // Fallback to full save if reorder function not available
               debouncedSaveList(currentList, list);

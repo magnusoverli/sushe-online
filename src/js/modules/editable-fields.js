@@ -31,6 +31,87 @@ export function createEditableFields(deps = {}) {
     isTextTruncated,
   } = deps;
 
+  // Batch update queue for rapid field edits
+  // Groups updates by albumId to reduce API calls
+  const pendingUpdates = new Map(); // albumId -> { country?, genre_1?, genre_2? }
+  let batchTimeout = null;
+  const BATCH_DELAY = 1500; // 1.5 seconds - allows user to make multiple edits
+
+  /**
+   * Queue a field update for batching
+   * @param {string} albumId - Album ID to update
+   * @param {string} field - Field name (country, genre_1, genre_2)
+   * @param {string|null} value - New value
+   */
+  function queueFieldUpdate(albumId, field, value) {
+    if (!albumId) return;
+
+    if (!pendingUpdates.has(albumId)) {
+      pendingUpdates.set(albumId, {});
+    }
+    pendingUpdates.get(albumId)[field] = value;
+
+    scheduleBatchFlush();
+  }
+
+  /**
+   * Schedule the batch flush with debounce
+   */
+  function scheduleBatchFlush() {
+    clearTimeout(batchTimeout);
+    batchTimeout = setTimeout(flushBatchUpdates, BATCH_DELAY);
+  }
+
+  /**
+   * Flush all pending updates to the server
+   */
+  async function flushBatchUpdates() {
+    if (pendingUpdates.size === 0) return;
+
+    // Copy and clear pending updates
+    const updates = Array.from(pendingUpdates.entries()).map(
+      ([albumId, fields]) => ({
+        albumId,
+        ...fields,
+      })
+    );
+
+    pendingUpdates.clear();
+    batchTimeout = null;
+
+    // Only use batch endpoint if there are multiple updates
+    if (updates.length === 1) {
+      // Single update - use individual endpoints (already handled inline)
+      return;
+    }
+
+    try {
+      const result = await apiCall('/api/albums/batch-update', {
+        method: 'PATCH',
+        body: JSON.stringify({ updates }),
+      });
+
+      if (result.updated > 0) {
+        console.log(`Batch updated ${result.updated} album(s)`);
+      }
+    } catch (error) {
+      console.error('Batch update failed:', error);
+      // Don't show toast - individual edits already showed success
+    }
+  }
+
+  /**
+   * Check if there are pending updates for an album
+   * If so, flush immediately to ensure data consistency
+   * @param {string} albumId - Album ID to check
+   */
+  async function flushPendingForAlbum(albumId) {
+    if (pendingUpdates.has(albumId)) {
+      clearTimeout(batchTimeout);
+      await flushBatchUpdates();
+    }
+  }
+
   /**
    * Make country field editable with datalist autocomplete
    * @param {HTMLElement} countryDiv - Country container element
@@ -149,6 +230,9 @@ export function createEditableFields(deps = {}) {
       // Close the dropdown immediately for better UX
       restoreDisplay(newCountry);
 
+      // Update local state immediately (optimistic)
+      albumsToUpdate[albumIndex].country = newCountry;
+
       try {
         // Use lightweight endpoint to update canonical country
         await apiCall(`/api/albums/${encodeURIComponent(albumId)}/country`, {
@@ -156,8 +240,8 @@ export function createEditableFields(deps = {}) {
           body: JSON.stringify({ country: newCountry || null }),
         });
 
-        // Update local state
-        albumsToUpdate[albumIndex].country = newCountry;
+        // Queue for potential batch if more edits come in rapid succession
+        queueFieldUpdate(albumId, 'country', newCountry || null);
 
         showToast(newCountry === '' ? 'Country cleared' : 'Country updated');
       } catch (_error) {
@@ -339,6 +423,9 @@ export function createEditableFields(deps = {}) {
       // Close the dropdown immediately for better UX
       restoreDisplay(newGenre);
 
+      // Update local state immediately (optimistic)
+      albumsToUpdate[albumIndex][genreField] = newGenre;
+
       try {
         // Use lightweight endpoint to update canonical genre
         // Build request body with only the field being updated
@@ -350,8 +437,8 @@ export function createEditableFields(deps = {}) {
           body: JSON.stringify(body),
         });
 
-        // Update local state
-        albumsToUpdate[albumIndex][genreField] = newGenre;
+        // Queue for potential batch if more edits come in rapid succession
+        queueFieldUpdate(albumId, genreField, newGenre || null);
 
         showToast(newGenre === '' ? 'Genre cleared' : 'Genre updated');
       } catch (_error) {
@@ -761,5 +848,8 @@ export function createEditableFields(deps = {}) {
     makeCountryEditable,
     makeGenreEditable,
     makeCommentEditable,
+    // Batch update utilities
+    flushBatchUpdates,
+    flushPendingForAlbum,
   };
 }

@@ -24,6 +24,7 @@ module.exports = (app, deps) => {
     sharp,
     mbFetch,
     imageProxyQueue,
+    itunesProxyQueue,
     cacheConfigs,
   } = deps;
 
@@ -294,7 +295,8 @@ module.exports = (app, deps) => {
   );
 
   // Proxy for iTunes Search API (album artwork)
-  // Public API, no key required, ~20 req/min rate limit
+  // Public API, no key required, ~20 req/min rate limit.
+  // Uses itunesProxyQueue to limit concurrent outbound requests and avoid 403/5xx.
   app.get(
     '/api/proxy/itunes',
     ensureAuthAPI,
@@ -309,24 +311,37 @@ module.exports = (app, deps) => {
         }
 
         const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&country=us&limit=${limit}`;
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'SuSheOnline/1.0',
-            Accept: 'application/json',
-          },
+        const response = await itunesProxyQueue.add(async () => {
+          return fetch(url, {
+            headers: {
+              'User-Agent': 'SuSheOnline/1.0',
+              Accept: 'application/json',
+            },
+          });
         });
 
         if (!response.ok) {
-          throw new Error(
+          const err = new Error(
             `iTunes API responded with status ${response.status}`
           );
+          err.status = response.status;
+          throw err;
         }
 
         const data = await response.json();
         res.json(data);
       } catch (error) {
-        logger.error('iTunes proxy error', { error: error.message });
-        res.status(500).json({ error: 'Failed to fetch from iTunes API' });
+        const status =
+          error.status || (error.response && error.response.status);
+        const isRateLimit = status === 403 || status === 429;
+        logger.error('iTunes proxy error', {
+          error: error.message,
+          status,
+          term: req.query.term,
+        });
+        res
+          .status(isRateLimit ? 429 : 500)
+          .json({ error: 'Failed to fetch from iTunes API' });
       }
     }
   );

@@ -24,6 +24,10 @@ let lastRenderedFingerprint = null;
 let lastRenderedMutableState = null;
 let positionElementCache = new WeakMap();
 
+// Fingerprint cache using WeakMap for automatic garbage collection
+// When album arrays are replaced, old fingerprints are automatically cleaned up
+const fingerprintCache = new WeakMap();
+
 // Cache all frequently-updated DOM elements per row for faster incremental updates
 // Structure: WeakMap<row, { position, artist, country, genre1, genre2, comment, track, releaseDate }>
 let rowElementsCache = new WeakMap();
@@ -158,17 +162,42 @@ function getCachedElements(row, isMobile) {
 /**
  * Generate a lightweight fingerprint string for change detection
  * Only includes mutable fields that trigger UI updates
+ * Uses WeakMap cache to avoid recalculating for same array reference
  * @param {Array} albums - Album array
  * @returns {string} Fingerprint string
  */
 function generateAlbumFingerprint(albums) {
   if (!albums || albums.length === 0) return '';
-  return albums
+
+  // Check cache first - avoid recalculation for same array reference
+  const cached = fingerprintCache.get(albums);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  // Generate fingerprint
+  const fingerprint = albums
     .map(
       (a) =>
         `${a._id || ''}|${a.track_pick || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}`
     )
     .join('::');
+
+  // Cache for future calls with same array reference
+  fingerprintCache.set(albums, fingerprint);
+
+  return fingerprint;
+}
+
+/**
+ * Invalidate cached fingerprint for an album array
+ * Call this when mutating album data in place
+ * @param {Array} albums - Album array to invalidate
+ */
+function invalidateFingerprint(albums) {
+  if (albums) {
+    fingerprintCache.delete(albums);
+  }
 }
 
 /**
@@ -1140,17 +1169,112 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
+   * Get album ID for comparison
+   * @param {Object} album - Album object
+   * @returns {string} Album identifier
+   */
+  function getAlbumId(album) {
+    return (
+      album._id ||
+      `${album.artist}::${album.album}::${album.release_date || ''}`
+    );
+  }
+
+  /**
+   * Find single addition in list
+   * @param {Array} oldState - Previous state
+   * @param {Array} newAlbums - New album array
+   * @returns {Object|null} { album, index } or null
+   */
+  function findSingleAddition(oldState, newAlbums) {
+    if (newAlbums.length !== oldState.length + 1) return null;
+
+    const oldIds = new Set(oldState.map(getAlbumId));
+
+    for (let i = 0; i < newAlbums.length; i++) {
+      const newId = getAlbumId(newAlbums[i]);
+      if (!oldIds.has(newId)) {
+        // Found the added album - verify rest of list matches
+        const beforeMatch = newAlbums
+          .slice(0, i)
+          .every((a, idx) => getAlbumId(a) === getAlbumId(oldState[idx]));
+        const afterMatch = newAlbums
+          .slice(i + 1)
+          .every((a, idx) => getAlbumId(a) === getAlbumId(oldState[i + idx]));
+
+        if (beforeMatch && afterMatch) {
+          return { album: newAlbums[i], index: i };
+        }
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Find single removal in list
+   * @param {Array} oldState - Previous state
+   * @param {Array} newAlbums - New album array
+   * @returns {number} Index of removed item or -1
+   */
+  function findSingleRemoval(oldState, newAlbums) {
+    if (newAlbums.length !== oldState.length - 1) return -1;
+
+    const newIds = new Set(newAlbums.map(getAlbumId));
+
+    for (let i = 0; i < oldState.length; i++) {
+      const oldId = getAlbumId(oldState[i]);
+      if (!newIds.has(oldId)) {
+        // Found the removed album - verify rest of list matches
+        const beforeMatch = newAlbums
+          .slice(0, i)
+          .every((a, idx) => getAlbumId(a) === getAlbumId(oldState[idx]));
+        const afterMatch = newAlbums
+          .slice(i)
+          .every(
+            (a, idx) => getAlbumId(a) === getAlbumId(oldState[i + 1 + idx])
+          );
+
+        if (beforeMatch && afterMatch) {
+          return i;
+        }
+      }
+    }
+    return -1;
+  }
+
+  /**
    * Detect what type of update is needed
    * Uses lightweight mutable state instead of full album objects
    * @param {Array} oldState - Previous lightweight state (from extractMutableState)
    * @param {Array} newAlbums - New album array
-   * @returns {string} Update type
+   * @returns {string|Object} Update type string or object with details for add/remove
    */
   function detectUpdateType(oldState, newAlbums) {
     if (!ENABLE_INCREMENTAL_UPDATES || !oldState) {
       return 'FULL_REBUILD';
     }
 
+    // Check for single addition
+    if (newAlbums.length === oldState.length + 1) {
+      const addition = findSingleAddition(oldState, newAlbums);
+      if (addition) {
+        return {
+          type: 'SINGLE_ADD',
+          album: addition.album,
+          index: addition.index,
+        };
+      }
+    }
+
+    // Check for single removal
+    if (newAlbums.length === oldState.length - 1) {
+      const removalIndex = findSingleRemoval(oldState, newAlbums);
+      if (removalIndex !== -1) {
+        return { type: 'SINGLE_REMOVE', index: removalIndex };
+      }
+    }
+
+    // Length must match for other incremental updates
     if (oldState.length !== newAlbums.length) {
       return 'FULL_REBUILD';
     }
@@ -1162,12 +1286,8 @@ export function createAlbumDisplay(deps = {}) {
       const oldAlbum = oldState[i];
       const newAlbum = newAlbums[i];
 
-      const oldId =
-        oldAlbum._id ||
-        `${oldAlbum.artist}::${oldAlbum.album}::${oldAlbum.release_date}`;
-      const newId =
-        newAlbum._id ||
-        `${newAlbum.artist}::${newAlbum.album}::${newAlbum.release_date}`;
+      const oldId = getAlbumId(oldAlbum);
+      const newId = getAlbumId(newAlbum);
 
       if (oldId !== newId) {
         positionChanges++;
@@ -1200,6 +1320,101 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     return 'FULL_REBUILD';
+  }
+
+  /**
+   * Insert a single album at a specific index without full rebuild
+   * @param {Array} albums - Full album array (for data)
+   * @param {number} index - Index to insert at
+   * @param {boolean} isMobile - Whether mobile view
+   * @returns {boolean} Success
+   */
+  function insertAlbumAtIndex(albums, index, isMobile) {
+    const container = document.getElementById('albumContainer');
+    if (!container) return false;
+
+    const rowsContainer = isMobile
+      ? container.querySelector('.mobile-album-list')
+      : container.querySelector('.album-rows-container');
+
+    if (!rowsContainer) return false;
+
+    const album = albums[index];
+    if (!album) return false;
+
+    // Create the new row/card
+    const newRow = createAlbumItem(album, index, isMobile);
+
+    // Insert at the correct position
+    const existingRows = rowsContainer.children;
+    if (index >= existingRows.length) {
+      rowsContainer.appendChild(newRow);
+    } else {
+      rowsContainer.insertBefore(newRow, existingRows[index]);
+    }
+
+    // Update indices for all rows after insertion
+    for (let i = index; i < rowsContainer.children.length; i++) {
+      const row = rowsContainer.children[i];
+      row.dataset.index = i;
+      // Also update inner card for mobile
+      const innerCard = row.querySelector('.album-card');
+      if (innerCard) {
+        innerCard.dataset.index = i;
+      }
+    }
+
+    // Update position numbers
+    updatePositionNumbers(rowsContainer, isMobile);
+
+    // Observe lazy images for the new row
+    observeLazyImages(container);
+
+    // Initialize tooltips for desktop
+    if (!isMobile) {
+      initSummaryTooltips(newRow);
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove a single album at a specific index without full rebuild
+   * @param {number} index - Index to remove
+   * @param {boolean} isMobile - Whether mobile view
+   * @returns {boolean} Success
+   */
+  function removeAlbumAtIndex(index, isMobile) {
+    const container = document.getElementById('albumContainer');
+    if (!container) return false;
+
+    const rowsContainer = isMobile
+      ? container.querySelector('.mobile-album-list')
+      : container.querySelector('.album-rows-container');
+
+    if (!rowsContainer) return false;
+
+    const row = rowsContainer.children[index];
+    if (!row) return false;
+
+    // Remove the row
+    row.remove();
+
+    // Update indices for remaining rows
+    for (let i = index; i < rowsContainer.children.length; i++) {
+      const r = rowsContainer.children[i];
+      r.dataset.index = i;
+      // Also update inner card for mobile
+      const innerCard = r.querySelector('.album-card');
+      if (innerCard) {
+        innerCard.dataset.index = i;
+      }
+    }
+
+    // Update position numbers
+    updatePositionNumbers(rowsContainer, isMobile);
+
+    return true;
   }
 
   /**
@@ -1925,6 +2140,50 @@ export function createAlbumDisplay(deps = {}) {
 
       const updateType = detectUpdateType(lastRenderedMutableState, albums);
 
+      // Handle single album addition
+      if (
+        updateType &&
+        typeof updateType === 'object' &&
+        updateType.type === 'SINGLE_ADD'
+      ) {
+        const success = insertAlbumAtIndex(albums, updateType.index, isMobile);
+
+        if (success) {
+          // Update lightweight state
+          requestAnimationFrame(() => {
+            lastRenderedFingerprint = newFingerprint;
+            lastRenderedMutableState = extractMutableState(albums);
+          });
+
+          reapplyNowPlayingBorder();
+          console.log(`Album inserted at index ${updateType.index}`);
+          return;
+        }
+        console.warn('Single add failed, falling back to full rebuild');
+      }
+
+      // Handle single album removal
+      if (
+        updateType &&
+        typeof updateType === 'object' &&
+        updateType.type === 'SINGLE_REMOVE'
+      ) {
+        const success = removeAlbumAtIndex(updateType.index, isMobile);
+
+        if (success) {
+          // Update lightweight state
+          requestAnimationFrame(() => {
+            lastRenderedFingerprint = newFingerprint;
+            lastRenderedMutableState = extractMutableState(albums);
+          });
+
+          reapplyNowPlayingBorder();
+          console.log(`Album removed from index ${updateType.index}`);
+          return;
+        }
+        console.warn('Single remove failed, falling back to full rebuild');
+      }
+
       // FIELD_UPDATE and HYBRID_UPDATE don't need cover refetch - covers don't change
       if (updateType === 'FIELD_UPDATE' || updateType === 'HYBRID_UPDATE') {
         const success = updateAlbumFields(albums, isMobile);
@@ -2331,6 +2590,10 @@ export function createAlbumDisplay(deps = {}) {
     clearLastRenderedCache,
     clearPlaycountCache,
     updateAlbumSummaryInPlace,
+    invalidateFingerprint,
+    // Granular DOM updates
+    insertAlbumAtIndex,
+    removeAlbumAtIndex,
     // Expose for testing
     processAlbumData,
     createAlbumItem,

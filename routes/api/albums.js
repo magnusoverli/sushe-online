@@ -257,6 +257,100 @@ module.exports = (app, deps) => {
     }
   });
 
+  // Batch update album metadata (country, genres) - reduces API calls for rapid edits
+  app.patch('/api/albums/batch-update', ensureAuthAPI, async (req, res) => {
+    try {
+      const { updates } = req.body;
+
+      if (!updates || !Array.isArray(updates) || updates.length === 0) {
+        return res.status(400).json({ error: 'Updates array is required' });
+      }
+
+      // Limit batch size to prevent abuse
+      if (updates.length > 50) {
+        return res.status(400).json({ error: 'Maximum 50 updates per batch' });
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        const timestamp = new Date();
+        let successCount = 0;
+        const albumIds = new Set();
+
+        for (const update of updates) {
+          const { albumId, country, genre_1, genre_2 } = update;
+
+          if (!albumId) continue;
+
+          // Build dynamic update query
+          const setClauses = [];
+          const values = [];
+          let paramIndex = 1;
+
+          if (country !== undefined) {
+            setClauses.push(`country = $${paramIndex++}`);
+            values.push(country ? country.trim() : null);
+          }
+
+          if (genre_1 !== undefined) {
+            setClauses.push(`genre_1 = $${paramIndex++}`);
+            values.push(genre_1 ? genre_1.trim() : null);
+          }
+
+          if (genre_2 !== undefined) {
+            setClauses.push(`genre_2 = $${paramIndex++}`);
+            values.push(genre_2 ? genre_2.trim() : null);
+          }
+
+          if (setClauses.length === 0) continue;
+
+          setClauses.push(`updated_at = $${paramIndex++}`);
+          values.push(timestamp);
+
+          values.push(albumId);
+
+          const result = await client.query(
+            `UPDATE albums SET ${setClauses.join(', ')} WHERE album_id = $${paramIndex}`,
+            values
+          );
+
+          if (result.rowCount > 0) {
+            successCount++;
+            albumIds.add(albumId);
+          }
+        }
+
+        await client.query('COMMIT');
+
+        // Invalidate caches for all affected albums
+        for (const albumId of albumIds) {
+          await invalidateCachesForAlbumUsers(albumId);
+        }
+
+        logger.info('Batch album update completed', {
+          userId: req.user._id,
+          requestedCount: updates.length,
+          successCount,
+        });
+
+        res.json({ success: true, updated: successCount });
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      logger.error('Error batch updating albums', {
+        error: err.message,
+        userId: req.user._id,
+      });
+      res.status(500).json({ error: 'Error batch updating albums' });
+    }
+  });
+
   // Check for similar albums before adding (fuzzy duplicate detection)
   app.post('/api/albums/check-similar', ensureAuthAPI, async (req, res) => {
     try {

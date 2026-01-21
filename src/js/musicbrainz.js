@@ -386,8 +386,32 @@ const coverArtProviders = [
   },
 ];
 
-// Query all providers in parallel, first to successfully LOAD an image wins
-// Other providers are aborted once we have a winner
+// Concurrency limit for cover art searches to avoid stampeding iTunes and CAA
+const COVER_CONCURRENCY = 8;
+let coverRunning = 0;
+const coverQueue = [];
+
+function runWithCoverConcurrency(fn) {
+  return new Promise((resolve, reject) => {
+    const run = () => {
+      coverRunning++;
+      Promise.resolve(fn())
+        .then(
+          (v) => resolve(v),
+          (e) => reject(e)
+        )
+        .finally(() => {
+          coverRunning--;
+          if (coverQueue.length > 0) coverQueue.shift()();
+        });
+    };
+    if (coverRunning < COVER_CONCURRENCY) run();
+    else coverQueue.push(run);
+  });
+}
+
+// Try CoverArtArchive first when we have releaseGroupId (no rate limit, fast).
+// Fall back to iTunes only when CAA fails or we have no ID. Reduces iTunes 500s.
 async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
   const cacheKey =
     releaseGroupId || `${artistName}::${albumTitle}`.toLowerCase();
@@ -396,57 +420,59 @@ async function searchCoverArt(artistName, albumTitle, releaseGroupId) {
     return coverArtCache.get(cacheKey);
   }
 
-  if (coverArtProviders.length === 0) {
-    coverArtCache.set(cacheKey, null);
-    return null;
-  }
-
-  // AbortController to cancel remaining providers once one succeeds
   const controller = new AbortController();
+  const signal = controller.signal;
 
-  // Each provider races to actually LOAD an image (not just return a URL)
-  const providerPromises = coverArtProviders.map(async (provider) => {
-    try {
-      const url = await provider.search(
-        artistName,
-        albumTitle,
-        releaseGroupId,
-        controller.signal
-      );
-
-      if (url) {
-        console.log(
-          `📊 [COVER] ✅ ${provider.name} loaded cover for "${albumTitle}"`
-        );
-        return { name: provider.name, url };
-      }
-      return null;
-    } catch (error) {
-      // AbortError is expected when cancelled - don't log it
-      if (error.name !== 'AbortError') {
-        // Don't log "Image failed to load" for every CAA miss - too noisy
-      }
-      return null;
-    }
-  });
+  const caa = coverArtProviders.find((p) => p.name === 'CoverArtArchive');
+  const itunes = coverArtProviders.find((p) => p.name === 'iTunes');
 
   try {
-    // Race all providers - first successful image load wins
-    const result = await Promise.any(
-      providerPromises.map((p) =>
-        p.then((r) => {
-          if (r?.url) return r;
-          throw new Error('No result');
-        })
-      )
-    );
+    // When we have a MusicBrainz ID, try CoverArtArchive first (no API rate limit)
+    if (releaseGroupId && caa) {
+      try {
+        const url = await caa.search(
+          artistName,
+          albumTitle,
+          releaseGroupId,
+          signal
+        );
+        if (url) {
+          console.log(
+            `📊 [COVER] ✅ ${caa.name} loaded cover for "${albumTitle}"`
+          );
+          coverArtCache.set(cacheKey, url);
+          return url;
+        }
+      } catch (_e) {
+        // CAA failed (404, bad image, etc.) – fall through to iTunes
+      }
+    }
 
-    // Got a winner - abort all other providers
-    controller.abort();
-    coverArtCache.set(cacheKey, result.url);
-    return result.url;
-  } catch (_error) {
-    // All providers failed
+    // CAA failed or no releaseGroupId: try iTunes (rate-limited; we throttle on server)
+    if (itunes && artistName && albumTitle) {
+      try {
+        const url = await itunes.search(
+          artistName,
+          albumTitle,
+          releaseGroupId,
+          signal
+        );
+        if (url) {
+          console.log(
+            `📊 [COVER] ✅ ${itunes.name} loaded cover for "${albumTitle}"`
+          );
+          coverArtCache.set(cacheKey, url);
+          return url;
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') throw err;
+      }
+    }
+
+    coverArtCache.set(cacheKey, null);
+    return null;
+  } catch (err) {
+    if (err.name === 'AbortError') throw err;
     coverArtCache.set(cacheKey, null);
     return null;
   }
@@ -462,11 +488,8 @@ async function loadAlbumCover(
   index
 ) {
   try {
-    // searchCoverArt races all providers and returns first VERIFIED image URL
-    const coverUrl = await searchCoverArt(
-      artistName,
-      albumTitle,
-      releaseGroupId
+    const coverUrl = await runWithCoverConcurrency(() =>
+      searchCoverArt(artistName, albumTitle, releaseGroupId)
     );
 
     if (coverUrl && imgElement && imgElement.parentElement) {

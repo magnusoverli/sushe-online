@@ -60,6 +60,8 @@ module.exports = (app, deps) => {
       responseCache.invalidate(
         `GET:/api/lists/${encodeURIComponent(list.name)}:${req.user._id}`
       );
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+      responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
 
       logger.debug('Track pick updated', {
         userId: req.user._id,
@@ -125,6 +127,8 @@ module.exports = (app, deps) => {
         responseCache.invalidate(
           `GET:/api/lists/${encodeURIComponent(list.name)}:${req.user._id}`
         );
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+        responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
 
         logger.debug('Track pick removed', {
           userId: req.user._id,
