@@ -1709,14 +1709,29 @@ async function saveList(listId, data, year = undefined) {
 
     if (diff && diff.totalChanges > 0) {
       // Use incremental endpoint (now ID-based)
-      await apiCall(`/api/lists/${encodeURIComponent(listId)}/items`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          added: diff.added,
-          removed: diff.removed,
-          updated: diff.updated,
-        }),
-      });
+      const result = await apiCall(
+        `/api/lists/${encodeURIComponent(listId)}/items`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            added: diff.added,
+            removed: diff.removed,
+            updated: diff.updated,
+          }),
+        }
+      );
+
+      // Update local items with server-generated IDs for newly added items
+      if (result.addedItems && result.addedItems.length > 0) {
+        for (const added of result.addedItems) {
+          const localItem = cleanedData.find(
+            (a) => a.album_id === added.album_id
+          );
+          if (localItem && !localItem._id) {
+            localItem._id = added._id;
+          }
+        }
+      }
 
       const listName = lists[listId]?.name || listId;
       console.log(

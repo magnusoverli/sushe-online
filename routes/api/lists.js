@@ -1130,6 +1130,7 @@ module.exports = (app, deps) => {
       }
 
       // Process additions (with position)
+      const addedItems = [];
       if (added && Array.isArray(added)) {
         for (const item of added) {
           if (!item) continue;
@@ -1159,6 +1160,7 @@ module.exports = (app, deps) => {
                 timestamp,
               ]
             );
+            addedItems.push({ album_id: albumId, _id: itemId });
             changeCount++;
           }
         }
@@ -1209,7 +1211,7 @@ module.exports = (app, deps) => {
         totalChanges: changeCount,
       });
 
-      res.json({ success: true, changes: changeCount });
+      res.json({ success: true, changes: changeCount, addedItems });
     } catch (err) {
       await client.query('ROLLBACK');
       logger.error('Error incrementally updating list', {
