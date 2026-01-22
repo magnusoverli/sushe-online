@@ -2399,9 +2399,9 @@ function showMoveToListYearSubmenu(year, yearButton, listsByYear) {
   // Populate the lists submenu
   listsSubmenu.innerHTML = yearLists
     .map(
-      (listName) => `
-      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listName}">
-        <span class="mr-2">•</span>${listName}
+      (listId) => `
+      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
+        <span class="mr-2">•</span>${lists[listId]?.name || listId}
       </button>
     `
     )
