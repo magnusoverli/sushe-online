@@ -775,6 +775,15 @@ export function createAlbumDisplay(deps = {}) {
       if (lastfmDivider) lastfmDivider.classList.toggle('hidden', !hasLastfm);
       if (similarOption) similarOption.classList.toggle('hidden', !hasLastfm);
 
+      // Show/hide admin-only options based on user role
+      const isAdmin = window.currentUser?.role === 'admin';
+      const adminDivider = document.getElementById('adminMenuDivider');
+      const reidentifyOption = document.getElementById('reidentifyAlbumOption');
+
+      if (adminDivider) adminDivider.classList.toggle('hidden', !isAdmin);
+      if (reidentifyOption)
+        reidentifyOption.classList.toggle('hidden', !isAdmin);
+
       // Position the menu
       positionContextMenu(contextMenu, e.clientX, e.clientY);
     });

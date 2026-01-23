@@ -430,6 +430,11 @@ const contextMenusComponent = () => `
     <button id="similarArtistsOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
       <i class="fas fa-users mr-2 w-4 text-center text-purple-400"></i>Show Similar Artists
     </button>
+    <!-- Admin-only option to re-identify album from MusicBrainz -->
+    <div id="adminMenuDivider" class="hidden context-menu-divider"></div>
+    <button id="reidentifyAlbumOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-yellow-400 transition-colors whitespace-nowrap">
+      <i class="fas fa-sync-alt mr-2 w-4 text-center text-yellow-400"></i>Re-identify Album
+    </button>
     <div class="context-menu-divider"></div>
     <button id="removeAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
       <i class="fas fa-times mr-2 w-4 text-center"></i>Remove from List
@@ -1043,6 +1048,52 @@ const listSetupWizardComponent = () => `
   </div>
 `;
 
+// Component: Release Selection Modal (Admin only - for re-identifying albums)
+const releaseSelectionModalComponent = () => `
+  <div id="releaseSelectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800 flex-shrink-0">
+        <h3 class="text-xl font-bold text-white">Select Correct Release</h3>
+        <p id="releaseSelectionSubtitle" class="text-sm text-gray-400 mt-1"></p>
+      </div>
+      
+      <!-- Modal Content - Scrollable -->
+      <div id="releaseSelectionContent" class="p-4 overflow-y-auto flex-1">
+        <!-- Loading state -->
+        <div id="releaseSelectionLoading" class="flex items-center justify-center py-8">
+          <i class="fas fa-spinner fa-spin text-2xl text-gray-500"></i>
+          <span class="ml-3 text-gray-400">Searching MusicBrainz...</span>
+        </div>
+        <!-- Candidates will be inserted here -->
+        <div id="releaseSelectionCandidates" class="hidden space-y-3"></div>
+        <!-- Error state -->
+        <div id="releaseSelectionError" class="hidden text-center py-8">
+          <i class="fas fa-exclamation-circle text-2xl text-red-500"></i>
+          <p class="mt-2 text-gray-400"></p>
+        </div>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-gray-800 flex gap-3 justify-end flex-shrink-0">
+        <button 
+          id="releaseSelectionCancelBtn" 
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition duration-200"
+        >
+          Cancel
+        </button>
+        <button 
+          id="releaseSelectionConfirmBtn" 
+          class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-white rounded-sm transition duration-200 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled
+        >
+          Apply Selection
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
 // Component: Modal Portal - contains all modals for proper z-index stacking above settings drawer
 const modalPortalComponent = () => `
   <div id="modalPortal">
@@ -1054,6 +1105,7 @@ const modalPortalComponent = () => `
     ${serviceSelectModalComponent()}
     ${confirmationModalComponent()}
     ${listSetupWizardComponent()}
+    ${releaseSelectionModalComponent()}
   </div>
 `;
 

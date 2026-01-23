@@ -2052,6 +2052,246 @@ function initializeAlbumContextMenu() {
       currentContextAlbumId = null;
     };
   }
+
+  // Handle re-identify album option (admin only)
+  const reidentifyOption = document.getElementById('reidentifyAlbumOption');
+
+  if (reidentifyOption) {
+    reidentifyOption.onclick = async () => {
+      contextMenu.classList.add('hidden');
+
+      // Get the album from the currently selected context
+      const albumsData = getListData(currentListId);
+      let album = albumsData && albumsData[currentContextAlbum];
+
+      if (album && currentContextAlbumId) {
+        const expectedId =
+          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+        if (expectedId !== currentContextAlbumId) {
+          const result = findAlbumByIdentity(currentContextAlbumId);
+          if (result) album = result.album;
+        }
+      }
+
+      if (!album || !album.artist || !album.album) {
+        showToast('Could not find album data', 'error');
+        currentContextAlbum = null;
+        currentContextAlbumId = null;
+        return;
+      }
+
+      // Show release selection modal
+      showReleaseSelectionModal(album);
+
+      currentContextAlbum = null;
+      currentContextAlbumId = null;
+    };
+  }
+}
+
+// Show release selection modal for admin re-identification
+async function showReleaseSelectionModal(album) {
+  const modal = document.getElementById('releaseSelectionModal');
+  const subtitle = document.getElementById('releaseSelectionSubtitle');
+  const loading = document.getElementById('releaseSelectionLoading');
+  const candidatesContainer = document.getElementById(
+    'releaseSelectionCandidates'
+  );
+  const errorContainer = document.getElementById('releaseSelectionError');
+  const confirmBtn = document.getElementById('releaseSelectionConfirmBtn');
+  const cancelBtn = document.getElementById('releaseSelectionCancelBtn');
+
+  if (!modal) return;
+
+  // Reset state
+  subtitle.textContent = `${album.album} by ${album.artist}`;
+  loading.classList.remove('hidden');
+  candidatesContainer.classList.add('hidden');
+  candidatesContainer.innerHTML = '';
+  errorContainer.classList.add('hidden');
+  confirmBtn.disabled = true;
+
+  let selectedReleaseId = null;
+  let cleanup = null;
+
+  // Show modal
+  modal.classList.remove('hidden');
+
+  // Setup event handlers
+  const handleCancel = () => {
+    modal.classList.add('hidden');
+    if (cleanup) cleanup();
+  };
+
+  const handleBackdropClick = (e) => {
+    if (e.target === modal) handleCancel();
+  };
+
+  const handleEscKey = (e) => {
+    if (e.key === 'Escape') handleCancel();
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedReleaseId) return;
+
+    confirmBtn.disabled = true;
+    confirmBtn.innerHTML =
+      '<i class="fas fa-spinner fa-spin mr-2"></i>Applying...';
+
+    try {
+      const response = await fetch('/api/admin/album/reidentify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          artist: album.artist,
+          album: album.album,
+          currentAlbumId: album.album_id,
+          newAlbumId: selectedReleaseId,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Re-identification failed');
+      }
+
+      modal.classList.add('hidden');
+      if (cleanup) cleanup();
+
+      if (data.changed) {
+        showToast(`Updated with ${data.trackCount} tracks`, 'success');
+        // Reload the list to get updated track data
+        await loadLists();
+        selectList(currentListId);
+      } else {
+        showToast(data.message || 'No changes made');
+      }
+    } catch (error) {
+      console.error('Error applying re-identification:', error);
+      showToast(`Error: ${error.message}`, 'error');
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = 'Apply Selection';
+    }
+  };
+
+  cleanup = () => {
+    cancelBtn.removeEventListener('click', handleCancel);
+    confirmBtn.removeEventListener('click', handleConfirm);
+    modal.removeEventListener('click', handleBackdropClick);
+    document.removeEventListener('keydown', handleEscKey);
+  };
+
+  cancelBtn.addEventListener('click', handleCancel);
+  confirmBtn.addEventListener('click', handleConfirm);
+  modal.addEventListener('click', handleBackdropClick);
+  document.addEventListener('keydown', handleEscKey);
+
+  // Fetch candidates
+  try {
+    const response = await fetch('/api/admin/album/reidentify/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        artist: album.artist,
+        album: album.album,
+        currentAlbumId: album.album_id,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Search failed');
+    }
+
+    loading.classList.add('hidden');
+
+    if (!data.candidates || data.candidates.length === 0) {
+      errorContainer.querySelector('p').textContent =
+        'No matching releases found on MusicBrainz';
+      errorContainer.classList.remove('hidden');
+      return;
+    }
+
+    // Render candidates
+    candidatesContainer.innerHTML = data.candidates
+      .map(
+        (candidate) => `
+      <label class="release-candidate flex items-center gap-4 p-3 bg-gray-800 rounded-lg cursor-pointer hover:bg-gray-750 border-2 ${candidate.isCurrent ? 'border-yellow-500' : 'border-transparent'} transition-colors">
+        <input type="radio" name="releaseCandidate" value="${candidate.id}" class="hidden" ${candidate.isCurrent ? 'checked' : ''}>
+        <div class="flex-shrink-0 w-16 h-16 bg-gray-700 rounded overflow-hidden">
+          ${
+            candidate.coverUrl
+              ? `<img src="${candidate.coverUrl}" alt="" class="w-full h-full object-cover" onerror="this.parentElement.innerHTML='<div class=\\'w-full h-full flex items-center justify-center text-gray-500\\'><i class=\\'fas fa-compact-disc text-2xl\\'></i></div>'">`
+              : `<div class="w-full h-full flex items-center justify-center text-gray-500"><i class="fas fa-compact-disc text-2xl"></i></div>`
+          }
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-white truncate">${candidate.title}</span>
+            ${candidate.isCurrent ? '<span class="text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded">Current</span>' : ''}
+          </div>
+          <div class="text-sm text-gray-400 truncate">${candidate.artist}</div>
+          <div class="flex items-center gap-3 mt-1 text-xs text-gray-500">
+            <span class="inline-flex items-center gap-1">
+              <i class="fas fa-tag"></i>${candidate.type}${candidate.secondaryTypes?.length ? ' + ' + candidate.secondaryTypes.join(', ') : ''}
+            </span>
+            ${candidate.trackCount ? `<span class="inline-flex items-center gap-1"><i class="fas fa-music"></i>${candidate.trackCount} tracks</span>` : ''}
+            ${candidate.releaseDate ? `<span class="inline-flex items-center gap-1"><i class="fas fa-calendar"></i>${candidate.releaseDate}</span>` : ''}
+          </div>
+        </div>
+        <div class="flex-shrink-0 w-6 h-6 rounded-full border-2 border-gray-600 flex items-center justify-center release-radio">
+          <div class="w-3 h-3 rounded-full bg-yellow-500 hidden"></div>
+        </div>
+      </label>
+    `
+      )
+      .join('');
+
+    candidatesContainer.classList.remove('hidden');
+
+    // Handle selection
+    const radioInputs = candidatesContainer.querySelectorAll(
+      'input[name="releaseCandidate"]'
+    );
+    const updateSelection = () => {
+      radioInputs.forEach((input) => {
+        const label = input.closest('label');
+        const radioIndicator = label.querySelector('.release-radio div');
+        if (input.checked) {
+          label.classList.add('border-yellow-500');
+          radioIndicator.classList.remove('hidden');
+          selectedReleaseId = input.value;
+        } else {
+          label.classList.remove('border-yellow-500');
+          radioIndicator.classList.add('hidden');
+        }
+      });
+      confirmBtn.disabled = !selectedReleaseId;
+      confirmBtn.textContent = 'Apply Selection';
+    };
+
+    radioInputs.forEach((input) => {
+      input.addEventListener('change', updateSelection);
+    });
+
+    // Initialize with current selection
+    const currentlySelected = candidatesContainer.querySelector(
+      'input[name="releaseCandidate"]:checked'
+    );
+    if (currentlySelected) {
+      selectedReleaseId = currentlySelected.value;
+      updateSelection();
+    }
+  } catch (error) {
+    console.error('Error fetching release candidates:', error);
+    loading.classList.add('hidden');
+    errorContainer.querySelector('p').textContent = error.message;
+    errorContainer.classList.remove('hidden');
+  }
 }
 
 // Initialize category (group) context menu
