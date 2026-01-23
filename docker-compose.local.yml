@@ -66,6 +66,7 @@ services:
     volumes:
       - postgres-data-local:/var/lib/postgresql
       - postgres-socket-local:/var/run/postgresql
+      - ./docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U postgres -d sushe']
       interval: 10s

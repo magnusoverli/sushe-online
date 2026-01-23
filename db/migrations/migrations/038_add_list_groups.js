@@ -15,6 +15,9 @@ const logger = require('../../../utils/logger');
 async function up(pool) {
   logger.info('Creating list_groups table and migrating existing data...');
 
+  // Step 0: Enable pgcrypto extension for gen_random_bytes
+  await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+
   // Step 1: Create list_groups table
   await pool.query(`
     CREATE TABLE IF NOT EXISTS list_groups (
