@@ -2637,19 +2637,21 @@ module.exports = (app, deps) => {
           });
         }
 
-        // Update the albums table
+        // Update the albums table - match by artist+album name for reliability
+        // (album_id might have already been changed by a previous operation)
         const updateResult = await pool.query(
           `UPDATE albums 
            SET album_id = $1, tracks = $2, updated_at = NOW() 
-           WHERE album_id = $3 
+           WHERE LOWER(artist) = LOWER($3) AND LOWER(album) = LOWER($4)
            RETURNING id, artist, album, album_id`,
-          [newAlbumId, JSON.stringify(tracks), currentAlbumId]
+          [newAlbumId, JSON.stringify(tracks), artist, album]
         );
 
         if (updateResult.rowCount === 0) {
           return res.status(404).json({
-            error: 'Album not found in database with current album_id',
-            currentAlbumId,
+            error: 'Album not found in database',
+            artist,
+            album,
           });
         }
 
