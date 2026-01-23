@@ -631,7 +631,17 @@ module.exports = (app, deps) => {
               }
             }
           } else {
-            releaseGroupId = groups[0].id;
+            // Prefer Album over Single/EP - Singles often have fewer tracks
+            // Priority: Album > EP > Single > other
+            const typeOrder = { Album: 0, EP: 1, Single: 2 };
+            const sortedGroups = [...groups].sort((a, b) => {
+              const aType = a['primary-type'] || 'Other';
+              const bType = b['primary-type'] || 'Other';
+              const aOrder = typeOrder[aType] ?? 3;
+              const bOrder = typeOrder[bType] ?? 3;
+              return aOrder - bOrder;
+            });
+            releaseGroupId = sortedGroups[0].id;
           }
 
           if (!releaseGroupId && !directReleaseId) {
