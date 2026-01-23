@@ -2655,6 +2655,19 @@ module.exports = (app, deps) => {
           });
         }
 
+        // Also update list_items that reference the old album_id
+        // This is crucial - otherwise the JOIN between list_items and albums breaks
+        let listItemsUpdated = 0;
+        if (currentAlbumId && currentAlbumId !== newAlbumId) {
+          const listItemsResult = await pool.query(
+            `UPDATE list_items 
+             SET album_id = $1, updated_at = NOW() 
+             WHERE album_id = $2`,
+            [newAlbumId, currentAlbumId]
+          );
+          listItemsUpdated = listItemsResult.rowCount;
+        }
+
         logger.info('Admin re-identified album successfully', {
           adminUsername: req.user.username,
           artist,
@@ -2662,14 +2675,16 @@ module.exports = (app, deps) => {
           oldAlbumId: currentAlbumId,
           newAlbumId,
           trackCount: tracks.length,
+          listItemsUpdated,
         });
 
         res.json({
           success: true,
-          message: `Album updated with ${tracks.length} tracks`,
+          message: `Album updated with ${tracks.length} tracks${listItemsUpdated > 0 ? ` (${listItemsUpdated} list references updated)` : ''}`,
           albumId: newAlbumId,
           trackCount: tracks.length,
           tracks: tracks.map((t) => t.name),
+          listItemsUpdated,
           changed: true,
         });
       } catch (error) {
