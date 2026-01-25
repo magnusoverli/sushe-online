@@ -805,7 +805,9 @@ function setListData(listId, albums, updateSnapshot = true) {
 
   // Update snapshot for diff-based saves (when data is fetched from server)
   if (updateSnapshot && albums) {
-    lastSavedSnapshots.set(listId, createListSnapshot(albums));
+    const snapshot = createListSnapshot(albums);
+    lastSavedSnapshots.set(listId, snapshot);
+    saveSnapshotToStorage(listId, snapshot);
   }
 }
 
@@ -1417,6 +1419,14 @@ async function loadLists() {
     });
     window.lists = lists;
 
+    // Load snapshots from localStorage for all lists (enables PATCH on first save after page load)
+    Object.keys(lists).forEach((listId) => {
+      const snapshot = loadSnapshotFromStorage(listId);
+      if (snapshot && snapshot.length > 0) {
+        lastSavedSnapshots.set(listId, snapshot);
+      }
+    });
+
     // Update navigation immediately - sidebar appears right away
     updateListNav();
 
@@ -1617,6 +1627,57 @@ function createListSnapshot(albums) {
 }
 
 /**
+ * Save snapshot to localStorage for persistence across page reloads
+ * @param {string} listId - The list ID
+ * @param {Array} snapshot - Array of album IDs
+ */
+function saveSnapshotToStorage(listId, snapshot) {
+  if (!listId || !snapshot) return;
+  try {
+    const key = `list-snapshot-${listId}`;
+    localStorage.setItem(key, JSON.stringify(snapshot));
+  } catch (e) {
+    // Silently fail if localStorage is full or unavailable
+    console.warn('Failed to save snapshot to localStorage:', e.message);
+  }
+}
+
+/**
+ * Load snapshot from localStorage
+ * @param {string} listId - The list ID
+ * @returns {Array|null} Array of album IDs or null if not found
+ */
+function loadSnapshotFromStorage(listId) {
+  if (!listId) return null;
+  try {
+    const key = `list-snapshot-${listId}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      const snapshot = JSON.parse(stored);
+      return Array.isArray(snapshot) ? snapshot : null;
+    }
+  } catch (e) {
+    // Silently fail if localStorage is unavailable or data is corrupted
+    console.warn('Failed to load snapshot from localStorage:', e.message);
+  }
+  return null;
+}
+
+/**
+ * Clear snapshot from localStorage (e.g., when list is deleted)
+ * @param {string} listId - The list ID
+ */
+function clearSnapshotFromStorage(listId) {
+  if (!listId) return;
+  try {
+    const key = `list-snapshot-${listId}`;
+    localStorage.removeItem(key);
+  } catch (e) {
+    // Silently fail
+  }
+}
+
+/**
  * Compute diff between old and new list states
  * Returns null if diff is too complex for incremental update
  * @param {Array} oldSnapshot - Previous album_id array
@@ -1747,8 +1808,10 @@ async function saveList(listId, data, year = undefined) {
       });
     }
 
-    // Update snapshot after successful save
-    lastSavedSnapshots.set(listId, createListSnapshot(cleanedData));
+    // Update snapshot after successful save (persist to localStorage)
+    const snapshot = createListSnapshot(cleanedData);
+    lastSavedSnapshots.set(listId, snapshot);
+    saveSnapshotToStorage(listId, snapshot);
 
     // Update in-memory list data using helper (preserves metadata)
     setListData(listId, cleanedData);
@@ -1770,6 +1833,9 @@ async function saveList(listId, data, year = undefined) {
 }
 // Expose saveList for other modules
 window.saveList = saveList;
+
+// Expose snapshot management functions for other modules
+window.clearSnapshotFromStorage = clearSnapshotFromStorage;
 
 /**
  * Get track name from track (string or object format)

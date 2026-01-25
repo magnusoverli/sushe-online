@@ -861,6 +861,11 @@ export function createContextMenus(deps = {}) {
 
           delete lists[currentContextList];
 
+          // Clean up snapshot from localStorage and memory
+          if (window.clearSnapshotFromStorage) {
+            window.clearSnapshotFromStorage(currentContextList);
+          }
+
           if (currentList === currentContextList) {
             const remainingLists = Object.keys(lists);
             if (remainingLists.length > 0) {
