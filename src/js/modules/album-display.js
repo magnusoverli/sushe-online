@@ -225,6 +225,9 @@ function extractMutableState(albums) {
 let playcountCache = {};
 let playcountFetchInProgress = false;
 
+// AbortControllers for active polling sessions (one per list)
+let pollingControllers = new Map(); // listId -> AbortController
+
 /**
  * Factory function to create the album display module with injected dependencies
  *
@@ -2322,7 +2325,25 @@ export function createAlbumDisplay(deps = {}) {
    * Used when switching lists or users
    */
   function clearPlaycountCache() {
+    // Cancel all active polling sessions
+    pollingControllers.forEach((controller) => {
+      controller.abort();
+    });
+    pollingControllers.clear();
+
     playcountCache = {};
+  }
+
+  /**
+   * Cancel active polling for a specific list
+   * @param {string} listId - List ID to cancel polling for
+   */
+  function cancelPollingForList(listId) {
+    const controller = pollingControllers.get(listId);
+    if (controller) {
+      controller.abort();
+      pollingControllers.delete(listId);
+    }
   }
 
   /**
@@ -2403,6 +2424,14 @@ export function createAlbumDisplay(deps = {}) {
    * @param {number} expectedCount - Number of albums being refreshed
    */
   async function pollForRefreshedPlaycounts(listId, expectedCount) {
+    // Cancel any existing polling for this list before starting new session
+    cancelPollingForList(listId);
+
+    // Create new AbortController for this polling session
+    const controller = new AbortController();
+    pollingControllers.set(listId, controller);
+    const { signal } = controller;
+
     // Calculate expected time: ~5 albums per batch, ~1.1s per batch
     // With variant detection, each album may take longer (multiple API calls)
     const estimatedBatches = Math.ceil(expectedCount / 3);
@@ -2423,10 +2452,20 @@ export function createAlbumDisplay(deps = {}) {
     let previousPlaycounts = { ...playcountCache };
 
     const poll = async () => {
+      // Check if polling was cancelled
+      if (signal.aborted) {
+        return;
+      }
+
       pollCount++;
 
       try {
-        const response = await apiCall(`/api/lastfm/list-playcounts/${listId}`);
+        const response = await apiCall(
+          `/api/lastfm/list-playcounts/${listId}`,
+          {
+            signal,
+          }
+        );
 
         if (response.playcounts) {
           // Check if any values changed since last poll
@@ -2463,6 +2502,7 @@ export function createAlbumDisplay(deps = {}) {
             pollCount >= MIN_POLLS
           ) {
             console.log('All playcounts loaded');
+            pollingControllers.delete(listId); // Clean up on success
             return;
           }
 
@@ -2475,12 +2515,30 @@ export function createAlbumDisplay(deps = {}) {
                 ? POLL_INTERVAL
                 : POLL_INTERVAL * 1.5;
             setTimeout(poll, interval);
+          } else {
+            // Max polls reached, clean up
+            pollingControllers.delete(listId);
           }
         }
       } catch (err) {
+        // Polling was cancelled - exit cleanly
+        if (err.name === 'AbortError') {
+          console.log(`Playcount polling cancelled for list ${listId}`);
+          return;
+        }
+
+        // List was deleted (404) - stop polling
+        if (err.message?.includes('List not found')) {
+          console.log(
+            `List ${listId} no longer exists, stopping playcount poll`
+          );
+          pollingControllers.delete(listId); // Clean up controller reference
+          return;
+        }
+
         console.warn('Playcount poll failed:', err);
-        // Retry if under max
-        if (pollCount < MAX_POLLS) {
+        // Retry if under max and not aborted
+        if (pollCount < MAX_POLLS && !signal.aborted) {
           setTimeout(poll, POLL_INTERVAL);
         }
       }
@@ -2598,6 +2656,7 @@ export function createAlbumDisplay(deps = {}) {
     updatePositionNumbers,
     clearLastRenderedCache,
     clearPlaycountCache,
+    cancelPollingForList,
     updateAlbumSummaryInPlace,
     invalidateFingerprint,
     // Granular DOM updates

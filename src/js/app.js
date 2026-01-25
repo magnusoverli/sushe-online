@@ -108,6 +108,10 @@ function clearPlaycountCache() {
   return getAlbumDisplayModule().clearPlaycountCache();
 }
 
+function cancelPollingForList(listId) {
+  return getAlbumDisplayModule().cancelPollingForList(listId);
+}
+
 function updatePositionNumbers(container, isMobile) {
   return getAlbumDisplayModule().updatePositionNumbers(container, isMobile);
 }
