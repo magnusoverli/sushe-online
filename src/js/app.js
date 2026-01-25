@@ -1636,9 +1636,9 @@ function saveSnapshotToStorage(listId, snapshot) {
   try {
     const key = `list-snapshot-${listId}`;
     localStorage.setItem(key, JSON.stringify(snapshot));
-  } catch (e) {
+  } catch (_e) {
     // Silently fail if localStorage is full or unavailable
-    console.warn('Failed to save snapshot to localStorage:', e.message);
+    console.warn('Failed to save snapshot to localStorage:', _e.message);
   }
 }
 
@@ -1656,9 +1656,9 @@ function loadSnapshotFromStorage(listId) {
       const snapshot = JSON.parse(stored);
       return Array.isArray(snapshot) ? snapshot : null;
     }
-  } catch (e) {
+  } catch (_e) {
     // Silently fail if localStorage is unavailable or data is corrupted
-    console.warn('Failed to load snapshot from localStorage:', e.message);
+    console.warn('Failed to load snapshot from localStorage:', _e.message);
   }
   return null;
 }
@@ -1672,7 +1672,7 @@ function clearSnapshotFromStorage(listId) {
   try {
     const key = `list-snapshot-${listId}`;
     localStorage.removeItem(key);
-  } catch (e) {
+  } catch (_e) {
     // Silently fail
   }
 }
