@@ -838,10 +838,14 @@ export function createContextMenus(deps = {}) {
 
       if (!currentContextList) return;
 
+      // Get list name from metadata for display
+      const listMeta = getListMetadata(currentContextList);
+      const listName = listMeta?.name || currentContextList;
+
       // Confirm deletion using custom modal
       const confirmed = await showConfirmation(
         'Delete List',
-        `Are you sure you want to delete the list "${currentContextList}"?`,
+        `Are you sure you want to delete the list "${listName}"?`,
         'This action cannot be undone.',
         'Delete'
       );
@@ -887,7 +891,7 @@ export function createContextMenus(deps = {}) {
 
           updateListNav();
 
-          showToast(`List "${currentContextList}" deleted`);
+          showToast(`List "${listName}" deleted`);
         } catch (_error) {
           showToast('Error deleting list', 'error');
         }
