@@ -3,14 +3,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      no_cache: true
       args:
         INSTALL_DEV_DEPS: 'true'
     container_name: sushe-online-local
     ports:
       - '3000:3000'
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - NO_COLOR=1
       - LOG_LEVEL=info
       - SESSION_SECRET=test-secret-change-in-production
@@ -41,9 +40,18 @@ services:
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       # Disable rate limiting for local development/testing
       - DISABLE_RATE_LIMITING=true
+      # Enable polling for file watchers (needed for Windows/WSL Docker volumes)
+      - CHOKIDAR_USEPOLLING=true
+      - CHOKIDAR_INTERVAL=1000
     volumes:
+      # Mount source code for live development
+      - .:/app
+      # Exclude node_modules - use container's version
+      - /app/node_modules
+      # Data and socket volumes
       - sushe-data-local:/app/data
       - postgres-socket-local:/var/run/postgresql
+    command: npm run dev
     depends_on:
       db:
         condition: service_healthy

@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "npm run build && node index.js",
-    "dev": "concurrently \"npm run watch:css\" \"npm run watch:js\" \"nodemon --ignore data/ --ignore *.log index.js\"",
+    "dev": "concurrently \"npm run watch:css\" \"npm run watch:js\" \"nodemon --legacy-watch --ignore data/ --ignore *.log index.js\"",
     "build": "npm run build:css && npm run build:js",
     "build:css": "postcss src/styles/input.css -o public/styles/output.css",
     "build:js": "vite build",
