@@ -122,22 +122,22 @@ export function createMobileUI(deps = {}) {
    * Move album from current list to target list
    * @param {number} index - Album index
    * @param {string} albumId - Album identity string
-   * @param {string} targetList - Target list name
+   * @param {string} targetListId - Target list ID
    */
-  async function moveAlbumToList(index, albumId, targetList) {
-    const currentList = getCurrentList();
+  async function moveAlbumToList(index, albumId, targetListId) {
+    const currentListId = getCurrentList();
     const lists = getLists();
 
     if (
-      !currentList ||
-      !lists[currentList] ||
-      !targetList ||
-      !lists[targetList]
+      !currentListId ||
+      !lists[currentListId] ||
+      !targetListId ||
+      !lists[targetListId]
     ) {
       throw new Error('Invalid source or target list');
     }
 
-    const sourceAlbums = getListData(currentList);
+    const sourceAlbums = getListData(currentListId);
     if (!sourceAlbums) throw new Error('Source list data not loaded');
 
     let album = sourceAlbums[index];
@@ -161,11 +161,15 @@ export function createMobileUI(deps = {}) {
 
     const albumToMove = { ...album };
 
+    // Get list names for user-facing messages
+    const targetListMeta = getListMetadata(targetListId);
+    const targetListName = targetListMeta?.name || 'Unknown';
+
     // Check for duplicate in target list
-    const targetAlbums = getListData(targetList);
+    const targetAlbums = getListData(targetListId);
     if (isAlbumInList(albumToMove, targetAlbums || [])) {
       showToast(
-        `"${albumToMove.album}" already exists in "${targetList}"`,
+        `"${albumToMove.album}" already exists in "${targetListName}"`,
         'error'
       );
       return;
@@ -178,20 +182,20 @@ export function createMobileUI(deps = {}) {
     let targetData = targetAlbums;
     if (!targetData) {
       targetData = await apiCall(
-        `/api/lists/${encodeURIComponent(targetList)}`
+        `/api/lists/${encodeURIComponent(targetListId)}`
       );
-      setListData(targetList, targetData);
+      setListData(targetListId, targetData);
     }
     targetData.push(albumToMove);
 
     try {
       await Promise.all([
-        saveList(currentList, sourceAlbums),
-        saveList(targetList, targetData),
+        saveList(currentListId, sourceAlbums),
+        saveList(targetListId, targetData),
       ]);
 
-      selectList(currentList);
-      showToast(`Moved "${album.album}" to "${targetList}"`);
+      selectList(currentListId);
+      showToast(`Moved "${album.album}" to "${targetListName}"`);
     } catch (error) {
       console.error('Error saving lists after move:', error);
       sourceAlbums.splice(indexToMove, 0, albumToMove);
@@ -203,11 +207,11 @@ export function createMobileUI(deps = {}) {
   /**
    * Show confirmation modal for moving album to another list
    * @param {string} albumId - Album identity string
-   * @param {string} targetList - Target list name
+   * @param {string} targetListId - Target list ID
    */
-  function showMoveConfirmation(albumId, targetList) {
-    if (!albumId || !targetList) {
-      console.error('Invalid albumId or targetList');
+  function showMoveConfirmation(albumId, targetListId) {
+    if (!albumId || !targetListId) {
+      console.error('Invalid albumId or targetListId');
       return;
     }
 
@@ -218,16 +222,22 @@ export function createMobileUI(deps = {}) {
     }
 
     const { album, index } = result;
-    const currentList = getCurrentList();
+    const currentListId = getCurrentList();
+
+    // Get list names from metadata for display
+    const currentListMeta = getListMetadata(currentListId);
+    const targetListMeta = getListMetadata(targetListId);
+    const currentListName = currentListMeta?.name || 'Unknown';
+    const targetListName = targetListMeta?.name || 'Unknown';
 
     showConfirmation(
       'Move Album',
-      `Move "${album.album}" by ${album.artist} to "${targetList}"?`,
-      `This will remove the album from "${currentList}" and add it to "${targetList}".`,
+      `Move "${album.album}" by ${album.artist} to "${targetListName}"?`,
+      `This will remove the album from "${currentListName}" and add it to "${targetListName}".`,
       'Move',
       async () => {
         try {
-          await moveAlbumToList(index, albumId, targetList);
+          await moveAlbumToList(index, albumId, targetListId);
         } catch (error) {
           console.error('Error moving album:', error);
           showToast('Error moving album', 'error');
@@ -580,25 +590,26 @@ export function createMobileUI(deps = {}) {
    * @returns {Object} { listsByYear, sortedYears, listsWithoutYear }
    */
   function groupListsForMove() {
-    const currentList = getCurrentList();
+    const currentListId = getCurrentList();
     const lists = getLists();
     const listsByYear = {};
     const listsWithoutYear = [];
 
-    Object.keys(lists).forEach((listName) => {
+    Object.keys(lists).forEach((listId) => {
       // Skip current list
-      if (listName === currentList) return;
+      if (listId === currentListId) return;
 
-      const meta = lists[listName];
+      const meta = lists[listId];
+      const listName = meta?.name || 'Unknown';
       const year = meta?.year;
 
       if (year) {
         if (!listsByYear[year]) {
           listsByYear[year] = [];
         }
-        listsByYear[year].push(listName);
+        listsByYear[year].push({ id: listId, name: listName });
       } else {
-        listsWithoutYear.push(listName);
+        listsWithoutYear.push({ id: listId, name: listName });
       }
     });
 
@@ -686,10 +697,10 @@ export function createMobileUI(deps = {}) {
               <div class="ml-4 border-l-2 border-gray-700 pl-2">
                 ${listsByYear[year]
                   .map(
-                    (listName) => `
-                  <button data-target-list="${listName}"
+                    (list) => `
+                  <button data-target-list="${list.id}"
                           class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
-                    ${listName}
+                    ${list.name}
                   </button>
                 `
                   )
@@ -718,10 +729,10 @@ export function createMobileUI(deps = {}) {
               <div class="ml-4 border-l-2 border-gray-700 pl-2">
                 ${listsWithoutYear
                   .map(
-                    (listName) => `
-                  <button data-target-list="${listName}"
+                    (list) => `
+                  <button data-target-list="${list.id}"
                           class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
-                    ${listName}
+                    ${list.name}
                   </button>
                 `
                   )

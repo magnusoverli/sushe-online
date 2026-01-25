@@ -273,21 +273,23 @@ export function createContextMenus(deps = {}) {
     // Highlight the parent menu item
     moveOption.classList.add('bg-gray-700', 'text-white');
 
-    // Get all list names except the current one
-    const listNames = Object.keys(lists).filter((name) => name !== currentList);
+    // Get all list IDs except the current one
+    const listIds = Object.keys(lists).filter((id) => id !== currentList);
 
-    if (listNames.length === 0) {
+    if (listIds.length === 0) {
       submenu.innerHTML =
         '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
     } else {
-      submenu.innerHTML = listNames
-        .map(
-          (listName) => `
-          <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listName}">
+      submenu.innerHTML = listIds
+        .map((listId) => {
+          const meta = getListMetadata(listId);
+          const listName = meta?.name || 'Unknown';
+          return `
+          <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
             <span class="mr-2">•</span>${listName}
           </button>
-        `
-        )
+        `;
+        })
         .join('');
 
       // Add click handlers to each list option
@@ -295,7 +297,7 @@ export function createContextMenus(deps = {}) {
         btn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          const targetList = btn.dataset.targetList;
+          const targetListId = btn.dataset.targetList;
 
           // Hide both menus and remove highlight
           document.getElementById('albumContextMenu')?.classList.add('hidden');
@@ -303,7 +305,7 @@ export function createContextMenus(deps = {}) {
           moveOption?.classList.remove('bg-gray-700', 'text-white');
 
           // Show confirmation modal
-          showMoveConfirmation(albumId, targetList);
+          showMoveConfirmation(albumId, targetListId);
         });
       });
     }
@@ -411,11 +413,11 @@ export function createContextMenus(deps = {}) {
   /**
    * Show confirmation modal for moving album to another list
    * @param {string} albumId - Album identity string
-   * @param {string} targetList - Target list name
+   * @param {string} targetListId - Target list ID
    */
-  function showMoveConfirmation(albumId, targetList) {
-    if (!albumId || !targetList) {
-      console.error('Invalid albumId or targetList');
+  function showMoveConfirmation(albumId, targetListId) {
+    if (!albumId || !targetListId) {
+      console.error('Invalid albumId or targetListId');
       return;
     }
 
@@ -426,16 +428,22 @@ export function createContextMenus(deps = {}) {
     }
 
     const { album, index } = result;
-    const currentList = getCurrentList();
+    const currentListId = getCurrentList();
+
+    // Get list names from metadata for display
+    const currentListMeta = getListMetadata(currentListId);
+    const targetListMeta = getListMetadata(targetListId);
+    const currentListName = currentListMeta?.name || 'Unknown';
+    const targetListName = targetListMeta?.name || 'Unknown';
 
     showConfirmation(
       'Move Album',
-      `Move "${album.album}" by ${album.artist} to "${targetList}"?`,
-      `This will remove the album from "${currentList}" and add it to "${targetList}".`,
+      `Move "${album.album}" by ${album.artist} to "${targetListName}"?`,
+      `This will remove the album from "${currentListName}" and add it to "${targetListName}".`,
       'Move',
       async () => {
         try {
-          await moveAlbumToList(index, albumId, targetList);
+          await moveAlbumToList(index, albumId, targetListId);
         } catch (error) {
           console.error('Error moving album:', error);
           showToast('Error moving album', 'error');
@@ -448,22 +456,22 @@ export function createContextMenus(deps = {}) {
    * Move album from current list to target list
    * @param {number} index - Album index
    * @param {string} albumId - Album identity string
-   * @param {string} targetList - Target list name
+   * @param {string} targetListId - Target list ID
    */
-  async function moveAlbumToList(index, albumId, targetList) {
-    const currentList = getCurrentList();
+  async function moveAlbumToList(index, albumId, targetListId) {
+    const currentListId = getCurrentList();
     const lists = getLists();
 
     if (
-      !currentList ||
-      !lists[currentList] ||
-      !targetList ||
-      !lists[targetList]
+      !currentListId ||
+      !lists[currentListId] ||
+      !targetListId ||
+      !lists[targetListId]
     ) {
       throw new Error('Invalid source or target list');
     }
 
-    const sourceAlbums = getListData(currentList);
+    const sourceAlbums = getListData(currentListId);
     if (!sourceAlbums) throw new Error('Source list data not loaded');
 
     let album = sourceAlbums[index];
@@ -487,8 +495,12 @@ export function createContextMenus(deps = {}) {
 
     const albumToMove = { ...album };
 
+    // Get list names for user-facing messages
+    const targetListMeta = getListMetadata(targetListId);
+    const targetListName = targetListMeta?.name || 'Unknown';
+
     // Check for duplicate in target list
-    const targetAlbums = getListData(targetList);
+    const targetAlbums = getListData(targetListId);
     const isAlbumInList = (albumToCheck, list) => {
       const key = `${albumToCheck.artist}::${albumToCheck.album}`.toLowerCase();
       return list.some((a) => `${a.artist}::${a.album}`.toLowerCase() === key);
@@ -496,7 +508,7 @@ export function createContextMenus(deps = {}) {
 
     if (isAlbumInList(albumToMove, targetAlbums || [])) {
       showToast(
-        `"${albumToMove.album}" already exists in "${targetList}"`,
+        `"${albumToMove.album}" already exists in "${targetListName}"`,
         'error'
       );
       return;
@@ -509,19 +521,19 @@ export function createContextMenus(deps = {}) {
     let targetData = targetAlbums;
     if (!targetData) {
       targetData = await apiCall(
-        `/api/lists/${encodeURIComponent(targetList)}`
+        `/api/lists/${encodeURIComponent(targetListId)}`
       );
     }
     targetData.push(albumToMove);
 
     try {
       await Promise.all([
-        saveList(currentList, sourceAlbums),
-        saveList(targetList, targetData),
+        saveList(currentListId, sourceAlbums),
+        saveList(targetListId, targetData),
       ]);
 
-      selectList(currentList);
-      showToast(`Moved "${album.album}" to "${targetList}"`);
+      selectList(currentListId);
+      showToast(`Moved "${album.album}" to "${targetListName}"`);
     } catch (error) {
       console.error('Error saving lists after move:', error);
       sourceAlbums.splice(indexToMove, 0, albumToMove);
