@@ -226,7 +226,7 @@ let playcountCache = {};
 let playcountFetchInProgress = false;
 
 // AbortControllers for active polling sessions (one per list)
-let pollingControllers = new Map(); // listId -> AbortController
+const pollingControllers = new Map(); // listId -> AbortController
 
 /**
  * Factory function to create the album display module with injected dependencies

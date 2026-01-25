@@ -44,8 +44,21 @@ module.exports = (app, deps) => {
         [req.user._id]
       );
 
-      res.json(
-        result.rows.map((row) => ({
+      // Filter out empty "Uncategorized" groups
+      const groups = result.rows
+        .filter((row) => {
+          const listCount = parseInt(row.list_count, 10);
+          const isUncategorized =
+            row.name === 'Uncategorized' && row.year === null;
+
+          // Hide empty "Uncategorized" groups
+          if (isUncategorized && listCount === 0) {
+            return false;
+          }
+
+          return true;
+        })
+        .map((row) => ({
           _id: row._id,
           name: row.name,
           year: row.year,
@@ -54,8 +67,9 @@ module.exports = (app, deps) => {
           isYearGroup: row.year !== null,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-        }))
-      );
+        }));
+
+      res.json(groups);
     } catch (err) {
       logger.error('Error fetching groups', {
         error: err.message,
@@ -117,6 +131,9 @@ module.exports = (app, deps) => {
           timestamp,
         ]
       );
+
+      // Invalidate cache
+      responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
 
       res.status(201).json({
         _id: groupId,
@@ -215,6 +232,9 @@ module.exports = (app, deps) => {
         values
       );
 
+      // Invalidate cache
+      responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+
       res.json({ success: true });
     } catch (err) {
       logger.error('Error updating group', {
@@ -269,13 +289,45 @@ module.exports = (app, deps) => {
       }
 
       // If force=true or no lists, delete the group
-      // First, unassign all lists from this group (set group_id to null)
-      // Also clear is_main flag and year since orphaned lists can't be main
+      // First, move all lists from this group to "Uncategorized"
+      // Also clear is_main flag and year since uncategorized lists can't be main
       if (listCount > 0) {
+        // Get or create "Uncategorized" group for this user
+        const uncategorizedResult = await pool.query(
+          `SELECT id FROM list_groups WHERE user_id = $1 AND name = $2 AND year IS NULL`,
+          [req.user._id, 'Uncategorized']
+        );
+
+        let uncategorizedId;
+        if (uncategorizedResult.rows.length === 0) {
+          // Create Uncategorized group
+          const newGroupId = crypto.randomBytes(12).toString('hex');
+          const maxOrder = await pool.query(
+            `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
+            [req.user._id]
+          );
+
+          const insertResult = await pool.query(
+            `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+             VALUES ($1, $2, $3, NULL, $4, NOW(), NOW())
+             RETURNING id`,
+            [
+              newGroupId,
+              req.user._id,
+              'Uncategorized',
+              maxOrder.rows[0].next_order,
+            ]
+          );
+          uncategorizedId = insertResult.rows[0].id;
+        } else {
+          uncategorizedId = uncategorizedResult.rows[0].id;
+        }
+
+        // Move lists to Uncategorized group
         await pool.query(
-          `UPDATE lists SET group_id = NULL, is_main = FALSE, year = NULL, updated_at = NOW() 
-           WHERE group_id = $1`,
-          [group.id]
+          `UPDATE lists SET group_id = $1, is_main = FALSE, year = NULL, updated_at = NOW() 
+           WHERE group_id = $2`,
+          [uncategorizedId, group.id]
         );
       }
 
@@ -287,6 +339,10 @@ module.exports = (app, deps) => {
         groupName: group.name,
         listsUnassigned: listCount,
       });
+
+      // Invalidate cache
+      responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
+      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
       res.json({ success: true, listsUnassigned: listCount });
     } catch (err) {
@@ -481,20 +537,24 @@ module.exports = (app, deps) => {
         );
 
         if (parseInt(oldGroupCount.rows[0].count, 10) === 0) {
-          // Check if old group was a year-group
+          // Check if old group was a year-group or "Uncategorized"
           const oldGroupResult = await client.query(
-            `SELECT year FROM list_groups WHERE id = $1`,
+            `SELECT year, name FROM list_groups WHERE id = $1`,
             [list.group_id]
           );
 
-          if (
-            oldGroupResult.rows.length > 0 &&
-            oldGroupResult.rows[0].year !== null
-          ) {
-            // Auto-delete empty year-group
-            await client.query(`DELETE FROM list_groups WHERE id = $1`, [
-              list.group_id,
-            ]);
+          if (oldGroupResult.rows.length > 0) {
+            const isYearGroup = oldGroupResult.rows[0].year !== null;
+            const isUncategorized =
+              oldGroupResult.rows[0].name === 'Uncategorized' &&
+              oldGroupResult.rows[0].year === null;
+
+            // Auto-delete year-groups and "Uncategorized" when empty
+            if (isYearGroup || isUncategorized) {
+              await client.query(`DELETE FROM list_groups WHERE id = $1`, [
+                list.group_id,
+              ]);
+            }
           }
         }
       }

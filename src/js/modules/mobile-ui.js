@@ -1121,7 +1121,13 @@ export function createMobileUI(deps = {}) {
             }
           }
 
-          updateListNav();
+          // Refresh groups and lists to update sidebar (groups may have been auto-deleted)
+          if (refreshGroupsAndLists) {
+            await refreshGroupsAndLists();
+          } else {
+            updateListNav();
+          }
+
           showToast(`List "${listName}" deleted`);
         } catch (_error) {
           showToast('Error deleting list', 'error');
@@ -1291,10 +1297,16 @@ export function createMobileUI(deps = {}) {
           <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
           <h3 class="font-semibold text-white mb-4">${groupName}</h3>
           
+          ${
+            !isYearGroup
+              ? `
           <button data-action="rename"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-edit mr-3 text-gray-400"></i>Rename
           </button>
+          `
+              : ''
+          }
           
           ${
             !isYearGroup
@@ -1341,6 +1353,18 @@ export function createMobileUI(deps = {}) {
     if (renameBtn) {
       renameBtn.addEventListener('click', () => {
         closeSheet();
+
+        // Year groups can't be renamed (shouldn't reach here due to UI)
+        if (isYearGroup) {
+          if (window.showToast) {
+            window.showToast(
+              'Year groups cannot be renamed. The name matches the year.',
+              'info'
+            );
+          }
+          return;
+        }
+
         // Use the global function from app.js
         if (window.openRenameCategoryModal) {
           window.openRenameCategoryModal(groupId, groupName);
@@ -1375,8 +1399,12 @@ export function createMobileUI(deps = {}) {
             const confirmed = await showConfirmation(
               'Delete Collection',
               `The collection "${groupName}" contains ${error.listCount} ${listWord}.`,
-              `Deleting this collection will move the ${listWord} to "Uncategorized". This cannot be undone.`,
-              'Delete Anyway'
+              `Deleting this collection will move the ${listWord} to "Uncategorized". This action cannot be undone.`,
+              'Delete Collection',
+              null,
+              {
+                checkboxLabel: `I understand that ${error.listCount} ${listWord} will be moved to "Uncategorized"`,
+              }
             );
 
             if (confirmed) {

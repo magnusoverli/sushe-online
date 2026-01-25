@@ -889,7 +889,12 @@ export function createContextMenus(deps = {}) {
             }
           }
 
-          updateListNav();
+          // Refresh groups and lists to update sidebar (groups may have been auto-deleted)
+          if (refreshGroupsAndLists) {
+            await refreshGroupsAndLists();
+          } else {
+            updateListNav();
+          }
 
           showToast(`List "${listName}" deleted`);
         } catch (_error) {

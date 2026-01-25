@@ -922,6 +922,18 @@ const confirmationModalComponent = () => `
       <div class="p-6">
         <p id="confirmationMessage" class="text-gray-300"></p>
         <p id="confirmationSubMessage" class="text-sm text-gray-500 mt-2"></p>
+        
+        <!-- Optional checkbox for additional confirmation -->
+        <div id="confirmationCheckboxContainer" class="hidden mt-4">
+          <label class="flex items-start gap-3 cursor-pointer">
+            <input 
+              type="checkbox" 
+              id="confirmationCheckbox" 
+              class="mt-1 w-4 h-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
+            />
+            <span id="confirmationCheckboxLabel" class="text-sm text-gray-400 select-none"></span>
+          </label>
+        </div>
       </div>
       
       <!-- Modal Footer -->

@@ -608,12 +608,23 @@ export function createListNav(deps = {}) {
 
     // Update menu options based on group type
     const deleteOption = document.getElementById('deleteCategoryOption');
+    const renameOption = document.getElementById('renameCategoryOption');
+
     if (deleteOption) {
       // Year groups can't be manually deleted
       if (isYearGroup) {
         deleteOption.classList.add('hidden');
       } else {
         deleteOption.classList.remove('hidden');
+      }
+    }
+
+    if (renameOption) {
+      // Year groups can't be renamed (name must match year)
+      if (isYearGroup) {
+        renameOption.classList.add('hidden');
+      } else {
+        renameOption.classList.remove('hidden');
       }
     }
 

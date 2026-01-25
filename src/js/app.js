@@ -108,10 +108,6 @@ function clearPlaycountCache() {
   return getAlbumDisplayModule().clearPlaycountCache();
 }
 
-function cancelPollingForList(listId) {
-  return getAlbumDisplayModule().cancelPollingForList(listId);
-}
-
 function updatePositionNumbers(container, isMobile) {
   return getAlbumDisplayModule().updatePositionNumbers(container, isMobile);
 }
@@ -2312,11 +2308,20 @@ function initializeCategoryContextMenu() {
 
     if (!currentContextGroup) return;
 
-    const { id, name } = currentContextGroup;
+    const { id, name, isYearGroup } = currentContextGroup;
 
     // Virtual "Uncategorized" group (orphaned lists) can't be renamed
     if (id === 'orphaned') {
       showToast('The "Uncategorized" section cannot be renamed', 'info');
+      return;
+    }
+
+    // Year groups can't be renamed (name must match year)
+    if (isYearGroup) {
+      showToast(
+        'Year groups cannot be renamed. The name matches the year.',
+        'info'
+      );
       return;
     }
 
@@ -2357,8 +2362,12 @@ function initializeCategoryContextMenu() {
         const confirmed = await showConfirmation(
           'Delete Collection',
           `The collection "${name}" contains ${error.listCount} ${listWord}.`,
-          `Deleting this collection will move the ${listWord} to "Uncategorized". This cannot be undone.`,
-          'Delete Anyway'
+          `Deleting this collection will move the ${listWord} to "Uncategorized". This action cannot be undone.`,
+          'Delete Collection',
+          null,
+          {
+            checkboxLabel: `I understand that ${error.listCount} ${listWord} will be moved to "Uncategorized"`,
+          }
         );
 
         if (confirmed) {

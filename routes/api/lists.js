@@ -1397,17 +1397,22 @@ module.exports = (app, deps) => {
 
         if (parseInt(groupCount.rows[0].count, 10) === 0) {
           const groupResult = await client.query(
-            `SELECT year FROM list_groups WHERE id = $1`,
+            `SELECT year, name FROM list_groups WHERE id = $1`,
             [list.group_id]
           );
 
-          if (
-            groupResult.rows.length > 0 &&
-            groupResult.rows[0].year !== null
-          ) {
-            await client.query(`DELETE FROM list_groups WHERE id = $1`, [
-              list.group_id,
-            ]);
+          if (groupResult.rows.length > 0) {
+            const isYearGroup = groupResult.rows[0].year !== null;
+            const isUncategorized =
+              groupResult.rows[0].name === 'Uncategorized' &&
+              groupResult.rows[0].year === null;
+
+            // Auto-delete year-groups and "Uncategorized" when empty
+            if (isYearGroup || isUncategorized) {
+              await client.query(`DELETE FROM list_groups WHERE id = $1`, [
+                list.group_id,
+              ]);
+            }
           }
         }
       }
@@ -1416,6 +1421,7 @@ module.exports = (app, deps) => {
 
       responseCache.invalidate(`GET:/api/lists/${id}:${req.user._id}`);
       responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
+      responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
 
       if (list.year) {
         triggerAggregateListRecompute(list.year);

@@ -102,7 +102,7 @@ export function showToast(message, type = 'success', duration = null) {
 }
 
 /**
- * Show a confirmation modal dialog
+ * Show a confirmation modal
  * Supports both callback and promise-based usage
  *
  * @param {string} title - Modal title
@@ -110,6 +110,8 @@ export function showToast(message, type = 'success', duration = null) {
  * @param {string} [subMessage] - Secondary message
  * @param {string} [confirmText='Confirm'] - Text for confirm button
  * @param {Function|null} [onConfirm=null] - Callback for confirmation (if null, returns Promise)
+ * @param {Object} [options] - Additional options
+ * @param {string} [options.checkboxLabel] - If provided, shows a checkbox that must be checked to confirm
  * @returns {Promise<boolean>|void} Promise resolving to true/false if no callback provided
  */
 export function showConfirmation(
@@ -117,7 +119,8 @@ export function showConfirmation(
   message,
   subMessage,
   confirmText = 'Confirm',
-  onConfirm = null
+  onConfirm = null,
+  options = {}
 ) {
   const modal = document.getElementById('confirmationModal');
   const titleEl = document.getElementById('confirmationTitle');
@@ -125,29 +128,65 @@ export function showConfirmation(
   const subMessageEl = document.getElementById('confirmationSubMessage');
   const confirmBtn = document.getElementById('confirmationConfirmBtn');
   const cancelBtn = document.getElementById('confirmationCancelBtn');
+  const checkboxContainer = document.getElementById(
+    'confirmationCheckboxContainer'
+  );
+  const checkbox = document.getElementById('confirmationCheckbox');
+  const checkboxLabel = document.getElementById('confirmationCheckboxLabel');
 
   titleEl.textContent = title;
   messageEl.textContent = message;
   subMessageEl.textContent = subMessage || '';
   confirmBtn.textContent = confirmText;
 
+  // Handle optional checkbox requirement
+  const requiresCheckbox = !!options.checkboxLabel;
+  if (requiresCheckbox) {
+    checkboxContainer.classList.remove('hidden');
+    checkboxLabel.textContent = options.checkboxLabel;
+    checkbox.checked = false;
+    confirmBtn.disabled = true;
+    confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+  } else {
+    checkboxContainer.classList.add('hidden');
+    confirmBtn.disabled = false;
+    confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+  }
+
   // If onConfirm is provided, use callback style
   if (onConfirm) {
-    const handleConfirm = () => {
-      modal.classList.add('hidden');
+    const handleCheckboxChange = requiresCheckbox
+      ? () => {
+          if (checkbox.checked) {
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          } else {
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          }
+        }
+      : null;
+
+    const cleanup = () => {
       confirmBtn.removeEventListener('click', handleConfirm);
       cancelBtn.removeEventListener('click', handleCancel);
       modal.removeEventListener('click', handleBackdropClick);
       document.removeEventListener('keydown', handleEscKey);
+      if (requiresCheckbox && handleCheckboxChange) {
+        checkbox.removeEventListener('change', handleCheckboxChange);
+        checkbox.checked = false;
+      }
+    };
+
+    const handleConfirm = () => {
+      modal.classList.add('hidden');
+      cleanup();
       onConfirm();
     };
 
     const handleCancel = () => {
       modal.classList.add('hidden');
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
+      cleanup();
     };
 
     const handleBackdropClick = (e) => {
@@ -166,6 +205,9 @@ export function showConfirmation(
     cancelBtn.addEventListener('click', handleCancel);
     modal.addEventListener('click', handleBackdropClick);
     document.addEventListener('keydown', handleEscKey);
+    if (requiresCheckbox && handleCheckboxChange) {
+      checkbox.addEventListener('change', handleCheckboxChange);
+    }
 
     modal.classList.remove('hidden');
     setTimeout(() => confirmBtn.focus(), 100);
@@ -174,21 +216,38 @@ export function showConfirmation(
 
   // Otherwise return a promise for async/await style
   return new Promise((resolve) => {
-    const handleConfirm = () => {
-      modal.classList.add('hidden');
+    const handleCheckboxChange = requiresCheckbox
+      ? () => {
+          if (checkbox.checked) {
+            confirmBtn.disabled = false;
+            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          } else {
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          }
+        }
+      : null;
+
+    const cleanup = () => {
       confirmBtn.removeEventListener('click', handleConfirm);
       cancelBtn.removeEventListener('click', handleCancel);
       modal.removeEventListener('click', handleBackdropClick);
       document.removeEventListener('keydown', handleEscKey);
+      if (requiresCheckbox && handleCheckboxChange) {
+        checkbox.removeEventListener('change', handleCheckboxChange);
+        checkbox.checked = false;
+      }
+    };
+
+    const handleConfirm = () => {
+      modal.classList.add('hidden');
+      cleanup();
       resolve(true);
     };
 
     const handleCancel = () => {
       modal.classList.add('hidden');
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
+      cleanup();
       resolve(false);
     };
 
@@ -208,6 +267,9 @@ export function showConfirmation(
     cancelBtn.addEventListener('click', handleCancel);
     modal.addEventListener('click', handleBackdropClick);
     document.addEventListener('keydown', handleEscKey);
+    if (requiresCheckbox && handleCheckboxChange) {
+      checkbox.addEventListener('change', handleCheckboxChange);
+    }
 
     modal.classList.remove('hidden');
     setTimeout(() => confirmBtn.focus(), 100);
