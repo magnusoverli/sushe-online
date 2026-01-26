@@ -1131,7 +1131,15 @@ module.exports = (app, deps) => {
 
       // Process additions (with position)
       const addedItems = [];
+      const duplicateAlbums = [];
       if (added && Array.isArray(added)) {
+        // Get current max position to auto-append new items at the end
+        const maxPosResult = await client.query(
+          'SELECT COALESCE(MAX(position), 0) as max_pos FROM list_items WHERE list_id = $1',
+          [list._id]
+        );
+        let nextPosition = maxPosResult.rows[0].max_pos + 1;
+
         for (const item of added) {
           if (!item) continue;
 
@@ -1144,6 +1152,12 @@ module.exports = (app, deps) => {
 
           if (existing.rows.length === 0) {
             const itemId = crypto.randomBytes(12).toString('hex');
+            // Use provided position or auto-increment to append at end
+            const position =
+              item.position !== undefined && item.position !== null
+                ? item.position
+                : nextPosition++;
+
             await client.query(
               `INSERT INTO list_items (
                 _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
@@ -1152,7 +1166,7 @@ module.exports = (app, deps) => {
                 itemId,
                 list._id,
                 albumId,
-                item.position || 0,
+                position,
                 item.comments || null,
                 item.primary_track || null,
                 item.secondary_track || null,
@@ -1162,6 +1176,13 @@ module.exports = (app, deps) => {
             );
             addedItems.push({ album_id: albumId, _id: itemId });
             changeCount++;
+          } else {
+            // Track duplicate album
+            duplicateAlbums.push({
+              album_id: albumId,
+              artist: item.artist || '',
+              album: item.album || '',
+            });
           }
         }
       }
@@ -1209,9 +1230,15 @@ module.exports = (app, deps) => {
         removed: removed?.length || 0,
         updated: updated?.length || 0,
         totalChanges: changeCount,
+        duplicates: duplicateAlbums?.length || 0,
       });
 
-      res.json({ success: true, changes: changeCount, addedItems });
+      res.json({
+        success: true,
+        changes: changeCount,
+        addedItems,
+        duplicates: duplicateAlbums,
+      });
     } catch (err) {
       await client.query('ROLLBACK');
       logger.error('Error incrementally updating list', {

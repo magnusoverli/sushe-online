@@ -948,49 +948,8 @@ async function addAlbumToList(info, tab, listId, listName) {
       }
     }
 
-    // Get current list data (now using list ID instead of name)
-    console.log(
-      `Fetching current list: ${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}`
-    );
-    const listResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}`,
-      { headers: getAuthHeaders() },
-      15000 // 15 second timeout
-    );
-
-    console.log('Fetch response status:', listResponse.status);
-
-    let currentList = [];
-    if (listResponse.ok) {
-      currentList = await listResponse.json();
-      console.log('Current list has', currentList.length, 'albums');
-    } else if (listResponse.status === 401) {
-      // Handle 401 - clear auth and notify user
-      await handleUnauthorized();
-      await showErrorMenu('Not logged in');
-      throw new Error(
-        'Authentication failed. Please click the extension icon and login again.'
-      );
-    } else if (listResponse.status === 404) {
-      console.log('List not found, will create new one');
-      // List doesn't exist yet, that's okay
-    } else {
-      throw new Error(`API returned status ${listResponse.status}`);
-    }
-
-    // Check if album already exists in list
-    const isDuplicate = currentList.some(
-      (item) =>
-        item.artist === albumData.artist && item.album === albumData.album
-    );
-
-    if (isDuplicate) {
-      showNotification(
-        'Already in list',
-        `${albumData.album} is already in ${listName}`
-      );
-      return;
-    }
+    // Note: Duplicate check now handled server-side via PATCH endpoint
+    // No need to fetch entire list - saves bandwidth and time!
 
     // Get artist country from MusicBrainz and resolve to full name
     let artistCountry = '';
@@ -1025,9 +984,9 @@ async function addAlbumToList(info, tab, listId, listName) {
       }
     }
 
-    // Add new album to list
+    // Build album object to add
     // Genres are extracted from the RYM page by the content script
-    currentList.push({
+    const newAlbum = {
       artist: albumData.artist,
       album: albumData.album,
       album_id: releaseGroup.id || '',
@@ -1037,26 +996,27 @@ async function addAlbumToList(info, tab, listId, listName) {
       genre_2: albumData.genre_2 || '',
       comments: '',
       tracks: null,
-      track_pick: null,
+      primary_track: null,
+      secondary_track: null,
       cover_image: coverImageData,
       cover_image_format: coverImageFormat,
-    });
+    };
 
     console.log('Album genres from RYM:', {
       genre_1: albumData.genre_1,
       genre_2: albumData.genre_2,
     });
 
-    // Save updated list (now using PUT with list ID)
-    console.log('Saving list with', currentList.length, 'albums');
+    // Add album via incremental PATCH endpoint (much faster than full list replacement)
+    console.log('Adding album to list via PATCH...');
     const saveResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}`,
+      `${SUSHE_API_BASE}/api/lists/${encodeURIComponent(listId)}/items`,
       {
-        method: 'PUT',
+        method: 'PATCH',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ data: currentList }),
+        body: JSON.stringify({ added: [newAlbum] }),
       },
-      60000 // 60 second timeout for saves (large lists)
+      15000 // 15 second timeout (vs 60s for full list - much faster!)
     );
 
     console.log('Save response status:', saveResponse.status);
@@ -1078,9 +1038,23 @@ async function addAlbumToList(info, tab, listId, listName) {
       try {
         errorData = JSON.parse(errorText);
       } catch {
-        throw new Error(`Failed to save album (HTTP ${saveResponse.status})`);
+        throw new Error(`Failed to add album (HTTP ${saveResponse.status})`);
       }
-      throw new Error(errorData.error || 'Failed to save album');
+      throw new Error(errorData.error || 'Failed to add album');
+    }
+
+    // Parse response to check for duplicates
+    const result = await saveResponse.json();
+    console.log('Add result:', result);
+
+    // Check if album was a duplicate (server-side detection)
+    if (result.duplicates && result.duplicates.length > 0) {
+      console.log('Album already exists in list');
+      showNotification(
+        'Already in list',
+        `${albumData.album} is already in ${listName}`
+      );
+      return;
     }
 
     // Success notification with album cover
