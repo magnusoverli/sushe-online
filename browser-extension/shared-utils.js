@@ -81,32 +81,48 @@
   }
 
   /**
-   * Show browser notification
+   * Show browser notification (auto-clears after 4 seconds)
    * @param {string} title - Notification title
    * @param {string} message - Notification message
    */
   function showNotification(title, message) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon128.png',
-      title: title,
-      message: message,
-    });
+    chrome.notifications.create(
+      {
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: title,
+        message: message,
+      },
+      (notificationId) => {
+        // Auto-clear notification after 4 seconds
+        setTimeout(() => {
+          chrome.notifications.clear(notificationId);
+        }, 4000);
+      }
+    );
   }
 
   /**
-   * Show browser notification with custom image
+   * Show browser notification with custom image (auto-clears after 4 seconds)
    * @param {string} title - Notification title
    * @param {string} message - Notification message
    * @param {string} imageUrl - URL for the notification icon
    */
   function showNotificationWithImage(title, message, imageUrl) {
-    chrome.notifications.create({
-      type: 'basic',
-      iconUrl: imageUrl,
-      title: title,
-      message: message,
-    });
+    chrome.notifications.create(
+      {
+        type: 'basic',
+        iconUrl: imageUrl,
+        title: title,
+        message: message,
+      },
+      (notificationId) => {
+        // Auto-clear notification after 4 seconds
+        setTimeout(() => {
+          chrome.notifications.clear(notificationId);
+        }, 4000);
+      }
+    );
   }
 
   // Export to globalThis for use by other scripts

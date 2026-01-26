@@ -1084,8 +1084,11 @@ async function addAlbumToList(info, tab, listId, listName) {
     }
 
     // Success notification with album cover
-    const albumCoverUrl = coverImageData
-      ? `data:image/${coverImageFormat.toLowerCase()};base64,${coverImageData}`
+    // Use URL-based loading (fast) instead of base64 data URI (slow, caused
+    // multi-second notification delay due to Chrome parsing 500KB+ data URIs).
+    // This aligns with how the main application serves cover images.
+    const albumCoverUrl = releaseGroup.id
+      ? `${SUSHE_API_BASE}/api/albums/${encodeURIComponent(releaseGroup.id)}/cover`
       : 'icons/icon128.png';
 
     showNotificationWithImage(
