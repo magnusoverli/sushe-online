@@ -5000,6 +5000,13 @@ document.addEventListener('DOMContentLoaded', () => {
           targetListData.push(newAlbum);
           await saveList(listName, targetListData);
 
+          // Force refresh from server to get merged album data (e.g., genres from canonical albums table)
+          // Clear the local cache so selectList will refetch
+          const listMetadata = lists[listName];
+          if (listMetadata) {
+            listMetadata._data = null;
+          }
+
           // Refresh if viewing the same list
           if (currentListId === listName) {
             selectList(listName);

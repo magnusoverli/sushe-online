@@ -1492,6 +1492,13 @@ async function finishManualAdd(album) {
     // Save to server
     await window.saveList(window.currentList, currentListData);
 
+    // Force refresh from server to get merged album data (e.g., genres from canonical albums table)
+    // Clear the local cache so selectList will refetch
+    const listMetadata = window.lists[window.currentList];
+    if (listMetadata) {
+      listMetadata._data = null;
+    }
+
     // Refresh the list view
     window.selectList(window.currentList);
 
@@ -2225,6 +2232,13 @@ async function addAlbumToCurrentList(album) {
     }
 
     await window.saveList(window.currentList, currentListData);
+
+    // Force refresh from server to get merged album data (e.g., genres from canonical albums table)
+    // Clear the local cache so selectList will refetch
+    const listMetadata = window.lists[window.currentList];
+    if (listMetadata) {
+      listMetadata._data = null;
+    }
 
     window.selectList(window.currentList);
 
