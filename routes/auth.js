@@ -630,11 +630,17 @@ module.exports = (app, deps) => {
         const { code } = req.body;
 
         // Validate code
-        if (
-          !code ||
-          code.toUpperCase() !== adminCode ||
-          new Date() > adminCodeExpiry
-        ) {
+        const submittedCode = code ? code.toUpperCase().trim() : null;
+        const isExpired = new Date() > adminCodeExpiry;
+
+        logger.info('Admin code validation', {
+          submittedCode,
+          expectedCode: adminCode,
+          isExpired,
+          expiresAt: adminCodeExpiry.toISOString(),
+        });
+
+        if (!code || submittedCode !== adminCode || isExpired) {
           logger.info('Invalid code attempt');
 
           // Increment failed attempts

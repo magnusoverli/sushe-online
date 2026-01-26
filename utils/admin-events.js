@@ -181,10 +181,17 @@ function createAdminEventService(deps = {}) {
     if (!pool) throw new Error('Database pool not configured');
 
     const result = await pool.query(
-      `INSERT INTO admin_events (event_type, title, description, data, priority)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO admin_events (event_type, title, description, data, priority, actions)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [type, title, description, JSON.stringify(data), priority]
+      [
+        type,
+        title,
+        description,
+        JSON.stringify(data),
+        priority,
+        JSON.stringify(actions),
+      ]
     );
 
     const event = result.rows[0];

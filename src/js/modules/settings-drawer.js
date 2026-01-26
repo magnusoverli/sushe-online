@@ -1874,7 +1874,7 @@ export function createSettingsDrawer(deps = {}) {
                 ${events.pending
                   .map(
                     (event) => `
-                  <div class="bg-gray-800/50 rounded-lg p-4" data-event-id="${event.id}">
+                   <div class="bg-gray-800/50 rounded-lg p-4" data-event-id="${event.id}" data-event-data="${_escapeHtml(JSON.stringify(event))}">
                     <div class="flex items-start justify-between mb-2">
                       <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
@@ -2134,7 +2134,17 @@ export function createSettingsDrawer(deps = {}) {
       btn.addEventListener('click', async () => {
         const eventId = btn.dataset.eventId;
         const action = btn.dataset.action;
-        await handleAdminEventAction(eventId, action);
+
+        // Get event data from parent container
+        const eventContainer = btn.closest('[data-event-data]');
+        let eventData = null;
+        try {
+          eventData = JSON.parse(eventContainer?.dataset.eventData || '{}');
+        } catch (e) {
+          console.error('Failed to parse event data:', e);
+        }
+
+        await handleAdminEventAction(eventId, action, eventData);
       });
     });
 
@@ -3122,8 +3132,54 @@ export function createSettingsDrawer(deps = {}) {
   /**
    * Handle admin event action
    */
-  async function handleAdminEventAction(eventId, action) {
+  async function handleAdminEventAction(eventId, action, eventData) {
     try {
+      // Build confirmation message based on action and event data
+      let title = 'Confirm Action';
+      let message = 'Are you sure you want to proceed with this action?';
+      let confirmText = 'Confirm';
+
+      if (
+        action === 'approve' &&
+        eventData?.event_type === 'account_approval'
+      ) {
+        title = 'Approve User Registration';
+        const username = eventData.data?.username || 'this user';
+        const email = eventData.data?.email || '';
+        message = `Are you sure you want to approve the registration for <strong>${username}</strong>?`;
+        if (email) {
+          message += `<br><span class="text-sm text-gray-400">${email}</span>`;
+        }
+        confirmText = 'Approve User';
+      } else if (
+        action === 'reject' &&
+        eventData?.event_type === 'account_approval'
+      ) {
+        title = 'Reject User Registration';
+        const username = eventData.data?.username || 'this user';
+        const email = eventData.data?.email || '';
+        message = `Are you sure you want to reject the registration for <strong>${username}</strong>?`;
+        if (email) {
+          message += `<br><span class="text-sm text-gray-400">${email}</span>`;
+        }
+        message +=
+          '<br><br><span class="text-yellow-400">This user will not be able to access the application.</span>';
+        confirmText = 'Reject User';
+      }
+
+      // Show confirmation modal
+      const confirmed = await showConfirmation(
+        title,
+        message,
+        null,
+        confirmText
+      );
+
+      if (!confirmed) {
+        return; // User cancelled
+      }
+
+      // Execute the action
       const response = await apiCall(
         `/api/admin/events/${eventId}/action/${action}`,
         {
