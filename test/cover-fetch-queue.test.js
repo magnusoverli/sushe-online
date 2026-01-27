@@ -3,7 +3,7 @@
  * Tests cover fetch queue functionality
  */
 
-const { describe, it, mock, beforeEach, afterEach } = require('node:test');
+const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const {
   createCoverFetchQueue,
