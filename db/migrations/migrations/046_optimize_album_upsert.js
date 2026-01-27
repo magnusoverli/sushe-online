@@ -18,6 +18,13 @@ const logger = require('../../../utils/logger');
 async function up(pool) {
   logger.info('Creating partial unique indexes for optimized album upsert...');
 
+  // First, drop the old global index from migration 032
+  // This index conflicts with the new partial indexes and prevents ON CONFLICT from working
+  logger.info('Dropping old idx_albums_unique_artist_album index...');
+  await pool.query(`
+    DROP INDEX IF EXISTS idx_albums_unique_artist_album
+  `);
+
   // Index 1: For albums WITH external album_id (MusicBrainz, Spotify, etc.)
   // This allows fast conflict detection on album_id during upsert
   logger.info('Creating idx_albums_album_id_unique...');
@@ -55,6 +62,14 @@ async function down(pool) {
 
   await pool.query(`
     DROP INDEX IF EXISTS idx_albums_normalized_name_unique
+  `);
+
+  // Restore the old global index from migration 032
+  logger.info('Restoring idx_albums_unique_artist_album index...');
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_albums_unique_artist_album
+    ON albums (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
+    WHERE artist IS NOT NULL AND artist != '' AND album IS NOT NULL AND album != ''
   `);
 
   logger.info(
