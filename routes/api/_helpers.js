@@ -64,8 +64,14 @@ function createHelpers(deps) {
    * @returns {Promise<string>} - The canonical album_id to use
    */
   async function upsertAlbumRecord(album, timestamp, client = null) {
+    // Remove cover_image for backward compatibility (extension may still send it)
+    // Cover images are now fetched asynchronously in the background
+    const albumDataWithoutCover = { ...album };
+    delete albumDataWithoutCover.cover_image;
+    delete albumDataWithoutCover.cover_image_format;
+
     const result = await albumCanonical.upsertCanonical(
-      album,
+      albumDataWithoutCover,
       timestamp,
       client
     );
@@ -75,7 +81,76 @@ function createHelpers(deps) {
       triggerAlbumSummaryFetch(result.albumId, album.artist, album.album);
     }
 
+    // Trigger async cover fetch if needed
+    if (result.needsCoverFetch && album.artist && album.album) {
+      const { getCoverFetchQueue } = require('../../utils/cover-fetch-queue');
+      try {
+        const coverQueue = getCoverFetchQueue();
+        coverQueue.add(result.albumId, album.artist, album.album);
+      } catch (error) {
+        // Queue not initialized yet - log but don't fail
+        logger.warn('Cover fetch queue not available', {
+          albumId: result.albumId,
+          error: error.message,
+        });
+      }
+    }
+
     return result.albumId;
+  }
+
+  /**
+   * Batch upsert multiple albums with canonical deduplication.
+   * Much faster than individual upserts for bulk operations.
+   *
+   * @param {Array<Object>} albums - Array of album data objects
+   * @param {Date} timestamp - Timestamp for created_at/updated_at
+   * @param {Object} client - Database client (for transactions)
+   * @returns {Promise<Map>} - Map of artist|album -> { albumId, wasInserted, wasMerged, ... }
+   */
+  async function batchUpsertAlbumRecords(albums, timestamp, client = null) {
+    if (!albums || albums.length === 0) return new Map();
+
+    // Remove cover_image from all albums (backward compatibility)
+    const albumsWithoutCovers = albums.map((album) => {
+      const cleaned = { ...album };
+      delete cleaned.cover_image;
+      delete cleaned.cover_image_format;
+      return cleaned;
+    });
+
+    const results = await albumCanonical.batchUpsertCanonical(
+      albumsWithoutCovers,
+      timestamp,
+      client
+    );
+
+    // Trigger async operations for all albums
+    const { getCoverFetchQueue } = require('../../utils/cover-fetch-queue');
+    let coverQueue;
+    try {
+      coverQueue = getCoverFetchQueue();
+    } catch (error) {
+      logger.warn('Cover fetch queue not available for batch', {
+        error: error.message,
+      });
+    }
+
+    results.forEach((result, key) => {
+      const [artist, album] = key.split('|');
+
+      // Trigger summary fetch if needed
+      if (result.needsSummaryFetch) {
+        triggerAlbumSummaryFetch(result.albumId, artist, album);
+      }
+
+      // Trigger cover fetch if needed
+      if (result.needsCoverFetch && artist && album && coverQueue) {
+        coverQueue.add(result.albumId, artist, album);
+      }
+    });
+
+    return results;
   }
 
   /**
@@ -123,6 +198,7 @@ function createHelpers(deps) {
     triggerAggregateListRecompute,
     triggerAlbumSummaryFetch,
     upsertAlbumRecord,
+    batchUpsertAlbumRecords,
     invalidateCachesForAlbumUsers,
     aggregateList,
     albumCanonical,

@@ -307,96 +307,19 @@ function createAlbumCanonical(deps = {}) {
 
   /**
    * Upsert an album with canonical deduplication.
-   * Checks by normalized name first, then by album_id. Merges if found, inserts if new.
+   * Uses INSERT...ON CONFLICT for atomic upsert (single query instead of 3).
    *
    * @param {Object} albumData - Album data (album_id, artist, album, release_date, etc.)
    * @param {Date} timestamp - Timestamp for created_at/updated_at
    * @param {Object} client - Database client (optional, for transactions)
-   * @returns {Promise<Object>} - { albumId, wasInserted, wasMerged, needsSummaryFetch }
+   * @returns {Promise<Object>} - { albumId, wasInserted, wasMerged, needsSummaryFetch, needsCoverFetch }
    */
   async function upsertCanonical(albumData, timestamp, client = null) {
     const db = client || pool;
 
-    // Check for existing album by normalized name first
-    let existing = await findByNormalizedName(
-      albumData.artist,
-      albumData.album,
-      db
-    );
-
-    // If not found by name but has an album_id, check by ID
-    // This handles cases where the same album exists with slightly different name spelling
-    if (!existing && albumData.album_id) {
-      existing = await findByAlbumId(albumData.album_id, db);
-      if (existing) {
-        log.debug('Album found by ID (name mismatch)', {
-          incomingArtist: albumData.artist,
-          incomingAlbum: albumData.album,
-          existingArtist: existing.artist,
-          existingAlbum: existing.album,
-          albumId: albumData.album_id,
-        });
-      }
-    }
-
-    if (existing) {
-      // Album exists - smart merge metadata
-      const merged = smartMergeMetadata(existing, albumData);
-
-      // Update if anything changed
-      await db.query(
-        `UPDATE albums SET
-          album_id = COALESCE($1, album_id),
-          artist = COALESCE(NULLIF($2, ''), artist),
-          album = COALESCE(NULLIF($3, ''), album),
-          release_date = COALESCE(NULLIF($4, ''), release_date),
-          country = COALESCE(NULLIF($5, ''), country),
-          genre_1 = COALESCE(NULLIF($6, ''), genre_1),
-          genre_2 = COALESCE(NULLIF($7, ''), genre_2),
-          tracks = COALESCE($8, tracks),
-          cover_image = COALESCE($9, cover_image),
-          cover_image_format = COALESCE(NULLIF($10, ''), cover_image_format),
-          updated_at = $11
-        WHERE LOWER(TRIM(COALESCE(artist, ''))) = $12 
-          AND LOWER(TRIM(COALESCE(album, ''))) = $13`,
-        [
-          merged.album_id,
-          merged.artist,
-          merged.album,
-          merged.release_date,
-          merged.country,
-          merged.genre_1,
-          merged.genre_2,
-          merged.tracks ? JSON.stringify(merged.tracks) : null,
-          merged.cover_image,
-          merged.cover_image_format,
-          timestamp,
-          normalizeForLookup(albumData.artist),
-          normalizeForLookup(albumData.album),
-        ]
-      );
-
-      // Return the album_id to use (might have been updated)
-      const updatedAlbumId = merged.album_id || existing.album_id;
-
-      log.debug('Album canonical merge', {
-        artist: albumData.artist,
-        album: albumData.album,
-        existingId: existing.album_id,
-        newId: albumData.album_id,
-        resultId: updatedAlbumId,
-      });
-
-      return {
-        albumId: updatedAlbumId,
-        wasInserted: false,
-        wasMerged: true,
-        needsSummaryFetch: !existing.summary_fetched_at,
-      };
-    }
-
-    // New album - generate internal ID if no external ID provided
-    const albumId = albumData.album_id || generateInternalAlbumId();
+    // Sanitize artist and album names for consistent storage
+    const sanitizedArtist = sanitizeForStorage(albumData.artist);
+    const sanitizedAlbum = sanitizeForStorage(albumData.album);
 
     // Convert cover image to Buffer if needed
     let coverImageBuffer = null;
@@ -406,47 +329,423 @@ function createAlbumCanonical(deps = {}) {
         : Buffer.from(albumData.cover_image, 'base64');
     }
 
-    // Sanitize artist and album names for consistent storage
-    const sanitizedArtist = sanitizeForStorage(albumData.artist);
-    const sanitizedAlbum = sanitizeForStorage(albumData.album);
+    // Generate album_id if not provided
+    const albumId = albumData.album_id || generateInternalAlbumId();
 
-    await db.query(
-      `INSERT INTO albums (
-        album_id, artist, album, release_date, country,
-        genre_1, genre_2, tracks, cover_image, cover_image_format,
-        created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [
-        albumId,
-        sanitizedArtist,
-        sanitizedAlbum,
-        albumData.release_date || '',
-        albumData.country || '',
-        albumData.genre_1 || albumData.genre || '',
-        albumData.genre_2 || '',
-        Array.isArray(albumData.tracks)
-          ? JSON.stringify(albumData.tracks)
+    // Prepare common values
+    const releaseDate = albumData.release_date || '';
+    const country = albumData.country || '';
+    const genre1 = albumData.genre_1 || albumData.genre || '';
+    const genre2 = albumData.genre_2 || '';
+    const tracks = Array.isArray(albumData.tracks)
+      ? JSON.stringify(albumData.tracks)
+      : null;
+    const coverFormat = albumData.cover_image_format || '';
+
+    // Use different conflict strategies based on whether album_id exists
+    if (albumData.album_id) {
+      // Path 1: Album WITH external ID - conflict on album_id
+      // Uses idx_albums_album_id_unique index
+      const result = await db.query(
+        `INSERT INTO albums (
+          album_id, artist, album, release_date, country,
+          genre_1, genre_2, tracks, cover_image, cover_image_format,
+          created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (album_id) 
+        WHERE album_id IS NOT NULL AND album_id != ''
+        DO UPDATE SET
+          -- Smart merge: prefer non-empty incoming values over existing
+          artist = CASE 
+            WHEN EXCLUDED.artist != '' THEN EXCLUDED.artist 
+            ELSE albums.artist 
+          END,
+          album = CASE 
+            WHEN EXCLUDED.album != '' THEN EXCLUDED.album 
+            ELSE albums.album 
+          END,
+          release_date = CASE 
+            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
+            ELSE albums.release_date 
+          END,
+          country = CASE 
+            WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
+            ELSE albums.country 
+          END,
+          genre_1 = CASE 
+            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
+            ELSE albums.genre_1 
+          END,
+          genre_2 = CASE 
+            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
+            ELSE albums.genre_2 
+          END,
+          tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
+          -- Cover image: prefer larger file (better quality)
+          cover_image = CASE 
+            WHEN EXCLUDED.cover_image IS NOT NULL AND 
+                 (albums.cover_image IS NULL OR 
+                  LENGTH(EXCLUDED.cover_image) > LENGTH(albums.cover_image))
+            THEN EXCLUDED.cover_image
+            ELSE albums.cover_image
+          END,
+          cover_image_format = CASE 
+            WHEN EXCLUDED.cover_image IS NOT NULL THEN EXCLUDED.cover_image_format
+            ELSE albums.cover_image_format
+          END,
+          updated_at = EXCLUDED.updated_at
+        RETURNING 
+          album_id,
+          (xmax = 0) AS was_inserted,
+          cover_image IS NULL AS needs_cover_fetch,
+          summary_fetched_at IS NULL AS needs_summary_fetch`,
+        [
+          albumId,
+          sanitizedArtist,
+          sanitizedAlbum,
+          releaseDate,
+          country,
+          genre1,
+          genre2,
+          tracks,
+          coverImageBuffer,
+          coverFormat,
+          timestamp,
+          timestamp,
+        ]
+      );
+
+      const row = result.rows[0];
+      log.debug('Album upsert (with album_id)', {
+        artist: albumData.artist,
+        album: albumData.album,
+        albumId: row.album_id,
+        wasInserted: row.was_inserted,
+      });
+
+      return {
+        albumId: row.album_id,
+        wasInserted: row.was_inserted,
+        wasMerged: !row.was_inserted,
+        needsSummaryFetch: row.needs_summary_fetch,
+        needsCoverFetch: row.needs_cover_fetch,
+      };
+    } else {
+      // Path 2: Album WITHOUT external ID - conflict on normalized name
+      // Uses idx_albums_normalized_name_unique index
+      const normalizedArtist = normalizeForLookup(sanitizedArtist);
+      const normalizedAlbum = normalizeForLookup(sanitizedAlbum);
+
+      const result = await db.query(
+        `INSERT INTO albums (
+          album_id, artist, album, release_date, country,
+          genre_1, genre_2, tracks, cover_image, cover_image_format,
+          created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        ON CONFLICT (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
+        WHERE album_id IS NULL OR album_id = ''
+        DO UPDATE SET
+          -- Prefer external album_id over internal UUID
+          album_id = CASE
+            WHEN albums.album_id LIKE 'internal-%' AND EXCLUDED.album_id NOT LIKE 'internal-%'
+            THEN EXCLUDED.album_id
+            ELSE albums.album_id
+          END,
+          release_date = CASE 
+            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
+            ELSE albums.release_date 
+          END,
+          country = CASE 
+            WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
+            ELSE albums.country 
+          END,
+          genre_1 = CASE 
+            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
+            ELSE albums.genre_1 
+          END,
+          genre_2 = CASE 
+            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
+            ELSE albums.genre_2 
+          END,
+          tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
+          cover_image = CASE 
+            WHEN EXCLUDED.cover_image IS NOT NULL AND 
+                 (albums.cover_image IS NULL OR 
+                  LENGTH(EXCLUDED.cover_image) > LENGTH(albums.cover_image))
+            THEN EXCLUDED.cover_image
+            ELSE albums.cover_image
+          END,
+          cover_image_format = CASE 
+            WHEN EXCLUDED.cover_image IS NOT NULL THEN EXCLUDED.cover_image_format
+            ELSE albums.cover_image_format
+          END,
+          updated_at = EXCLUDED.updated_at
+        RETURNING 
+          album_id,
+          (xmax = 0) AS was_inserted,
+          cover_image IS NULL AS needs_cover_fetch,
+          summary_fetched_at IS NULL AS needs_summary_fetch`,
+        [
+          albumId,
+          sanitizedArtist,
+          sanitizedAlbum,
+          releaseDate,
+          country,
+          genre1,
+          genre2,
+          tracks,
+          coverImageBuffer,
+          coverFormat,
+          timestamp,
+          timestamp,
+        ]
+      );
+
+      const row = result.rows[0];
+      log.debug('Album upsert (without album_id)', {
+        artist: albumData.artist,
+        album: albumData.album,
+        albumId: row.album_id,
+        wasInserted: row.was_inserted,
+        normalizedKey: `${normalizedArtist}|${normalizedAlbum}`,
+      });
+
+      return {
+        albumId: row.album_id,
+        wasInserted: row.was_inserted,
+        wasMerged: !row.was_inserted,
+        needsSummaryFetch: row.needs_summary_fetch,
+        needsCoverFetch: row.needs_cover_fetch,
+      };
+    }
+  }
+
+  /**
+   * Batch upsert multiple albums at once using UNNEST
+   * Significantly faster than individual upserts for bulk operations
+   *
+   * @param {Array<Object>} albums - Array of album data objects
+   * @param {Date} timestamp - Timestamp for created_at/updated_at
+   * @param {Object} client - Database client (for transactions)
+   * @returns {Promise<Map>} - Map of artist|album -> result object
+   */
+  async function batchUpsertCanonical(albums, timestamp, client = null) {
+    if (!albums || albums.length === 0) return new Map();
+
+    // For single album, use regular upsert
+    if (albums.length === 1) {
+      const result = await upsertCanonical(albums[0], timestamp, client);
+      const key = `${albums[0].artist}|${albums[0].album}`;
+      return new Map([[key, result]]);
+    }
+
+    const db = client || pool;
+    const results = new Map();
+
+    // Separate albums with/without album_id (different conflict strategies)
+    const withId = [];
+    const withoutId = [];
+
+    for (const album of albums) {
+      const sanitizedArtist = sanitizeForStorage(album.artist);
+      const sanitizedAlbum = sanitizeForStorage(album.album);
+
+      const albumData = {
+        original: album,
+        album_id: album.album_id || generateInternalAlbumId(),
+        artist: sanitizedArtist,
+        album: sanitizedAlbum,
+        release_date: album.release_date || '',
+        country: album.country || '',
+        genre_1: album.genre_1 || album.genre || '',
+        genre_2: album.genre_2 || '',
+        tracks: Array.isArray(album.tracks)
+          ? JSON.stringify(album.tracks)
           : null,
-        coverImageBuffer,
-        albumData.cover_image_format || '',
-        timestamp,
-        timestamp,
-      ]
-    );
+        key: `${album.artist}|${album.album}`,
+      };
 
-    log.debug('Album canonical insert', {
-      artist: albumData.artist,
-      album: albumData.album,
-      albumId: albumId,
-      hasExternalId: !!albumData.album_id,
-    });
+      if (album.album_id) {
+        withId.push(albumData);
+      } else {
+        withoutId.push(albumData);
+      }
+    }
 
-    return {
-      albumId,
-      wasInserted: true,
-      wasMerged: false,
-      needsSummaryFetch: true,
-    };
+    // Batch 1: Albums WITH album_id
+    if (withId.length > 0) {
+      const albumIds = withId.map((a) => a.album_id);
+      const artists = withId.map((a) => a.artist);
+      const albumNames = withId.map((a) => a.album);
+      const releaseDates = withId.map((a) => a.release_date);
+      const countries = withId.map((a) => a.country);
+      const genres1 = withId.map((a) => a.genre_1);
+      const genres2 = withId.map((a) => a.genre_2);
+      const tracksList = withId.map((a) => a.tracks);
+
+      const result = await db.query(
+        `INSERT INTO albums (
+          album_id, artist, album, release_date, country, genre_1, genre_2, 
+          tracks, created_at, updated_at
+        )
+        SELECT * FROM UNNEST(
+          $1::text[], $2::text[], $3::text[], $4::text[], 
+          $5::text[], $6::text[], $7::text[], $8::jsonb[],
+          $9::timestamptz, $10::timestamptz
+        ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
+        ON CONFLICT (album_id) 
+        WHERE album_id IS NOT NULL AND album_id != ''
+        DO UPDATE SET
+          artist = CASE 
+            WHEN EXCLUDED.artist != '' THEN EXCLUDED.artist 
+            ELSE albums.artist 
+          END,
+          album = CASE 
+            WHEN EXCLUDED.album != '' THEN EXCLUDED.album 
+            ELSE albums.album 
+          END,
+          release_date = CASE 
+            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
+            ELSE albums.release_date 
+          END,
+          country = CASE 
+            WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
+            ELSE albums.country 
+          END,
+          genre_1 = CASE 
+            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
+            ELSE albums.genre_1 
+          END,
+          genre_2 = CASE 
+            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
+            ELSE albums.genre_2 
+          END,
+          tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
+          updated_at = EXCLUDED.updated_at
+        RETURNING 
+          album_id, artist, album,
+          (xmax = 0) AS was_inserted,
+          cover_image IS NULL AS needs_cover_fetch,
+          summary_fetched_at IS NULL AS needs_summary_fetch`,
+        [
+          albumIds,
+          artists,
+          albumNames,
+          releaseDates,
+          countries,
+          genres1,
+          genres2,
+          tracksList,
+          timestamp,
+          timestamp,
+        ]
+      );
+
+      // Map results by artist|album key
+      result.rows.forEach((row) => {
+        const key = `${row.artist}|${row.album}`;
+        results.set(key, {
+          albumId: row.album_id,
+          wasInserted: row.was_inserted,
+          wasMerged: !row.was_inserted,
+          needsSummaryFetch: row.needs_summary_fetch,
+          needsCoverFetch: row.needs_cover_fetch,
+        });
+      });
+
+      log.debug('Batch upsert (with album_id)', {
+        count: withId.length,
+        inserted: result.rows.filter((r) => r.was_inserted).length,
+        updated: result.rows.filter((r) => !r.was_inserted).length,
+      });
+    }
+
+    // Batch 2: Albums WITHOUT album_id
+    if (withoutId.length > 0) {
+      const albumIds = withoutId.map((a) => a.album_id);
+      const artists = withoutId.map((a) => a.artist);
+      const albumNames = withoutId.map((a) => a.album);
+      const releaseDates = withoutId.map((a) => a.release_date);
+      const countries = withoutId.map((a) => a.country);
+      const genres1 = withoutId.map((a) => a.genre_1);
+      const genres2 = withoutId.map((a) => a.genre_2);
+      const tracksList = withoutId.map((a) => a.tracks);
+
+      const result = await db.query(
+        `INSERT INTO albums (
+          album_id, artist, album, release_date, country, genre_1, genre_2, 
+          tracks, created_at, updated_at
+        )
+        SELECT * FROM UNNEST(
+          $1::text[], $2::text[], $3::text[], $4::text[], 
+          $5::text[], $6::text[], $7::text[], $8::jsonb[],
+          $9::timestamptz, $10::timestamptz
+        ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
+        ON CONFLICT (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
+        WHERE album_id IS NULL OR album_id = ''
+        DO UPDATE SET
+          album_id = CASE
+            WHEN albums.album_id LIKE 'internal-%' AND EXCLUDED.album_id NOT LIKE 'internal-%'
+            THEN EXCLUDED.album_id
+            ELSE albums.album_id
+          END,
+          release_date = CASE 
+            WHEN EXCLUDED.release_date != '' THEN EXCLUDED.release_date 
+            ELSE albums.release_date 
+          END,
+          country = CASE 
+            WHEN EXCLUDED.country != '' THEN EXCLUDED.country 
+            ELSE albums.country 
+          END,
+          genre_1 = CASE 
+            WHEN EXCLUDED.genre_1 != '' THEN EXCLUDED.genre_1 
+            ELSE albums.genre_1 
+          END,
+          genre_2 = CASE 
+            WHEN EXCLUDED.genre_2 != '' THEN EXCLUDED.genre_2 
+            ELSE albums.genre_2 
+          END,
+          tracks = COALESCE(EXCLUDED.tracks, albums.tracks),
+          updated_at = EXCLUDED.updated_at
+        RETURNING 
+          album_id, artist, album,
+          (xmax = 0) AS was_inserted,
+          cover_image IS NULL AS needs_cover_fetch,
+          summary_fetched_at IS NULL AS needs_summary_fetch`,
+        [
+          albumIds,
+          artists,
+          albumNames,
+          releaseDates,
+          countries,
+          genres1,
+          genres2,
+          tracksList,
+          timestamp,
+          timestamp,
+        ]
+      );
+
+      // Map results by artist|album key
+      result.rows.forEach((row) => {
+        const key = `${row.artist}|${row.album}`;
+        results.set(key, {
+          albumId: row.album_id,
+          wasInserted: row.was_inserted,
+          wasMerged: !row.was_inserted,
+          needsSummaryFetch: row.needs_summary_fetch,
+          needsCoverFetch: row.needs_cover_fetch,
+        });
+      });
+
+      log.debug('Batch upsert (without album_id)', {
+        count: withoutId.length,
+        inserted: result.rows.filter((r) => r.was_inserted).length,
+        updated: result.rows.filter((r) => !r.was_inserted).length,
+      });
+    }
+
+    return results;
   }
 
   return {
@@ -454,6 +753,7 @@ function createAlbumCanonical(deps = {}) {
     findByAlbumId,
     smartMergeMetadata,
     upsertCanonical,
+    batchUpsertCanonical,
     normalizeForLookup,
     generateInternalAlbumId,
     isBetterCoverImage,

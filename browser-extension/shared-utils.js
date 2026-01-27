@@ -81,48 +81,46 @@
   }
 
   /**
-   * Show browser notification (auto-clears after 4 seconds)
+   * Show browser notification (auto-dismisses via Chrome's default behavior)
    * @param {string} title - Notification title
    * @param {string} message - Notification message
    */
   function showNotification(title, message) {
-    chrome.notifications.create(
-      {
-        type: 'basic',
-        iconUrl: 'icons/icon128.png',
-        title: title,
-        message: message,
-      },
-      (notificationId) => {
-        // Auto-clear notification after 4 seconds
-        setTimeout(() => {
-          chrome.notifications.clear(notificationId);
-        }, 4000);
-      }
-    );
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: title,
+      message: message,
+      requireInteraction: false,
+      silent: true,
+    });
+    // Let Chrome handle auto-dismiss naturally (progress bar will match timing)
   }
 
   /**
-   * Show browser notification with custom image (auto-clears after 4 seconds)
+   * Show browser notification with custom image (auto-dismisses via Chrome's default behavior)
    * @param {string} title - Notification title
    * @param {string} message - Notification message
    * @param {string} imageUrl - URL for the notification icon
+   * @param {string} contextMessage - Optional gray subtitle text (appears below message)
    */
-  function showNotificationWithImage(title, message, imageUrl) {
-    chrome.notifications.create(
-      {
-        type: 'basic',
-        iconUrl: imageUrl,
-        title: title,
-        message: message,
-      },
-      (notificationId) => {
-        // Auto-clear notification after 4 seconds
-        setTimeout(() => {
-          chrome.notifications.clear(notificationId);
-        }, 4000);
-      }
-    );
+  function showNotificationWithImage(title, message, imageUrl, contextMessage) {
+    const options = {
+      type: 'basic',
+      iconUrl: imageUrl,
+      title: title,
+      message: message,
+      requireInteraction: false,
+      silent: true,
+    };
+
+    // Add contextMessage if provided (appears as gray text below main message)
+    if (contextMessage) {
+      options.contextMessage = contextMessage;
+    }
+
+    chrome.notifications.create(options);
+    // Let Chrome handle auto-dismiss naturally (progress bar will match timing)
   }
 
   // Export to globalThis for use by other scripts

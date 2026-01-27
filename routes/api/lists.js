@@ -32,7 +32,11 @@ module.exports = (app, deps) => {
     getPointsForPosition,
     crypto,
     validateYear,
-    helpers: { triggerAggregateListRecompute, upsertAlbumRecord },
+    helpers: {
+      triggerAggregateListRecompute,
+      upsertAlbumRecord,
+      batchUpsertAlbumRecords,
+    },
   } = deps;
 
   /**
@@ -1132,7 +1136,7 @@ module.exports = (app, deps) => {
       // Process additions (with position)
       const addedItems = [];
       const duplicateAlbums = [];
-      if (added && Array.isArray(added)) {
+      if (added && Array.isArray(added) && added.length > 0) {
         // Get current max position to auto-append new items at the end
         const maxPosResult = await client.query(
           'SELECT COALESCE(MAX(position), 0) as max_pos FROM list_items WHERE list_id = $1',
@@ -1140,9 +1144,14 @@ module.exports = (app, deps) => {
         );
         let nextPosition = maxPosResult.rows[0].max_pos + 1;
 
-        for (const item of added) {
-          if (!item) continue;
+        // Filter out empty items
+        const validItems = added.filter((item) => item);
 
+        if (validItems.length === 0) {
+          // Skip processing if no valid items
+        } else if (validItems.length === 1) {
+          // Single item: use original individual logic for backward compatibility
+          const item = validItems[0];
           const albumId = await upsertAlbumRecord(item, timestamp, client);
 
           const existing = await client.query(
@@ -1152,7 +1161,6 @@ module.exports = (app, deps) => {
 
           if (existing.rows.length === 0) {
             const itemId = crypto.randomBytes(12).toString('hex');
-            // Use provided position or auto-increment to append at end
             const position =
               item.position !== undefined && item.position !== null
                 ? item.position
@@ -1177,11 +1185,116 @@ module.exports = (app, deps) => {
             addedItems.push({ album_id: albumId, _id: itemId });
             changeCount++;
           } else {
-            // Track duplicate album
             duplicateAlbums.push({
               album_id: albumId,
               artist: item.artist || '',
               album: item.album || '',
+            });
+          }
+        } else {
+          // Multiple items: use batch operations for better performance
+          // Step 1: Batch upsert all albums
+          const upsertResults = await batchUpsertAlbumRecords(
+            validItems,
+            timestamp,
+            client
+          );
+
+          // Step 2: Build array of album IDs for duplicate check
+          const albumIds = Array.from(upsertResults.values()).map(
+            (r) => r.albumId
+          );
+
+          // Step 3: Batch check for duplicates using ANY
+          const duplicateCheck = await client.query(
+            `SELECT album_id, _id FROM list_items 
+             WHERE list_id = $1 AND album_id = ANY($2::text[])`,
+            [list._id, albumIds]
+          );
+
+          const duplicateSet = new Set(
+            duplicateCheck.rows.map((r) => r.album_id)
+          );
+
+          // Step 4: Prepare batch insert for non-duplicate items
+          const itemsToInsert = [];
+          validItems.forEach((item) => {
+            const key = `${item.artist}|${item.album}`;
+            const upsertResult = upsertResults.get(key);
+
+            if (!upsertResult) {
+              logger.warn('Album not found in upsert results', {
+                artist: item.artist,
+                album: item.album,
+              });
+              return;
+            }
+
+            if (duplicateSet.has(upsertResult.albumId)) {
+              duplicateAlbums.push({
+                album_id: upsertResult.albumId,
+                artist: item.artist || '',
+                album: item.album || '',
+              });
+            } else {
+              const itemId = crypto.randomBytes(12).toString('hex');
+              const position =
+                item.position !== undefined && item.position !== null
+                  ? item.position
+                  : nextPosition++;
+
+              itemsToInsert.push({
+                _id: itemId,
+                album_id: upsertResult.albumId,
+                position,
+                comments: item.comments || null,
+                primary_track: item.primary_track || null,
+                secondary_track: item.secondary_track || null,
+              });
+
+              addedItems.push({
+                album_id: upsertResult.albumId,
+                _id: itemId,
+              });
+            }
+          });
+
+          // Step 5: Batch insert all list items if any
+          if (itemsToInsert.length > 0) {
+            const itemIds = itemsToInsert.map((i) => i._id);
+            const albumIdsToInsert = itemsToInsert.map((i) => i.album_id);
+            const positions = itemsToInsert.map((i) => i.position);
+            const comments = itemsToInsert.map((i) => i.comments);
+            const primaryTracks = itemsToInsert.map((i) => i.primary_track);
+            const secondaryTracks = itemsToInsert.map((i) => i.secondary_track);
+
+            await client.query(
+              `INSERT INTO list_items (
+                _id, list_id, album_id, position, comments, primary_track, secondary_track, 
+                created_at, updated_at
+              )
+              SELECT * FROM UNNEST(
+                $1::text[], $2::text, $3::text[], $4::int[], $5::text[], 
+                $6::text[], $7::text[], $8::timestamptz, $9::timestamptz
+              ) AS t(_id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at)`,
+              [
+                itemIds,
+                list._id,
+                albumIdsToInsert,
+                positions,
+                comments,
+                primaryTracks,
+                secondaryTracks,
+                timestamp,
+                timestamp,
+              ]
+            );
+
+            changeCount += itemsToInsert.length;
+
+            logger.debug('Batch insert list items', {
+              listId: list._id,
+              count: itemsToInsert.length,
             });
           }
         }

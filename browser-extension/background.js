@@ -703,7 +703,11 @@ async function showErrorMenu(message) {
       );
     }
   } catch (error) {
-    console.error('Error showing error menu:', error);
+    console.error('Error adding album:', error);
+    showNotification(
+      '❌   Error   ❌',
+      error.message || 'Failed to add album to list'
+    );
   }
 }
 
@@ -797,22 +801,11 @@ async function addAlbumToList(info, tab, listId, listName) {
   }
 
   try {
-    // Show immediate feedback to user while we process
-    // Parse the URL to get a rough album name for the notification
-    const urlForParsing = info.linkUrl || info.pageUrl || '';
-    const urlMatch = urlForParsing.match(/\/release\/[^/]+\/([^/]+)\/([^/]+)/);
-    if (urlMatch) {
-      const roughArtist = decodeURIComponent(urlMatch[1].replace(/[-_]/g, ' '));
-      const roughAlbum = decodeURIComponent(urlMatch[2].replace(/[-_]/g, ' '));
-      const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
-      showNotificationWithImage(
-        'Adding album...',
-        `Processing ${roughAlbum} by ${roughArtist}...`,
-        rymCoverUrl
-      );
-    } else {
-      showNotification('Adding album...', 'Processing album data...');
-    }
+    // Capture the RYM cover URL to use in the final notification
+    const rymCoverUrl = info.srcUrl || 'icons/icon128.png';
+
+    // No intermediate "Adding..." notification - the process is fast enough (~200-400ms)
+    // that we can just show the final result (success or duplicate)
 
     // Send message to content script to extract album data
     console.log('Sending message to content script...');
@@ -901,52 +894,8 @@ async function addAlbumToList(info, tab, listId, listName) {
     const releaseGroup = releaseGroups[0];
     console.log('Found release group:', releaseGroup);
 
-    // Get cover art from Deezer
-    console.log('Fetching cover art from Deezer...');
-
-    const deezerQuery = `${albumData.artist} ${albumData.album}`
-      .replace(/[^\w\s]/g, ' ')
-      .trim();
-    const deezerResponse = await fetchWithTimeout(
-      `${SUSHE_API_BASE}/api/proxy/deezer?q=${encodeURIComponent(deezerQuery)}`,
-      { headers: getAuthHeaders() },
-      20000 // 20 second timeout for Deezer
-    );
-
-    let coverImageData = '';
-    let coverImageFormat = '';
-
-    if (deezerResponse.ok) {
-      const deezerData = await deezerResponse.json();
-      if (deezerData.data && deezerData.data.length > 0) {
-        const coverUrl =
-          deezerData.data[0].cover_xl || deezerData.data[0].cover_big;
-        if (coverUrl) {
-          console.log('Found cover art, processing through proxy...');
-          try {
-            const proxyUrl = `${SUSHE_API_BASE}/api/proxy/image?url=${encodeURIComponent(coverUrl)}`;
-            const imageResponse = await fetchWithTimeout(
-              proxyUrl,
-              { headers: getAuthHeaders() },
-              30000 // 30 second timeout for image proxy
-            );
-
-            if (imageResponse.ok) {
-              const imageData = await imageResponse.json();
-              if (imageData.data && imageData.contentType) {
-                coverImageData = imageData.data;
-                coverImageFormat = imageData.contentType
-                  .split('/')[1]
-                  .toUpperCase();
-                console.log('Cover image processed successfully');
-              }
-            }
-          } catch (error) {
-            console.warn('Error processing cover image:', error);
-          }
-        }
-      }
-    }
+    // Note: Cover images are now fetched asynchronously on the backend
+    // This saves ~650KB per PATCH request and makes the extension feel instant
 
     // Note: Duplicate check now handled server-side via PATCH endpoint
     // No need to fetch entire list - saves bandwidth and time!
@@ -986,6 +935,7 @@ async function addAlbumToList(info, tab, listId, listName) {
 
     // Build album object to add
     // Genres are extracted from the RYM page by the content script
+    // Cover images are now fetched asynchronously on the backend
     const newAlbum = {
       artist: albumData.artist,
       album: albumData.album,
@@ -998,8 +948,6 @@ async function addAlbumToList(info, tab, listId, listName) {
       tracks: null,
       primary_track: null,
       secondary_track: null,
-      cover_image: coverImageData,
-      cover_image_format: coverImageFormat,
     };
 
     console.log('Album genres from RYM:', {
@@ -1050,29 +998,27 @@ async function addAlbumToList(info, tab, listId, listName) {
     // Check if album was a duplicate (server-side detection)
     if (result.duplicates && result.duplicates.length > 0) {
       console.log('Album already exists in list');
-      showNotification(
-        'Already in list',
-        `${albumData.album} is already in ${listName}`
+      showNotificationWithImage(
+        `⚠️   Already in ${listName}   ⚠️`,
+        `${albumData.album} by ${albumData.artist}`,
+        rymCoverUrl
       );
       return;
     }
 
-    // Success notification with album cover
-    // Use URL-based loading (fast) instead of base64 data URI (slow, caused
-    // multi-second notification delay due to Chrome parsing 500KB+ data URIs).
-    // This aligns with how the main application serves cover images.
-    const albumCoverUrl = releaseGroup.id
-      ? `${SUSHE_API_BASE}/api/albums/${encodeURIComponent(releaseGroup.id)}/cover`
-      : 'icons/icon128.png';
-
+    // Success notification with the same RYM cover image
+    // This provides visual consistency and shows the album cover immediately
     showNotificationWithImage(
-      'Successfully added',
-      `${albumData.album} added to ${listName}`,
-      albumCoverUrl
+      `✅   Added to ${listName}   ✅`,
+      `${albumData.album} by ${albumData.artist}`,
+      rymCoverUrl
     );
   } catch (error) {
     console.error('Error adding album:', error);
-    showNotification('Error', error.message || 'Failed to add album to list');
+    showNotification(
+      '❌ Error',
+      error.message || 'Failed to add album to list'
+    );
   }
 }
 

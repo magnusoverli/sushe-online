@@ -28,27 +28,53 @@ module.exports = (app, deps) => {
     try {
       const { album_id } = req.params;
 
-      // Query albums table for cover image
+      // Query albums table for cover image (also get artist/album for async fetch)
       const result = await pool.query(
-        'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
+        'SELECT cover_image, cover_image_format, artist, album FROM albums WHERE album_id = $1',
         [album_id]
       );
 
-      if (!result.rows.length || !result.rows[0].cover_image) {
+      if (!result.rows.length) {
+        return res.status(404).json({ error: 'Album not found' });
+      }
+
+      const album = result.rows[0];
+
+      // If cover is missing, trigger async fetch (don't wait - return 404 for now)
+      if (!album.cover_image && album.artist && album.album) {
+        const { getCoverFetchQueue } = require('../../utils/cover-fetch-queue');
+        try {
+          const coverQueue = getCoverFetchQueue();
+          coverQueue.add(album_id, album.artist, album.album);
+          logger.debug('Triggered lazy cover fetch', {
+            albumId: album_id,
+            artist: album.artist,
+            album: album.album,
+          });
+        } catch (error) {
+          logger.warn('Cover fetch queue not available for lazy fetch', {
+            albumId: album_id,
+            error: error.message,
+          });
+        }
+        return res
+          .status(404)
+          .json({ error: 'Image not found (fetching in background)' });
+      }
+
+      if (!album.cover_image) {
         return res.status(404).json({ error: 'Image not found' });
       }
 
-      const { cover_image, cover_image_format } = result.rows[0];
-
       // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
       // This ensures compatibility with database backups from before migration 024
-      const imageBuffer = Buffer.isBuffer(cover_image)
-        ? cover_image
-        : Buffer.from(cover_image, 'base64');
+      const imageBuffer = Buffer.isBuffer(album.cover_image)
+        ? album.cover_image
+        : Buffer.from(album.cover_image, 'base64');
 
       // Determine content type
-      const contentType = cover_image_format
-        ? `image/${cover_image_format.toLowerCase()}`
+      const contentType = album.cover_image_format
+        ? `image/${album.cover_image_format.toLowerCase()}`
         : 'image/jpeg';
 
       // Set aggressive caching headers (images rarely change)

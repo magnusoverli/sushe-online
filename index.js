@@ -879,6 +879,10 @@ ready
       // This prevents downtime if a migration has issues
     }
 
+    // Initialize cover fetch queue for async album cover fetching
+    const { initializeCoverFetchQueue } = require('./utils/cover-fetch-queue');
+    initializeCoverFetchQueue(pool);
+
     // Set up WebSocket server with session middleware
     setupWebSocket(httpServer, sessionMiddleware);
 
