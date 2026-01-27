@@ -835,3 +835,202 @@ describe('upsertCanonical', () => {
     assert.ok(insertCalled, 'INSERT should have been called');
   });
 });
+
+describe('Country code auto-resolution', () => {
+  it('should resolve 2-letter country codes to full names', async () => {
+    let insertedData = null;
+
+    const mockPool = {
+      query: mock.fn((sql, values) => {
+        if (sql.includes('SELECT')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes('INSERT')) {
+          insertedData = values;
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'test-mb-id',
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+              },
+            ],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+
+    const canonical = createAlbumCanonical({
+      pool: mockPool,
+      logger: { debug: () => {}, warn: () => {} },
+    });
+
+    const result = await canonical.upsertCanonical(
+      {
+        album_id: 'test-mb-id',
+        artist: 'Test Artist',
+        album: 'Test Album',
+        country: 'NO', // 2-letter code
+      },
+      new Date()
+    );
+
+    assert.strictEqual(result.albumId, 'test-mb-id');
+    assert.ok(insertedData);
+    // Country should be at index 4 (after album_id, artist, album, release_date)
+    assert.strictEqual(
+      insertedData[4],
+      'Norway',
+      'Country code should be resolved to full name'
+    );
+  });
+
+  it('should preserve full country names (backward compatibility)', async () => {
+    let insertedData = null;
+
+    const mockPool = {
+      query: mock.fn((sql, values) => {
+        if (sql.includes('SELECT')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes('INSERT')) {
+          insertedData = values;
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'test-mb-id',
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+              },
+            ],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+
+    const canonical = createAlbumCanonical({
+      pool: mockPool,
+      logger: { debug: () => {}, warn: () => {} },
+    });
+
+    const result = await canonical.upsertCanonical(
+      {
+        album_id: 'test-mb-id',
+        artist: 'Test Artist',
+        album: 'Test Album',
+        country: 'United States', // Full name
+      },
+      new Date()
+    );
+
+    assert.strictEqual(result.albumId, 'test-mb-id');
+    assert.ok(insertedData);
+    assert.strictEqual(
+      insertedData[4],
+      'United States',
+      'Full country name should be preserved'
+    );
+  });
+
+  it('should handle unknown country codes gracefully', async () => {
+    let insertedData = null;
+
+    const mockPool = {
+      query: mock.fn((sql, values) => {
+        if (sql.includes('SELECT')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes('INSERT')) {
+          insertedData = values;
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'test-mb-id',
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+              },
+            ],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+
+    const canonical = createAlbumCanonical({
+      pool: mockPool,
+      logger: { debug: () => {}, warn: () => {} },
+    });
+
+    const result = await canonical.upsertCanonical(
+      {
+        album_id: 'test-mb-id',
+        artist: 'Test Artist',
+        album: 'Test Album',
+        country: 'ZZ', // Invalid code
+      },
+      new Date()
+    );
+
+    assert.strictEqual(result.albumId, 'test-mb-id');
+    assert.ok(insertedData);
+    assert.strictEqual(
+      insertedData[4],
+      'ZZ',
+      'Unknown country code should be preserved as fallback'
+    );
+  });
+
+  it('should handle special MusicBrainz country codes', async () => {
+    let insertedData = null;
+
+    const mockPool = {
+      query: mock.fn((sql, values) => {
+        if (sql.includes('SELECT')) {
+          return Promise.resolve({ rows: [] });
+        }
+        if (sql.includes('INSERT')) {
+          insertedData = values;
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'test-mb-id',
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+              },
+            ],
+          });
+        }
+        return Promise.resolve({ rows: [] });
+      }),
+    };
+
+    const canonical = createAlbumCanonical({
+      pool: mockPool,
+      logger: { debug: () => {}, warn: () => {} },
+    });
+
+    const result = await canonical.upsertCanonical(
+      {
+        album_id: 'test-mb-id',
+        artist: 'Test Artist',
+        album: 'Test Album',
+        country: 'XW', // Special code for Worldwide
+      },
+      new Date()
+    );
+
+    assert.strictEqual(result.albumId, 'test-mb-id');
+    assert.ok(insertedData);
+    assert.strictEqual(
+      insertedData[4],
+      'Worldwide',
+      'Special MusicBrainz code should be resolved'
+    );
+  });
+});

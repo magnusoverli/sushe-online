@@ -900,7 +900,7 @@ async function addAlbumToList(info, tab, listId, listName) {
     // Note: Duplicate check now handled server-side via PATCH endpoint
     // No need to fetch entire list - saves bandwidth and time!
 
-    // Get artist country from MusicBrainz and resolve to full name
+    // Get artist country from MusicBrainz (send 2-letter code to server for resolution)
     let artistCountry = '';
     if (
       releaseGroup['artist-credit'] &&
@@ -917,15 +917,10 @@ async function addAlbumToList(info, tab, listId, listName) {
 
         if (artistResponse.ok) {
           const artistData = await artistResponse.json();
-          if (artistData.country && artistData.country.length === 2) {
-            // Resolve 2-letter country code to full name
-            artistCountry = await resolveCountryCode(artistData.country);
-            console.log(
-              `Resolved country code ${artistData.country} to: ${artistCountry}`
-            );
-          } else if (artistData.country) {
-            // Already full name
-            artistCountry = artistData.country;
+          // Send 2-letter country code directly - server will resolve to full name
+          artistCountry = artistData.country || '';
+          if (artistCountry) {
+            console.log(`Got artist country code: ${artistCountry}`);
           }
         }
       } catch (error) {
@@ -1019,58 +1014,6 @@ async function addAlbumToList(info, tab, listId, listName) {
       '❌ Error',
       error.message || 'Failed to add album to list'
     );
-  }
-}
-
-// Resolve 2-letter country code to full country name
-async function resolveCountryCode(countryCode) {
-  if (!countryCode || countryCode.length !== 2) {
-    console.debug(`Invalid country code: ${countryCode}`);
-    return '';
-  }
-
-  try {
-    // Use RestCountries API to get country info
-    const response = await fetchWithTimeout(
-      `https://restcountries.com/v3.1/alpha/${countryCode}`,
-      {},
-      10000 // 10 second timeout
-    );
-
-    if (!response.ok) {
-      console.warn(
-        `Country code ${countryCode} not found in RestCountries API`
-      );
-      return '';
-    }
-
-    const data = await response.json();
-    if (!data || !data[0]) {
-      console.warn(`Empty data from RestCountries API for ${countryCode}`);
-      return '';
-    }
-
-    const countryData = data[0];
-
-    // Use the common name (e.g., "United States" instead of "United States of America")
-    let countryName = countryData.name.common;
-
-    // Special cases to match SuShe Online's country list
-    if (countryCode === 'US') {
-      countryName = 'United States';
-    } else if (countryCode === 'GB') {
-      countryName = 'United Kingdom';
-    } else if (countryCode === 'KR') {
-      countryName = 'Korea, South';
-    } else if (countryCode === 'KP') {
-      countryName = 'Korea, North';
-    }
-
-    console.debug(`Resolved ${countryCode} to ${countryName}`);
-    return countryName;
-  } catch (error) {
-    console.error(`Error resolving country code ${countryCode}:`, error);
-    return '';
   }
 }
 

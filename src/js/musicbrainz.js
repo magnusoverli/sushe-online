@@ -1646,17 +1646,14 @@ async function displayArtistResults(artists) {
         : artist.disambiguation;
     }
 
-    // Resolve country code to full name (async but don't block rendering)
+    // Display country code directly (server resolves to full name when saved)
     let countryDisplay = '';
-    resolveCountryCode(artist.country).then((fullCountryName) => {
-      if (fullCountryName) {
-        countryDisplay = ` • ${fullCountryName}`;
-        const countryEl = artistEl.querySelector('.artist-country');
-        if (countryEl) {
-          countryEl.textContent = `${artist.type || 'Artist'}${countryDisplay}`;
-        }
+    if (artist.country) {
+      const formattedCountry = formatCountryCode(artist.country);
+      if (formattedCountry) {
+        countryDisplay = ` • ${formattedCountry}`;
       }
-    });
+    }
 
     // Start with placeholder image
     artistEl.innerHTML = `
@@ -1674,7 +1671,7 @@ async function displayArtistResults(artists) {
           ${displayName.warning ? '<i class="fas fa-exclamation-triangle text-yellow-500 text-xs ml-2" title="Non-Latin script - no Latin version found"></i>' : ''}
         </div>
         ${secondaryText ? `<div class="text-sm text-gray-400 mt-1">${secondaryText}</div>` : ''}
-        <div class="text-sm text-gray-400 mt-1 artist-country">${artist.type || 'Artist'}${artist.country ? ` • ${artist.country}` : ''}</div>
+        <div class="text-sm text-gray-400 mt-1 artist-country">${artist.type || 'Artist'}${countryDisplay}</div>
       </div>
       <div class="shrink-0">
         <i class="fas fa-chevron-right text-gray-500"></i>
@@ -1783,104 +1780,19 @@ async function selectArtist(artist) {
   }
 }
 
-async function resolveCountryCode(countryCode) {
-  if (!countryCode || countryCode.length !== 2) {
-    console.debug(`Invalid country code: ${countryCode}`);
-    return '';
-  }
+// Country code resolution is now handled server-side during album save.
+// For display purposes, we show 2-letter codes directly.
+// Special MusicBrainz codes that we can resolve client-side without API calls.
+function formatCountryCode(countryCode) {
+  if (!countryCode) return '';
 
-  // Handle special MusicBrainz codes not in RestCountries
   const specialCodes = {
     XW: 'Worldwide',
     XE: 'Europe',
     XU: 'Unknown',
   };
 
-  if (specialCodes[countryCode]) {
-    return specialCodes[countryCode];
-  }
-
-  try {
-    // Use RestCountries API to get country info
-    const response = await fetch(
-      `https://restcountries.com/v3.1/alpha/${countryCode}`
-    );
-
-    if (!response.ok) {
-      console.warn(
-        `Country code ${countryCode} not found in RestCountries API`
-      );
-      return '';
-    }
-
-    const data = await response.json();
-    if (!data || !data[0]) {
-      console.warn(`Empty data from RestCountries API for ${countryCode}`);
-      return '';
-    }
-
-    const countryData = data[0];
-
-    // Try different name variations to match against our countries list
-    const namesToTry = [
-      countryData.name.common,
-      countryData.name.official,
-      // Also check alternative names
-      ...(countryData.altSpellings || []),
-    ];
-
-    // Special cases for common variations
-    if (countryCode === 'US') {
-      namesToTry.push('United States');
-    } else if (countryCode === 'GB') {
-      namesToTry.push('United Kingdom');
-    } else if (countryCode === 'KR') {
-      namesToTry.push('Korea, South');
-    } else if (countryCode === 'KP') {
-      namesToTry.push('Korea, North');
-    }
-
-    // Check if availableCountries is loaded
-    if (
-      !window.availableCountries ||
-      !Array.isArray(window.availableCountries)
-    ) {
-      console.warn('availableCountries not loaded yet, returning country code');
-      return countryData.name.common;
-    }
-
-    // Find the first name that matches our countries list
-    for (const name of namesToTry) {
-      if (name && window.availableCountries.includes(name)) {
-        console.debug(`Resolved ${countryCode} to ${name}`);
-        return name;
-      }
-    }
-
-    // If no exact match, try case-insensitive partial matching
-    const commonName = countryData.name.common.toLowerCase();
-    const closeMatch = window.availableCountries.find((country) => {
-      const countryLower = country.toLowerCase();
-      return (
-        countryLower === commonName ||
-        countryLower.includes(commonName) ||
-        commonName.includes(countryLower)
-      );
-    });
-
-    if (closeMatch) {
-      console.debug(`Resolved ${countryCode} to ${closeMatch} (partial match)`);
-      return closeMatch;
-    }
-
-    console.warn(
-      `Country "${countryData.name.common}" (${countryCode}) not found in allowed countries list. Names tried: ${namesToTry.join(', ')}`
-    );
-    return '';
-  } catch (error) {
-    console.error(`Error resolving country code ${countryCode}:`, error);
-    return '';
-  }
+  return specialCodes[countryCode] || countryCode;
 }
 
 // Get combined country names for multiple artists
@@ -1896,7 +1808,7 @@ async function getCombinedArtistCountries(artistCredits) {
       // NORMAL priority: needed for display but not critical
       const artistData = await rateLimitedFetch(endpoint, 'normal');
       if (artistData && artistData.country) {
-        const name = await resolveCountryCode(artistData.country);
+        const name = formatCountryCode(artistData.country);
         if (name && !countries.includes(name)) {
           countries.push(name);
         }
@@ -2072,17 +1984,10 @@ async function addAlbumToList(releaseGroup) {
   console.debug('Adding album for artist:', currentArtist);
   console.debug('Artist country field:', currentArtist.country);
 
-  let resolvedCountry = '';
-  if (currentArtist.country) {
-    if (currentArtist.country.length === 2) {
-      resolvedCountry = await resolveCountryCode(currentArtist.country);
-      console.debug(
-        `Resolved country code ${currentArtist.country} to: ${resolvedCountry}`
-      );
-    } else {
-      resolvedCountry = currentArtist.country;
-      console.debug('Using full country name:', resolvedCountry);
-    }
+  // Send country code directly to server - it will resolve to full name during save
+  const countryCode = currentArtist.country || '';
+  if (countryCode) {
+    console.debug('Sending country code to server:', countryCode);
   } else {
     console.warn('No country field found for artist:', currentArtist.name);
   }
@@ -2092,7 +1997,7 @@ async function addAlbumToList(releaseGroup) {
     album: releaseGroup.title,
     album_id: releaseGroup.id,
     release_date: releaseGroup['first-release-date'] || '',
-    country: resolvedCountry,
+    country: countryCode,
     genre_1: '',
     genre_2: '',
     comments: '',

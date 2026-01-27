@@ -16,6 +16,7 @@
 
 const crypto = require('crypto');
 const logger = require('./logger');
+const { resolveCountryCode } = require('./musicbrainz');
 
 /**
  * Sanitize artist/album names for consistent storage.
@@ -334,7 +335,12 @@ function createAlbumCanonical(deps = {}) {
 
     // Prepare common values
     const releaseDate = albumData.release_date || '';
-    const country = albumData.country || '';
+    // Auto-resolve 2-letter country codes to full names (backward compatible)
+    const countryInput = albumData.country || '';
+    const country =
+      countryInput.length === 2
+        ? resolveCountryCode(countryInput) || countryInput // Resolve code, fallback to code if unmapped
+        : countryInput; // Already full name (backward compat)
     const genre1 = albumData.genre_1 || albumData.genre || '';
     const genre2 = albumData.genre_2 || '';
     const tracks = Array.isArray(albumData.tracks)
