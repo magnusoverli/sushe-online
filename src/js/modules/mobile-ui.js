@@ -1727,7 +1727,11 @@ export function createMobileUI(deps = {}) {
                     ? `<img src="data:image/${album.cover_image_format || 'PNG'};base64,${album.cover_image}" 
                            alt="${album.album}" 
                            class="w-full h-full object-cover">`
-                    : `<i class="fas fa-image text-2xl text-gray-600"></i>`
+                    : album.cover_image_url
+                      ? `<img src="${album.cover_image_url}" 
+                             alt="${album.album}" 
+                             class="w-full h-full object-cover">`
+                      : `<i class="fas fa-image text-2xl text-gray-600"></i>`
                 }
               </div>
               <div class="flex-1">

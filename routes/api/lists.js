@@ -26,7 +26,7 @@ module.exports = (app, deps) => {
     // Note: 'lists' is no longer used - we use findListById() instead
     listsAsync,
     listItemsAsync,
-    albumsAsync,
+    albumsAsync: _albumsAsync, // Unused but kept for API consistency
     cacheConfigs,
     responseCache,
     getPointsForPosition,
@@ -87,94 +87,59 @@ module.exports = (app, deps) => {
 
         if (full === 'true') {
           // FULL MODE: Return all album data (backward compatibility)
-          if (typeof listsAsync.findAllUserListsWithItems === 'function') {
-            const allRows = await listsAsync.findAllUserListsWithItems(
-              req.user._id
-            );
+          if (typeof listsAsync.findAllUserListsWithItems !== 'function') {
+            logger.error('Full list fetch requires optimized DB method', {
+              userId: req.user._id,
+            });
+            return res.status(500).json({ error: 'Error fetching lists' });
+          }
 
-            // Group rows by list _id
-            const listMap = new Map();
-            for (const list of userLists) {
-              listMap.set(list._id, { ...list, items: [] });
+          const allRows = await listsAsync.findAllUserListsWithItems(
+            req.user._id
+          );
+
+          // Group rows by list _id
+          const listMap = new Map();
+          for (const list of userLists) {
+            listMap.set(list._id, { ...list, items: [] });
+          }
+
+          for (const row of allRows) {
+            if (!row.list_id) continue;
+            if (!listMap.has(row.list_id)) {
+              listMap.set(row.list_id, {
+                _id: row.list_id,
+                name: row.list_name,
+                year: row.year,
+                isMain: row.is_main,
+                items: [],
+              });
             }
-
-            for (const row of allRows) {
-              // Find the list by name (from the query result)
-              const list = userLists.find((l) => l.name === row.list_name);
-              if (list && row.position !== null && row.item_id !== null) {
-                if (!listMap.has(list._id)) {
-                  listMap.set(list._id, { ...list, items: [] });
-                }
-                listMap.get(list._id).items.push({
-                  _id: row.item_id,
-                  artist: row.artist || '',
-                  album: row.album || '',
-                  album_id: row.album_id || '',
-                  release_date: row.release_date || '',
-                  country: row.country || '',
-                  genre_1: row.genre_1 || '',
-                  genre_2: row.genre_2 || '',
-                  track_pick: row.primary_track || '',
-                  primary_track: row.primary_track || null,
-                  secondary_track: row.secondary_track || null,
-                  comments: row.comments || '',
-                  tracks: row.tracks || null,
-                  cover_image: row.cover_image || '',
-                  cover_image_format: row.cover_image_format || '',
-                  summary: row.summary || '',
-                  summary_source: row.summary_source || '',
-                });
-              }
+            if (row.position !== null && row.item_id !== null) {
+              listMap.get(row.list_id).items.push({
+                _id: row.item_id,
+                artist: row.artist || '',
+                album: row.album || '',
+                album_id: row.album_id || '',
+                release_date: row.release_date || '',
+                country: row.country || '',
+                genre_1: row.genre_1 || '',
+                genre_2: row.genre_2 || '',
+                track_pick: row.primary_track || '',
+                primary_track: row.primary_track || null,
+                secondary_track: row.secondary_track || null,
+                comments: row.comments || '',
+                tracks: row.tracks || null,
+                cover_image: row.cover_image || '',
+                cover_image_format: row.cover_image_format || '',
+                summary: row.summary || '',
+                summary_source: row.summary_source || '',
+              });
             }
+          }
 
-            for (const [listId, listData] of listMap) {
-              listsObj[listId] = listData.items;
-            }
-          } else {
-            // Fallback to original N+1 pattern
-            for (const list of userLists) {
-              const items = await listItemsAsync.find({ listId: list._id });
-              items.sort((a, b) => a.position - b.position);
-
-              const albumIds = items
-                .map((item) => item.albumId)
-                .filter(Boolean);
-              const albumsData =
-                albumIds.length > 0
-                  ? await albumsAsync.findByAlbumIds(albumIds)
-                  : [];
-              const albumsMap = new Map(
-                albumsData.map((album) => [album.albumId, album])
-              );
-
-              const mapped = [];
-              for (const item of items) {
-                const albumData = item.albumId
-                  ? albumsMap.get(item.albumId)
-                  : null;
-                mapped.push({
-                  _id: item._id,
-                  artist: item.artist || albumData?.artist,
-                  album: item.album || albumData?.album,
-                  album_id: item.albumId,
-                  release_date: item.releaseDate || albumData?.releaseDate,
-                  country: item.country || albumData?.country,
-                  genre_1: item.genre1 || albumData?.genre1,
-                  genre_2: item.genre2 || albumData?.genre2,
-                  track_pick: item.primaryTrack || '',
-                  primary_track: item.primaryTrack || null,
-                  secondary_track: item.secondaryTrack || null,
-                  comments: item.comments,
-                  tracks: item.tracks || albumData?.tracks,
-                  cover_image: item.coverImage || albumData?.coverImage,
-                  cover_image_format:
-                    item.coverImageFormat || albumData?.coverImageFormat,
-                  summary: albumData?.summary || '',
-                  summary_source: albumData?.summarySource || '',
-                });
-              }
-              listsObj[list._id] = mapped;
-            }
+          for (const [listId, listData] of listMap) {
+            listsObj[listId] = listData.items;
           }
         } else {
           // METADATA MODE (default): Return only list metadata for fast loading
@@ -658,14 +623,9 @@ module.exports = (app, deps) => {
                 points: getPointsForPosition(index + 1),
               }
             : (() => {
-                if (item.coverImage) {
-                  return {
-                    cover_image: Buffer.isBuffer(item.coverImage)
-                      ? item.coverImage.toString('base64')
-                      : item.coverImage,
-                    cover_image_format: item.coverImageFormat || 'jpeg',
-                  };
-                } else if (item.albumId) {
+                // Normal mode: Always return URL instead of base64 for better performance
+                // This reduces payload size from ~5MB to ~50KB for 100 albums
+                if (item.albumId) {
                   return {
                     cover_image_url: `/api/albums/${item.albumId}/cover`,
                   };
