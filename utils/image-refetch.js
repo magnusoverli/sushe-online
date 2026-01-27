@@ -226,12 +226,13 @@ async function fetchCoverArt(artist, album) {
 }
 
 /**
- * Create the image refetch service
+ * Create image refetch service
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL pool
  * @param {Object} deps.logger - Logger instance (optional)
  * @returns {Object} - Image refetch service
  */
+// eslint-disable-next-line max-lines-per-function -- Factory function with multiple internal methods
 function createImageRefetchService(deps = {}) {
   const pool = deps.pool;
   const log = deps.logger || logger;
