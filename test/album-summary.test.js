@@ -193,10 +193,24 @@ test('stopBatchFetch should return false when no job running', () => {
 });
 
 test('startBatchFetch should throw if already running', async () => {
+  let pageCalls = 0;
   const mockPool = {
     query: async (query) => {
-      // Return albums for the initial query (now uses JOIN with list_items)
+      if (query.includes('COUNT(DISTINCT a.album_id)')) {
+        return {
+          rows: [{ total: '1' }],
+        };
+      }
+      // Return albums for the paged query (now uses JOIN with list_items)
       if (query.includes('SELECT DISTINCT a.album_id')) {
+        return {
+          rows:
+            pageCalls++ === 0
+              ? [{ album_id: 'test1', artist: 'Test', album: 'Album' }]
+              : [],
+        };
+      }
+      if (query.includes('SELECT album_id, artist, album FROM albums')) {
         return {
           rows: [{ album_id: 'test1', artist: 'Test', album: 'Album' }],
         };

@@ -384,27 +384,76 @@ function createImageRefetchService(deps = {}) {
     try {
       log.info('Starting image refetch job');
 
-      // Get all albums with their current image size
-      const albumsResult = await pool.query(`
-        SELECT album_id, artist, album, 
-               COALESCE(OCTET_LENGTH(cover_image), 0) as image_size_bytes
-        FROM albums
-        ORDER BY album_id
-      `);
+      const pageSize = parseInt(
+        process.env.IMAGE_REFETCH_PAGE_SIZE || String(BATCH_SIZE),
+        10
+      );
+      const skipSizeThresholdBytes = SKIP_SIZE_THRESHOLD_KB * 1024;
 
-      summary.total = albumsResult.rows.length;
-      currentProgress.total = summary.total;
-      log.info(`Found ${summary.total} albums to process`);
+      const totalResult = await pool.query(
+        'SELECT COUNT(*) AS total FROM albums'
+      );
+      const totalAlbums = parseInt(totalResult.rows[0]?.total, 10) || 0;
 
-      // Process in batches
-      for (let i = 0; i < albumsResult.rows.length; i += BATCH_SIZE) {
+      const candidateResult = await pool.query(
+        `SELECT COUNT(*) AS total
+         FROM albums
+         WHERE COALESCE(OCTET_LENGTH(cover_image), 0) < $1`,
+        [skipSizeThresholdBytes]
+      );
+      const candidateAlbums = parseInt(candidateResult.rows[0]?.total, 10) || 0;
+
+      summary.total = totalAlbums;
+      currentProgress.total = totalAlbums;
+
+      const preSkipped = Math.max(totalAlbums - candidateAlbums, 0);
+      summary.skipped = preSkipped;
+      currentProgress.skipped = preSkipped;
+      currentProgress.processed = preSkipped;
+      currentProgress.percentComplete =
+        totalAlbums > 0 ? Math.round((preSkipped / totalAlbums) * 100) : 0;
+
+      log.info(`Found ${candidateAlbums} albums to process`);
+
+      if (candidateAlbums === 0) {
+        summary.completedAt = new Date().toISOString();
+        summary.durationSeconds = Math.round(
+          (new Date(summary.completedAt) - new Date(summary.startedAt)) / 1000
+        );
+        log.info('Image refetch job completed', summary);
+        return summary;
+      }
+
+      let lastAlbumId = null;
+      while (true) {
         if (shouldStop) {
           summary.stoppedEarly = true;
           log.info('Image refetch job stopped by user');
           break;
         }
+        const params = [skipSizeThresholdBytes];
+        let whereClause = `WHERE COALESCE(OCTET_LENGTH(cover_image), 0) < $1`;
+        if (lastAlbumId) {
+          params.push(lastAlbumId);
+          whereClause += ` AND album_id > $${params.length}`;
+        }
+        params.push(pageSize);
+        const limitParam = `$${params.length}`;
 
-        const batch = albumsResult.rows.slice(i, i + BATCH_SIZE);
+        const albumsResult = await pool.query(
+          `SELECT album_id, artist, album,
+                  COALESCE(OCTET_LENGTH(cover_image), 0) as image_size_bytes
+           FROM albums
+           ${whereClause}
+           ORDER BY album_id
+           LIMIT ${limitParam}`,
+          params
+        );
+        const batch = albumsResult.rows;
+        if (batch.length === 0) {
+          break;
+        }
+        lastAlbumId = batch[batch.length - 1].album_id;
 
         for (const album of batch) {
           if (shouldStop) {
@@ -475,7 +524,7 @@ function createImageRefetchService(deps = {}) {
           await sleep(RATE_LIMIT_MS);
         }
 
-        // Log progress every batch
+        // Log progress every page
         const processed = summary.success + summary.failed + summary.skipped;
         log.info('Image refetch progress', {
           processed,

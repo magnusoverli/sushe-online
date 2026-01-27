@@ -167,15 +167,15 @@ async function invalidateCachesForAlbum(pool, responseCache, logger, albumId) {
 /**
  * Process batch job albums in background with controlled concurrency
  * @param {Object} batchJob - Batch job state object
- * @param {Array} albums - Albums to process
+ * @param {Function} fetchNextPage - Function that returns next page of albums
  * @param {Function} fetchAndStoreSummary - Function to fetch and store summary
  * @param {Object} log - Logger instance
  * @param {Object} pool - Database pool (for batch cache invalidation)
  * @param {Object} responseCache - Response cache instance (for batch cache invalidation)
  */
-async function processBatchAlbums(
+async function processBatchAlbumsPaged(
   batchJob,
-  albums,
+  fetchNextPage,
   fetchAndStoreSummary,
   log,
   pool,
@@ -189,76 +189,93 @@ async function processBatchAlbums(
   );
 
   setImmediate(async () => {
-    const queue = [...albums];
     const inFlight = new Map(); // Map to track promises with their album info
     const processedAlbumIds = []; // Track successfully processed album IDs for cache invalidation
+    let queue = [];
+    let isExhausted = false;
 
-    while (queue.length > 0 || inFlight.size > 0) {
-      if (!batchJob.running) {
-        log.info('Batch job cancelled', {
-          processed: batchJob.processed,
-          remaining: queue.length + inFlight.size,
-        });
-        break;
-      }
+    try {
+      while (!isExhausted || queue.length > 0 || inFlight.size > 0) {
+        if (!batchJob.running) {
+          log.info('Batch job cancelled', {
+            processed: batchJob.processed,
+            remaining: queue.length + inFlight.size,
+          });
+          break;
+        }
 
-      // Start new requests up to concurrency limit
-      while (queue.length > 0 && inFlight.size < CONCURRENCY) {
-        const album = queue.shift();
+        if (queue.length === 0 && !isExhausted) {
+          const nextPage = await fetchNextPage();
+          if (!nextPage || nextPage.length === 0) {
+            isExhausted = true;
+          } else {
+            queue = nextPage;
+          }
+        }
 
-        const promise = (async () => {
-          try {
-            const result = await fetchAndStoreSummary(album.album_id, {
-              skipCacheInvalidation: true, // Will invalidate in batch at the end
-              skipBroadcast: true, // Prevent WebSocket flood during batch
-            });
-            batchJob.processed++;
+        // Start new requests up to concurrency limit
+        while (queue.length > 0 && inFlight.size < CONCURRENCY) {
+          const album = queue.shift();
 
-            if (result.success) {
-              if (result.hasSummary) {
-                batchJob.found++;
-                processedAlbumIds.push(album.album_id); // Track for cache invalidation
+          const promise = (async () => {
+            try {
+              const result = await fetchAndStoreSummary(album.album_id, {
+                skipCacheInvalidation: true, // Will invalidate in batch at the end
+                skipBroadcast: true, // Prevent WebSocket flood during batch
+              });
+              batchJob.processed++;
+
+              if (result.success) {
+                if (result.hasSummary) {
+                  batchJob.found++;
+                  processedAlbumIds.push(album.album_id); // Track for cache invalidation
+                } else {
+                  batchJob.notFound++;
+                }
               } else {
-                batchJob.notFound++;
+                batchJob.errors++;
               }
-            } else {
-              batchJob.errors++;
-            }
 
-            if (batchJob.processed % 10 === 0) {
-              log.info('Batch summary fetch progress', {
-                processed: batchJob.processed,
-                total: batchJob.total,
-                found: batchJob.found,
-                inFlight: inFlight.size,
-                progress: `${Math.round((batchJob.processed / batchJob.total) * 100)}%`,
+              if (batchJob.processed % 10 === 0) {
+                log.info('Batch summary fetch progress', {
+                  processed: batchJob.processed,
+                  total: batchJob.total,
+                  found: batchJob.found,
+                  inFlight: inFlight.size,
+                  progress: `${Math.round((batchJob.processed / batchJob.total) * 100)}%`,
+                });
+              }
+            } catch (err) {
+              batchJob.processed++;
+              batchJob.errors++;
+              log.error('Batch fetch error for album', {
+                albumId: album.album_id,
+                artist: album.artist,
+                album: album.album,
+                error: err.message,
+                stack: err.stack,
               });
             }
-          } catch (err) {
-            batchJob.processed++;
-            batchJob.errors++;
-            log.error('Batch fetch error for album', {
-              albumId: album.album_id,
-              artist: album.artist,
-              album: album.album,
-              error: err.message,
-              stack: err.stack,
-            });
-          }
-        })();
+          })();
 
-        inFlight.set(promise, album);
+          inFlight.set(promise, album);
 
-        // Clean up completed promise
-        promise.finally(() => {
-          inFlight.delete(promise);
-        });
+          // Clean up completed promise
+          promise.finally(() => {
+            inFlight.delete(promise);
+          });
+        }
+
+        // Wait for at least one request to complete before starting more
+        if (inFlight.size > 0) {
+          await Promise.race(inFlight.keys());
+        }
       }
-
-      // Wait for at least one request to complete before starting more
-      if (inFlight.size > 0) {
-        await Promise.race(inFlight.keys());
-      }
+    } catch (err) {
+      log.error('Batch summary fetch failed', {
+        error: err.message,
+        stack: err.stack,
+      });
     }
 
     batchJob.running = false;
@@ -587,26 +604,29 @@ function createAlbumSummaryService(deps = {}) {
       : includeRetries
         ? 'a.summary IS NULL'
         : 'a.summary_fetched_at IS NULL';
-    const query = `SELECT DISTINCT a.album_id, a.artist, a.album FROM albums a
-      INNER JOIN list_items li ON li.album_id = a.album_id WHERE ${whereClause} ORDER BY a.album_id`;
+    const pageSize = parseInt(process.env.ALBUM_SUMMARY_PAGE_SIZE || '500', 10);
 
-    const albumsResult = await pool.query(query);
-    const albums = albumsResult.rows;
+    const countResult = await pool.query(
+      `SELECT COUNT(DISTINCT a.album_id) AS total
+       FROM albums a INNER JOIN list_items li ON li.album_id = a.album_id
+       WHERE ${whereClause}`
+    );
+    const total = parseInt(countResult.rows[0]?.total, 10) || 0;
 
-    if (albums.length === 0) {
+    if (total === 0) {
       log.info('No albums need summary fetching');
       return;
     }
 
     log.info('Starting batch summary fetch', {
-      albumCount: albums.length,
+      albumCount: total,
       includeRetries,
       regenerateAll: !!regenerateAll,
       concurrency: parseInt(process.env.ALBUM_SUMMARY_CONCURRENCY || '3', 10),
     });
     batchJob = {
       running: true,
-      total: albums.length,
+      total: total,
       processed: 0,
       found: 0,
       notFound: 0,
@@ -614,9 +634,36 @@ function createAlbumSummaryService(deps = {}) {
       startedAt: new Date().toISOString(),
     };
 
-    processBatchAlbums(
+    let lastAlbumId = null;
+    const fetchNextPage = async () => {
+      const params = [];
+      let pageWhere = `WHERE ${whereClause}`;
+
+      if (lastAlbumId) {
+        params.push(lastAlbumId);
+        pageWhere += ` AND a.album_id > $${params.length}`;
+      }
+
+      params.push(pageSize);
+      const limitParam = `$${params.length}`;
+
+      const query = `SELECT DISTINCT a.album_id, a.artist, a.album
+        FROM albums a
+        INNER JOIN list_items li ON li.album_id = a.album_id
+        ${pageWhere}
+        ORDER BY a.album_id
+        LIMIT ${limitParam}`;
+
+      const result = await pool.query(query, params);
+      if (result.rows.length > 0) {
+        lastAlbumId = result.rows[result.rows.length - 1].album_id;
+      }
+      return result.rows;
+    };
+
+    processBatchAlbumsPaged(
       batchJob,
-      albums,
+      fetchNextPage,
       fetchAndStoreSummary,
       log,
       pool,
