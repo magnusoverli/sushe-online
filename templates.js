@@ -1216,7 +1216,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     #addAlbumFAB {
       box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4),
                   0 2px 4px 0 rgba(0, 0, 0, 0.2);
-      bottom: calc(1.5rem + env(safe-area-inset-bottom));
+      bottom: 1.5rem;
     }
     
     #addAlbumFAB:active {
@@ -1226,7 +1226,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     /* Ensure FAB positioning is consistent across all mobile devices */
     @media (max-width: 1023px) {
       #addAlbumFAB {
-        bottom: calc(1.5rem + env(safe-area-inset-bottom, 1rem));
+        bottom: 1.5rem;
       }
     }
     
