@@ -1703,7 +1703,7 @@ export function createMobileUI(deps = {}) {
     // Create the edit modal
     const editModal = document.createElement('div');
     editModal.className =
-      'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl';
+      'fixed inset-0 z-50 bg-gray-900 flex flex-col overflow-hidden pt-[env(safe-area-inset-top)] lg:max-w-2xl lg:max-h-[85vh] lg:mx-auto lg:mt-20 lg:mb-8 lg:rounded-lg lg:shadow-2xl';
     editModal.innerHTML = `
       <!-- Header -->
       <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">

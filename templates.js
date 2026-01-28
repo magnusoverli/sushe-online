@@ -678,7 +678,7 @@ const renameListModalComponent = () => `
 
 // Component: Add Album Modal - Consolidated Version
 const addAlbumModalComponent = () => `
-  <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center lg:p-4">
+  <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center pt-[env(safe-area-inset-top)] lg:p-4">
     <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col">
       <!-- Unified Header -->
       <div class="flex items-center justify-between p-4 lg:p-6 border-b border-gray-800">
