@@ -1432,25 +1432,32 @@ body.now-playing-bar-visible #addAlbumFAB {
   background: #0f172a; /* slightly darker than panel */
 }
 
-/* Mobile: horizontal nav at top */
+/* Mobile: floating glassmorphism nav bar */
 @media (max-width: 1023px) {
   .settings-drawer-nav {
-    width: 100%;
-    box-shadow: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0.75rem;
+    width: calc(100% - 1.5rem);
+    margin: 0.75rem;
+    padding: 0.375rem;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.05);
     display: flex;
-    flex-direction: row; /* Explicitly set to row */
+    flex-direction: row;
     align-items: center;
-    gap: 0.5rem; /* Add gap between nav items */
+    gap: 0.25rem;
     overflow-x: auto;
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none; /* Firefox */
     -ms-overflow-style: none; /* IE/Edge */
-    flex-shrink: 0; /* Prevent nav from shrinking */
-    min-width: 0; /* Allow proper flex behavior */
-    max-width: 100%; /* Prevent overflow */
+    flex-shrink: 0;
+    min-width: 0;
+    max-width: 100%;
   }
 
   .settings-drawer-nav::-webkit-scrollbar {
@@ -1485,25 +1492,35 @@ body.now-playing-bar-visible #addAlbumFAB {
   border-left-color: var(--accent-color);
 }
 
-/* Mobile nav items */
+/* Mobile nav items - pill style */
 @media (max-width: 1023px) {
   .settings-nav-item {
-    width: auto; /* Override desktop width: 100% */
-    padding: 0.75rem 1rem;
-    min-height: 44px; /* Touch target size */
+    width: auto;
+    padding: 0.625rem 1rem;
+    min-height: 44px;
     white-space: nowrap;
+    border: none;
     border-left: none;
-    border-bottom: 3px solid transparent;
+    border-bottom: none;
+    border-radius: 10px;
+    background: transparent;
     text-align: center;
     flex-shrink: 0;
-    display: flex; /* Use flex for horizontal layout within flex container */
+    display: flex;
     align-items: center;
     justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .settings-nav-item.active {
     border-left: none;
-    border-bottom-color: var(--accent-color);
+    border-bottom: none;
+    background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+
+  .settings-nav-item:active {
+    transform: scale(0.96);
   }
 }
 
@@ -1539,20 +1556,29 @@ body.now-playing-bar-visible #addAlbumFAB {
 }
 
 .settings-group-title {
-  font-size: 1.125rem;
+  font-size: 0.8125rem;
   font-weight: 600;
-  color: white;
-  margin: 0 0 1rem 0;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 0.75rem 0.25rem;
 }
 
 .settings-group-content {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 0.5rem;
-  padding: 1.5rem;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 /* Settings rows */
@@ -1561,6 +1587,23 @@ body.now-playing-bar-visible #addAlbumFAB {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1.5rem;
+}
+
+/* Mobile touch feedback for settings rows */
+@media (max-width: 1023px) {
+  .settings-row {
+    padding: 0.75rem;
+    margin: -0.25rem;
+    border-radius: 12px;
+    transition:
+      transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+      background-color 0.2s ease;
+  }
+
+  .settings-row:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
 
 @media (max-width: 640px) {
@@ -1593,13 +1636,16 @@ body.now-playing-bar-visible #addAlbumFAB {
   }
 
   .settings-drawer-nav {
-    padding: 0.5rem;
-    gap: 0.375rem; /* Reduce gap for narrow screens */
+    margin: 0.5rem;
+    width: calc(100% - 1rem);
+    padding: 0.25rem;
+    gap: 0.25rem;
   }
 
   .settings-nav-item {
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
+    border-radius: 8px;
   }
 
   /* Text wrapping */
@@ -1632,14 +1678,17 @@ body.now-playing-bar-visible #addAlbumFAB {
 
   /* Navigation */
   .settings-drawer-nav {
-    padding: 0.375rem;
-    gap: 0.25rem; /* Further reduce gap for very narrow screens */
+    margin: 0.375rem;
+    width: calc(100% - 0.75rem);
+    padding: 0.25rem;
+    gap: 0.125rem;
   }
 
   .settings-nav-item {
-    padding: 0.5rem 0.75rem;
+    padding: 0.5rem 0.625rem;
     font-size: 0.8125rem;
-    min-height: 48px; /* Larger touch target for narrow screens */
+    min-height: 44px;
+    border-radius: 8px;
   }
 
   /* Content */
@@ -1658,13 +1707,14 @@ body.now-playing-bar-visible #addAlbumFAB {
   }
 
   .settings-group-title {
-    font-size: 1rem;
-    margin-bottom: 0.75rem;
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
   }
 
   .settings-group-content {
-    padding: 0.75rem;
+    padding: 0.875rem;
     gap: 1rem;
+    border-radius: 12px;
   }
 
   .settings-row {
@@ -1716,11 +1766,17 @@ body.now-playing-bar-visible #addAlbumFAB {
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .settings-button:hover {
   background: #4b5563; /* bg-gray-600 */
+}
+
+.settings-button:active {
+  transform: scale(0.95);
 }
 
 .settings-button-danger {
@@ -1745,6 +1801,81 @@ body.now-playing-bar-visible #addAlbumFAB {
   background: rgba(34, 197, 94, 0.2); /* green-500 with opacity */
   color: #4ade80; /* green-400 */
   border: 1px solid rgba(34, 197, 94, 0.3);
+  position: relative;
+}
+
+.settings-badge.connected::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  animation: badge-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes badge-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0);
+  }
+}
+
+/* Bottom Action Bar (mobile only) */
+.settings-action-bar {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem;
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    to top,
+    rgba(17, 24, 39, 1) 0%,
+    rgba(17, 24, 39, 0.98) 60%,
+    rgba(17, 24, 39, 0) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: none;
+  flex-shrink: 0;
+}
+
+.settings-action-bar:not(:empty) {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.settings-action-bar .settings-button {
+  flex: 1;
+  justify-content: center;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-size: 0.9375rem;
+}
+
+@media (min-width: 1024px) {
+  .settings-action-bar {
+    display: none !important;
+  }
+}
+
+/* Category transition animation */
+#settingsCategoryContent {
+  animation: settings-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes settings-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Color input */

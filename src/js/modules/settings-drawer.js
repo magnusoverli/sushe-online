@@ -195,6 +195,12 @@ export function createSettingsDrawer(deps = {}) {
     const contentEl = document.getElementById('settingsCategoryContent');
     if (!contentEl) return;
 
+    // Re-trigger fade-in animation by removing and adding animation
+    contentEl.style.animation = 'none';
+    // Force reflow to ensure animation restart
+    void contentEl.offsetHeight;
+    contentEl.style.animation = '';
+
     const data = categoryData[categoryId] || {};
 
     switch (categoryId) {
@@ -229,6 +235,114 @@ export function createSettingsDrawer(deps = {}) {
       const savedPosition = categoryScrollPositions[categoryId];
       mainContent.scrollTop =
         typeof savedPosition === 'number' ? savedPosition : 0;
+    }
+
+    // Update bottom action bar for mobile
+    updateActionBar(categoryId);
+  }
+
+  /**
+   * Update the bottom action bar with context-appropriate actions
+   * @param {string} categoryId - Current category ID
+   */
+  function updateActionBar(categoryId) {
+    const actionBar = document.getElementById('settingsActionBar');
+    if (!actionBar || window.innerWidth >= 1024) return;
+
+    const actions = {
+      account:
+        '<button class="settings-button" id="actionBarLogout"><i class="fas fa-sign-out-alt mr-2"></i>Log Out</button>',
+      integrations:
+        '<button class="settings-button" id="actionBarSync"><i class="fas fa-sync-alt mr-2"></i>Sync Services</button>',
+      preferences:
+        '<button class="settings-button" id="actionBarSyncPrefs"><i class="fas fa-sync-alt mr-2"></i>Sync Now</button>',
+      stats:
+        '<button class="settings-button" id="actionBarRefresh"><i class="fas fa-redo mr-2"></i>Refresh</button>',
+      visual: '', // No primary action needed
+      admin: '', // Admin has inline actions
+    };
+
+    actionBar.innerHTML = actions[categoryId] || '';
+
+    // Attach handlers for action bar buttons
+    attachActionBarHandlers(categoryId);
+  }
+
+  /**
+   * Attach event handlers for action bar buttons
+   * @param {string} _categoryId - Current category ID (unused, reserved for future use)
+   */
+  function attachActionBarHandlers(_categoryId) {
+    const logoutBtn = document.getElementById('actionBarLogout');
+    const syncBtn = document.getElementById('actionBarSync');
+    const syncPrefsBtn = document.getElementById('actionBarSyncPrefs');
+    const refreshBtn = document.getElementById('actionBarRefresh');
+
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        window.location.href = '/logout';
+      });
+    }
+
+    if (syncBtn) {
+      syncBtn.addEventListener('click', async () => {
+        syncBtn.disabled = true;
+        syncBtn.innerHTML =
+          '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
+        try {
+          await apiCall('/api/preferences/sync', { method: 'POST' });
+          showToast('Services synced successfully');
+          // Reload integrations data
+          delete categoryData.integrations;
+          loadCategoryData('integrations');
+        } catch (_error) {
+          showToast('Failed to sync services', 'error');
+        } finally {
+          syncBtn.disabled = false;
+          syncBtn.innerHTML =
+            '<i class="fas fa-sync-alt mr-2"></i>Sync Services';
+        }
+      });
+    }
+
+    if (syncPrefsBtn) {
+      syncPrefsBtn.addEventListener('click', async () => {
+        syncPrefsBtn.disabled = true;
+        syncPrefsBtn.innerHTML =
+          '<i class="fas fa-spinner fa-spin mr-2"></i>Syncing...';
+        try {
+          await apiCall('/api/preferences/sync', { method: 'POST' });
+          showToast('Preferences synced successfully');
+          // Reload preferences data
+          delete categoryData.preferences;
+          loadCategoryData('preferences');
+        } catch (_error) {
+          showToast('Failed to sync preferences', 'error');
+        } finally {
+          syncPrefsBtn.disabled = false;
+          syncPrefsBtn.innerHTML =
+            '<i class="fas fa-sync-alt mr-2"></i>Sync Now';
+        }
+      });
+    }
+
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', async () => {
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML =
+          '<i class="fas fa-spinner fa-spin mr-2"></i>Refreshing...';
+        try {
+          // Reload stats data
+          delete categoryData.stats;
+          await loadCategoryData('stats');
+          showToast('Stats refreshed');
+        } catch (_error) {
+          showToast('Failed to refresh stats', 'error');
+        } finally {
+          refreshBtn.disabled = false;
+          refreshBtn.innerHTML = '<i class="fas fa-redo mr-2"></i>Refresh';
+        }
+      });
     }
   }
 

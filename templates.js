@@ -1017,6 +1017,9 @@ const settingsDrawerComponent = (user) => `
             <!-- Content loaded dynamically -->
           </div>
         </div>
+        
+        <!-- Bottom Action Bar (mobile only) -->
+        <div id="settingsActionBar" class="settings-action-bar lg:hidden"></div>
       </div>
     </div>
   </div>
