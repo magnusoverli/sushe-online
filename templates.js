@@ -1250,15 +1250,17 @@ const spotifyTemplate = (user, csrfToken = '') => `
     @media (max-width: 1023px) {
       /* Push entire app below status bar/notch on iOS - top only */
       body {
-        padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
-        padding-top: env(safe-area-inset-top); /* iOS 11.2+ */
+        padding-top: 0;
         /* Bottom safe area handled by individual elements (now-playing bar, FAB) */
       }
       
-      /* Full viewport height, accounting only for top safe area */
+      /* Full viewport height with safe-area padding */
       .app-layout {
-        height: calc(100vh - env(safe-area-inset-top, 0px));
-        height: calc(100dvh - env(safe-area-inset-top, 0px));
+        height: 100vh;
+        height: 100dvh;
+        min-height: 100dvh;
+        padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
+        padding-top: env(safe-area-inset-top, 0px); /* iOS 11.2+ */
       }
     }
     
@@ -1496,7 +1498,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       <!-- Drawer -->
       <div id="mobileMenuDrawer" class="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-900 border-r border-gray-800 overflow-hidden flex flex-col transition-transform" style="transition-duration: var(--sidebar-transition-duration); transform: translateX(-100%);">
         <!-- Header -->
-        <div class="p-4 border-b border-gray-800">
+        <div class="p-4 border-b border-gray-800" style="padding-top: calc(1rem + env(safe-area-inset-top, 0px))">
           <div class="flex justify-between items-center">
             <h2 class="text-xl font-bold text-white">Lists</h2>
             <button onclick="toggleMobileMenu()" class="p-2 -m-2 text-gray-400 hover:text-white">
