@@ -26,6 +26,7 @@ export function createSettingsDrawer(deps = {}) {
 
   let currentCategory = 'account';
   const categoryData = {};
+  const categoryScrollPositions = {};
   let isOpen = false;
   let telegramModalState = null;
 
@@ -94,6 +95,11 @@ export function createSettingsDrawer(deps = {}) {
   async function switchCategory(categoryId) {
     if (categoryId === currentCategory) return;
 
+    const mainContent = document.querySelector('.settings-drawer-main');
+    if (mainContent) {
+      categoryScrollPositions[currentCategory] = mainContent.scrollTop;
+    }
+
     // Update active nav item
     document.querySelectorAll('.settings-nav-item').forEach((btn) => {
       btn.classList.remove('active');
@@ -101,6 +107,15 @@ export function createSettingsDrawer(deps = {}) {
         btn.classList.add('active');
       }
     });
+
+    const activeNavItem = document.querySelector('.settings-nav-item.active');
+    if (activeNavItem && window.innerWidth <= 1023) {
+      activeNavItem.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
 
     currentCategory = categoryId;
 
@@ -207,6 +222,13 @@ export function createSettingsDrawer(deps = {}) {
         contentEl.innerHTML = renderAdminCategory(data);
         attachAdminHandlers();
         break;
+    }
+
+    const mainContent = document.querySelector('.settings-drawer-main');
+    if (mainContent) {
+      const savedPosition = categoryScrollPositions[categoryId];
+      mainContent.scrollTop =
+        typeof savedPosition === 'number' ? savedPosition : 0;
     }
   }
 
@@ -5815,6 +5837,23 @@ export function createSettingsDrawer(deps = {}) {
       let touchStartX = null;
       let touchStartY = null;
       let isSwiping = false;
+      let allowSwipe = false;
+      const header = panel.querySelector('.settings-drawer-header');
+      const swipeEdgeSize = 44;
+      const swipeIntentThreshold = 30;
+      const swipeIntentRatio = 2;
+
+      const updateSwipeFeedback = (progress) => {
+        if (!closeBtn) return;
+        closeBtn.style.opacity = String(1 - progress * 0.4);
+        closeBtn.style.transform = `scale(${1 - progress * 0.1})`;
+      };
+
+      const resetSwipeFeedback = () => {
+        if (!closeBtn) return;
+        closeBtn.style.opacity = '';
+        closeBtn.style.transform = '';
+      };
 
       panel.addEventListener(
         'touchstart',
@@ -5824,6 +5863,9 @@ export function createSettingsDrawer(deps = {}) {
           touchStartX = touch.clientX;
           touchStartY = touch.clientY;
           isSwiping = false;
+          allowSwipe =
+            (header && header.contains(e.target)) ||
+            touchStartX >= window.innerWidth - swipeEdgeSize;
         },
         { passive: true }
       );
@@ -5832,6 +5874,7 @@ export function createSettingsDrawer(deps = {}) {
         'touchmove',
         (e) => {
           if (touchStartX === null) return;
+          if (!allowSwipe) return;
 
           const touch = e.touches[0];
           const deltaX = touch.clientX - touchStartX;
@@ -5840,8 +5883,8 @@ export function createSettingsDrawer(deps = {}) {
           // Only start swiping if horizontal movement is greater than vertical
           if (
             !isSwiping &&
-            Math.abs(deltaX) > Math.abs(deltaY) &&
-            Math.abs(deltaX) > 10
+            Math.abs(deltaX) > Math.abs(deltaY) * swipeIntentRatio &&
+            Math.abs(deltaX) > swipeIntentThreshold
           ) {
             isSwiping = true;
           }
@@ -5850,12 +5893,13 @@ export function createSettingsDrawer(deps = {}) {
           if (isSwiping && deltaX > 0) {
             const translateX = Math.min(deltaX, panel.offsetWidth);
             panel.style.transform = `translateX(${translateX}px)`;
+            const progress = translateX / panel.offsetWidth;
             // Add opacity to backdrop based on swipe progress
             const backdrop = drawer.querySelector('.settings-drawer-backdrop');
             if (backdrop) {
-              const progress = translateX / panel.offsetWidth;
               backdrop.style.opacity = String(1 - progress * 0.5);
             }
+            updateSwipeFeedback(progress);
           }
         },
         { passive: true }
@@ -5864,10 +5908,11 @@ export function createSettingsDrawer(deps = {}) {
       panel.addEventListener(
         'touchend',
         (e) => {
-          if (!isSwiping || touchStartX === null) {
+          if (!isSwiping || touchStartX === null || !allowSwipe) {
             touchStartX = null;
             touchStartY = null;
             isSwiping = false;
+            allowSwipe = false;
             return;
           }
 
@@ -5885,11 +5930,13 @@ export function createSettingsDrawer(deps = {}) {
             if (backdrop) {
               backdrop.style.opacity = '';
             }
+            resetSwipeFeedback();
           }
 
           touchStartX = null;
           touchStartY = null;
           isSwiping = false;
+          allowSwipe = false;
         },
         { passive: true }
       );
@@ -5902,6 +5949,7 @@ export function createSettingsDrawer(deps = {}) {
           if (backdrop) {
             backdrop.style.opacity = '';
           }
+          resetSwipeFeedback();
         }
       });
     }
