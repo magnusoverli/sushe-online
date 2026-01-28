@@ -84,10 +84,10 @@ const headerComponent = (user, activeSection = 'home') => `
       
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-1">
-        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings" id="newSettingsButton">
+        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings" id="newSettingsButton">
           <i class="fas fa-sliders-h text-lg"></i>
         </button>
-        <a href="/logout" class="flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">
+        <a href="/logout" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
