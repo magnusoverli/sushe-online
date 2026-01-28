@@ -79,6 +79,7 @@ const headerComponent = (user, activeSection = 'home') => `
         <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="lg:hidden p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings" id="newSettingsButton">
           <i class="fas fa-sliders-h text-lg"></i>
         </button>
+        <a href="/" class="hidden lg:inline text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
       </div>
       
       <!-- Current list name (mobile only) -->
