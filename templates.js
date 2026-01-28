@@ -1258,7 +1258,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       .app-layout {
         height: 100vh;
         height: 100dvh;
-        min-height: 100dvh;
+        min-height: 100vh;
         padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
         padding-top: env(safe-area-inset-top, 0px); /* iOS 11.2+ */
       }
