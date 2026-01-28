@@ -5819,7 +5819,7 @@ export function createSettingsDrawer(deps = {}) {
       panel.addEventListener(
         'touchstart',
         (e) => {
-          // Only allow swipe from the left edge or if already dragging
+          // Track the initial touch position for swipe-to-close
           const touch = e.touches[0];
           touchStartX = touch.clientX;
           touchStartY = touch.clientY;
@@ -5846,14 +5846,14 @@ export function createSettingsDrawer(deps = {}) {
             isSwiping = true;
           }
 
-          // If swiping left (closing gesture), translate the panel
-          if (isSwiping && deltaX < 0) {
-            const translateX = Math.max(deltaX, -panel.offsetWidth);
+          // If swiping right (closing gesture), translate the panel
+          if (isSwiping && deltaX > 0) {
+            const translateX = Math.min(deltaX, panel.offsetWidth);
             panel.style.transform = `translateX(${translateX}px)`;
             // Add opacity to backdrop based on swipe progress
             const backdrop = drawer.querySelector('.settings-drawer-backdrop');
             if (backdrop) {
-              const progress = Math.abs(translateX) / panel.offsetWidth;
+              const progress = translateX / panel.offsetWidth;
               backdrop.style.opacity = String(1 - progress * 0.5);
             }
           }
@@ -5875,8 +5875,8 @@ export function createSettingsDrawer(deps = {}) {
           const deltaX = touch.clientX - touchStartX;
           const swipeThreshold = panel.offsetWidth * 0.3; // 30% of panel width
 
-          // If swiped left enough, close the drawer
-          if (deltaX < -swipeThreshold) {
+          // If swiped right enough, close the drawer
+          if (deltaX > swipeThreshold) {
             closeDrawer();
           } else {
             // Otherwise, snap back to open position
