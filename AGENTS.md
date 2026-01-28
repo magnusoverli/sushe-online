@@ -602,12 +602,12 @@ describe('example', () => {
 
 ## Git Commit Guidelines
 
-- **Commit messages**: Write meaningful commits that clearly describe the change with personality and wit
-- **Structure**: Lead with a catchy summary, then use bullet points for detailed changes
-- **Tone**: Professional but playful - make code reviews more enjoyable to read
+- **Commit messages**: Write clear, meaningful commits that describe what changed and why
+- **Structure**: Start with a straightforward summary, then use bullet points for detailed changes
+- **Tone**: Informal and conversational, but clear and to the point
 - **Examples**:
-  - "Tame the linting beast: from 500+ errors to just 13 survivors"
-  - "Banish the authentication gremlins that were eating user sessions"
-  - "Add database migrations (because schema changes shouldn't be a surprise party)"
-  - "Fix memory leak that was hungrier than a teenager after school"
-  - "Refactor API endpoints to be less chatty than a parrot on caffeine"
+  - "Clean up linting errors - reduced from 500+ to 13 remaining"
+  - "Fix authentication bug causing session loss"
+  - "Add database migrations for schema versioning"
+  - "Fix memory leak in background job processor"
+  - "Refactor API endpoints to reduce response payload size"
