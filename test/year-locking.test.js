@@ -1,4 +1,4 @@
-const { describe, it, before, after, beforeEach, mock } = require('node:test');
+const { describe, it, before, after, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const request = require('supertest');
 const { Pool } = require('pg');
@@ -9,19 +9,19 @@ describe('Year Locking Feature', () => {
   before(async () => {
     // Setup test environment
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    
+
     // Create test app
     app = require('../index.js');
-    
+
     testYear = 2024;
-    
+
     // Create admin user
     adminUser = await createTestUser(pool, {
       email: 'admin@test.com',
       username: 'admin',
       role: 'admin',
     });
-    
+
     // Create regular user
     regularUser = await createTestUser(pool, {
       email: 'user@test.com',
@@ -32,17 +32,16 @@ describe('Year Locking Feature', () => {
 
   after(async () => {
     // Cleanup
-    await pool.query('DELETE FROM users WHERE email LIKE \'%@test.com\'');
+    await pool.query("DELETE FROM users WHERE email LIKE '%@test.com'");
     await pool.query('DELETE FROM master_lists WHERE year = $1', [testYear]);
     await pool.end();
   });
 
   beforeEach(async () => {
     // Unlock year before each test
-    await pool.query(
-      'UPDATE master_lists SET locked = FALSE WHERE year = $1',
-      [testYear]
-    );
+    await pool.query('UPDATE master_lists SET locked = FALSE WHERE year = $1', [
+      testYear,
+    ]);
   });
 
   describe('Admin Lock/Unlock Endpoints', () => {

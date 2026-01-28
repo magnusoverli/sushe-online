@@ -488,19 +488,89 @@ function createAggregateAudit(deps = {}) {
   }
 
   /**
+   * Check if a manual album is orphaned (not in albums table)
+   * @param {Object} album - Album data from query
+   * @returns {boolean} - True if orphaned
+   */
+  function isOrphanedAlbum(album) {
+    return album.artist === null && album.album === null && !album.has_cover;
+  }
+
+  /**
+   * Check if a manual album has missing metadata
+   * @param {Object} album - Album data from query
+   * @returns {boolean} - True if missing metadata
+   */
+  function hasMissingMetadata(album) {
+    return (
+      !album.artist ||
+      album.artist.trim() === '' ||
+      !album.album ||
+      album.album.trim() === ''
+    );
+  }
+
+  /**
+   * Create an integrity issue object for orphaned albums
+   * @param {Object} album - Album data
+   * @param {Array} usedIn - List usage info
+   * @returns {Object} - Integrity issue
+   */
+  function createOrphanedIssue(album, usedIn) {
+    return {
+      type: 'orphaned',
+      severity: 'high',
+      manualId: album.album_id,
+      artist: null,
+      album: null,
+      description:
+        'Album referenced in lists but does not exist in albums table',
+      usedIn,
+      fixAction: 'delete_references',
+    };
+  }
+
+  /**
+   * Create an integrity issue object for missing metadata
+   * @param {Object} album - Album data
+   * @param {Array} usedIn - List usage info
+   * @returns {Object} - Integrity issue
+   */
+  function createMissingMetadataIssue(album, usedIn) {
+    const missingFields = [];
+    if (!album.artist || album.artist.trim() === '') {
+      missingFields.push('artist');
+    }
+    if (!album.album || album.album.trim() === '') {
+      missingFields.push('album');
+    }
+
+    return {
+      type: 'missing_metadata',
+      severity: 'medium',
+      manualId: album.album_id,
+      artist: album.artist || null,
+      album: album.album || null,
+      description: `Missing ${missingFields.join(' and ')} name`,
+      usedIn,
+      fixAction: 'manual_review',
+    };
+  }
+
+  /**
    * Find manual albums that may match canonical albums in the database
    *
    * Scans all list_items with manual-* album_ids and finds potential
-   * matches in the albums table using fuzzy matching.
+   * matches in the albums table using fuzzy matching with dynamic thresholds.
    *
    * @param {Object} options - Options
-   * @param {number} options.threshold - Fuzzy match threshold (default: 0.20, very low since human reviews)
+   * @param {number} options.threshold - Fuzzy match threshold (default: 0.15, high sensitivity)
    * @param {number} options.maxMatchesPerAlbum - Max matches per manual album (default: 5)
    * @returns {Promise<Object>} Manual albums with potential matches
    */
   async function findManualAlbumsForReconciliation(options = {}) {
-    // Very low threshold - better to show false positives than miss real duplicates
-    const { threshold = 0.2, maxMatchesPerAlbum = 5 } = options;
+    // Default threshold: 0.15 (high sensitivity) - human reviews all matches
+    const { threshold = 0.15, maxMatchesPerAlbum = 5 } = options;
 
     log.info('Finding manual albums for reconciliation');
 
@@ -524,6 +594,8 @@ function createAggregateAudit(deps = {}) {
         manualAlbums: [],
         totalManual: 0,
         totalWithMatches: 0,
+        integrityIssues: [],
+        totalIntegrityIssues: 0,
       };
     }
 
@@ -590,11 +662,43 @@ function createAggregateAudit(deps = {}) {
       excludePairs.add(`${row.album_id_2}::${row.album_id_1}`);
     }
 
-    // 5. Find matches for each manual album
+    // 5. Detect data integrity issues and find matches for valid albums
     const manualAlbums = [];
+    const integrityIssues = [];
     let totalWithMatches = 0;
+    const normalizedAlbumGroups = new Map(); // For detecting duplicate manual albums
 
     for (const manualAlbum of manualItemsResult.rows) {
+      const usedIn = usageMap.get(manualAlbum.album_id) || [];
+
+      // DATA INTEGRITY CHECK 1: Orphaned albums (in list_items but not in albums table)
+      if (isOrphanedAlbum(manualAlbum)) {
+        integrityIssues.push(createOrphanedIssue(manualAlbum, usedIn));
+        continue; // Skip matching for orphaned albums
+      }
+
+      // DATA INTEGRITY CHECK 2: Missing metadata
+      if (hasMissingMetadata(manualAlbum)) {
+        integrityIssues.push(createMissingMetadataIssue(manualAlbum, usedIn));
+        continue; // Skip matching for albums with missing metadata
+      }
+
+      // Track normalized keys to detect duplicate manual albums
+      const normalizedKey = normalizeAlbumKey(
+        manualAlbum.artist,
+        manualAlbum.album
+      );
+      if (!normalizedAlbumGroups.has(normalizedKey)) {
+        normalizedAlbumGroups.set(normalizedKey, []);
+      }
+      normalizedAlbumGroups.get(normalizedKey).push({
+        manualId: manualAlbum.album_id,
+        artist: manualAlbum.artist,
+        album: manualAlbum.album,
+        usedIn,
+      });
+
+      // Find potential canonical matches for valid albums
       const matches = findPotentialDuplicates(
         {
           artist: manualAlbum.artist,
@@ -614,7 +718,7 @@ function createAggregateAudit(deps = {}) {
         artist: manualAlbum.artist,
         album: manualAlbum.album,
         hasCover: manualAlbum.has_cover,
-        usedIn: usageMap.get(manualAlbum.album_id) || [],
+        usedIn,
         matches: matches.map((m) => ({
           albumId: m.candidate.album_id,
           artist: m.candidate.artist,
@@ -631,7 +735,27 @@ function createAggregateAudit(deps = {}) {
       }
     }
 
-    // Sort by those with matches first, then by confidence of best match
+    // DATA INTEGRITY CHECK 3: Duplicate manual albums with same normalized name
+    for (const [normalizedKey, albums] of normalizedAlbumGroups) {
+      if (albums.length > 1) {
+        // Multiple manual albums with same artist/album name
+        integrityIssues.push({
+          type: 'duplicate_manual',
+          severity: 'low',
+          normalizedKey,
+          description: `${albums.length} manual albums with same normalized name`,
+          duplicates: albums.map((a) => ({
+            manualId: a.manualId,
+            artist: a.artist,
+            album: a.album,
+            usedIn: a.usedIn,
+          })),
+          fixAction: 'merge_manual_albums',
+        });
+      }
+    }
+
+    // Sort manual albums by those with matches first, then by confidence
     manualAlbums.sort((a, b) => {
       if (a.matches.length > 0 && b.matches.length === 0) return -1;
       if (a.matches.length === 0 && b.matches.length > 0) return 1;
@@ -641,14 +765,22 @@ function createAggregateAudit(deps = {}) {
       return 0;
     });
 
+    // Sort integrity issues by severity
+    const severityOrder = { high: 0, medium: 1, low: 2 };
+    integrityIssues.sort(
+      (a, b) => severityOrder[a.severity] - severityOrder[b.severity]
+    );
+
     log.info(
-      `Found ${manualItemsResult.rows.length} manual albums, ${totalWithMatches} with potential matches`
+      `Found ${manualItemsResult.rows.length} manual albums: ${totalWithMatches} with matches, ${integrityIssues.length} with integrity issues`
     );
 
     return {
       manualAlbums,
       totalManual: manualItemsResult.rows.length,
       totalWithMatches,
+      integrityIssues,
+      totalIntegrityIssues: integrityIssues.length,
     };
   }
 

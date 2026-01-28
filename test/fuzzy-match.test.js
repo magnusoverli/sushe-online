@@ -15,6 +15,7 @@ const {
   isPotentialDuplicate,
   findPotentialDuplicates,
   isExactMatch,
+  deriveMinScoreFromThreshold,
   AUTO_MERGE_THRESHOLD,
   MODAL_THRESHOLD,
 } = require('../utils/fuzzy-match');
@@ -508,5 +509,72 @@ describe('Real-world album matching scenarios', () => {
     // Verify the result object has expected structure
     assert.ok('isPotentialMatch' in result);
     assert.ok('confidence' in result);
+  });
+});
+
+// ============================================
+// DYNAMIC THRESHOLD TESTS
+// ============================================
+
+describe('deriveMinScoreFromThreshold', () => {
+  it('should return 0.25 for very aggressive thresholds (<=0.05)', () => {
+    assert.strictEqual(deriveMinScoreFromThreshold(0.03), 0.25);
+    assert.strictEqual(deriveMinScoreFromThreshold(0.05), 0.25);
+  });
+
+  it('should return 0.35 for high sensitivity thresholds (<=0.15)', () => {
+    assert.strictEqual(deriveMinScoreFromThreshold(0.1), 0.35);
+    assert.strictEqual(deriveMinScoreFromThreshold(0.15), 0.35);
+  });
+
+  it('should return 0.45 for medium sensitivity thresholds (<=0.30)', () => {
+    assert.strictEqual(deriveMinScoreFromThreshold(0.2), 0.45);
+    assert.strictEqual(deriveMinScoreFromThreshold(0.3), 0.45);
+  });
+
+  it('should return 0.50 for conservative thresholds (>0.30)', () => {
+    assert.strictEqual(deriveMinScoreFromThreshold(0.4), 0.5);
+    assert.strictEqual(deriveMinScoreFromThreshold(0.5), 0.5);
+  });
+});
+
+describe('Dynamic threshold behavior', () => {
+  // Test albums that are somewhat similar but not exact
+  // Artist: "The Beatles" vs "Beatles" (similar but not identical)
+  // Album: "Abbey Road" vs "Abbey Roads" (typo)
+  const album1 = { artist: 'The Beatles', album: 'Abbey Road' };
+  const album2 = { artist: 'Beatles', album: 'Abbey Roads' };
+
+  it('should match with aggressive threshold (0.03)', () => {
+    // With threshold 0.03, minimum scores will be 0.25
+    // This pair should match because artist/album are reasonably similar
+    const result = isPotentialDuplicate(album1, album2, { threshold: 0.03 });
+    assert.ok(
+      result.isPotentialMatch,
+      'Should match with very aggressive threshold'
+    );
+  });
+
+  it('should allow explicit artistMinScore and albumMinScore', () => {
+    // Force very low thresholds
+    const result = isPotentialDuplicate(album1, album2, {
+      threshold: 0.03,
+      artistMinScore: 0.2,
+      albumMinScore: 0.2,
+    });
+    assert.ok(result.isPotentialMatch, 'Should match with explicit low scores');
+  });
+
+  it('should respect higher explicit thresholds', () => {
+    // Force unrealistically high thresholds
+    const result = isPotentialDuplicate(album1, album2, {
+      threshold: 0.03,
+      artistMinScore: 0.99,
+      albumMinScore: 0.99,
+    });
+    assert.ok(
+      !result.isPotentialMatch,
+      'Should not match with very high minimum scores'
+    );
   });
 });

@@ -266,6 +266,8 @@ function calculateSimilarity(a, b) {
  * @param {Object} options - Matching options
  * @param {number} options.threshold - Minimum combined score to consider a match (default: MODAL_THRESHOLD)
  * @param {number} options.autoMergeThreshold - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
+ * @param {number} options.artistMinScore - Minimum artist similarity score (default: derived from threshold)
+ * @param {number} options.albumMinScore - Minimum album similarity score (default: derived from threshold)
  * @returns {Object} - { isPotentialMatch, shouldAutoMerge, confidence, artistScore, albumScore }
  */
 function isPotentialDuplicate(album1, album2, options = {}) {
@@ -281,6 +283,17 @@ function isPotentialDuplicate(album1, album2, options = {}) {
 
   const { threshold, autoMergeThreshold = AUTO_MERGE_THRESHOLD } = opts;
 
+  // Derive minimum individual scores from threshold if not explicitly provided
+  // Lower threshold = lower minimum scores = more aggressive matching
+  const artistMinScore =
+    opts.artistMinScore !== undefined
+      ? opts.artistMinScore
+      : deriveMinScoreFromThreshold(threshold);
+  const albumMinScore =
+    opts.albumMinScore !== undefined
+      ? opts.albumMinScore
+      : deriveMinScoreFromThreshold(threshold);
+
   const artistScore = calculateSimilarity(album1.artist, album2.artist);
   const albumScore = calculateSimilarity(album1.album, album2.album);
 
@@ -289,12 +302,12 @@ function isPotentialDuplicate(album1, album2, options = {}) {
   const combinedConfidence = artistScore.score * 0.4 + albumScore.score * 0.6;
 
   // For a potential match:
-  // - Album name must be somewhat similar (>0.5)
-  // - Artist name must be somewhat similar (>0.5)
+  // - Album name must meet minimum similarity
+  // - Artist name must meet minimum similarity
   // - Combined score must meet threshold
   const isPotentialMatch =
-    albumScore.score > 0.5 &&
-    artistScore.score > 0.5 &&
+    albumScore.score >= albumMinScore &&
+    artistScore.score >= artistMinScore &&
     combinedConfidence >= threshold;
 
   // Auto-merge: confidence >= 98% means this is almost certainly the same album
@@ -311,6 +324,21 @@ function isPotentialDuplicate(album1, album2, options = {}) {
 }
 
 /**
+ * Derive minimum individual scores from combined threshold
+ * Lower threshold = more aggressive matching = lower minimum scores
+ *
+ * @param {number} threshold - Combined threshold (0-1)
+ * @returns {number} - Minimum individual score (0-1)
+ */
+function deriveMinScoreFromThreshold(threshold) {
+  // Map threshold ranges to minimum scores
+  if (threshold <= 0.05) return 0.25; // Very High+ (extremely aggressive)
+  if (threshold <= 0.15) return 0.35; // High (moderately aggressive)
+  if (threshold <= 0.3) return 0.45; // Medium (balanced)
+  return 0.5; // Low/default (conservative)
+}
+
+/**
  * Find potential duplicate albums from a list of candidates
  *
  * @param {Object} newAlbum - Album to check { artist, album }
@@ -318,6 +346,8 @@ function isPotentialDuplicate(album1, album2, options = {}) {
  * @param {Object} options - Options
  * @param {number} options.threshold - Minimum confidence to include (default: MODAL_THRESHOLD)
  * @param {number} options.autoMergeThreshold - Confidence above which to auto-merge (default: AUTO_MERGE_THRESHOLD)
+ * @param {number} options.artistMinScore - Minimum artist similarity score (default: derived from threshold)
+ * @param {number} options.albumMinScore - Minimum album similarity score (default: derived from threshold)
  * @param {number} options.maxResults - Maximum results to return (default: 5)
  * @param {Set<string>} options.excludePairs - Set of "id1::id2" pairs to exclude (already confirmed different)
  * @returns {Array<Object>} - Sorted array of potential matches with confidence scores and shouldAutoMerge flags
@@ -326,6 +356,8 @@ function findPotentialDuplicates(newAlbum, candidates, options = {}) {
   const {
     threshold = MODAL_THRESHOLD,
     autoMergeThreshold = AUTO_MERGE_THRESHOLD,
+    artistMinScore,
+    albumMinScore,
     maxResults = 5,
     excludePairs = new Set(),
   } = options;
@@ -345,6 +377,8 @@ function findPotentialDuplicates(newAlbum, candidates, options = {}) {
     const result = isPotentialDuplicate(newAlbum, candidate, {
       threshold,
       autoMergeThreshold,
+      artistMinScore,
+      albumMinScore,
     });
 
     if (result.isPotentialMatch) {
@@ -386,6 +420,7 @@ module.exports = {
   findPotentialDuplicates,
   isExactMatch,
   normalizeAlbumKey,
+  deriveMinScoreFromThreshold,
 
   // Constants (for testing)
   STRIP_PATTERNS,

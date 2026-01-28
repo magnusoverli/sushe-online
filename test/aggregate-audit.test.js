@@ -491,7 +491,9 @@ describe('aggregate-audit', () => {
 
       assert.strictEqual(result.totalManual, 0);
       assert.strictEqual(result.totalWithMatches, 0);
+      assert.strictEqual(result.totalIntegrityIssues, 0);
       assert.deepStrictEqual(result.manualAlbums, []);
+      assert.deepStrictEqual(result.integrityIssues, []);
     });
 
     it('should find manual albums with potential canonical matches', async () => {
@@ -549,6 +551,7 @@ describe('aggregate-audit', () => {
       assert.strictEqual(album.album, 'OK Computer');
       assert.ok(album.matches.length > 0);
       assert.strictEqual(album.matches[0].albumId, 'spotify-abc123');
+      assert.strictEqual(result.totalIntegrityIssues, 0);
     });
 
     it('should exclude pairs marked as distinct', async () => {
@@ -591,6 +594,121 @@ describe('aggregate-audit', () => {
       // The manual album should have no matches because it's excluded
       assert.strictEqual(result.manualAlbums[0].matches.length, 0);
       assert.strictEqual(result.totalWithMatches, 0);
+    });
+
+    it('should detect orphaned manual albums (not in albums table)', async () => {
+      const pool = createMockPool([
+        // Query 1: Manual items with orphaned album (NULL metadata from LEFT JOIN)
+        {
+          rows: [
+            {
+              album_id: 'manual-orphan',
+              artist: null,
+              album: null,
+              has_cover: false,
+            },
+          ],
+        },
+        // Query 2: Usage info
+        {
+          rows: [
+            {
+              album_id: 'manual-orphan',
+              list_id: 'list-1',
+              list_name: 'Test List',
+              year: 2023,
+              user_id: 'user-1',
+              username: 'testuser',
+            },
+          ],
+        },
+        // Query 3: Canonical albums
+        { rows: [] },
+        // Query 4: Excluded pairs
+        { rows: [] },
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.findManualAlbumsForReconciliation();
+
+      assert.strictEqual(result.totalManual, 1);
+      assert.strictEqual(result.totalIntegrityIssues, 1);
+      assert.strictEqual(result.manualAlbums.length, 0); // Orphaned albums not included in valid albums
+      assert.strictEqual(result.integrityIssues[0].type, 'orphaned');
+      assert.strictEqual(result.integrityIssues[0].severity, 'high');
+      assert.strictEqual(
+        result.integrityIssues[0].fixAction,
+        'delete_references'
+      );
+    });
+
+    it('should detect manual albums with missing metadata', async () => {
+      const pool = createMockPool([
+        // Query 1: Manual items with missing artist
+        {
+          rows: [
+            {
+              album_id: 'manual-missing',
+              artist: '',
+              album: 'Some Album',
+              has_cover: false,
+            },
+          ],
+        },
+        // Query 2: Usage info
+        { rows: [] },
+        // Query 3: Canonical albums
+        { rows: [] },
+        // Query 4: Excluded pairs
+        { rows: [] },
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.findManualAlbumsForReconciliation();
+
+      assert.strictEqual(result.totalIntegrityIssues, 1);
+      assert.strictEqual(result.integrityIssues[0].type, 'missing_metadata');
+      assert.strictEqual(result.integrityIssues[0].severity, 'medium');
+      assert.strictEqual(result.integrityIssues[0].fixAction, 'manual_review');
+    });
+
+    it('should detect duplicate manual albums with same normalized name', async () => {
+      const pool = createMockPool([
+        // Query 1: Manual items with duplicate normalized names
+        {
+          rows: [
+            {
+              album_id: 'manual-123',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              has_cover: false,
+            },
+            {
+              album_id: 'manual-456',
+              artist: 'Radiohead',
+              album: 'OK Computer',
+              has_cover: false,
+            },
+          ],
+        },
+        // Query 2: Usage info
+        { rows: [] },
+        // Query 3: Canonical albums
+        { rows: [] },
+        // Query 4: Excluded pairs
+        { rows: [] },
+      ]);
+      const logger = createMockLogger();
+      const audit = createAggregateAudit({ pool, logger });
+
+      const result = await audit.findManualAlbumsForReconciliation();
+
+      assert.strictEqual(result.totalIntegrityIssues, 1);
+      assert.strictEqual(result.integrityIssues[0].type, 'duplicate_manual');
+      assert.strictEqual(result.integrityIssues[0].severity, 'low');
+      assert.strictEqual(result.integrityIssues[0].duplicates.length, 2);
     });
   });
 

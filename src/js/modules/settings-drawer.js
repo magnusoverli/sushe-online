@@ -1765,33 +1765,40 @@ export function createSettingsDrawer(deps = {}) {
         <div class="settings-group">
           <h3 class="settings-group-title">Duplicate Album Scanner</h3>
           <div class="settings-group-content">
-            <div class="settings-row">
-              <div class="settings-row-label">
+            <div class="space-y-3">
+              <div>
                 <label class="settings-label">Scan for Duplicates</label>
                 <p class="settings-description">Find and review albums that may be duplicates based on fuzzy matching</p>
+                <p class="text-xs text-gray-500 mt-1">Lower values = more matches (more false positives). All matches require human review.</p>
               </div>
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 flex-wrap">
                 <div class="flex items-center gap-2">
                   <label for="duplicateThreshold" class="text-xs text-gray-400 whitespace-nowrap">Sensitivity:</label>
                   <select id="duplicateThreshold" class="bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600">
-                    <option value="0.10">Very High (0.10)</option>
+                    <option value="0.03">Very High (0.03)</option>
                     <option value="0.15" selected>High (0.15)</option>
-                    <option value="0.20">Medium (0.20)</option>
-                    <option value="0.30">Low (0.30)</option>
-                    <option value="0.45">Very Low (0.45)</option>
+                    <option value="0.30">Medium (0.30)</option>
                   </select>
                 </div>
                 <button id="scanDuplicatesBtn" class="settings-button">Scan & Review</button>
               </div>
             </div>
-            <p class="text-xs text-gray-500 mt-1">Lower values = more matches (more false positives). All matches require human review.</p>
             <div id="duplicateScanStatus" class="hidden mt-3 text-sm text-gray-400"></div>
-            <div class="settings-row mt-4 pt-4 border-t border-gray-700/50">
-              <div class="settings-row-label">
+            <div class="space-y-3 mt-4 pt-4 border-t border-gray-700/50">
+              <div>
                 <label class="settings-label">Manual Album Reconciliation</label>
                 <p class="settings-description">Review manually-added albums that may match existing canonical albums</p>
+                <p class="text-xs text-gray-500 mt-1">Lower values = more matches (more false positives). All matches require human review.</p>
               </div>
-              <div class="flex gap-2">
+              <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                  <label for="manualAlbumThreshold" class="text-xs text-gray-400 whitespace-nowrap">Sensitivity:</label>
+                  <select id="manualAlbumThreshold" class="bg-gray-700 text-white text-sm rounded px-2 py-1 border border-gray-600">
+                    <option value="0.03">Very High (0.03)</option>
+                    <option value="0.15" selected>High (0.15)</option>
+                    <option value="0.30">Medium (0.30)</option>
+                  </select>
+                </div>
                 <button id="auditManualAlbumsBtn" class="settings-button">Audit Manual Albums</button>
               </div>
             </div>
@@ -4965,8 +4972,7 @@ export function createSettingsDrawer(deps = {}) {
       // Lock engaged: Disable contributors button
       if (contributorsButton) {
         const newButton = document.createElement('button');
-        newButton.className =
-          'settings-button opacity-50 cursor-not-allowed';
+        newButton.className = 'settings-button opacity-50 cursor-not-allowed';
         newButton.disabled = true;
         newButton.dataset.year = year;
         newButton.title = 'Unlock the year to manage contributors';

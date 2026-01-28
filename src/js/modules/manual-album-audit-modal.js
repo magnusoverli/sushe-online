@@ -16,13 +16,23 @@ let isLoading = false;
 /**
  * Open the manual album audit modal
  * Fetches manual albums and displays review interface
+ * @param {number} threshold - Optional threshold (default: read from DOM)
  */
-export async function openManualAlbumAudit() {
+export async function openManualAlbumAudit(threshold = null) {
   if (isLoading) return;
 
   isLoading = true;
 
   try {
+    // Get threshold from parameter or DOM element
+    let thresholdValue = threshold;
+    if (thresholdValue === null) {
+      const thresholdSelect = document.getElementById('manualAlbumThreshold');
+      thresholdValue = thresholdSelect
+        ? parseFloat(thresholdSelect.value)
+        : 0.15;
+    }
+
     // Create modal if doesn't exist
     if (!modalElement) {
       createModal();
@@ -32,10 +42,13 @@ export async function openManualAlbumAudit() {
     showModal();
     setLoadingState(true);
 
-    // Fetch manual albums
-    const response = await fetch('/api/admin/audit/manual-albums', {
-      credentials: 'same-origin',
-    });
+    // Fetch manual albums with threshold
+    const response = await fetch(
+      `/api/admin/audit/manual-albums?threshold=${thresholdValue}`,
+      {
+        credentials: 'same-origin',
+      }
+    );
 
     if (!response.ok) {
       throw new Error('Failed to fetch manual albums');
@@ -46,7 +59,10 @@ export async function openManualAlbumAudit() {
 
     setLoadingState(false);
 
-    if (currentData.totalWithMatches === 0) {
+    // Show integrity issues first if they exist, otherwise show matches
+    if (currentData.integrityIssues && currentData.integrityIssues.length > 0) {
+      showIntegrityIssues();
+    } else if (currentData.totalWithMatches === 0) {
       showEmptyState();
     } else {
       showCurrentItem();
@@ -194,6 +210,217 @@ function showEmptyState() {
   footerEl.classList.add('hidden');
   progressEl.textContent = `${currentData.totalManual} manual albums, none need review`;
 }
+
+function showIntegrityIssues() {
+  const emptyEl = modalElement.querySelector('#auditEmpty');
+  const comparisonEl = modalElement.querySelector('#auditComparison');
+  const footerEl = modalElement.querySelector('#auditFooter');
+  const progressEl = modalElement.querySelector('#auditProgress');
+
+  emptyEl.classList.add('hidden');
+  comparisonEl.classList.remove('hidden');
+  footerEl.classList.remove('hidden');
+
+  const issues = currentData.integrityIssues || [];
+  progressEl.textContent = `${issues.length} data integrity issue${issues.length !== 1 ? 's' : ''} found`;
+
+  const getSeverityColor = (severity) => {
+    switch (severity) {
+      case 'high':
+        return 'text-red-500 border-red-800/50 bg-red-900/20';
+      case 'medium':
+        return 'text-yellow-500 border-yellow-800/50 bg-yellow-900/20';
+      case 'low':
+        return 'text-blue-500 border-blue-800/50 bg-blue-900/20';
+      default:
+        return 'text-gray-500 border-gray-800/50 bg-gray-900/20';
+    }
+  };
+
+  const renderIssue = (issue, index) => {
+    const usageInfo =
+      issue.usedIn
+        ?.map((u) => `${u.username}'s ${u.listName} (${u.year})`)
+        .join(', ') || 'Not used in any lists';
+
+    let actionButtons = '';
+    if (issue.fixAction === 'delete_references') {
+      actionButtons = `
+        <button 
+          class="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-sm rounded transition-colors"
+          onclick="window.deleteOrphanedReferences('${escapeHtml(issue.manualId)}', ${index})"
+        >
+          <i class="fas fa-trash-alt mr-1"></i> Delete References
+        </button>
+      `;
+    } else if (issue.fixAction === 'manual_review') {
+      actionButtons = `
+        <span class="text-sm text-gray-400">
+          <i class="fas fa-exclamation-triangle mr-1"></i> Requires manual review
+        </span>
+      `;
+    } else if (issue.fixAction === 'merge_manual_albums') {
+      actionButtons = `
+        <span class="text-sm text-gray-400">
+          <i class="fas fa-info-circle mr-1"></i> Consider merging duplicates manually
+        </span>
+      `;
+    }
+
+    if (issue.type === 'duplicate_manual') {
+      return `
+        <div class="p-4 border rounded-lg ${getSeverityColor(issue.severity)}" data-issue-index="${index}">
+          <div class="flex items-start justify-between mb-2">
+            <div>
+              <span class="text-xs uppercase tracking-wide font-semibold">${issue.severity} severity</span>
+              <h4 class="font-semibold mt-1">${escapeHtml(issue.description)}</h4>
+            </div>
+          </div>
+          <div class="space-y-2 mt-3">
+            ${issue.duplicates
+              .map(
+                (dup) => `
+              <div class="bg-gray-800/50 p-3 rounded">
+                <div class="text-white font-medium">${escapeHtml(dup.artist)} - ${escapeHtml(dup.album)}</div>
+                <div class="text-xs text-gray-400 mt-1">ID: ${dup.manualId}</div>
+                <div class="text-xs text-gray-500 mt-1">Used in: ${dup.usedIn.map((u) => `${u.username}'s ${u.listName}`).join(', ')}</div>
+              </div>
+            `
+              )
+              .join('')}
+          </div>
+          <div class="mt-3">
+            ${actionButtons}
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="p-4 border rounded-lg ${getSeverityColor(issue.severity)}" data-issue-index="${index}">
+        <div class="flex items-start justify-between mb-2">
+          <div>
+            <span class="text-xs uppercase tracking-wide font-semibold">${issue.severity} severity</span>
+            <h4 class="font-semibold mt-1">${escapeHtml(issue.description)}</h4>
+          </div>
+        </div>
+        <div class="mt-3 space-y-1">
+          <div class="text-sm"><strong>Album ID:</strong> ${issue.manualId}</div>
+          ${issue.artist ? `<div class="text-sm"><strong>Artist:</strong> ${escapeHtml(issue.artist)}</div>` : ''}
+          ${issue.album ? `<div class="text-sm"><strong>Album:</strong> ${escapeHtml(issue.album)}</div>` : ''}
+          <div class="text-sm"><strong>Used in:</strong> ${usageInfo}</div>
+        </div>
+        <div class="mt-3">
+          ${actionButtons}
+        </div>
+      </div>
+    `;
+  };
+
+  comparisonEl.innerHTML = `
+    <div class="space-y-3">
+      <div class="bg-gray-800/50 p-4 rounded-lg border border-yellow-600/30">
+        <h3 class="text-lg font-semibold text-yellow-400 mb-2">
+          <i class="fas fa-exclamation-triangle mr-2"></i>Data Integrity Issues
+        </h3>
+        <p class="text-sm text-gray-300">
+          The following manual albums have data integrity problems that should be fixed before continuing with reconciliation.
+        </p>
+      </div>
+      
+      ${issues.map((issue, index) => renderIssue(issue, index)).join('')}
+      
+      ${
+        currentData.totalWithMatches > 0
+          ? `
+        <div class="mt-4 p-3 bg-blue-900/20 border border-blue-800/30 rounded text-sm text-blue-300">
+          <i class="fas fa-info-circle mr-1"></i>
+          After fixing these issues, ${currentData.totalWithMatches} manual album${currentData.totalWithMatches !== 1 ? 's' : ''} will be ready for reconciliation review.
+        </div>
+      `
+          : ''
+      }
+    </div>
+  `;
+
+  footerEl.classList.remove('hidden');
+  footerEl.innerHTML = `
+    <button id="auditCloseIntegrityBtn" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors">
+      Close
+    </button>
+    ${
+      currentData.totalWithMatches > 0
+        ? `
+      <button id="auditProceedBtn" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors">
+        Proceed to Reconciliation
+      </button>
+    `
+        : ''
+    }
+  `;
+
+  modalElement
+    .querySelector('#auditCloseIntegrityBtn')
+    .addEventListener('click', closeModal);
+
+  if (currentData.totalWithMatches > 0) {
+    modalElement
+      .querySelector('#auditProceedBtn')
+      .addEventListener('click', () => {
+        currentData.integrityIssues = []; // Clear issues to proceed
+        showCurrentItem();
+      });
+  }
+}
+
+// Global function for deleting orphaned references
+window.deleteOrphanedReferences = async function (albumId, issueIndex) {
+  if (
+    !confirm(
+      'Delete all references to this orphaned album from user lists? This cannot be undone.'
+    )
+  ) {
+    return;
+  }
+
+  try {
+    const response = await fetch(
+      '/api/admin/audit/delete-orphaned-references',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ albumId }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to delete orphaned references');
+    }
+
+    const result = await response.json();
+    showToast(
+      `Deleted ${result.deletedListItems} orphaned reference${result.deletedListItems !== 1 ? 's' : ''}`,
+      'success'
+    );
+
+    // Remove this issue from the list
+    currentData.integrityIssues.splice(issueIndex, 1);
+    currentData.totalIntegrityIssues--;
+
+    // Refresh the display
+    if (currentData.integrityIssues.length > 0) {
+      showIntegrityIssues();
+    } else if (currentData.totalWithMatches > 0) {
+      showCurrentItem();
+    } else {
+      showEmptyState();
+    }
+  } catch (err) {
+    console.error('Error deleting orphaned references:', err);
+    showToast('Failed to delete orphaned references', 'error');
+  }
+};
 
 function showCurrentItem() {
   // Filter to only albums with matches
