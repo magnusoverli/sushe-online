@@ -60,8 +60,8 @@ const loginSnippetFn = ejs.compile(
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
   <header class="bg-gray-900 z-50 border-b border-gray-700/50">
-    <div class="flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
-      <!-- Mobile menu button / Desktop logo -->
+    <div class="relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
+      <!-- Mobile menu button -->
       <div class="flex items-center gap-2 lg:w-72 lg:justify-center lg:gap-0">
         ${
           activeSection === 'home'
@@ -76,18 +76,17 @@ const headerComponent = (user, activeSection = 'home') => `
         </a>
         `
         }
-        <a href="/" class="text-xl lg:text-2xl font-bold text-red-600 hover:text-red-500 transition duration-200">SuShe</a>
+        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="lg:hidden p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings" id="newSettingsButton">
+          <i class="fas fa-sliders-h text-lg"></i>
+        </button>
       </div>
       
       <!-- Current list name (mobile only) -->
-      <span id="mobileCurrentListName" class="lg:hidden text-base text-gray-300 font-medium truncate max-w-[40%] hidden"></span>
+      <span id="mobileCurrentListName" class="lg:hidden absolute left-1/2 -translate-x-1/2 text-base text-gray-300 font-medium truncate max-w-[60%] hidden"></span>
       
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-1">
-        <button onclick="window.openSettingsDrawer && window.openSettingsDrawer()" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Settings" id="newSettingsButton">
-          <i class="fas fa-sliders-h text-lg"></i>
-        </button>
-        <a href="/logout" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target ml-3 lg:ml-4" title="Logout">
+        <a href="/logout" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="Logout">
           <i class="fas fa-sign-out-alt text-lg"></i>
         </a>
       </div>
