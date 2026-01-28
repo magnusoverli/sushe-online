@@ -180,3 +180,6 @@ opencodetmp/*
 # Local plans and notes (not synced to repo)
 /plans/
 .opencode/
+
+# Restart trigger file for development (touched to force nodemon restart)
+.restart-trigger

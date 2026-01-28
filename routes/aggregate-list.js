@@ -1,5 +1,6 @@
 const { createAggregateList } = require('../utils/aggregate-list');
 const { aggregateListTemplate } = require('../templates');
+const { validateYearNotLocked } = require('../utils/year-lock');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
@@ -478,6 +479,17 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: 'Invalid year' });
         }
 
+        // Check if year is locked
+        try {
+          await validateYearNotLocked(pool, year, 'manage contributors');
+        } catch (err) {
+          return res.status(403).json({
+            error: err.message,
+            yearLocked: true,
+            year: year,
+          });
+        }
+
         const { userId } = req.body;
         if (!userId) {
           return res.status(400).json({ error: 'userId is required' });
@@ -517,6 +529,17 @@ module.exports = (app, deps) => {
         const year = parseInt(req.params.year, 10);
         if (isNaN(year) || year < 1000 || year > 9999) {
           return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        // Check if year is locked
+        try {
+          await validateYearNotLocked(pool, year, 'manage contributors');
+        } catch (err) {
+          return res.status(403).json({
+            error: err.message,
+            yearLocked: true,
+            year: year,
+          });
         }
 
         const { userId } = req.params;
@@ -589,6 +612,121 @@ module.exports = (app, deps) => {
       }
     }
   );
+
+  // ============ YEAR LOCKING ENDPOINTS ============
+
+  /**
+   * POST /api/aggregate-list/:year/lock
+   * Lock a year to prevent list modifications (admin only)
+   */
+  app.post(
+    '/api/aggregate-list/:year/lock',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        // Create master_lists record if doesn't exist, or update existing
+        await pool.query(
+          `
+          INSERT INTO master_lists (year, locked, created_at, updated_at)
+          VALUES ($1, TRUE, NOW(), NOW())
+          ON CONFLICT (year) DO UPDATE SET
+            locked = TRUE,
+            updated_at = NOW()
+        `,
+          [year]
+        );
+
+        logger.info('Admin action', {
+          action: 'lock_year',
+          adminId: req.user._id,
+          adminEmail: req.user.email,
+          year,
+          ip: req.ip,
+        });
+
+        res.json({ success: true, year, locked: true });
+      } catch (err) {
+        logger.error('Error locking year', {
+          error: err.message,
+          year: req.params.year,
+          adminId: req.user._id,
+        });
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * POST /api/aggregate-list/:year/unlock
+   * Unlock a year to allow list modifications (admin only)
+   */
+  app.post(
+    '/api/aggregate-list/:year/unlock',
+    ensureAuthAPI,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const year = parseInt(req.params.year, 10);
+        if (isNaN(year) || year < 1000 || year > 9999) {
+          return res.status(400).json({ error: 'Invalid year' });
+        }
+
+        await pool.query(
+          `
+          UPDATE master_lists 
+          SET locked = FALSE, updated_at = NOW()
+          WHERE year = $1
+        `,
+          [year]
+        );
+
+        logger.info('Admin action', {
+          action: 'unlock_year',
+          adminId: req.user._id,
+          adminEmail: req.user.email,
+          year,
+          ip: req.ip,
+        });
+
+        res.json({ success: true, year, locked: false });
+      } catch (err) {
+        logger.error('Error unlocking year', {
+          error: err.message,
+          year: req.params.year,
+          adminId: req.user._id,
+        });
+        res.status(500).json({ error: 'Database error' });
+      }
+    }
+  );
+
+  /**
+   * GET /api/locked-years
+   * Get list of all locked years
+   */
+  app.get('/api/locked-years', ensureAuthAPI, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `
+        SELECT year 
+        FROM master_lists 
+        WHERE locked = TRUE 
+        ORDER BY year DESC
+      `
+      );
+
+      res.json({ years: result.rows.map((r) => r.year) });
+    } catch (err) {
+      logger.error('Error fetching locked years', { error: err.message });
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
 
   // Export the aggregateList instance for use in triggers
   return { aggregateList };

@@ -297,6 +297,7 @@ async function buildAggregateStatus(pool, aggregateList, year) {
     return {
       exists: false,
       revealed: false,
+      locked: false,
       confirmations: [],
       confirmationCount: 0,
       requiredConfirmations: 2,
@@ -322,6 +323,7 @@ async function buildAggregateStatus(pool, aggregateList, year) {
     revealed: aggregateList.revealed,
     revealedAt: aggregateList.revealed_at,
     computedAt: aggregateList.computed_at,
+    locked: aggregateList.locked || false,
     totalAlbums,
     rankDistribution,
     confirmations: confirmResult.rows.map((r) => ({

@@ -24,6 +24,8 @@ module.exports = (app, deps) => {
     helpers: { triggerAggregateListRecompute },
   } = deps;
 
+  const { validateYearNotLocked } = require('../../utils/year-lock');
+
   // Get all groups for the current user (with list counts)
   app.get('/api/groups', ensureAuthAPI, async (req, res) => {
     try {
@@ -272,6 +274,24 @@ module.exports = (app, deps) => {
         });
       }
 
+      // Check if any lists in the group have locked years
+      const listsWithYears = await pool.query(
+        `SELECT DISTINCT year FROM lists WHERE group_id = $1 AND year IS NOT NULL`,
+        [group.id]
+      );
+
+      for (const row of listsWithYears.rows) {
+        try {
+          await validateYearNotLocked(pool, row.year, 'delete group');
+        } catch (err) {
+          return res.status(403).json({
+            error: err.message,
+            yearLocked: true,
+            year: row.year,
+          });
+        }
+      }
+
       // Check if collection has lists
       const listCountResult = await pool.query(
         `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
@@ -508,6 +528,22 @@ module.exports = (app, deps) => {
 
         targetGroupId = groupResult.rows[0].id;
         targetYear = groupResult.rows[0].year;
+      }
+
+      // Check if source or target years are locked
+      try {
+        // Check source year
+        await validateYearNotLocked(pool, oldYear, 'move list from year');
+        // Check target year (if different)
+        if (targetYear !== oldYear) {
+          await validateYearNotLocked(pool, targetYear, 'move list to year');
+        }
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+        });
       }
 
       // If moving to a collection (no year), must clear is_main flag

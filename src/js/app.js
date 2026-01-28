@@ -19,6 +19,10 @@ import {
 } from './modules/ui-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
+import {
+  invalidateLockedYearsCache,
+  isYearLocked,
+} from './modules/year-lock.js';
 
 // Re-export UI utilities for backward compatibility
 export { showToast, showConfirmation };
@@ -83,6 +87,7 @@ function getAlbumDisplayModule() {
       formatTrackTime,
       reapplyNowPlayingBorder,
       initializeUnifiedSorting,
+      destroySorting,
       setContextAlbum: (index, albumId) => {
         currentContextAlbum = index;
         currentContextAlbumId = albumId;
@@ -483,9 +488,13 @@ function getSortingModule() {
   return sortingModule;
 }
 
-// Wrapper function for sorting module
+// Wrapper functions for sorting module
 function initializeUnifiedSorting(container, isMobile) {
   return getSortingModule().initializeUnifiedSorting(container, isMobile);
+}
+
+function destroySorting(container) {
+  return getSortingModule().destroySorting(container);
 }
 
 /**
@@ -4145,6 +4154,63 @@ window.loadLists = loadLists;
 window.getCurrentListName = getCurrentListName;
 // Helper to find list by name
 window.findListByName = findListByName;
+
+/**
+ * Refresh the locked year status for the current list
+ * Called after locking/unlocking a year in admin settings
+ * @param {number} year - Year that was locked/unlocked
+ */
+window.refreshLockedYearStatus = async function (year) {
+  // Invalidate the cache so we fetch fresh status
+  invalidateLockedYearsCache();
+
+  // Get the current list's year
+  const currentMeta = getListMetadata(currentListId);
+  const currentYear = currentMeta?.year;
+
+  // If the current list belongs to the year that was locked/unlocked
+  if (currentYear && currentYear === year) {
+    const isLocked = await isYearLocked(currentYear);
+
+    // Get the album container
+    const container = document.getElementById('albumContainer');
+    if (!container) return;
+
+    // Get the sorting module
+    const sorting = getSortingModule();
+    if (!sorting) return;
+
+    if (isLocked) {
+      // Year is now locked - disable sorting and show banner
+      sorting.destroySorting(container);
+
+      // Add lock banner if not already present
+      const existingBanner = container.querySelector('.year-locked-banner');
+      if (!existingBanner) {
+        const banner = document.createElement('div');
+        banner.className =
+          'year-locked-banner bg-yellow-900 bg-opacity-20 border border-yellow-700 rounded-lg p-3 mb-4 flex items-center gap-3 text-yellow-200';
+        banner.innerHTML = `
+          <i class="fas fa-lock text-yellow-500"></i>
+          <span class="text-sm">
+            Year ${currentYear} is locked. You cannot reorder, add, or edit albums in this list.
+          </span>
+        `;
+        container.insertBefore(banner, container.firstChild);
+      }
+    } else {
+      // Year is now unlocked - enable sorting and remove banner
+      const isMobile = window.innerWidth < 1024;
+      sorting.initializeUnifiedSorting(container, isMobile);
+
+      // Remove lock banner if present
+      const banner = container.querySelector('.year-locked-banner');
+      if (banner) {
+        banner.remove();
+      }
+    }
+  }
+};
 
 function updateHeaderTitle(listName) {
   const headerAddAlbumBtn = document.getElementById('headerAddAlbumBtn');

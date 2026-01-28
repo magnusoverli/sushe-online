@@ -1546,10 +1546,8 @@ export function createSettingsDrawer(deps = {}) {
                       '<span class="px-2 py-1 bg-green-900/50 text-green-400 text-xs rounded-sm border border-green-600/30">Revealed</span>';
                   } else if (confirmCount > 0) {
                     statusBadge = `<span class="px-2 py-1 bg-yellow-900/50 text-yellow-400 text-xs rounded-sm border border-yellow-600/30">${confirmCount}/${required} Confirmations</span>`;
-                  } else {
-                    statusBadge =
-                      '<span class="px-2 py-1 bg-gray-700 text-gray-400 text-xs rounded-sm border border-gray-600">Pending</span>';
                   }
+                  // No badge shown when not revealed and no confirmations yet
 
                   // Confirmations display
                   let confirmationsHtml = '';
@@ -1596,9 +1594,25 @@ export function createSettingsDrawer(deps = {}) {
 
                   // Action buttons
                   let actionsHtml = '';
-                  actionsHtml += `<button class="settings-button aggregate-manage-contributors" data-year="${year}">
-                  <i class="fas fa-users mr-2"></i>Manage Contributors
-                </button>`;
+
+                  // Lock/Unlock button
+                  const isLocked = status.locked || false;
+                  actionsHtml += `
+                  <button class="settings-button aggregate-toggle-lock" data-year="${year}" data-locked="${isLocked}">
+                    <i class="fas fa-${isLocked ? 'unlock' : 'lock'} mr-2"></i>${isLocked ? 'Unlock' : 'Lock'} Year
+                  </button>`;
+
+                  // Manage Contributors button - disabled if year is locked
+                  if (isLocked) {
+                    actionsHtml += `<button class="settings-button opacity-50 cursor-not-allowed" disabled data-year="${year}" title="Unlock the year to manage contributors">
+                    <i class="fas fa-users mr-2"></i>Manage Contributors
+                    <i class="fas fa-lock text-yellow-500 ml-2 text-xs"></i>
+                  </button>`;
+                  } else {
+                    actionsHtml += `<button class="settings-button aggregate-manage-contributors" data-year="${year}">
+                    <i class="fas fa-users mr-2"></i>Manage Contributors
+                  </button>`;
+                  }
 
                   if (isRevealed) {
                     actionsHtml += `
@@ -1650,6 +1664,7 @@ export function createSettingsDrawer(deps = {}) {
                       <div class="flex items-center gap-3">
                         <i class="fas fa-chevron-right text-gray-400 aggregate-year-chevron transition-transform duration-300 ease-in-out text-sm" style="transform: rotate(0deg);" aria-hidden="true"></i>
                         <h5 class="text-lg font-bold text-white">${year}</h5>
+                        ${isLocked ? '<i class="fas fa-lock text-yellow-500 ml-2" title="Year is locked"></i>' : ''}
                       </div>
                       ${statusBadge}
                     </button>
@@ -1687,27 +1702,6 @@ export function createSettingsDrawer(deps = {}) {
         `
         }
 
-        <!-- Database Management -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">Database Management</h3>
-          <div class="settings-group-content">
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Backup Database</label>
-                <p class="settings-description">Download a backup of the entire database</p>
-              </div>
-              <a href="/admin/backup" class="settings-button" download>Download Backup</a>
-            </div>
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Restore Database</label>
-                <p class="settings-description">Restore from a backup file (destructive operation)</p>
-              </div>
-              <button id="restoreDatabaseBtn" class="settings-button settings-button-danger">Restore Backup</button>
-            </div>
-          </div>
-        </div>
-
         <!-- Album Summaries -->
         <div class="settings-group">
           <h3 class="settings-group-title">Album Summaries</h3>
@@ -1721,7 +1715,7 @@ export function createSettingsDrawer(deps = {}) {
                 <p class="settings-description">Fetch album descriptions from Claude AI for all albums without summaries</p>
               </div>
               <div class="flex gap-2">
-                <button id="fetchAlbumSummariesBtn" class="settings-button">Fetch Summaries</button>
+                <button id="fetchAlbumSummariesBtn" class="settings-button">Fetch Missing</button>
                 <button id="regenerateAllSummariesBtn" class="settings-button" title="Regenerate all summaries (including existing ones)">Regenerate All</button>
                 <button id="stopAlbumSummariesBtn" class="settings-button settings-button-danger hidden">Stop</button>
               </div>
@@ -1940,6 +1934,27 @@ export function createSettingsDrawer(deps = {}) {
                     : `<button id="configureTelegramBtn" class="settings-button">Configure</button>`
                 }
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Database Management -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">Database Management</h3>
+          <div class="settings-group-content">
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Backup Database</label>
+                <p class="settings-description">Download a backup of the entire database</p>
+              </div>
+              <a href="/admin/backup" class="settings-button" download>Download Backup</a>
+            </div>
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Restore Database</label>
+                <p class="settings-description">Restore from a backup file (destructive operation)</p>
+              </div>
+              <button id="restoreDatabaseBtn" class="settings-button settings-button-danger">Restore Backup</button>
             </div>
           </div>
         </div>
@@ -2297,6 +2312,14 @@ export function createSettingsDrawer(deps = {}) {
         });
       });
 
+    document.querySelectorAll('.aggregate-toggle-lock').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const year = parseInt(btn.dataset.year, 10);
+        const isCurrentlyLocked = btn.dataset.locked === 'true';
+        await handleToggleYearLock(year, isCurrentlyLocked);
+      });
+    });
+
     // Album summary handlers
     const fetchAlbumSummariesBtn = document.getElementById(
       'fetchAlbumSummariesBtn'
@@ -2317,6 +2340,16 @@ export function createSettingsDrawer(deps = {}) {
 
     if (regenerateAllSummariesBtn) {
       regenerateAllSummariesBtn.addEventListener('click', async () => {
+        // Show confirmation modal with cost warning
+        const confirmed = await showConfirmation(
+          'Regenerate All Album Summaries',
+          'Are you sure you want to regenerate ALL album summaries?',
+          'This will regenerate summaries for all albums (including those with existing summaries) and will incur API costs. This action should only be used when necessary.',
+          'Regenerate All'
+        );
+
+        if (!confirmed) return;
+
         const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
         try {
           fetchBtn.disabled = true;
@@ -4117,6 +4150,7 @@ export function createSettingsDrawer(deps = {}) {
    */
   function updateAlbumSummaryUI(status) {
     const fetchBtn = document.getElementById('fetchAlbumSummariesBtn');
+    const regenerateBtn = document.getElementById('regenerateAllSummariesBtn');
     const stopBtn = document.getElementById('stopAlbumSummariesBtn');
     const progressEl = document.getElementById('albumSummaryProgress');
     const progressBar = document.getElementById('albumSummaryProgressBar');
@@ -4125,7 +4159,9 @@ export function createSettingsDrawer(deps = {}) {
     if (!fetchBtn || !stopBtn || !progressEl) return;
 
     if (status?.running) {
+      // Hide both action buttons, show stop button
       fetchBtn.classList.add('hidden');
+      if (regenerateBtn) regenerateBtn.classList.add('hidden');
       stopBtn.classList.remove('hidden');
       progressEl.classList.remove('hidden');
 
@@ -4138,7 +4174,9 @@ export function createSettingsDrawer(deps = {}) {
         albumSummaryPollInterval = setInterval(pollAlbumSummaryStatus, 2000);
       }
     } else {
+      // Show both action buttons, hide stop button
       fetchBtn.classList.remove('hidden');
+      if (regenerateBtn) regenerateBtn.classList.remove('hidden');
       stopBtn.classList.add('hidden');
       progressEl.classList.add('hidden');
 
@@ -4201,7 +4239,7 @@ export function createSettingsDrawer(deps = {}) {
       showToast(error.data?.error || 'Failed to start fetch', 'error');
     } finally {
       fetchBtn.disabled = false;
-      fetchBtn.textContent = 'Fetch Summaries';
+      fetchBtn.textContent = 'Fetch Missing';
     }
   }
 
@@ -4837,6 +4875,132 @@ export function createSettingsDrawer(deps = {}) {
         error.message ||
         'Failed to reset reveal experience';
       showToast(errorMsg, 'error');
+    }
+  }
+
+  /**
+   * Handle toggle year lock
+   */
+  async function handleToggleYearLock(year, isCurrentlyLocked) {
+    const action = isCurrentlyLocked ? 'unlock' : 'lock';
+    const confirmed = await showConfirmation(
+      `${action === 'lock' ? 'Lock' : 'Unlock'} Year ${year}`,
+      `Are you sure you want to ${action} year ${year}?`,
+      action === 'lock'
+        ? 'This will prevent all users (including admins) from creating or editing lists for this year.'
+        : 'This will allow users to create and edit lists for this year again.',
+      action === 'lock' ? 'Lock Year' : 'Unlock Year'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await apiCall(`/api/aggregate-list/${year}/${action}`, {
+        method: 'POST',
+      });
+
+      if (response.success) {
+        showToast(`Year ${year} has been ${action}ed successfully`, 'success');
+
+        // Partial update: Update just this year's status without collapsing
+        await updateSingleYearLockStatus(year, !isCurrentlyLocked);
+
+        // Notify main app to refresh locked year status
+        if (window.refreshLockedYearStatus) {
+          await window.refreshLockedYearStatus(year);
+        }
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing year:`, error);
+      const errorMsg =
+        error.data?.error || error.message || `Failed to ${action} year`;
+      showToast(errorMsg, 'error');
+    }
+  }
+
+  /**
+   * Update the lock status for a single year without reloading the entire admin section
+   * @param {number} year - Year to update
+   * @param {boolean} newLockStatus - New lock status (true = locked, false = unlocked)
+   */
+  async function updateSingleYearLockStatus(year, newLockStatus) {
+    // Find the lock button for this year
+    const lockButton = document.querySelector(
+      `.aggregate-toggle-lock[data-year="${year}"]`
+    );
+    if (!lockButton) return;
+
+    // Update button content entirely to avoid text duplication
+    const buttonText = newLockStatus ? 'Unlock Year' : 'Lock Year';
+    const iconClass = newLockStatus ? 'unlock' : 'lock';
+    lockButton.innerHTML = `<i class="fas fa-${iconClass} mr-2"></i>${buttonText}`;
+    lockButton.dataset.locked = newLockStatus;
+
+    // Update lock icon in year header
+    const yearHeader = document.querySelector(
+      `.aggregate-year-toggle[data-year="${year}"]`
+    );
+    if (yearHeader) {
+      const existingLockIcon = yearHeader.querySelector('.fa-lock');
+      if (newLockStatus && !existingLockIcon) {
+        // Add lock icon
+        const lockIcon = document.createElement('i');
+        lockIcon.className = 'fas fa-lock text-yellow-500 ml-2';
+        yearHeader.appendChild(lockIcon);
+      } else if (!newLockStatus && existingLockIcon) {
+        // Remove lock icon
+        existingLockIcon.remove();
+      }
+    }
+
+    // Update Manage Contributors button
+    const contributorsButton = document.querySelector(
+      `.aggregate-manage-contributors[data-year="${year}"]`
+    );
+    const disabledContributorsButton = document.querySelector(
+      `button[disabled][data-year="${year}"][title*="Unlock"]`
+    );
+
+    if (newLockStatus) {
+      // Lock engaged: Disable contributors button
+      if (contributorsButton) {
+        const newButton = document.createElement('button');
+        newButton.className =
+          'settings-button opacity-50 cursor-not-allowed';
+        newButton.disabled = true;
+        newButton.dataset.year = year;
+        newButton.title = 'Unlock the year to manage contributors';
+        newButton.innerHTML = `
+          <i class="fas fa-users mr-2"></i>Manage Contributors
+          <i class="fas fa-lock text-yellow-500 ml-2 text-xs"></i>
+        `;
+        contributorsButton.replaceWith(newButton);
+      }
+    } else {
+      // Lock removed: Enable contributors button
+      if (disabledContributorsButton) {
+        const newButton = document.createElement('button');
+        newButton.className = 'settings-button aggregate-manage-contributors';
+        newButton.dataset.year = year;
+        newButton.innerHTML = `
+          <i class="fas fa-users mr-2"></i>Manage Contributors
+        `;
+        // Re-attach event listener
+        newButton.addEventListener('click', async () => {
+          await handleShowContributorManager(year);
+        });
+        disabledContributorsButton.replaceWith(newButton);
+      }
+    }
+
+    // Update cached data if available
+    if (categoryData.admin?.aggregateStatus) {
+      const statusIndex = categoryData.admin.aggregateStatus.findIndex(
+        (s) => s.year === year
+      );
+      if (statusIndex !== -1) {
+        categoryData.admin.aggregateStatus[statusIndex].locked = newLockStatus;
+      }
     }
   }
 

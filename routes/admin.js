@@ -877,7 +877,39 @@ module.exports = (app, deps) => {
           );
           setTimeout(() => {
             logger.info(`[${restoreId}] Restarting server now...`);
-            process.exit(0); // Exit cleanly, Docker/nodemon will restart
+
+            // In development with nodemon, touch a file to trigger restart
+            // In production, Docker's restart policy will handle the exit
+            if (process.env.NODE_ENV === 'development') {
+              const fs = require('fs');
+              const path = require('path');
+              const triggerFile = path.join(__dirname, '../.restart-trigger');
+              try {
+                // Touch the file to trigger nodemon's file watcher
+                const now = new Date();
+                fs.utimesSync(triggerFile, now, now);
+                logger.info(
+                  `[${restoreId}] Triggered nodemon restart via file touch`
+                );
+              } catch (err) {
+                // File doesn't exist, create it
+                try {
+                  fs.writeFileSync(triggerFile, String(Date.now()));
+                  logger.info(
+                    `[${restoreId}] Created restart trigger file for nodemon`
+                  );
+                } catch (createErr) {
+                  logger.warn(
+                    `[${restoreId}] Could not create restart trigger file`,
+                    { error: createErr.message }
+                  );
+                }
+              }
+            }
+
+            // Exit the process - Docker will restart the container
+            // Use exit code 1 to force restart even in dev mode
+            process.exit(1);
           }, 3000);
         } else {
           const totalDuration = Date.now() - restoreStartTime;
@@ -1003,8 +1035,9 @@ module.exports = (app, deps) => {
           pool.query(
             `
             WITH album_genres AS (
-              SELECT DISTINCT li.album_id, li.genre_1, li.genre_2 
+              SELECT DISTINCT li.album_id, a.genre_1, a.genre_2 
               FROM list_items li
+              LEFT JOIN albums a ON li.album_id = a.album_id
             ),
             unique_albums AS (
               SELECT COUNT(DISTINCT album_id) as total 

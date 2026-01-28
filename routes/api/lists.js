@@ -39,6 +39,8 @@ module.exports = (app, deps) => {
     },
   } = deps;
 
+  const { validateYearNotLocked } = require('../../utils/year-lock');
+
   /**
    * Helper to find a list by ID and verify ownership
    * @param {string} listId - The list _id
@@ -263,6 +265,21 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'Updates must be an array' });
     }
 
+    // Check for locked years before processing updates
+    try {
+      const uniqueYears = new Set(
+        updates.map((u) => u.year).filter((y) => y !== undefined && y !== null)
+      );
+      for (const year of uniqueYears) {
+        await validateYearNotLocked(pool, year, 'bulk update lists');
+      }
+    } catch (err) {
+      return res.status(403).json({
+        error: err.message,
+        yearLocked: true,
+      });
+    }
+
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -392,6 +409,18 @@ module.exports = (app, deps) => {
         }
         groupId = groupResult.rows[0].id;
         listYear = groupResult.rows[0].year; // Inherit year from group
+
+        // Check if year is locked
+        try {
+          await validateYearNotLocked(pool, listYear, 'create list');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            error: err.message,
+            yearLocked: true,
+            year: listYear,
+          });
+        }
       } else if (year !== undefined && year !== null) {
         // Create/find year group
         const yearValidation = validateYear(year);
@@ -400,6 +429,18 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: yearValidation.error });
         }
         listYear = yearValidation.value;
+
+        // Check if year is locked
+        try {
+          await validateYearNotLocked(pool, listYear, 'create list');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            error: err.message,
+            yearLocked: true,
+            year: listYear,
+          });
+        }
 
         let yearGroupResult = await client.query(
           `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
@@ -733,6 +774,22 @@ module.exports = (app, deps) => {
         values.push(targetYear);
       }
 
+      // Check if any affected years are locked
+      try {
+        // Check source year (current list year)
+        await validateYearNotLocked(pool, list.year, 'update list');
+        // Check target year if it's different
+        if (targetYear !== list.year) {
+          await validateYearNotLocked(pool, targetYear, 'update list');
+        }
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+        });
+      }
+
       // Handle name change
       if (newName !== undefined) {
         if (typeof newName !== 'string' || newName.trim().length === 0) {
@@ -836,6 +893,18 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
+      // Check if year is locked
+      try {
+        await validateYearNotLocked(pool, list.year, 'modify list items');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+          year: list.year,
+        });
+      }
+
       const timestamp = new Date();
 
       // Delete existing items
@@ -921,6 +990,17 @@ module.exports = (app, deps) => {
       const list = await findListById(id, req.user._id);
       if (!list) {
         return res.status(404).json({ error: 'List not found' });
+      }
+
+      // Check if year is locked
+      try {
+        await validateYearNotLocked(pool, list.year, 'reorder list items');
+      } catch (err) {
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+          year: list.year,
+        });
       }
 
       client = await pool.connect();
@@ -1011,6 +1091,18 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'List not found' });
         }
 
+        // Check if year is locked
+        try {
+          await validateYearNotLocked(pool, list.year, 'update comment');
+        } catch (err) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            error: err.message,
+            yearLocked: true,
+            year: list.year,
+          });
+        }
+
         const trimmedComment = comment ? comment.trim() : null;
         let result;
 
@@ -1076,6 +1168,18 @@ module.exports = (app, deps) => {
       if (!list) {
         await client.query('ROLLBACK');
         return res.status(404).json({ error: 'List not found' });
+      }
+
+      // Check if year is locked
+      try {
+        await validateYearNotLocked(pool, list.year, 'modify list items');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+          year: list.year,
+        });
       }
 
       const timestamp = new Date();
@@ -1355,6 +1459,18 @@ module.exports = (app, deps) => {
       const list = listResult.rows[0];
       const year = list.year || list.group_year;
 
+      // Check if year is locked
+      try {
+        await validateYearNotLocked(pool, year, 'change main status');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+          year: year,
+        });
+      }
+
       if (isMain === false) {
         await client.query(
           `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1`,
@@ -1469,7 +1585,7 @@ module.exports = (app, deps) => {
       await client.query('BEGIN');
 
       const listResult = await client.query(
-        `SELECT id, _id, name, year, group_id FROM lists WHERE _id = $1 AND user_id = $2`,
+        `SELECT id, _id, name, year, group_id, is_main FROM lists WHERE _id = $1 AND user_id = $2`,
         [id, req.user._id]
       );
 
@@ -1479,6 +1595,26 @@ module.exports = (app, deps) => {
       }
 
       const list = listResult.rows[0];
+
+      // Check if main list (always blocked, regardless of lock status)
+      if (list.is_main) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: 'Cannot delete main list. Unset main status first.',
+        });
+      }
+
+      // Check if year is locked (only for non-main lists)
+      try {
+        await validateYearNotLocked(pool, list.year, 'delete list');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({
+          error: err.message,
+          yearLocked: true,
+          year: list.year,
+        });
+      }
 
       // Delete list items
       await client.query('DELETE FROM list_items WHERE list_id = $1', [

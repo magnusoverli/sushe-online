@@ -13,6 +13,7 @@ import {
   extractYearFromDate,
 } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
+import { isYearLocked } from './year-lock.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -250,6 +251,7 @@ const pollingControllers = new Map(); // listId -> AbortController
  * @param {Function} deps.playTrackSafe - Play track safely by album ID
  * @param {Function} deps.reapplyNowPlayingBorder - Re-apply now playing border
  * @param {Function} deps.initializeUnifiedSorting - Initialize drag-drop sorting
+ * @param {Function} deps.destroySorting - Destroy drag-drop sorting instance
  * @param {Function} deps.setContextAlbum - Set context album index and ID for menus
  * @returns {Object} Album display module API
  */
@@ -273,6 +275,7 @@ export function createAlbumDisplay(deps = {}) {
     playTrackSafe,
     reapplyNowPlayingBorder,
     initializeUnifiedSorting,
+    destroySorting,
     setContextAlbum,
     getTrackName,
     getTrackLength,
@@ -2125,6 +2128,33 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
+   * Add visual banner indicating the year is locked
+   * @param {HTMLElement} container - Container element
+   * @param {number} year - Locked year
+   */
+  function addYearLockedBanner(container, year) {
+    // Remove existing banner if present
+    const existingBanner = container.querySelector('.year-locked-banner');
+    if (existingBanner) {
+      existingBanner.remove();
+    }
+
+    // Create lock banner
+    const banner = document.createElement('div');
+    banner.className =
+      'year-locked-banner bg-yellow-900 bg-opacity-20 border border-yellow-700 rounded-lg p-3 mb-4 flex items-center gap-3 text-yellow-200';
+    banner.innerHTML = `
+      <i class="fas fa-lock text-yellow-500"></i>
+      <span class="text-sm">
+        Year ${year} is locked. You cannot reorder, add, or edit albums in this list.
+      </span>
+    `;
+
+    // Insert at the beginning of the container
+    container.insertBefore(banner, container.firstChild);
+  }
+
+  /**
    * Main display function - renders albums to the container
    * @param {Array} albums - Album array to display
    * @param {Object} options - Display options
@@ -2292,7 +2322,39 @@ export function createAlbumDisplay(deps = {}) {
     // Note: After replaceChildren, if albumContainer was a DocumentFragment,
     // it's now empty - the children are in `container`. Use `container` for lookups.
     prePopulatePositionCache(container, isMobile);
-    initializeUnifiedSorting(container, isMobile);
+
+    // Only enable sorting if the year is not locked
+    const currentList = getCurrentList();
+    const listMeta = getListMetadata(currentList);
+    const listYear = listMeta?.year || null;
+
+    if (listYear) {
+      isYearLocked(listYear).then((locked) => {
+        if (!locked) {
+          initializeUnifiedSorting(container, isMobile);
+          // Remove lock banner if it exists
+          const existingBanner = container.querySelector('.year-locked-banner');
+          if (existingBanner) {
+            existingBanner.remove();
+          }
+        } else {
+          // Year is locked - destroy any existing sortable instance
+          if (destroySorting) {
+            destroySorting(container);
+          }
+          // Add visual indicator that the list is locked
+          addYearLockedBanner(container, listYear);
+        }
+      });
+    } else {
+      // No year associated with list (e.g., collections) - enable sorting
+      initializeUnifiedSorting(container, isMobile);
+      // Remove lock banner if it exists
+      const existingBanner = container.querySelector('.year-locked-banner');
+      if (existingBanner) {
+        existingBanner.remove();
+      }
+    }
 
     // Initialize lazy loading for album cover images
     observeLazyImages(container);
