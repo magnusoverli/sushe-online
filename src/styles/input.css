@@ -2245,6 +2245,17 @@ body.now-playing-bar-visible #addAlbumFAB {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+/* Duplicate review modal layout */
+.duplicate-review-modal-content {
+  max-width: 56rem;
+  width: 90vw;
+}
+
+.duplicate-review-modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
 .settings-form-group {
   margin-bottom: 1.25rem;
 }
@@ -2276,6 +2287,34 @@ body.now-playing-bar-visible #addAlbumFAB {
     max-height: calc(
       100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
     );
+  }
+
+  .duplicate-review-modal-content {
+    width: 100%;
+    max-width: none;
+  }
+
+  .duplicate-review-modal .settings-modal-header {
+    padding: 1rem;
+  }
+
+  .duplicate-review-modal-body {
+    padding: 1rem;
+    max-height: none;
+  }
+
+  .duplicate-review-modal-footer {
+    padding: 1rem;
+  }
+
+  .duplicate-review-modal-footer > div {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .duplicate-review-modal-footer .settings-button {
+    width: 100%;
+    min-height: 44px;
   }
 
   .settings-modal-footer {
