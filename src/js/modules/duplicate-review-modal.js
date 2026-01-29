@@ -59,9 +59,9 @@ function createModal() {
     <div class="settings-modal-backdrop"></div>
     <div class="settings-modal-content duplicate-review-modal-content">
       <div class="settings-modal-header">
-        <div class="flex items-center gap-3">
-          <h3 class="settings-modal-title">Review Potential Duplicates</h3>
-          <span id="duplicateProgress" class="px-2 py-1 bg-gray-700 text-gray-300 text-sm rounded">
+        <div class="flex items-center gap-2">
+          <h3 class="settings-modal-title">Review Duplicates</h3>
+          <span id="duplicateProgress" class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs sm:text-sm rounded">
             1 / 1
           </span>
         </div>
@@ -72,21 +72,21 @@ function createModal() {
       <div class="settings-modal-body duplicate-review-modal-body" id="duplicateReviewContent">
         <!-- Content rendered dynamically -->
       </div>
-      <div class="settings-modal-footer duplicate-review-modal-footer flex-wrap gap-2">
+      <div class="settings-modal-footer duplicate-review-modal-footer">
         <div class="flex gap-2">
           <button id="keepLeftBtn" class="settings-button bg-green-700 hover:bg-green-600" type="button">
-            <i class="fas fa-check mr-1"></i> Keep Left
+            <i class="fas fa-check"></i><span class="hidden sm:inline ml-1">Keep</span> Left
           </button>
           <button id="keepRightBtn" class="settings-button bg-green-700 hover:bg-green-600" type="button">
-            <i class="fas fa-check mr-1"></i> Keep Right
+            <i class="fas fa-check"></i><span class="hidden sm:inline ml-1">Keep</span> Right
           </button>
         </div>
         <div class="flex gap-2">
           <button id="markDistinctBtn" class="settings-button bg-blue-700 hover:bg-blue-600" type="button">
-            <i class="fas fa-not-equal mr-1"></i> Different Albums
+            <i class="fas fa-not-equal"></i><span class="hidden sm:inline ml-1">Different</span>
           </button>
           <button id="skipPairBtn" class="settings-button" type="button">
-            <i class="fas fa-forward mr-1"></i> Skip
+            <i class="fas fa-forward"></i><span class="hidden sm:inline ml-1">Skip</span>
           </button>
         </div>
       </div>
@@ -259,39 +259,34 @@ function renderCurrentPair() {
 
   const diffSection1 =
     diffFields1.length > 0
-      ? `<div class="mt-3 pt-3 border-t border-gray-700 space-y-1">${diffFields1.join('')}</div>`
+      ? `<div class="mt-2 pt-2 border-t border-gray-700 space-y-0.5">${diffFields1.join('')}</div>`
       : '';
   const diffSection2 =
     diffFields2.length > 0
-      ? `<div class="mt-3 pt-3 border-t border-gray-700 space-y-1">${diffFields2.join('')}</div>`
+      ? `<div class="mt-2 pt-2 border-t border-gray-700 space-y-0.5">${diffFields2.join('')}</div>`
       : '';
 
   content.innerHTML = `
-    <!-- Confidence Banner -->
-    <div class="mb-4 p-3 sm:p-4 rounded-lg ${pair.confidence >= 90 ? 'bg-red-900/30 border border-red-700/50' : pair.confidence >= 75 ? 'bg-yellow-900/30 border border-yellow-700/50' : 'bg-blue-900/30 border border-blue-700/50'}">
-      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div class="flex items-center gap-2">
-          <span class="text-base sm:text-lg font-bold ${pair.confidence >= 90 ? 'text-red-400' : pair.confidence >= 75 ? 'text-yellow-400' : 'text-blue-400'}">
-            ${pair.confidence}% Match
-          </span>
-          <span class="text-xs sm:text-sm text-gray-400">
-            (Artist: ${pair.artistScore}% | Album: ${pair.albumScore}%)
-          </span>
-        </div>
-        <div class="text-xs sm:text-sm ${diffs.hasDifferences ? 'text-yellow-400' : 'text-green-400'}">
-          ${diffs.hasDifferences ? `${diffs.differenceCount} field${diffs.differenceCount > 1 ? 's' : ''} differ` : 'All fields match'}
-        </div>
+    <!-- Confidence Banner - compact on mobile -->
+    <div class="mb-3 p-2 sm:p-3 rounded-lg ${pair.confidence >= 90 ? 'bg-red-900/30 border border-red-700/50' : pair.confidence >= 75 ? 'bg-yellow-900/30 border border-yellow-700/50' : 'bg-blue-900/30 border border-blue-700/50'}">
+      <div class="flex items-center justify-between flex-wrap gap-1">
+        <span class="text-sm sm:text-base font-bold ${pair.confidence >= 90 ? 'text-red-400' : pair.confidence >= 75 ? 'text-yellow-400' : 'text-blue-400'}">
+          ${pair.confidence}% Match
+        </span>
+        <span class="text-xs ${diffs.hasDifferences ? 'text-yellow-400' : 'text-green-400'}">
+          ${diffs.hasDifferences ? `${diffs.differenceCount} diff` : 'Match'}
+        </span>
       </div>
     </div>
 
-    <!-- Side-by-side comparison -->
-    <div class="duplicate-review-compare grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+    <!-- Side-by-side comparison - always 2 columns -->
+    <div class="duplicate-review-compare">
       <!-- Left Album -->
-      <div class="duplicate-review-card bg-gray-800/50 rounded-lg p-3 sm:p-4 border-2 border-transparent hover:border-green-600/50 transition-colors">
-        <div class="text-center mb-3">
-          <span class="px-3 py-1 bg-gray-700 text-gray-300 text-xs sm:text-sm rounded-full">Left</span>
+      <div class="duplicate-review-card bg-gray-800/50 rounded-lg p-2 sm:p-4 border-2 border-transparent hover:border-green-600/50 transition-colors">
+        <div class="text-center mb-2">
+          <span class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">Left</span>
         </div>
-        <div class="duplicate-review-cover aspect-square mb-4 bg-gray-900 rounded-lg overflow-hidden max-w-[160px] sm:max-w-[200px] mx-auto">
+        <div class="duplicate-review-cover aspect-square mb-2 sm:mb-3 bg-gray-900 rounded overflow-hidden">
           <img 
             src="${leftCoverUrl || placeholderSvg}" 
             alt="${escapeHtml(pair.album1.album)}"
@@ -300,18 +295,18 @@ function renderCurrentPair() {
           />
         </div>
         <div class="text-center">
-          <div class="text-white font-semibold" title="${escapeHtml(pair.album1.album)}">${escapeHtml(pair.album1.album)}</div>
-          <div class="text-gray-400 text-sm" title="${escapeHtml(pair.album1.artist)}">${escapeHtml(pair.album1.artist)}</div>
+          <div class="album-title text-white font-semibold text-sm sm:text-base truncate" title="${escapeHtml(pair.album1.album)}">${escapeHtml(pair.album1.album)}</div>
+          <div class="album-artist text-gray-400 text-xs sm:text-sm truncate" title="${escapeHtml(pair.album1.artist)}">${escapeHtml(pair.album1.artist)}</div>
           ${diffSection1}
         </div>
       </div>
 
       <!-- Right Album -->
-      <div class="duplicate-review-card bg-gray-800/50 rounded-lg p-3 sm:p-4 border-2 border-transparent hover:border-green-600/50 transition-colors">
-        <div class="text-center mb-3">
-          <span class="px-3 py-1 bg-gray-700 text-gray-300 text-xs sm:text-sm rounded-full">Right</span>
+      <div class="duplicate-review-card bg-gray-800/50 rounded-lg p-2 sm:p-4 border-2 border-transparent hover:border-green-600/50 transition-colors">
+        <div class="text-center mb-2">
+          <span class="px-2 py-0.5 bg-gray-700 text-gray-300 text-xs rounded-full">Right</span>
         </div>
-        <div class="duplicate-review-cover aspect-square mb-4 bg-gray-900 rounded-lg overflow-hidden max-w-[160px] sm:max-w-[200px] mx-auto">
+        <div class="duplicate-review-cover aspect-square mb-2 sm:mb-3 bg-gray-900 rounded overflow-hidden">
           <img 
             src="${rightCoverUrl || placeholderSvg}" 
             alt="${escapeHtml(pair.album2.album)}"
@@ -320,8 +315,8 @@ function renderCurrentPair() {
           />
         </div>
         <div class="text-center">
-          <div class="text-white font-semibold" title="${escapeHtml(pair.album2.album)}">${escapeHtml(pair.album2.album)}</div>
-          <div class="text-gray-400 text-sm" title="${escapeHtml(pair.album2.artist)}">${escapeHtml(pair.album2.artist)}</div>
+          <div class="album-title text-white font-semibold text-sm sm:text-base truncate" title="${escapeHtml(pair.album2.album)}">${escapeHtml(pair.album2.album)}</div>
+          <div class="album-artist text-gray-400 text-xs sm:text-sm truncate" title="${escapeHtml(pair.album2.artist)}">${escapeHtml(pair.album2.artist)}</div>
           ${diffSection2}
         </div>
       </div>
@@ -335,9 +330,9 @@ function renderCurrentPair() {
 
 function renderDiffField(label, value) {
   return `
-    <div class="flex justify-between items-center bg-yellow-900/20 border-l-2 border-yellow-500 pl-2 py-1 text-sm">
-      <span class="text-gray-400">${label}:</span>
-      <span class="text-yellow-300" title="${escapeHtml(value)}">${escapeHtml(value)}</span>
+    <div class="bg-yellow-900/20 border-l-2 border-yellow-500 pl-1.5 py-0.5 text-xs">
+      <span class="text-gray-500">${label}:</span>
+      <span class="text-yellow-300 block truncate" title="${escapeHtml(value)}">${escapeHtml(value)}</span>
     </div>
   `;
 }
