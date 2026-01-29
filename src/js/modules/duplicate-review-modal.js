@@ -54,7 +54,7 @@ function createModal() {
   modalElement.id = 'duplicateReviewModal';
   // Use z-[10002] to ensure modal is above #modalPortal (z-10001) and similar-album-modal (z-10001)
   modalElement.className =
-    'fixed inset-0 z-[10002] flex items-center justify-center p-4 hidden';
+    'fixed inset-0 z-[10002] flex items-center justify-center p-4 safe-area-modal hidden';
   modalElement.innerHTML = `
     <div class="settings-modal-backdrop"></div>
     <div class="settings-modal-content" style="max-width: 56rem; width: 90vw;">

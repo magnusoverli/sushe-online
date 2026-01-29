@@ -292,7 +292,7 @@ const invalidTokenTemplate = () => `
 
 // Component: Import Conflict Modal
 const importConflictModalComponent = () => `
-  <div id="importConflictModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="importConflictModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -344,7 +344,7 @@ const importConflictModalComponent = () => `
   </div>
   
   <!-- Rename Import Modal -->
-  <div id="importRenameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="importRenameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -479,7 +479,7 @@ const contextMenusComponent = () => `
 
 // Component: Create List Modal
 const createListModalComponent = () => `
-  <div id="createListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="createListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -569,7 +569,7 @@ const createListModalComponent = () => `
 
 // Component: Create Collection Modal
 const createCollectionModalComponent = () => `
-  <div id="createCollectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="createCollectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -616,7 +616,7 @@ const createCollectionModalComponent = () => `
 
 // Component: Edit List Details Modal (formerly Rename List Modal)
 const renameListModalComponent = () => `
-  <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="renameListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -679,7 +679,7 @@ const renameListModalComponent = () => `
 // Component: Add Album Modal - Consolidated Version
 const addAlbumModalComponent = () => `
   <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center lg:p-4">
-    <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col pt-[env(safe-area-inset-top)]">
+    <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
       <!-- Unified Header -->
       <div class="flex items-center justify-between p-4 lg:p-6 border-b border-gray-800">
         <button id="closeModalBtn" class="lg:hidden p-2 -m-2 text-gray-400 hover:text-white">
@@ -911,7 +911,7 @@ const addAlbumModalComponent = () => `
 
 // Component: Confirmation Modal
 const confirmationModalComponent = () => `
-  <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -957,7 +957,7 @@ const confirmationModalComponent = () => `
 
 // Component: Service Select Modal
 const serviceSelectModalComponent = () => `
-  <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800">
@@ -1027,7 +1027,7 @@ const settingsDrawerComponent = (user) => `
 
 // Component: List Setup Wizard Modal
 const listSetupWizardComponent = () => `
-  <div id="listSetupWizard" class="hidden fixed inset-0 bg-black bg-opacity-70 z-60 flex items-center justify-center p-4">
+  <div id="listSetupWizard" class="hidden fixed inset-0 bg-black bg-opacity-70 z-60 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-700 shrink-0">
@@ -1065,7 +1065,7 @@ const listSetupWizardComponent = () => `
 
 // Component: Release Selection Modal (Admin only - for re-identifying albums)
 const releaseSelectionModalComponent = () => `
-  <div id="releaseSelectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+  <div id="releaseSelectionModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
       <!-- Modal Header -->
       <div class="p-6 border-b border-gray-800 flex-shrink-0">

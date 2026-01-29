@@ -32,7 +32,7 @@ function createModalElement() {
   const modal = document.createElement('div');
   modal.id = 'discoveryModal';
   modal.className =
-    'hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    'hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal';
   modal.innerHTML = `
     <div class="discovery-modal-content bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
       <!-- Modal Header -->

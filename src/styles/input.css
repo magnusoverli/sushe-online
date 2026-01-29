@@ -2165,6 +2165,12 @@ body.now-playing-bar-visible #addAlbumFAB {
   }
 }
 
+/* Safe-area aware modal padding (used with p-4 overlays) */
+.safe-area-modal {
+  padding-top: calc(1rem + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* Settings Modal Styles */
 .settings-modal {
   position: fixed;
@@ -2259,12 +2265,17 @@ body.now-playing-bar-visible #addAlbumFAB {
 /* Mobile responsive for modals */
 @media (max-width: 640px) {
   .settings-modal {
-    padding: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-right: 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: 0;
   }
 
   .settings-modal-content {
     border-radius: 0;
-    max-height: 100vh;
+    max-height: calc(
+      100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
   }
 
   .settings-modal-footer {

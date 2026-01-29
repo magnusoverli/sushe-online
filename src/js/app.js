@@ -2489,7 +2489,7 @@ function openRenameCategoryModal(groupId, currentName) {
   // Use the existing confirmation modal pattern with an input
   const modal = document.createElement('div');
   modal.className =
-    'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4';
+    'fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal';
   modal.id = 'renameCategoryModal';
   modal.innerHTML = `
     <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
