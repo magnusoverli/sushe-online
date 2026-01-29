@@ -753,6 +753,63 @@ body.now-playing-bar-visible #addAlbumFAB {
   transition: none !important;
 }
 
+/* Mobile sidebar drag feedback */
+@media (max-width: 1024px) {
+  /* Group section being dragged */
+  .group-section.sortable-chosen,
+  .group-section.sidebar-dragging {
+    background-color: rgba(31, 41, 55, 0.8) !important;
+    transform: scale(1.02);
+    z-index: 1000;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    border-radius: 0.375rem;
+  }
+
+  .group-section.sortable-ghost {
+    opacity: 0.3 !important;
+  }
+
+  /* List item being dragged in sidebar */
+  #mobileListNav li.sortable-chosen,
+  #mobileListNav li.sidebar-list-dragging {
+    background-color: rgba(31, 41, 55, 0.9) !important;
+    transform: scale(1.02);
+    z-index: 1000;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: 0.25rem;
+  }
+
+  #mobileListNav li.sortable-ghost {
+    opacity: 0.3 !important;
+  }
+
+  /* Prevent text selection during drag */
+  .group-section.sortable-chosen *,
+  #mobileListNav li.sortable-chosen * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+}
+
+/* Desktop sidebar drag feedback - subtle styling */
+@media (min-width: 1024px) {
+  #listNav .group-section.sortable-chosen {
+    background-color: rgba(31, 41, 55, 0.5) !important;
+  }
+
+  #listNav .group-section.sortable-ghost {
+    opacity: 0.4 !important;
+  }
+
+  #listNav li.sortable-chosen {
+    background-color: rgba(31, 41, 55, 0.5) !important;
+  }
+
+  #listNav li.sortable-ghost {
+    opacity: 0.4 !important;
+  }
+}
+
 /* Custom tooltip for comment cells - overlays on the comment itself */
 .comment-text[data-comment]:not([data-comment=''])::after {
   content: attr(data-comment);

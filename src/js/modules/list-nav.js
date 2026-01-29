@@ -771,9 +771,12 @@ export function createListNav(deps = {}) {
     if (nav) renderListItems(nav, false);
     if (mobileNav) renderListItems(mobileNav, true);
 
-    // Initialize drag-and-drop for desktop (not mobile for now)
+    // Initialize drag-and-drop for both desktop and mobile
     if (nav && apiCall) {
-      initializeDragAndDrop(nav);
+      initializeDragAndDrop(nav, false);
+    }
+    if (mobileNav && apiCall) {
+      initializeDragAndDrop(mobileNav, true);
     }
 
     // Cache list names locally for faster startup
@@ -797,41 +800,111 @@ export function createListNav(deps = {}) {
   /**
    * Initialize drag-and-drop for the sidebar
    * @param {HTMLElement} container - The sidebar container
+   * @param {boolean} isMobile - Whether this is mobile view
    */
-  function initializeDragAndDrop(container) {
+  function initializeDragAndDrop(container, isMobile = false) {
     if (!window.Sortable) {
       console.warn('SortableJS not loaded, drag-and-drop disabled');
       return;
     }
 
     // Initialize sortable for groups (reorder groups)
-    initializeGroupsSortable(container);
+    initializeGroupsSortable(container, isMobile);
 
     // Initialize sortable for lists within each group
     const groupSections = container.querySelectorAll('.group-section');
     groupSections.forEach((section) => {
       const groupId = section.getAttribute('data-group-id');
       if (groupId) {
-        initializeListsSortable(section, groupId);
+        initializeListsSortable(section, groupId, isMobile);
       }
     });
+
+    // Mobile: handle scroll vs drag conflict
+    if (isMobile) {
+      setupMobileTouchHandling(container);
+    }
+  }
+
+  /**
+   * Setup mobile touch handling for scroll vs drag conflict
+   * Allows scrolling for the first 200ms, then blocks it for drag
+   * @param {HTMLElement} container - The sidebar container
+   */
+  function setupMobileTouchHandling(container) {
+    const SCROLL_GRACE_PERIOD = 200; // ms - allow scroll during this initial period
+    let touchState = null;
+
+    const onTouchStart = (e) => {
+      const item = e.target.closest('.group-section, .group-lists > li');
+      if (
+        !item ||
+        e.target.closest(
+          'button, .no-drag, [data-list-menu-btn], [data-category-menu-btn]'
+        )
+      ) {
+        return;
+      }
+      touchState = { startTime: Date.now() };
+    };
+
+    const onTouchMove = (e) => {
+      if (!touchState) return;
+      const elapsed = Date.now() - touchState.startTime;
+      // Allow scroll during grace period, block after (for drag)
+      if (elapsed >= SCROLL_GRACE_PERIOD) {
+        e.preventDefault();
+      }
+    };
+
+    const onTouchEnd = () => {
+      touchState = null;
+    };
+
+    // Use passive for start/end, non-passive for move to allow preventDefault
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    container.addEventListener('touchend', onTouchEnd, { passive: true });
   }
 
   /**
    * Initialize sortable for reordering groups
    * @param {HTMLElement} container - The sidebar container
+   * @param {boolean} isMobile - Whether this is mobile view
    */
-  function initializeGroupsSortable(container) {
+  function initializeGroupsSortable(container, isMobile = false) {
+    // Mobile-specific SortableJS options
+    const mobileOptions = isMobile
+      ? {
+          delay: 300, // 300ms touch-and-hold delay
+          delayOnTouchOnly: true,
+          touchStartThreshold: 10, // Allow 10px movement before cancelling drag
+          forceFallback: true,
+          fallbackTolerance: 5,
+        }
+      : {};
+
     groupsSortable = new window.Sortable(container, {
       animation: 150,
-      handle: '.group-section', // Drag by the section
+      handle: '.group-header-wrapper', // Drag by the header wrapper, not entire section
       draggable: '.group-section',
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
-      filter: '.group-lists', // Don't trigger on list items
+      filter:
+        '.group-lists, .category-menu-btn, [data-category-menu-btn], .no-drag', // Exclude list items and menu buttons
       preventOnFilter: false,
+      ...mobileOptions,
+      onStart: function (evt) {
+        // Mobile haptic feedback
+        if (isMobile && navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+        evt.item.classList.add('sidebar-dragging');
+      },
       onEnd: async (evt) => {
+        evt.item.classList.remove('sidebar-dragging');
+
         if (evt.oldIndex === evt.newIndex) return;
 
         // Get the new order of group IDs
@@ -866,10 +939,22 @@ export function createListNav(deps = {}) {
    * Initialize sortable for reordering lists within a group
    * @param {HTMLElement} section - The group section element
    * @param {string} groupId - The group ID
+   * @param {boolean} isMobile - Whether this is mobile view
    */
-  function initializeListsSortable(section, groupId) {
+  function initializeListsSortable(section, groupId, isMobile = false) {
     const listsContainer = section.querySelector('.group-lists');
     if (!listsContainer) return;
+
+    // Mobile-specific SortableJS options
+    const mobileOptions = isMobile
+      ? {
+          delay: 300, // 300ms touch-and-hold delay
+          delayOnTouchOnly: true,
+          touchStartThreshold: 10, // Allow 10px movement before cancelling drag
+          forceFallback: true,
+          fallbackTolerance: 5,
+        }
+      : {};
 
     const sortable = new window.Sortable(listsContainer, {
       group: 'lists', // Allow dragging between groups
@@ -879,7 +964,19 @@ export function createListNav(deps = {}) {
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
       dragClass: 'sortable-drag',
+      filter: '[data-list-menu-btn], .no-drag', // Exclude menu buttons
+      preventOnFilter: false,
+      ...mobileOptions,
+      onStart: function (evt) {
+        // Mobile haptic feedback
+        if (isMobile && navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+        evt.item.classList.add('sidebar-list-dragging');
+      },
       onEnd: async (evt) => {
+        evt.item.classList.remove('sidebar-list-dragging');
+
         const listId = evt.item
           .querySelector('[data-list-id]')
           ?.getAttribute('data-list-id');
