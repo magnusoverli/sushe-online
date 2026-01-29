@@ -17,8 +17,12 @@ let isLoading = false;
  * Open the manual album audit modal
  * Fetches manual albums and displays review interface
  * @param {number} threshold - Optional threshold (default: read from DOM)
+ * @param {object} prefetchedData - Optional pre-fetched data to skip the API call
  */
-export async function openManualAlbumAudit(threshold = null) {
+export async function openManualAlbumAudit(
+  threshold = null,
+  prefetchedData = null
+) {
   if (isLoading) return;
 
   isLoading = true;
@@ -38,23 +42,30 @@ export async function openManualAlbumAudit(threshold = null) {
       createModal();
     }
 
-    // Show loading state
+    // Show loading state only if we need to fetch
     showModal();
-    setLoadingState(true);
-
-    // Fetch manual albums with threshold
-    const response = await fetch(
-      `/api/admin/audit/manual-albums?threshold=${thresholdValue}`,
-      {
-        credentials: 'same-origin',
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch manual albums');
+    if (!prefetchedData) {
+      setLoadingState(true);
     }
 
-    currentData = await response.json();
+    // Use pre-fetched data or fetch from API
+    if (prefetchedData) {
+      currentData = prefetchedData;
+    } else {
+      // Fetch manual albums with threshold
+      const response = await fetch(
+        `/api/admin/audit/manual-albums?threshold=${thresholdValue}`,
+        {
+          credentials: 'same-origin',
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch manual albums');
+      }
+
+      currentData = await response.json();
+    }
     currentIndex = 0;
 
     setLoadingState(false);

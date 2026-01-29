@@ -1938,6 +1938,7 @@ export function createSettingsDrawer(deps = {}) {
                 <button id="auditManualAlbumsBtn" class="settings-button">Audit Manual Albums</button>
               </div>
             </div>
+            <div id="manualAlbumAuditStatus" class="hidden mt-3 text-sm text-gray-400"></div>
           </div>
         </div>
 
@@ -2565,7 +2566,7 @@ export function createSettingsDrawer(deps = {}) {
       'auditManualAlbumsBtn'
     );
     if (auditManualAlbumsBtn) {
-      auditManualAlbumsBtn.addEventListener('click', openManualAlbumAudit);
+      auditManualAlbumsBtn.addEventListener('click', handleAuditManualAlbums);
     }
   }
 
@@ -2632,6 +2633,84 @@ export function createSettingsDrawer(deps = {}) {
     } finally {
       scanBtn.disabled = false;
       scanBtn.textContent = 'Scan & Review';
+    }
+  }
+
+  /**
+   * Handle manual album audit - pre-fetches data and shows inline message if nothing to review
+   */
+  async function handleAuditManualAlbums() {
+    const auditBtn = document.getElementById('auditManualAlbumsBtn');
+    const statusDiv = document.getElementById('manualAlbumAuditStatus');
+    const thresholdSelect = document.getElementById('manualAlbumThreshold');
+    const threshold = thresholdSelect
+      ? parseFloat(thresholdSelect.value)
+      : 0.15;
+
+    try {
+      auditBtn.disabled = true;
+      auditBtn.textContent = 'Checking...';
+      statusDiv.classList.remove('hidden');
+      statusDiv.innerHTML =
+        '<i class="fas fa-spinner fa-spin mr-2"></i>Scanning manual albums...';
+
+      const response = await fetch(
+        `/api/admin/audit/manual-albums?threshold=${threshold}`,
+        { credentials: 'same-origin' }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch manual albums');
+      }
+
+      const data = await response.json();
+
+      const hasIntegrityIssues =
+        data.integrityIssues && data.integrityIssues.length > 0;
+      const hasMatches = data.totalWithMatches > 0;
+
+      if (!hasIntegrityIssues && !hasMatches) {
+        // Nothing to review - show inline message like duplicate scanner
+        statusDiv.innerHTML = `
+          <span class="text-green-400">
+            <i class="fas fa-check-circle mr-2"></i>
+            No manual albums need review (${data.totalManual} manual albums checked)
+          </span>
+        `;
+        showToast('No manual albums need review', 'success');
+      } else {
+        // Has items to review - open the modal with pre-fetched data
+        const issueCount = hasIntegrityIssues ? data.integrityIssues.length : 0;
+        const matchCount = data.totalWithMatches;
+
+        statusDiv.innerHTML = `
+          <span class="text-yellow-400">
+            Found ${issueCount > 0 ? `${issueCount} integrity issue${issueCount !== 1 ? 's' : ''}` : ''}${issueCount > 0 && matchCount > 0 ? ' and ' : ''}${matchCount > 0 ? `${matchCount} album${matchCount !== 1 ? 's' : ''} to review` : ''}. Opening review...
+          </span>
+        `;
+
+        // Open modal with pre-fetched data
+        await openManualAlbumAudit(threshold, data);
+
+        // Update status after review
+        statusDiv.innerHTML = `
+          <span class="text-gray-400">
+            Last audit: ${data.totalManual} manual albums checked
+          </span>
+        `;
+      }
+    } catch (error) {
+      console.error('Error auditing manual albums:', error);
+      statusDiv.innerHTML = `
+        <span class="text-red-400">
+          <i class="fas fa-exclamation-triangle mr-2"></i>
+          Error: ${error.message}
+        </span>
+      `;
+      showToast('Error auditing manual albums', 'error');
+    } finally {
+      auditBtn.disabled = false;
+      auditBtn.textContent = 'Audit Manual Albums';
     }
   }
 
