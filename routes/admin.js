@@ -1582,6 +1582,113 @@ module.exports = (app, deps) => {
     }
   );
 
+  // ============ TELEGRAM RECOMMENDATIONS CONFIG ============
+
+  // Get recommendations Telegram status
+  app.get(
+    '/api/admin/telegram/recommendations/status',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const config = await telegramNotifier.getConfig();
+        const threads = await telegramNotifier.getRecommendationThreads();
+
+        res.json({
+          configured: config?.enabled || false,
+          recommendationsEnabled: config?.recommendationsEnabled || false,
+          chatTitle: config?.chatTitle || null,
+          threads,
+        });
+      } catch (error) {
+        logger.error('Error getting recommendations Telegram status', {
+          error: error.message,
+        });
+        res.status(500).json({ error: 'Failed to get status' });
+      }
+    }
+  );
+
+  // Enable/disable recommendations notifications
+  app.post(
+    '/api/admin/telegram/recommendations/toggle',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const { enabled } = req.body;
+
+        // Check if base Telegram is configured
+        const config = await telegramNotifier.getConfig();
+        if (!config?.enabled) {
+          return res.status(400).json({
+            error: 'Telegram must be configured for admin events first',
+          });
+        }
+
+        await telegramNotifier.setRecommendationsEnabled(enabled);
+
+        logger.info('Admin action', {
+          action: enabled
+            ? 'enable_telegram_recommendations'
+            : 'disable_telegram_recommendations',
+          adminId: req.user._id,
+          adminEmail: req.user.email,
+          ip: req.ip,
+        });
+
+        res.json({ success: true, enabled });
+      } catch (error) {
+        logger.error('Error toggling recommendations Telegram', {
+          error: error.message,
+        });
+        res.status(500).json({ error: 'Failed to toggle setting' });
+      }
+    }
+  );
+
+  // Send test recommendation notification
+  app.post(
+    '/api/admin/telegram/recommendations/test',
+    ensureAuth,
+    ensureAdmin,
+    async (req, res) => {
+      try {
+        const config = await telegramNotifier.getConfig();
+        if (!config?.enabled || !config?.recommendationsEnabled) {
+          return res.status(400).json({
+            error: 'Recommendations notifications are not enabled',
+          });
+        }
+
+        const testYear = new Date().getFullYear();
+        const result = await telegramNotifier.sendRecommendationNotification(
+          {
+            artist: 'Test Artist',
+            album: 'Test Album',
+            album_id: 'test-album-id',
+            year: testYear,
+            recommended_by: req.user.username,
+            reasoning:
+              'This is a test recommendation to verify the Telegram integration is working correctly.',
+          },
+          null // No cover for test
+        );
+
+        if (!result.success) {
+          return res.status(500).json({ error: result.error });
+        }
+
+        res.json({ success: true, year: testYear });
+      } catch (error) {
+        logger.error('Error sending test recommendation notification', {
+          error: error.message,
+        });
+        res.status(500).json({ error: 'Failed to send test notification' });
+      }
+    }
+  );
+
   // ============ ALBUM SUMMARY FETCH API ============
   // Batch fetch album summaries from Claude API
 

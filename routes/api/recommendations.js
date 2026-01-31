@@ -16,7 +16,8 @@ const { ensureAdmin } = require('../../middleware/auth');
  * @param {Object} app - Express app instance
  * @param {Object} deps - Dependencies
  */
-module.exports = (app, deps) => {
+module.exports = (appInstance, deps) => {
+  const app = appInstance;
   const {
     ensureAuthAPI,
     pool,
@@ -264,6 +265,32 @@ module.exports = (app, deps) => {
           userId: req.user._id,
           username: req.user.username,
         });
+
+        // Send Telegram notification (fire-and-forget)
+        const telegramNotifier = app.locals.telegramNotifier;
+        if (telegramNotifier?.sendRecommendationNotification) {
+          const coverUrl = `/api/albums/${encodeURIComponent(albumId)}/cover`;
+          // Use absolute URL for Telegram
+          const baseUrl =
+            process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+          telegramNotifier
+            .sendRecommendationNotification(
+              {
+                artist: album.artist,
+                album: album.album,
+                album_id: albumId,
+                year,
+                recommended_by: req.user.username,
+                reasoning: trimmedReasoning,
+              },
+              `${baseUrl}${coverUrl}`
+            )
+            .catch((err) => {
+              logger.warn('Failed to send Telegram notification', {
+                error: err.message,
+              });
+            });
+        }
 
         res.status(201).json({
           success: true,

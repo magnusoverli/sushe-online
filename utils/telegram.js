@@ -385,6 +385,7 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
       topicName: config.topic_name,
       webhookSecret: config.webhook_secret,
       enabled: config.enabled,
+      recommendationsEnabled: config.recommendations_enabled || false,
       configuredAt: config.configured_at,
     };
 
@@ -423,7 +424,24 @@ function createConfigManager(pool, encryptionKey, log, setupHelpers, baseUrl) {
     return true;
   }
 
-  return { saveConfig, getConfig, isConfigured, disconnect };
+  async function setRecommendationsEnabled(enabled) {
+    if (!pool) return false;
+
+    await pool.query(
+      'UPDATE telegram_config SET recommendations_enabled = $1',
+      [enabled]
+    );
+    configCache = null;
+    return true;
+  }
+
+  return {
+    saveConfig,
+    getConfig,
+    isConfigured,
+    disconnect,
+    setRecommendationsEnabled,
+  };
 }
 
 // ============================================
@@ -695,6 +713,195 @@ function createWebhookHandler(pool, configManager, log) {
 }
 
 // ============================================
+// RECOMMENDATIONS NOTIFIER
+// ============================================
+
+/**
+ * Create recommendations notification functions
+ */
+function createRecommendationsNotifier(pool, apiRequest, configManager, log) {
+  /**
+   * Get all recommendation threads from database
+   */
+  async function getThreads() {
+    if (!pool) return [];
+    const result = await pool.query(
+      'SELECT year, thread_id, topic_name, created_at FROM telegram_recommendation_threads ORDER BY year DESC'
+    );
+    return result.rows.map((row) => ({
+      year: row.year,
+      threadId: row.thread_id,
+      topicName: row.topic_name,
+      createdAt: row.created_at,
+    }));
+  }
+
+  /**
+   * Get or create a thread for a specific year
+   */
+  async function getOrCreateThread(year, botToken, chatId) {
+    if (!pool) return null;
+
+    // Check if thread exists
+    const existing = await pool.query(
+      'SELECT thread_id FROM telegram_recommendation_threads WHERE year = $1',
+      [year]
+    );
+
+    if (existing.rows.length > 0) {
+      return existing.rows[0].thread_id;
+    }
+
+    // Create new forum topic
+    const topicName = `Recommendations ${year}`;
+    try {
+      const result = await apiRequest(botToken, 'createForumTopic', {
+        chat_id: chatId,
+        name: topicName,
+      });
+
+      const threadId = result.message_thread_id;
+
+      // Save to database
+      await pool.query(
+        `INSERT INTO telegram_recommendation_threads (year, thread_id, topic_name, created_at)
+         VALUES ($1, $2, $3, NOW())`,
+        [year, threadId, topicName]
+      );
+
+      log.info('Created Telegram recommendation thread', {
+        year,
+        threadId,
+        topicName,
+      });
+      return threadId;
+    } catch (err) {
+      log.error('Failed to create recommendation thread', {
+        year,
+        error: err.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Send a recommendation notification to Telegram
+   * @param {Object} rec - Recommendation data
+   * @param {string} rec.artist - Artist name
+   * @param {string} rec.album - Album name
+   * @param {string} rec.album_id - Album ID for cover
+   * @param {number} rec.year - Year of recommendation
+   * @param {string} rec.recommended_by - Username of recommender
+   * @param {string} rec.reasoning - Reasoning text
+   * @param {string} [coverUrl] - Optional cover image URL
+   */
+  async function sendNotification(rec, coverUrl = null) {
+    try {
+      const config = await configManager.getConfig(true);
+      if (
+        !config?.enabled ||
+        !config.recommendationsEnabled ||
+        !config.botToken
+      ) {
+        return {
+          success: false,
+          error: 'Recommendations notifications not enabled',
+        };
+      }
+
+      // Get or create thread for this year
+      const threadId = await getOrCreateThread(
+        rec.year,
+        config.botToken,
+        config.chatId
+      );
+      if (!threadId) {
+        return { success: false, error: 'Failed to get/create thread' };
+      }
+
+      // Format message
+      const message = formatRecommendationMessage(rec);
+
+      // Try to send with photo first
+      if (coverUrl) {
+        try {
+          await apiRequest(config.botToken, 'sendPhoto', {
+            chat_id: config.chatId,
+            message_thread_id: threadId,
+            photo: coverUrl,
+            caption: message,
+            parse_mode: 'Markdown',
+          });
+          return { success: true };
+        } catch (photoErr) {
+          log.warn('Failed to send photo, falling back to text', {
+            error: photoErr.message,
+          });
+        }
+      }
+
+      // Fallback to text-only message
+      await apiRequest(config.botToken, 'sendMessage', {
+        chat_id: config.chatId,
+        message_thread_id: threadId,
+        text: message,
+        parse_mode: 'Markdown',
+      });
+
+      return { success: true };
+    } catch (err) {
+      log.error('Failed to send recommendation notification', {
+        album: rec.album,
+        artist: rec.artist,
+        year: rec.year,
+        error: err.message,
+      });
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Format the recommendation message
+   */
+  function formatRecommendationMessage(rec) {
+    const lines = [
+      '📀 *New Recommendation*',
+      '',
+      `🎵 *${escapeMarkdown(rec.album)}*`,
+      `🎤 ${escapeMarkdown(rec.artist)}`,
+      `📅 ${rec.year}`,
+      '',
+    ];
+
+    if (rec.reasoning) {
+      // Truncate reasoning if too long
+      const maxLen = 300;
+      let reasoning = rec.reasoning;
+      if (reasoning.length > maxLen) {
+        reasoning = reasoning.substring(0, maxLen) + '...';
+      }
+      lines.push(`💬 _"${escapeMarkdown(reasoning)}"_`);
+      lines.push('');
+    }
+
+    lines.push(`👤 Recommended by ${escapeMarkdown(rec.recommended_by)}`);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Escape special characters for Telegram Markdown
+   */
+  function escapeMarkdown(text) {
+    if (!text) return '';
+    // eslint-disable-next-line no-useless-escape
+    return text.replace(/([_*\[\]()~`>#+=|{}.!-])/g, '\\$1');
+  }
+
+  return { sendNotification, getThreads };
+}
+
+// ============================================
 // MAIN FACTORY
 // ============================================
 
@@ -757,6 +964,12 @@ function createTelegramNotifier(deps = {}) {
     log
   );
   const webhook = createWebhookHandler(pool, configManager, log);
+  const recommendations = createRecommendationsNotifier(
+    pool,
+    apiRequest,
+    configManager,
+    log
+  );
 
   return {
     // Setup functions
@@ -772,6 +985,7 @@ function createTelegramNotifier(deps = {}) {
     getConfig: configManager.getConfig,
     isConfigured: configManager.isConfigured,
     disconnect: configManager.disconnect,
+    setRecommendationsEnabled: configManager.setRecommendationsEnabled,
 
     // Messaging
     sendMessage: messenger.sendMessage,
@@ -794,6 +1008,10 @@ function createTelegramNotifier(deps = {}) {
     // Utilities
     encrypt,
     decrypt,
+
+    // Recommendations
+    sendRecommendationNotification: recommendations.sendNotification,
+    getRecommendationThreads: recommendations.getThreads,
   };
 }
 

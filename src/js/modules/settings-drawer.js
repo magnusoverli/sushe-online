@@ -597,6 +597,16 @@ export function createSettingsDrawer(deps = {}) {
         console.warn('Could not load Telegram status:', e);
       }
 
+      // Load Telegram recommendations status
+      let telegramRecsStatus = null;
+      try {
+        telegramRecsStatus = await apiCall(
+          '/api/admin/telegram/recommendations/status'
+        );
+      } catch (e) {
+        console.warn('Could not load Telegram recommendations status:', e);
+      }
+
       // Load admin stats
       let stats = null;
       try {
@@ -714,6 +724,10 @@ export function createSettingsDrawer(deps = {}) {
           },
         },
         telegram: telegramStatus || { configured: false },
+        telegramRecs: telegramRecsStatus || {
+          configured: false,
+          recommendationsEnabled: false,
+        },
         stats: stats || null,
         users: users,
         aggregateLists: aggregateLists,
@@ -1637,6 +1651,10 @@ export function createSettingsDrawer(deps = {}) {
       counts: { total: 0, byType: {}, byPriority: {} },
     };
     const telegram = data.telegram || { configured: false };
+    const telegramRecs = data.telegramRecs || {
+      configured: false,
+      recommendationsEnabled: false,
+    };
     const users = data.users || [];
     const aggregateLists = data.aggregateLists || [];
 
@@ -2113,6 +2131,34 @@ export function createSettingsDrawer(deps = {}) {
                 }
               </div>
             </div>
+            ${
+              telegram.configured
+                ? `
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Recommendation Notifications</label>
+                <p class="settings-description">
+                  ${
+                    telegramRecs.recommendationsEnabled
+                      ? 'New recommendations are posted to Telegram'
+                      : 'Enable to post new recommendations to Telegram'
+                  }
+                </p>
+              </div>
+              <div class="settings-row-control flex gap-2">
+                <button id="toggleTelegramRecsBtn" class="settings-button ${telegramRecs.recommendationsEnabled ? 'settings-button-danger' : ''}">
+                  ${telegramRecs.recommendationsEnabled ? 'Disable' : 'Enable'}
+                </button>
+                ${
+                  telegramRecs.recommendationsEnabled
+                    ? `<button id="testTelegramRecsBtn" class="settings-button">Test</button>`
+                    : ''
+                }
+              </div>
+            </div>
+            `
+                : ''
+            }
           </div>
         </div>
 
@@ -2355,6 +2401,26 @@ export function createSettingsDrawer(deps = {}) {
 
     if (disconnectTelegramBtn) {
       disconnectTelegramBtn.addEventListener('click', handleDisconnectTelegram);
+    }
+
+    // Telegram recommendations handlers
+    const toggleTelegramRecsBtn = document.getElementById(
+      'toggleTelegramRecsBtn'
+    );
+    const testTelegramRecsBtn = document.getElementById('testTelegramRecsBtn');
+
+    if (toggleTelegramRecsBtn) {
+      toggleTelegramRecsBtn.addEventListener(
+        'click',
+        handleToggleTelegramRecommendations
+      );
+    }
+
+    if (testTelegramRecsBtn) {
+      testTelegramRecsBtn.addEventListener(
+        'click',
+        handleTestTelegramRecommendations
+      );
     }
 
     // Database restore handler
@@ -4158,8 +4224,72 @@ export function createSettingsDrawer(deps = {}) {
   }
 
   /**
-   * Handle restore database
+   * Handle toggle Telegram recommendations notifications
    */
+  async function handleToggleTelegramRecommendations() {
+    try {
+      // Get current status
+      const status = await apiCall(
+        '/api/admin/telegram/recommendations/status'
+      );
+      const newEnabled = !status.recommendationsEnabled;
+
+      const response = await apiCall(
+        '/api/admin/telegram/recommendations/toggle',
+        {
+          method: 'POST',
+          body: JSON.stringify({ enabled: newEnabled }),
+        }
+      );
+
+      if (response.success) {
+        showToast(
+          newEnabled
+            ? 'Recommendation notifications enabled'
+            : 'Recommendation notifications disabled',
+          'success'
+        );
+
+        // Reload admin data
+        categoryData.admin = null;
+        await loadCategoryData('admin');
+      }
+    } catch (error) {
+      console.error('Error toggling Telegram recommendations:', error);
+      const errorMsg =
+        error.data?.error || error.message || 'Failed to toggle setting';
+      showToast(errorMsg, 'error');
+    }
+  }
+
+  /**
+   * Handle test Telegram recommendations notification
+   */
+  async function handleTestTelegramRecommendations() {
+    try {
+      const response = await apiCall(
+        '/api/admin/telegram/recommendations/test',
+        {
+          method: 'POST',
+        }
+      );
+
+      if (response.success) {
+        showToast(
+          `Test notification sent for year ${response.year}`,
+          'success'
+        );
+      }
+    } catch (error) {
+      console.error('Error sending test recommendation notification:', error);
+      const errorMsg =
+        error.data?.error ||
+        error.message ||
+        'Failed to send test notification';
+      showToast(errorMsg, 'error');
+    }
+  }
+
   /**
    * Handle restore database (opens modal)
    */
