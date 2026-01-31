@@ -4361,6 +4361,614 @@ async function selectRecommendations(year) {
 window.selectRecommendations = selectRecommendations;
 
 /**
+ * Create mobile recommendation card
+ * @param {Object} rec - Recommendation object
+ * @param {number} year - Year
+ * @param {boolean} locked - Whether recommendations are locked
+ * @param {number} index - Index in recommendations array
+ * @returns {HTMLElement} Card wrapper element
+ */
+function createRecommendationCard(rec, year, locked, index) {
+  const cardWrapper = document.createElement('div');
+  cardWrapper.className = 'album-card-wrapper h-[130px]';
+
+  const card = document.createElement('div');
+  card.className = 'album-card album-row relative h-[130px] bg-gray-900';
+  card.dataset.albumId = rec.album_id;
+  card.dataset.recIndex = index;
+
+  // Format date
+  const date = new Date(rec.created_at);
+  const formattedDate = date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  });
+
+  // Check if user is owner or admin (used in menu handler)
+  const _isOwner = window.currentUser?._id === rec.recommender_id;
+  const _isAdmin = window.currentUser?.role === 'admin';
+  const hasReasoning = rec.reasoning && rec.reasoning.trim().length > 0;
+
+  card.innerHTML = `
+    <div class="flex items-stretch h-full">
+      
+      <!-- COVER SECTION -->
+      <div class="shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1">
+        <!-- Album cover -->
+        <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center bg-gray-800 rounded-lg">
+          <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
+               alt="${escapeHtml(rec.album)}"
+               class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
+               loading="lazy" decoding="async"
+               onerror="this.parentElement.innerHTML='<div class=\\'w-[75px] h-[75px] rounded-lg bg-gray-800 flex items-center justify-center\\'><i class=\\'fas fa-compact-disc text-xl text-gray-600\\'></i></div>'">
+        </div>
+        <!-- Date -->
+        <div class="flex-1 flex items-center mt-1">
+          <span class="text-xs whitespace-nowrap text-gray-500">
+            ${formattedDate}
+          </span>
+        </div>
+      </div>
+      
+      <!-- INFO SECTION -->
+      <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
+        <!-- Album name -->
+        <div class="flex items-center">
+          <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
+            <i class="fas fa-compact-disc fa-xs mr-2"></i>${escapeHtml(rec.album)}
+          </h3>
+        </div>
+        <!-- Artist -->
+        <div class="flex items-center">
+          <p class="text-[13px] text-gray-500 truncate">
+            <i class="fas fa-user fa-xs mr-2"></i>
+            <span data-field="artist-mobile-text">${escapeHtml(rec.artist)}</span>
+          </p>
+        </div>
+        <!-- Recommended by -->
+        <div class="flex items-center">
+          <span class="text-[13px] text-blue-400 truncate">
+            <i class="fas fa-thumbs-up fa-xs mr-2"></i>
+            ${escapeHtml(rec.recommended_by)}
+          </span>
+        </div>
+        <!-- View reasoning button -->
+        ${
+          hasReasoning
+            ? `<div class="flex items-center">
+            <button class="view-reasoning-mobile-btn text-[13px] text-purple-400 hover:text-purple-300 active:opacity-70 flex items-center gap-1 no-drag">
+              <i class="fas fa-comment-alt fa-xs"></i>
+              <span>Reason for recommendation</span>
+            </button>
+          </div>`
+            : `<div class="flex items-center">
+            <span class="text-[13px] text-gray-600 italic">
+              <i class="fas fa-comment-alt fa-xs mr-1"></i>No reason provided
+            </span>
+          </div>`
+        }
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+      </div>
+      
+      <!-- MENU SECTION -->
+      <div class="shrink-0 w-[25px] border-l border-gray-800/50" style="display: flex; align-items: center; justify-content: center;">
+        <button data-rec-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform: translateX(7px);">
+          <i class="fas fa-ellipsis-v fa-fw"></i>
+        </button>
+      </div>
+      
+    </div>
+  `;
+
+  cardWrapper.appendChild(card);
+  attachRecommendationCardHandlers(card, rec, year, locked);
+  return cardWrapper;
+}
+
+/**
+ * Attach event handlers to mobile recommendation card
+ * @param {HTMLElement} card - Card element
+ * @param {Object} rec - Recommendation object
+ * @param {number} year - Year
+ * @param {boolean} locked - Whether recommendations are locked
+ */
+function attachRecommendationCardHandlers(card, rec, year, locked) {
+  // View reasoning button handler
+  const viewReasoningBtn = card.querySelector('.view-reasoning-mobile-btn');
+  if (viewReasoningBtn) {
+    viewReasoningBtn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    viewReasoningBtn.addEventListener(
+      'touchend',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    viewReasoningBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      showViewReasoningModal(rec);
+    });
+  }
+
+  // Three-dot menu button handler
+  const menuBtn = card.querySelector('[data-rec-menu-btn]');
+  if (menuBtn) {
+    menuBtn.addEventListener(
+      'touchstart',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    menuBtn.addEventListener(
+      'touchend',
+      (e) => {
+        e.stopPropagation();
+      },
+      { passive: true }
+    );
+
+    menuBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      showMobileRecommendationMenu(rec, year, locked);
+    });
+  }
+}
+
+/**
+ * Show mobile bottom sheet menu for recommendation actions
+ * @param {Object} rec - Recommendation object
+ * @param {number} year - Year
+ * @param {boolean} locked - Whether recommendations are locked
+ */
+function showMobileRecommendationMenu(rec, year, locked) {
+  const isOwner = window.currentUser?._id === rec.recommender_id;
+  const isAdmin = window.currentUser?.role === 'admin';
+  const hasAnyService =
+    window.currentUser?.spotifyAuth || window.currentUser?.tidalAuth;
+  const hasReasoning = rec.reasoning && rec.reasoning.trim().length > 0;
+
+  // Remove any existing action sheets
+  const existingSheet = document.querySelector(
+    '.fixed.inset-0.z-50.lg\\:hidden'
+  );
+  if (existingSheet) {
+    existingSheet.remove();
+  }
+
+  // Hide FAB when action sheet is shown
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab) {
+    fab.style.display = 'none';
+  }
+
+  const actionSheet = document.createElement('div');
+  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+  actionSheet.innerHTML = `
+    <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+      <div class="p-4">
+        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+        <h3 class="font-semibold text-white mb-1 truncate">${escapeHtml(rec.album)}</h3>
+        <p class="text-sm text-gray-400 mb-4 truncate">${escapeHtml(rec.artist)}</p>
+        
+        ${
+          hasAnyService
+            ? `
+        <button data-action="play"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+          <i class="fas fa-play mr-3 text-green-400"></i>Play Album
+        </button>
+        `
+            : ''
+        }
+        
+        ${
+          hasReasoning
+            ? `
+        <button data-action="view-reasoning"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+          <i class="fas fa-comment-alt mr-3 text-purple-400"></i>Reason for recommendation
+        </button>
+        `
+            : ''
+        }
+        
+        ${
+          isOwner && !locked
+            ? `
+        <button data-action="edit-reasoning"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+          <i class="fas fa-edit mr-3 text-blue-400"></i>${hasReasoning ? 'Edit' : 'Add'} Reason
+        </button>
+        `
+            : ''
+        }
+        
+        <button data-action="add-to-list"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+          <i class="fas fa-plus mr-3 text-gray-400"></i>Add to List...
+        </button>
+        
+        ${
+          (isOwner || isAdmin) && !locked
+            ? `
+        <div class="border-t border-gray-700 my-2"></div>
+        <button data-action="remove"
+                class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm text-red-500">
+          <i class="fas fa-trash mr-3"></i>Remove Recommendation
+        </button>
+        `
+            : ''
+        }
+        
+        <button data-action="cancel"
+                class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(actionSheet);
+
+  const backdrop = actionSheet.querySelector('[data-backdrop]');
+  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+  const playBtn = actionSheet.querySelector('[data-action="play"]');
+  const viewReasoningBtn = actionSheet.querySelector(
+    '[data-action="view-reasoning"]'
+  );
+  const editReasoningBtn = actionSheet.querySelector(
+    '[data-action="edit-reasoning"]'
+  );
+  const addToListBtn = actionSheet.querySelector('[data-action="add-to-list"]');
+  const removeBtn = actionSheet.querySelector('[data-action="remove"]');
+
+  const closeSheet = () => {
+    actionSheet.remove();
+    const fabElement = document.getElementById('addAlbumFAB');
+    if (fabElement) {
+      fabElement.style.display = 'flex';
+    }
+  };
+
+  backdrop.addEventListener('click', closeSheet);
+  cancelBtn.addEventListener('click', closeSheet);
+
+  if (playBtn) {
+    playBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeSheet();
+      if (window.playAlbumSafe) {
+        window.playAlbumSafe(rec.album_id);
+      }
+    });
+  }
+
+  if (viewReasoningBtn) {
+    viewReasoningBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeSheet();
+      showViewReasoningModal(rec);
+    });
+  }
+
+  if (editReasoningBtn) {
+    editReasoningBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      closeSheet();
+      const newReasoning = await showReasoningModal(
+        rec,
+        year,
+        rec.reasoning || '',
+        true // isEditMode
+      );
+
+      if (newReasoning !== null) {
+        try {
+          await apiCall(
+            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}/reasoning`,
+            {
+              method: 'PATCH',
+              body: JSON.stringify({ reasoning: newReasoning }),
+            }
+          );
+          showToast('Reasoning updated', 'success');
+          selectRecommendations(year);
+        } catch (_err) {
+          showToast('Failed to update reasoning', 'error');
+        }
+      }
+    });
+  }
+
+  if (addToListBtn) {
+    addToListBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      closeSheet();
+      showMobileAddRecommendationToListSheet(rec, year);
+    });
+  }
+
+  if (removeBtn) {
+    removeBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      closeSheet();
+
+      const confirmed = await showConfirmation(
+        'Remove Recommendation',
+        `Remove "${rec.album}" by ${rec.artist} from recommendations?`,
+        "This will remove the album from this year's recommendations.",
+        'Remove'
+      );
+
+      if (confirmed) {
+        try {
+          await apiCall(
+            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}`,
+            { method: 'DELETE' }
+          );
+          showToast('Recommendation removed', 'success');
+          selectRecommendations(year);
+        } catch (_err) {
+          showToast('Failed to remove recommendation', 'error');
+        }
+      }
+    });
+  }
+}
+
+/**
+ * Show mobile sheet to select list for adding recommendation
+ * @param {Object} rec - Recommendation object
+ * @param {number} year - Year
+ */
+function showMobileAddRecommendationToListSheet(rec, year) {
+  // Get user's lists grouped by year
+  const listsByYear = {};
+  const listsWithoutYear = [];
+
+  Object.keys(lists).forEach((listId) => {
+    const meta = lists[listId];
+    const listName = meta?.name || 'Unknown';
+    const listYear = meta?.year;
+
+    if (listYear) {
+      if (!listsByYear[listYear]) {
+        listsByYear[listYear] = [];
+      }
+      listsByYear[listYear].push({ id: listId, name: listName });
+    } else {
+      listsWithoutYear.push({ id: listId, name: listName });
+    }
+  });
+
+  // Sort years descending
+  const sortedYears = Object.keys(listsByYear).sort(
+    (a, b) => parseInt(b) - parseInt(a)
+  );
+
+  const hasAnyLists = sortedYears.length > 0 || listsWithoutYear.length > 0;
+
+  // Remove any existing sheets
+  const existingSheet = document.querySelector(
+    '.fixed.inset-0.z-50.lg\\:hidden'
+  );
+  if (existingSheet) {
+    existingSheet.remove();
+  }
+
+  const actionSheet = document.createElement('div');
+  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+
+  if (!hasAnyLists) {
+    actionSheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          <h3 class="font-semibold text-white mb-1">Add to List</h3>
+          <p class="text-sm text-gray-400 mb-4">${escapeHtml(rec.album)} by ${escapeHtml(rec.artist)}</p>
+          
+          <div class="py-8 text-center text-gray-500">
+            No lists available
+          </div>
+          
+          <button data-action="cancel"
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    // Build year accordion sections
+    const yearSections = sortedYears
+      .map(
+        (yr, idx) => `
+        <div class="year-section" data-year="${yr}">
+          <button data-action="toggle-year" data-year="${yr}"
+                  class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <span class="font-medium text-white">${yr}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">${listsByYear[yr].length} list${listsByYear[yr].length !== 1 ? 's' : ''}</span>
+              <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="${yr}"></i>
+            </div>
+          </button>
+          <div data-year-lists="${yr}" class="${idx === 0 ? '' : 'hidden'} overflow-hidden transition-all duration-200 ease-out" style="${idx === 0 ? '' : 'max-height: 0;'}">
+            <div class="ml-4 border-l-2 border-gray-700 pl-2">
+              ${listsByYear[yr]
+                .map(
+                  (list) => `
+                <button data-target-list="${list.id}"
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
+                  ${escapeHtml(list.name)}
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+        </div>
+      `
+      )
+      .join('');
+
+    // Build "Other" section
+    const otherSection =
+      listsWithoutYear.length > 0
+        ? `
+        <div class="year-section" data-year="other">
+          <button data-action="toggle-year" data-year="other"
+                  class="w-full flex items-center justify-between py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <span class="font-medium text-white">Other</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500">${listsWithoutYear.length} list${listsWithoutYear.length !== 1 ? 's' : ''}</span>
+              <i class="fas fa-chevron-down text-gray-500 text-xs transition-transform duration-200" data-year-chevron="other"></i>
+            </div>
+          </button>
+          <div data-year-lists="other" class="hidden overflow-hidden transition-all duration-200 ease-out" style="max-height: 0;">
+            <div class="ml-4 border-l-2 border-gray-700 pl-2">
+              ${listsWithoutYear
+                .map(
+                  (list) => `
+                <button data-target-list="${list.id}"
+                        class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm text-gray-300">
+                  ${escapeHtml(list.name)}
+                </button>
+              `
+                )
+                .join('')}
+            </div>
+          </div>
+        </div>
+      `
+        : '';
+
+    actionSheet.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[80vh] overflow-y-auto">
+        <div class="p-4">
+          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+          <h3 class="font-semibold text-white mb-1">Add to List</h3>
+          <p class="text-sm text-gray-400 mb-4 truncate">${escapeHtml(rec.album)} by ${escapeHtml(rec.artist)}</p>
+          
+          ${yearSections}
+          ${otherSection}
+          
+          <button data-action="cancel"
+                  class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  document.body.appendChild(actionSheet);
+
+  const backdrop = actionSheet.querySelector('[data-backdrop]');
+  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
+
+  const closeSheet = () => {
+    actionSheet.remove();
+  };
+
+  backdrop.addEventListener('click', closeSheet);
+  cancelBtn.addEventListener('click', closeSheet);
+
+  // Track expanded years
+  const expandedYears = new Set();
+  if (sortedYears.length > 0) {
+    expandedYears.add(sortedYears[0]);
+    const firstChevron = actionSheet.querySelector(
+      `[data-year-chevron="${sortedYears[0]}"]`
+    );
+    if (firstChevron) {
+      firstChevron.style.transform = 'rotate(180deg)';
+    }
+  }
+
+  // Attach toggle handlers
+  actionSheet.querySelectorAll('[data-action="toggle-year"]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const yr = btn.dataset.year;
+      const listContainer = actionSheet.querySelector(
+        `[data-year-lists="${yr}"]`
+      );
+      const chevron = actionSheet.querySelector(`[data-year-chevron="${yr}"]`);
+
+      if (!listContainer) return;
+
+      const isExpanded = expandedYears.has(yr);
+
+      if (isExpanded) {
+        listContainer.style.maxHeight = '0';
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+        setTimeout(() => {
+          listContainer.classList.add('hidden');
+        }, 200);
+        expandedYears.delete(yr);
+      } else {
+        listContainer.classList.remove('hidden');
+        void listContainer.offsetHeight;
+        listContainer.style.maxHeight = listContainer.scrollHeight + 'px';
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        expandedYears.add(yr);
+      }
+    });
+  });
+
+  // Attach list selection handlers
+  actionSheet.querySelectorAll('[data-target-list]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetList = btn.dataset.targetList;
+      closeSheet();
+
+      try {
+        await addRecommendationToListMobile(rec, targetList, year);
+      } catch (err) {
+        console.error('Error adding recommendation to list:', err);
+      }
+    });
+  });
+}
+
+/**
+ * Add recommendation album to a user's list (mobile version)
+ * Sets the context and calls existing addRecommendationToList
+ * @param {Object} rec - Recommendation object
+ * @param {string} targetListId - Target list ID
+ * @param {number} year - Year
+ */
+async function addRecommendationToListMobile(rec, targetListId, year) {
+  // Set context for the existing function
+  currentRecommendationContext = { rec, year };
+
+  // Call existing function
+  await addRecommendationToList(targetListId);
+
+  // Clear context
+  currentRecommendationContext = null;
+}
+
+/**
  * Display recommendations in the album container
  * @param {Array} recommendations - Array of recommendation objects
  * @param {number} year - The year
@@ -4369,6 +4977,8 @@ window.selectRecommendations = selectRecommendations;
 function displayRecommendations(recommendations, year, locked) {
   const container = document.getElementById('albumContainer');
   if (!container) return;
+
+  const isMobile = window.innerWidth < 1024;
 
   container.innerHTML = '';
 
@@ -4384,101 +4994,124 @@ function displayRecommendations(recommendations, year, locked) {
     container.appendChild(banner);
   }
 
-  // Create table for recommendations
-  const table = document.createElement('table');
-  table.className = 'w-full album-table recommendations-table';
-  table.innerHTML = `
-    <thead>
-      <tr class="text-left text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700">
-        <th class="py-3 px-2 w-12"></th>
-        <th class="py-3 px-2">Artist</th>
-        <th class="py-3 px-2">Album</th>
-        <th class="py-3 px-2">Recommended By</th>
-        <th class="py-3 px-2">Date Added</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  `;
+  if (isMobile) {
+    // Mobile: Card layout
+    const cardContainer = document.createElement('div');
+    cardContainer.className = 'mobile-album-list';
 
-  const tbody = table.querySelector('tbody');
-
-  if (recommendations.length === 0) {
-    const emptyRow = document.createElement('tr');
-    emptyRow.innerHTML = `
-      <td colspan="5" class="py-12 text-center text-gray-500">
+    if (recommendations.length === 0) {
+      const emptyDiv = document.createElement('div');
+      emptyDiv.className = 'text-center text-gray-500 mt-20 px-4';
+      emptyDiv.innerHTML = `
         <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
-        <p>No recommendations yet for ${year}</p>
-        <p class="text-sm mt-2">Click the + button to recommend an album</p>
-      </td>
-    `;
-    tbody.appendChild(emptyRow);
-  } else {
-    recommendations.forEach((rec) => {
-      const row = document.createElement('tr');
-      row.className =
-        'album-row hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
-      row.dataset.albumId = rec.album_id;
-
-      // Format date
-      const date = new Date(rec.created_at);
-      const formattedDate = date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-
-      row.innerHTML = `
-        <td class="py-2 px-2">
-          <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden">
-            <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
-                 alt="${rec.album}" 
-                 class="w-full h-full object-cover"
-                 loading="lazy"
-                 onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc\\'></i></div>'">
-          </div>
-        </td>
-        <td class="py-2 px-2 text-white">${escapeHtml(rec.artist)}</td>
-        <td class="py-2 px-2 text-gray-300">${escapeHtml(rec.album)}</td>
-        <td class="py-2 px-2 text-blue-400">
-          <span class="flex items-center gap-1">
-            ${escapeHtml(rec.recommended_by)}
-            <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors" 
-                    title="View reasoning"
-                    data-rec-index="${recommendations.indexOf(rec)}">
-              <i class="fas fa-comment-alt text-xs"></i>
-            </button>
-          </span>
-        </td>
-        <td class="py-2 px-2 text-gray-500 text-sm">${formattedDate}</td>
+        <p class="text-xl mb-2">No recommendations yet for ${year}</p>
+        <p class="text-sm">Click the + button to recommend an album</p>
       `;
-
-      // Click to play album
-      row.addEventListener('click', (e) => {
-        if (e.target.closest('.view-reasoning-btn')) return;
-        // Could open album details or play in music service
+      container.appendChild(emptyDiv);
+    } else {
+      recommendations.forEach((rec, index) => {
+        const card = createRecommendationCard(rec, year, locked, index);
+        cardContainer.appendChild(card);
       });
+      container.appendChild(cardContainer);
+    }
+  } else {
+    // Desktop: Table layout (unchanged)
+    const table = document.createElement('table');
+    table.className = 'w-full album-table recommendations-table';
+    table.innerHTML = `
+      <thead>
+        <tr class="text-left text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700">
+          <th class="py-3 px-2 w-12"></th>
+          <th class="py-3 px-2">Artist</th>
+          <th class="py-3 px-2">Album</th>
+          <th class="py-3 px-2">Recommended By</th>
+          <th class="py-3 px-2">Date Added</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    `;
 
-      // Right-click context menu
-      row.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showRecommendationContextMenu(e, rec, year);
-      });
+    const tbody = table.querySelector('tbody');
 
-      // View reasoning button click
-      const viewReasoningBtn = row.querySelector('.view-reasoning-btn');
-      if (viewReasoningBtn) {
-        viewReasoningBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showViewReasoningModal(rec);
+    if (recommendations.length === 0) {
+      const emptyRow = document.createElement('tr');
+      emptyRow.innerHTML = `
+        <td colspan="5" class="py-12 text-center text-gray-500">
+          <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
+          <p>No recommendations yet for ${year}</p>
+          <p class="text-sm mt-2">Click the + button to recommend an album</p>
+        </td>
+      `;
+      tbody.appendChild(emptyRow);
+    } else {
+      recommendations.forEach((rec) => {
+        const row = document.createElement('tr');
+        row.className =
+          'album-row hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
+        row.dataset.albumId = rec.album_id;
+
+        // Format date
+        const date = new Date(rec.created_at);
+        const formattedDate = date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
         });
-      }
 
-      tbody.appendChild(row);
-    });
+        row.innerHTML = `
+          <td class="py-2 px-2">
+            <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden">
+              <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
+                   alt="${rec.album}" 
+                   class="w-full h-full object-cover"
+                   loading="lazy"
+                   onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc\\'></i></div>'">
+            </div>
+          </td>
+          <td class="py-2 px-2 text-white">${escapeHtml(rec.artist)}</td>
+          <td class="py-2 px-2 text-gray-300">${escapeHtml(rec.album)}</td>
+          <td class="py-2 px-2 text-blue-400">
+            <span class="flex items-center gap-1">
+              ${escapeHtml(rec.recommended_by)}
+              <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors" 
+                      title="View reasoning"
+                      data-rec-index="${recommendations.indexOf(rec)}">
+                <i class="fas fa-comment-alt text-xs"></i>
+              </button>
+            </span>
+          </td>
+          <td class="py-2 px-2 text-gray-500 text-sm">${formattedDate}</td>
+        `;
+
+        // Click to play album
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.view-reasoning-btn')) return;
+          // Could open album details or play in music service
+        });
+
+        // Right-click context menu
+        row.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          showRecommendationContextMenu(e, rec, year);
+        });
+
+        // View reasoning button click
+        const viewReasoningBtn = row.querySelector('.view-reasoning-btn');
+        if (viewReasoningBtn) {
+          viewReasoningBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            showViewReasoningModal(rec);
+          });
+        }
+
+        tbody.appendChild(row);
+      });
+    }
+
+    container.appendChild(table);
   }
-
-  container.appendChild(table);
 }
 
 /**
