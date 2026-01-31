@@ -6195,7 +6195,7 @@ export function createSettingsDrawer(deps = {}) {
     // Load users
     try {
       const response = await apiCall(
-        `/api/recommendations/${year}/access/users`
+        `/api/recommendations/${year}/eligible-users`
       );
       const body = modal.querySelector('.settings-modal-body');
 
