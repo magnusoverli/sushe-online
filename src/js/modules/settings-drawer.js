@@ -28,6 +28,21 @@ export function createSettingsDrawer(deps = {}) {
   const categoryData = {};
   const categoryScrollPositions = {};
   let isOpen = false;
+
+  /**
+   * Get recommendation lock status for a year
+   * @param {number} year - Year to check
+   * @returns {Promise<Object>} Status object with locked, hasAccess, count
+   */
+  async function getRecommendationLockStatus(year) {
+    try {
+      const response = await apiCall(`/api/recommendations/${year}/status`);
+      return response;
+    } catch (err) {
+      console.warn('Error fetching recommendation lock status:', err);
+      return { locked: false, hasAccess: true, count: 0 };
+    }
+  }
   let telegramModalState = null;
 
   /**
@@ -647,10 +662,22 @@ export function createSettingsDrawer(deps = {}) {
                   console.warn(`Could not load stats for year ${year}:`, e);
                 }
 
+                // Fetch recommendation status
+                let recStatus = { locked: false };
+                try {
+                  recStatus = await getRecommendationLockStatus(year);
+                } catch (e) {
+                  console.warn(
+                    `Could not load recommendation status for year ${year}:`,
+                    e
+                  );
+                }
+
                 return {
                   year,
                   status,
                   stats,
+                  recStatus,
                 };
               } catch (e) {
                 console.warn(
@@ -1738,6 +1765,13 @@ export function createSettingsDrawer(deps = {}) {
                     <i class="fas fa-${isLocked ? 'unlock' : 'lock'} mr-2"></i>${isLocked ? 'Unlock' : 'Lock'} Year
                   </button>`;
 
+                  // Recommendation Lock/Unlock button
+                  const isRecLocked = item.recStatus?.locked || false;
+                  actionsHtml += `
+                  <button class="settings-button recommendation-toggle-lock" data-year="${year}" data-locked="${isRecLocked}">
+                    <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-${isRecLocked ? 'unlock' : 'lock'} mr-1"></i>${isRecLocked ? 'Unlock' : 'Lock'} Recommendations
+                  </button>`;
+
                   // Manage Contributors button - disabled if year is locked
                   if (isLocked) {
                     actionsHtml += `<button class="settings-button opacity-50 cursor-not-allowed" disabled data-year="${year}" title="Unlock the year to manage contributors">
@@ -2461,6 +2495,14 @@ export function createSettingsDrawer(deps = {}) {
         const year = parseInt(btn.dataset.year, 10);
         const isCurrentlyLocked = btn.dataset.locked === 'true';
         await handleToggleYearLock(year, isCurrentlyLocked);
+      });
+    });
+
+    document.querySelectorAll('.recommendation-toggle-lock').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const year = parseInt(btn.dataset.year, 10);
+        const isCurrentlyLocked = btn.dataset.locked === 'true';
+        await handleToggleRecommendationLock(year, isCurrentlyLocked);
       });
     });
 
@@ -5136,6 +5178,62 @@ export function createSettingsDrawer(deps = {}) {
       console.error(`Error ${action}ing year:`, error);
       const errorMsg =
         error.data?.error || error.message || `Failed to ${action} year`;
+      showToast(errorMsg, 'error');
+    }
+  }
+
+  /**
+   * Handle toggle recommendation lock
+   */
+  async function handleToggleRecommendationLock(year, isCurrentlyLocked) {
+    const action = isCurrentlyLocked ? 'unlock' : 'lock';
+    const confirmed = await showConfirmation(
+      `${action === 'lock' ? 'Lock' : 'Unlock'} Recommendations for ${year}`,
+      `Are you sure you want to ${action} recommendations for ${year}?`,
+      action === 'lock'
+        ? 'This will prevent users from adding new recommendations for this year.'
+        : 'This will allow users to add recommendations for this year again.',
+      action === 'lock' ? 'Lock Recommendations' : 'Unlock Recommendations'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await apiCall(`/api/recommendations/${year}/${action}`, {
+        method: 'POST',
+      });
+
+      if (response.success) {
+        showToast(
+          `Recommendations for ${year} have been ${action}ed successfully`,
+          'success'
+        );
+
+        // Update the button state
+        const lockButton = document.querySelector(
+          `.recommendation-toggle-lock[data-year="${year}"]`
+        );
+        if (lockButton) {
+          const newLockStatus = !isCurrentlyLocked;
+          const buttonText = newLockStatus
+            ? 'Unlock Recommendations'
+            : 'Lock Recommendations';
+          const iconClass = newLockStatus ? 'unlock' : 'lock';
+          lockButton.innerHTML = `<i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-${iconClass} mr-1"></i>${buttonText}`;
+          lockButton.dataset.locked = newLockStatus;
+        }
+
+        // Invalidate recommendation lock cache
+        if (window.invalidateLockedRecommendationYearsCache) {
+          window.invalidateLockedRecommendationYearsCache();
+        }
+      }
+    } catch (error) {
+      console.error(`Error ${action}ing recommendations:`, error);
+      const errorMsg =
+        error.data?.error ||
+        error.message ||
+        `Failed to ${action} recommendations`;
       showToast(errorMsg, 'error');
     }
   }

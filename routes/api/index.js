@@ -190,6 +190,7 @@ module.exports = (app, deps) => {
   require('./lastfm')(app, sharedDeps);
   require('./telegram')(app, sharedDeps);
   require('./user')(app, sharedDeps);
+  require('./recommendations')(app, sharedDeps);
 
   logger.info('API routes initialized (modular structure)');
 };

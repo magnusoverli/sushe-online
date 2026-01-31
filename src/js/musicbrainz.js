@@ -1163,12 +1163,15 @@ window.openAddAlbumModal = function () {
   console.log(
     'openAddAlbumModal called, currentList:',
     window.currentList,
+    'recommendations year:',
+    window.currentRecommendationsYear,
     'modal:',
     modal
   );
 
-  if (!window.currentList) {
-    console.log('No list selected, showing toast');
+  // Allow opening if we have a list OR if we're viewing recommendations
+  if (!window.currentList && !window.currentRecommendationsYear) {
+    console.log('No list or recommendations selected, showing toast');
     showToast('Please select a list first', 'error');
     return;
   }
@@ -2061,6 +2064,12 @@ async function addAlbumToList(releaseGroup) {
 }
 
 async function addAlbumToCurrentList(album) {
+  // Check if we're viewing recommendations - route to recommendations flow
+  if (window.isViewingRecommendations && window.isViewingRecommendations()) {
+    await addAlbumToRecommendations(album);
+    return;
+  }
+
   try {
     // Get current list data
     const currentListData = window.getListData(window.currentList);
@@ -2158,6 +2167,62 @@ async function addAlbumToCurrentList(album) {
       currentListData.pop();
       window.setListData(window.currentList, currentListData);
     }
+  }
+}
+
+/**
+ * Add an album to the recommendations for the current year
+ * @param {Object} album - Album object with artist, album, etc.
+ */
+async function addAlbumToRecommendations(album) {
+  const year = window.getCurrentRecommendationsYear();
+  if (!year) {
+    showToast('No recommendations year selected', 'error');
+    return;
+  }
+
+  // Close the add album modal first
+  closeAddAlbumModal();
+
+  // Show reasoning modal
+  const reasoning = await window.showReasoningModal(album, year);
+  if (!reasoning) {
+    // User cancelled
+    return;
+  }
+
+  try {
+    const response = await fetch(`/api/recommendations/${year}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ album, reasoning }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      if (response.status === 409) {
+        // Album already recommended
+        showToast(data.error || 'This album was already recommended', 'info');
+        return;
+      }
+      if (response.status === 403 && data.locked) {
+        showToast('Recommendations are locked for this year', 'error');
+        return;
+      }
+      throw new Error(data.error || 'Failed to add recommendation');
+    }
+
+    showToast(`Recommended "${album.album}" by ${album.artist}`, 'success');
+
+    // Refresh recommendations display
+    if (window.selectRecommendations) {
+      window.selectRecommendations(year);
+    }
+  } catch (error) {
+    console.error('Error adding recommendation:', error);
+    showToast('Error adding recommendation', 'error');
   }
 }
 

@@ -312,6 +312,26 @@ export function createListNav(deps = {}) {
   }
 
   /**
+   * Generate HTML for recommendations button
+   * @param {number} year - Year for recommendations
+   * @param {boolean} isActive - Whether recommendations is currently selected
+   * @param {boolean} isMobile - Whether rendering for mobile
+   * @returns {string} HTML string
+   */
+  function createRecommendationsButtonHTML(year, isActive, isMobile) {
+    const paddingClass = isMobile ? 'py-3' : 'py-2';
+    const widthClass = isMobile ? 'flex-1' : 'w-full';
+    const activeClass = isActive ? 'active' : '';
+
+    return `
+      <button data-recommendations-year="${year}" class="recommendations-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
+        <i class="fas fa-thumbs-up mr-2 shrink-0 text-blue-400"></i>
+        <span class="truncate flex-1">Recommendations</span>
+      </button>
+    `;
+  }
+
+  /**
    * Generate HTML for list button
    * @param {string} listId - List ID
    * @param {string} listName - List name (for display)
@@ -579,8 +599,46 @@ export function createListNav(deps = {}) {
       listsContainer.appendChild(li);
     });
 
+    // Add recommendations button at the bottom of year groups
+    if (isYearGroup && year) {
+      const recommendationsLi = createRecommendationsButton(year, isMobile);
+      listsContainer.appendChild(recommendationsLi);
+    }
+
     section.appendChild(listsContainer);
     return section;
+  }
+
+  /**
+   * Create a recommendations button element with event handlers
+   * @param {number} year - Year for recommendations
+   * @param {boolean} isMobile - Whether rendering for mobile
+   * @returns {HTMLElement} List item element
+   */
+  function createRecommendationsButton(year, isMobile) {
+    // Check if recommendations is currently active for this year
+    const currentRecommendationsYear = window.currentRecommendationsYear;
+    const isActive = currentRecommendationsYear === year;
+
+    const li = document.createElement('li');
+    if (isMobile) {
+      li.className = 'flex items-center';
+    }
+    li.innerHTML = createRecommendationsButtonHTML(year, isActive, isMobile);
+
+    const button = li.querySelector('[data-recommendations-year]');
+
+    // Click handler for selecting recommendations
+    button.onclick = () => {
+      if (window.selectRecommendations) {
+        window.selectRecommendations(year);
+      }
+      if (isMobile && toggleMobileLists) {
+        toggleMobileLists();
+      }
+    };
+
+    return li;
   }
 
   /**
@@ -1086,8 +1144,12 @@ export function createListNav(deps = {}) {
   /**
    * Update only the active state in sidebar (optimized - no DOM rebuild)
    * @param {string} activeListId - ID of the active list
+   * @param {number|null} activeRecommendationsYear - Year if recommendations is active
    */
-  function updateListNavActiveState(activeListId) {
+  function updateListNavActiveState(
+    activeListId,
+    activeRecommendationsYear = null
+  ) {
     const nav = document.getElementById('listNav');
     const mobileNav = document.getElementById('mobileListNav');
 
@@ -1100,9 +1162,24 @@ export function createListNav(deps = {}) {
         const listId = button.dataset.listId;
         if (!listId) return;
 
-        const isActive = listId === activeListId;
+        const isActive = listId === activeListId && !activeRecommendationsYear;
 
         // Toggle active class - background is handled by ::before pseudo-element in CSS
+        if (isActive) {
+          button.classList.add('active');
+        } else {
+          button.classList.remove('active');
+        }
+      });
+
+      // Update recommendations buttons active state
+      const recommendationsButtons = container.querySelectorAll(
+        '[data-recommendations-year]'
+      );
+      recommendationsButtons.forEach((button) => {
+        const year = parseInt(button.dataset.recommendationsYear, 10);
+        const isActive = activeRecommendationsYear === year;
+
         if (isActive) {
           button.classList.add('active');
         } else {
@@ -1125,7 +1202,9 @@ export function createListNav(deps = {}) {
     groupListsByYear,
     createYearHeaderHTML,
     createListButtonHTML,
+    createRecommendationsButtonHTML,
     createListButton,
+    createRecommendationsButton,
     createYearSection,
     renderListItems,
   };

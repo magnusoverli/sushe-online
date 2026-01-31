@@ -91,3 +91,81 @@ export async function isListLocked(year, isMain) {
   if (!year || !isMain) return false;
   return await isYearLocked(year);
 }
+
+// ============ RECOMMENDATION LOCK UTILITIES ============
+
+/**
+ * Cache for locked recommendation years to reduce API calls
+ */
+let lockedRecommendationYearsCache = null;
+let recommendationCacheTimestamp = 0;
+
+/**
+ * Fetch list of all locked recommendation years
+ * @returns {Promise<number[]>} Array of locked year numbers
+ */
+export async function fetchLockedRecommendationYears() {
+  try {
+    const response = await apiCall('/api/recommendations/locked-years');
+    return response.years || [];
+  } catch (err) {
+    console.error('Error fetching locked recommendation years:', err);
+    return [];
+  }
+}
+
+/**
+ * Get locked recommendation years from cache or fetch if expired
+ * @returns {Promise<number[]>} Array of locked year numbers
+ */
+export async function getLockedRecommendationYears() {
+  const now = Date.now();
+  if (
+    lockedRecommendationYearsCache &&
+    now - recommendationCacheTimestamp < CACHE_DURATION
+  ) {
+    return lockedRecommendationYearsCache;
+  }
+
+  lockedRecommendationYearsCache = await fetchLockedRecommendationYears();
+  recommendationCacheTimestamp = now;
+  return lockedRecommendationYearsCache;
+}
+
+/**
+ * Invalidate the locked recommendation years cache
+ * Call this after locking/unlocking recommendations
+ */
+export function invalidateLockedRecommendationYearsCache() {
+  lockedRecommendationYearsCache = null;
+  recommendationCacheTimestamp = 0;
+}
+
+/**
+ * Check if recommendations are locked for a year (using cache)
+ * @param {number|null} year - Year to check
+ * @returns {Promise<boolean>} True if recommendations are locked
+ */
+export async function isRecommendationsLocked(year) {
+  if (!year) return false;
+
+  const lockedYears = await getLockedRecommendationYears();
+  return lockedYears.includes(year);
+}
+
+/**
+ * Check recommendation status for a year (makes API call for detailed info)
+ * @param {number} year - Year to check
+ * @returns {Promise<Object>} Status object with locked, hasAccess, count
+ */
+export async function getRecommendationStatus(year) {
+  if (!year) return { locked: false, hasAccess: true, count: 0 };
+
+  try {
+    const response = await apiCall(`/api/recommendations/${year}/status`);
+    return response;
+  } catch (err) {
+    console.error('Error fetching recommendation status:', err);
+    return { locked: false, hasAccess: true, count: 0 };
+  }
+}

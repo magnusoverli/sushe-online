@@ -16,16 +16,25 @@ import {
   showToast,
   showConfirmation,
   hideConfirmation,
+  showReasoningModal,
+  hideReasoningModal,
+  showViewReasoningModal,
 } from './modules/ui-utils.js';
+import { escapeHtml } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
 import {
   invalidateLockedYearsCache,
+  invalidateLockedRecommendationYearsCache,
   isListLocked,
 } from './modules/year-lock.js';
 
+// Expose recommendation lock cache invalidation to window
+window.invalidateLockedRecommendationYearsCache =
+  invalidateLockedRecommendationYearsCache;
+
 // Re-export UI utilities for backward compatibility
-export { showToast, showConfirmation };
+export { showToast, showConfirmation, showReasoningModal, hideReasoningModal };
 
 // Lazy loading module cache
 let musicServicesModule = null;
@@ -390,8 +399,14 @@ function updateListNav() {
   return getListNavModule().updateListNav();
 }
 
-function updateListNavActiveState(activeListName) {
-  return getListNavModule().updateListNavActiveState(activeListName);
+function updateListNavActiveState(
+  activeListId,
+  activeRecommendationsYear = null
+) {
+  return getListNavModule().updateListNavActiveState(
+    activeListId,
+    activeRecommendationsYear
+  );
 }
 
 // Expose updateListNav to window for access from other modules
@@ -654,6 +669,7 @@ function initializeRealtimeSync() {
 let lists = {};
 let groups = {}; // List groups (years and collections)
 let currentListId = ''; // Now stores list ID instead of name
+let currentRecommendationsYear = null; // Year if viewing recommendations, null otherwise
 let currentContextAlbum = null;
 let currentContextAlbumId = null; // Store album identity as backup
 let currentContextList = null; // Now stores list ID
@@ -1064,15 +1080,38 @@ function hideAllContextMenus() {
     playAlbumSubmenu.classList.add('hidden');
   }
 
+  const recommendationContextMenu = document.getElementById(
+    'recommendationContextMenu'
+  );
+  if (recommendationContextMenu) {
+    recommendationContextMenu.classList.add('hidden');
+  }
+
+  const recommendationAddSubmenu = document.getElementById(
+    'recommendationAddSubmenu'
+  );
+  if (recommendationAddSubmenu) {
+    recommendationAddSubmenu.classList.add('hidden');
+  }
+
+  const recommendationAddListsSubmenu = document.getElementById(
+    'recommendationAddListsSubmenu'
+  );
+  if (recommendationAddListsSubmenu) {
+    recommendationAddListsSubmenu.classList.add('hidden');
+  }
+
   // Remove highlights from submenu parent options
   const moveOption = document.getElementById('moveAlbumOption');
   const playOption = document.getElementById('playAlbumOption');
+  const addToListOption = document.getElementById('addToListOption');
   moveOption?.classList.remove('bg-gray-700', 'text-white');
   playOption?.classList.remove('bg-gray-700', 'text-white');
+  addToListOption?.classList.remove('bg-gray-700', 'text-white');
 
-  // Restore FAB visibility if a list is selected
+  // Restore FAB visibility if a list or recommendations is selected
   const fab = document.getElementById('addAlbumFAB');
-  if (fab && currentListId) {
+  if (fab && (currentListId || currentRecommendationsYear)) {
     fab.style.display = 'flex';
   }
 }
@@ -1139,6 +1178,9 @@ window.updatePlaylist = updatePlaylist;
 
 // Make showToast globally available
 window.showToast = showToast;
+
+// Make reasoning modal available globally (for musicbrainz.js and context menus)
+window.showReasoningModal = showReasoningModal;
 
 // Link preview caching and request deduplication
 const linkPreviewCache = new Map(); // URL -> preview data
@@ -2094,6 +2136,83 @@ function initializeAlbumContextMenu() {
     });
   }
 
+  // Handle recommend option click
+  const recommendOption = document.getElementById('recommendAlbumOption');
+  if (recommendOption) {
+    recommendOption.onclick = async () => {
+      contextMenu.classList.add('hidden');
+
+      // Get the album from the currently selected context
+      const albumsData = getListData(currentListId);
+      let album = albumsData && albumsData[currentContextAlbum];
+
+      if (album && currentContextAlbumId) {
+        const expectedId =
+          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
+        if (expectedId !== currentContextAlbumId) {
+          const result = findAlbumByIdentity(currentContextAlbumId);
+          if (result) album = result.album;
+        }
+      }
+
+      if (!album || !album.artist || !album.album) {
+        showToast('Could not find album data', 'error');
+        currentContextAlbum = null;
+        currentContextAlbumId = null;
+        return;
+      }
+
+      // Get the year from the current list metadata
+      const listMeta = lists[currentListId];
+      const year = listMeta?.year;
+
+      if (!year) {
+        showToast('Cannot recommend from a list without a year', 'error');
+        currentContextAlbum = null;
+        currentContextAlbumId = null;
+        return;
+      }
+
+      // Show reasoning modal
+      const reasoning = await showReasoningModal(album, year);
+      if (!reasoning) {
+        // User cancelled
+        currentContextAlbum = null;
+        currentContextAlbumId = null;
+        return;
+      }
+
+      try {
+        const response = await apiCall(`/api/recommendations/${year}`, {
+          method: 'POST',
+          body: JSON.stringify({ album, reasoning }),
+        });
+
+        if (response.error) {
+          showToast(response.error, 'info');
+        } else {
+          showToast(
+            `Recommended "${album.album}" by ${album.artist}`,
+            'success'
+          );
+        }
+      } catch (err) {
+        // Check if it's an "already recommended" error
+        if (err.status === 409) {
+          const data = (await err.json?.()) || {};
+          showToast(data.error || 'This album was already recommended', 'info');
+        } else if (err.status === 403) {
+          showToast('Recommendations are locked for this year', 'error');
+        } else {
+          showToast('Error adding recommendation', 'error');
+        }
+      }
+
+      currentContextAlbum = null;
+      currentContextAlbumId = null;
+    };
+  }
+
   // Handle Last.fm discovery options
   const similarOption = document.getElementById('similarArtistsOption');
 
@@ -2615,6 +2734,31 @@ function groupListsForMove() {
         listsByYear[year] = [];
       }
       listsByYear[year].push(listName);
+    }
+  });
+
+  // Sort years descending
+  const sortedYears = Object.keys(listsByYear).sort(
+    (a, b) => parseInt(b) - parseInt(a)
+  );
+
+  return { listsByYear, sortedYears };
+}
+
+// Group user's lists by year for add-to-list from recommendations
+function groupUserListsForAdd() {
+  const listsByYear = {};
+
+  Object.keys(lists).forEach((listId) => {
+    const meta = lists[listId];
+    const year = meta?.year;
+
+    // Only include lists that have a year (no collections)
+    if (year) {
+      if (!listsByYear[year]) {
+        listsByYear[year] = [];
+      }
+      listsByYear[year].push(listId);
     }
   });
 
@@ -4035,6 +4179,9 @@ async function selectList(listId) {
     const previousListId = currentListId;
 
     currentListId = listId;
+    // Clear recommendations state when selecting a regular list
+    currentRecommendationsYear = null;
+    window.currentRecommendationsYear = null;
 
     // Update realtime sync subscriptions
     if (realtimeSyncModule) {
@@ -4149,6 +4296,649 @@ async function selectList(listId) {
 
 // Expose selectList to window after it's defined
 window.selectList = selectList;
+
+/**
+ * Select and display recommendations for a year
+ * @param {number} year - The year to show recommendations for
+ */
+async function selectRecommendations(year) {
+  try {
+    // Track previous state
+    const previousListId = currentListId;
+    const _previousRecommendationsYear = currentRecommendationsYear;
+
+    // Update state
+    currentListId = ''; // Clear regular list selection
+    currentRecommendationsYear = year;
+    window.currentRecommendationsYear = year; // Expose for sidebar active state
+
+    // Update realtime sync subscriptions (unsubscribe from previous list)
+    if (realtimeSyncModule && previousListId) {
+      realtimeSyncModule.unsubscribeFromList(previousListId);
+    }
+
+    // Clear playcount cache when switching
+    clearPlaycountCache();
+
+    // === IMMEDIATE UI UPDATES ===
+    // Update active state in sidebar
+    updateListNavActiveState('', year);
+
+    // Update the header title
+    updateHeaderTitle(`${year} Recommendations`);
+    updateMobileHeader();
+
+    // Show FAB for adding albums
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = 'flex';
+    }
+
+    // Show loading spinner
+    const container = document.getElementById('albumContainer');
+    if (container) {
+      showLoadingSpinner(container);
+    }
+
+    // === FETCH AND RENDER DATA ===
+    try {
+      const response = await apiCall(`/api/recommendations/${year}`);
+
+      // Only update if still viewing this year's recommendations
+      if (currentRecommendationsYear === year) {
+        displayRecommendations(response.recommendations, year, response.locked);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch recommendations:', err);
+      showToast('Error loading recommendations', 'error');
+    }
+  } catch (_error) {
+    showToast('Error loading recommendations', 'error');
+  }
+}
+
+// Expose selectRecommendations to window
+window.selectRecommendations = selectRecommendations;
+
+/**
+ * Display recommendations in the album container
+ * @param {Array} recommendations - Array of recommendation objects
+ * @param {number} year - The year
+ * @param {boolean} locked - Whether recommendations are locked
+ */
+function displayRecommendations(recommendations, year, locked) {
+  const container = document.getElementById('albumContainer');
+  if (!container) return;
+
+  container.innerHTML = '';
+
+  // Add locked banner if applicable
+  if (locked) {
+    const banner = document.createElement('div');
+    banner.className =
+      'bg-yellow-900/50 border border-yellow-700 text-yellow-200 px-4 py-3 rounded-lg mb-4 flex items-center gap-2';
+    banner.innerHTML = `
+      <i class="fas fa-lock"></i>
+      <span>Recommendations for ${year} are locked. No new albums can be added.</span>
+    `;
+    container.appendChild(banner);
+  }
+
+  // Create table for recommendations
+  const table = document.createElement('table');
+  table.className = 'w-full album-table recommendations-table';
+  table.innerHTML = `
+    <thead>
+      <tr class="text-left text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700">
+        <th class="py-3 px-2 w-12"></th>
+        <th class="py-3 px-2">Artist</th>
+        <th class="py-3 px-2">Album</th>
+        <th class="py-3 px-2">Recommended By</th>
+        <th class="py-3 px-2">Date Added</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  `;
+
+  const tbody = table.querySelector('tbody');
+
+  if (recommendations.length === 0) {
+    const emptyRow = document.createElement('tr');
+    emptyRow.innerHTML = `
+      <td colspan="5" class="py-12 text-center text-gray-500">
+        <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
+        <p>No recommendations yet for ${year}</p>
+        <p class="text-sm mt-2">Click the + button to recommend an album</p>
+      </td>
+    `;
+    tbody.appendChild(emptyRow);
+  } else {
+    recommendations.forEach((rec) => {
+      const row = document.createElement('tr');
+      row.className =
+        'album-row hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
+      row.dataset.albumId = rec.album_id;
+
+      // Format date
+      const date = new Date(rec.created_at);
+      const formattedDate = date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+
+      row.innerHTML = `
+        <td class="py-2 px-2">
+          <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden">
+            <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
+                 alt="${rec.album}" 
+                 class="w-full h-full object-cover"
+                 loading="lazy"
+                 onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc\\'></i></div>'">
+          </div>
+        </td>
+        <td class="py-2 px-2 text-white">${escapeHtml(rec.artist)}</td>
+        <td class="py-2 px-2 text-gray-300">${escapeHtml(rec.album)}</td>
+        <td class="py-2 px-2 text-blue-400">
+          <span class="flex items-center gap-1">
+            ${escapeHtml(rec.recommended_by)}
+            <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors" 
+                    title="View reasoning"
+                    data-rec-index="${recommendations.indexOf(rec)}">
+              <i class="fas fa-comment-alt text-xs"></i>
+            </button>
+          </span>
+        </td>
+        <td class="py-2 px-2 text-gray-500 text-sm">${formattedDate}</td>
+      `;
+
+      // Click to play album
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('.view-reasoning-btn')) return;
+        // Could open album details or play in music service
+      });
+
+      // Right-click context menu
+      row.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showRecommendationContextMenu(e, rec, year);
+      });
+
+      // View reasoning button click
+      const viewReasoningBtn = row.querySelector('.view-reasoning-btn');
+      if (viewReasoningBtn) {
+        viewReasoningBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          showViewReasoningModal(rec);
+        });
+      }
+
+      tbody.appendChild(row);
+    });
+  }
+
+  container.appendChild(table);
+}
+
+/**
+ * Check if currently viewing recommendations
+ * @returns {boolean}
+ */
+function isViewingRecommendations() {
+  return currentRecommendationsYear !== null;
+}
+
+/**
+ * Get current recommendations year
+ * @returns {number|null}
+ */
+function getCurrentRecommendationsYear() {
+  return currentRecommendationsYear;
+}
+
+// Track current recommendation context for context menu
+let currentRecommendationContext = null;
+
+/**
+ * Show context menu for a recommendation album
+ * @param {MouseEvent} e - Mouse event
+ * @param {Object} rec - Recommendation object
+ * @param {number} year - Year of the recommendation
+ */
+function showRecommendationContextMenu(e, rec, year) {
+  // Hide other context menus
+  hideAllContextMenus();
+
+  // Store context
+  currentRecommendationContext = { rec, year };
+
+  const contextMenu = document.getElementById('recommendationContextMenu');
+  if (!contextMenu) return;
+
+  // Show/hide owner options (edit reasoning - only for the recommender)
+  const isOwner = window.currentUser?._id === rec.recommender_id;
+  const ownerDivider = contextMenu.querySelector(
+    '.recommendation-owner-divider'
+  );
+  const editReasoningOption = document.getElementById('editReasoningOption');
+
+  if (ownerDivider) ownerDivider.classList.toggle('hidden', !isOwner);
+  if (editReasoningOption)
+    editReasoningOption.classList.toggle('hidden', !isOwner);
+
+  // Show/hide admin options
+  const isAdmin = window.currentUser?.role === 'admin';
+  const adminDivider = contextMenu.querySelector(
+    '.recommendation-admin-divider'
+  );
+  const removeOption = document.getElementById('removeRecommendationOption');
+
+  if (adminDivider) adminDivider.classList.toggle('hidden', !isAdmin);
+  if (removeOption) removeOption.classList.toggle('hidden', !isAdmin);
+
+  // Position the menu
+  positionContextMenu(contextMenu, e.clientX, e.clientY);
+}
+
+/**
+ * Initialize recommendation context menu handlers
+ */
+function initializeRecommendationContextMenu() {
+  const contextMenu = document.getElementById('recommendationContextMenu');
+  const playOption = document.getElementById('playRecommendationOption');
+  const removeOption = document.getElementById('removeRecommendationOption');
+
+  if (!contextMenu) return;
+
+  // Handle play option - show play submenu
+  if (playOption) {
+    playOption.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!currentRecommendationContext) return;
+      const { rec } = currentRecommendationContext;
+
+      // Use existing play functionality
+      if (window.playAlbumSafe) {
+        window.playAlbumSafe(rec.album_id);
+      }
+
+      contextMenu.classList.add('hidden');
+      currentRecommendationContext = null;
+    });
+  }
+
+  // Handle remove option (admin only)
+  if (removeOption) {
+    removeOption.addEventListener('click', async () => {
+      contextMenu.classList.add('hidden');
+
+      if (!currentRecommendationContext) return;
+      const { rec, year } = currentRecommendationContext;
+
+      const confirmed = await showConfirmation(
+        'Remove Recommendation',
+        `Remove "${rec.album}" by ${rec.artist} from recommendations?`,
+        "This will remove the album from this year's recommendations.",
+        'Remove'
+      );
+
+      if (confirmed) {
+        try {
+          await apiCall(
+            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}`,
+            { method: 'DELETE' }
+          );
+          showToast('Recommendation removed', 'success');
+          // Refresh recommendations
+          selectRecommendations(year);
+        } catch (_err) {
+          showToast('Failed to remove recommendation', 'error');
+        }
+      }
+
+      currentRecommendationContext = null;
+    });
+  }
+
+  // Handle edit reasoning option (owner only)
+  const editReasoningOption = document.getElementById('editReasoningOption');
+  if (editReasoningOption) {
+    editReasoningOption.addEventListener('click', async () => {
+      contextMenu.classList.add('hidden');
+
+      if (!currentRecommendationContext) return;
+      const { rec, year } = currentRecommendationContext;
+
+      // Show reasoning modal in edit mode with existing reasoning
+      const newReasoning = await showReasoningModal(
+        rec,
+        year,
+        rec.reasoning || '',
+        true // isEditMode
+      );
+
+      if (newReasoning) {
+        try {
+          await apiCall(
+            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}/reasoning`,
+            {
+              method: 'PATCH',
+              body: JSON.stringify({ reasoning: newReasoning }),
+            }
+          );
+          showToast('Reasoning updated', 'success');
+          // Refresh recommendations
+          selectRecommendations(year);
+        } catch (_err) {
+          showToast('Failed to update reasoning', 'error');
+        }
+      }
+
+      currentRecommendationContext = null;
+    });
+  }
+
+  // Handle add to list option - show submenu with years
+  const addToListOption = document.getElementById('addToListOption');
+  if (addToListOption) {
+    let addHideTimeout;
+
+    addToListOption.addEventListener('mouseenter', () => {
+      if (addHideTimeout) clearTimeout(addHideTimeout);
+      showRecommendationAddSubmenu();
+    });
+
+    addToListOption.addEventListener('mouseleave', (e) => {
+      const submenu = document.getElementById('recommendationAddSubmenu');
+      const toSubmenu =
+        submenu &&
+        (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
+
+      if (!toSubmenu) {
+        addHideTimeout = setTimeout(() => {
+          if (submenu) submenu.classList.add('hidden');
+          addToListOption.classList.remove('bg-gray-700', 'text-white');
+          currentRecommendationAddHighlightedYear = null;
+        }, 100);
+      }
+    });
+
+    addToListOption.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showRecommendationAddSubmenu();
+    });
+  }
+}
+
+// Track highlighted year in add-to-list submenu
+let currentRecommendationAddHighlightedYear = null;
+let recommendationAddListsHideTimeout = null;
+
+/**
+ * Show the add-to-list submenu with years
+ */
+function showRecommendationAddSubmenu() {
+  const submenu = document.getElementById('recommendationAddSubmenu');
+  const listsSubmenu = document.getElementById('recommendationAddListsSubmenu');
+  const addToListOption = document.getElementById('addToListOption');
+  const contextMenu = document.getElementById('recommendationContextMenu');
+
+  if (!submenu || !addToListOption || !contextMenu) return;
+
+  // Hide lists submenu first
+  if (listsSubmenu) {
+    listsSubmenu.classList.add('hidden');
+  }
+
+  // Reset highlighted year
+  currentRecommendationAddHighlightedYear = null;
+
+  // Highlight the parent menu item
+  addToListOption.classList.add('bg-gray-700', 'text-white');
+
+  // Group lists by year
+  const { listsByYear, sortedYears } = groupUserListsForAdd();
+
+  if (sortedYears.length === 0) {
+    submenu.innerHTML =
+      '<div class="px-4 py-2 text-sm text-gray-500">No lists available</div>';
+  } else {
+    submenu.innerHTML = sortedYears
+      .map(
+        (year) => `
+        <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-add-year="${year}">
+          <span>${year}</span>
+          <i class="fas fa-chevron-right text-xs ml-3 text-gray-500"></i>
+        </button>
+      `
+      )
+      .join('');
+
+    // Add hover handlers to each year option
+    submenu.querySelectorAll('[data-add-year]').forEach((btn) => {
+      btn.addEventListener('mouseenter', () => {
+        if (recommendationAddListsHideTimeout) {
+          clearTimeout(recommendationAddListsHideTimeout);
+          recommendationAddListsHideTimeout = null;
+        }
+        const year = btn.dataset.addYear;
+        showRecommendationAddListsSubmenu(year, btn, listsByYear);
+      });
+
+      btn.addEventListener('mouseleave', (e) => {
+        const listsMenu = document.getElementById(
+          'recommendationAddListsSubmenu'
+        );
+        const toListsSubmenu =
+          listsMenu &&
+          (e.relatedTarget === listsMenu ||
+            listsMenu.contains(e.relatedTarget));
+
+        if (!toListsSubmenu) {
+          recommendationAddListsHideTimeout = setTimeout(() => {
+            if (listsMenu) listsMenu.classList.add('hidden');
+            btn.classList.remove('bg-gray-700', 'text-white');
+            currentRecommendationAddHighlightedYear = null;
+          }, 100);
+        }
+      });
+    });
+  }
+
+  // Position submenu next to the add-to-list option
+  const optionRect = addToListOption.getBoundingClientRect();
+  const menuRect = contextMenu.getBoundingClientRect();
+
+  submenu.style.left = `${menuRect.right}px`;
+  submenu.style.top = `${optionRect.top}px`;
+  submenu.classList.remove('hidden');
+}
+
+/**
+ * Show the lists submenu for a specific year
+ */
+function showRecommendationAddListsSubmenu(year, yearButton, listsByYear) {
+  const listsSubmenu = document.getElementById('recommendationAddListsSubmenu');
+  const yearSubmenu = document.getElementById('recommendationAddSubmenu');
+
+  if (!listsSubmenu || !yearSubmenu) return;
+
+  // Remove highlight from previously highlighted year
+  if (
+    currentRecommendationAddHighlightedYear &&
+    currentRecommendationAddHighlightedYear !== year
+  ) {
+    const prevBtn = yearSubmenu.querySelector(
+      `[data-add-year="${currentRecommendationAddHighlightedYear}"]`
+    );
+    if (prevBtn) {
+      prevBtn.classList.remove('bg-gray-700', 'text-white');
+    }
+  }
+
+  // Highlight the current year button
+  yearButton.classList.add('bg-gray-700', 'text-white');
+  currentRecommendationAddHighlightedYear = year;
+
+  // Get lists for this year
+  const yearLists = listsByYear[year] || [];
+
+  if (yearLists.length === 0) {
+    listsSubmenu.classList.add('hidden');
+    return;
+  }
+
+  // Populate the lists submenu
+  listsSubmenu.innerHTML = yearLists
+    .map(
+      (listId) => `
+      <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-add-target-list="${listId}">
+        <span class="mr-2">•</span>${lists[listId]?.name || listId}
+      </button>
+    `
+    )
+    .join('');
+
+  // Add click handlers to each list option
+  listsSubmenu.querySelectorAll('[data-add-target-list]').forEach((btn) => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const targetListId = btn.dataset.addTargetList;
+
+      // Hide all menus
+      document
+        .getElementById('recommendationContextMenu')
+        ?.classList.add('hidden');
+      yearSubmenu.classList.add('hidden');
+      listsSubmenu.classList.add('hidden');
+
+      // Add album to list
+      await addRecommendationToList(targetListId);
+    });
+  });
+
+  // Handle mouse leaving the lists submenu
+  listsSubmenu.onmouseenter = () => {
+    if (recommendationAddListsHideTimeout) {
+      clearTimeout(recommendationAddListsHideTimeout);
+      recommendationAddListsHideTimeout = null;
+    }
+  };
+
+  listsSubmenu.onmouseleave = (e) => {
+    const yearMenu = document.getElementById('recommendationAddSubmenu');
+    const toYearSubmenu =
+      yearMenu &&
+      (e.relatedTarget === yearMenu || yearMenu.contains(e.relatedTarget));
+
+    if (!toYearSubmenu) {
+      recommendationAddListsHideTimeout = setTimeout(() => {
+        listsSubmenu.classList.add('hidden');
+        if (currentRecommendationAddHighlightedYear) {
+          const yearBtn = yearMenu?.querySelector(
+            `[data-add-year="${currentRecommendationAddHighlightedYear}"]`
+          );
+          if (yearBtn) {
+            yearBtn.classList.remove('bg-gray-700', 'text-white');
+          }
+          currentRecommendationAddHighlightedYear = null;
+        }
+      }, 100);
+    }
+  };
+
+  // Position lists submenu next to the year button
+  const yearRect = yearButton.getBoundingClientRect();
+  const yearSubmenuRect = yearSubmenu.getBoundingClientRect();
+
+  listsSubmenu.style.left = `${yearSubmenuRect.right}px`;
+  listsSubmenu.style.top = `${yearRect.top}px`;
+  listsSubmenu.classList.remove('hidden');
+}
+
+/**
+ * Add a recommendation album to a user's list
+ */
+async function addRecommendationToList(targetListId) {
+  if (!currentRecommendationContext) {
+    showToast('No album selected', 'error');
+    return;
+  }
+
+  const { rec } = currentRecommendationContext;
+  const targetMeta = lists[targetListId];
+  const targetListName = targetMeta?.name || 'Unknown';
+
+  // Get target list data
+  let targetAlbums = getListData(targetListId);
+
+  // If list data not loaded, fetch it
+  if (!targetAlbums) {
+    try {
+      const data = await apiCall(
+        `/api/lists/${encodeURIComponent(targetListId)}`
+      );
+      setListData(targetListId, data);
+      targetAlbums = data;
+    } catch (_err) {
+      showToast('Failed to load list data', 'error');
+      currentRecommendationContext = null;
+      return;
+    }
+  }
+
+  // Check for duplicate
+  const key = `${rec.artist}::${rec.album}`.toLowerCase();
+  const isDuplicate = targetAlbums?.some(
+    (a) => `${a.artist}::${a.album}`.toLowerCase() === key
+  );
+
+  if (isDuplicate) {
+    showToast(`"${rec.album}" is already in "${targetListName}"`, 'info');
+    currentRecommendationContext = null;
+    return;
+  }
+
+  // Build album object to add
+  const albumToAdd = {
+    album_id: rec.album_id,
+    artist: rec.artist,
+    album: rec.album,
+    release_date: rec.release_date || null,
+    country: rec.country || null,
+    genre_1: rec.genre_1 || null,
+    genre_2: rec.genre_2 || null,
+  };
+
+  try {
+    // Add to list via API
+    await apiCall(`/api/lists/${encodeURIComponent(targetListId)}/items`, {
+      method: 'PATCH',
+      body: JSON.stringify({ added: [albumToAdd] }),
+    });
+
+    showToast(`Added "${rec.album}" to "${targetListName}"`, 'success');
+
+    // Invalidate cached list data so it refetches
+    const listMetadata = lists[targetListId];
+    if (listMetadata) {
+      listMetadata._data = null;
+    }
+  } catch (_err) {
+    showToast('Failed to add album to list', 'error');
+  }
+
+  currentRecommendationContext = null;
+}
+
+// Expose helper functions
+window.isViewingRecommendations = isViewingRecommendations;
+window.getCurrentRecommendationsYear = getCurrentRecommendationsYear;
 window.loadLists = loadLists;
 // Helper to get current list name (for display)
 window.getCurrentListName = getCurrentListName;
@@ -4956,6 +5746,7 @@ document.addEventListener('DOMContentLoaded', () => {
     .then(() => {
       initializeContextMenu();
       initializeAlbumContextMenu();
+      initializeRecommendationContextMenu();
       initializeCategoryContextMenu();
       hideSubmenuOnLeave();
       initializeCreateList();

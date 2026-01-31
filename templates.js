@@ -425,6 +425,10 @@ const contextMenusComponent = () => `
       <span><i class="fas fa-arrow-right mr-2 w-4 text-center"></i>Move to List</span>
       <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
     </button>
+    <!-- Recommend option (shown only for year-based lists) -->
+    <button id="recommendAlbumOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors whitespace-nowrap">
+      <i class="fas fa-thumbs-up mr-2 w-4 text-center text-blue-400"></i>Recommend
+    </button>
     <!-- Last.fm Discovery Options (shown only when connected) -->
     <div id="lastfmMenuDivider" class="hidden context-menu-divider"></div>
     <button id="similarArtistsOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
@@ -464,6 +468,36 @@ const contextMenusComponent = () => `
   <!-- Submenu for Move List to Collection -->
   <div id="moveListSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-44">
     <!-- Populated dynamically with collections -->
+  </div>
+  
+  <!-- Context Menu for Recommendation Albums -->
+  <div id="recommendationContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
+    <button id="playRecommendationOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-play mr-2 w-4 text-center"></i>Play Album</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
+    </button>
+    <button id="addToListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-plus mr-2 w-4 text-center"></i>Add to List...</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
+    </button>
+    <div class="recommendation-owner-divider hidden context-menu-divider"></div>
+    <button id="editReasoningOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
+      <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Reasoning
+    </button>
+    <div class="recommendation-admin-divider hidden context-menu-divider"></div>
+    <button id="removeRecommendationOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
+      <i class="fas fa-times mr-2 w-4 text-center"></i>Remove from Recommendations
+    </button>
+  </div>
+  
+  <!-- Submenu for Add to List - Years -->
+  <div id="recommendationAddSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+    <!-- Populated dynamically with years -->
+  </div>
+  
+  <!-- Submenu for Add to List - Lists within a year -->
+  <div id="recommendationAddListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+    <!-- Populated dynamically with lists for selected year -->
   </div>
   
   <!-- Context Menu for Categories (Groups) -->
@@ -955,6 +989,97 @@ const confirmationModalComponent = () => `
   </div>
 `;
 
+// Component: Recommendation Reasoning Modal
+const recommendReasoningModalComponent = () => `
+  <div id="recommendReasoningModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-gray-800">
+        <h3 class="text-xl font-bold text-white">Why do you recommend this album?</h3>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-6">
+        <!-- Album info display -->
+        <div class="flex items-center gap-4 mb-4 p-3 bg-gray-800 rounded-lg">
+          <div id="reasoningAlbumCover" class="w-12 h-12 bg-gray-700 rounded-sm flex items-center justify-center">
+            <i class="fas fa-compact-disc text-gray-500"></i>
+          </div>
+          <div class="flex-1 min-w-0">
+            <p id="reasoningAlbumTitle" class="text-white font-medium truncate"></p>
+            <p id="reasoningArtistName" class="text-gray-400 text-sm truncate"></p>
+          </div>
+        </div>
+        
+        <!-- Reasoning textarea -->
+        <div>
+          <label class="block text-gray-400 text-sm font-medium mb-2" for="reasoningText">
+            Your reasoning <span class="text-red-500">*</span>
+          </label>
+          <textarea 
+            id="reasoningText" 
+            rows="4"
+            maxlength="500"
+            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200 resize-none"
+            placeholder="Tell others why they should listen to this album..."
+          ></textarea>
+          <div class="flex justify-between mt-2">
+            <p id="reasoningError" class="text-red-400 text-sm hidden">Reasoning is required</p>
+            <p class="text-gray-500 text-xs ml-auto">
+              <span id="reasoningCharCount">0</span> / 500
+            </p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Modal Footer -->
+      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
+        <button 
+          id="reasoningCancelBtn" 
+          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition duration-200"
+        >
+          Cancel
+        </button>
+        <button 
+          id="reasoningSubmitBtn" 
+          class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-sm transition duration-200 font-semibold"
+        >
+          Recommend
+        </button>
+      </div>
+    </div>
+  </div>
+`;
+
+// Component: View Reasoning Modal (read-only, small)
+const viewReasoningModalComponent = () => `
+  <div id="viewReasoningModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm transform transition-all">
+      <!-- Modal Header -->
+      <div class="p-4 border-b border-gray-800 flex items-center gap-3">
+        <div id="viewReasoningAlbumCover" class="w-10 h-10 bg-gray-700 rounded-sm flex items-center justify-center overflow-hidden flex-shrink-0">
+          <i class="fas fa-compact-disc text-gray-500"></i>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p id="viewReasoningAlbumTitle" class="text-white font-medium truncate text-sm"></p>
+          <p id="viewReasoningArtistName" class="text-gray-400 text-xs truncate"></p>
+        </div>
+        <button id="viewReasoningCloseBtn" class="text-gray-400 hover:text-white p-1">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      
+      <!-- Modal Content -->
+      <div class="p-4">
+        <p class="text-xs text-gray-500 uppercase tracking-wider mb-2">
+          <i class="fas fa-user mr-1"></i><span id="viewReasoningRecommender"></span>'s reasoning:
+        </p>
+        <p id="viewReasoningText" class="text-gray-300 text-sm leading-relaxed"></p>
+      </div>
+    </div>
+  </div>
+`;
+
 // Component: Service Select Modal
 const serviceSelectModalComponent = () => `
   <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
@@ -1119,6 +1244,8 @@ const modalPortalComponent = () => `
     ${importConflictModalComponent()}
     ${serviceSelectModalComponent()}
     ${confirmationModalComponent()}
+    ${recommendReasoningModalComponent()}
+    ${viewReasoningModalComponent()}
     ${listSetupWizardComponent()}
     ${releaseSelectionModalComponent()}
   </div>

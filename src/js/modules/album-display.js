@@ -790,6 +790,22 @@ export function createAlbumDisplay(deps = {}) {
       if (reidentifyOption)
         reidentifyOption.classList.toggle('hidden', !isAdmin);
 
+      // Show/hide recommend option based on whether current list is year-based
+      // and not currently viewing recommendations
+      const recommendOption = document.getElementById('recommendAlbumOption');
+      if (recommendOption) {
+        const currentListId = getCurrentList();
+        const listMeta = window.lists && window.lists[currentListId];
+        const isYearBased =
+          listMeta && listMeta.year !== null && listMeta.year !== undefined;
+        const isViewingRecommendations =
+          window.isViewingRecommendations && window.isViewingRecommendations();
+
+        // Show recommend option only for year-based lists (not when viewing recommendations)
+        const showRecommend = isYearBased && !isViewingRecommendations;
+        recommendOption.classList.toggle('hidden', !showRecommend);
+      }
+
       // Position the menu
       positionContextMenu(contextMenu, e.clientX, e.clientY);
     });
