@@ -888,12 +888,17 @@ function createRecommendationsNotifier(
       }
     }
 
+    // Build RYM search URL
+    const rymSearchTerm = encodeURIComponent(`${rec.artist} ${rec.album}`);
+    const rymUrl = `https://rateyourmusic.com/search?searchterm=${rymSearchTerm}&searchtype=l`;
+
     const lines = [
       '🎉 *New Recommendation* 🎉',
       '',
       `🎵 *${escapeMarkdown(rec.album)}*`,
       `🎤 ${escapeMarkdown(rec.artist)}`,
       `📅 ${escapeMarkdown(dateDisplay)}`,
+      `🔗 [Rate Your Music](${rymUrl})`,
       '',
     ];
 
