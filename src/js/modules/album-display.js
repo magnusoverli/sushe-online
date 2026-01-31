@@ -13,7 +13,7 @@ import {
   extractYearFromDate,
 } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
-import { isYearLocked } from './year-lock.js';
+import { isListLocked } from './year-lock.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -2323,13 +2323,15 @@ export function createAlbumDisplay(deps = {}) {
     // it's now empty - the children are in `container`. Use `container` for lookups.
     prePopulatePositionCache(container, isMobile);
 
-    // Only enable sorting if the year is not locked
+    // Only enable sorting if the list is not locked (main list in locked year)
     const currentList = getCurrentList();
     const listMeta = getListMetadata(currentList);
     const listYear = listMeta?.year || null;
+    const listIsMain = listMeta?.isMain || false;
 
-    if (listYear) {
-      isYearLocked(listYear).then((locked) => {
+    if (listYear && listIsMain) {
+      // Only check lock status for main lists
+      isListLocked(listYear, listIsMain).then((locked) => {
         if (!locked) {
           initializeUnifiedSorting(container, isMobile);
           // Remove lock banner if it exists
@@ -2338,7 +2340,7 @@ export function createAlbumDisplay(deps = {}) {
             existingBanner.remove();
           }
         } else {
-          // Year is locked - destroy any existing sortable instance
+          // Main list is locked - destroy any existing sortable instance
           if (destroySorting) {
             destroySorting(container);
           }
@@ -2347,7 +2349,7 @@ export function createAlbumDisplay(deps = {}) {
         }
       });
     } else {
-      // No year associated with list (e.g., collections) - enable sorting
+      // Non-main lists or collections - always enable sorting
       initializeUnifiedSorting(container, isMobile);
       // Remove lock banner if it exists
       const existingBanner = container.querySelector('.year-locked-banner');

@@ -24,7 +24,7 @@ module.exports = (app, deps) => {
     helpers: { triggerAggregateListRecompute },
   } = deps;
 
-  const { validateYearNotLocked } = require('../../utils/year-lock');
+  const { isYearLocked } = require('../../utils/year-lock');
 
   // Get all groups for the current user (with list counts)
   app.get('/api/groups', ensureAuthAPI, async (req, res) => {
@@ -274,18 +274,17 @@ module.exports = (app, deps) => {
         });
       }
 
-      // Check if any lists in the group have locked years
-      const listsWithYears = await pool.query(
-        `SELECT DISTINCT year FROM lists WHERE group_id = $1 AND year IS NOT NULL`,
+      // Check if any main lists in the group are in locked years
+      const mainListsWithYears = await pool.query(
+        `SELECT year FROM lists WHERE group_id = $1 AND year IS NOT NULL AND is_main = TRUE`,
         [group.id]
       );
 
-      for (const row of listsWithYears.rows) {
-        try {
-          await validateYearNotLocked(pool, row.year, 'delete group');
-        } catch (err) {
+      for (const row of mainListsWithYears.rows) {
+        const yearLocked = await isYearLocked(pool, row.year);
+        if (yearLocked) {
           return res.status(403).json({
-            error: err.message,
+            error: `Cannot delete group: Main list for year ${row.year} is locked`,
             yearLocked: true,
             year: row.year,
           });
@@ -530,21 +529,32 @@ module.exports = (app, deps) => {
         targetYear = groupResult.rows[0].year;
       }
 
-      // Check if source or target years are locked
-      try {
-        // Check source year
-        await validateYearNotLocked(pool, oldYear, 'move list from year');
-        // Check target year (if different)
-        if (targetYear !== oldYear) {
-          await validateYearNotLocked(pool, targetYear, 'move list to year');
+      // Check if source or target years are locked (only for main lists)
+      if (list.is_main) {
+        const sourceYearLocked = oldYear
+          ? await isYearLocked(pool, oldYear)
+          : false;
+        const targetYearLocked =
+          targetYear && targetYear !== oldYear
+            ? await isYearLocked(pool, targetYear)
+            : false;
+
+        if (sourceYearLocked) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            error: `Cannot move main list from year ${oldYear}: Year is locked`,
+            yearLocked: true,
+          });
         }
-      } catch (err) {
-        await client.query('ROLLBACK');
-        return res.status(403).json({
-          error: err.message,
-          yearLocked: true,
-        });
+        if (targetYearLocked) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({
+            error: `Cannot move main list to year ${targetYear}: Year is locked`,
+            yearLocked: true,
+          });
+        }
       }
+      // Note: Non-main lists can be moved freely even in locked years
 
       // If moving to a collection (no year), must clear is_main flag
       if (targetYear === null && list.is_main) {

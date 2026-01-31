@@ -39,7 +39,10 @@ module.exports = (app, deps) => {
     },
   } = deps;
 
-  const { validateYearNotLocked } = require('../../utils/year-lock');
+  const {
+    validateYearNotLocked,
+    validateMainListNotLocked,
+  } = require('../../utils/year-lock');
 
   /**
    * Helper to find a list by ID and verify ownership
@@ -265,20 +268,8 @@ module.exports = (app, deps) => {
       return res.status(400).json({ error: 'Updates must be an array' });
     }
 
-    // Check for locked years before processing updates
-    try {
-      const uniqueYears = new Set(
-        updates.map((u) => u.year).filter((y) => y !== undefined && y !== null)
-      );
-      for (const year of uniqueYears) {
-        await validateYearNotLocked(pool, year, 'bulk update lists');
-      }
-    } catch (err) {
-      return res.status(403).json({
-        error: err.message,
-        yearLocked: true,
-      });
-    }
+    // Note: Year lock checks are done per-update in the loop below
+    // to properly handle main list locking rules
 
     const client = await pool.connect();
     try {
@@ -286,6 +277,7 @@ module.exports = (app, deps) => {
 
       const results = [];
       const yearsToRecompute = new Set();
+      const { isYearLocked } = require('../../utils/year-lock');
 
       for (const update of updates) {
         const { listId, year, isMain } = update;
@@ -313,6 +305,32 @@ module.exports = (app, deps) => {
         if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
           results.push({ listId, success: false, error: 'Invalid year' });
           continue;
+        }
+
+        // Check year lock rules for main list changes
+        const effectiveYear = newYear || oldYear;
+        if (effectiveYear) {
+          const yearLocked = await isYearLocked(pool, effectiveYear);
+          if (yearLocked) {
+            // Block changing main status in locked years
+            if (isMain !== undefined && isMain !== oldList.is_main) {
+              results.push({
+                listId,
+                success: false,
+                error: `Cannot change main status: Year ${effectiveYear} is locked`,
+              });
+              continue;
+            }
+            // Block updates to main lists in locked years
+            if (oldList.is_main) {
+              results.push({
+                listId,
+                success: false,
+                error: `Cannot update main list: Year ${effectiveYear} is locked`,
+              });
+              continue;
+            }
+          }
         }
 
         if (newIsMain && newYear !== null) {
@@ -409,18 +427,7 @@ module.exports = (app, deps) => {
         }
         groupId = groupResult.rows[0].id;
         listYear = groupResult.rows[0].year; // Inherit year from group
-
-        // Check if year is locked
-        try {
-          await validateYearNotLocked(pool, listYear, 'create list');
-        } catch (err) {
-          await client.query('ROLLBACK');
-          return res.status(403).json({
-            error: err.message,
-            yearLocked: true,
-            year: listYear,
-          });
-        }
+        // Note: Year lock check removed - new lists are always non-main
       } else if (year !== undefined && year !== null) {
         // Create/find year group
         const yearValidation = validateYear(year);
@@ -429,18 +436,7 @@ module.exports = (app, deps) => {
           return res.status(400).json({ error: yearValidation.error });
         }
         listYear = yearValidation.value;
-
-        // Check if year is locked
-        try {
-          await validateYearNotLocked(pool, listYear, 'create list');
-        } catch (err) {
-          await client.query('ROLLBACK');
-          return res.status(403).json({
-            error: err.message,
-            yearLocked: true,
-            year: listYear,
-          });
-        }
+        // Note: Year lock check removed - new lists are always non-main
 
         let yearGroupResult = await client.query(
           `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
@@ -713,7 +709,7 @@ module.exports = (app, deps) => {
 
       // Find the list
       const listResult = await client.query(
-        `SELECT l.id, l._id, l.name, l.year, l.group_id, g.year as group_year
+        `SELECT l.id, l._id, l.name, l.year, l.group_id, l.is_main, g.year as group_year
          FROM lists l
          LEFT JOIN list_groups g ON l.group_id = g.id
          WHERE l._id = $1 AND l.user_id = $2`,
@@ -774,13 +770,23 @@ module.exports = (app, deps) => {
         values.push(targetYear);
       }
 
-      // Check if any affected years are locked
+      // Check if main list is locked (only main lists are locked in locked years)
       try {
-        // Check source year (current list year)
-        await validateYearNotLocked(pool, list.year, 'update list');
-        // Check target year if it's different
+        // Check source year (current list year) - only if list is main
+        await validateMainListNotLocked(
+          pool,
+          list.year,
+          list.is_main,
+          'update list'
+        );
+        // Check target year if it's different and list is main
         if (targetYear !== list.year) {
-          await validateYearNotLocked(pool, targetYear, 'update list');
+          await validateMainListNotLocked(
+            pool,
+            targetYear,
+            list.is_main,
+            'update list'
+          );
         }
       } catch (err) {
         await client.query('ROLLBACK');
@@ -893,9 +899,14 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      // Check if year is locked
+      // Check if main list is locked (only main lists are locked in locked years)
       try {
-        await validateYearNotLocked(pool, list.year, 'modify list items');
+        await validateMainListNotLocked(
+          pool,
+          list.year,
+          list.isMain,
+          'modify list items'
+        );
       } catch (err) {
         await client.query('ROLLBACK');
         return res.status(403).json({
@@ -992,9 +1003,14 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      // Check if year is locked
+      // Check if main list is locked (only main lists are locked in locked years)
       try {
-        await validateYearNotLocked(pool, list.year, 'reorder list items');
+        await validateMainListNotLocked(
+          pool,
+          list.year,
+          list.isMain,
+          'reorder list items'
+        );
       } catch (err) {
         return res.status(403).json({
           error: err.message,
@@ -1091,9 +1107,14 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'List not found' });
         }
 
-        // Check if year is locked
+        // Check if main list is locked (only main lists are locked in locked years)
         try {
-          await validateYearNotLocked(pool, list.year, 'update comment');
+          await validateMainListNotLocked(
+            pool,
+            list.year,
+            list.isMain,
+            'update comment'
+          );
         } catch (err) {
           await client.query('ROLLBACK');
           return res.status(403).json({
@@ -1170,9 +1191,14 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'List not found' });
       }
 
-      // Check if year is locked
+      // Check if main list is locked (only main lists are locked in locked years)
       try {
-        await validateYearNotLocked(pool, list.year, 'modify list items');
+        await validateMainListNotLocked(
+          pool,
+          list.year,
+          list.isMain,
+          'modify list items'
+        );
       } catch (err) {
         await client.query('ROLLBACK');
         return res.status(403).json({
@@ -1603,18 +1629,8 @@ module.exports = (app, deps) => {
           error: 'Cannot delete main list. Unset main status first.',
         });
       }
-
-      // Check if year is locked (only for non-main lists)
-      try {
-        await validateYearNotLocked(pool, list.year, 'delete list');
-      } catch (err) {
-        await client.query('ROLLBACK');
-        return res.status(403).json({
-          error: err.message,
-          yearLocked: true,
-          year: list.year,
-        });
-      }
+      // Note: No year lock check needed - non-main lists can be deleted in locked years
+      // (main lists are already blocked above)
 
       // Delete list items
       await client.query('DELETE FROM list_items WHERE list_id = $1', [

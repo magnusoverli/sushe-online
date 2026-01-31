@@ -79,3 +79,15 @@ export async function isYearLocked(year) {
   const lockedYears = await getLockedYears();
   return lockedYears.includes(year);
 }
+
+/**
+ * Check if a specific list is locked
+ * A list is locked only if the year is locked AND the list is the main list
+ * @param {number|null} year - Year to check
+ * @param {boolean} isMain - Whether the list is the main list
+ * @returns {Promise<boolean>} True if list is locked
+ */
+export async function isListLocked(year, isMain) {
+  if (!year || !isMain) return false;
+  return await isYearLocked(year);
+}

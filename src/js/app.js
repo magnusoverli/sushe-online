@@ -21,7 +21,7 @@ import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
 import {
   invalidateLockedYearsCache,
-  isYearLocked,
+  isListLocked,
 } from './modules/year-lock.js';
 
 // Re-export UI utilities for backward compatibility
@@ -4164,13 +4164,15 @@ window.refreshLockedYearStatus = async function (year) {
   // Invalidate the cache so we fetch fresh status
   invalidateLockedYearsCache();
 
-  // Get the current list's year
+  // Get the current list's year and main status
   const currentMeta = getListMetadata(currentListId);
   const currentYear = currentMeta?.year;
+  const currentIsMain = currentMeta?.isMain || false;
 
   // If the current list belongs to the year that was locked/unlocked
-  if (currentYear && currentYear === year) {
-    const isLocked = await isYearLocked(currentYear);
+  // and the list is the main list for that year
+  if (currentYear && currentYear === year && currentIsMain) {
+    const isLocked = await isListLocked(currentYear, currentIsMain);
 
     // Get the album container
     const container = document.getElementById('albumContainer');
@@ -4181,7 +4183,7 @@ window.refreshLockedYearStatus = async function (year) {
     if (!sorting) return;
 
     if (isLocked) {
-      // Year is now locked - disable sorting and show banner
+      // Main list is now locked - disable sorting and show banner
       sorting.destroySorting(container);
 
       // Add lock banner if not already present
@@ -4193,13 +4195,13 @@ window.refreshLockedYearStatus = async function (year) {
         banner.innerHTML = `
           <i class="fas fa-lock text-yellow-500"></i>
           <span class="text-sm">
-            Year ${currentYear} is locked. You cannot reorder, add, or edit albums in this list.
+            Year ${currentYear} is locked. You cannot reorder, add, or edit albums in this main list.
           </span>
         `;
         container.insertBefore(banner, container.firstChild);
       }
     } else {
-      // Year is now unlocked - enable sorting and remove banner
+      // Main list is now unlocked - enable sorting and remove banner
       const isMobile = window.innerWidth < 1024;
       sorting.initializeUnifiedSorting(container, isMobile);
 

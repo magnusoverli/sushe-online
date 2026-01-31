@@ -4,9 +4,13 @@ const logger = require('./logger');
  * Year Lock Utilities
  *
  * Provides functions to check if a year is locked and validate operations
- * against locked years. Year locking prevents list creation/modification
- * for specific years while allowing admin operations like contributor
- * management and aggregate recomputation.
+ * against locked years. Year locking prevents modification of MAIN lists
+ * for specific years while allowing:
+ * - Creation of new lists (they start as non-main)
+ * - Editing non-main lists
+ * - Admin operations like contributor management and aggregate recomputation
+ *
+ * Main status cannot be changed in locked years (cannot set or unset main).
  */
 
 /**
@@ -52,4 +56,42 @@ async function validateYearNotLocked(pool, year, operation) {
   }
 }
 
-module.exports = { isYearLocked, validateYearNotLocked };
+/**
+ * Check if a specific list is locked
+ * A list is locked only if the year is locked AND the list is the main list
+ * @param {object} pool - PostgreSQL connection pool
+ * @param {number|null} year - Year to check
+ * @param {boolean} isMain - Whether the list is the main list
+ * @returns {Promise<boolean>} - True if list is locked, false otherwise
+ */
+async function isMainListLocked(pool, year, isMain) {
+  if (!year || !isMain) return false;
+  return await isYearLocked(pool, year);
+}
+
+/**
+ * Validate that a main list is not locked before performing an operation
+ * Throws an error only if the year is locked AND the list is main
+ * @param {object} pool - PostgreSQL connection pool
+ * @param {number|null} year - Year to validate
+ * @param {boolean} isMain - Whether the list is the main list
+ * @param {string} operation - Description of the operation being attempted
+ * @throws {Error} - If list is locked (year locked + is main)
+ */
+async function validateMainListNotLocked(pool, year, isMain, operation) {
+  if (!year || !isMain) return; // Non-main lists are never locked
+
+  const locked = await isYearLocked(pool, year);
+  if (locked) {
+    throw new Error(
+      `Cannot ${operation}: Main list for year ${year} is locked`
+    );
+  }
+}
+
+module.exports = {
+  isYearLocked,
+  validateYearNotLocked,
+  isMainListLocked,
+  validateMainListNotLocked,
+};
