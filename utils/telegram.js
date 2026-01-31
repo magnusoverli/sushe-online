@@ -719,7 +719,13 @@ function createWebhookHandler(pool, configManager, log) {
 /**
  * Create recommendations notification functions
  */
-function createRecommendationsNotifier(pool, apiRequest, configManager, log) {
+function createRecommendationsNotifier(
+  pool,
+  apiRequest,
+  uploadPhoto,
+  configManager,
+  log
+) {
   /**
    * Get all recommendation threads from database
    */
@@ -793,9 +799,11 @@ function createRecommendationsNotifier(pool, apiRequest, configManager, log) {
    * @param {number} rec.year - Year of recommendation
    * @param {string} rec.recommended_by - Username of recommender
    * @param {string} rec.reasoning - Reasoning text
-   * @param {string} [coverUrl] - Optional cover image URL
+   * @param {Object} [coverImage] - Optional cover image data
+   * @param {Buffer} [coverImage.buffer] - Image buffer
+   * @param {string} [coverImage.format] - Image format (jpeg, png, etc.)
    */
-  async function sendNotification(rec, coverUrl = null) {
+  async function sendNotification(rec, coverImage = null) {
     try {
       const config = await configManager.getConfig(true);
       if (
@@ -822,19 +830,23 @@ function createRecommendationsNotifier(pool, apiRequest, configManager, log) {
       // Format message
       const message = formatRecommendationMessage(rec);
 
-      // Try to send with photo first
-      if (coverUrl) {
+      // Try to send with photo first (upload directly)
+      if (coverImage?.buffer) {
         try {
-          await apiRequest(config.botToken, 'sendPhoto', {
-            chat_id: config.chatId,
-            message_thread_id: threadId,
-            photo: coverUrl,
-            caption: message,
-            parse_mode: 'Markdown',
-          });
+          await uploadPhoto(
+            config.botToken,
+            coverImage.buffer,
+            coverImage.format,
+            {
+              chat_id: config.chatId,
+              message_thread_id: threadId,
+              caption: message,
+              parse_mode: 'Markdown',
+            }
+          );
           return { success: true };
         } catch (photoErr) {
-          log.warn('Failed to send photo, falling back to text', {
+          log.warn('Failed to upload photo, falling back to text', {
             error: photoErr.message,
           });
         }
@@ -959,6 +971,74 @@ function createTelegramNotifier(deps = {}) {
     return data.result;
   }
 
+  /**
+   * Upload a photo to Telegram using multipart/form-data
+   * @param {string} token - Bot token
+   * @param {Buffer} imageBuffer - Image data as buffer
+   * @param {string} imageFormat - Image format (jpeg, png, etc.)
+   * @param {Object} params - Additional params (chat_id, caption, etc.)
+   */
+  async function uploadPhoto(token, imageBuffer, imageFormat, params = {}) {
+    const url = `${TELEGRAM_API}${token}/sendPhoto`;
+
+    // Create form data manually for Node.js fetch
+    const boundary = `----FormBoundary${crypto.randomBytes(16).toString('hex')}`;
+    const filename = `cover.${imageFormat || 'jpg'}`;
+    const mimeType = `image/${imageFormat || 'jpeg'}`;
+
+    // Build multipart body
+    const parts = [];
+
+    // Add the photo file
+    parts.push(
+      `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="photo"; filename="${filename}"\r\n` +
+        `Content-Type: ${mimeType}\r\n\r\n`
+    );
+    parts.push(imageBuffer);
+    parts.push('\r\n');
+
+    // Add other params
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null) {
+        parts.push(
+          `--${boundary}\r\n` +
+            `Content-Disposition: form-data; name="${key}"\r\n\r\n` +
+            `${value}\r\n`
+        );
+      }
+    }
+
+    parts.push(`--${boundary}--\r\n`);
+
+    // Combine parts into single buffer
+    const bodyParts = parts.map((part) =>
+      Buffer.isBuffer(part) ? part : Buffer.from(part, 'utf8')
+    );
+    const body = Buffer.concat(bodyParts);
+
+    const response = await fetchFn(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        'Content-Length': body.length.toString(),
+      },
+      body: body,
+    });
+
+    const data = await response.json();
+
+    if (!data.ok) {
+      log.error('Telegram photo upload error', {
+        error_code: data.error_code,
+        description: data.description,
+      });
+      throw new Error(data.description || 'Failed to upload photo');
+    }
+
+    return data.result;
+  }
+
   // Create helper modules
   const setupHelpers = createSetupHelpers(apiRequest, log);
   const configManager = createConfigManager(
@@ -979,6 +1059,7 @@ function createTelegramNotifier(deps = {}) {
   const recommendations = createRecommendationsNotifier(
     pool,
     apiRequest,
+    uploadPhoto,
     configManager,
     log
   );

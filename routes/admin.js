@@ -1673,7 +1673,7 @@ module.exports = (app, deps) => {
             reasoning:
               'This is a test recommendation to verify the Telegram integration is working correctly.',
           },
-          null // No cover for test
+          null // No cover image for test
         );
 
         if (!result.success) {

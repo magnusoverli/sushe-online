@@ -269,28 +269,47 @@ module.exports = (appInstance, deps) => {
         // Send Telegram notification (fire-and-forget)
         const telegramNotifier = app.locals.telegramNotifier;
         if (telegramNotifier?.sendRecommendationNotification) {
-          const coverUrl = `/api/albums/${encodeURIComponent(albumId)}/cover`;
-          // Use absolute URL for Telegram
-          const baseUrl =
-            process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
-          telegramNotifier
-            .sendRecommendationNotification(
-              {
-                artist: album.artist,
-                album: album.album,
-                album_id: albumId,
-                release_date: album.release_date,
-                year,
-                recommended_by: req.user.username,
-                reasoning: trimmedReasoning,
-              },
-              `${baseUrl}${coverUrl}`
-            )
-            .catch((err) => {
+          // Fetch cover image from database for direct upload
+          (async () => {
+            try {
+              let coverImage = null;
+              const coverResult = await pool.query(
+                'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
+                [albumId]
+              );
+              if (
+                coverResult.rows.length > 0 &&
+                coverResult.rows[0].cover_image
+              ) {
+                const row = coverResult.rows[0];
+                // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
+                const imageBuffer = Buffer.isBuffer(row.cover_image)
+                  ? row.cover_image
+                  : Buffer.from(row.cover_image, 'base64');
+                coverImage = {
+                  buffer: imageBuffer,
+                  format: row.cover_image_format || 'jpeg',
+                };
+              }
+
+              await telegramNotifier.sendRecommendationNotification(
+                {
+                  artist: album.artist,
+                  album: album.album,
+                  album_id: albumId,
+                  release_date: album.release_date,
+                  year,
+                  recommended_by: req.user.username,
+                  reasoning: trimmedReasoning,
+                },
+                coverImage
+              );
+            } catch (err) {
               logger.warn('Failed to send Telegram notification', {
                 error: err.message,
               });
-            });
+            }
+          })();
         }
 
         res.status(201).json({
