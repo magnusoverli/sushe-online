@@ -70,6 +70,7 @@ Gorenoise
 Gothic Country
 Gothic Metal
 Gothic Rock
+Hellenic Black Metal
 Grindcore
 Groove Metal
 Grunge
@@ -111,6 +112,7 @@ Nordic Folk Rock
 Nu Metal
 Nwobhm
 Oi!
+Occult Rock
 Pagan Black Metal
 Persian Music
 Pop Rock
@@ -157,6 +159,7 @@ Synthpop
 Synthwave
 Technical Death Metal
 Technical Thrash Metal
+Thall
 Thrash Metal
 Thrashcore
 Traditional Doom Metal
