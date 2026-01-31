@@ -279,6 +279,7 @@ module.exports = (appInstance, deps) => {
                 artist: album.artist,
                 album: album.album,
                 album_id: albumId,
+                release_date: album.release_date,
                 year,
                 recommended_by: req.user.username,
                 reasoning: trimmedReasoning,

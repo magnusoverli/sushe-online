@@ -1667,6 +1667,7 @@ module.exports = (app, deps) => {
             artist: 'Test Artist',
             album: 'Test Album',
             album_id: 'test-album-id',
+            release_date: new Date().toISOString(),
             year: testYear,
             recommended_by: req.user.username,
             reasoning:

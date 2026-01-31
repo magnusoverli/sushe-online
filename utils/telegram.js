@@ -864,12 +864,24 @@ function createRecommendationsNotifier(pool, apiRequest, configManager, log) {
    * Format the recommendation message
    */
   function formatRecommendationMessage(rec) {
+    // Format release date as DD/MM/YYYY, fallback to year
+    let dateDisplay = rec.year;
+    if (rec.release_date) {
+      const date = new Date(rec.release_date);
+      if (!isNaN(date.getTime())) {
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        dateDisplay = `${day}/${month}/${year}`;
+      }
+    }
+
     const lines = [
-      '📀 *New Recommendation*',
+      '🎉 *New Recommendation* 🎉',
       '',
       `🎵 *${escapeMarkdown(rec.album)}*`,
       `🎤 ${escapeMarkdown(rec.artist)}`,
-      `📅 ${rec.year}`,
+      `📅 ${escapeMarkdown(dateDisplay)}`,
       '',
     ];
 
