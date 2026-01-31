@@ -3078,8 +3078,9 @@ const aggregateListTemplate = (user, year) => `
     }
     
     // Calculate reveal phases based on POSITIONS (ranks), not indices
-    // - Bulk reveal: all albums with rank > 5 (in groups, bottom-to-top)
-    // - Individual reveal: positions 5, 4, 3, 2, 1 - all albums sharing that rank together
+    // - Ranks > 40: reveal in groups of 20 (bottom-to-top)
+    // - Ranks 6-40: reveal in groups of 5 (bottom-to-top)
+    // - Ranks 1-5: individual reveal (all albums sharing that rank together)
     // - Tied albums are NEVER split across bulk groups
     function calculateRevealPhases(albums) {
       const phases = [];
@@ -3087,33 +3088,25 @@ const aggregateListTemplate = (user, year) => `
       
       if (totalAlbums === 0) return phases;
       
-      // Separate albums into bulk (rank > 5) and individual (rank <= 5)
       const topRanks = [5, 4, 3, 2, 1]; // Positions to reveal individually
       
-      // Get bulk items with their indices and ranks
-      const bulkItems = albums
-        .map((a, idx) => ({ album: a, idx, rank: a.rank }))
-        .filter(item => item.album.rank > 5);
-      
-      // Create bulk phases for albums with rank > 5 (in groups of ~5, from bottom)
-      // Ensure ties are never split across groups
-      if (bulkItems.length > 0) {
-        const batchSize = 5;
+      // Helper function to create batches from items with a given batch size
+      function createBatches(items, batchSize) {
         const batches = [];
         let currentBatch = [];
         
         // Process from bottom (highest index) to top (lowest index)
-        for (let i = bulkItems.length - 1; i >= 0; i--) {
-          const item = bulkItems[i];
+        for (let i = items.length - 1; i >= 0; i--) {
+          const item = items[i];
           currentBatch.push(item.idx);
           
           // Check if we've reached batch size
           if (currentBatch.length >= batchSize) {
             // Before closing batch, check if next item has same rank (tie)
             // If so, include it in this batch to avoid splitting ties
-            while (i > 0 && bulkItems[i - 1].rank === item.rank) {
+            while (i > 0 && items[i - 1].rank === item.rank) {
               i--;
-              currentBatch.push(bulkItems[i].idx);
+              currentBatch.push(items[i].idx);
             }
             batches.push([...currentBatch]);
             currentBatch = [];
@@ -3125,12 +3118,30 @@ const aggregateListTemplate = (user, year) => `
           batches.push(currentBatch);
         }
         
-        // Add bulk phases (already in bottom to top order)
-        batches.forEach((batchIndices, idx) => {
-          const label = idx === 0 ? 'Begin Reveal' : 'Continue...';
-          phases.push({ indices: batchIndices, label, isBulk: true });
-        });
+        return batches;
       }
+      
+      // Get items by rank category
+      const farBulkItems = albums
+        .map((a, idx) => ({ album: a, idx, rank: a.rank }))
+        .filter(item => item.album.rank > 40); // Groups of 20
+      
+      const nearBulkItems = albums
+        .map((a, idx) => ({ album: a, idx, rank: a.rank }))
+        .filter(item => item.album.rank > 5 && item.album.rank <= 40); // Groups of 5
+      
+      // Create batches for far bulk (ranks > 40) - groups of 20
+      const farBatches = createBatches(farBulkItems, 20);
+      
+      // Create batches for near bulk (ranks 6-40) - groups of 5
+      const nearBatches = createBatches(nearBulkItems, 5);
+      
+      // Add all bulk phases (far first since they're lower positions, then near)
+      const allBatches = [...farBatches, ...nearBatches];
+      allBatches.forEach((batchIndices, idx) => {
+        const label = idx === 0 ? 'Begin Reveal' : 'Continue...';
+        phases.push({ indices: batchIndices, label, isBulk: true });
+      });
       
       // Individual reveals for positions 5, 4, 3, 2, 1 (all albums sharing that rank)
       for (const rank of topRanks) {
