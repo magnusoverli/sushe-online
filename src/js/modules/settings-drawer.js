@@ -1790,6 +1790,18 @@ export function createSettingsDrawer(deps = {}) {
                     <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-${isRecLocked ? 'unlock' : 'lock'} mr-1"></i>${isRecLocked ? 'Unlock' : 'Lock'} Recommendations
                   </button>`;
 
+                  // Manage Recommenders button - disabled if recommendations are locked
+                  if (isRecLocked) {
+                    actionsHtml += `<button class="settings-button opacity-50 cursor-not-allowed" disabled data-year="${year}" title="Unlock recommendations to manage recommenders">
+                    <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-user-check mr-1"></i>Manage Recommenders
+                    <i class="fas fa-lock text-yellow-500 ml-2 text-xs"></i>
+                  </button>`;
+                  } else {
+                    actionsHtml += `<button class="settings-button recommendation-manage-access" data-year="${year}">
+                    <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-user-check mr-1"></i>Manage Recommenders
+                  </button>`;
+                  }
+
                   // Manage Contributors button - disabled if year is locked
                   if (isLocked) {
                     actionsHtml += `<button class="settings-button opacity-50 cursor-not-allowed" disabled data-year="${year}" title="Unlock the year to manage contributors">
@@ -2571,6 +2583,15 @@ export function createSettingsDrawer(deps = {}) {
         await handleToggleRecommendationLock(year, isCurrentlyLocked);
       });
     });
+
+    document
+      .querySelectorAll('.recommendation-manage-access')
+      .forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const year = parseInt(btn.dataset.year, 10);
+          await handleShowRecommenderManager(year);
+        });
+      });
 
     // Album summary handlers
     const fetchAlbumSummariesBtn = document.getElementById(
@@ -5343,14 +5364,55 @@ export function createSettingsDrawer(deps = {}) {
         const lockButton = document.querySelector(
           `.recommendation-toggle-lock[data-year="${year}"]`
         );
+        const newLockStatus = !isCurrentlyLocked;
         if (lockButton) {
-          const newLockStatus = !isCurrentlyLocked;
           const buttonText = newLockStatus
             ? 'Unlock Recommendations'
             : 'Lock Recommendations';
           const iconClass = newLockStatus ? 'unlock' : 'lock';
           lockButton.innerHTML = `<i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-${iconClass} mr-1"></i>${buttonText}`;
           lockButton.dataset.locked = newLockStatus;
+        }
+
+        // Update Manage Recommenders button
+        const recommenderButton = document.querySelector(
+          `.recommendation-manage-access[data-year="${year}"]`
+        );
+        const disabledRecommenderButton = document.querySelector(
+          `button[disabled][data-year="${year}"][title*="Unlock recommendations"]`
+        );
+
+        if (newLockStatus) {
+          // Lock engaged: Disable recommenders button
+          if (recommenderButton) {
+            const newButton = document.createElement('button');
+            newButton.className =
+              'settings-button opacity-50 cursor-not-allowed';
+            newButton.disabled = true;
+            newButton.dataset.year = year;
+            newButton.title = 'Unlock recommendations to manage recommenders';
+            newButton.innerHTML = `
+              <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-user-check mr-1"></i>Manage Recommenders
+              <i class="fas fa-lock text-yellow-500 ml-2 text-xs"></i>
+            `;
+            recommenderButton.replaceWith(newButton);
+          }
+        } else {
+          // Lock removed: Enable recommenders button
+          if (disabledRecommenderButton) {
+            const newButton = document.createElement('button');
+            newButton.className =
+              'settings-button recommendation-manage-access';
+            newButton.dataset.year = year;
+            newButton.innerHTML = `
+              <i class="fas fa-thumbs-up mr-2 text-blue-400"></i><i class="fas fa-user-check mr-1"></i>Manage Recommenders
+            `;
+            // Re-attach event listener
+            newButton.addEventListener('click', async () => {
+              await handleShowRecommenderManager(year);
+            });
+            disabledRecommenderButton.replaceWith(newButton);
+          }
         }
 
         // Invalidate recommendation lock cache
@@ -6068,6 +6130,247 @@ export function createSettingsDrawer(deps = {}) {
   async function handleShowContributorManager(year) {
     // Create and show modal
     const modal = await createContributorModal(year);
+    document.body.appendChild(modal);
+
+    // Trigger animation
+    setTimeout(() => {
+      modal.classList.remove('hidden');
+    }, 10);
+  }
+
+  /**
+   * Create recommender management modal
+   */
+  async function createRecommenderModal(year) {
+    const modal = document.createElement('div');
+    modal.className = 'settings-modal hidden';
+    modal.id = `recommender-modal-${year}`;
+    modal.innerHTML = `
+      <div class="settings-modal-backdrop"></div>
+      <div class="settings-modal-content" style="max-width: 600px;">
+        <div class="settings-modal-header">
+          <h3 class="settings-modal-title">
+            <i class="fas fa-thumbs-up text-blue-400 mr-2"></i>Manage Recommenders - ${year}
+          </h3>
+          <button class="settings-modal-close" aria-label="Close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="settings-modal-body">
+          <div class="text-center py-4">
+            <i class="fas fa-spinner fa-spin text-gray-500"></i>
+            <p class="text-gray-400 mt-2">Loading users...</p>
+          </div>
+        </div>
+        <div class="settings-modal-footer">
+          <button id="cancelRecommenderBtn-${year}" class="settings-button">Cancel</button>
+          <button id="saveRecommenderBtn-${year}" class="settings-button" disabled>Save Changes</button>
+        </div>
+      </div>
+    `;
+
+    // Attach close handlers
+    const backdrop = modal.querySelector('.settings-modal-backdrop');
+    const closeBtn = modal.querySelector('.settings-modal-close');
+    const cancelBtn = modal.querySelector(`#cancelRecommenderBtn-${year}`);
+    const saveBtn = modal.querySelector(`#saveRecommenderBtn-${year}`);
+
+    // Track original state and current state
+    const originalState = new Map();
+    const currentState = new Map();
+
+    const closeModal = () => {
+      modal.classList.add('hidden');
+      setTimeout(() => {
+        if (document.body.contains(modal)) {
+          document.body.removeChild(modal);
+        }
+      }, 300);
+    };
+
+    backdrop.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+    cancelBtn.addEventListener('click', closeModal);
+
+    // Load users
+    try {
+      const response = await apiCall(
+        `/api/recommendations/${year}/access/users`
+      );
+      const body = modal.querySelector('.settings-modal-body');
+
+      if (!response.users || response.users.length === 0) {
+        body.innerHTML =
+          '<p class="text-gray-500 text-sm text-center py-4">No approved users found.</p>';
+        saveBtn.disabled = true;
+        return modal;
+      }
+
+      const users = response.users;
+      const initialSelectedCount = users.filter((u) => u.has_access).length;
+
+      // Store original state
+      users.forEach((user) => {
+        originalState.set(user.user_id, user.has_access);
+        currentState.set(user.user_id, user.has_access);
+      });
+
+      // Build HTML
+      let html = `
+        <div class="mb-3 p-3 bg-blue-900/30 border border-blue-700/50 rounded-sm">
+          <p class="text-sm text-blue-300">
+            <i class="fas fa-info-circle mr-1"></i>
+            By default, all users can recommend albums. Select specific users below to restrict recommendations to only those users.
+          </p>
+        </div>
+        <div class="mb-4 flex items-center justify-between flex-wrap gap-2">
+          <span class="text-sm text-gray-400">
+            <i class="fas fa-user-check mr-1"></i>
+            <span id="recommender-count-${year}">${initialSelectedCount}</span> of ${users.length} users selected
+            ${initialSelectedCount === 0 ? '<span class="text-green-400 ml-1">(all users can recommend)</span>' : '<span class="text-yellow-400 ml-1">(restricted)</span>'}
+          </span>
+          <div class="flex gap-2">
+            <button id="selectAllRecsBtn-${year}" class="settings-button" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">Select All</button>
+            <button id="deselectAllRecsBtn-${year}" class="settings-button" style="font-size: 0.75rem; padding: 0.25rem 0.5rem;">Clear All</button>
+          </div>
+        </div>
+        <div class="space-y-2 max-h-96 overflow-y-auto" id="recommender-list-${year}">
+      `;
+
+      users.forEach((user) => {
+        const isChecked = user.has_access ? 'checked' : '';
+        html += `
+          <label class="flex items-center gap-3 p-2 bg-gray-900/50 rounded-sm cursor-pointer hover:bg-gray-800/50 transition border border-gray-700/50">
+            <input type="checkbox" 
+                   class="recommender-checkbox w-5 h-5 rounded-sm border-gray-600 bg-gray-800 text-blue-600 focus:ring-blue-500 focus:ring-offset-gray-900"
+                   data-user-id="${user.user_id}" 
+                   ${isChecked}>
+            <div class="flex-1 min-w-0">
+              <span class="text-white font-medium">${user.username || 'Unknown'}</span>
+            </div>
+            <span class="text-xs text-gray-600 truncate max-w-[150px]">${user.email || ''}</span>
+          </label>
+        `;
+      });
+
+      html += '</div>';
+      body.innerHTML = html;
+
+      // Update count and restriction status function
+      const updateCountAndStatus = () => {
+        const checkedCount = Array.from(currentState.values()).filter(
+          (v) => v
+        ).length;
+        const countEl = document.getElementById(`recommender-count-${year}`);
+        if (countEl) {
+          const statusText =
+            checkedCount === 0
+              ? '<span class="text-green-400 ml-1">(all users can recommend)</span>'
+              : '<span class="text-yellow-400 ml-1">(restricted)</span>';
+          countEl.parentElement.innerHTML = `
+            <i class="fas fa-user-check mr-1"></i>
+            <span id="recommender-count-${year}">${checkedCount}</span> of ${users.length} users selected
+            ${statusText}
+          `;
+        }
+        // Enable save button if there are changes
+        const hasChanges = Array.from(originalState.entries()).some(
+          ([userId, originalValue]) =>
+            currentState.get(userId) !== originalValue
+        );
+        saveBtn.disabled = !hasChanges;
+        saveBtn.textContent = hasChanges ? 'Save Changes' : 'No Changes';
+      };
+
+      // Attach checkbox handlers
+      modal.querySelectorAll('.recommender-checkbox').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          const userId = checkbox.dataset.userId;
+          currentState.set(userId, checkbox.checked);
+          updateCountAndStatus();
+        });
+      });
+
+      // Select All / Deselect All
+      const selectAllBtn = modal.querySelector(`#selectAllRecsBtn-${year}`);
+      const deselectAllBtn = modal.querySelector(`#deselectAllRecsBtn-${year}`);
+
+      selectAllBtn.addEventListener('click', () => {
+        modal.querySelectorAll('.recommender-checkbox').forEach((checkbox) => {
+          checkbox.checked = true;
+          currentState.set(checkbox.dataset.userId, true);
+        });
+        updateCountAndStatus();
+      });
+
+      deselectAllBtn.addEventListener('click', () => {
+        modal.querySelectorAll('.recommender-checkbox').forEach((checkbox) => {
+          checkbox.checked = false;
+          currentState.set(checkbox.dataset.userId, false);
+        });
+        updateCountAndStatus();
+      });
+
+      // Save button handler
+      saveBtn.addEventListener('click', async () => {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+
+        try {
+          // Get only selected user IDs
+          const selectedUserIds = Array.from(currentState.entries())
+            .filter(([, isSelected]) => isSelected)
+            .map(([userId]) => userId);
+
+          const response = await apiCall(
+            `/api/recommendations/${year}/access`,
+            {
+              method: 'PUT',
+              body: JSON.stringify({ userIds: selectedUserIds }),
+            }
+          );
+
+          if (response.success) {
+            showToast(
+              selectedUserIds.length === 0
+                ? `Recommendations for ${year} are now open to all users`
+                : `Recommendation access updated for ${year}`,
+              'success'
+            );
+            closeModal();
+
+            // Reload admin data
+            categoryData.admin = null;
+            await loadCategoryData('admin');
+          } else {
+            throw new Error(response.error || 'Failed to save');
+          }
+        } catch (error) {
+          console.error('Error saving recommender access:', error);
+          const errorMsg =
+            error.data?.error || error.message || 'Failed to save access list';
+          showToast(errorMsg, 'error');
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Changes';
+        }
+      });
+    } catch (error) {
+      console.error('Error loading recommender manager:', error);
+      const body = modal.querySelector('.settings-modal-body');
+      body.innerHTML =
+        '<p class="text-red-400 text-sm text-center py-4">Error loading users. Please try again.</p>';
+      saveBtn.disabled = true;
+    }
+
+    return modal;
+  }
+
+  /**
+   * Handle show recommender manager (opens modal)
+   */
+  async function handleShowRecommenderManager(year) {
+    // Create and show modal
+    const modal = await createRecommenderModal(year);
     document.body.appendChild(modal);
 
     // Trigger animation
