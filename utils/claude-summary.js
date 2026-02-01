@@ -67,8 +67,18 @@ function stripPreambles(text) {
   ];
 
   let cleaned = text;
-  for (const pattern of preamblePatterns) {
-    cleaned = cleaned.replace(pattern, '');
+  let changed = true;
+
+  // Keep stripping preambles until no more matches (handles multiple preambles)
+  while (changed) {
+    changed = false;
+    for (const pattern of preamblePatterns) {
+      const before = cleaned;
+      cleaned = cleaned.replace(pattern, '');
+      if (cleaned !== before) {
+        changed = true;
+      }
+    }
   }
 
   return cleaned.trim();
@@ -350,43 +360,47 @@ function createClaudeSummaryService(deps = {}) {
     const startTime = Date.now();
 
     try {
-      const message = await retryWithBackoff(async () => {
-        await waitForRateLimit();
+      const message = await retryWithBackoff(
+        async () => {
+          await waitForRateLimit();
 
-        const prompt = buildPrompt(
-          artist,
-          album,
-          targetSentences,
-          targetMaxChars
-        );
+          const prompt = buildPrompt(
+            artist,
+            album,
+            targetSentences,
+            targetMaxChars
+          );
 
-        log.debug('Calling Claude API for album summary', {
-          artist,
-          album,
-          model,
-        });
+          log.debug('Calling Claude API for album summary', {
+            artist,
+            album,
+            model,
+          });
 
-        return await anthropic.messages.create({
-          model,
-          max_tokens: maxTokens,
-          temperature: 0.3,
-          system:
-            'You are a music encyclopedia providing accurate, concise album information from web search results.',
-          tools: [
-            {
-              type: 'web_search_20250305',
-              name: 'web_search',
-              max_uses: 3,
-            },
-          ],
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-        });
-      }, 3, log);
+          return await anthropic.messages.create({
+            model,
+            max_tokens: maxTokens,
+            temperature: 0.3,
+            system:
+              'You are a music encyclopedia providing accurate, concise album information from web search results.',
+            tools: [
+              {
+                type: 'web_search_20250305',
+                name: 'web_search',
+                max_uses: 3,
+              },
+            ],
+            messages: [
+              {
+                role: 'user',
+                content: prompt,
+              },
+            ],
+          });
+        },
+        3,
+        log
+      );
 
       const duration = Date.now() - startTime;
 
@@ -400,8 +414,9 @@ function createClaudeSummaryService(deps = {}) {
 
       if (summary) {
         // Validate response quality
-        const isNoInfo =
-          summary.toLowerCase().includes('no information available');
+        const isNoInfo = summary
+          .toLowerCase()
+          .includes('no information available');
         const isTooShort = summary.length < 50;
 
         if (isNoInfo || isTooShort) {

@@ -578,7 +578,7 @@ test('fetchClaudeSummary should retry on 429 with exponential backoff', async ()
           content: [
             {
               type: 'text',
-              text: 'Success after retries',
+              text: 'Success after retries. This is a longer summary that passes validation. It has enough characters to not be rejected. The album was well received.',
             },
           ],
         };
@@ -593,10 +593,14 @@ test('fetchClaudeSummary should retry on 429 with exponential backoff', async ()
 
   const result = await service.fetchClaudeSummary('Artist', 'Album');
 
-  assert.strictEqual(result.summary, 'Success after retries');
+  assert.ok(result.summary.startsWith('Success after retries'));
   assert.strictEqual(result.found, true);
   assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 3);
-  assert.ok(mockLogger.info.mock.calls.some((call) => call.arguments[0] === 'Retrying Claude API call'));
+  assert.ok(
+    mockLogger.info.mock.calls.some(
+      (call) => call.arguments[0] === 'Retrying Claude API call'
+    )
+  );
 });
 
 test('fetchClaudeSummary should retry on 500 errors', async () => {
@@ -622,7 +626,7 @@ test('fetchClaudeSummary should retry on 500 errors', async () => {
           content: [
             {
               type: 'text',
-              text: 'Success after server error retry',
+              text: 'Success after server error retry. This is a longer summary that passes validation. It has enough characters. The album was notable.',
             },
           ],
         };
@@ -637,7 +641,7 @@ test('fetchClaudeSummary should retry on 500 errors', async () => {
 
   const result = await service.fetchClaudeSummary('Artist', 'Album');
 
-  assert.strictEqual(result.summary, 'Success after server error retry');
+  assert.ok(result.summary.startsWith('Success after server error retry'));
   assert.strictEqual(result.found, true);
   assert.strictEqual(mockAnthropic.messages.create.mock.calls.length, 2);
 });
@@ -722,7 +726,7 @@ test('fetchClaudeSummary should strip "Here is a summary" preamble', async () =>
         content: [
           {
             type: 'text',
-            text: "Here is a 4-sentence summary of \"Wolves of the Trench\" by Grenadier: The album was released in 2023. It's a black metal album. Critics praised its atmospheric sound. The band explores war themes.",
+            text: 'Here is a 4-sentence summary of "Wolves of the Trench" by Grenadier: The album was released in 2023. It\'s a black metal album. Critics praised its atmospheric sound. The band explores war themes.',
           },
         ],
       })),
@@ -734,7 +738,10 @@ test('fetchClaudeSummary should strip "Here is a summary" preamble', async () =>
     anthropicClient: mockAnthropic,
   });
 
-  const result = await service.fetchClaudeSummary('Grenadier', 'Wolves of the Trench');
+  const result = await service.fetchClaudeSummary(
+    'Grenadier',
+    'Wolves of the Trench'
+  );
 
   assert.strictEqual(result.found, true);
   assert.ok(!result.summary.includes('Here is'));
@@ -755,7 +762,7 @@ test('fetchClaudeSummary should strip "Let me search" preamble', async () => {
         content: [
           {
             type: 'text',
-            text: "Let me search for more specific information about the album's significance. Here is a 4-sentence summary of the album \"III\" by Gates Of Dawn: The album features post-rock elements. Released in 2019. Known for its atmospheric compositions. The band's third studio album.",
+            text: 'Let me search for more specific information about the album\'s significance. Here is a 4-sentence summary of the album "III" by Gates Of Dawn: The album features post-rock elements. Released in 2019. Known for its atmospheric compositions. The band\'s third studio album.',
           },
         ],
       })),
@@ -783,7 +790,8 @@ test('fetchClaudeSummary should handle summary without preamble', async () => {
     debug: mock.fn(),
   };
 
-  const cleanSummary = 'The album was released in 2021. It received widespread acclaim. Features experimental production techniques. Considered a landmark release in the genre.';
+  const cleanSummary =
+    'The album was released in 2021. It received widespread acclaim. Features experimental production techniques. Considered a landmark release in the genre.';
 
   const mockAnthropic = {
     messages: {
