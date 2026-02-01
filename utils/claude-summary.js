@@ -36,12 +36,42 @@ async function waitForRateLimit() {
 function buildPrompt(artist, album, targetSentences, targetMaxChars) {
   let lengthGuidance = '';
   if (targetMaxChars > 0) {
-    lengthGuidance = ` CRITICAL REQUIREMENT: Your response must be under ${targetMaxChars} characters total (including spaces and punctuation). Count characters as you write and stop before reaching ${targetMaxChars}. Be concise and focused - prioritize key information only.`;
+    lengthGuidance = ` Keep your response under ${targetMaxChars} characters.`;
   } else if (targetSentences > 0) {
     lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
   }
 
-  return `Write a ${targetSentences > 0 ? `${targetSentences}-sentence` : 'concise'} summary of the album "${album}" by ${artist}.${lengthGuidance} Search online for current information. Include the release date, genre, and what makes this album notable in the artist's discography. Write in a clear, informative style suitable for music fans. Do a proper online search to gather accurate information.`;
+  return `Search for information about the album "${album}" by ${artist} and write a concise summary.${lengthGuidance}
+
+Include: release date (year), primary genre(s), one key fact about significance/reception, and any notable ideological associations of the artist (political, religious, or social). Keep ideology mention brief unless significant or controversial.
+
+Requirements: Use only verified search results. If no reliable information found, respond "No information available." Write factually in neutral tone without superlatives. DO NOT include preambles like "Here is a summary" or "Based on my research" - start directly with the album information.`;
+}
+
+/**
+ * Remove common preambles from summary text
+ */
+function stripPreambles(text) {
+  if (!text) return text;
+
+  // Common preamble patterns to remove
+  const preamblePatterns = [
+    /^Based on my research,?\s*/i,
+    /^Here is a \d+-sentence summary of[^:]*:\s*/i,
+    /^Here's a \d+-sentence summary of[^:]*:\s*/i,
+    /^Here is a summary of[^:]*:\s*/i,
+    /^Here's a summary of[^:]*:\s*/i,
+    /^Let me search for[^.]*\.\s*/i,
+    /^According to my search,?\s*/i,
+    /^From my research,?\s*/i,
+  ];
+
+  let cleaned = text;
+  for (const pattern of preamblePatterns) {
+    cleaned = cleaned.replace(pattern, '');
+  }
+
+  return cleaned.trim();
 }
 
 /**
@@ -58,10 +88,25 @@ function extractSummaryFromContent(content, artist, album, log) {
   }
 
   // Join all text blocks with spaces
-  const summary = textBlocks
+  let summary = textBlocks
     .map((block) => block.text)
     .join(' ')
     .trim();
+
+  // Remove common preambles
+  const originalLength = summary.length;
+  summary = stripPreambles(summary);
+
+  // Log if preamble was removed
+  if (summary.length < originalLength) {
+    log.debug('Removed preamble from Claude response', {
+      artist,
+      album,
+      originalLength,
+      cleanedLength: summary.length,
+      removed: originalLength - summary.length,
+    });
+  }
 
   // Debug logging for short summaries
   if (summary.length < 100) {
@@ -194,6 +239,59 @@ function handleApiError(
 }
 
 /**
+ * Retry API call with exponential backoff
+ * Respects Retry-After headers for 429 responses
+ */
+async function retryWithBackoff(fn, maxRetries = 3, log) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+
+      // Don't retry client errors (except 429)
+      if (
+        err.status &&
+        err.status >= 400 &&
+        err.status < 500 &&
+        err.status !== 429
+      ) {
+        throw err;
+      }
+
+      // Last attempt - give up
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      // Calculate backoff
+      let backoffMs;
+      if (err.status === 429 && err.headers?.['retry-after']) {
+        // Respect Retry-After header (seconds)
+        backoffMs = parseInt(err.headers['retry-after'], 10) * 1000;
+      } else {
+        // Exponential backoff: 1s, 2s, 4s
+        backoffMs = Math.pow(2, attempt - 1) * 1000;
+      }
+
+      log.info('Retrying Claude API call', {
+        attempt,
+        maxRetries,
+        backoffMs,
+        status: err.status,
+        isRateLimit: err.status === 429,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  throw lastError;
+}
+
+/**
  * Create Claude summary service with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
@@ -237,7 +335,7 @@ function createClaudeSummaryService(deps = {}) {
 
     // Read config at call time, not module load time
     const model = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
-    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '512', 10);
+    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '300', 10);
 
     // Configurable summary length preferences
     const targetSentences = parseInt(
@@ -252,38 +350,43 @@ function createClaudeSummaryService(deps = {}) {
     const startTime = Date.now();
 
     try {
-      await waitForRateLimit();
+      const message = await retryWithBackoff(async () => {
+        await waitForRateLimit();
 
-      const prompt = buildPrompt(
-        artist,
-        album,
-        targetSentences,
-        targetMaxChars
-      );
+        const prompt = buildPrompt(
+          artist,
+          album,
+          targetSentences,
+          targetMaxChars
+        );
 
-      log.debug('Calling Claude API for album summary', {
-        artist,
-        album,
-        model,
-      });
+        log.debug('Calling Claude API for album summary', {
+          artist,
+          album,
+          model,
+        });
 
-      const message = await anthropic.messages.create({
-        model,
-        max_tokens: maxTokens,
-        tools: [
-          {
-            type: 'web_search_20250305',
-            name: 'web_search',
-            max_uses: 3,
-          },
-        ],
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      });
+        return await anthropic.messages.create({
+          model,
+          max_tokens: maxTokens,
+          temperature: 0.3,
+          system:
+            'You are a music encyclopedia providing accurate, concise album information from web search results.',
+          tools: [
+            {
+              type: 'web_search_20250305',
+              name: 'web_search',
+              max_uses: 3,
+            },
+          ],
+          messages: [
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+        });
+      }, 3, log);
 
       const duration = Date.now() - startTime;
 
@@ -296,6 +399,31 @@ function createClaudeSummaryService(deps = {}) {
       );
 
       if (summary) {
+        // Validate response quality
+        const isNoInfo =
+          summary.toLowerCase().includes('no information available');
+        const isTooShort = summary.length < 50;
+
+        if (isNoInfo || isTooShort) {
+          log.warn('Claude returned invalid or no-info response', {
+            artist,
+            album,
+            summaryLength: summary.length,
+            isNoInfo,
+          });
+          // Record usage but return no summary
+          if (message.usage) {
+            recordClaudeUsage(
+              model,
+              message.usage.input_tokens || 0,
+              message.usage.output_tokens || 0,
+              'no_info'
+            );
+          }
+          observeExternalApiCall('claude', 'messages.create', duration, 404);
+          return { summary: null, source: SUMMARY_SOURCE, found: false };
+        }
+
         validateSummary(summary, artist, album, log);
 
         // Record token usage and estimated cost

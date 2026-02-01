@@ -182,9 +182,9 @@ async function processBatchAlbumsPaged(
   responseCache
 ) {
   // Concurrent processing configuration
-  // Default to 2 to coordinate with 500ms rate limit (2 req/sec)
+  // Default to 3 for improved batch processing speed
   const CONCURRENCY = parseInt(
-    process.env.ALBUM_SUMMARY_CONCURRENCY || '2',
+    process.env.ALBUM_SUMMARY_CONCURRENCY || '3',
     10
   );
 
