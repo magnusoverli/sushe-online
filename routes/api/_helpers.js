@@ -96,6 +96,21 @@ function createHelpers(deps) {
       }
     }
 
+    // Trigger async track fetch if needed
+    if (result.needsTracksFetch && album.artist && album.album) {
+      const { getTrackFetchQueue } = require('../../utils/track-fetch-queue');
+      try {
+        const trackQueue = getTrackFetchQueue();
+        trackQueue.add(result.albumId, album.artist, album.album);
+      } catch (error) {
+        // Queue not initialized yet - log but don't fail
+        logger.warn('Track fetch queue not available', {
+          albumId: result.albumId,
+          error: error.message,
+        });
+      }
+    }
+
     return result.albumId;
   }
 
@@ -127,11 +142,20 @@ function createHelpers(deps) {
 
     // Trigger async operations for all albums
     const { getCoverFetchQueue } = require('../../utils/cover-fetch-queue');
+    const { getTrackFetchQueue } = require('../../utils/track-fetch-queue');
     let coverQueue;
+    let trackQueue;
     try {
       coverQueue = getCoverFetchQueue();
     } catch (error) {
       logger.warn('Cover fetch queue not available for batch', {
+        error: error.message,
+      });
+    }
+    try {
+      trackQueue = getTrackFetchQueue();
+    } catch (error) {
+      logger.warn('Track fetch queue not available for batch', {
         error: error.message,
       });
     }
@@ -147,6 +171,11 @@ function createHelpers(deps) {
       // Trigger cover fetch if needed
       if (result.needsCoverFetch && artist && album && coverQueue) {
         coverQueue.add(result.albumId, artist, album);
+      }
+
+      // Trigger track fetch if needed
+      if (result.needsTracksFetch && artist && album && trackQueue) {
+        trackQueue.add(result.albumId, artist, album);
       }
     });
 

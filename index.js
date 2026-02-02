@@ -883,6 +883,10 @@ ready
     const { initializeCoverFetchQueue } = require('./utils/cover-fetch-queue');
     initializeCoverFetchQueue(pool);
 
+    // Initialize track fetch queue for async album track fetching
+    const { initializeTrackFetchQueue } = require('./utils/track-fetch-queue');
+    initializeTrackFetchQueue(pool);
+
     // Set up WebSocket server with session middleware
     setupWebSocket(httpServer, sessionMiddleware);
 

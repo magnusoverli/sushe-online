@@ -404,7 +404,8 @@ function createAlbumCanonical(deps = {}) {
           album_id,
           (xmax = 0) AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
-          summary_fetched_at IS NULL AS needs_summary_fetch`,
+          summary_fetched_at IS NULL AS needs_summary_fetch,
+          tracks IS NULL AS needs_tracks_fetch`,
         [
           albumId,
           sanitizedArtist,
@@ -435,6 +436,7 @@ function createAlbumCanonical(deps = {}) {
         wasMerged: !row.was_inserted,
         needsSummaryFetch: row.needs_summary_fetch,
         needsCoverFetch: row.needs_cover_fetch,
+        needsTracksFetch: row.needs_tracks_fetch,
       };
     } else {
       // Path 2: Album WITHOUT external ID - conflict on normalized name
@@ -490,7 +492,8 @@ function createAlbumCanonical(deps = {}) {
           album_id,
           (xmax = 0) AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
-          summary_fetched_at IS NULL AS needs_summary_fetch`,
+          summary_fetched_at IS NULL AS needs_summary_fetch,
+          tracks IS NULL AS needs_tracks_fetch`,
         [
           albumId,
           sanitizedArtist,
@@ -522,6 +525,7 @@ function createAlbumCanonical(deps = {}) {
         wasMerged: !row.was_inserted,
         needsSummaryFetch: row.needs_summary_fetch,
         needsCoverFetch: row.needs_cover_fetch,
+        needsTracksFetch: row.needs_tracks_fetch,
       };
     }
   }
@@ -632,7 +636,8 @@ function createAlbumCanonical(deps = {}) {
           album_id, artist, album,
           (xmax = 0) AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
-          summary_fetched_at IS NULL AS needs_summary_fetch`,
+          summary_fetched_at IS NULL AS needs_summary_fetch,
+          tracks IS NULL AS needs_tracks_fetch`,
         [
           albumIds,
           artists,
@@ -656,6 +661,7 @@ function createAlbumCanonical(deps = {}) {
           wasMerged: !row.was_inserted,
           needsSummaryFetch: row.needs_summary_fetch,
           needsCoverFetch: row.needs_cover_fetch,
+          needsTracksFetch: row.needs_tracks_fetch,
         });
       });
 
@@ -717,7 +723,8 @@ function createAlbumCanonical(deps = {}) {
           album_id, artist, album,
           (xmax = 0) AS was_inserted,
           cover_image IS NULL AS needs_cover_fetch,
-          summary_fetched_at IS NULL AS needs_summary_fetch`,
+          summary_fetched_at IS NULL AS needs_summary_fetch,
+          tracks IS NULL AS needs_tracks_fetch`,
         [
           albumIds,
           artists,
@@ -741,6 +748,7 @@ function createAlbumCanonical(deps = {}) {
           wasMerged: !row.was_inserted,
           needsSummaryFetch: row.needs_summary_fetch,
           needsCoverFetch: row.needs_cover_fetch,
+          needsTracksFetch: row.needs_tracks_fetch,
         });
       });
 
