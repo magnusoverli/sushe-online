@@ -41,15 +41,15 @@ function buildPrompt(artist, album, targetSentences, targetMaxChars) {
     lengthGuidance = ` Write exactly ${targetSentences} sentences.`;
   }
 
-  return `Search for information about the album "${album}" by ${artist} and write a concise summary.${lengthGuidance}
+  return `Search for information about the album "${album}" by ${artist} and write a concise, factual summary.${lengthGuidance}
 
-Include: release date (year), primary genre(s), one key fact about significance/reception, and any notable ideological associations of the artist (political, religious, or social). Keep ideology mention brief unless significant or controversial.
+Cover these elements when information is available: release date (year), primary genre(s), significance or critical reception, and any notable ideological associations of the artist (political, religious, or social views). Mention ideology naturally when relevant or controversial.
 
-Requirements: Use only verified search results. If no reliable information found, respond "No information available." Write factually in neutral tone without superlatives. DO NOT include preambles like "Here is a summary" or "Based on my research" - start directly with the album information.`;
+CRITICAL: Write ONLY the final summary. Use only verified search results. If insufficient reliable information is found, respond "No information available." Write factually in neutral tone. DO NOT include ANY meta-commentary, preambles, explanations about your search process, or statements about needing more information. Start directly with factual album information.`;
 }
 
 /**
- * Remove common preambles from summary text
+ * Remove common preambles and meta-commentary from summary text
  */
 function stripPreambles(text) {
   if (!text) return text;
@@ -64,6 +64,18 @@ function stripPreambles(text) {
     /^Let me search for[^.]*\.\s*/i,
     /^According to my search,?\s*/i,
     /^From my research,?\s*/i,
+    // Internal reasoning and meta-commentary patterns
+    /^I need to search for[^.]*\.\s*/i,
+    /^I need to find[^.]*\.\s*/i,
+    /^I should search for[^.]*\.\s*/i,
+    /^I'll search for[^.]*\.\s*/i,
+    /^I will search for[^.]*\.\s*/i,
+    /^I couldn't find[^.]*\.\s*/i,
+    /^I was unable to[^.]*\.\s*/i,
+    /^Unable to find[^.]*\.\s*/i,
+    /[^.]*to complete the requirements\.\s*/i,
+    /[^.]*to fulfill the requirements\.\s*/i,
+    /[^.]*to meet the requirements\.\s*/i,
   ];
 
   let cleaned = text;

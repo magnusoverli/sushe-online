@@ -816,3 +816,103 @@ test('fetchClaudeSummary should handle summary without preamble', async () => {
   assert.strictEqual(result.found, true);
   assert.strictEqual(result.summary, cleanSummary);
 });
+
+test('fetchClaudeSummary should strip "I need to search" meta-commentary', async () => {
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
+  const mockAnthropic = {
+    messages: {
+      create: mock.fn(async () => ({
+        content: [
+          {
+            type: 'text',
+            text: 'I need to search for more information about the artist\'s ideological associations to complete the requirements. The album "Filosofem" was released in 1996. It is a black metal album. Known for its atmospheric and minimalist approach.',
+          },
+        ],
+      })),
+    },
+  };
+
+  const service = createClaudeSummaryService({
+    logger: mockLogger,
+    anthropicClient: mockAnthropic,
+  });
+
+  const result = await service.fetchClaudeSummary('Burzum', 'Filosofem');
+
+  assert.strictEqual(result.found, true);
+  assert.ok(!result.summary.includes('I need to search'));
+  assert.ok(!result.summary.includes('to complete the requirements'));
+  assert.ok(result.summary.startsWith('The album "Filosofem"'));
+});
+
+test('fetchClaudeSummary should strip "I will search" meta-commentary', async () => {
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
+  const mockAnthropic = {
+    messages: {
+      create: mock.fn(async () => ({
+        content: [
+          {
+            type: 'text',
+            text: 'I will search for more details about this release. The album features post-punk influences. Released in 2018. Critics praised its raw energy.',
+          },
+        ],
+      })),
+    },
+  };
+
+  const service = createClaudeSummaryService({
+    logger: mockLogger,
+    anthropicClient: mockAnthropic,
+  });
+
+  const result = await service.fetchClaudeSummary('Artist', 'Album');
+
+  assert.strictEqual(result.found, true);
+  assert.ok(!result.summary.includes('I will search'));
+  assert.ok(result.summary.startsWith('The album features'));
+});
+
+test('fetchClaudeSummary should strip "Unable to find" meta-commentary', async () => {
+  const mockLogger = {
+    info: mock.fn(),
+    warn: mock.fn(),
+    error: mock.fn(),
+    debug: mock.fn(),
+  };
+
+  const mockAnthropic = {
+    messages: {
+      create: mock.fn(async () => ({
+        content: [
+          {
+            type: 'text',
+            text: 'Unable to find complete information about ideological associations. The album was released in 2020. Features progressive metal elements. Received positive reviews from critics.',
+          },
+        ],
+      })),
+    },
+  };
+
+  const service = createClaudeSummaryService({
+    logger: mockLogger,
+    anthropicClient: mockAnthropic,
+  });
+
+  const result = await service.fetchClaudeSummary('Artist', 'Album');
+
+  assert.strictEqual(result.found, true);
+  assert.ok(!result.summary.includes('Unable to find'));
+  assert.ok(result.summary.startsWith('The album was released'));
+});
