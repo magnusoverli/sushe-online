@@ -8,6 +8,8 @@
  * - Token management
  */
 
+const { normalizeForExternalApi } = require('../../utils/normalization');
+
 /**
  * Register Spotify routes
  * @param {Object} app - Express app instance
@@ -80,7 +82,11 @@ module.exports = (app, deps) => {
       logger.info('Spotify album search', { artist, album });
 
       try {
-        const query = `album:${album} artist:${artist}`;
+        // Normalize artist/album names for better Spotify matching
+        // Strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
+        const normalizedArtist = normalizeForExternalApi(artist);
+        const normalizedAlbum = normalizeForExternalApi(album);
+        const query = `album:${normalizedAlbum} artist:${normalizedArtist}`;
         const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
         const resp = await fetch(url, {
           headers: {
@@ -607,8 +613,13 @@ module.exports = (app, deps) => {
       };
 
       try {
+        // Normalize artist/album names for better Spotify matching
+        // Strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
+        const normalizedArtist = normalizeForExternalApi(artist);
+        const normalizedAlbum = normalizeForExternalApi(album);
+
         // First, find the album
-        const albumQuery = `album:${album} artist:${artist}`;
+        const albumQuery = `album:${normalizedAlbum} artist:${normalizedArtist}`;
         const albumResp = await fetch(
           `https://api.spotify.com/v1/search?q=${encodeURIComponent(albumQuery)}&type=album&limit=1`,
           { headers }
@@ -710,8 +721,9 @@ module.exports = (app, deps) => {
           return res.json({ id: matchingTrack.id });
         }
 
-        // Fallback: general track search
-        const fallbackQuery = `track:${searchName} album:${album} artist:${artist}`;
+        // Fallback: general track search with normalized names
+        const normalizedTrack = normalizeForExternalApi(searchName);
+        const fallbackQuery = `track:${normalizedTrack} album:${normalizedAlbum} artist:${normalizedArtist}`;
         const fallbackResp = await fetch(
           `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=1`,
           { headers }

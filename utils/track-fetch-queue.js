@@ -11,16 +11,17 @@
 
 const { RequestQueue } = require('./request-queue');
 const logger = require('./logger');
+const { normalizeForExternalApi } = require('./normalization');
 
 /**
  * Sanitize search query string for API requests
+ * Now uses normalizeForExternalApi for consistent diacritic handling
  * @param {string} str - String to sanitize
  * @returns {string} - Sanitized string
  */
 function sanitizeQuery(str = '') {
-  return str
-    .trim()
-    .replace(/[\u2018\u2019'"`]/g, '')
+  // Use centralized normalization then remove extra punctuation
+  return normalizeForExternalApi(str)
     .replace(/[()[\]{}]/g, '')
     .replace(/[.,!?]/g, '')
     .replace(/\s{2,}/g, ' ');
@@ -85,9 +86,8 @@ function createTrackFetchQueue(deps = {}) {
    */
   async function fetchItunesTracks(artistClean, albumClean) {
     try {
-      const term = `${artistClean} ${albumClean}`
-        .replace(/[^\w\s]/g, ' ')
-        .trim();
+      // artistClean and albumClean are already normalized via sanitizeQuery
+      const term = `${artistClean} ${albumClean}`;
       const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
       const resp = await fetchFn(searchUrl);
       if (!resp.ok) return null;
@@ -122,7 +122,8 @@ function createTrackFetchQueue(deps = {}) {
    */
   async function fetchDeezerTracks(artistClean, albumClean) {
     try {
-      const q = `${artistClean} ${albumClean}`.replace(/[^\w\s]/g, ' ').trim();
+      // artistClean and albumClean are already normalized via sanitizeQuery
+      const q = `${artistClean} ${albumClean}`;
       const searchResp = await fetchFn(
         `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`
       );

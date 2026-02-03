@@ -3,22 +3,11 @@
  * Consolidated from spotify-player.js and now-playing.js
  */
 
-/**
- * Normalize a string for fuzzy matching
- * Removes diacritics, punctuation, and normalizes whitespace
- * @param {string} str - String to normalize
- * @returns {string} Normalized string
- */
-export function normalizeForMatch(str) {
-  if (!str) return '';
-  return str
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
-    .replace(/[^a-z0-9\s]/g, '') // Remove non-alphanumeric (keep spaces)
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
-}
+// Import normalizeForMatch from centralized normalization module
+import { normalizeForMatch } from './normalization.js';
+
+// Re-export for backward compatibility
+export { normalizeForMatch };
 
 /**
  * Check if a list album matches the currently playing Spotify track

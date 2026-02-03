@@ -9,6 +9,7 @@
 
 const sharp = require('sharp');
 const logger = require('./logger');
+const { normalizeForLookup } = require('./normalization');
 
 // Image processing settings (matching migration 036)
 const TARGET_SIZE = 512;
@@ -154,14 +155,14 @@ async function fetchFromItunes(artist, album) {
       return null;
     }
 
-    // Find best matching result (simple case-insensitive match)
-    const normalizedArtist = artist.toLowerCase().trim();
-    const normalizedAlbum = album.toLowerCase().trim();
+    // Find best matching result using centralized normalization
+    const normalizedArtist = normalizeForLookup(artist);
+    const normalizedAlbum = normalizeForLookup(album);
 
     let bestMatch = null;
     for (const result of data.results) {
-      const resultArtist = (result.artistName || '').toLowerCase().trim();
-      const resultAlbum = (result.collectionName || '').toLowerCase().trim();
+      const resultArtist = normalizeForLookup(result.artistName);
+      const resultAlbum = normalizeForLookup(result.collectionName);
 
       // Check for reasonable match
       if (

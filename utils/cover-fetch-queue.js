@@ -8,6 +8,7 @@
 
 const { RequestQueue } = require('./request-queue');
 const logger = require('./logger');
+const { normalizeForExternalApi } = require('./normalization');
 
 /**
  * Factory function to create a CoverFetchQueue with dependency injection
@@ -72,8 +73,11 @@ function createCoverFetchQueue(deps = {}) {
       throw new Error('Database pool not initialized');
     }
 
-    // Search Deezer for cover
-    const deezerQuery = `${artist} ${album}`.replace(/[^\w\s]/g, ' ').trim();
+    // Search Deezer for cover with normalized names for better matching
+    // Strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
+    const normalizedArtist = normalizeForExternalApi(artist);
+    const normalizedAlbum = normalizeForExternalApi(album);
+    const deezerQuery = `${normalizedArtist} ${normalizedAlbum}`;
     const deezerUrl = `https://api.deezer.com/search/album?q=${encodeURIComponent(deezerQuery)}`;
 
     logger.debug('Fetching cover from Deezer', {

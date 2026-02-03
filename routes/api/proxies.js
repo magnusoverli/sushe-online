@@ -11,6 +11,8 @@
  * - MusicBrainz tracks
  */
 
+const { normalizeForExternalApi } = require('../../utils/normalization');
+
 /**
  * Register proxy routes
  * @param {Object} app - Express app instance
@@ -494,22 +496,20 @@ module.exports = (app, deps) => {
         let releaseGroupId = id;
         let directReleaseId = null;
 
+        // Use centralized normalization for better external API matching
+        // Strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
         const sanitize = (str = '') =>
-          str
-            .trim()
-            .replace(/[\u2018\u2019'"`]/g, '')
+          normalizeForExternalApi(str)
             .replace(/[()[\]{}]/g, '')
-            .replace(/[.,!?]/g, '')
-            .replace(/\s{2,}/g, ' ');
+            .replace(/[.,!?]/g, '');
 
         const artistClean = sanitize(artist);
         const albumClean = sanitize(album);
 
         const fetchItunesTracks = async () => {
           try {
-            const term = `${artistClean} ${albumClean}`
-              .replace(/[^\w\s]/g, ' ')
-              .trim();
+            // artistClean and albumClean are already normalized
+            const term = `${artistClean} ${albumClean}`;
             const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
             const resp = await fetch(searchUrl);
             if (!resp.ok) return null;
@@ -539,9 +539,8 @@ module.exports = (app, deps) => {
 
         const fetchDeezerTracks = async () => {
           try {
-            const q = `${artistClean} ${albumClean}`
-              .replace(/[^\w\s]/g, ' ')
-              .trim();
+            // artistClean and albumClean are already normalized
+            const q = `${artistClean} ${albumClean}`;
             const searchResp = await fetch(
               `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`
             );

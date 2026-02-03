@@ -8,6 +8,9 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const {
+  sanitizeForStorage,
+  normalizeForLookup,
+  normalizeForExternalApi,
   normalizeArtistName,
   normalizeAlbumName,
   normalizeGenre,
@@ -19,6 +22,155 @@ const {
 } = require('../utils/normalization');
 
 test('Normalization Utilities', async (t) => {
+  // ============================================
+  // Storage and Lookup Normalization Tests
+  // ============================================
+
+  await t.test('sanitizeForStorage', async (t) => {
+    await t.test('should return empty string for null/undefined input', () => {
+      assert.strictEqual(sanitizeForStorage(null), '');
+      assert.strictEqual(sanitizeForStorage(undefined), '');
+      assert.strictEqual(sanitizeForStorage(''), '');
+    });
+
+    await t.test('should trim whitespace', () => {
+      assert.strictEqual(sanitizeForStorage('  Metallica  '), 'Metallica');
+    });
+
+    await t.test('should convert ellipsis to three periods', () => {
+      assert.strictEqual(sanitizeForStorage('…and Oceans'), '...and Oceans');
+    });
+
+    await t.test('should convert en-dash and em-dash to hyphen', () => {
+      assert.strictEqual(sanitizeForStorage('Black – Metal'), 'Black - Metal');
+      assert.strictEqual(sanitizeForStorage('Black — Metal'), 'Black - Metal');
+    });
+
+    await t.test('should normalize smart quotes to straight quotes', () => {
+      assert.strictEqual(sanitizeForStorage("Rock 'n' Roll"), "Rock 'n' Roll");
+      assert.strictEqual(
+        sanitizeForStorage('Rock "Live" Album'),
+        'Rock "Live" Album'
+      );
+    });
+
+    await t.test('should PRESERVE diacritics (for display purposes)', () => {
+      // This is intentional - diacritics are preserved for display
+      assert.strictEqual(sanitizeForStorage('Mötley Crüe'), 'Mötley Crüe');
+      assert.strictEqual(sanitizeForStorage('Björk'), 'Björk');
+      assert.strictEqual(sanitizeForStorage('Exxûl'), 'Exxûl');
+    });
+
+    await t.test('should normalize multiple spaces to single space', () => {
+      assert.strictEqual(sanitizeForStorage('Pink   Floyd'), 'Pink Floyd');
+    });
+  });
+
+  await t.test('normalizeForLookup', async (t) => {
+    await t.test('should return empty string for null/undefined input', () => {
+      assert.strictEqual(normalizeForLookup(null), '');
+      assert.strictEqual(normalizeForLookup(undefined), '');
+      assert.strictEqual(normalizeForLookup(''), '');
+    });
+
+    await t.test('should lowercase and sanitize', () => {
+      assert.strictEqual(normalizeForLookup('  METALLICA  '), 'metallica');
+    });
+
+    await t.test('should convert ellipsis and lowercase', () => {
+      assert.strictEqual(normalizeForLookup('…and Oceans'), '...and oceans');
+    });
+
+    await t.test('should PRESERVE diacritics but lowercase', () => {
+      // Diacritics preserved for database unique constraint matching
+      assert.strictEqual(normalizeForLookup('Exxûl'), 'exxûl');
+      assert.strictEqual(normalizeForLookup('Mötley Crüe'), 'mötley crüe');
+    });
+  });
+
+  await t.test('normalizeForExternalApi', async (t) => {
+    await t.test('should return empty string for null/undefined input', () => {
+      assert.strictEqual(normalizeForExternalApi(null), '');
+      assert.strictEqual(normalizeForExternalApi(undefined), '');
+      assert.strictEqual(normalizeForExternalApi(''), '');
+    });
+
+    await t.test('should STRIP diacritics for external API matching', () => {
+      // This is the key function for Last.fm, Spotify, iTunes matching
+      assert.strictEqual(normalizeForExternalApi('Exxûl'), 'Exxul');
+      assert.strictEqual(normalizeForExternalApi('Mötley Crüe'), 'Motley Crue');
+      assert.strictEqual(normalizeForExternalApi('Björk'), 'Bjork');
+      assert.strictEqual(normalizeForExternalApi('Sigur Rós'), 'Sigur Ros');
+    });
+
+    await t.test('should convert ellipsis to three periods', () => {
+      assert.strictEqual(
+        normalizeForExternalApi('…and Oceans'),
+        '...and Oceans'
+      );
+    });
+
+    await t.test('should normalize smart quotes', () => {
+      assert.strictEqual(
+        normalizeForExternalApi("Rock 'n' Roll"),
+        "Rock 'n' Roll"
+      );
+    });
+
+    await t.test('should convert en-dash and em-dash to hyphen', () => {
+      assert.strictEqual(
+        normalizeForExternalApi('Black – Metal'),
+        'Black - Metal'
+      );
+      assert.strictEqual(
+        normalizeForExternalApi('Black — Metal'),
+        'Black - Metal'
+      );
+    });
+
+    await t.test('should normalize whitespace', () => {
+      assert.strictEqual(
+        normalizeForExternalApi('  Pink   Floyd  '),
+        'Pink Floyd'
+      );
+    });
+
+    await t.test(
+      'should preserve original case (for display in API calls)',
+      () => {
+        // Unlike normalizeForLookup, this preserves case
+        assert.strictEqual(normalizeForExternalApi('METALLICA'), 'METALLICA');
+        assert.strictEqual(normalizeForExternalApi('Metallica'), 'Metallica');
+      }
+    );
+
+    await t.test('should handle complex Unicode characters', () => {
+      // Various diacritics from different languages
+      assert.strictEqual(normalizeForExternalApi('Ásgeir'), 'Asgeir');
+      assert.strictEqual(normalizeForExternalApi('Naïve'), 'Naive');
+      assert.strictEqual(normalizeForExternalApi('Café'), 'Cafe');
+      assert.strictEqual(normalizeForExternalApi('Über'), 'Uber');
+    });
+
+    await t.test('should handle Japanese/non-Latin scripts gracefully', () => {
+      // Non-Latin scripts are preserved (diacritic stripping only affects combining marks)
+      // Note: whitespace may be normalized but characters are preserved
+      const result = normalizeForExternalApi('マキシマム ザ ホルモン');
+      assert.ok(
+        result.includes('マキシマム'),
+        'Japanese characters should be preserved'
+      );
+      assert.ok(
+        result.includes('ホルモン'),
+        'Japanese characters should be preserved'
+      );
+    });
+  });
+
+  // ============================================
+  // Artist/Album Name Normalization Tests
+  // ============================================
+
   await t.test('normalizeArtistName', async (t) => {
     await t.test('should return empty string for null/undefined input', () => {
       assert.strictEqual(normalizeArtistName(null), '');

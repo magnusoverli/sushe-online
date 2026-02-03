@@ -1,15 +1,12 @@
 /**
- * Normalization Utilities
+ * Normalization Utilities (Browser-side)
  *
  * Shared string normalization functions for matching artists, albums,
  * and genres across different data sources (Spotify, Last.fm, MusicBrainz, etc.)
  *
- * IMPORTANT: These functions are used both server-side and have browser-side
- * equivalents in src/js/modules/normalization.js. When modifying normalization logic,
- * ensure consistency between server and browser implementations.
- *
- * NOTE: Do NOT modify normalizeForComparison in utils/fuzzy-match.js -
- * it is used in production database migrations and must remain stable.
+ * IMPORTANT: This module mirrors the server-side utils/normalization.js.
+ * When modifying normalization logic, ensure consistency between
+ * server and browser implementations.
  *
  * NORMALIZATION LAYERS:
  * 1. sanitizeForStorage() - Light cleanup for database storage (preserves diacritics)
@@ -26,9 +23,6 @@
  * Sanitize artist/album names for consistent storage.
  * Converts Unicode variants to ASCII equivalents for better cross-source matching.
  *
- * This is applied at storage time to ensure data from different sources
- * (Spotify, MusicBrainz, manual entry) uses consistent character encoding.
- *
  * NOTE: Diacritics are PRESERVED for display purposes (e.g., "Mötley Crüe" stays as-is)
  *
  * Examples:
@@ -39,21 +33,18 @@
  * @param {string|null|undefined} value - Value to sanitize
  * @returns {string} - Sanitized value
  */
-function sanitizeForStorage(value) {
+export function sanitizeForStorage(value) {
   if (!value) return '';
 
   return (
     String(value)
       .trim()
       // Convert ellipsis (…) to three periods for consistent matching
-      // e.g., "…and Oceans" → "...and Oceans"
       .replace(/…/g, '...')
       // Convert en-dash (–) and em-dash (—) to hyphen
       .replace(/[–—]/g, '-')
       // Normalize smart quotes to straight quotes
-      // U+2018 ('), U+2019 ('), U+0060 (`) -> straight single quote
       .replace(/[\u2018\u2019`]/g, "'")
-      // U+201C ("), U+201D (") -> straight double quote
       .replace(/[\u201c\u201d]/g, '"')
       // Normalize multiple spaces to single space
       .replace(/\s+/g, ' ')
@@ -68,8 +59,7 @@ function sanitizeForStorage(value) {
  * @param {string|null|undefined} value - Value to normalize
  * @returns {string} - Normalized value (lowercase, trimmed, sanitized)
  */
-function normalizeForLookup(value) {
-  // First sanitize, then lowercase for lookup
+export function normalizeForLookup(value) {
   return sanitizeForStorage(value).toLowerCase();
 }
 
@@ -87,7 +77,7 @@ function normalizeForLookup(value) {
  * @param {string|null|undefined} str - String to normalize
  * @returns {string} - Normalized string for external API use
  */
-function normalizeForExternalApi(str) {
+export function normalizeForExternalApi(str) {
   if (!str) return '';
 
   return (
@@ -118,7 +108,7 @@ function normalizeForExternalApi(str) {
  * @param {string} name - Artist name to normalize
  * @returns {string} - Normalized name (lowercase, stripped of common variations)
  */
-function normalizeArtistName(name) {
+export function normalizeArtistName(name) {
   if (!name) return '';
 
   return (
@@ -126,7 +116,6 @@ function normalizeArtistName(name) {
       .toLowerCase()
       .trim()
       // Convert ellipsis (…) to three periods for consistent matching
-      // e.g., "…and Oceans" -> "...and Oceans"
       .replace(/…/g, '...')
       // Remove "the " prefix (e.g., "The Beatles" -> "beatles")
       .replace(/^the\s+/, '')
@@ -157,7 +146,7 @@ function normalizeArtistName(name) {
  * @param {string} name - Album name to normalize
  * @returns {string} - Normalized name
  */
-function normalizeAlbumName(name) {
+export function normalizeAlbumName(name) {
   if (!name) return '';
 
   return (
@@ -186,29 +175,6 @@ function normalizeAlbumName(name) {
 }
 
 // ============================================
-// Genre Normalization
-// ============================================
-
-/**
- * Normalize genre/tag name for matching
- * @param {string} genre - Genre/tag name
- * @returns {string} - Normalized genre
- */
-function normalizeGenre(genre) {
-  if (!genre) return '';
-
-  return (
-    genre
-      .toLowerCase()
-      .trim()
-      // Normalize hyphens and spaces
-      .replace(/[-_]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
-// ============================================
 // Fuzzy Matching Normalization
 // ============================================
 
@@ -218,7 +184,7 @@ function normalizeGenre(genre) {
  * @param {string} str - String to normalize
  * @returns {string} - Normalized string for comparison
  */
-function normalizeForMatch(str) {
+export function normalizeForMatch(str) {
   if (!str) return '';
 
   return (
@@ -242,7 +208,7 @@ function normalizeForMatch(str) {
  * @param {string} name2 - Second artist name
  * @returns {boolean} - True if names match
  */
-function artistNamesMatch(name1, name2) {
+export function artistNamesMatch(name1, name2) {
   return normalizeArtistName(name1) === normalizeArtistName(name2);
 }
 
@@ -252,18 +218,8 @@ function artistNamesMatch(name1, name2) {
  * @param {string} name2 - Second album name
  * @returns {boolean} - True if names match
  */
-function albumNamesMatch(name1, name2) {
+export function albumNamesMatch(name1, name2) {
   return normalizeAlbumName(name1) === normalizeAlbumName(name2);
-}
-
-/**
- * Find matching artist in a map by normalized name
- * @param {Map} map - Map with normalized keys
- * @param {string} artistName - Artist name to look up
- * @returns {*} - Value from map or undefined
- */
-function findArtistInMap(map, artistName) {
-  return map.get(normalizeArtistName(artistName));
 }
 
 /**
@@ -272,7 +228,7 @@ function findArtistInMap(map, artistName) {
  * @param {string} str2 - Second string
  * @returns {number} - Similarity score between 0 and 1
  */
-function stringSimilarity(str1, str2) {
+export function stringSimilarity(str1, str2) {
   const s1 = normalizeForMatch(str1);
   const s2 = normalizeForMatch(str2);
 
@@ -289,22 +245,3 @@ function stringSimilarity(str1, str2) {
 
   return commonWords.length / Math.max(words1.length, words2.length);
 }
-
-module.exports = {
-  // Storage and lookup normalization
-  sanitizeForStorage,
-  normalizeForLookup,
-  normalizeForExternalApi,
-
-  // Core normalization functions
-  normalizeArtistName,
-  normalizeAlbumName,
-  normalizeGenre,
-  normalizeForMatch,
-
-  // Matching helpers
-  artistNamesMatch,
-  albumNamesMatch,
-  findArtistInMap,
-  stringSimilarity,
-};

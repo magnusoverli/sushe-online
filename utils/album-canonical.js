@@ -17,55 +17,7 @@
 const crypto = require('crypto');
 const logger = require('./logger');
 const { resolveCountryCode } = require('./musicbrainz');
-
-/**
- * Sanitize artist/album names for consistent storage.
- * Converts Unicode variants to ASCII equivalents for better cross-source matching.
- *
- * This is applied at storage time to ensure data from different sources
- * (Spotify, MusicBrainz, manual entry) uses consistent character encoding.
- *
- * Examples:
- * - "…and Oceans" (ellipsis U+2026) → "...and Oceans" (three periods)
- * - "Mötley Crüe" → preserved (diacritics are intentional for display)
- * - "  Artist  " → "Artist" (trimmed whitespace)
- *
- * @param {string|null|undefined} value - Value to sanitize
- * @returns {string} - Sanitized value
- */
-function sanitizeForStorage(value) {
-  if (!value) return '';
-
-  return (
-    String(value)
-      .trim()
-      // Convert ellipsis (…) to three periods for consistent matching
-      // e.g., "…and Oceans" → "...and Oceans"
-      .replace(/…/g, '...')
-      // Convert en-dash (–) and em-dash (—) to hyphen
-      .replace(/[–—]/g, '-')
-      // Normalize smart quotes to straight quotes
-      // U+2018 ('), U+2019 ('), U+0060 (`) -> straight single quote
-      .replace(/[\u2018\u2019`]/g, "'")
-      // U+201C ("), U+201D (") -> straight double quote
-      .replace(/[\u201c\u201d]/g, '"')
-      // Normalize multiple spaces to single space
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-}
-
-/**
- * Normalize artist and album names for canonical lookup
- * Used to find existing albums regardless of casing or whitespace
- *
- * @param {string|null|undefined} value - Value to normalize
- * @returns {string} - Normalized value (lowercase, trimmed, sanitized)
- */
-function normalizeForLookup(value) {
-  // First sanitize, then lowercase for lookup
-  return sanitizeForStorage(value).toLowerCase();
-}
+const { sanitizeForStorage, normalizeForLookup } = require('./normalization');
 
 /**
  * Generate a stable internal album ID for manually added albums

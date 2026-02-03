@@ -3,6 +3,7 @@
 
 const logger = require('./logger');
 const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
+const { normalizeForExternalApi } = require('./normalization');
 
 const API_URL = 'https://ws.audioscrobbler.com/2.0/';
 
@@ -65,18 +66,16 @@ async function parseJsonWithRateLimitRetry(response, log, retryFn) {
  * responses to our data. Use this whenever "same logical string" must match
  * across our DB (e.g. MusicBrainz … U+2026) and Last.fm (typically ASCII ...).
  *
- * Mappings:
- * - U+2026 (…) → "..."
- * - U+2018/U+2019 (''') → "'"
+ * This now uses the centralized normalizeForExternalApi() which:
+ * - Strips diacritics (e.g., "Exxûl" → "Exxul", "Mötley Crüe" → "Motley Crue")
+ * - Normalizes ellipsis, smart quotes, dashes
+ * - Normalizes whitespace
  *
  * @param {string|null|undefined} str - Input string
  * @returns {string} Normalized string, or '' if str is null/undefined
  */
 function normalizeForLastfm(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/\u2026/g, '...')
-    .replace(/[\u2018\u2019]/g, "'");
+  return normalizeForExternalApi(str);
 }
 
 /**
@@ -804,16 +803,24 @@ function createDiscoveryMethods(fetchFn, log, env) {
  */
 function createWriteMethods(fetchFn, generateSignature, log, env) {
   async function scrobble(trackData, sessionKey, apiKey, secret) {
+    // Normalize artist, track, and album names for better Last.fm matching
+    // This strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
+    const normalizedArtist = normalizeForLastfm(trackData.artist);
+    const normalizedTrack = normalizeForLastfm(trackData.track);
+    const normalizedAlbum = trackData.album
+      ? normalizeForLastfm(trackData.album)
+      : null;
+
     const params = {
       method: 'track.scrobble',
       api_key: apiKey || env.LASTFM_API_KEY,
       sk: sessionKey,
-      artist: trackData.artist,
-      track: trackData.track,
+      artist: normalizedArtist,
+      track: normalizedTrack,
       timestamp: String(trackData.timestamp || Math.floor(Date.now() / 1000)),
     };
 
-    if (trackData.album) params.album = trackData.album;
+    if (normalizedAlbum) params.album = normalizedAlbum;
     if (trackData.duration)
       params.duration = String(Math.floor(trackData.duration / 1000));
     if (trackData.trackNumber)
@@ -822,8 +829,10 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
     params.api_sig = generateSignature(params, secret || env.LASTFM_SECRET);
 
     log.info('Scrobbling to Last.fm:', {
-      artist: trackData.artist,
-      track: trackData.track,
+      artist: normalizedArtist,
+      track: normalizedTrack,
+      originalArtist:
+        trackData.artist !== normalizedArtist ? trackData.artist : undefined,
     });
 
     const response = await fetchFn(API_URL, {
@@ -848,15 +857,23 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
   }
 
   async function updateNowPlaying(trackData, sessionKey, apiKey, secret) {
+    // Normalize artist, track, and album names for better Last.fm matching
+    // This strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
+    const normalizedArtist = normalizeForLastfm(trackData.artist);
+    const normalizedTrack = normalizeForLastfm(trackData.track);
+    const normalizedAlbum = trackData.album
+      ? normalizeForLastfm(trackData.album)
+      : null;
+
     const params = {
       method: 'track.updateNowPlaying',
       api_key: apiKey || env.LASTFM_API_KEY,
       sk: sessionKey,
-      artist: trackData.artist,
-      track: trackData.track,
+      artist: normalizedArtist,
+      track: normalizedTrack,
     };
 
-    if (trackData.album) params.album = trackData.album;
+    if (normalizedAlbum) params.album = normalizedAlbum;
     if (trackData.duration)
       params.duration = String(Math.floor(trackData.duration / 1000));
 

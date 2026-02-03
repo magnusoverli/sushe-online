@@ -1,6 +1,10 @@
 // MusicBrainz API integration
 import { isAlbumInList } from './modules/utils.js';
 import { checkAndPromptSimilar } from './modules/similar-album-modal.js';
+import {
+  stringSimilarity,
+  normalizeForExternalApi,
+} from './modules/normalization.js';
 
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
@@ -27,7 +31,8 @@ const artistImageProviders = [
   {
     name: 'Deezer',
     search: async (artistName, _artistId, signal) => {
-      const searchQuery = artistName.replace(/[^\w\s]/g, ' ').trim();
+      // Normalize artist name for better API matching (strips diacritics)
+      const searchQuery = normalizeForExternalApi(artistName);
       const url = `/api/proxy/deezer/artist?q=${encodeURIComponent(searchQuery)}`;
 
       const response = await fetch(url, { signal, credentials: 'same-origin' });
@@ -72,7 +77,8 @@ const artistImageProviders = [
   {
     name: 'iTunes',
     search: async (artistName, _artistId, signal) => {
-      const searchTerm = artistName.replace(/[^\w\s]/g, ' ').trim();
+      // Normalize artist name for better API matching (strips diacritics)
+      const searchTerm = normalizeForExternalApi(artistName);
       const url = `/api/proxy/itunes?term=${encodeURIComponent(searchTerm)}&limit=10`;
 
       const response = await fetch(url, { signal, credentials: 'same-origin' });
@@ -246,35 +252,7 @@ const coverArtCache = new Map();
 // Options: 100, 300, 600, 1000, 2000, 5000
 const ITUNES_IMAGE_SIZE = 600;
 
-// Normalize string for fuzzy matching (lowercase, remove special chars)
-function normalizeForMatch(str) {
-  if (!str) return '';
-
-  return str
-    .toLowerCase()
-    .replace(/[^\w\s]/g, '') // Remove special characters
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .trim();
-}
-
-// Calculate similarity score between two strings (0-1)
-function stringSimilarity(str1, str2) {
-  const s1 = normalizeForMatch(str1);
-  const s2 = normalizeForMatch(str2);
-
-  if (s1 === s2) return 1;
-  if (s1.length === 0 || s2.length === 0) return 0;
-
-  // Check if one contains the other
-  if (s1.includes(s2) || s2.includes(s1)) return 0.9;
-
-  // Simple word overlap scoring
-  const words1 = s1.split(' ');
-  const words2 = s2.split(' ');
-  const commonWords = words1.filter((w) => words2.includes(w));
-
-  return commonWords.length / Math.max(words1.length, words2.length);
-}
+// normalizeForMatch and stringSimilarity imported from ./modules/normalization.js
 
 // Verify an image URL actually loads successfully
 // Returns the URL if successful, throws on failure
