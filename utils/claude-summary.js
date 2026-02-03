@@ -149,7 +149,7 @@ function extractSummaryFromContent(content, artist, album, log) {
  */
 function validateSummary(summary, artist, album, log) {
   const sentenceCount = (summary.match(/[.!?]+/g) || []).length;
-  const minChars = parseInt(process.env.CLAUDE_SUMMARY_MIN_CHARS || '100', 10);
+  const minChars = parseInt(process.env.CLAUDE_SUMMARY_MIN_CHARS || '250', 10);
   const maxChars = parseInt(process.env.CLAUDE_SUMMARY_MAX_CHARS || '0', 10);
   const minSentences = parseInt(
     process.env.CLAUDE_SUMMARY_MIN_SENTENCES || '2',
@@ -195,7 +195,7 @@ function handleApiError(
   album,
   duration,
   log,
-  model = 'claude-haiku-4-5'
+  model = 'claude-sonnet-4-5'
 ) {
   recordExternalApiError('claude', 'api_error');
 
@@ -356,12 +356,12 @@ function createClaudeSummaryService(deps = {}) {
     }
 
     // Read config at call time, not module load time
-    const model = process.env.CLAUDE_MODEL || 'claude-haiku-4-5';
-    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '300', 10);
+    const model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+    const maxTokens = parseInt(process.env.CLAUDE_MAX_TOKENS || '400', 10);
 
     // Configurable summary length preferences
     const targetSentences = parseInt(
-      process.env.CLAUDE_SUMMARY_SENTENCES || '4',
+      process.env.CLAUDE_SUMMARY_SENTENCES || '5',
       10
     );
     const targetMaxChars = parseInt(
@@ -392,7 +392,7 @@ function createClaudeSummaryService(deps = {}) {
           return await anthropic.messages.create({
             model,
             max_tokens: maxTokens,
-            temperature: 0.3,
+            temperature: 0.43,
             system:
               'You are a music encyclopedia providing accurate, concise album information from web search results.',
             tools: [
