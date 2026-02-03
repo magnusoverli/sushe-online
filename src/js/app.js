@@ -4370,10 +4370,10 @@ window.selectRecommendations = selectRecommendations;
  */
 function createRecommendationCard(rec, year, locked, index) {
   const cardWrapper = document.createElement('div');
-  cardWrapper.className = 'album-card-wrapper h-[130px]';
+  cardWrapper.className = 'album-card-wrapper h-[150px]';
 
   const card = document.createElement('div');
-  card.className = 'album-card album-row relative h-[130px] bg-gray-900';
+  card.className = 'album-card album-row relative h-[150px] bg-gray-900';
   card.dataset.albumId = rec.album_id;
   card.dataset.recIndex = index;
 
@@ -4412,7 +4412,7 @@ function createRecommendationCard(rec, year, locked, index) {
       </div>
       
       <!-- INFO SECTION -->
-      <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
+      <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[142px]">
         <!-- Album name -->
         <div class="flex items-center">
           <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
@@ -4424,6 +4424,13 @@ function createRecommendationCard(rec, year, locked, index) {
           <p class="text-[13px] text-gray-500 truncate">
             <i class="fas fa-user fa-xs mr-2"></i>
             <span data-field="artist-mobile-text">${escapeHtml(rec.artist)}</span>
+          </p>
+        </div>
+        <!-- Genre -->
+        <div class="flex items-center">
+          <p class="text-[13px] text-gray-400 truncate">
+            <i class="fas fa-tag fa-xs mr-2"></i>
+            ${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}${!rec.genre_1 && !rec.genre_2 ? '<span class="text-gray-600 italic">No genre</span>' : ''}
           </p>
         </div>
         <!-- Recommended by -->
@@ -5025,6 +5032,7 @@ function displayRecommendations(recommendations, year, locked) {
           <th class="py-3 px-2 w-12"></th>
           <th class="py-3 px-2">Artist</th>
           <th class="py-3 px-2">Album</th>
+          <th class="py-3 px-2">Genre</th>
           <th class="py-3 px-2">Recommended By</th>
           <th class="py-3 px-2">Date Added</th>
         </tr>
@@ -5037,7 +5045,7 @@ function displayRecommendations(recommendations, year, locked) {
     if (recommendations.length === 0) {
       const emptyRow = document.createElement('tr');
       emptyRow.innerHTML = `
-        <td colspan="5" class="py-12 text-center text-gray-500">
+        <td colspan="6" class="py-12 text-center text-gray-500">
           <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
           <p>No recommendations yet for ${year}</p>
           <p class="text-sm mt-2">Click the + button to recommend an album</p>
@@ -5071,6 +5079,7 @@ function displayRecommendations(recommendations, year, locked) {
           </td>
           <td class="py-2 px-2 text-white">${escapeHtml(rec.artist)}</td>
           <td class="py-2 px-2 text-gray-300">${escapeHtml(rec.album)}</td>
+          <td class="py-2 px-2 text-gray-400 text-sm">${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}</td>
           <td class="py-2 px-2 text-blue-400">
             <span class="flex items-center gap-1">
               ${escapeHtml(rec.recommended_by)}
