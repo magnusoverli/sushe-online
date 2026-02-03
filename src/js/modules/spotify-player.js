@@ -6,6 +6,7 @@
 
 import { showToast } from './utils.js';
 import { isAlbumMatchingPlayback } from './playback-utils.js';
+import { formatTime } from './time-utils.js';
 
 // ============ MODULE STATE ============
 let currentPlayback = null;
@@ -50,16 +51,7 @@ let mobileElements = {};
 
 // ============ UTILITY FUNCTIONS ============
 
-/**
- * Format milliseconds to MM:SS
- */
-function formatTime(ms) {
-  if (!ms || ms < 0) return '0:00';
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
+// formatTime is imported from ./time-utils.js
 
 /**
  * Check if the currently playing track's album is in the current list

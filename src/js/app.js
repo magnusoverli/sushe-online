@@ -28,6 +28,7 @@ import {
   invalidateLockedRecommendationYearsCache,
   isListLocked,
 } from './modules/year-lock.js';
+import { formatTrackTime } from './modules/time-utils.js';
 
 // Expose recommendation lock cache invalidation to window
 window.invalidateLockedRecommendationYearsCache =
@@ -1910,18 +1911,7 @@ function getTrackLength(track) {
   return track.length || null;
 }
 
-/**
- * Format milliseconds to MM:SS format
- * @param {number|null|undefined} ms - Milliseconds
- * @returns {string} Formatted time string (e.g., "3:45") or empty string
- */
-function formatTrackTime(ms) {
-  if (!ms || ms < 0) return '';
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
+// formatTrackTime is imported from ./modules/time-utils.js
 
 async function fetchTracksForAlbum(album, signal = null) {
   const params = new URLSearchParams({

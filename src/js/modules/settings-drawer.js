@@ -9,6 +9,7 @@
 
 import { openDuplicateReviewModal } from './duplicate-review-modal.js';
 import { openManualAlbumAudit } from './manual-album-audit-modal.js';
+import { escapeHtml } from './html-utils.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -2076,7 +2077,7 @@ export function createSettingsDrawer(deps = {}) {
                 ${events.pending
                   .map(
                     (event) => `
-                   <div class="bg-gray-800/50 rounded-lg p-4" data-event-id="${event.id}" data-event-data="${_escapeHtml(JSON.stringify(event))}">
+                   <div class="bg-gray-800/50 rounded-lg p-4" data-event-id="${event.id}" data-event-data="${escapeHtml(JSON.stringify(event))}">
                     <div class="flex items-start justify-between mb-2">
                       <div class="flex-1">
                         <div class="flex items-center gap-2 mb-1">
@@ -5875,21 +5876,6 @@ export function createSettingsDrawer(deps = {}) {
     document.addEventListener('keydown', handleEscape);
   }
 
-  /**
-   * Escape HTML to prevent XSS
-   * Currently unused after removing album details from audit modal,
-   * but kept for potential future use.
-   */
-  function _escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  /**
-   * Handle show contributor manager
-   */
   /**
    * Create contributor management modal
    */
