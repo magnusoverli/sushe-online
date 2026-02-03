@@ -126,7 +126,7 @@ test('fetchClaudeSummary should return summary for successful API call', async (
 
   // Verify API call parameters
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  assert.strictEqual(callArgs.model, 'claude-haiku-4-5');
+  assert.strictEqual(callArgs.model, 'claude-sonnet-4-5');
   assert.ok(callArgs.tools);
   assert.strictEqual(callArgs.tools[0].type, 'web_search_20250305');
   assert.strictEqual(callArgs.tools[0].name, 'web_search');
@@ -399,7 +399,7 @@ test('fetchClaudeSummary should include temperature parameter', async () => {
   await service.fetchClaudeSummary('Artist', 'Album');
 
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  assert.strictEqual(callArgs.temperature, 0.3);
+  assert.strictEqual(callArgs.temperature, 0.43);
 });
 
 test('fetchClaudeSummary should include system message', async () => {
@@ -436,7 +436,7 @@ test('fetchClaudeSummary should include system message', async () => {
   assert.ok(callArgs.system.includes('music encyclopedia'));
 });
 
-test('fetchClaudeSummary should use max_tokens default of 300', async () => {
+test('fetchClaudeSummary should use max_tokens default of 400', async () => {
   const mockLogger = {
     info: mock.fn(),
     warn: mock.fn(),
@@ -470,7 +470,7 @@ test('fetchClaudeSummary should use max_tokens default of 300', async () => {
   await service.fetchClaudeSummary('Artist', 'Album');
 
   const callArgs = mockAnthropic.messages.create.mock.calls[0].arguments[0];
-  assert.strictEqual(callArgs.max_tokens, 300);
+  assert.strictEqual(callArgs.max_tokens, 400);
 
   // Restore env var
   if (originalMaxTokens !== undefined) {
