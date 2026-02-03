@@ -364,7 +364,7 @@ module.exports = (app, deps) => {
         const playcounts = {};
 
         const statsResult = await pool.query(
-          `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_updated_at
+          `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at
          FROM user_album_stats
          WHERE user_id = $1`,
           [userId]
@@ -393,29 +393,63 @@ module.exports = (app, deps) => {
           }
         }
 
+        // Staleness threshold: only refresh albums older than 2 hours
+        const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+        const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+
         // Match list items to cached stats using normalized keys
+        // Also track which albums are stale and need refresh
+        const albumsToRefresh = [];
+
         for (const item of listItems) {
           if (!item.artist || !item.album) continue;
 
           const key = normalizeAlbumKey(item.artist, item.album);
           const cached = statsMap.get(key);
 
-          playcounts[item._id] = cached ? cached.lastfm_playcount || 0 : null;
+          // Return object with playcount and status
+          // - null playcount + null status = never fetched (hide in UI)
+          // - null playcount + 'not_found' status = album not found (show red X)
+          // - number playcount + 'success' status = show playcount
+          if (cached) {
+            playcounts[item._id] = {
+              playcount: cached.lastfm_playcount,
+              status: cached.lastfm_status || null,
+            };
+          } else {
+            playcounts[item._id] = null; // Not yet fetched
+          }
+
+          // Check if album needs refresh:
+          // - No cached data
+          // - No lastfm_updated_at timestamp
+          // - Updated more than 2 hours ago
+          // - Status is 'error' (retry errors)
+          const needsRefresh =
+            !cached ||
+            !cached.lastfm_updated_at ||
+            cached.lastfm_status === 'error' ||
+            new Date(cached.lastfm_updated_at) < staleThreshold;
+
+          if (needsRefresh) {
+            albumsToRefresh.push({
+              itemId: item._id,
+              artist: item.artist,
+              album: item.album,
+              albumId: item.album_id,
+            });
+          }
         }
 
-        // Always refresh ALL albums in background on every list render
-        const albumsToRefresh = listItems.map((item) => ({
-          itemId: item._id,
-          artist: item.artist,
-          album: item.album,
-          albumId: item.album_id,
-        }));
-
         if (albumsToRefresh.length > 0) {
-          logger.debug('Triggering background playcount refresh', {
-            albumCount: albumsToRefresh.length,
-            lastfmUsername: req.user.lastfmUsername,
-          });
+          logger.debug(
+            'Triggering background playcount refresh for stale albums',
+            {
+              staleCount: albumsToRefresh.length,
+              totalCount: listItems.length,
+              lastfmUsername: req.user.lastfmUsername,
+            }
+          );
           refreshPlaycountsInBackground(
             userId,
             req.user.lastfmUsername,

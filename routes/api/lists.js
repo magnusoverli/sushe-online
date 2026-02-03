@@ -32,6 +32,7 @@ module.exports = (app, deps) => {
     getPointsForPosition,
     crypto,
     validateYear,
+    refreshPlaycountsInBackground,
     helpers: {
       triggerAggregateListRecompute,
       upsertAlbumRecord,
@@ -1435,6 +1436,49 @@ module.exports = (app, deps) => {
         totalChanges: changeCount,
         duplicates: duplicateAlbums?.length || 0,
       });
+
+      // Trigger async playcount refresh for newly added albums (if user has Last.fm connected)
+      if (addedItems.length > 0 && req.user.lastfmUsername) {
+        // Look up album details for the added items
+        const albumIds = addedItems.map((item) => item.album_id);
+        pool
+          .query(
+            `SELECT album_id, artist, album FROM albums WHERE album_id = ANY($1::text[])`,
+            [albumIds]
+          )
+          .then((result) => {
+            if (result.rows.length > 0) {
+              const albumsToRefresh = result.rows.map((album) => ({
+                itemId: album.album_id,
+                artist: album.artist,
+                album: album.album,
+                albumId: album.album_id,
+              }));
+
+              logger.debug('Triggering playcount refresh for added albums', {
+                userId: req.user._id,
+                albumCount: albumsToRefresh.length,
+              });
+
+              refreshPlaycountsInBackground(
+                req.user._id,
+                req.user.lastfmUsername,
+                albumsToRefresh,
+                pool,
+                logger
+              ).catch((err) => {
+                logger.warn('Playcount refresh for added albums failed', {
+                  error: err.message,
+                });
+              });
+            }
+          })
+          .catch((err) => {
+            logger.warn('Failed to look up albums for playcount refresh', {
+              error: err.message,
+            });
+          });
+      }
 
       res.json({
         success: true,

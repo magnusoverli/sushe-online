@@ -14,7 +14,14 @@
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, logger, fetch, requireSpotifyAuth } = deps;
+  const {
+    ensureAuthAPI,
+    logger,
+    fetch,
+    requireSpotifyAuth,
+    pool,
+    refreshPlaycountsInBackground,
+  } = deps;
 
   // Helper to handle Spotify player API errors (Premium-required endpoints)
   function handleSpotifyPlayerError(resp, errorData, res, action) {
@@ -236,6 +243,58 @@ module.exports = (app, deps) => {
             'Spotify playback started on device:',
             deviceId || 'active'
           );
+
+          // Trigger delayed playcount refresh (60 seconds to allow scrobble to register)
+          // This is fire-and-forget - don't block the response
+          if (req.user.lastfmUsername) {
+            const PLAY_REFRESH_DELAY_MS = 60000; // 60 seconds
+
+            // Look up album details from database using Spotify album ID
+            pool
+              .query(
+                `SELECT album_id, artist, album FROM albums WHERE spotify_id = $1`,
+                [albumId]
+              )
+              .then((result) => {
+                if (result.rows.length > 0) {
+                  const album = result.rows[0];
+                  logger.debug('Scheduling playcount refresh after play', {
+                    artist: album.artist,
+                    album: album.album,
+                    delayMs: PLAY_REFRESH_DELAY_MS,
+                  });
+
+                  // Delay the refresh to allow scrobble to register on Last.fm
+                  setTimeout(() => {
+                    refreshPlaycountsInBackground(
+                      req.user._id,
+                      req.user.lastfmUsername,
+                      [
+                        {
+                          itemId: album.album_id,
+                          artist: album.artist,
+                          album: album.album,
+                          albumId: album.album_id,
+                        },
+                      ],
+                      pool,
+                      logger
+                    ).catch((err) => {
+                      logger.warn('Playcount refresh after play failed', {
+                        error: err.message,
+                      });
+                    });
+                  }, PLAY_REFRESH_DELAY_MS);
+                }
+              })
+              .catch((err) => {
+                logger.warn('Failed to look up album for playcount refresh', {
+                  albumId,
+                  error: err.message,
+                });
+              });
+          }
+
           return res.json({ success: true });
         }
 

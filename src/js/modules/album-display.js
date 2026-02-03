@@ -222,7 +222,8 @@ function extractMutableState(albums) {
   }));
 }
 
-// Last.fm playcount cache: { listItemId: playcount }
+// Last.fm playcount cache: { listItemId: { playcount, status } | null }
+// status can be: 'success', 'not_found', 'error', or null (not yet fetched)
 let playcountCache = {};
 let playcountFetchInProgress = false;
 
@@ -406,9 +407,12 @@ export function createAlbumDisplay(deps = {}) {
     const summarySource = album.summary_source || album.summarySource || '';
 
     // Get playcount from cache (keyed by list item _id)
+    // Cache now stores { playcount, status } objects or null
     const itemId = album._id || '';
-    const playcount = playcountCache[itemId];
-    const playcountDisplay = formatPlaycount(playcount);
+    const cachedData = playcountCache[itemId];
+    const playcount = cachedData?.playcount ?? null;
+    const playcountStatus = cachedData?.status ?? null;
+    const playcountDisplay = formatPlaycountDisplay(playcount, playcountStatus);
 
     return {
       position,
@@ -452,6 +456,7 @@ export function createAlbumDisplay(deps = {}) {
       hasSecondaryTrack: !!secondaryTrack,
       itemId,
       playcount,
+      playcountStatus,
       playcountDisplay,
       summary,
       summarySource,
@@ -459,7 +464,7 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Format playcount for display
+   * Format playcount number for display
    * @param {number|null|undefined} count - Raw playcount
    * @returns {string} Formatted playcount or empty string
    */
@@ -469,6 +474,33 @@ export function createAlbumDisplay(deps = {}) {
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
     if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
     return count.toString();
+  }
+
+  /**
+   * Format playcount display based on status
+   * @param {number|null} playcount - Raw playcount
+   * @param {string|null} status - 'success', 'not_found', 'error', or null
+   * @returns {Object} { html, isNotFound } for rendering
+   */
+  function formatPlaycountDisplay(playcount, status) {
+    // Not yet fetched - return empty (will be hidden)
+    if (status === null || status === undefined) {
+      return { html: '', isNotFound: false, isEmpty: true };
+    }
+
+    // Album not found on Last.fm - show red X
+    if (status === 'not_found') {
+      return { html: '', isNotFound: true, isEmpty: false };
+    }
+
+    // Error state - treat like not yet fetched (will retry)
+    if (status === 'error') {
+      return { html: '', isNotFound: false, isEmpty: true };
+    }
+
+    // Success - show formatted playcount
+    const formatted = formatPlaycount(playcount);
+    return { html: formatted, isNotFound: false, isEmpty: !formatted };
   }
 
   /**
@@ -593,7 +625,13 @@ export function createAlbumDisplay(deps = {}) {
       <div class="flex flex-col justify-center">
         <div class="flex items-center gap-2">
           <span class="album-name font-semibold text-gray-200 truncate">${data.albumName}</span>
-          ${data.playcountDisplay ? `<span class="text-xs text-gray-500 shrink-0" data-playcount="${data.itemId}" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay}</span>` : `<span class="text-xs text-gray-500 shrink-0 hidden" data-playcount="${data.itemId}"></span>`}
+          ${
+            data.playcountDisplay.isNotFound
+              ? `<span class="text-xs text-red-500 shrink-0" data-playcount="${data.itemId}" data-status="not_found" title="Album not found on Last.fm"><i class="fas fa-times text-[10px]"></i></span>`
+              : data.playcountDisplay.isEmpty
+                ? `<span class="text-xs text-gray-500 shrink-0 hidden" data-playcount="${data.itemId}"></span>`
+                : `<span class="text-xs text-gray-500 shrink-0" data-playcount="${data.itemId}" data-status="success" title="${data.playcount} plays on Last.fm"><i class="fas fa-headphones text-[10px] mr-1"></i>${data.playcountDisplay.html}</span>`
+          }
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
       </div>
@@ -1007,10 +1045,13 @@ export function createAlbumDisplay(deps = {}) {
               <i class="fas fa-user fa-xs mr-2"></i>
               <span data-field="artist-mobile-text">${escapeHtml(data.artist)}</span>
               ${
-                data.playcountDisplay
-                  ? `<span class="text-gray-600 ml-4" data-playcount-mobile="${data.itemId}">
-                     <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay}</span>`
-                  : `<span class="text-gray-600 ml-4 hidden" data-playcount-mobile="${data.itemId}"></span>`
+                data.playcountDisplay.isNotFound
+                  ? `<span class="text-red-500 ml-4" data-playcount-mobile="${data.itemId}" data-status="not_found" title="Album not found on Last.fm">
+                     <i class="fas fa-times text-[10px]"></i></span>`
+                  : data.playcountDisplay.isEmpty
+                    ? `<span class="text-gray-600 ml-4 hidden" data-playcount-mobile="${data.itemId}"></span>`
+                    : `<span class="text-gray-600 ml-4" data-playcount-mobile="${data.itemId}" data-status="success">
+                       <i class="fas fa-headphones text-[10px]"></i> ${data.playcountDisplay.html}</span>`
               }
             </p>
           </div>
@@ -2471,20 +2512,35 @@ export function createAlbumDisplay(deps = {}) {
 
   /**
    * Update playcount elements in the DOM
-   * @param {Object} playcounts - Map of itemId to playcount
+   * @param {Object} playcounts - Map of itemId to { playcount, status } or null
    */
   function updatePlaycountElements(playcounts) {
-    for (const [itemId, count] of Object.entries(playcounts)) {
-      if (count === null || count === undefined) continue;
+    for (const [itemId, data] of Object.entries(playcounts)) {
+      // Skip if no data yet
+      if (data === null || data === undefined) continue;
 
-      const display = formatPlaycount(count);
+      const { playcount, status } = data;
 
       // Update desktop elements
       const desktopEl = document.querySelector(`[data-playcount="${itemId}"]`);
       if (desktopEl) {
-        desktopEl.innerHTML = `<i class="fas fa-headphones text-[10px] mr-1"></i>${display}`;
-        desktopEl.title = `${count} plays on Last.fm`;
-        desktopEl.classList.remove('hidden');
+        if (status === 'not_found') {
+          // Album not found - show red X
+          desktopEl.innerHTML = `<i class="fas fa-times text-[10px]"></i>`;
+          desktopEl.title = 'Album not found on Last.fm';
+          desktopEl.className = 'text-xs text-red-500 shrink-0';
+          desktopEl.dataset.status = 'not_found';
+          desktopEl.classList.remove('hidden');
+        } else if (status === 'success') {
+          // Success - show playcount
+          const display = formatPlaycount(playcount);
+          desktopEl.innerHTML = `<i class="fas fa-headphones text-[10px] mr-1"></i>${display}`;
+          desktopEl.title = `${playcount} plays on Last.fm`;
+          desktopEl.className = 'text-xs text-gray-500 shrink-0';
+          desktopEl.dataset.status = 'success';
+          desktopEl.classList.remove('hidden');
+        }
+        // For 'error' status, keep hidden (will retry later)
       }
 
       // Update mobile elements
@@ -2492,8 +2548,22 @@ export function createAlbumDisplay(deps = {}) {
         `[data-playcount-mobile="${itemId}"]`
       );
       if (mobileEl) {
-        mobileEl.innerHTML = `<i class="fas fa-headphones text-[10px]"></i> ${display}`;
-        mobileEl.classList.remove('hidden');
+        if (status === 'not_found') {
+          // Album not found - show red X
+          mobileEl.innerHTML = `<i class="fas fa-times text-[10px]"></i>`;
+          mobileEl.title = 'Album not found on Last.fm';
+          mobileEl.className = 'text-red-500 ml-4';
+          mobileEl.dataset.status = 'not_found';
+          mobileEl.classList.remove('hidden');
+        } else if (status === 'success') {
+          // Success - show playcount
+          const display = formatPlaycount(playcount);
+          mobileEl.innerHTML = `<i class="fas fa-headphones text-[10px]"></i> ${display}`;
+          mobileEl.className = 'text-gray-600 ml-4';
+          mobileEl.dataset.status = 'success';
+          mobileEl.classList.remove('hidden');
+        }
+        // For 'error' status, keep hidden (will retry later)
       }
     }
   }
@@ -2549,9 +2619,17 @@ export function createAlbumDisplay(deps = {}) {
 
         if (response.playcounts) {
           // Check if any values changed since last poll
+          // Compare by playcount and status since values are now objects
           let changedCount = 0;
-          for (const [itemId, count] of Object.entries(response.playcounts)) {
-            if (previousPlaycounts[itemId] !== count) {
+          for (const [itemId, data] of Object.entries(response.playcounts)) {
+            const prev = previousPlaycounts[itemId];
+            const hasChanged =
+              (data === null) !== (prev === null) ||
+              (data &&
+                prev &&
+                (data.playcount !== prev.playcount ||
+                  data.status !== prev.status));
+            if (hasChanged) {
               changedCount++;
             }
           }
@@ -2559,11 +2637,11 @@ export function createAlbumDisplay(deps = {}) {
           // Update cache and DOM
           Object.assign(playcountCache, response.playcounts);
           updatePlaycountElements(response.playcounts);
-          previousPlaycounts = { ...response.playcounts };
+          previousPlaycounts = JSON.parse(JSON.stringify(response.playcounts));
 
-          // Count how many are still null/missing
+          // Count how many are still null/missing (not yet fetched or error)
           const missingCount = Object.values(response.playcounts).filter(
-            (v) => v === null
+            (v) => v === null || (v && v.status === 'error')
           ).length;
 
           // Log progress

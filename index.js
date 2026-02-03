@@ -26,6 +26,9 @@ const {
 } = require('./utils/metrics');
 const { createPreferenceSyncService } = require('./utils/preference-sync');
 const {
+  createPlaycountSyncService,
+} = require('./services/playcount-sync-service');
+const {
   setup: setupWebSocket,
   broadcast,
   shutdown: shutdownWebSocket,
@@ -921,6 +924,36 @@ ready
           logger.info('Preference sync service initialized');
         } catch (syncErr) {
           logger.error('Failed to start preference sync service', {
+            error: syncErr.message,
+          });
+          // Don't exit - sync service is not critical for app operation
+        }
+      }
+
+      // Start playcount sync service (only in production or if explicitly enabled)
+      // This runs every 24 hours to refresh Last.fm playcounts for all user albums
+      if (
+        process.env.NODE_ENV === 'production' ||
+        process.env.ENABLE_PLAYCOUNT_SYNC === 'true'
+      ) {
+        try {
+          const playcountSyncService = createPlaycountSyncService({
+            pool,
+            logger,
+          });
+          playcountSyncService.start();
+
+          // Clean shutdown
+          const playcountShutdown = () => {
+            logger.info('Shutting down playcount sync service...');
+            playcountSyncService.stop();
+          };
+          process.on('SIGTERM', playcountShutdown);
+          process.on('SIGINT', playcountShutdown);
+
+          logger.info('Playcount sync service initialized (24h interval)');
+        } catch (syncErr) {
+          logger.error('Failed to start playcount sync service', {
             error: syncErr.message,
           });
           // Don't exit - sync service is not critical for app operation

@@ -18,7 +18,7 @@ const { normalizeAlbumKey } = require('../utils/fuzzy-match');
  * @param {Array} albums - Array of album objects with itemId, artist, album, albumId
  * @param {Object} pool - Database connection pool
  * @param {Object} logger - Logger instance
- * @returns {Promise<Object>} - Map of itemId -> playcount
+ * @returns {Promise<Object>} - Map of itemId -> { playcount, status }
  */
 async function refreshPlaycountsInBackground(
   userId,
@@ -51,22 +51,6 @@ async function refreshPlaycountsInBackground(
           process.env.LASTFM_API_KEY
         );
 
-        const playcount = parseInt(info.userplaycount || 0);
-
-        // Log if Last.fm returned a different artist name (indicates potential mismatch).
-        // Compare using normalizeForLastfm so encoding-only differences (e.g. U+2026 … vs ...)
-        // are not reported as differs.
-        if (
-          info.artist &&
-          normalizeForLastfm(info.artist) !== normalizeForLastfm(album.artist)
-        ) {
-          logger.info('Last.fm artist name differs from request', {
-            requested: album.artist,
-            returned: info.artist,
-            album: album.album,
-          });
-        }
-
         // Canonicalize artist/album so "…and oceans", "...and oceans", " and oceans" etc.
         // all map to one row. Prevents duplicate rows for the same logical album.
         const canonicalArtist = normalizeForLastfm(album.artist)
@@ -80,16 +64,61 @@ async function refreshPlaycountsInBackground(
           canonicalAlbum
         );
 
-        // Upsert into user_album_stats. Store canonical artist/album so the unique
-        // (user_id, LOWER(artist), LOWER(album_name)) maps one row per logical album.
+        // Check if album was not found on Last.fm
+        if (info.notFound) {
+          logger.debug('Album not found on Last.fm', {
+            artist: album.artist,
+            album: album.album,
+          });
+
+          await pool.query(
+            `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NULL, 'not_found', NOW(), NOW())
+             ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
+             DO UPDATE SET
+               album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
+               normalized_key = EXCLUDED.normalized_key,
+               lastfm_playcount = NULL,
+               lastfm_status = 'not_found',
+               lastfm_updated_at = NOW(),
+               updated_at = NOW()`,
+            [
+              userId,
+              album.albumId || null,
+              canonicalArtist,
+              canonicalAlbum,
+              normalizedKey,
+            ]
+          );
+
+          results[album.itemId] = { playcount: null, status: 'not_found' };
+          return;
+        }
+
+        const playcount = parseInt(info.userplaycount || 0);
+
+        // Log if Last.fm returned a different artist name (indicates potential mismatch).
+        if (
+          info.artist &&
+          normalizeForLastfm(info.artist) !== normalizeForLastfm(album.artist)
+        ) {
+          logger.info('Last.fm artist name differs from request', {
+            requested: album.artist,
+            returned: info.artist,
+            album: album.album,
+          });
+        }
+
+        // Upsert into user_album_stats with success status
         await pool.query(
-          `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_updated_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
+          `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, 'success', NOW(), NOW())
            ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
            DO UPDATE SET
              album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
              normalized_key = EXCLUDED.normalized_key,
              lastfm_playcount = EXCLUDED.lastfm_playcount,
+             lastfm_status = 'success',
              lastfm_updated_at = NOW(),
              updated_at = NOW()`,
           [
@@ -102,7 +131,7 @@ async function refreshPlaycountsInBackground(
           ]
         );
 
-        results[album.itemId] = playcount;
+        results[album.itemId] = { playcount, status: 'success' };
         logger.debug('Fetched playcount', {
           artist: album.artist,
           album: album.album,
@@ -114,9 +143,7 @@ async function refreshPlaycountsInBackground(
           err.message
         );
 
-        // Store 0 playcount on failure so the album is not retried every request
-        // It will be marked as stale and retried after 24 hours.
-        // Use same canonical artist/album as success path.
+        // Store error status so the album is retried later
         try {
           const canonicalArtist = normalizeForLastfm(album.artist)
             .toLowerCase()
@@ -129,12 +156,13 @@ async function refreshPlaycountsInBackground(
             canonicalAlbum
           );
           await pool.query(
-            `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_updated_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, 0, NOW(), NOW())
+            `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NULL, 'error', NOW(), NOW())
              ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
              DO UPDATE SET
                album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
                normalized_key = EXCLUDED.normalized_key,
+               lastfm_status = 'error',
                lastfm_updated_at = NOW(),
                updated_at = NOW()`,
             [
@@ -145,9 +173,9 @@ async function refreshPlaycountsInBackground(
               normalizedKey,
             ]
           );
-          results[album.itemId] = 0;
+          results[album.itemId] = { playcount: null, status: 'error' };
         } catch (dbErr) {
-          logger.error('Failed to store fallback playcount:', dbErr.message);
+          logger.error('Failed to store error status:', dbErr.message);
           results[album.itemId] = null;
         }
       }
@@ -161,11 +189,17 @@ async function refreshPlaycountsInBackground(
     }
   }
 
-  const successCount = Object.values(results).filter((v) => v !== null).length;
+  const successCount = Object.values(results).filter(
+    (v) => v && v.status === 'success'
+  ).length;
+  const notFoundCount = Object.values(results).filter(
+    (v) => v && v.status === 'not_found'
+  ).length;
   logger.info('Background playcount refresh completed', {
     total: albums.length,
     successful: successCount,
-    failed: albums.length - successCount,
+    notFound: notFoundCount,
+    failed: albums.length - successCount - notFoundCount,
   });
 
   return results;
