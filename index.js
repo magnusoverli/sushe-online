@@ -680,6 +680,7 @@ const rateLimitAdminRequest = createRateLimitAdminRequest({
 });
 
 const authRoutes = require('./routes/auth');
+const oauthRoutes = require('./routes/oauth');
 const adminRoutes = require('./routes/admin');
 const apiRoutes = require('./routes/api/index');
 const preferencesRoutes = require('./routes/preferences');
@@ -810,6 +811,7 @@ app.get('/metrics', async (req, res) => {
 });
 
 authRoutes(app, deps);
+oauthRoutes(app, deps);
 adminRoutes(app, deps);
 apiRoutes(app, deps);
 preferencesRoutes(app, deps);
