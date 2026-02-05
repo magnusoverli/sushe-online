@@ -4,6 +4,7 @@
  */
 
 const { createAggregateAudit } = require('../../utils/aggregate-audit');
+const { validateYearParam } = require('../../middleware/validate-params');
 
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin } = deps;
@@ -23,13 +24,10 @@ module.exports = (app, deps) => {
     '/api/admin/aggregate-audit/:year',
     ensureAuth,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const report = await aggregateAudit.getAuditReport(year);
         res.json(report);
       } catch (error) {
@@ -50,13 +48,10 @@ module.exports = (app, deps) => {
     '/api/admin/aggregate-audit/:year/preview',
     ensureAuth,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const preview = await aggregateAudit.previewFix(year);
         res.json(preview);
       } catch (error) {
@@ -78,13 +73,10 @@ module.exports = (app, deps) => {
     '/api/admin/aggregate-audit/:year/fix',
     ensureAuth,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const { confirm, dryRun } = req.body;
 
         // Require explicit confirmation unless dry run
@@ -127,13 +119,10 @@ module.exports = (app, deps) => {
     '/api/admin/aggregate-audit/:year/diagnose',
     ensureAuth,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const diagnostic = await aggregateAudit.diagnoseNormalization(year);
         res.json(diagnostic);
       } catch (error) {

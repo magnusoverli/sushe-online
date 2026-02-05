@@ -563,8 +563,4 @@ function createImageRefetchService(deps = {}) {
 
 module.exports = {
   createImageRefetchService,
-  fetchCoverArt,
-  fetchAndProcessImage,
-  TARGET_SIZE,
-  JPEG_QUALITY,
 };

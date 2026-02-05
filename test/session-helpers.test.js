@@ -23,8 +23,6 @@ require.cache[require.resolve('../utils/logger')] = {
 const {
   saveSessionAsync,
   saveSessionSafe,
-  regenerateSessionAsync,
-  destroySessionAsync,
 } = require('../utils/session-helpers');
 
 // Helper to create mock request with session
@@ -37,20 +35,6 @@ function createMockReq(sessionOverrides = {}) {
         // Default: successful save
         if (sessionOverrides.saveError) {
           callback(sessionOverrides.saveError);
-        } else {
-          callback(null);
-        }
-      },
-      regenerate: (callback) => {
-        if (sessionOverrides.regenerateError) {
-          callback(sessionOverrides.regenerateError);
-        } else {
-          callback(null);
-        }
-      },
-      destroy: (callback) => {
-        if (sessionOverrides.destroyError) {
-          callback(sessionOverrides.destroyError);
         } else {
           callback(null);
         }
@@ -128,85 +112,6 @@ test('Session Helpers', async (t) => {
       };
 
       saveSessionSafe(req, 'test');
-    });
-  });
-
-  await t.test('regenerateSessionAsync', async (t) => {
-    await t.test(
-      'should resolve when session regeneration succeeds',
-      async () => {
-        const req = createMockReq();
-
-        // Should not throw
-        await regenerateSessionAsync(req);
-      }
-    );
-
-    await t.test('should reject when session regeneration fails', async () => {
-      const regenerateError = new Error('Regeneration failed');
-      const req = createMockReq({ regenerateError });
-
-      await assert.rejects(async () => {
-        await regenerateSessionAsync(req);
-      }, /Regeneration failed/);
-    });
-
-    await t.test('should call session.regenerate exactly once', async () => {
-      let regenerateCallCount = 0;
-      const req = {
-        session: {
-          id: 'test-id',
-          regenerate: (callback) => {
-            regenerateCallCount++;
-            callback(null);
-          },
-        },
-      };
-
-      await regenerateSessionAsync(req);
-
-      assert.strictEqual(
-        regenerateCallCount,
-        1,
-        'regenerate should be called once'
-      );
-    });
-  });
-
-  await t.test('destroySessionAsync', async (t) => {
-    await t.test(
-      'should resolve when session destruction succeeds',
-      async () => {
-        const req = createMockReq();
-
-        // Should not throw
-        await destroySessionAsync(req);
-      }
-    );
-
-    await t.test('should reject when session destruction fails', async () => {
-      const destroyError = new Error('Destruction failed');
-      const req = createMockReq({ destroyError });
-
-      await assert.rejects(async () => {
-        await destroySessionAsync(req);
-      }, /Destruction failed/);
-    });
-
-    await t.test('should call session.destroy exactly once', async () => {
-      let destroyCallCount = 0;
-      const req = {
-        session: {
-          destroy: (callback) => {
-            destroyCallCount++;
-            callback(null);
-          },
-        },
-      };
-
-      await destroySessionAsync(req);
-
-      assert.strictEqual(destroyCallCount, 1, 'destroy should be called once');
     });
   });
 });

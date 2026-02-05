@@ -1,6 +1,7 @@
 const { createAggregateList } = require('../utils/aggregate-list');
 const { aggregateListTemplate } = require('../templates');
 const { validateYearNotLocked } = require('../utils/year-lock');
+const { validateYearParam } = require('../middleware/validate-params');
 
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
@@ -15,14 +16,14 @@ module.exports = (app, deps) => {
    * GET /aggregate-list/:year
    * Render the aggregate list page for a specific year
    */
-  app.get('/aggregate-list/:year', ensureAuth, (req, res) => {
-    const year = parseInt(req.params.year, 10);
-    if (isNaN(year) || year < 1000 || year > 9999) {
-      return res.status(400).send('Invalid year');
+  app.get(
+    '/aggregate-list/:year',
+    ensureAuth,
+    validateYearParam,
+    (req, res) => {
+      res.send(aggregateListTemplate(req.user, req.validatedYear));
     }
-
-    res.send(aggregateListTemplate(req.user, year));
-  });
+  );
 
   // ============ AGGREGATE LIST API ENDPOINTS ============
 
@@ -30,43 +31,44 @@ module.exports = (app, deps) => {
    * GET /api/aggregate-list/:year
    * Get the full aggregate list for a year (only if revealed)
    */
-  app.get('/api/aggregate-list/:year', ensureAuthAPI, async (req, res) => {
-    try {
-      const year = parseInt(req.params.year, 10);
-      if (isNaN(year) || year < 1000 || year > 9999) {
-        return res.status(400).json({ error: 'Invalid year' });
-      }
+  app.get(
+    '/api/aggregate-list/:year',
+    ensureAuthAPI,
+    validateYearParam,
+    async (req, res) => {
+      try {
+        const year = req.validatedYear;
+        const record = await aggregateList.get(year);
 
-      const record = await aggregateList.get(year);
+        if (!record) {
+          return res
+            .status(404)
+            .json({ error: 'Aggregate list not found for this year' });
+        }
 
-      if (!record) {
-        return res
-          .status(404)
-          .json({ error: 'Aggregate list not found for this year' });
-      }
+        if (!record.revealed) {
+          return res.status(403).json({
+            error: 'Aggregate list has not been revealed yet',
+            status: await aggregateList.getStatus(year),
+          });
+        }
 
-      if (!record.revealed) {
-        return res.status(403).json({
-          error: 'Aggregate list has not been revealed yet',
-          status: await aggregateList.getStatus(year),
+        // Return the full data
+        res.json({
+          year,
+          revealed: true,
+          revealedAt: record.revealed_at,
+          data: record.data,
         });
+      } catch (err) {
+        logger.error('Error fetching aggregate list', {
+          error: err.message,
+          year: req.params.year,
+        });
+        res.status(500).json({ error: 'Database error' });
       }
-
-      // Return the full data
-      res.json({
-        year,
-        revealed: true,
-        revealedAt: record.revealed_at,
-        data: record.data,
-      });
-    } catch (err) {
-      logger.error('Error fetching aggregate list', {
-        error: err.message,
-        year: req.params.year,
-      });
-      res.status(500).json({ error: 'Database error' });
     }
-  });
+  );
 
   /**
    * GET /api/aggregate-list/:year/status
@@ -75,13 +77,10 @@ module.exports = (app, deps) => {
   app.get(
     '/api/aggregate-list/:year/status',
     ensureAuthAPI,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const status = await aggregateList.getStatus(year);
         res.json(status);
       } catch (err) {
@@ -102,12 +101,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/stats',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
+        const year = req.validatedYear;
 
         // First ensure the aggregate list is computed
         let record = await aggregateList.get(year);
@@ -147,13 +144,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/confirm',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const result = await aggregateList.addConfirmation(year, req.user._id);
 
         if (result.alreadyRevealed) {
@@ -187,13 +181,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/confirm',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const result = await aggregateList.removeConfirmation(
           year,
           req.user._id
@@ -270,13 +261,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/recompute',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         await aggregateList.recompute(year);
         const status = await aggregateList.getStatus(year);
 
@@ -305,13 +293,10 @@ module.exports = (app, deps) => {
   app.get(
     '/api/aggregate-list/:year/has-seen',
     ensureAuthAPI,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const hasSeen = await aggregateList.hasSeen(year, req.user._id);
         res.json({ hasSeen, year });
       } catch (err) {
@@ -332,13 +317,10 @@ module.exports = (app, deps) => {
   app.post(
     '/api/aggregate-list/:year/mark-seen',
     ensureAuthAPI,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         await aggregateList.markSeen(year, req.user._id);
         res.json({ success: true, year });
       } catch (err) {
@@ -360,13 +342,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/reset-seen',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const result = await aggregateList.resetSeen(year, req.user._id);
         res.json({
           success: true,
@@ -418,13 +397,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/contributors',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const contributors = await aggregateList.getContributors(year);
         res.json({ year, contributors });
       } catch (err) {
@@ -445,13 +421,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/eligible-users',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const eligibleUsers = await aggregateList.getEligibleUsers(year);
         res.json({ year, eligibleUsers });
       } catch (err) {
@@ -472,12 +445,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/contributors',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
+        const year = req.validatedYear;
 
         // Check if year is locked
         try {
@@ -524,12 +495,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/contributors/:userId',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
+        const year = req.validatedYear;
 
         // Check if year is locked
         try {
@@ -579,13 +548,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/contributors',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const { userIds } = req.body;
         if (!Array.isArray(userIds)) {
           return res.status(400).json({ error: 'userIds must be an array' });
@@ -623,12 +589,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/lock',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
+        const year = req.validatedYear;
 
         // Create master_lists record if doesn't exist, or update existing
         await pool.query(
@@ -670,13 +634,10 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/unlock',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = parseInt(req.params.year, 10);
-        if (isNaN(year) || year < 1000 || year > 9999) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         await pool.query(
           `
           UPDATE master_lists 

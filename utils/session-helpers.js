@@ -4,10 +4,6 @@
  * Provides async/await wrappers for Express session operations.
  * Express sessions use callbacks by default, which can lead to
  * inconsistent error handling and race conditions.
- *
- * This module provides:
- * - saveSessionAsync: Promise-based session save with proper error handling
- * - saveSessionSafe: Fire-and-forget session save with error logging
  */
 
 const logger = require('./logger');
@@ -77,74 +73,7 @@ function saveSessionSafe(req, context = 'session update') {
   });
 }
 
-/**
- * Regenerate session with async/await support
- *
- * Wraps req.session.regenerate() in a Promise for security-critical
- * operations like login where session fixation attacks must be prevented.
- *
- * @param {Object} req - Express request object with session
- * @returns {Promise<void>} - Resolves when session is regenerated
- * @throws {Error} - Throws if session regeneration fails
- *
- * @example
- * async function loginHandler(req, res) {
- *   await regenerateSessionAsync(req);
- *   req.session.userId = user._id;
- *   await saveSessionAsync(req);
- *   res.redirect('/dashboard');
- * }
- */
-async function regenerateSessionAsync(req) {
-  return new Promise((resolve, reject) => {
-    req.session.regenerate((err) => {
-      if (err) {
-        logger.error('Session regeneration failed', {
-          error: err.message,
-          sessionId: req.session?.id,
-        });
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-
-/**
- * Destroy session with async/await support
- *
- * Wraps req.session.destroy() in a Promise for logout operations.
- *
- * @param {Object} req - Express request object with session
- * @returns {Promise<void>} - Resolves when session is destroyed
- * @throws {Error} - Throws if session destruction fails
- *
- * @example
- * async function logoutHandler(req, res) {
- *   await destroySessionAsync(req);
- *   res.clearCookie('connect.sid');
- *   res.redirect('/');
- * }
- */
-async function destroySessionAsync(req) {
-  return new Promise((resolve, reject) => {
-    req.session.destroy((err) => {
-      if (err) {
-        logger.error('Session destruction failed', {
-          error: err.message,
-        });
-        reject(err);
-      } else {
-        resolve();
-      }
-    });
-  });
-}
-
 module.exports = {
   saveSessionAsync,
   saveSessionSafe,
-  regenerateSessionAsync,
-  destroySessionAsync,
 };

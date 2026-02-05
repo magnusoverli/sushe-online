@@ -306,14 +306,6 @@ function recordAuthAttempt(type, result) {
 }
 
 /**
- * Update WebSocket connection count
- * @param {number} count - The current connection count
- */
-function setWebsocketConnections(count) {
-  websocketConnectionsActive.set(count);
-}
-
-/**
  * Increment WebSocket connection count
  */
 function incWebsocketConnections() {
@@ -325,14 +317,6 @@ function incWebsocketConnections() {
  */
 function decWebsocketConnections() {
   websocketConnectionsActive.dec();
-}
-
-/**
- * Update active session count
- * @param {number} count - The current session count
- */
-function setActiveSessions(count) {
-  userSessionsActive.set(count);
 }
 
 /**
@@ -444,10 +428,8 @@ module.exports = {
   observeDbQuery,
   recordAuthAttempt,
   recordClaudeUsage,
-  setWebsocketConnections,
   incWebsocketConnections,
   decWebsocketConnections,
-  setActiveSessions,
   updateDbPoolMetrics,
   updateUptime,
   getMetrics,

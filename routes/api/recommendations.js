@@ -10,6 +10,7 @@
  */
 
 const { ensureAdmin } = require('../../middleware/auth');
+const { validateYearParam } = require('../../middleware/validate-params');
 
 /**
  * Register recommendations routes
@@ -25,17 +26,6 @@ module.exports = (appInstance, deps) => {
     crypto,
     helpers: { upsertAlbumRecord },
   } = deps;
-
-  /**
-   * Helper to validate year parameter
-   */
-  function validateYear(yearParam) {
-    const year = parseInt(yearParam, 10);
-    if (isNaN(year) || year < 1000 || year > 9999) {
-      return null;
-    }
-    return year;
-  }
 
   /**
    * Helper to check if recommendations are locked for a year
@@ -105,27 +95,28 @@ module.exports = (appInstance, deps) => {
    * GET /api/recommendations/:year
    * Get all recommendations for a year (with album data + recommender username)
    */
-  app.get('/api/recommendations/:year', ensureAuthAPI, async (req, res) => {
-    try {
-      const year = validateYear(req.params.year);
-      if (!year) {
-        return res.status(400).json({ error: 'Invalid year' });
-      }
+  app.get(
+    '/api/recommendations/:year',
+    ensureAuthAPI,
+    validateYearParam,
+    async (req, res) => {
+      try {
+        const year = req.validatedYear;
 
-      // Check access
-      const hasAccess = await hasRecommendationAccess(year, req.user._id);
-      if (!hasAccess) {
-        return res
-          .status(403)
-          .json({ error: 'Access denied to recommendations for this year' });
-      }
+        // Check access
+        const hasAccess = await hasRecommendationAccess(year, req.user._id);
+        if (!hasAccess) {
+          return res
+            .status(403)
+            .json({ error: 'Access denied to recommendations for this year' });
+        }
 
-      // Get lock status
-      const locked = await isRecommendationsLocked(year);
+        // Get lock status
+        const locked = await isRecommendationsLocked(year);
 
-      // Get recommendations with album data and recommender info
-      const result = await pool.query(
-        `SELECT 
+        // Get recommendations with album data and recommender info
+        const result = await pool.query(
+          `SELECT 
           r._id,
           r.year,
           r.album_id,
@@ -144,196 +135,199 @@ module.exports = (appInstance, deps) => {
         JOIN users u ON r.recommended_by = u._id
         WHERE r.year = $1
         ORDER BY r.created_at DESC`,
-        [year]
-      );
+          [year]
+        );
 
-      res.json({
-        year,
-        locked,
-        recommendations: result.rows.map((row) => ({
-          _id: row._id,
-          album_id: row.album_id,
-          artist: row.artist,
-          album: row.album,
-          release_date: row.release_date,
-          country: row.country,
-          genre_1: row.genre_1,
-          genre_2: row.genre_2,
-          recommended_by: row.recommended_by,
-          recommender_id: row.recommender_id,
-          reasoning: row.reasoning,
-          created_at: row.created_at,
-        })),
-      });
-    } catch (err) {
-      logger.error('Error fetching recommendations', {
-        error: err.message,
-        year: req.params.year,
-      });
-      res.status(500).json({ error: 'Database error' });
+        res.json({
+          year,
+          locked,
+          recommendations: result.rows.map((row) => ({
+            _id: row._id,
+            album_id: row.album_id,
+            artist: row.artist,
+            album: row.album,
+            release_date: row.release_date,
+            country: row.country,
+            genre_1: row.genre_1,
+            genre_2: row.genre_2,
+            recommended_by: row.recommended_by,
+            recommender_id: row.recommender_id,
+            reasoning: row.reasoning,
+            created_at: row.created_at,
+          })),
+        });
+      } catch (err) {
+        logger.error('Error fetching recommendations', {
+          error: err.message,
+          year: req.params.year,
+        });
+        res.status(500).json({ error: 'Database error' });
+      }
     }
-  });
+  );
 
   /**
    * POST /api/recommendations/:year
    * Add an album to recommendations
    */
-  app.post('/api/recommendations/:year', ensureAuthAPI, async (req, res) => {
-    try {
-      const year = validateYear(req.params.year);
-      if (!year) {
-        return res.status(400).json({ error: 'Invalid year' });
-      }
-
-      // Check access
-      const hasAccess = await hasRecommendationAccess(year, req.user._id);
-      if (!hasAccess) {
-        return res
-          .status(403)
-          .json({ error: 'Access denied to recommendations for this year' });
-      }
-
-      // Check if locked
-      const locked = await isRecommendationsLocked(year);
-      if (locked) {
-        return res.status(403).json({
-          error: 'Recommendations are locked for this year',
-          locked: true,
-        });
-      }
-
-      const { album, reasoning } = req.body;
-      if (!album || !album.artist || !album.album) {
-        return res
-          .status(400)
-          .json({ error: 'Album data required (artist, album)' });
-      }
-
-      // Validate reasoning
-      if (!reasoning || typeof reasoning !== 'string' || !reasoning.trim()) {
-        return res.status(400).json({ error: 'Reasoning is required' });
-      }
-
-      const trimmedReasoning = reasoning.trim();
-      if (trimmedReasoning.length > 500) {
-        return res
-          .status(400)
-          .json({ error: 'Reasoning must be 500 characters or less' });
-      }
-
-      // Start transaction
-      const client = await pool.connect();
+  app.post(
+    '/api/recommendations/:year',
+    ensureAuthAPI,
+    validateYearParam,
+    async (req, res) => {
       try {
-        await client.query('BEGIN');
+        const year = req.validatedYear;
 
-        // Upsert album to canonical albums table
-        const timestamp = new Date();
-        const albumId = await upsertAlbumRecord(album, timestamp, client);
+        // Check access
+        const hasAccess = await hasRecommendationAccess(year, req.user._id);
+        if (!hasAccess) {
+          return res
+            .status(403)
+            .json({ error: 'Access denied to recommendations for this year' });
+        }
 
-        // Check if album already recommended for this year
-        const existing = await client.query(
-          `SELECT r._id, u.username 
-           FROM recommendations r 
-           JOIN users u ON r.recommended_by = u._id
-           WHERE r.year = $1 AND r.album_id = $2`,
-          [year, albumId]
-        );
-
-        if (existing.rows.length > 0) {
-          await client.query('ROLLBACK');
-          return res.status(409).json({
-            error: `This album was already recommended by ${existing.rows[0].username}`,
-            recommended_by: existing.rows[0].username,
+        // Check if locked
+        const locked = await isRecommendationsLocked(year);
+        if (locked) {
+          return res.status(403).json({
+            error: 'Recommendations are locked for this year',
+            locked: true,
           });
         }
 
-        // Generate unique ID for recommendation
-        const _id = crypto.randomBytes(12).toString('hex');
-
-        // Insert recommendation
-        await client.query(
-          `INSERT INTO recommendations (_id, year, album_id, recommended_by, reasoning, created_at)
-           VALUES ($1, $2, $3, $4, $5, NOW())`,
-          [_id, year, albumId, req.user._id, trimmedReasoning]
-        );
-
-        await client.query('COMMIT');
-
-        logger.info('Album recommended', {
-          year,
-          albumId,
-          userId: req.user._id,
-          username: req.user.username,
-        });
-
-        // Send Telegram notification (fire-and-forget)
-        const telegramNotifier = app.locals.telegramNotifier;
-        if (telegramNotifier?.sendRecommendationNotification) {
-          // Fetch cover image from database for direct upload
-          (async () => {
-            try {
-              let coverImage = null;
-              const coverResult = await pool.query(
-                'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
-                [albumId]
-              );
-              if (
-                coverResult.rows.length > 0 &&
-                coverResult.rows[0].cover_image
-              ) {
-                const row = coverResult.rows[0];
-                // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
-                const imageBuffer = Buffer.isBuffer(row.cover_image)
-                  ? row.cover_image
-                  : Buffer.from(row.cover_image, 'base64');
-                coverImage = {
-                  buffer: imageBuffer,
-                  format: row.cover_image_format || 'jpeg',
-                };
-              }
-
-              await telegramNotifier.sendRecommendationNotification(
-                {
-                  artist: album.artist,
-                  album: album.album,
-                  album_id: albumId,
-                  release_date: album.release_date,
-                  year,
-                  recommended_by: req.user.username,
-                  reasoning: trimmedReasoning,
-                },
-                coverImage
-              );
-            } catch (err) {
-              logger.warn('Failed to send Telegram notification', {
-                error: err.message,
-              });
-            }
-          })();
+        const { album, reasoning } = req.body;
+        if (!album || !album.artist || !album.album) {
+          return res
+            .status(400)
+            .json({ error: 'Album data required (artist, album)' });
         }
 
-        res.status(201).json({
-          success: true,
-          _id,
-          album_id: albumId,
-          year,
-          recommended_by: req.user.username,
-        });
+        // Validate reasoning
+        if (!reasoning || typeof reasoning !== 'string' || !reasoning.trim()) {
+          return res.status(400).json({ error: 'Reasoning is required' });
+        }
+
+        const trimmedReasoning = reasoning.trim();
+        if (trimmedReasoning.length > 500) {
+          return res
+            .status(400)
+            .json({ error: 'Reasoning must be 500 characters or less' });
+        }
+
+        // Start transaction
+        const client = await pool.connect();
+        try {
+          await client.query('BEGIN');
+
+          // Upsert album to canonical albums table
+          const timestamp = new Date();
+          const albumId = await upsertAlbumRecord(album, timestamp, client);
+
+          // Check if album already recommended for this year
+          const existing = await client.query(
+            `SELECT r._id, u.username 
+           FROM recommendations r 
+           JOIN users u ON r.recommended_by = u._id
+           WHERE r.year = $1 AND r.album_id = $2`,
+            [year, albumId]
+          );
+
+          if (existing.rows.length > 0) {
+            await client.query('ROLLBACK');
+            return res.status(409).json({
+              error: `This album was already recommended by ${existing.rows[0].username}`,
+              recommended_by: existing.rows[0].username,
+            });
+          }
+
+          // Generate unique ID for recommendation
+          const _id = crypto.randomBytes(12).toString('hex');
+
+          // Insert recommendation
+          await client.query(
+            `INSERT INTO recommendations (_id, year, album_id, recommended_by, reasoning, created_at)
+           VALUES ($1, $2, $3, $4, $5, NOW())`,
+            [_id, year, albumId, req.user._id, trimmedReasoning]
+          );
+
+          await client.query('COMMIT');
+
+          logger.info('Album recommended', {
+            year,
+            albumId,
+            userId: req.user._id,
+            username: req.user.username,
+          });
+
+          // Send Telegram notification (fire-and-forget)
+          const telegramNotifier = app.locals.telegramNotifier;
+          if (telegramNotifier?.sendRecommendationNotification) {
+            // Fetch cover image from database for direct upload
+            (async () => {
+              try {
+                let coverImage = null;
+                const coverResult = await pool.query(
+                  'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
+                  [albumId]
+                );
+                if (
+                  coverResult.rows.length > 0 &&
+                  coverResult.rows[0].cover_image
+                ) {
+                  const row = coverResult.rows[0];
+                  // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
+                  const imageBuffer = Buffer.isBuffer(row.cover_image)
+                    ? row.cover_image
+                    : Buffer.from(row.cover_image, 'base64');
+                  coverImage = {
+                    buffer: imageBuffer,
+                    format: row.cover_image_format || 'jpeg',
+                  };
+                }
+
+                await telegramNotifier.sendRecommendationNotification(
+                  {
+                    artist: album.artist,
+                    album: album.album,
+                    album_id: albumId,
+                    release_date: album.release_date,
+                    year,
+                    recommended_by: req.user.username,
+                    reasoning: trimmedReasoning,
+                  },
+                  coverImage
+                );
+              } catch (err) {
+                logger.warn('Failed to send Telegram notification', {
+                  error: err.message,
+                });
+              }
+            })();
+          }
+
+          res.status(201).json({
+            success: true,
+            _id,
+            album_id: albumId,
+            year,
+            recommended_by: req.user.username,
+          });
+        } catch (err) {
+          await client.query('ROLLBACK');
+          throw err;
+        } finally {
+          client.release();
+        }
       } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      } finally {
-        client.release();
+        logger.error('Error adding recommendation', {
+          error: err.message,
+          year: req.params.year,
+          userId: req.user._id,
+        });
+        res.status(500).json({ error: 'Database error' });
       }
-    } catch (err) {
-      logger.error('Error adding recommendation', {
-        error: err.message,
-        year: req.params.year,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Database error' });
     }
-  });
+  );
 
   /**
    * DELETE /api/recommendations/:year/:albumId
@@ -343,13 +337,10 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/:albumId',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const { albumId } = req.params;
         if (!albumId) {
           return res.status(400).json({ error: 'Album ID required' });
@@ -398,13 +389,10 @@ module.exports = (appInstance, deps) => {
   app.patch(
     '/api/recommendations/:year/:albumId/reasoning',
     ensureAuthAPI,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const { albumId } = req.params;
         if (!albumId) {
           return res.status(400).json({ error: 'Album ID required' });
@@ -478,13 +466,10 @@ module.exports = (appInstance, deps) => {
   app.get(
     '/api/recommendations/:year/status',
     ensureAuthAPI,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const locked = await isRecommendationsLocked(year);
         const hasAccess = await hasRecommendationAccess(year, req.user._id);
 
@@ -520,13 +505,10 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/lock',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         await pool.query(
           `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
            VALUES ($1, TRUE, NOW(), NOW())
@@ -564,13 +546,10 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/unlock',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         await pool.query(
           `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
            VALUES ($1, FALSE, NOW(), NOW())
@@ -633,13 +612,10 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/access',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const result = await pool.query(
           `SELECT 
             ra.user_id,
@@ -688,13 +664,10 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/access',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
-
+        const year = req.validatedYear;
         const { userIds } = req.body;
         if (!Array.isArray(userIds)) {
           return res.status(400).json({ error: 'userIds must be an array' });
@@ -764,12 +737,10 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/eligible-users',
     ensureAuthAPI,
     ensureAdmin,
+    validateYearParam,
     async (req, res) => {
       try {
-        const year = validateYear(req.params.year);
-        if (!year) {
-          return res.status(400).json({ error: 'Invalid year' });
-        }
+        const year = req.validatedYear;
 
         // Get all approved users with their current access status
         const result = await pool.query(
