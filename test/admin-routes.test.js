@@ -177,6 +177,33 @@ function createTestApp(options = {}) {
         }
         return Promise.resolve([]);
       }),
+    findWithCounts:
+      options.listsAsyncFindWithCounts ||
+      mock.fn((query) => {
+        if (query.userId === 'user-with-lists') {
+          return Promise.resolve([
+            {
+              _id: 'list-1',
+              name: 'My Albums',
+              userId: 'user-with-lists',
+              itemCount: 15,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              group: null,
+            },
+            {
+              _id: 'list-2',
+              name: 'Favorites',
+              userId: 'user-with-lists',
+              itemCount: 8,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+              group: null,
+            },
+          ]);
+        }
+        return Promise.resolve([]);
+      }),
   };
 
   const mockListItemsAsync = {
@@ -594,7 +621,7 @@ describe('GET /admin/user-lists/:userId', () => {
 
   it('should handle database errors', async () => {
     const { app } = createTestApp({
-      listsAsyncFind: mock.fn(() =>
+      listsAsyncFindWithCounts: mock.fn(() =>
         Promise.reject(new Error('Database error'))
       ),
     });

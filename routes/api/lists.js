@@ -101,16 +101,13 @@ module.exports = (app, deps) => {
    */
   async function processRemovals(client, listId, removed) {
     if (!removed || !Array.isArray(removed)) return 0;
-    let count = 0;
-    for (const albumId of removed) {
-      if (!albumId) continue;
-      const result = await client.query(
-        'DELETE FROM list_items WHERE list_id = $1 AND album_id = $2',
-        [listId, albumId]
-      );
-      count += result.rowCount;
-    }
-    return count;
+    const validIds = removed.filter(Boolean);
+    if (validIds.length === 0) return 0;
+    const result = await client.query(
+      'DELETE FROM list_items WHERE list_id = $1 AND album_id = ANY($2::text[])',
+      [listId, validIds]
+    );
+    return result.rowCount;
   }
 
   /**
@@ -262,16 +259,17 @@ module.exports = (app, deps) => {
    */
   async function processPositionUpdates(client, listId, updated, timestamp) {
     if (!updated || !Array.isArray(updated)) return 0;
-    let count = 0;
-    for (const item of updated) {
-      if (!item || !item.album_id) continue;
-      const result = await client.query(
-        'UPDATE list_items SET position = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4',
-        [item.position, timestamp, listId, item.album_id]
-      );
-      count += result.rowCount;
-    }
-    return count;
+    const validItems = updated.filter((item) => item && item.album_id);
+    if (validItems.length === 0) return 0;
+    const albumIds = validItems.map((i) => i.album_id);
+    const positions = validItems.map((i) => i.position);
+    const result = await client.query(
+      `UPDATE list_items SET position = t.position, updated_at = $1
+       FROM UNNEST($2::text[], $3::int[]) AS t(album_id, position)
+       WHERE list_items.list_id = $4 AND list_items.album_id = t.album_id`,
+      [timestamp, albumIds, positions, listId]
+    );
+    return result.rowCount;
   }
 
   /**
@@ -1169,23 +1167,49 @@ module.exports = (app, deps) => {
       let effectivePos = 0;
 
       await withTransaction(pool, async (client) => {
-        for (let i = 0; i < order.length; i++) {
-          const entry = order[i];
-          const now = new Date();
+        const now = new Date();
+        const byAlbumId = [];
+        const byItemId = [];
 
+        // Collect all updates with sequential positions
+        for (const entry of order) {
           if (typeof entry === 'string') {
             effectivePos += 1;
-            await client.query(
-              'UPDATE list_items SET position = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4',
-              [effectivePos, now, list._id, entry]
-            );
+            byAlbumId.push({ albumId: entry, position: effectivePos });
           } else if (entry && typeof entry === 'object' && entry._id) {
             effectivePos += 1;
-            await client.query(
-              'UPDATE list_items SET position = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4',
-              [effectivePos, now, entry._id, list._id]
-            );
+            byItemId.push({ itemId: entry._id, position: effectivePos });
           }
+        }
+
+        // Batch update by album_id
+        if (byAlbumId.length > 0) {
+          await client.query(
+            `UPDATE list_items SET position = t.position, updated_at = $1
+             FROM UNNEST($2::text[], $3::int[]) AS t(album_id, position)
+             WHERE list_items.list_id = $4 AND list_items.album_id = t.album_id`,
+            [
+              now,
+              byAlbumId.map((i) => i.albumId),
+              byAlbumId.map((i) => i.position),
+              list._id,
+            ]
+          );
+        }
+
+        // Batch update by item _id
+        if (byItemId.length > 0) {
+          await client.query(
+            `UPDATE list_items SET position = t.position, updated_at = $1
+             FROM UNNEST($2::text[], $3::int[]) AS t(item_id, position)
+             WHERE list_items._id = t.item_id AND list_items.list_id = $4`,
+            [
+              now,
+              byItemId.map((i) => i.itemId),
+              byItemId.map((i) => i.position),
+              list._id,
+            ]
+          );
         }
       });
 

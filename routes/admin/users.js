@@ -11,15 +11,8 @@
 const logger = require('../../utils/logger');
 
 module.exports = (app, deps) => {
-  const {
-    ensureAuth,
-    ensureAdmin,
-    users,
-    usersAsync,
-    lists,
-    listsAsync,
-    listItemsAsync,
-  } = deps;
+  const { ensureAuth, ensureAdmin, users, usersAsync, lists, listsAsync } =
+    deps;
 
   // Admin: Delete user
   app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
@@ -128,17 +121,13 @@ module.exports = (app, deps) => {
       const { userId } = req.params;
 
       try {
-        const userLists = await listsAsync.find({ userId });
-        const listsData = [];
-        for (const list of userLists) {
-          const count = await listItemsAsync.count({ listId: list._id });
-          listsData.push({
-            name: list.name,
-            albumCount: count,
-            createdAt: list.createdAt,
-            updatedAt: list.updatedAt,
-          });
-        }
+        const userLists = await listsAsync.findWithCounts({ userId });
+        const listsData = userLists.map((list) => ({
+          name: list.name,
+          albumCount: list.itemCount,
+          createdAt: list.createdAt,
+          updatedAt: list.updatedAt,
+        }));
 
         res.json({ lists: listsData });
       } catch (err) {

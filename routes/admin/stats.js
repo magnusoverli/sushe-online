@@ -32,11 +32,13 @@ module.exports = (app, deps) => {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       // Parallel fetch of aggregate stats only (no user details)
-      const [allUsers, allLists, adminStatsResult] = await Promise.all([
-        usersAsync.find({}),
-        listsAsync.find({}),
-        pool.query(
-          `
+      const [totalUsers, totalLists, adminUsers, adminStatsResult] =
+        await Promise.all([
+          usersAsync.count({}),
+          listsAsync.count({}),
+          usersAsync.count({ role: 'admin' }),
+          pool.query(
+            `
             WITH unique_albums AS (
               SELECT COUNT(DISTINCT album_id) as total 
               FROM list_items 
@@ -49,9 +51,9 @@ module.exports = (app, deps) => {
               (SELECT total FROM unique_albums) as total_albums,
               (SELECT count FROM active_users) as active_users
           `,
-          [sevenDaysAgo]
-        ),
-      ]);
+            [sevenDaysAgo]
+          ),
+        ]);
 
       // Extract stats from aggregate query
       const aggregateStats = adminStatsResult.rows[0] || {};
@@ -59,10 +61,10 @@ module.exports = (app, deps) => {
       const activeUsers = parseInt(aggregateStats.active_users, 10) || 0;
 
       res.json({
-        totalUsers: allUsers.length,
-        totalLists: allLists.length,
+        totalUsers,
+        totalLists,
         totalAlbums,
-        adminUsers: allUsers.filter((u) => u.role === 'admin').length,
+        adminUsers,
         activeUsers,
       });
     } catch (error) {
@@ -78,15 +80,21 @@ module.exports = (app, deps) => {
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       // Parallel fetch of all independent data
-      const [allUsers, allLists, userListCountsResult, adminStatsResult] =
-        await Promise.all([
-          usersAsync.find({}),
-          listsAsync.find({}),
-          pool.query(
-            'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
-          ),
-          pool.query(
-            `
+      const [
+        allUsers,
+        totalLists,
+        adminUsers,
+        userListCountsResult,
+        adminStatsResult,
+      ] = await Promise.all([
+        usersAsync.find({}),
+        listsAsync.count({}),
+        usersAsync.count({ role: 'admin' }),
+        pool.query(
+          'SELECT user_id, COUNT(*) as list_count FROM lists GROUP BY user_id'
+        ),
+        pool.query(
+          `
             WITH album_genres AS (
               SELECT DISTINCT li.album_id, a.genre_1, a.genre_2 
               FROM list_items li
@@ -104,9 +112,9 @@ module.exports = (app, deps) => {
               (SELECT total FROM unique_albums) as total_albums,
               (SELECT count FROM active_users) as active_users
           `,
-            [sevenDaysAgo]
-          ),
-        ]);
+          [sevenDaysAgo]
+        ),
+      ]);
 
       // Build Map for O(1) list count lookup
       const listCountMap = new Map(
@@ -133,9 +141,9 @@ module.exports = (app, deps) => {
 
       res.json({
         totalUsers: allUsers.length,
-        totalLists: allLists.length,
+        totalLists,
         totalAlbums,
-        adminUsers: allUsers.filter((u) => u.role === 'admin').length,
+        adminUsers,
         activeUsers,
         users: usersWithCounts,
       });
