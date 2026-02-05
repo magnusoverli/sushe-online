@@ -544,6 +544,8 @@ function createAlbumCanonical(deps = {}) {
       const genres1 = withId.map((a) => a.genre_1);
       const genres2 = withId.map((a) => a.genre_2);
       const tracksList = withId.map((a) => a.tracks);
+      const createdAts = withId.map(() => timestamp);
+      const updatedAts = withId.map(() => timestamp);
 
       const result = await db.query(
         `INSERT INTO albums (
@@ -553,7 +555,7 @@ function createAlbumCanonical(deps = {}) {
         SELECT * FROM UNNEST(
           $1::text[], $2::text[], $3::text[], $4::text[], 
           $5::text[], $6::text[], $7::text[], $8::jsonb[],
-          $9::timestamptz, $10::timestamptz
+          $9::timestamptz[], $10::timestamptz[]
         ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
         ON CONFLICT (album_id) 
         WHERE album_id IS NOT NULL AND album_id != ''
@@ -599,8 +601,8 @@ function createAlbumCanonical(deps = {}) {
           genres1,
           genres2,
           tracksList,
-          timestamp,
-          timestamp,
+          createdAts,
+          updatedAts,
         ]
       );
 
@@ -634,6 +636,8 @@ function createAlbumCanonical(deps = {}) {
       const genres1 = withoutId.map((a) => a.genre_1);
       const genres2 = withoutId.map((a) => a.genre_2);
       const tracksList = withoutId.map((a) => a.tracks);
+      const createdAts = withoutId.map(() => timestamp);
+      const updatedAts = withoutId.map(() => timestamp);
 
       const result = await db.query(
         `INSERT INTO albums (
@@ -643,7 +647,7 @@ function createAlbumCanonical(deps = {}) {
         SELECT * FROM UNNEST(
           $1::text[], $2::text[], $3::text[], $4::text[], 
           $5::text[], $6::text[], $7::text[], $8::jsonb[],
-          $9::timestamptz, $10::timestamptz
+          $9::timestamptz[], $10::timestamptz[]
         ) AS t(album_id, artist, album, release_date, country, genre_1, genre_2, tracks, created_at, updated_at)
         ON CONFLICT (LOWER(TRIM(COALESCE(artist, ''))), LOWER(TRIM(COALESCE(album, ''))))
         WHERE album_id IS NULL OR album_id = ''
@@ -686,8 +690,8 @@ function createAlbumCanonical(deps = {}) {
           genres1,
           genres2,
           tracksList,
-          timestamp,
-          timestamp,
+          createdAts,
+          updatedAts,
         ]
       );
 

@@ -204,11 +204,14 @@ module.exports = (app, deps) => {
     // Batch insert all list items if any
     if (itemsToInsert.length > 0) {
       const itemIds = itemsToInsert.map((i) => i._id);
+      const listIds = itemsToInsert.map(() => list._id);
       const albumIdsToInsert = itemsToInsert.map((i) => i.album_id);
       const positions = itemsToInsert.map((i) => i.position);
       const comments = itemsToInsert.map((i) => i.comments);
       const primaryTracks = itemsToInsert.map((i) => i.primary_track);
       const secondaryTracks = itemsToInsert.map((i) => i.secondary_track);
+      const createdAts = itemsToInsert.map(() => timestamp);
+      const updatedAts = itemsToInsert.map(() => timestamp);
 
       await client.query(
         `INSERT INTO list_items (
@@ -216,19 +219,19 @@ module.exports = (app, deps) => {
           created_at, updated_at
         )
         SELECT * FROM UNNEST(
-          $1::text[], $2::text, $3::text[], $4::int[], $5::text[], 
-          $6::text[], $7::text[], $8::timestamptz, $9::timestamptz
+          $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], 
+          $6::text[], $7::text[], $8::timestamptz[], $9::timestamptz[]
         ) AS t(_id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at)`,
         [
           itemIds,
-          list._id,
+          listIds,
           albumIdsToInsert,
           positions,
           comments,
           primaryTracks,
           secondaryTracks,
-          timestamp,
-          timestamp,
+          createdAts,
+          updatedAts,
         ]
       );
 
