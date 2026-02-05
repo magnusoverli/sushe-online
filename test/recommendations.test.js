@@ -6,6 +6,10 @@ const { Pool } = require('pg');
 /**
  * Recommendations Feature Tests
  *
+ * Integration tests that require the full app running with database.
+ * These tests connect to http://localhost:3000 and require the Docker
+ * containers to be running. They are skipped when the server is not available.
+ *
  * The recommendations system allows users to recommend albums for a given year.
  * - Any authenticated user can add recommendations (unless access is restricted)
  * - Only admins can remove recommendations
@@ -19,8 +23,9 @@ describe('Recommendations Feature', () => {
     // Setup test environment
     pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-    // Create test app
-    app = require('../index.js');
+    // Connect to the running app server instead of requiring index.js
+    // (requiring index.js starts a server as a side effect and hangs the process)
+    app = 'http://localhost:3000';
 
     testYear = 2024;
 

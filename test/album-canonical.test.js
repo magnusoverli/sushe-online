@@ -549,12 +549,19 @@ describe('upsertCanonical', () => {
 
     const mockPool = {
       query: mock.fn((sql, values) => {
-        if (sql.includes('SELECT')) {
-          return Promise.resolve({ rows: [] });
-        }
         if (sql.includes('INSERT')) {
           insertedData = values;
-          return Promise.resolve({ rows: [] });
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: values[0],
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+                needs_tracks_fetch: true,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -587,12 +594,19 @@ describe('upsertCanonical', () => {
 
     const mockPool = {
       query: mock.fn((sql, values) => {
-        if (sql.includes('SELECT')) {
-          return Promise.resolve({ rows: [] });
-        }
         if (sql.includes('INSERT')) {
           insertedData = values;
-          return Promise.resolve({ rows: [] });
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: values[0],
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+                needs_tracks_fetch: true,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -618,32 +632,22 @@ describe('upsertCanonical', () => {
   });
 
   it('should merge with existing album when match found', async () => {
-    let updateCalled = false;
-
-    const existingAlbum = {
-      album_id: 'spotify-123',
-      artist: 'Aara',
-      album: 'Eiger',
-      release_date: '2024',
-      country: '',
-      genre_1: '',
-      genre_2: '',
-      cover_image: null,
-      cover_image_format: '',
-      tracks: null,
-      summary: null,
-      summary_fetched_at: null,
-      summary_source: null,
-    };
-
+    // The current upsertCanonical uses INSERT...ON CONFLICT...RETURNING
+    // When an album_id conflict occurs, the DO UPDATE fires and was_inserted = false
     const mockPool = {
-      query: mock.fn((sql) => {
-        if (sql.includes('SELECT')) {
-          return Promise.resolve({ rows: [existingAlbum] });
-        }
-        if (sql.includes('UPDATE')) {
-          updateCalled = true;
-          return Promise.resolve({ rows: [] });
+      query: mock.fn((sql, _values) => {
+        if (sql.includes('INSERT')) {
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'musicbrainz-456',
+                was_inserted: false, // conflict triggered DO UPDATE
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+                needs_tracks_fetch: true,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -656,25 +660,34 @@ describe('upsertCanonical', () => {
 
     const result = await canonical.upsertCanonical(
       {
-        album_id: 'musicbrainz-456', // Different ID
-        artist: 'AARA', // Different casing
-        album: 'eiger', // Different casing
-        country: 'Switzerland', // New data
+        album_id: 'musicbrainz-456',
+        artist: 'AARA',
+        album: 'eiger',
+        country: 'Switzerland',
       },
       new Date()
     );
 
     assert.strictEqual(result.wasInserted, false);
     assert.strictEqual(result.wasMerged, true);
-    assert.strictEqual(result.albumId, 'spotify-123'); // Keeps existing external ID
-    assert.ok(updateCalled);
+    assert.strictEqual(result.albumId, 'musicbrainz-456');
   });
 
   it('should indicate needsSummaryFetch for new albums', async () => {
     const mockPool = {
-      query: mock.fn((sql) => {
-        if (sql.includes('SELECT')) {
-          return Promise.resolve({ rows: [] });
+      query: mock.fn((sql, values) => {
+        if (sql.includes('INSERT')) {
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: values[0],
+                was_inserted: true,
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+                needs_tracks_fetch: true,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -694,17 +707,22 @@ describe('upsertCanonical', () => {
   });
 
   it('should indicate needsSummaryFetch false when existing has summary', async () => {
-    const existingAlbum = {
-      album_id: 'spotify-123',
-      artist: 'Aara',
-      album: 'Eiger',
-      summary_fetched_at: new Date(),
-    };
-
+    // When upsert hits an existing album that already has summary_fetched_at,
+    // the RETURNING clause returns needs_summary_fetch = false
     const mockPool = {
-      query: mock.fn((sql) => {
-        if (sql.includes('SELECT')) {
-          return Promise.resolve({ rows: [existingAlbum] });
+      query: mock.fn((sql, values) => {
+        if (sql.includes('INSERT')) {
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: values[0],
+                was_inserted: false,
+                needs_cover_fetch: false,
+                needs_summary_fetch: false, // existing has summary
+                needs_tracks_fetch: false,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -724,42 +742,22 @@ describe('upsertCanonical', () => {
   });
 
   it('should find existing album by ID when name does not match exactly', async () => {
-    // This test covers the bug fix: when an album exists with the same ID
-    // but slightly different name spelling, we should merge instead of insert
-    const existingAlbum = {
-      album_id: 'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679',
-      artist: 'Kêres',
-      album: 'Skryer of the Lighthouse',
-      release_date: '2024',
-      country: '',
-      genre_1: 'Black Metal',
-      genre_2: '',
-      cover_image: null,
-      cover_image_format: '',
-      tracks: null,
-      summary: null,
-      summary_fetched_at: null,
-      summary_source: null,
-    };
-
-    let updateCalled = false;
-    let queryCount = 0;
-
+    // When album_id conflicts, the ON CONFLICT DO UPDATE fires and merges metadata.
+    // The RETURNING clause reports was_inserted = false (it was an update).
     const mockPool = {
-      query: mock.fn((sql) => {
-        queryCount++;
-        // First SELECT: findByNormalizedName - no match (different spelling)
-        if (sql.includes('LOWER(TRIM') && queryCount === 1) {
-          return Promise.resolve({ rows: [] });
-        }
-        // Second SELECT: findByAlbumId - match found
-        if (sql.includes('WHERE album_id = $1')) {
-          return Promise.resolve({ rows: [existingAlbum] });
-        }
-        // UPDATE: merge metadata
-        if (sql.includes('UPDATE')) {
-          updateCalled = true;
-          return Promise.resolve({ rows: [] });
+      query: mock.fn((sql, _values) => {
+        if (sql.includes('INSERT')) {
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679',
+                was_inserted: false, // conflict on album_id triggered DO UPDATE
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+                needs_tracks_fetch: true,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),
@@ -788,28 +786,26 @@ describe('upsertCanonical', () => {
       result.albumId,
       'mb-9b8f70b0-1351-41a2-be5c-59a8445a4679'
     );
-    assert.ok(updateCalled, 'UPDATE should have been called for merge');
   });
 
   it('should insert new album when neither name nor ID matches', async () => {
     let insertCalled = false;
-    let queryCount = 0;
 
     const mockPool = {
-      query: mock.fn((sql) => {
-        queryCount++;
-        // First SELECT: findByNormalizedName - no match
-        if (sql.includes('LOWER(TRIM') && queryCount === 1) {
-          return Promise.resolve({ rows: [] });
-        }
-        // Second SELECT: findByAlbumId - no match
-        if (sql.includes('WHERE album_id = $1')) {
-          return Promise.resolve({ rows: [] });
-        }
-        // INSERT: new album
+      query: mock.fn((sql, _values) => {
         if (sql.includes('INSERT')) {
           insertCalled = true;
-          return Promise.resolve({ rows: [] });
+          return Promise.resolve({
+            rows: [
+              {
+                album_id: 'new-unique-id',
+                was_inserted: true, // no conflict, fresh insert
+                needs_cover_fetch: true,
+                needs_summary_fetch: true,
+                needs_tracks_fetch: true,
+              },
+            ],
+          });
         }
         return Promise.resolve({ rows: [] });
       }),

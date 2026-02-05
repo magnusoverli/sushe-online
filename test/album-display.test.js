@@ -4,6 +4,100 @@
 
 const { describe, it, mock, beforeEach } = require('node:test');
 const assert = require('node:assert');
+const { register } = require('node:module');
+const path = require('node:path');
+
+// Register a loader that handles Vite-specific features for Node.js:
+// 1. .txt?raw imports (used by app.js for genres data)
+// 2. @utils/ alias (used by normalization.js to import from utils/)
+const projectRoot = path.resolve(__dirname, '..').replace(/\\/g, '/');
+register(
+  'data:text/javascript,' +
+    encodeURIComponent(`
+  const PROJECT_ROOT = ${JSON.stringify(projectRoot)};
+  export function resolve(specifier, context, next) {
+    if (specifier.startsWith('@utils/')) {
+      const resolved = 'file://' + PROJECT_ROOT + '/utils/' + specifier.slice(7);
+      return { url: resolved, shortCircuit: true };
+    }
+    if (specifier.endsWith('.txt') || specifier.includes('.txt?')) {
+      return { url: new URL(specifier.split('?')[0], context.parentURL).href, shortCircuit: true };
+    }
+    return next(specifier, context);
+  }
+  export function load(url, context, next) {
+    if (url.endsWith('.txt')) {
+      return { format: 'module', source: 'export default ""', shortCircuit: true };
+    }
+    return next(url, context);
+  }
+`)
+);
+
+// Provide minimal browser globals needed by the ESM import chain
+// (various modules in src/js/modules/ reference window/document at module level)
+if (typeof globalThis.window === 'undefined') {
+  globalThis.addEventListener = globalThis.addEventListener || (() => {});
+  globalThis.removeEventListener = globalThis.removeEventListener || (() => {});
+  globalThis.dispatchEvent = globalThis.dispatchEvent || (() => {});
+  globalThis.window = globalThis;
+  globalThis.document = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    createElement: () => ({
+      style: {},
+      classList: { add: () => {}, remove: () => {}, toggle: () => {} },
+      setAttribute: () => {},
+      getAttribute: () => null,
+      appendChild: () => {},
+      addEventListener: () => {},
+    }),
+    body: { appendChild: () => {}, style: {} },
+    documentElement: { style: {} },
+  };
+  globalThis.navigator = { userAgent: 'node' };
+  globalThis.localStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  };
+  globalThis.sessionStorage = {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  };
+  globalThis.MutationObserver = class {
+    observe() {}
+    disconnect() {}
+  };
+  globalThis.IntersectionObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  globalThis.ResizeObserver = class {
+    observe() {}
+    disconnect() {}
+    unobserve() {}
+  };
+  globalThis.matchMedia = () => ({
+    matches: false,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  });
+  globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+  globalThis.getComputedStyle = () => ({});
+  globalThis.CustomEvent = class CustomEvent {
+    constructor(type, options) {
+      this.type = type;
+      this.detail = options?.detail;
+    }
+  };
+  globalThis.fetch = () => Promise.resolve({ ok: true, json: () => ({}) });
+}
 
 // Since this is a browser module, we need to mock the DOM and dependencies
 // For now, we test the factory function and basic structure
@@ -84,6 +178,8 @@ describe('album-display module', () => {
         getTrackName: mock.fn((t) =>
           typeof t === 'string' ? t : t?.name || ''
         ),
+        getTrackLength: mock.fn(() => ''),
+        formatTrackTime: mock.fn(() => ''),
       };
 
       const module = createAlbumDisplay(mockDeps);
@@ -176,6 +272,8 @@ describe('album-display module', () => {
         getTrackName: mock.fn((t) =>
           typeof t === 'string' ? t : t?.name || ''
         ),
+        getTrackLength: mock.fn(() => ''),
+        formatTrackTime: mock.fn(() => ''),
       };
 
       const module = createAlbumDisplay(mockDeps);
@@ -260,12 +358,30 @@ describe('album-display module', () => {
       assert.strictEqual(result, 'FULL_REBUILD');
     });
 
-    it('should return FULL_REBUILD when lengths differ', () => {
+    it('should return SINGLE_ADD when one album is added', () => {
       const module = createAlbumDisplay({});
       const oldAlbums = [{ artist: 'A', album: '1', release_date: '' }];
       const newAlbums = [
         { artist: 'A', album: '1', release_date: '' },
         { artist: 'B', album: '2', release_date: '' },
+      ];
+      const result = module.detectUpdateType(oldAlbums, newAlbums);
+      assert.strictEqual(result.type, 'SINGLE_ADD');
+      assert.strictEqual(result.index, 1);
+      assert.deepStrictEqual(result.album, {
+        artist: 'B',
+        album: '2',
+        release_date: '',
+      });
+    });
+
+    it('should return FULL_REBUILD when multiple albums differ', () => {
+      const module = createAlbumDisplay({});
+      const oldAlbums = [{ artist: 'A', album: '1', release_date: '' }];
+      const newAlbums = [
+        { artist: 'B', album: '2', release_date: '' },
+        { artist: 'C', album: '3', release_date: '' },
+        { artist: 'D', album: '4', release_date: '' },
       ];
       const result = module.detectUpdateType(oldAlbums, newAlbums);
       assert.strictEqual(result, 'FULL_REBUILD');
