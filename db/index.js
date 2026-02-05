@@ -6,9 +6,9 @@ const {
   Pool,
   waitForPostgres,
   warmConnections,
-  reportPoolMetrics,
 } = require('./postgres');
 const logger = require('../utils/logger');
+const { setPoolReference } = require('../utils/metrics');
 
 async function ensureTables(pool) {
   await pool.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
@@ -176,13 +176,13 @@ if (process.env.DATABASE_URL) {
   logger.info('Using PostgreSQL backend');
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 30, // Increase max connections for better performance with more resources
-    min: 10, // Keep more connections warm for faster response
-    idleTimeoutMillis: 600000, // 10 minutes - longer idle timeout for stability
+    max: 30, // Maximum connections for burst capacity
+    min: 2, // Keep fewer connections warm to reduce idle resource usage
+    idleTimeoutMillis: 300000, // 5 minutes - release idle connections sooner
     connectionTimeoutMillis: 5000, // 5 seconds - more reasonable for production
     acquireTimeoutMillis: 5000, // 5 seconds - prevent cascade failures
     keepAlive: true, // Enable TCP keep-alive
-    keepAliveInitialDelayMillis: 10000, // 10 second initial delay for keep-alive
+    keepAliveInitialDelayMillis: 60000, // 60 seconds - less aggressive keep-alive probing
     statement_timeout: 60000, // 60 seconds for complex queries
     query_timeout: 60000, // 60 seconds query timeout
     allowExitOnIdle: false, // Don't exit when idle
@@ -411,12 +411,8 @@ if (process.env.DATABASE_URL) {
     })
     .then(() => {
       logger.info('Database ready');
-      // Start periodic pool metrics reporting (every 15 seconds)
-      setInterval(() => {
-        reportPoolMetrics(pool);
-      }, 15000);
-      // Report initial metrics
-      reportPoolMetrics(pool);
+      // Register pool reference for pull-based metrics (collected on /metrics scrape)
+      setPoolReference(pool);
     })
     .catch((err) => {
       logger.error('Database initialization error', {
@@ -443,5 +439,4 @@ module.exports = {
   dataDir,
   ready,
   pool,
-  reportPoolMetrics: () => reportPoolMetrics(pool),
 };

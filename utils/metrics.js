@@ -4,9 +4,11 @@ const client = require('prom-client');
 const register = new client.Registry();
 
 // Add default metrics (CPU, memory, event loop, etc.)
+// eventLoopMonitoringPrecision: 500ms (default 10ms) to reduce idle CPU wake-ups
 client.collectDefaultMetrics({
   register,
   prefix: 'sushe_',
+  eventLoopMonitoringPrecision: 500,
 });
 
 // ============================================
@@ -140,13 +142,28 @@ const dbQueryDuration = new client.Histogram({
 });
 
 /**
+ * Database connection pool reference for pull-based metrics collection.
+ * Set via setPoolReference() after pool initialization.
+ */
+let _pool = null;
+
+/**
  * Database connection pool size gauge
+ * Uses a collect callback to read pool stats on-demand when /metrics is scraped,
+ * instead of pushing values on a 15-second setInterval.
  */
 const dbPoolSize = new client.Gauge({
   name: 'sushe_db_pool_size',
   help: 'Number of connections in the database pool',
   labelNames: ['state'], // 'total', 'idle', 'waiting'
   registers: [register],
+  collect() {
+    if (_pool) {
+      this.labels('total').set(_pool.totalCount || 0);
+      this.labels('idle').set(_pool.idleCount || 0);
+      this.labels('waiting').set(_pool.waitingCount || 0);
+    }
+  },
 });
 
 // ============================================
@@ -320,18 +337,20 @@ function decWebsocketConnections() {
 }
 
 /**
- * Update database pool metrics
- * @param {Object} poolStats - Pool statistics
- * @param {number} poolStats.total - Total connections
- * @param {number} poolStats.idle - Idle connections
- * @param {number} poolStats.waiting - Waiting clients
+ * Store a reference to the database pool for pull-based metrics collection.
+ * Call this once after pool initialization instead of using a setInterval.
+ * @param {Object} pool - pg Pool instance
  */
-function updateDbPoolMetrics(poolStats) {
-  if (poolStats) {
-    dbPoolSize.labels('total').set(poolStats.total || 0);
-    dbPoolSize.labels('idle').set(poolStats.idle || 0);
-    dbPoolSize.labels('waiting').set(poolStats.waiting || 0);
-  }
+function setPoolReference(pool) {
+  _pool = pool;
+}
+
+/**
+ * Update database pool metrics (no-op, kept for backward compatibility).
+ * Pool metrics are now collected on-demand via the dbPoolSize gauge's collect callback.
+ */
+function updateDbPoolMetrics() {
+  // No-op: pool metrics are now collected pull-based via setPoolReference + collect callback
 }
 
 /**
@@ -430,6 +449,7 @@ module.exports = {
   recordClaudeUsage,
   incWebsocketConnections,
   decWebsocketConnections,
+  setPoolReference,
   updateDbPoolMetrics,
   updateUptime,
   getMetrics,

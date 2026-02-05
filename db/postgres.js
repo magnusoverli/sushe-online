@@ -1,7 +1,7 @@
 const { Pool } = require('pg');
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { observeDbQuery, updateDbPoolMetrics } = require('../utils/metrics');
+const { observeDbQuery } = require('../utils/metrics');
 
 async function waitForPostgres(pool, retries = 10, interval = 3000) {
   logger.info('Checking PostgreSQL connection...');
@@ -647,33 +647,9 @@ class PgDatastore {
   }
 }
 
-/**
- * Get pool statistics for metrics
- * @param {Pool} pool - pg Pool instance
- * @returns {Object} Pool statistics
- */
-function getPoolStats(pool) {
-  if (!pool) return { total: 0, idle: 0, waiting: 0 };
-  return {
-    total: pool.totalCount || 0,
-    idle: pool.idleCount || 0,
-    waiting: pool.waitingCount || 0,
-  };
-}
-
-/**
- * Update pool metrics from a pool instance
- * @param {Pool} pool - pg Pool instance
- */
-function reportPoolMetrics(pool) {
-  const stats = getPoolStats(pool);
-  updateDbPoolMetrics(stats);
-}
-
 module.exports = {
   PgDatastore,
   Pool,
   waitForPostgres,
   warmConnections,
-  reportPoolMetrics,
 };
