@@ -30,15 +30,26 @@ echo "=== Phase 1: Unit tests (parallel) ==="
 node --test "${UNIT_TESTS[@]}"
 
 # Phase 2: Run integration tests one at a time (each creates its own DB pool)
-# Run all even if one fails, then report the overall result at the end.
+# These require PostgreSQL and the app server to be running.
+# Skip gracefully in CI or when infrastructure is not available.
 INTEGRATION_EXIT=0
 echo "=== Phase 2: Integration tests (serial) ==="
-for f in "${INTEGRATION_TESTS[@]}"; do
-  if [ -f "$f" ]; then
-    echo "--- Running $f ---"
-    node --test "$f" || INTEGRATION_EXIT=1
-  fi
-done
+
+# Check if PostgreSQL is reachable (integration tests need it)
+if [ -n "$DATABASE_URL" ] && node -e "
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 3000 });
+  pool.query('SELECT 1').then(() => { pool.end(); process.exit(0); }).catch(() => { pool.end(); process.exit(1); });
+" 2>/dev/null; then
+  for f in "${INTEGRATION_TESTS[@]}"; do
+    if [ -f "$f" ]; then
+      echo "--- Running $f ---"
+      node --test "$f" || INTEGRATION_EXIT=1
+    fi
+  done
+else
+  echo "Skipping integration tests (no database connection available)"
+fi
 
 exit $INTEGRATION_EXIT
 
