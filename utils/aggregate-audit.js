@@ -14,6 +14,7 @@
 
 const logger = require('./logger');
 const { findPotentialDuplicates, normalizeAlbumKey } = require('./fuzzy-match');
+const { withTransaction } = require('../db/transaction');
 
 /**
  * Basic normalization (lowercase + trim only)
@@ -41,12 +42,9 @@ function basicNormalizeAlbumKey(artist, album) {
  * @returns {Promise<Object>} Result of the fix
  */
 async function applyFixTransaction(pool, log, year, preview) {
-  const client = await pool.connect();
   let totalUpdated = 0;
 
-  try {
-    await client.query('BEGIN');
-
+  await withTransaction(pool, async (client) => {
     for (const change of preview.changes) {
       for (const entry of change.affectedEntries) {
         const updateResult = await client.query(
@@ -65,27 +63,19 @@ async function applyFixTransaction(pool, log, year, preview) {
         totalUpdated += updateResult.rowCount;
       }
     }
+  });
 
-    await client.query('COMMIT');
+  log.info(`Aggregate fix for ${year}: Updated ${totalUpdated} list_items`);
 
-    log.info(`Aggregate fix for ${year}: Updated ${totalUpdated} list_items`);
-
-    return {
-      year,
-      executedAt: new Date().toISOString(),
-      dryRun: false,
-      success: true,
-      message: `Successfully updated ${totalUpdated} list_items`,
-      changesApplied: totalUpdated,
-      details: preview.changes,
-    };
-  } catch (err) {
-    await client.query('ROLLBACK');
-    log.error(`Aggregate fix failed for ${year}: ${err.message}`);
-    throw err;
-  } finally {
-    client.release();
-  }
+  return {
+    year,
+    executedAt: new Date().toISOString(),
+    dryRun: false,
+    success: true,
+    message: `Successfully updated ${totalUpdated} list_items`,
+    changesApplied: totalUpdated,
+    details: preview.changes,
+  };
 }
 
 /**
@@ -851,12 +841,9 @@ function createAggregateAudit(deps = {}) {
     const affectedYears = [...new Set(affectedLists.map((l) => l.year))];
 
     // Perform merge in transaction
-    const client = await pool.connect();
     let updatedCount = 0;
 
-    try {
-      await client.query('BEGIN');
-
+    await withTransaction(pool, async (client) => {
       // Update list_items to use canonical album_id
       // Note: syncMetadata option is now a no-op since list_items no longer stores
       // album metadata - all metadata comes from the canonical albums table
@@ -896,40 +883,32 @@ function createAggregateAudit(deps = {}) {
           adminUserId,
         ]
       );
+    });
 
-      await client.query('COMMIT');
+    log.info(
+      `Merged manual album: ${updatedCount} list_items updated, ` +
+        `${affectedLists.length} lists affected, years: ${affectedYears.join(', ')}`
+    );
 
-      log.info(
-        `Merged manual album: ${updatedCount} list_items updated, ` +
-          `${affectedLists.length} lists affected, years: ${affectedYears.join(', ')}`
-      );
-
-      return {
-        success: true,
-        manualAlbumId,
-        canonicalAlbumId,
-        updatedListItems: updatedCount,
-        affectedLists: affectedLists.map((l) => ({
-          listId: l.list_id,
-          listName: l.list_name,
-          year: l.year,
-          username: l.username,
-        })),
-        affectedYears,
-        syncedMetadata: syncMetadata
-          ? {
-              artist: canonicalAlbum.artist,
-              album: canonicalAlbum.album,
-            }
-          : null,
-      };
-    } catch (err) {
-      await client.query('ROLLBACK');
-      log.error(`Failed to merge manual album: ${err.message}`);
-      throw err;
-    } finally {
-      client.release();
-    }
+    return {
+      success: true,
+      manualAlbumId,
+      canonicalAlbumId,
+      updatedListItems: updatedCount,
+      affectedLists: affectedLists.map((l) => ({
+        listId: l.list_id,
+        listName: l.list_name,
+        year: l.year,
+        username: l.username,
+      })),
+      affectedYears,
+      syncedMetadata: syncMetadata
+        ? {
+            artist: canonicalAlbum.artist,
+            album: canonicalAlbum.album,
+          }
+        : null,
+    };
   }
 
   return {

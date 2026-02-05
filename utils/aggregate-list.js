@@ -1,6 +1,7 @@
 const logger = require('./logger');
 const { normalizeAlbumKey } = require('./fuzzy-match');
 const { POSITION_POINTS, getPositionPoints } = require('./scoring');
+const { withTransaction } = require('../db/transaction');
 
 // ============================================
 // AGGREGATION HELPER FUNCTIONS
@@ -389,33 +390,28 @@ async function queryEligibleUsers(pool, year) {
  * Bulk set contributors for a year (transaction)
  */
 async function setContributorsTransaction(pool, year, userIds, addedBy, log) {
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-
-    await client.query(
-      'DELETE FROM aggregate_list_contributors WHERE year = $1',
-      [year]
-    );
-
-    if (userIds.length > 0) {
-      const values = userIds
-        .map((_, i) => `($1, $${i + 2}, $${userIds.length + 2})`)
-        .join(', ');
+    await withTransaction(pool, async (client) => {
       await client.query(
-        `INSERT INTO aggregate_list_contributors (year, user_id, added_by) VALUES ${values}`,
-        [year, ...userIds, addedBy]
+        'DELETE FROM aggregate_list_contributors WHERE year = $1',
+        [year]
       );
-    }
 
-    await client.query('COMMIT');
+      if (userIds.length > 0) {
+        const values = userIds
+          .map((_, i) => `($1, $${i + 2}, $${userIds.length + 2})`)
+          .join(', ');
+        await client.query(
+          `INSERT INTO aggregate_list_contributors (year, user_id, added_by) VALUES ${values}`,
+          [year, ...userIds, addedBy]
+        );
+      }
+    });
+
     return { success: true, count: userIds.length };
   } catch (err) {
-    await client.query('ROLLBACK');
     log.error(`Error setting contributors: ${err.message}`);
     throw err;
-  } finally {
-    client.release();
   }
 }
 

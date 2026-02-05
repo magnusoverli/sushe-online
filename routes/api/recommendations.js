@@ -11,6 +11,7 @@
 
 const { ensureAdmin } = require('../../middleware/auth');
 const { validateYearParam } = require('../../middleware/validate-params');
+const { withTransaction, TransactionAbort } = require('../../db/transaction');
 
 /**
  * Register recommendations routes
@@ -215,13 +216,16 @@ module.exports = (appInstance, deps) => {
         }
 
         // Start transaction
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
+        const timestamp = new Date();
+        const _id = crypto.randomBytes(12).toString('hex');
 
+        const albumId = await withTransaction(pool, async (client) => {
           // Upsert album to canonical albums table
-          const timestamp = new Date();
-          const albumId = await upsertAlbumRecord(album, timestamp, client);
+          const upsertedAlbumId = await upsertAlbumRecord(
+            album,
+            timestamp,
+            client
+          );
 
           // Check if album already recommended for this year
           const existing = await client.query(
@@ -229,96 +233,90 @@ module.exports = (appInstance, deps) => {
            FROM recommendations r 
            JOIN users u ON r.recommended_by = u._id
            WHERE r.year = $1 AND r.album_id = $2`,
-            [year, albumId]
+            [year, upsertedAlbumId]
           );
 
           if (existing.rows.length > 0) {
-            await client.query('ROLLBACK');
-            return res.status(409).json({
+            throw new TransactionAbort(409, {
               error: `This album was already recommended by ${existing.rows[0].username}`,
               recommended_by: existing.rows[0].username,
             });
           }
 
-          // Generate unique ID for recommendation
-          const _id = crypto.randomBytes(12).toString('hex');
-
           // Insert recommendation
           await client.query(
             `INSERT INTO recommendations (_id, year, album_id, recommended_by, reasoning, created_at)
            VALUES ($1, $2, $3, $4, $5, NOW())`,
-            [_id, year, albumId, req.user._id, trimmedReasoning]
+            [_id, year, upsertedAlbumId, req.user._id, trimmedReasoning]
           );
 
-          await client.query('COMMIT');
+          return upsertedAlbumId;
+        });
 
-          logger.info('Album recommended', {
-            year,
-            albumId,
-            userId: req.user._id,
-            username: req.user.username,
-          });
+        logger.info('Album recommended', {
+          year,
+          albumId,
+          userId: req.user._id,
+          username: req.user.username,
+        });
 
-          // Send Telegram notification (fire-and-forget)
-          const telegramNotifier = app.locals.telegramNotifier;
-          if (telegramNotifier?.sendRecommendationNotification) {
-            // Fetch cover image from database for direct upload
-            (async () => {
-              try {
-                let coverImage = null;
-                const coverResult = await pool.query(
-                  'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
-                  [albumId]
-                );
-                if (
-                  coverResult.rows.length > 0 &&
-                  coverResult.rows[0].cover_image
-                ) {
-                  const row = coverResult.rows[0];
-                  // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
-                  const imageBuffer = Buffer.isBuffer(row.cover_image)
-                    ? row.cover_image
-                    : Buffer.from(row.cover_image, 'base64');
-                  coverImage = {
-                    buffer: imageBuffer,
-                    format: row.cover_image_format || 'jpeg',
-                  };
-                }
-
-                await telegramNotifier.sendRecommendationNotification(
-                  {
-                    artist: album.artist,
-                    album: album.album,
-                    album_id: albumId,
-                    release_date: album.release_date,
-                    year,
-                    recommended_by: req.user.username,
-                    reasoning: trimmedReasoning,
-                  },
-                  coverImage
-                );
-              } catch (err) {
-                logger.warn('Failed to send Telegram notification', {
-                  error: err.message,
-                });
+        // Send Telegram notification (fire-and-forget)
+        const telegramNotifier = app.locals.telegramNotifier;
+        if (telegramNotifier?.sendRecommendationNotification) {
+          // Fetch cover image from database for direct upload
+          (async () => {
+            try {
+              let coverImage = null;
+              const coverResult = await pool.query(
+                'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
+                [albumId]
+              );
+              if (
+                coverResult.rows.length > 0 &&
+                coverResult.rows[0].cover_image
+              ) {
+                const row = coverResult.rows[0];
+                // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
+                const imageBuffer = Buffer.isBuffer(row.cover_image)
+                  ? row.cover_image
+                  : Buffer.from(row.cover_image, 'base64');
+                coverImage = {
+                  buffer: imageBuffer,
+                  format: row.cover_image_format || 'jpeg',
+                };
               }
-            })();
-          }
 
-          res.status(201).json({
-            success: true,
-            _id,
-            album_id: albumId,
-            year,
-            recommended_by: req.user.username,
-          });
-        } catch (err) {
-          await client.query('ROLLBACK');
-          throw err;
-        } finally {
-          client.release();
+              await telegramNotifier.sendRecommendationNotification(
+                {
+                  artist: album.artist,
+                  album: album.album,
+                  album_id: albumId,
+                  release_date: album.release_date,
+                  year,
+                  recommended_by: req.user.username,
+                  reasoning: trimmedReasoning,
+                },
+                coverImage
+              );
+            } catch (err) {
+              logger.warn('Failed to send Telegram notification', {
+                error: err.message,
+              });
+            }
+          })();
         }
+
+        res.status(201).json({
+          success: true,
+          _id,
+          album_id: albumId,
+          year,
+          recommended_by: req.user.username,
+        });
       } catch (err) {
+        if (err instanceof TransactionAbort) {
+          return res.status(err.statusCode).json(err.body);
+        }
         logger.error('Error adding recommendation', {
           error: err.message,
           year: req.params.year,
@@ -673,10 +671,7 @@ module.exports = (appInstance, deps) => {
           return res.status(400).json({ error: 'userIds must be an array' });
         }
 
-        const client = await pool.connect();
-        try {
-          await client.query('BEGIN');
-
+        await withTransaction(pool, async (client) => {
           // Clear existing access for this year
           await client.query(
             'DELETE FROM recommendation_access WHERE year = $1',
@@ -694,30 +689,23 @@ module.exports = (appInstance, deps) => {
               [year, ...userIds, req.user._id]
             );
           }
+        });
 
-          await client.query('COMMIT');
+        logger.info('Admin action', {
+          action: 'set_recommendation_access',
+          adminId: req.user._id,
+          adminEmail: req.user.email,
+          year,
+          userCount: userIds.length,
+          ip: req.ip,
+        });
 
-          logger.info('Admin action', {
-            action: 'set_recommendation_access',
-            adminId: req.user._id,
-            adminEmail: req.user.email,
-            year,
-            userCount: userIds.length,
-            ip: req.ip,
-          });
-
-          res.json({
-            success: true,
-            year,
-            isRestricted: userIds.length > 0,
-            userCount: userIds.length,
-          });
-        } catch (err) {
-          await client.query('ROLLBACK');
-          throw err;
-        } finally {
-          client.release();
-        }
+        res.json({
+          success: true,
+          year,
+          isRestricted: userIds.length > 0,
+          userCount: userIds.length,
+        });
       } catch (err) {
         logger.error('Error setting recommendation access', {
           error: err.message,

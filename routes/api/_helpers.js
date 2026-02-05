@@ -223,12 +223,37 @@ function createHelpers(deps) {
     }
   }
 
+  /**
+   * Invalidate list-related caches for a specific user.
+   * Consolidates the repeated cache invalidation pattern used across list route handlers.
+   *
+   * @param {string} userId - The user ID whose caches to invalidate
+   * @param {string|null} [listId=null] - Optional specific list ID to invalidate
+   * @param {Object} [options] - Additional options
+   * @param {boolean} [options.full=true] - Also invalidate the ?full=true variant
+   * @param {boolean} [options.groups=false] - Also invalidate groups cache
+   */
+  function invalidateListCaches(userId, listId = null, options = {}) {
+    const { full = true, groups = false } = options;
+    if (listId) {
+      responseCache.invalidate(`GET:/api/lists/${listId}:${userId}`);
+    }
+    responseCache.invalidate(`GET:/api/lists:${userId}`);
+    if (full) {
+      responseCache.invalidate(`GET:/api/lists?full=true:${userId}`);
+    }
+    if (groups) {
+      responseCache.invalidate(`GET:/api/groups:${userId}`);
+    }
+  }
+
   return {
     triggerAggregateListRecompute,
     triggerAlbumSummaryFetch,
     upsertAlbumRecord,
     batchUpsertAlbumRecords,
     invalidateCachesForAlbumUsers,
+    invalidateListCaches,
     aggregateList,
     albumCanonical,
   };

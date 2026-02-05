@@ -9,6 +9,7 @@
  */
 
 const { findPotentialDuplicates } = require('../../utils/fuzzy-match');
+const { withTransaction } = require('../../db/transaction');
 
 /**
  * Register album routes
@@ -297,14 +298,11 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Maximum 50 updates per batch' });
       }
 
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
+      const timestamp = new Date();
+      let successCount = 0;
+      const albumIds = new Set();
 
-        const timestamp = new Date();
-        let successCount = 0;
-        const albumIds = new Set();
-
+      await withTransaction(pool, async (client) => {
         for (const update of updates) {
           const { albumId, country, genre_1, genre_2 } = update;
 
@@ -347,27 +345,20 @@ module.exports = (app, deps) => {
             albumIds.add(albumId);
           }
         }
+      });
 
-        await client.query('COMMIT');
-
-        // Invalidate caches for all affected albums
-        for (const albumId of albumIds) {
-          await invalidateCachesForAlbumUsers(albumId);
-        }
-
-        logger.info('Batch album update completed', {
-          userId: req.user._id,
-          requestedCount: updates.length,
-          successCount,
-        });
-
-        res.json({ success: true, updated: successCount });
-      } catch (err) {
-        await client.query('ROLLBACK');
-        throw err;
-      } finally {
-        client.release();
+      // Invalidate caches for all affected albums
+      for (const albumId of albumIds) {
+        await invalidateCachesForAlbumUsers(albumId);
       }
+
+      logger.info('Batch album update completed', {
+        userId: req.user._id,
+        requestedCount: updates.length,
+        successCount,
+      });
+
+      res.json({ success: true, updated: successCount });
     } catch (err) {
       logger.error('Error batch updating albums', {
         error: err.message,
