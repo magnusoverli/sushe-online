@@ -4,9 +4,9 @@
  * Shared string normalization functions for matching artists, albums,
  * and genres across different data sources (Spotify, Last.fm, MusicBrainz, etc.)
  *
- * IMPORTANT: These functions are used both server-side and have browser-side
- * equivalents in src/js/modules/normalization.js. When modifying normalization logic,
- * ensure consistency between server and browser implementations.
+ * IMPORTANT: This is the single source of truth for normalization logic.
+ * The browser-side module (src/js/modules/normalization.js) re-exports from
+ * this file via a Vite alias, so changes here apply to both server and client.
  *
  * NOTE: Do NOT modify normalizeForComparison in utils/fuzzy-match.js -
  * it is used in production database migrations and must remain stable.
