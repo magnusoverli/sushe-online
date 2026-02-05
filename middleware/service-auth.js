@@ -2,7 +2,7 @@
  * Service Authentication Middleware
  *
  * Provides middleware for validating and refreshing tokens for
- * external music services (Spotify, Tidal).
+ * external music services (Spotify, Tidal, Last.fm).
  *
  * Uses dependency injection pattern for testability.
  */
@@ -66,9 +66,41 @@ function createServiceAuthMiddleware(deps) {
     }
   };
 
+  /**
+   * Middleware to ensure user has connected their Last.fm account
+   * Checks for lastfmUsername on the user object
+   */
+  const requireLastfmAuth = (req, res, next) => {
+    if (!req.user.lastfmUsername) {
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
+    }
+    next();
+  };
+
+  /**
+   * Middleware to ensure user has a valid Last.fm session key
+   * Required for write operations (scrobble, now-playing)
+   */
+  const requireLastfmSessionKey = (req, res, next) => {
+    if (!req.user.lastfmAuth?.session_key) {
+      return res.status(401).json({
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
+    }
+    next();
+  };
+
   return {
     requireSpotifyAuth,
     requireTidalAuth,
+    requireLastfmAuth,
+    requireLastfmSessionKey,
   };
 }
 

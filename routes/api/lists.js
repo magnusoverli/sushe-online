@@ -46,8 +46,14 @@ module.exports = (app, deps) => {
   } = require('../../utils/year-lock');
 
   const { withTransaction, TransactionAbort } = require('../../db/transaction');
+  const { buildPartialUpdate } = require('./_helpers');
 
-  const { invalidateListCaches } = deps.helpers;
+  const {
+    invalidateListCaches,
+    findOrCreateYearGroup,
+    findOrCreateUncategorizedGroup,
+    deleteGroupIfEmptyAutoGroup,
+  } = deps.helpers;
 
   /**
    * Helper to find a list by ID and verify ownership
@@ -665,70 +671,16 @@ module.exports = (app, deps) => {
           resultYear = groupResult.rows[0].year; // Inherit year from group
         } else if (year !== undefined && year !== null) {
           // Create/find year group
-          const yearValidation = validateYear(year);
-          if (!yearValidation.valid) {
-            throw new TransactionAbort(400, { error: yearValidation.error });
-          }
-          resultYear = yearValidation.value;
-
-          let yearGroupResult = await client.query(
-            `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
-            [req.user._id, resultYear]
+          const yearGroup = await findOrCreateYearGroup(
+            client,
+            req.user._id,
+            year
           );
-
-          if (yearGroupResult.rows.length === 0) {
-            const newGroupId = crypto.randomBytes(12).toString('hex');
-            const maxOrder = await client.query(
-              `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-              [req.user._id]
-            );
-
-            await client.query(
-              `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-              [
-                newGroupId,
-                req.user._id,
-                String(resultYear),
-                resultYear,
-                maxOrder.rows[0].next_order,
-              ]
-            );
-
-            yearGroupResult = await client.query(
-              `SELECT id FROM list_groups WHERE _id = $1`,
-              [newGroupId]
-            );
-          }
-
-          groupId = yearGroupResult.rows[0].id;
+          groupId = yearGroup.groupId;
+          resultYear = yearGroup.year;
         } else {
           // Default to Uncategorized group
-          let uncatResult = await client.query(
-            `SELECT id FROM list_groups WHERE user_id = $1 AND name = 'Uncategorized' AND year IS NULL`,
-            [req.user._id]
-          );
-
-          if (uncatResult.rows.length === 0) {
-            const newGroupId = crypto.randomBytes(12).toString('hex');
-            const maxOrder = await client.query(
-              `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-              [req.user._id]
-            );
-
-            await client.query(
-              `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-               VALUES ($1, $2, 'Uncategorized', NULL, $3, NOW(), NOW())`,
-              [newGroupId, req.user._id, maxOrder.rows[0].next_order]
-            );
-
-            uncatResult = await client.query(
-              `SELECT id FROM list_groups WHERE _id = $1`,
-              [newGroupId]
-            );
-          }
-
-          groupId = uncatResult.rows[0].id;
+          groupId = await findOrCreateUncategorizedGroup(client, req.user._id);
         }
 
         // Check for duplicate name within the same group
@@ -948,9 +900,7 @@ module.exports = (app, deps) => {
         }
 
         const list = listResult.rows[0];
-        const fieldUpdates = [];
-        const values = [];
-        let paramIndex = 1;
+        const fields = [];
 
         let targetGroupId = list.group_id;
         let targetYear = list.year;
@@ -975,11 +925,8 @@ module.exports = (app, deps) => {
           targetGroupId = groupResult.rows[0].id;
           targetYear = groupResult.rows[0].year;
 
-          fieldUpdates.push(`group_id = $${paramIndex++}`);
-          values.push(targetGroupId);
-
-          fieldUpdates.push(`year = $${paramIndex++}`);
-          values.push(targetYear);
+          fields.push({ column: 'group_id', value: targetGroupId });
+          fields.push({ column: 'year', value: targetYear });
         } else if (year !== undefined) {
           // Handle year change without group change
           const yearValidation = validateYear(year);
@@ -988,8 +935,7 @@ module.exports = (app, deps) => {
           }
           targetYear = year === null ? null : yearValidation.value;
 
-          fieldUpdates.push(`year = $${paramIndex++}`);
-          values.push(targetYear);
+          fields.push({ column: 'year', value: targetYear });
         }
 
         // Check if main list is locked (only main lists are locked in locked years)
@@ -1039,23 +985,15 @@ module.exports = (app, deps) => {
             }
           }
 
-          fieldUpdates.push(`name = $${paramIndex++}`);
-          values.push(trimmedName);
+          fields.push({ column: 'name', value: trimmedName });
         }
 
-        if (fieldUpdates.length === 0) {
+        if (fields.length === 0) {
           throw new TransactionAbort(400, { error: 'No updates provided' });
         }
 
-        fieldUpdates.push(`updated_at = $${paramIndex++}`);
-        values.push(new Date());
-
-        values.push(list.id);
-
-        await client.query(
-          `UPDATE lists SET ${fieldUpdates.join(', ')} WHERE id = $${paramIndex}`,
-          values
-        );
+        const update = buildPartialUpdate('lists', 'id', list.id, fields);
+        await client.query(update.query, update.values);
 
         return { list, targetYear };
       });
@@ -1653,34 +1591,8 @@ module.exports = (app, deps) => {
         // Delete list
         await client.query('DELETE FROM lists WHERE id = $1', [foundList.id]);
 
-        // Check if group is now empty
-        if (foundList.group_id) {
-          const groupCount = await client.query(
-            `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
-            [foundList.group_id]
-          );
-
-          if (parseInt(groupCount.rows[0].count, 10) === 0) {
-            const groupResult = await client.query(
-              `SELECT year, name FROM list_groups WHERE id = $1`,
-              [foundList.group_id]
-            );
-
-            if (groupResult.rows.length > 0) {
-              const isYearGroup = groupResult.rows[0].year !== null;
-              const isUncategorized =
-                groupResult.rows[0].name === 'Uncategorized' &&
-                groupResult.rows[0].year === null;
-
-              // Auto-delete year-groups and "Uncategorized" when empty
-              if (isYearGroup || isUncategorized) {
-                await client.query(`DELETE FROM list_groups WHERE id = $1`, [
-                  foundList.group_id,
-                ]);
-              }
-            }
-          }
-        }
+        // Auto-delete empty year-groups and "Uncategorized"
+        await deleteGroupIfEmptyAutoGroup(client, foundList.group_id);
 
         return foundList;
       });

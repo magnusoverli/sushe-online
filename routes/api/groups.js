@@ -20,12 +20,17 @@ module.exports = (app, deps) => {
     logger,
     crypto,
     responseCache,
-    validateYear,
-    helpers: { triggerAggregateListRecompute },
+    helpers: {
+      triggerAggregateListRecompute,
+      findOrCreateYearGroup,
+      findOrCreateUncategorizedGroup,
+      deleteGroupIfEmptyAutoGroup,
+    },
   } = deps;
 
   const { isYearLocked } = require('../../utils/year-lock');
   const { withTransaction, TransactionAbort } = require('../../db/transaction');
+  const { buildPartialUpdate } = require('./_helpers');
 
   // Get all groups for the current user (with list counts)
   app.get('/api/groups', ensureAuthAPI, async (req, res) => {
@@ -204,36 +209,25 @@ module.exports = (app, deps) => {
       }
 
       // Build update query
-      const updates = [];
-      const values = [];
-      let paramIndex = 1;
+      const fields = [];
 
       if (name !== undefined) {
-        updates.push(`name = $${paramIndex++}`);
-        values.push(name.trim());
+        fields.push({ column: 'name', value: name.trim() });
       }
 
       if (sortOrder !== undefined) {
         if (typeof sortOrder !== 'number' || sortOrder < 0) {
           return res.status(400).json({ error: 'Invalid sort order' });
         }
-        updates.push(`sort_order = $${paramIndex++}`);
-        values.push(sortOrder);
+        fields.push({ column: 'sort_order', value: sortOrder });
       }
 
-      if (updates.length === 0) {
+      if (fields.length === 0) {
         return res.status(400).json({ error: 'No updates provided' });
       }
 
-      updates.push(`updated_at = $${paramIndex++}`);
-      values.push(new Date());
-
-      values.push(group.id);
-
-      await pool.query(
-        `UPDATE list_groups SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
-        values
-      );
+      const update = buildPartialUpdate('list_groups', 'id', group.id, fields);
+      await pool.query(update.query, update.values);
 
       // Invalidate cache
       responseCache.invalidate(`GET:/api/groups:${req.user._id}`);
@@ -313,35 +307,10 @@ module.exports = (app, deps) => {
       // Also clear is_main flag and year since uncategorized lists can't be main
       if (listCount > 0) {
         // Get or create "Uncategorized" group for this user
-        const uncategorizedResult = await pool.query(
-          `SELECT id FROM list_groups WHERE user_id = $1 AND name = $2 AND year IS NULL`,
-          [req.user._id, 'Uncategorized']
+        const uncategorizedId = await findOrCreateUncategorizedGroup(
+          pool,
+          req.user._id
         );
-
-        let uncategorizedId;
-        if (uncategorizedResult.rows.length === 0) {
-          // Create Uncategorized group
-          const newGroupId = crypto.randomBytes(12).toString('hex');
-          const maxOrder = await pool.query(
-            `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-            [req.user._id]
-          );
-
-          const insertResult = await pool.query(
-            `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-             VALUES ($1, $2, $3, NULL, $4, NOW(), NOW())
-             RETURNING id`,
-            [
-              newGroupId,
-              req.user._id,
-              'Uncategorized',
-              maxOrder.rows[0].next_order,
-            ]
-          );
-          uncategorizedId = insertResult.rows[0].id;
-        } else {
-          uncategorizedId = uncategorizedResult.rows[0].id;
-        }
 
         // Move lists to Uncategorized group
         await pool.query(
@@ -465,46 +434,13 @@ module.exports = (app, deps) => {
 
         if (year !== undefined) {
           // Moving to a year-group
-          const yearValidation = validateYear(year);
-          if (!yearValidation.valid) {
-            throw new TransactionAbort(400, { error: yearValidation.error });
-          }
-
-          targetYear = yearValidation.value;
-
-          // Find or create year-group
-          let yearGroupResult = await client.query(
-            `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
-            [req.user._id, targetYear]
+          const yearGroup = await findOrCreateYearGroup(
+            client,
+            req.user._id,
+            year
           );
-
-          if (yearGroupResult.rows.length === 0) {
-            // Create year-group
-            const newGroupId = crypto.randomBytes(12).toString('hex');
-            const maxOrder = await client.query(
-              `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
-              [req.user._id]
-            );
-
-            await client.query(
-              `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
-               VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-              [
-                newGroupId,
-                req.user._id,
-                String(targetYear),
-                targetYear,
-                maxOrder.rows[0].next_order,
-              ]
-            );
-
-            yearGroupResult = await client.query(
-              `SELECT id FROM list_groups WHERE _id = $1`,
-              [newGroupId]
-            );
-          }
-
-          targetGroupId = yearGroupResult.rows[0].id;
+          targetGroupId = yearGroup.groupId;
+          targetYear = yearGroup.year;
         } else {
           // Moving to an existing group (collection)
           const groupResult = await client.query(
@@ -566,35 +502,8 @@ module.exports = (app, deps) => {
           [targetGroupId, targetYear, maxOrder.rows[0].next_order, list.id]
         );
 
-        // Clean up empty year-groups
-        if (list.group_id) {
-          const oldGroupCount = await client.query(
-            `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
-            [list.group_id]
-          );
-
-          if (parseInt(oldGroupCount.rows[0].count, 10) === 0) {
-            // Check if old group was a year-group or "Uncategorized"
-            const oldGroupResult = await client.query(
-              `SELECT year, name FROM list_groups WHERE id = $1`,
-              [list.group_id]
-            );
-
-            if (oldGroupResult.rows.length > 0) {
-              const isYearGroupFlag = oldGroupResult.rows[0].year !== null;
-              const isUncategorized =
-                oldGroupResult.rows[0].name === 'Uncategorized' &&
-                oldGroupResult.rows[0].year === null;
-
-              // Auto-delete year-groups and "Uncategorized" when empty
-              if (isYearGroupFlag || isUncategorized) {
-                await client.query(`DELETE FROM list_groups WHERE id = $1`, [
-                  list.group_id,
-                ]);
-              }
-            }
-          }
-        }
+        // Auto-delete empty year-groups and "Uncategorized"
+        await deleteGroupIfEmptyAutoGroup(client, list.group_id);
 
         return { oldYear, targetYear, targetGroupId };
       });

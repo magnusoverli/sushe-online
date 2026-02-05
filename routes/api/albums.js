@@ -10,6 +10,7 @@
 
 const { findPotentialDuplicates } = require('../../utils/fuzzy-match');
 const { withTransaction } = require('../../db/transaction');
+const { buildPartialUpdate } = require('./_helpers');
 
 /**
  * Register album routes
@@ -240,29 +241,22 @@ module.exports = (app, deps) => {
       }
 
       // Build dynamic update query
-      const updates = [];
-      const params = [];
-      let paramIndex = 1;
-
+      const fields = [];
       if (genre_1 !== undefined) {
-        updates.push(`genre_1 = $${paramIndex++}`);
-        params.push(genre_1 ? genre_1.trim() : null);
+        fields.push({
+          column: 'genre_1',
+          value: genre_1 ? genre_1.trim() : null,
+        });
       }
-
       if (genre_2 !== undefined) {
-        updates.push(`genre_2 = $${paramIndex++}`);
-        params.push(genre_2 ? genre_2.trim() : null);
+        fields.push({
+          column: 'genre_2',
+          value: genre_2 ? genre_2.trim() : null,
+        });
       }
 
-      updates.push(`updated_at = $${paramIndex++}`);
-      params.push(new Date());
-
-      params.push(albumId);
-
-      await pool.query(
-        `UPDATE albums SET ${updates.join(', ')} WHERE album_id = $${paramIndex}`,
-        params
-      );
+      const update = buildPartialUpdate('albums', 'album_id', albumId, fields);
+      await pool.query(update.query, update.values);
 
       // Invalidate caches for ALL users who have this album
       await invalidateCachesForAlbumUsers(albumId);
@@ -309,35 +303,38 @@ module.exports = (app, deps) => {
           if (!albumId) continue;
 
           // Build dynamic update query
-          const setClauses = [];
-          const values = [];
-          let paramIndex = 1;
-
+          const fields = [];
           if (country !== undefined) {
-            setClauses.push(`country = $${paramIndex++}`);
-            values.push(country ? country.trim() : null);
+            fields.push({
+              column: 'country',
+              value: country ? country.trim() : null,
+            });
           }
-
           if (genre_1 !== undefined) {
-            setClauses.push(`genre_1 = $${paramIndex++}`);
-            values.push(genre_1 ? genre_1.trim() : null);
+            fields.push({
+              column: 'genre_1',
+              value: genre_1 ? genre_1.trim() : null,
+            });
           }
-
           if (genre_2 !== undefined) {
-            setClauses.push(`genre_2 = $${paramIndex++}`);
-            values.push(genre_2 ? genre_2.trim() : null);
+            fields.push({
+              column: 'genre_2',
+              value: genre_2 ? genre_2.trim() : null,
+            });
           }
 
-          if (setClauses.length === 0) continue;
-
-          setClauses.push(`updated_at = $${paramIndex++}`);
-          values.push(timestamp);
-
-          values.push(albumId);
+          const partialUpdate = buildPartialUpdate(
+            'albums',
+            'album_id',
+            albumId,
+            fields,
+            { timestamp }
+          );
+          if (!partialUpdate) continue;
 
           const result = await client.query(
-            `UPDATE albums SET ${setClauses.join(', ')} WHERE album_id = $${paramIndex}`,
-            values
+            partialUpdate.query,
+            partialUpdate.values
           );
 
           if (result.rowCount > 0) {

@@ -98,10 +98,16 @@ module.exports = (app, deps) => {
     logger,
     responseCache,
     app,
+    crypto,
   });
 
   // Create service auth middleware
-  const { requireSpotifyAuth, requireTidalAuth } = createServiceAuthMiddleware({
+  const {
+    requireSpotifyAuth,
+    requireTidalAuth,
+    requireLastfmAuth,
+    requireLastfmSessionKey,
+  } = createServiceAuthMiddleware({
     ensureValidSpotifyToken,
     ensureValidTidalToken,
     users,
@@ -138,6 +144,8 @@ module.exports = (app, deps) => {
     resetPasswordRateLimit,
     requireSpotifyAuth,
     requireTidalAuth,
+    requireLastfmAuth,
+    requireLastfmSessionKey,
 
     // Token validation
     ensureValidSpotifyToken,

@@ -285,4 +285,165 @@ test('Service Auth Middleware', async (t) => {
       }
     );
   });
+
+  await t.test('requireLastfmAuth', async (t) => {
+    await t.test(
+      'should call next() when user has lastfmUsername',
+      async () => {
+        const { requireLastfmAuth } = createServiceAuthMiddleware({
+          ensureValidSpotifyToken: async () => ({}),
+          ensureValidTidalToken: async () => ({}),
+          users: {},
+          logger: mockLogger,
+        });
+
+        const { req, res } = createMockReqRes({
+          _id: 'user123',
+          lastfmUsername: 'testuser',
+        });
+        let nextCalled = false;
+        const next = () => {
+          nextCalled = true;
+        };
+
+        requireLastfmAuth(req, res, next);
+
+        assert.strictEqual(nextCalled, true, 'next() should be called');
+        assert.strictEqual(res.statusCode, null, 'status should not be set');
+      }
+    );
+
+    await t.test(
+      'should return 401 when user has no lastfmUsername',
+      async () => {
+        const { requireLastfmAuth } = createServiceAuthMiddleware({
+          ensureValidSpotifyToken: async () => ({}),
+          ensureValidTidalToken: async () => ({}),
+          users: {},
+          logger: mockLogger,
+        });
+
+        const { req, res } = createMockReqRes({ _id: 'user123' });
+        let nextCalled = false;
+        const next = () => {
+          nextCalled = true;
+        };
+
+        requireLastfmAuth(req, res, next);
+
+        assert.strictEqual(nextCalled, false, 'next() should not be called');
+        assert.strictEqual(res.statusCode, 401, 'status should be 401');
+        assert.deepStrictEqual(res.jsonData, {
+          error: 'Last.fm not connected',
+          code: 'NOT_AUTHENTICATED',
+          service: 'lastfm',
+        });
+      }
+    );
+
+    await t.test(
+      'should return 401 when lastfmUsername is empty string',
+      async () => {
+        const { requireLastfmAuth } = createServiceAuthMiddleware({
+          ensureValidSpotifyToken: async () => ({}),
+          ensureValidTidalToken: async () => ({}),
+          users: {},
+          logger: mockLogger,
+        });
+
+        const { req, res } = createMockReqRes({
+          _id: 'user123',
+          lastfmUsername: '',
+        });
+        let nextCalled = false;
+        const next = () => {
+          nextCalled = true;
+        };
+
+        requireLastfmAuth(req, res, next);
+
+        assert.strictEqual(nextCalled, false, 'next() should not be called');
+        assert.strictEqual(res.statusCode, 401, 'status should be 401');
+      }
+    );
+  });
+
+  await t.test('requireLastfmSessionKey', async (t) => {
+    await t.test(
+      'should call next() when user has lastfmAuth.session_key',
+      async () => {
+        const { requireLastfmSessionKey } = createServiceAuthMiddleware({
+          ensureValidSpotifyToken: async () => ({}),
+          ensureValidTidalToken: async () => ({}),
+          users: {},
+          logger: mockLogger,
+        });
+
+        const { req, res } = createMockReqRes({
+          _id: 'user123',
+          lastfmAuth: { session_key: 'valid-session-key' },
+        });
+        let nextCalled = false;
+        const next = () => {
+          nextCalled = true;
+        };
+
+        requireLastfmSessionKey(req, res, next);
+
+        assert.strictEqual(nextCalled, true, 'next() should be called');
+        assert.strictEqual(res.statusCode, null, 'status should not be set');
+      }
+    );
+
+    await t.test('should return 401 when user has no lastfmAuth', async () => {
+      const { requireLastfmSessionKey } = createServiceAuthMiddleware({
+        ensureValidSpotifyToken: async () => ({}),
+        ensureValidTidalToken: async () => ({}),
+        users: {},
+        logger: mockLogger,
+      });
+
+      const { req, res } = createMockReqRes({ _id: 'user123' });
+      let nextCalled = false;
+      const next = () => {
+        nextCalled = true;
+      };
+
+      requireLastfmSessionKey(req, res, next);
+
+      assert.strictEqual(nextCalled, false, 'next() should not be called');
+      assert.strictEqual(res.statusCode, 401, 'status should be 401');
+      assert.deepStrictEqual(res.jsonData, {
+        error: 'Last.fm not connected',
+        code: 'NOT_AUTHENTICATED',
+        service: 'lastfm',
+      });
+    });
+
+    await t.test(
+      'should return 401 when lastfmAuth exists but has no session_key',
+      async () => {
+        const { requireLastfmSessionKey } = createServiceAuthMiddleware({
+          ensureValidSpotifyToken: async () => ({}),
+          ensureValidTidalToken: async () => ({}),
+          users: {},
+          logger: mockLogger,
+        });
+
+        const { req, res } = createMockReqRes({
+          _id: 'user123',
+          lastfmAuth: {},
+        });
+        let nextCalled = false;
+        const next = () => {
+          nextCalled = true;
+        };
+
+        requireLastfmSessionKey(req, res, next);
+
+        assert.strictEqual(nextCalled, false, 'next() should not be called');
+        assert.strictEqual(res.statusCode, 401, 'status should be 401');
+      }
+    );
+  });
 });

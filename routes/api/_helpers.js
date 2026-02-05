@@ -7,6 +7,8 @@
 // Import shared utilities
 const { createAggregateList } = require('../../utils/aggregate-list');
 const { createAlbumCanonical } = require('../../utils/album-canonical');
+const { validateYear } = require('../../validators');
+const { TransactionAbort } = require('../../db/transaction');
 
 /**
  * Create helper functions with injected dependencies
@@ -15,10 +17,11 @@ const { createAlbumCanonical } = require('../../utils/album-canonical');
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.responseCache - Response cache instance
  * @param {Object} deps.app - Express app instance
+ * @param {Object} deps.crypto - Node.js crypto module
  * @returns {Object} - Helper functions
  */
 function createHelpers(deps) {
-  const { pool, logger, responseCache, app } = deps;
+  const { pool, logger, responseCache, app, crypto } = deps;
 
   // Create aggregate list instance for recomputation triggers
   const aggregateList = createAggregateList({ pool, logger });
@@ -247,6 +250,119 @@ function createHelpers(deps) {
     }
   }
 
+  /**
+   * Find or create a year-group for a user.
+   * Validates the year, looks up an existing group, or creates one.
+   *
+   * @param {Object} queryable - Database client (transaction) or pool
+   * @param {string} userId - The user's _id
+   * @param {number|string} year - The year value to find/create a group for
+   * @returns {Promise<{groupId: number, year: number}>} The serial group id and validated year
+   * @throws {TransactionAbort} If year validation fails
+   */
+  async function findOrCreateYearGroup(queryable, userId, year) {
+    const yearValidation = validateYear(year);
+    if (!yearValidation.valid) {
+      throw new TransactionAbort(400, { error: yearValidation.error });
+    }
+    const validYear = yearValidation.value;
+
+    let result = await queryable.query(
+      `SELECT id FROM list_groups WHERE user_id = $1 AND year = $2`,
+      [userId, validYear]
+    );
+
+    if (result.rows.length === 0) {
+      const newGroupId = crypto.randomBytes(12).toString('hex');
+      const maxOrder = await queryable.query(
+        `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
+        [userId]
+      );
+
+      result = await queryable.query(
+        `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         RETURNING id`,
+        [
+          newGroupId,
+          userId,
+          String(validYear),
+          validYear,
+          maxOrder.rows[0].next_order,
+        ]
+      );
+    }
+
+    return { groupId: result.rows[0].id, year: validYear };
+  }
+
+  /**
+   * Find or create an "Uncategorized" group for a user.
+   *
+   * @param {Object} queryable - Database client (transaction) or pool
+   * @param {string} userId - The user's _id
+   * @returns {Promise<number>} The serial group id
+   */
+  async function findOrCreateUncategorizedGroup(queryable, userId) {
+    let result = await queryable.query(
+      `SELECT id FROM list_groups WHERE user_id = $1 AND name = 'Uncategorized' AND year IS NULL`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      const newGroupId = crypto.randomBytes(12).toString('hex');
+      const maxOrder = await queryable.query(
+        `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM list_groups WHERE user_id = $1`,
+        [userId]
+      );
+
+      result = await queryable.query(
+        `INSERT INTO list_groups (_id, user_id, name, year, sort_order, created_at, updated_at)
+         VALUES ($1, $2, 'Uncategorized', NULL, $3, NOW(), NOW())
+         RETURNING id`,
+        [newGroupId, userId, maxOrder.rows[0].next_order]
+      );
+    }
+
+    return result.rows[0].id;
+  }
+
+  /**
+   * Delete an auto-managed group (year-group or "Uncategorized") if it has no lists.
+   * Custom (user-created) groups are left untouched.
+   *
+   * @param {Object} queryable - Database client (transaction) or pool
+   * @param {number} groupId - The serial group id to check
+   */
+  async function deleteGroupIfEmptyAutoGroup(queryable, groupId) {
+    if (!groupId) return;
+
+    const groupCount = await queryable.query(
+      `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
+      [groupId]
+    );
+
+    if (parseInt(groupCount.rows[0].count, 10) === 0) {
+      const groupResult = await queryable.query(
+        `SELECT year, name FROM list_groups WHERE id = $1`,
+        [groupId]
+      );
+
+      if (groupResult.rows.length > 0) {
+        const isYearGroup = groupResult.rows[0].year !== null;
+        const isUncategorized =
+          groupResult.rows[0].name === 'Uncategorized' &&
+          groupResult.rows[0].year === null;
+
+        if (isYearGroup || isUncategorized) {
+          await queryable.query(`DELETE FROM list_groups WHERE id = $1`, [
+            groupId,
+          ]);
+        }
+      }
+    }
+  }
+
   return {
     triggerAggregateListRecompute,
     triggerAlbumSummaryFetch,
@@ -254,9 +370,49 @@ function createHelpers(deps) {
     batchUpsertAlbumRecords,
     invalidateCachesForAlbumUsers,
     invalidateListCaches,
+    findOrCreateYearGroup,
+    findOrCreateUncategorizedGroup,
+    deleteGroupIfEmptyAutoGroup,
     aggregateList,
     albumCanonical,
   };
 }
 
-module.exports = { createHelpers };
+/**
+ * Build a dynamic partial UPDATE query from an array of field/value pairs.
+ * Pure function — no database calls or side effects.
+ *
+ * @param {string} table - Table name (e.g. 'albums', 'lists', 'list_groups')
+ * @param {string} idColumn - WHERE clause column name (e.g. 'album_id', 'id')
+ * @param {*} idValue - The value to match in the WHERE clause
+ * @param {Array<{column: string, value: *}>} fields - Column/value pairs to SET
+ * @param {Object} [options] - Optional settings
+ * @param {Date|*} [options.timestamp] - Value for updated_at (default: new Date())
+ * @returns {{query: string, values: Array}|null} The query and params, or null if fields is empty
+ */
+function buildPartialUpdate(table, idColumn, idValue, fields, options = {}) {
+  if (!fields || fields.length === 0) return null;
+
+  const timestamp =
+    options.timestamp !== undefined ? options.timestamp : new Date();
+  const setClauses = [];
+  const values = [];
+  let paramIndex = 1;
+
+  for (const { column, value } of fields) {
+    setClauses.push(`${column} = $${paramIndex++}`);
+    values.push(value);
+  }
+
+  setClauses.push(`updated_at = $${paramIndex++}`);
+  values.push(timestamp);
+
+  values.push(idValue);
+
+  return {
+    query: `UPDATE ${table} SET ${setClauses.join(', ')} WHERE ${idColumn} = $${paramIndex}`,
+    values,
+  };
+}
+
+module.exports = { createHelpers, buildPartialUpdate };
