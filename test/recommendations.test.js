@@ -21,7 +21,7 @@ describe('Recommendations Feature', () => {
 
   before(async () => {
     // Setup test environment
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 
     // Connect to the running app server instead of requiring index.js
     // (requiring index.js starts a server as a side effect and hangs the process)
@@ -58,15 +58,15 @@ describe('Recommendations Feature', () => {
   });
 
   after(async () => {
-    // Cleanup
-    await pool.query("DELETE FROM users WHERE email LIKE 'rec-%@test.com'");
+    // Cleanup - delete in FK-safe order (recommendation_access references users)
+    await pool.query('DELETE FROM recommendation_access WHERE year = $1', [
+      testYear,
+    ]);
     await pool.query('DELETE FROM recommendations WHERE year = $1', [testYear]);
     await pool.query('DELETE FROM recommendation_settings WHERE year = $1', [
       testYear,
     ]);
-    await pool.query('DELETE FROM recommendation_access WHERE year = $1', [
-      testYear,
-    ]);
+    await pool.query("DELETE FROM users WHERE email LIKE 'rec-%@test.com'");
     await pool.query('DELETE FROM albums WHERE album_id = $1', [testAlbumId]);
     await pool.end();
   });
@@ -546,7 +546,13 @@ async function createTestAlbum(pool, { artist, album, release_date }) {
 }
 
 async function loginAs(agent, user) {
+  // GET /login to obtain CSRF token from the form
+  const getRes = await agent.get('/login');
+  const csrfMatch = getRes.text.match(/name="_csrf" value="([^"]+)"/);
+  const csrfToken = csrfMatch ? csrfMatch[1] : '';
+
   await agent.post('/login').send({
+    _csrf: csrfToken,
     email: user.email,
     password: 'password',
   });

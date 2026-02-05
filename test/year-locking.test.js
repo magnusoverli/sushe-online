@@ -14,14 +14,15 @@ const { Pool } = require('pg');
  * - When a year is locked, ONLY main lists are protected
  * - Non-main lists can still be created, edited, and deleted in locked years
  * - Main status changes are blocked in locked years (cannot set or unset main)
- * - Admin operations (lock/unlock, contributors, recompute) are always allowed
+ * - Admin operations (lock/unlock, recompute) are always allowed
+ * - Contributor management is blocked for locked years
  */
 describe('Year Locking Feature', () => {
   let app, pool, adminUser, regularUser, testYear;
 
   before(async () => {
     // Setup test environment
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 2 });
 
     // Connect to the running app server instead of requiring index.js
     // (requiring index.js starts a server as a side effect and hangs the process)
@@ -29,24 +30,33 @@ describe('Year Locking Feature', () => {
 
     testYear = 2024;
 
-    // Create admin user
+    // Create admin user (unique names to avoid collisions with existing data)
     adminUser = await createTestUser(pool, {
-      email: 'admin@test.com',
-      username: 'admin',
+      email: 'yl-admin@test.com',
+      username: 'yl-admin',
       role: 'admin',
     });
 
     // Create regular user
     regularUser = await createTestUser(pool, {
-      email: 'user@test.com',
-      username: 'user',
+      email: 'yl-user@test.com',
+      username: 'yl-user',
       role: 'user',
     });
   });
 
   after(async () => {
-    // Cleanup
-    await pool.query("DELETE FROM users WHERE email LIKE '%@test.com'");
+    // Cleanup - delete in FK-safe order: list_items -> lists -> list_groups -> users
+    await pool.query(
+      "DELETE FROM list_items WHERE list_id IN (SELECT _id FROM lists WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'yl-%@test.com'))"
+    );
+    await pool.query(
+      "DELETE FROM lists WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'yl-%@test.com')"
+    );
+    await pool.query(
+      "DELETE FROM list_groups WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'yl-%@test.com')"
+    );
+    await pool.query("DELETE FROM users WHERE email LIKE 'yl-%@test.com'");
     await pool.query('DELETE FROM master_lists WHERE year = $1', [testYear]);
     await pool.end();
   });
@@ -135,9 +145,9 @@ describe('Year Locking Feature', () => {
           name: 'Test List In Locked Year',
           year: testYear,
         })
-        .expect(200);
+        .expect(201);
 
-      assert.ok(res.body.listId);
+      assert.ok(res.body._id);
     });
 
     it('should allow list creation for unlocked year', async () => {
@@ -150,9 +160,9 @@ describe('Year Locking Feature', () => {
           name: 'Test List Unlocked',
           year: testYear,
         })
-        .expect(200);
+        .expect(201);
 
-      assert.ok(res.body.listId);
+      assert.ok(res.body._id);
     });
   });
 
@@ -166,7 +176,7 @@ describe('Year Locking Feature', () => {
         name: 'Main List Update Test',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Set as main
       await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
@@ -192,7 +202,7 @@ describe('Year Locking Feature', () => {
         name: 'Non-Main List Update Test',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Lock the year
       await lockYear(pool, testYear);
@@ -224,7 +234,7 @@ describe('Year Locking Feature', () => {
           },
         ],
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Set as main
       await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
@@ -232,9 +242,9 @@ describe('Year Locking Feature', () => {
       // Lock the year
       await lockYear(pool, testYear);
 
-      // Try to update items on main list
+      // Try to update items on main list (PUT replaces all items)
       const res = await agent
-        .post(`/api/lists/${listId}/items`)
+        .put(`/api/lists/${listId}`)
         .send({
           data: [
             {
@@ -265,14 +275,14 @@ describe('Year Locking Feature', () => {
           },
         ],
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Lock the year
       await lockYear(pool, testYear);
 
-      // Should be able to update items on non-main list
+      // Should be able to update items on non-main list (PUT replaces all items)
       const res = await agent
-        .post(`/api/lists/${listId}/items`)
+        .put(`/api/lists/${listId}`)
         .send({
           data: [
             {
@@ -298,7 +308,7 @@ describe('Year Locking Feature', () => {
         name: 'Main List',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Set as main
       await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
@@ -320,7 +330,7 @@ describe('Year Locking Feature', () => {
         name: 'List To Set Main',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Lock the year
       await lockYear(pool, testYear);
@@ -344,7 +354,7 @@ describe('Year Locking Feature', () => {
         name: 'List To Unset Main',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Set as main first
       await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
@@ -371,7 +381,7 @@ describe('Year Locking Feature', () => {
         name: 'List To Set Main Unlocked',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Year not locked - should succeed
       const res = await agent
@@ -393,7 +403,7 @@ describe('Year Locking Feature', () => {
         name: 'Non-Main List Deletable Locked',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Lock the year
       await lockYear(pool, testYear);
@@ -411,7 +421,7 @@ describe('Year Locking Feature', () => {
         name: 'Non-Main List Deletable',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Delete (year not locked)
       await agent.delete(`/api/lists/${listId}`).expect(200);
@@ -428,7 +438,7 @@ describe('Year Locking Feature', () => {
         name: 'Main List Move Test',
         year: testYear,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Set as main
       await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
@@ -436,18 +446,13 @@ describe('Year Locking Feature', () => {
       // Lock the year
       await lockYear(pool, testYear);
 
-      // Try to move main list to different year - use groups API
-      const groupsRes = await agent.get('/api/groups');
-      const targetGroup = groupsRes.body.find((g) => g.year === testYear + 1);
+      // Try to move main list to different year via PATCH
+      const res = await agent
+        .patch(`/api/lists/${listId}`)
+        .send({ year: testYear + 1 })
+        .expect(403);
 
-      if (targetGroup) {
-        const res = await agent
-          .put(`/api/groups/${targetGroup._id}/move-list`)
-          .send({ listId, year: testYear + 1 })
-          .expect(403);
-
-        assert.ok(res.body.error.includes('locked'));
-      }
+      assert.ok(res.body.error.includes('locked'));
     });
 
     it('should allow moving non-main list FROM locked year', async () => {
@@ -468,15 +473,15 @@ describe('Year Locking Feature', () => {
         name: 'Main List Move To Test',
         year: testYear + 1,
       });
-      const listId = createRes.body.listId;
+      const listId = createRes.body._id;
 
       // Set as main for source year
       await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
 
-      // Try to move main list to locked year - use groups API
+      // Try to move main list to locked year via PATCH
       const res = await agent
-        .put(`/api/groups/move-list`)
-        .send({ listId, year: testYear })
+        .patch(`/api/lists/${listId}`)
+        .send({ year: testYear })
         .expect(403);
 
       assert.ok(res.body.error.includes('locked'));
@@ -519,20 +524,20 @@ describe('Year Locking Feature', () => {
   });
 
   describe('Contributor Management with Locked Years', () => {
-    it('should allow contributor management for locked years', async () => {
+    it('should block contributor management for locked years', async () => {
       // Lock the year
       await lockYear(pool, testYear);
 
       const agent = request.agent(app);
       await loginAs(agent, adminUser);
 
-      // Should still be able to add contributors
+      // Adding contributors is blocked for locked years
       const res = await agent
         .post(`/api/aggregate-list/${testYear}/contributors`)
         .send({ userId: regularUser._id })
-        .expect(200);
+        .expect(403);
 
-      assert.strictEqual(res.body.success, true);
+      assert.strictEqual(res.body.yearLocked, true);
     });
   });
 
@@ -563,17 +568,28 @@ async function createTestUser(pool, { email, username, role }) {
   const userId = crypto.randomBytes(12).toString('hex');
 
   await pool.query(
-    `INSERT INTO users (_id, email, username, hash, role, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-     ON CONFLICT (email) DO UPDATE SET role = $5`,
+    `INSERT INTO users (_id, email, username, hash, role, approval_status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'approved', NOW(), NOW())
+     ON CONFLICT (email) DO UPDATE SET role = $5, username = $3`,
     [userId, email, username, hash, role]
   );
 
-  return { _id: userId, email, username, role };
+  // Re-query to get the actual ID (in case of conflict update)
+  const result = await pool.query('SELECT _id FROM users WHERE email = $1', [
+    email,
+  ]);
+
+  return { _id: result.rows[0]._id, email, username, role };
 }
 
 async function loginAs(agent, user) {
+  // GET /login to obtain CSRF token from the form
+  const getRes = await agent.get('/login');
+  const csrfMatch = getRes.text.match(/name="_csrf" value="([^"]+)"/);
+  const csrfToken = csrfMatch ? csrfMatch[1] : '';
+
   await agent.post('/login').send({
+    _csrf: csrfToken,
     email: user.email,
     password: 'password',
   });

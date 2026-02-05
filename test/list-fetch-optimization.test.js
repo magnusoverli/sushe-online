@@ -23,44 +23,45 @@ describe('List Fetch Optimization', () => {
   let testUserId;
 
   before(async () => {
-    pool = new Pool({ connectionString: DATABASE_URL });
+    pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
 
     // Create test user and list
     testUserId = `test-user-${Date.now()}`;
     testListId = `test-list-${Date.now()}`;
 
     await pool.query(
-      `INSERT INTO users (_id, email, hash, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
+      `INSERT INTO users (_id, username, email, hash, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
        ON CONFLICT (_id) DO NOTHING`,
-      [testUserId, `test-${Date.now()}@example.com`, 'fake-hash']
+      [testUserId, testUserId, `test-${Date.now()}@example.com`, 'fake-hash']
     );
+
+    // Create a list group (required FK for lists.group_id)
+    const groupResult = await pool.query(
+      `INSERT INTO list_groups (_id, user_id, name, sort_order, created_at, updated_at)
+       VALUES ($1, $2, $3, 0, NOW(), NOW())
+       RETURNING id`,
+      [`group-${Date.now()}`, testUserId, 'Test Group']
+    );
+    const groupId = groupResult.rows[0].id;
 
     await pool.query(
-      `INSERT INTO lists (_id, user_id, name, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())`,
-      [testListId, testUserId, 'Test List']
+      `INSERT INTO lists (_id, user_id, name, group_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+      [testListId, testUserId, 'Test List', groupId]
     );
 
-    // Initialize PgDatastore
+    // Initialize PgDatastore with actual list_items columns
     const listItemsMap = {
       _id: '_id',
       listId: 'list_id',
-      position: 'position',
-      artist: 'artist',
-      album: 'album',
       albumId: 'album_id',
-      releaseDate: 'release_date',
-      country: 'country',
-      genre1: 'genre_1',
-      genre2: 'genre_2',
+      position: 'position',
       comments: 'comments',
-      tracks: 'tracks',
-      // V6: Track picks now stored directly on list_items
       primaryTrack: 'primary_track',
       secondaryTrack: 'secondary_track',
-      coverImage: 'cover_image',
-      coverImageFormat: 'cover_image_format',
+      tracks: 'tracks',
+      trackPick: 'track_pick',
       createdAt: 'created_at',
       updatedAt: 'updated_at',
     };
@@ -69,13 +70,27 @@ describe('List Fetch Optimization', () => {
   });
 
   after(async () => {
-    // Cleanup test data
+    // Cleanup test data in FK-safe order
     if (pool) {
+      // Get album_ids from test list items before deleting them
+      const albumIds = await pool.query(
+        'SELECT DISTINCT album_id FROM list_items WHERE list_id = $1 AND album_id IS NOT NULL',
+        [testListId]
+      );
       await pool.query('DELETE FROM list_items WHERE list_id = $1', [
         testListId,
       ]);
       await pool.query('DELETE FROM lists WHERE _id = $1', [testListId]);
+      await pool.query('DELETE FROM list_groups WHERE user_id = $1', [
+        testUserId,
+      ]);
       await pool.query('DELETE FROM users WHERE _id = $1', [testUserId]);
+      // Clean up test albums
+      for (const row of albumIds.rows) {
+        await pool.query('DELETE FROM albums WHERE album_id = $1', [
+          row.album_id,
+        ]);
+      }
       await pool.end();
     }
   });
@@ -87,25 +102,19 @@ describe('List Fetch Optimization', () => {
   });
 
   it('should handle list items without album data (NULL JOIN)', async () => {
-    // Insert item without album_id (no join will occur)
+    // Insert item without album_id (LEFT JOIN returns NULLs for album fields)
     await pool.query(
-      `INSERT INTO list_items (_id, list_id, position, artist, album, release_date, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-      [
-        `item-${Date.now()}-1`,
-        testListId,
-        1,
-        'Test Artist',
-        'Test Album',
-        '2024',
-      ]
+      `INSERT INTO list_items (_id, list_id, position, created_at, updated_at)
+       VALUES ($1, $2, $3, NOW(), NOW())`,
+      [`item-${Date.now()}-1`, testListId, 1]
     );
 
     const result = await listItems.findWithAlbumData(testListId);
     assert.strictEqual(result.length, 1);
-    assert.strictEqual(result[0].artist, 'Test Artist');
-    assert.strictEqual(result[0].album, 'Test Album');
-    assert.strictEqual(result[0].releaseDate, '2024');
+    // Without album_id, all album fields should be empty strings (from || '' fallback)
+    assert.strictEqual(result[0].artist, '');
+    assert.strictEqual(result[0].album, '');
+    assert.strictEqual(result[0].releaseDate, '');
     assert.strictEqual(result[0].position, 1);
   });
 
@@ -147,38 +156,35 @@ describe('List Fetch Optimization', () => {
     assert.strictEqual(joinedItem.genre2, 'Alternative');
   });
 
-  it('should prefer list_items data over albums data (COALESCE)', async () => {
-    const albumId = `test-album-${Date.now()}`;
+  it('should use albums table data for album metadata via JOIN', async () => {
+    const albumId = `test-album-coalesce-${Date.now()}`;
 
-    // Insert album data
+    // Insert album with metadata
     await pool.query(
-      `INSERT INTO albums (album_id, artist, album, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
+      `INSERT INTO albums (album_id, artist, album, country, genre_1, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
        ON CONFLICT (album_id) DO NOTHING`,
-      [albumId, 'Album Artist Fallback', 'Album Name Fallback']
+      [albumId, 'Joined Artist', 'Joined Album', 'UK', 'Indie']
     );
 
-    // Insert list item with album_id AND override data
+    // Insert list item referencing the album
     await pool.query(
-      `INSERT INTO list_items (_id, list_id, position, album_id, artist, album, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-      [
-        `item-${Date.now()}-3`,
-        testListId,
-        3,
-        albumId,
-        'Override Artist',
-        'Override Album',
-      ]
+      `INSERT INTO list_items (_id, list_id, position, album_id, comments, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
+      [`item-${Date.now()}-3`, testListId, 3, albumId, 'Great album']
     );
 
     const result = await listItems.findWithAlbumData(testListId);
-    const overrideItem = result.find((item) => item.position === 3);
+    const joinedItem = result.find((item) => item.position === 3);
 
-    assert.ok(overrideItem);
-    // Should use list_items data, not albums data
-    assert.strictEqual(overrideItem.artist, 'Override Artist');
-    assert.strictEqual(overrideItem.album, 'Override Album');
+    assert.ok(joinedItem);
+    // Album metadata comes from albums table
+    assert.strictEqual(joinedItem.artist, 'Joined Artist');
+    assert.strictEqual(joinedItem.album, 'Joined Album');
+    assert.strictEqual(joinedItem.country, 'UK');
+    assert.strictEqual(joinedItem.genre1, 'Indie');
+    // Comments come from list_items table
+    assert.strictEqual(joinedItem.comments, 'Great album');
   });
 
   it('should return items sorted by position', async () => {
@@ -192,22 +198,24 @@ describe('List Fetch Optimization', () => {
   });
 
   it('should handle JSONB tracks field correctly', async () => {
+    const albumId = `test-album-tracks-${Date.now()}`;
     const tracks = [
       { title: 'Track 1', duration: '3:45' },
       { title: 'Track 2', duration: '4:20' },
     ];
 
+    // Insert album with tracks in the albums table (tracks come from JOIN)
     await pool.query(
-      `INSERT INTO list_items (_id, list_id, position, artist, album, tracks, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())`,
-      [
-        `item-${Date.now()}-4`,
-        testListId,
-        4,
-        'Artist',
-        'Album',
-        JSON.stringify(tracks),
-      ]
+      `INSERT INTO albums (album_id, artist, album, tracks, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())
+       ON CONFLICT (album_id) DO NOTHING`,
+      [albumId, 'Track Artist', 'Track Album', JSON.stringify(tracks)]
+    );
+
+    await pool.query(
+      `INSERT INTO list_items (_id, list_id, position, album_id, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, NOW(), NOW())`,
+      [`item-${Date.now()}-4`, testListId, 4, albumId]
     );
 
     const result = await listItems.findWithAlbumData(testListId);
