@@ -352,36 +352,23 @@ async function getAlbumInfoWithVariants(
 /**
  * Create core user data fetching methods (individual endpoints)
  */
-function createCoreUserDataMethods(fetchFn, log, env) {
+function createCoreUserDataMethods(fetchFn, log, env, lastfmGet) {
   async function getTopAlbums(
     username,
     period = 'overall',
     limit = 50,
     apiKey
   ) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'user.getTopAlbums',
-      user: username,
-      period,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: {
+        user: username,
+        period,
+        limit: String(limit),
+        api_key: apiKey,
+      },
+      withRetry: true,
     });
-
-    const url = `${API_URL}?${params}`;
-    const response = await fetchFn(url);
-    const data = await parseJsonWithRateLimitRetry(response, log, () =>
-      fetchFn(url)
-    );
-
-    if (data.error) {
-      log.error('Last.fm getTopAlbums failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch top albums');
-    }
-
     return data.topalbums?.album || [];
   }
 
@@ -397,25 +384,10 @@ function createCoreUserDataMethods(fetchFn, log, env) {
   }
 
   async function getRecentTracks(username, limit = 50, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'user.getRecentTracks',
-      user: username,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { user: username, limit: String(limit), api_key: apiKey },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      log.error('Last.fm getRecentTracks failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch recent tracks');
-    }
-
     return data.recenttracks?.track || [];
   }
 
@@ -425,28 +397,16 @@ function createCoreUserDataMethods(fetchFn, log, env) {
     limit = 50,
     apiKey
   ) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'user.getTopArtists',
-      user: username,
-      period,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: {
+        user: username,
+        period,
+        limit: String(limit),
+        api_key: apiKey,
+      },
+      withRetry: true,
     });
-
-    const url = `${API_URL}?${params}`;
-    const response = await fetchFn(url);
-    const data = await parseJsonWithRateLimitRetry(response, log, () =>
-      fetchFn(url)
-    );
-
-    if (data.error) {
-      log.error('Last.fm getTopArtists failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch top artists');
-    }
 
     const artists = (data.topartists?.artist || []).map((artist) => ({
       name: artist.name,
@@ -464,24 +424,10 @@ function createCoreUserDataMethods(fetchFn, log, env) {
   }
 
   async function getTopTags(username, limit = 50, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'user.getTopTags',
-      user: username,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { user: username, limit: String(limit), api_key: apiKey },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      log.error('Last.fm getTopTags failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch top tags');
-    }
 
     const tags = (data.toptags?.tag || []).map((tag) => ({
       name: tag.name,
@@ -493,23 +439,10 @@ function createCoreUserDataMethods(fetchFn, log, env) {
   }
 
   async function getUserInfo(username, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'user.getInfo',
-      user: username,
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { user: username, api_key: apiKey },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      log.error('Last.fm getUserInfo failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch user info');
-    }
 
     const user = data.user || {};
     const reg = user.registered?.unixtime;
@@ -597,8 +530,8 @@ function createBatchUserDataMethods(coreMethods) {
 /**
  * Create combined user data methods (core + batch)
  */
-function createUserDataMethods(fetchFn, log, env) {
-  const coreMethods = createCoreUserDataMethods(fetchFn, log, env);
+function createUserDataMethods(fetchFn, log, env, lastfmGet) {
+  const coreMethods = createCoreUserDataMethods(fetchFn, log, env, lastfmGet);
   const batchMethods = createBatchUserDataMethods(coreMethods);
   return { ...coreMethods, ...batchMethods };
 }
@@ -610,50 +543,27 @@ function createUserDataMethods(fetchFn, log, env) {
 /**
  * Create discovery/exploration methods
  */
-function createDiscoveryMethods(fetchFn, log, env) {
+function createDiscoveryMethods(fetchFn, log, env, lastfmGet) {
   async function getSimilarArtists(artist, limit = 10, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'artist.getSimilar',
-      artist,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { artist, limit: String(limit), api_key: apiKey },
+      notFoundValue: { similarartists: { artist: [] } },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      if (data.error === 6) return []; // Artist not found
-      log.error('Last.fm getSimilarArtists failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch similar artists');
-    }
-
     return data.similarartists?.artist || [];
   }
 
   async function getArtistTopTags(artist, limit = 10, apiKey) {
-    const params = new URLSearchParams({
-      method: 'artist.getTopTags',
-      artist,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
-    });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      if (data.error === 6) return [];
-      log.error('Last.fm getArtistTopTags failed:', {
-        error: data.error,
-        message: data.message,
-        artist,
+    // Return empty array for any error (not just error 6) to match original behavior
+    let data;
+    try {
+      data = await lastfmGet({
+        method: 'artist.getTopTags',
+        params: { artist, limit: String(limit), api_key: apiKey },
+        notFoundValue: { toptags: { tag: [] } },
       });
+    } catch {
+      // Original logged non-6 errors but still returned [] instead of throwing
       return [];
     }
 
@@ -713,74 +623,29 @@ function createDiscoveryMethods(fetchFn, log, env) {
   }
 
   async function getTagTopArtists(tag, limit = 10, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'tag.getTopArtists',
-      tag,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { tag, limit: String(limit), api_key: apiKey },
+      notFoundValue: { topartists: { artist: [] } },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      if (data.error === 6) return [];
-      log.error('Last.fm getTagTopArtists failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch tag top artists');
-    }
-
     return data.topartists?.artist || [];
   }
 
   async function getTagTopAlbums(tag, limit = 10, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'tag.getTopAlbums',
-      tag,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { tag, limit: String(limit), api_key: apiKey },
+      notFoundValue: { albums: { album: [] } },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      if (data.error === 6) return [];
-      log.error('Last.fm getTagTopAlbums failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch tag top albums');
-    }
-
     return data.albums?.album || [];
   }
 
   async function getArtistTopAlbums(artist, limit = 10, apiKey) {
-    const params = new URLSearchParams({
+    const data = await lastfmGet({
       method: 'artist.getTopAlbums',
-      artist,
-      limit: String(limit),
-      api_key: apiKey || env.LASTFM_API_KEY,
-      format: 'json',
+      params: { artist, limit: String(limit), api_key: apiKey },
+      notFoundValue: { topalbums: { album: [] } },
     });
-
-    const response = await fetchFn(`${API_URL}?${params}`);
-    const data = await response.json();
-
-    if (data.error) {
-      if (data.error === 6) return []; // Artist not found
-      log.error('Last.fm getArtistTopAlbums failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to fetch artist top albums');
-    }
-
     return data.topalbums?.album || [];
   }
 
@@ -801,7 +666,13 @@ function createDiscoveryMethods(fetchFn, log, env) {
 /**
  * Create write operation methods (require session key)
  */
-function createWriteMethods(fetchFn, generateSignature, log, env) {
+function createWriteMethods(
+  fetchFn,
+  generateSignature,
+  log,
+  env,
+  lastfmSignedPost
+) {
   async function scrobble(trackData, sessionKey, apiKey, secret) {
     // Normalize artist, track, and album names for better Last.fm matching
     // This strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
@@ -812,8 +683,6 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
       : null;
 
     const params = {
-      method: 'track.scrobble',
-      api_key: apiKey || env.LASTFM_API_KEY,
       sk: sessionKey,
       artist: normalizedArtist,
       track: normalizedTrack,
@@ -826,8 +695,6 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
     if (trackData.trackNumber)
       params.trackNumber = String(trackData.trackNumber);
 
-    params.api_sig = generateSignature(params, secret || env.LASTFM_SECRET);
-
     log.info('Scrobbling to Last.fm:', {
       artist: normalizedArtist,
       track: normalizedTrack,
@@ -835,21 +702,12 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
         trackData.artist !== normalizedArtist ? trackData.artist : undefined,
     });
 
-    const response = await fetchFn(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ ...params, format: 'json' }),
+    const data = await lastfmSignedPost({
+      method: 'track.scrobble',
+      params,
+      apiKey,
+      secret,
     });
-
-    const data = await response.json();
-
-    if (data.error) {
-      log.error('Last.fm scrobble failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to scrobble');
-    }
 
     const accepted = data.scrobbles?.['@attr']?.accepted || 0;
     log.info('Last.fm scrobble result:', { accepted });
@@ -866,8 +724,6 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
       : null;
 
     const params = {
-      method: 'track.updateNowPlaying',
-      api_key: apiKey || env.LASTFM_API_KEY,
       sk: sessionKey,
       artist: normalizedArtist,
       track: normalizedTrack,
@@ -877,25 +733,12 @@ function createWriteMethods(fetchFn, generateSignature, log, env) {
     if (trackData.duration)
       params.duration = String(Math.floor(trackData.duration / 1000));
 
-    params.api_sig = generateSignature(params, secret || env.LASTFM_SECRET);
-
-    const response = await fetchFn(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ ...params, format: 'json' }),
+    return lastfmSignedPost({
+      method: 'track.updateNowPlaying',
+      params,
+      apiKey,
+      secret,
     });
-
-    const data = await response.json();
-
-    if (data.error) {
-      log.error('Last.fm updateNowPlaying failed:', {
-        error: data.error,
-        message: data.message,
-      });
-      throw new Error(data.message || 'Failed to update now playing');
-    }
-
-    return data;
   }
 
   return { scrobble, updateNowPlaying };
@@ -974,10 +817,94 @@ function createLastfmAuth(deps = {}) {
     };
   }
 
+  /**
+   * Shared helper for Last.fm GET API calls.
+   * Builds URLSearchParams, fetches, optionally retries on rate limit, and checks for errors.
+   * @param {Object} opts
+   * @param {string} opts.method - Last.fm API method (e.g. 'user.getTopAlbums')
+   * @param {Object} opts.params - Additional query parameters (api_key is auto-filled if missing)
+   * @param {boolean} [opts.withRetry=false] - Use parseJsonWithRateLimitRetry for rate limit handling
+   * @param {*} [opts.notFoundValue=null] - Value to return on error 6 (not found); null means throw
+   */
+  async function lastfmGet(opts) {
+    const {
+      method,
+      params = {},
+      withRetry = false,
+      notFoundValue = null,
+    } = opts;
+    const searchParams = new URLSearchParams({
+      method,
+      api_key: params.api_key || env.LASTFM_API_KEY,
+      format: 'json',
+      ...params,
+    });
+    // Remove duplicate api_key if it was in params and we set it above
+    const url = `${API_URL}?${searchParams}`;
+    const response = await fetchFn(url);
+    const data = withRetry
+      ? await parseJsonWithRateLimitRetry(response, log, () => fetchFn(url))
+      : await response.json();
+
+    if (data.error) {
+      if (data.error === 6 && notFoundValue !== null) return notFoundValue;
+      log.error(`Last.fm ${method} failed:`, {
+        error: data.error,
+        message: data.message,
+      });
+      throw new Error(data.message || `Failed: ${method}`);
+    }
+    return data;
+  }
+
+  /**
+   * Shared helper for Last.fm signed POST API calls.
+   * Builds params, signs them, POSTs with urlencoded body, and checks for errors.
+   * @param {Object} opts
+   * @param {string} opts.method - Last.fm API method (e.g. 'track.scrobble')
+   * @param {Object} opts.params - Parameters to include (excluding method, api_key, api_sig)
+   * @param {string} [opts.apiKey] - Override API key
+   * @param {string} [opts.secret] - Override API secret
+   */
+  async function lastfmSignedPost(opts) {
+    const { method, params = {}, apiKey, secret } = opts;
+    const allParams = {
+      method,
+      api_key: apiKey || env.LASTFM_API_KEY,
+      ...params,
+    };
+    allParams.api_sig = generateSignature(
+      allParams,
+      secret || env.LASTFM_SECRET
+    );
+
+    const response = await fetchFn(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ ...allParams, format: 'json' }),
+    });
+    const data = await response.json();
+
+    if (data.error) {
+      log.error(`Last.fm ${method} failed:`, {
+        error: data.error,
+        message: data.message,
+      });
+      throw new Error(data.message || `Failed: ${method}`);
+    }
+    return data;
+  }
+
   // Create helper modules
-  const userData = createUserDataMethods(fetchFn, log, env);
-  const discovery = createDiscoveryMethods(fetchFn, log, env);
-  const write = createWriteMethods(fetchFn, generateSignature, log, env);
+  const userData = createUserDataMethods(fetchFn, log, env, lastfmGet);
+  const discovery = createDiscoveryMethods(fetchFn, log, env, lastfmGet);
+  const write = createWriteMethods(
+    fetchFn,
+    generateSignature,
+    log,
+    env,
+    lastfmSignedPost
+  );
 
   return {
     // Signature generation

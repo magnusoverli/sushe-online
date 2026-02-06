@@ -25,6 +25,47 @@ module.exports = (app, deps) => {
     refreshPlaycountsInBackground,
   } = deps;
 
+  /**
+   * Shared helper for simple Spotify player control commands.
+   * Handles token injection, fetch, success (2xx), error delegation, and catch.
+   * @param {Object} req - Express request (must have req.spotifyAuth)
+   * @param {Object} res - Express response
+   * @param {Object} opts
+   * @param {string} opts.method - HTTP method (PUT, POST, etc.)
+   * @param {string} opts.url - Full Spotify API URL
+   * @param {string} opts.action - Human-readable action name for logging/errors
+   * @param {Object} [opts.body] - Optional JSON body
+   * @param {Function} [opts.onSuccess] - Optional callback on success
+   */
+  async function spotifyPlayerCommand(req, res, opts) {
+    const { method, url, action, body, onSuccess } = opts;
+    try {
+      const fetchOptions = {
+        method,
+        headers: {
+          Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+        },
+      };
+      if (body) {
+        fetchOptions.headers['Content-Type'] = 'application/json';
+        fetchOptions.body = JSON.stringify(body);
+      }
+
+      const resp = await fetch(url, fetchOptions);
+
+      if (resp.ok || resp.status === 204) {
+        if (onSuccess) onSuccess();
+        return res.json({ success: true });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      return handleSpotifyPlayerError(resp, errorData, res, action);
+    } catch (err) {
+      logger.error(`Spotify ${action} error`, { error: err.message });
+      res.status(500).json({ error: `Failed to ${action}` });
+    }
+  }
+
   // Helper to handle Spotify player API errors (Premium-required endpoints)
   function handleSpotifyPlayerError(resp, errorData, res, action) {
     // 403 = Premium required for playback control
@@ -367,30 +408,12 @@ module.exports = (app, deps) => {
   );
 
   // Pause playback
-  app.put(
-    '/api/spotify/pause',
-    ensureAuthAPI,
-    requireSpotifyAuth,
-    async (req, res) => {
-      try {
-        const resp = await fetch('https://api.spotify.com/v1/me/player/pause', {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-          },
-        });
-
-        if (resp.ok || resp.status === 204) {
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'pause');
-      } catch (err) {
-        logger.error('Spotify pause error', { error: err.message });
-        res.status(500).json({ error: 'Failed to pause playback' });
-      }
-    }
+  app.put('/api/spotify/pause', ensureAuthAPI, requireSpotifyAuth, (req, res) =>
+    spotifyPlayerCommand(req, res, {
+      method: 'PUT',
+      url: 'https://api.spotify.com/v1/me/player/pause',
+      action: 'pause',
+    })
   );
 
   // Resume playback
@@ -398,26 +421,12 @@ module.exports = (app, deps) => {
     '/api/spotify/resume',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
-      try {
-        const resp = await fetch('https://api.spotify.com/v1/me/player/play', {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-          },
-        });
-
-        if (resp.ok || resp.status === 204) {
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'resume');
-      } catch (err) {
-        logger.error('Spotify resume error', { error: err.message });
-        res.status(500).json({ error: 'Failed to resume playback' });
-      }
-    }
+    (req, res) =>
+      spotifyPlayerCommand(req, res, {
+        method: 'PUT',
+        url: 'https://api.spotify.com/v1/me/player/play',
+        action: 'resume',
+      })
   );
 
   // Skip to previous track
@@ -425,56 +434,21 @@ module.exports = (app, deps) => {
     '/api/spotify/previous',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
-      try {
-        const resp = await fetch(
-          'https://api.spotify.com/v1/me/player/previous',
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-            },
-          }
-        );
-
-        if (resp.ok || resp.status === 204) {
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'previous');
-      } catch (err) {
-        logger.error('Spotify previous track error', { error: err.message });
-        res.status(500).json({ error: 'Failed to skip to previous' });
-      }
-    }
+    (req, res) =>
+      spotifyPlayerCommand(req, res, {
+        method: 'POST',
+        url: 'https://api.spotify.com/v1/me/player/previous',
+        action: 'skip to previous',
+      })
   );
 
   // Skip to next track
-  app.post(
-    '/api/spotify/next',
-    ensureAuthAPI,
-    requireSpotifyAuth,
-    async (req, res) => {
-      try {
-        const resp = await fetch('https://api.spotify.com/v1/me/player/next', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-          },
-        });
-
-        if (resp.ok || resp.status === 204) {
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'next');
-      } catch (err) {
-        logger.error('Spotify next track error', { error: err.message });
-        res.status(500).json({ error: 'Failed to skip to next' });
-      }
-    }
+  app.post('/api/spotify/next', ensureAuthAPI, requireSpotifyAuth, (req, res) =>
+    spotifyPlayerCommand(req, res, {
+      method: 'POST',
+      url: 'https://api.spotify.com/v1/me/player/next',
+      action: 'skip to next',
+    })
   );
 
   // Seek to position
@@ -482,33 +456,16 @@ module.exports = (app, deps) => {
     '/api/spotify/seek',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    (req, res) => {
       const { position_ms } = req.body;
       if (position_ms === undefined || isNaN(parseInt(position_ms))) {
         return res.status(400).json({ error: 'position_ms is required' });
       }
-
-      try {
-        const resp = await fetch(
-          `https://api.spotify.com/v1/me/player/seek?position_ms=${parseInt(position_ms)}`,
-          {
-            method: 'PUT',
-            headers: {
-              Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-            },
-          }
-        );
-
-        if (resp.ok || resp.status === 204) {
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'seek');
-      } catch (err) {
-        logger.error('Spotify seek error', { error: err.message });
-        res.status(500).json({ error: 'Failed to seek' });
-      }
+      return spotifyPlayerCommand(req, res, {
+        method: 'PUT',
+        url: `https://api.spotify.com/v1/me/player/seek?position_ms=${parseInt(position_ms)}`,
+        action: 'seek',
+      });
     }
   );
 
@@ -517,35 +474,17 @@ module.exports = (app, deps) => {
     '/api/spotify/volume',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    (req, res) => {
       const { volume_percent } = req.body;
       if (volume_percent === undefined || isNaN(parseInt(volume_percent))) {
         return res.status(400).json({ error: 'volume_percent is required' });
       }
-
       const vol = Math.max(0, Math.min(100, parseInt(volume_percent)));
-
-      try {
-        const resp = await fetch(
-          `https://api.spotify.com/v1/me/player/volume?volume_percent=${vol}`,
-          {
-            method: 'PUT',
-            headers: {
-              Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-            },
-          }
-        );
-
-        if (resp.ok || resp.status === 204) {
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'volume');
-      } catch (err) {
-        logger.error('Spotify volume error', { error: err.message });
-        res.status(500).json({ error: 'Failed to set volume' });
-      }
+      return spotifyPlayerCommand(req, res, {
+        method: 'PUT',
+        url: `https://api.spotify.com/v1/me/player/volume?volume_percent=${vol}`,
+        action: 'set volume',
+      });
     }
   );
 
@@ -554,36 +493,19 @@ module.exports = (app, deps) => {
     '/api/spotify/transfer',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    (req, res) => {
       const { device_id, play } = req.body;
       if (!device_id) {
         return res.status(400).json({ error: 'device_id is required' });
       }
-
-      try {
-        const resp = await fetch('https://api.spotify.com/v1/me/player', {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            device_ids: [device_id],
-            play: play === true,
-          }),
-        });
-
-        if (resp.ok || resp.status === 204) {
-          logger.info('Spotify playback transferred', { deviceId: device_id });
-          return res.json({ success: true });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'transfer');
-      } catch (err) {
-        logger.error('Spotify transfer error', { error: err.message });
-        res.status(500).json({ error: 'Failed to transfer playback' });
-      }
+      return spotifyPlayerCommand(req, res, {
+        method: 'PUT',
+        url: 'https://api.spotify.com/v1/me/player',
+        action: 'transfer playback',
+        body: { device_ids: [device_id], play: play === true },
+        onSuccess: () =>
+          logger.info('Spotify playback transferred', { deviceId: device_id }),
+      });
     }
   );
 
