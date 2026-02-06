@@ -41,6 +41,7 @@ const {
 
 // Import services
 const { createPlaylistService } = require('../../services/playlist');
+const { createListService } = require('../../services/list-service');
 const {
   refreshPlaycountsInBackground,
 } = require('../../services/playcount-service');
@@ -117,6 +118,19 @@ module.exports = (app, deps) => {
   // Create playlist service
   const playlistService = createPlaylistService({ logger });
 
+  // Create list service
+  const listService = createListService({
+    pool,
+    logger,
+    listsAsync,
+    listItemsAsync,
+    crypto,
+    validateYear,
+    helpers,
+    getPointsForPosition,
+    refreshPlaycountsInBackground,
+  });
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -153,6 +167,7 @@ module.exports = (app, deps) => {
 
     // Services
     playlistService,
+    listService,
     refreshPlaycountsInBackground,
 
     // Helpers

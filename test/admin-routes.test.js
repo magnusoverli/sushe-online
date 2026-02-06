@@ -242,7 +242,11 @@ function createTestApp(options = {}) {
     listsAsync: mockListsAsync,
     listItemsAsync: mockListItemsAsync,
     upload: mockUpload,
-    adminCodeExpiry: options.adminCodeExpiry || new Date(Date.now() + 3600000),
+    adminCodeState: {
+      get adminCodeExpiry() {
+        return options.adminCodeExpiry || new Date(Date.now() + 3600000);
+      },
+    },
     crypto: mockCrypto,
     pool: mockPool,
   };

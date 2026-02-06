@@ -243,10 +243,18 @@ function createRouteDependencies(
     isValidPassword,
     sanitizeUser: (user) =>
       user ? { _id: user._id, email: user.email } : null,
-    adminCodeAttempts: new Map(),
-    adminCode: 'TESTCODE',
-    adminCodeExpiry: new Date(Date.now() + 60000),
-    generateAdminCode: mock.fn(),
+    adminCodeState: {
+      adminCodeAttempts: new Map(),
+      get adminCode() {
+        return 'TESTCODE';
+      },
+      get adminCodeExpiry() {
+        return new Date(Date.now() + 60000);
+      },
+      generateAdminCode: mock.fn(),
+      lastCodeUsedBy: null,
+      lastCodeUsedAt: null,
+    },
     pool: { query: mock.fn() },
     passport: mockPassport,
     isTokenValid: () => false,

@@ -244,10 +244,18 @@ function createTestApp(options = {}) {
     spotifyTemplate: mockSpotifyTemplate,
     isTokenValid: mockIsTokenValid,
     isTokenUsable: mockIsTokenUsable,
-    adminCodeAttempts: mockAdminCodeAttempts,
-    adminCode: mockAdminCode,
-    adminCodeExpiry: mockAdminCodeExpiry,
-    generateAdminCode: mockGenerateAdminCode,
+    adminCodeState: {
+      adminCodeAttempts: mockAdminCodeAttempts,
+      get adminCode() {
+        return mockAdminCode;
+      },
+      get adminCodeExpiry() {
+        return mockAdminCodeExpiry;
+      },
+      generateAdminCode: mockGenerateAdminCode,
+      lastCodeUsedBy: null,
+      lastCodeUsedAt: null,
+    },
   };
 
   // Import and setup routes

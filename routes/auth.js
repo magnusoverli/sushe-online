@@ -28,10 +28,7 @@ module.exports = (app, deps) => {
     isValidPassword,
 
     sanitizeUser,
-    adminCodeAttempts,
-    adminCode,
-    adminCodeExpiry,
-    generateAdminCode,
+    adminCodeState,
     pool,
     passport,
   } = deps;
@@ -631,22 +628,22 @@ module.exports = (app, deps) => {
 
         // Validate code
         const submittedCode = code ? code.toUpperCase().trim() : null;
-        const isExpired = new Date() > adminCodeExpiry;
+        const isExpired = new Date() > adminCodeState.adminCodeExpiry;
 
         logger.info('Admin code validation', {
           submittedCode,
-          expectedCode: adminCode,
+          expectedCode: adminCodeState.adminCode,
           isExpired,
-          expiresAt: adminCodeExpiry.toISOString(),
+          expiresAt: adminCodeState.adminCodeExpiry.toISOString(),
         });
 
-        if (!code || submittedCode !== adminCode || isExpired) {
+        if (!code || submittedCode !== adminCodeState.adminCode || isExpired) {
           logger.info('Invalid code attempt');
 
           // Increment failed attempts
           const attempts = req.adminAttempts;
           attempts.count++;
-          adminCodeAttempts.set(req.user._id, attempts);
+          adminCodeState.adminCodeAttempts.set(req.user._id, attempts);
 
           if (req.accepts('json')) {
             return res
@@ -658,7 +655,7 @@ module.exports = (app, deps) => {
         }
 
         // Clear failed attempts on success
-        adminCodeAttempts.delete(req.user._id);
+        adminCodeState.adminCodeAttempts.delete(req.user._id);
 
         // Grant admin
         users.update(
@@ -688,12 +685,12 @@ module.exports = (app, deps) => {
             logger.info(`✅ Admin access granted to: ${req.user.email}`);
 
             // Track code usage
-            deps.lastCodeUsedBy = req.user.email;
-            deps.lastCodeUsedAt = Date.now();
+            adminCodeState.lastCodeUsedBy = req.user.email;
+            adminCodeState.lastCodeUsedAt = Date.now();
 
             // REGENERATE CODE IMMEDIATELY after successful use
             logger.info('🔄 Regenerating admin code after successful use...');
-            generateAdminCode();
+            adminCodeState.generateAdminCode();
 
             // Update the session
             req.user.role = 'admin';

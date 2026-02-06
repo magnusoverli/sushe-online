@@ -10,12 +10,15 @@
 const logger = require('../../utils/logger');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, usersAsync, listsAsync, adminCodeExpiry } =
+  const { ensureAuth, ensureAdmin, usersAsync, listsAsync, adminCodeState } =
     deps;
   const { pool } = deps;
 
   // Admin status endpoint (for debugging)
   app.get('/api/admin/status', ensureAuth, (req, res) => {
+    const adminCodeExpiry = adminCodeState
+      ? adminCodeState.adminCodeExpiry
+      : new Date(0);
     res.json({
       isAdmin: req.user.role === 'admin',
       codeValid: new Date() < adminCodeExpiry,

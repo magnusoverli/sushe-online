@@ -108,10 +108,18 @@ function createTestApp() {
     isValidUsername: () => true,
     isValidPassword: () => true,
     sanitizeUser: (u) => u,
-    adminCodeAttempts: new Map(),
-    adminCode: 'TESTCODE',
-    adminCodeExpiry: new Date(Date.now() + 60_000),
-    generateAdminCode: mock.fn(),
+    adminCodeState: {
+      adminCodeAttempts: new Map(),
+      get adminCode() {
+        return 'TESTCODE';
+      },
+      get adminCodeExpiry() {
+        return new Date(Date.now() + 60_000);
+      },
+      generateAdminCode: mock.fn(),
+      lastCodeUsedBy: null,
+      lastCodeUsedAt: null,
+    },
     pool: { query: mock.fn(async () => ({ rows: [], rowCount: 0 })) },
     passport: {
       authenticate: (_strategy, callback) => (req, _res, _next) => {
