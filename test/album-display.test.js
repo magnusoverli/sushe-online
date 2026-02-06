@@ -358,6 +358,13 @@ describe('album-display module', () => {
       assert.strictEqual(result, 'FULL_REBUILD');
     });
 
+    // Helper: build a fingerprint string from an album object, matching the
+    // format used by extractMutableFingerprints in album-display.js.
+    // Format: "_id|artist|album|release_date|country|genre_1|genre_2|comments|track_pick"
+    function fp(a) {
+      return `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.track_pick || ''}`;
+    }
+
     it('should return SINGLE_ADD when one album is added', () => {
       const module = createAlbumDisplay({});
       const oldAlbums = [{ artist: 'A', album: '1', release_date: '' }];
@@ -365,7 +372,7 @@ describe('album-display module', () => {
         { artist: 'A', album: '1', release_date: '' },
         { artist: 'B', album: '2', release_date: '' },
       ];
-      const result = module.detectUpdateType(oldAlbums, newAlbums);
+      const result = module.detectUpdateType(oldAlbums.map(fp), newAlbums);
       assert.strictEqual(result.type, 'SINGLE_ADD');
       assert.strictEqual(result.index, 1);
       assert.deepStrictEqual(result.album, {
@@ -383,7 +390,7 @@ describe('album-display module', () => {
         { artist: 'C', album: '3', release_date: '' },
         { artist: 'D', album: '4', release_date: '' },
       ];
-      const result = module.detectUpdateType(oldAlbums, newAlbums);
+      const result = module.detectUpdateType(oldAlbums.map(fp), newAlbums);
       assert.strictEqual(result, 'FULL_REBUILD');
     });
 
@@ -395,7 +402,7 @@ describe('album-display module', () => {
       const newAlbums = [
         { artist: 'A', album: '1', release_date: '', country: 'UK' },
       ];
-      const result = module.detectUpdateType(oldAlbums, newAlbums);
+      const result = module.detectUpdateType(oldAlbums.map(fp), newAlbums);
       assert.strictEqual(result, 'FIELD_UPDATE');
     });
 
@@ -410,7 +417,7 @@ describe('album-display module', () => {
       const newAlbums = [
         { artist: 'A', album: '1', release_date: '', cover_image: 'new' },
       ];
-      const result = module.detectUpdateType(oldState, newAlbums);
+      const result = module.detectUpdateType(oldState.map(fp), newAlbums);
       // No tracked field changes, no position changes = falls through to HYBRID_UPDATE
       // (0 + 0 <= 15 is true, so HYBRID_UPDATE is returned)
       assert.strictEqual(result, 'HYBRID_UPDATE');
@@ -426,7 +433,7 @@ describe('album-display module', () => {
         { artist: 'B', album: '2', release_date: '' },
         { artist: 'A', album: '1', release_date: '' },
       ];
-      const result = module.detectUpdateType(oldAlbums, newAlbums);
+      const result = module.detectUpdateType(oldAlbums.map(fp), newAlbums);
       assert.strictEqual(result, 'POSITION_UPDATE');
     });
   });

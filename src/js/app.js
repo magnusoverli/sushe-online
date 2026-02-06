@@ -6320,14 +6320,22 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeSidebarCollapse();
 
   // Initialize FAB button click handler
+  // musicbrainz.js is loaded on-demand (not in the initial bundle) to reduce
+  // initial JS payload from ~533 KB to ~25 KB. The first click loads the chunk.
   const fab = document.getElementById('addAlbumFAB');
   if (fab) {
-    fab.addEventListener('click', () => {
+    fab.addEventListener('click', async () => {
+      if (!window.openAddAlbumModal) {
+        try {
+          await import('./musicbrainz.js');
+        } catch (err) {
+          console.error('Failed to load album editor:', err);
+          showToast('Error loading album editor. Please try again.', 'error');
+          return;
+        }
+      }
       if (window.openAddAlbumModal) {
         window.openAddAlbumModal();
-      } else {
-        console.error('openAddAlbumModal not found');
-        showToast('Error: Add album function not available', 'error');
       }
     });
   }

@@ -21,7 +21,7 @@ const ENABLE_INCREMENTAL_UPDATES = true;
 // Module-level state
 // Store lightweight fingerprint instead of deep-cloned array for performance
 let lastRenderedFingerprint = null;
-// Store only mutable fields needed for detectUpdateType (no cover_image)
+// Store mutable field fingerprints for detectUpdateType (strings, not objects)
 let lastRenderedMutableState = null;
 let positionElementCache = new WeakMap();
 
@@ -202,24 +202,18 @@ function invalidateFingerprint(albums) {
 }
 
 /**
- * Extract lightweight mutable state for detectUpdateType comparisons
- * Excludes heavy fields like cover_image to avoid expensive cloning
+ * Generate per-album mutable field strings for change detection.
+ * Returns an array of fingerprint strings instead of an array of objects,
+ * dramatically reducing GC pressure (primitives vs N 9-property objects).
  * @param {Array} albums - Album array
- * @returns {Array} Array of lightweight album objects
+ * @returns {Array<string>|null} Array of field fingerprint strings
  */
-function extractMutableState(albums) {
+function extractMutableFingerprints(albums) {
   if (!albums || albums.length === 0) return null;
-  return albums.map((a) => ({
-    _id: a._id,
-    artist: a.artist,
-    album: a.album,
-    release_date: a.release_date,
-    country: a.country,
-    genre_1: a.genre_1,
-    genre_2: a.genre_2,
-    comments: a.comments,
-    track_pick: a.track_pick,
-  }));
+  return albums.map(
+    (a) =>
+      `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.track_pick || ''}`
+  );
 }
 
 // Last.fm playcount cache: { listItemId: { playcount, status } | null }
@@ -501,6 +495,96 @@ export function createAlbumDisplay(deps = {}) {
     // Success - show formatted playcount
     const formatted = formatPlaycount(playcount);
     return { html: formatted, isNotFound: false, isEmpty: !formatted };
+  }
+
+  /**
+   * Extract only the fields needed for DOM field updates (updateAlbumFields).
+   * ~20 properties vs processAlbumData's 40+, no closures, no cover/playcount/summary.
+   * @param {Object} album - Raw album data
+   * @param {number} index - Album index in list
+   * @returns {Object} Lightweight field data for DOM updates
+   */
+  function extractFieldUpdateData(album, index) {
+    const currentList = getCurrentList();
+    const listMeta = getListMetadata(currentList);
+    const isMain = listMeta?.isMain || false;
+    const position = isMain ? index + 1 : null;
+
+    const rawReleaseDate = album.release_date || '';
+    const releaseDate = formatReleaseDate(rawReleaseDate);
+    const listYear = listMeta?.year || null;
+    const yearMismatch = isYearMismatch(rawReleaseDate, listYear);
+    const releaseYear = extractYearFromDate(rawReleaseDate);
+    const yearMismatchTooltip = yearMismatch
+      ? `Release year (${releaseYear}) doesn't match list year (${listYear})`
+      : '';
+
+    const artist = album.artist || 'Unknown Artist';
+    const albumName = album.album || 'Unknown Album';
+    const country = album.country || '';
+    const genre1 = album.genre_1 || album.genre || '';
+    let genre2 = album.genre_2 || '';
+    if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
+    let comment = album.comments || album.comment || '';
+    if (comment === 'Comment') comment = '';
+
+    const primaryTrack = album.primary_track || album.track_pick || '';
+    const trackPick = primaryTrack;
+
+    // Inline track display logic (avoids processTrackPick closure allocation)
+    let trackPickDisplay = 'Select Track';
+    let trackPickClass = 'text-gray-800 italic';
+    let trackPickDuration = '';
+
+    if (primaryTrack) {
+      trackPickClass = 'text-gray-300';
+      if (album.tracks && Array.isArray(album.tracks)) {
+        const trackMatch = album.tracks.find(
+          (t) => getTrackName(t) === primaryTrack
+        );
+        if (trackMatch) {
+          const trackName = getTrackName(trackMatch);
+          const match = trackName.match(/^(\d+)[.\s-]?\s*(.*)$/);
+          trackPickDisplay = match
+            ? match[2]
+              ? `${match[1]}. ${match[2]}`
+              : `Track ${match[1]}`
+            : trackName;
+          trackPickDuration = formatTrackTime(getTrackLength(trackMatch));
+        } else if (primaryTrack.match(/^\d+$/)) {
+          trackPickDisplay = `Track ${primaryTrack}`;
+        } else {
+          trackPickDisplay = primaryTrack;
+        }
+      } else if (primaryTrack.match(/^\d+$/)) {
+        trackPickDisplay = `Track ${primaryTrack}`;
+      } else {
+        trackPickDisplay = primaryTrack;
+      }
+    }
+
+    return {
+      position,
+      albumName,
+      artist,
+      releaseDate,
+      yearMismatch,
+      yearMismatchTooltip,
+      country,
+      countryDisplay: country || 'Country',
+      countryClass: country ? 'text-gray-300' : 'text-gray-800 italic',
+      genre1,
+      genre1Display: genre1 || 'Genre 1',
+      genre1Class: genre1 ? 'text-gray-300' : 'text-gray-800 italic',
+      genre2,
+      genre2Display: genre2 || 'Genre 2',
+      genre2Class: genre2 ? 'text-gray-300' : 'text-gray-800 italic',
+      comment,
+      trackPick,
+      trackPickDisplay,
+      trackPickClass,
+      trackPickDuration,
+    };
   }
 
   /**
@@ -1253,15 +1337,30 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
+   * Extract album ID from a mutable fingerprint string.
+   * Fingerprint format: "_id|artist|album|release_date|..."
+   * @param {string} fp - Fingerprint string
+   * @returns {string} Album identifier
+   */
+  function getAlbumIdFromFingerprint(fp) {
+    const pipeIdx = fp.indexOf('|');
+    const id = pipeIdx >= 0 ? fp.substring(0, pipeIdx) : fp;
+    if (id) return id;
+    // Fallback: extract artist::album::release_date for composite ID
+    const parts = fp.split('|');
+    return `${parts[1] || ''}::${parts[2] || ''}::${parts[3] || ''}`;
+  }
+
+  /**
    * Find single addition in list
-   * @param {Array} oldState - Previous state
+   * @param {Array<string>} oldFingerprints - Previous fingerprint strings
    * @param {Array} newAlbums - New album array
    * @returns {Object|null} { album, index } or null
    */
-  function findSingleAddition(oldState, newAlbums) {
-    if (newAlbums.length !== oldState.length + 1) return null;
+  function findSingleAddition(oldFingerprints, newAlbums) {
+    if (newAlbums.length !== oldFingerprints.length + 1) return null;
 
-    const oldIds = new Set(oldState.map(getAlbumId));
+    const oldIds = new Set(oldFingerprints.map(getAlbumIdFromFingerprint));
 
     for (let i = 0; i < newAlbums.length; i++) {
       const newId = getAlbumId(newAlbums[i]);
@@ -1269,10 +1368,17 @@ export function createAlbumDisplay(deps = {}) {
         // Found the added album - verify rest of list matches
         const beforeMatch = newAlbums
           .slice(0, i)
-          .every((a, idx) => getAlbumId(a) === getAlbumId(oldState[idx]));
+          .every(
+            (a, idx) =>
+              getAlbumId(a) === getAlbumIdFromFingerprint(oldFingerprints[idx])
+          );
         const afterMatch = newAlbums
           .slice(i + 1)
-          .every((a, idx) => getAlbumId(a) === getAlbumId(oldState[i + idx]));
+          .every(
+            (a, idx) =>
+              getAlbumId(a) ===
+              getAlbumIdFromFingerprint(oldFingerprints[i + idx])
+          );
 
         if (beforeMatch && afterMatch) {
           return { album: newAlbums[i], index: i };
@@ -1284,26 +1390,31 @@ export function createAlbumDisplay(deps = {}) {
 
   /**
    * Find single removal in list
-   * @param {Array} oldState - Previous state
+   * @param {Array<string>} oldFingerprints - Previous fingerprint strings
    * @param {Array} newAlbums - New album array
    * @returns {number} Index of removed item or -1
    */
-  function findSingleRemoval(oldState, newAlbums) {
-    if (newAlbums.length !== oldState.length - 1) return -1;
+  function findSingleRemoval(oldFingerprints, newAlbums) {
+    if (newAlbums.length !== oldFingerprints.length - 1) return -1;
 
     const newIds = new Set(newAlbums.map(getAlbumId));
 
-    for (let i = 0; i < oldState.length; i++) {
-      const oldId = getAlbumId(oldState[i]);
+    for (let i = 0; i < oldFingerprints.length; i++) {
+      const oldId = getAlbumIdFromFingerprint(oldFingerprints[i]);
       if (!newIds.has(oldId)) {
         // Found the removed album - verify rest of list matches
         const beforeMatch = newAlbums
           .slice(0, i)
-          .every((a, idx) => getAlbumId(a) === getAlbumId(oldState[idx]));
+          .every(
+            (a, idx) =>
+              getAlbumId(a) === getAlbumIdFromFingerprint(oldFingerprints[idx])
+          );
         const afterMatch = newAlbums
           .slice(i)
           .every(
-            (a, idx) => getAlbumId(a) === getAlbumId(oldState[i + 1 + idx])
+            (a, idx) =>
+              getAlbumId(a) ===
+              getAlbumIdFromFingerprint(oldFingerprints[i + 1 + idx])
           );
 
         if (beforeMatch && afterMatch) {
@@ -1315,20 +1426,20 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Detect what type of update is needed
-   * Uses lightweight mutable state instead of full album objects
-   * @param {Array} oldState - Previous lightweight state (from extractMutableState)
+   * Detect what type of update is needed.
+   * Compares fingerprint strings instead of objects to reduce allocations.
+   * @param {Array<string>|null} oldFingerprints - Previous fingerprint strings (from extractMutableFingerprints)
    * @param {Array} newAlbums - New album array
    * @returns {string|Object} Update type string or object with details for add/remove
    */
-  function detectUpdateType(oldState, newAlbums) {
-    if (!ENABLE_INCREMENTAL_UPDATES || !oldState) {
+  function detectUpdateType(oldFingerprints, newAlbums) {
+    if (!ENABLE_INCREMENTAL_UPDATES || !oldFingerprints) {
       return 'FULL_REBUILD';
     }
 
     // Check for single addition
-    if (newAlbums.length === oldState.length + 1) {
-      const addition = findSingleAddition(oldState, newAlbums);
+    if (newAlbums.length === oldFingerprints.length + 1) {
+      const addition = findSingleAddition(oldFingerprints, newAlbums);
       if (addition) {
         return {
           type: 'SINGLE_ADD',
@@ -1339,15 +1450,15 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     // Check for single removal
-    if (newAlbums.length === oldState.length - 1) {
-      const removalIndex = findSingleRemoval(oldState, newAlbums);
+    if (newAlbums.length === oldFingerprints.length - 1) {
+      const removalIndex = findSingleRemoval(oldFingerprints, newAlbums);
       if (removalIndex !== -1) {
         return { type: 'SINGLE_REMOVE', index: removalIndex };
       }
     }
 
     // Length must match for other incremental updates
-    if (oldState.length !== newAlbums.length) {
+    if (oldFingerprints.length !== newAlbums.length) {
       return 'FULL_REBUILD';
     }
 
@@ -1355,25 +1466,17 @@ export function createAlbumDisplay(deps = {}) {
     let fieldChanges = 0;
 
     for (let i = 0; i < newAlbums.length; i++) {
-      const oldAlbum = oldState[i];
-      const newAlbum = newAlbums[i];
-
-      const oldId = getAlbumId(oldAlbum);
-      const newId = getAlbumId(newAlbum);
+      const oldId = getAlbumIdFromFingerprint(oldFingerprints[i]);
+      const newId = getAlbumId(newAlbums[i]);
 
       if (oldId !== newId) {
         positionChanges++;
       } else {
-        if (
-          oldAlbum.artist !== newAlbum.artist ||
-          oldAlbum.album !== newAlbum.album ||
-          oldAlbum.release_date !== newAlbum.release_date ||
-          oldAlbum.country !== newAlbum.country ||
-          oldAlbum.genre_1 !== newAlbum.genre_1 ||
-          oldAlbum.genre_2 !== newAlbum.genre_2 ||
-          oldAlbum.comments !== newAlbum.comments ||
-          oldAlbum.track_pick !== newAlbum.track_pick
-        ) {
+        // Build new fingerprint inline and compare as string -- cheaper than
+        // comparing 8+ object properties individually, and avoids allocating objects.
+        const newAlbum = newAlbums[i];
+        const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.track_pick || ''}`;
+        if (oldFingerprints[i] !== newFp) {
           fieldChanges++;
         }
       }
@@ -1519,7 +1622,7 @@ export function createAlbumDisplay(deps = {}) {
         if (!row) return;
 
         row.dataset.index = index;
-        const data = processAlbumData(album, index);
+        const data = extractFieldUpdateData(album, index);
 
         // Get cached element references (creates cache if missing)
         const cache = getCachedElements(row, isMobile);
@@ -2251,7 +2354,7 @@ export function createAlbumDisplay(deps = {}) {
           // Update lightweight state
           requestAnimationFrame(() => {
             lastRenderedFingerprint = newFingerprint;
-            lastRenderedMutableState = extractMutableState(albums);
+            lastRenderedMutableState = extractMutableFingerprints(albums);
           });
 
           reapplyNowPlayingBorder();
@@ -2273,7 +2376,7 @@ export function createAlbumDisplay(deps = {}) {
           // Update lightweight state
           requestAnimationFrame(() => {
             lastRenderedFingerprint = newFingerprint;
-            lastRenderedMutableState = extractMutableState(albums);
+            lastRenderedMutableState = extractMutableFingerprints(albums);
           });
 
           reapplyNowPlayingBorder();
@@ -2291,7 +2394,7 @@ export function createAlbumDisplay(deps = {}) {
           // Update lightweight state instead of expensive deep clone
           requestAnimationFrame(() => {
             lastRenderedFingerprint = newFingerprint;
-            lastRenderedMutableState = extractMutableState(albums);
+            lastRenderedMutableState = extractMutableFingerprints(albums);
           });
 
           const albumContainer = isMobile
@@ -2426,7 +2529,7 @@ export function createAlbumDisplay(deps = {}) {
     // Update lightweight state instead of expensive deep clone
     requestAnimationFrame(() => {
       lastRenderedFingerprint = generateAlbumFingerprint(albums);
-      lastRenderedMutableState = extractMutableState(albums);
+      lastRenderedMutableState = extractMutableFingerprints(albums);
     });
 
     reapplyNowPlayingBorder();

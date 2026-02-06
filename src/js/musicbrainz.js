@@ -2325,18 +2325,23 @@ function formatArtistDisplayName(artist) {
   }
 }
 
-// Initialize when the page loads
-document.addEventListener('DOMContentLoaded', () => {
-  // Only initialize on pages that have the add album feature
+// Self-initialize: works both when loaded eagerly (DOMContentLoaded hasn't fired)
+// and when loaded lazily via dynamic import() (DOMContentLoaded already fired).
+function selfInit() {
   const isAuthPage = window.location.pathname.match(
     /\/(login|register|forgot)/
   );
   if (!isAuthPage) {
-    // Warm up CDN connections early for faster first-image load
     warmupConnections();
     initializeAddAlbumFeature();
   }
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', selfInit);
+} else {
+  selfInit();
+}
 
 // Export for use in other modules
 export { searchArtistImageRacing };

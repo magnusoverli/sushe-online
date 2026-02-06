@@ -7,8 +7,19 @@
  * @module discovery
  */
 
-import { searchArtistImageRacing } from '../musicbrainz.js';
 import { escapeHtml } from './html-utils.js';
+
+// Lazy-loaded to avoid pulling in the 508KB musicbrainz chunk at startup.
+// searchArtistImageRacing is only needed when viewing similar artists.
+let _searchArtistImageRacing = null;
+
+async function getSearchArtistImageRacing() {
+  if (!_searchArtistImageRacing) {
+    const mod = await import('../musicbrainz.js');
+    _searchArtistImageRacing = mod.searchArtistImageRacing;
+  }
+  return _searchArtistImageRacing;
+}
 
 // Module state
 let discoveryModal = null;
@@ -269,7 +280,8 @@ async function loadSimilarArtistImages(artists, signal) {
     if (!container) continue;
 
     // Search for artist image using racing providers (Deezer, iTunes, Wikidata)
-    searchArtistImageRacing(artist.name, null, signal)
+    getSearchArtistImageRacing()
+      .then((searchFn) => searchFn(artist.name, null, signal))
       .then((imageUrl) => {
         if (signal?.aborted) return;
         if (imageUrl && container) {

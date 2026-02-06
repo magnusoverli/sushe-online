@@ -1,4 +1,3 @@
-import './musicbrainz.js';
 import './app.js';
 import {
   initMiniplayer,

@@ -57,15 +57,19 @@ describe('Year Locking Feature', () => {
       "DELETE FROM list_groups WHERE user_id IN (SELECT _id FROM users WHERE email LIKE 'yl-%@test.com')"
     );
     await pool.query("DELETE FROM users WHERE email LIKE 'yl-%@test.com'");
-    await pool.query('DELETE FROM master_lists WHERE year = $1', [testYear]);
+    await pool.query('DELETE FROM master_lists WHERE year IN ($1, $2)', [
+      testYear,
+      testYear + 1,
+    ]);
     await pool.end();
   });
 
   beforeEach(async () => {
-    // Unlock year before each test
-    await pool.query('UPDATE master_lists SET locked = FALSE WHERE year = $1', [
-      testYear,
-    ]);
+    // Unlock test years before each test (testYear + 1 is used as an unlocked year in move tests)
+    await pool.query(
+      'UPDATE master_lists SET locked = FALSE WHERE year IN ($1, $2)',
+      [testYear, testYear + 1]
+    );
   });
 
   describe('Admin Lock/Unlock Endpoints', () => {
@@ -476,7 +480,10 @@ describe('Year Locking Feature', () => {
       const listId = createRes.body._id;
 
       // Set as main for source year
-      await agent.post(`/api/lists/${listId}/main`).send({ isMain: true });
+      await agent
+        .post(`/api/lists/${listId}/main`)
+        .send({ isMain: true })
+        .expect(200);
 
       // Try to move main list to locked year via PATCH
       const res = await agent
