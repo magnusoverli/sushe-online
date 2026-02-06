@@ -20,7 +20,7 @@ import {
   showViewReasoningModal,
 } from './modules/modals.js';
 import { positionContextMenu } from './modules/context-menu.js';
-import { escapeHtml } from './modules/html-utils.js';
+import { escapeHtml, escapeHtmlAttr } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
 import { createActionSheet } from './modules/ui-factories.js';
@@ -30,6 +30,24 @@ import {
   isListLocked,
 } from './modules/year-lock.js';
 import { formatTrackTime } from './modules/time-utils.js';
+import { verifyAlbumAtIndex } from './utils/album-identity.js';
+import { chooseService } from './utils/music-service-chooser.js';
+import {
+  openInMusicApp,
+  playOnSpotifyDevice,
+} from './utils/playback-service.js';
+import { parseStaticList } from './utils/static-data.js';
+import { groupListsByYear } from './utils/list-grouping.js';
+import {
+  editRecommendationReasoning,
+  removeRecommendation,
+} from './utils/recommendation-actions.js';
+import { setupModalBehavior } from './utils/modal-helpers.js';
+import {
+  setupSubmenuHover,
+  setupChainedSubmenus,
+} from './utils/submenu-behavior.js';
+import { createLazyModule } from './utils/lazy-module.js';
 
 // Expose recommendation lock cache invalidation to window
 window.invalidateLockedRecommendationYearsCache =
@@ -42,71 +60,44 @@ export { showToast, showConfirmation, showReasoningModal, hideReasoningModal };
 let musicServicesModule = null;
 let importExportModule = null;
 
-// Album display module instance (initialized lazily when first needed)
-let albumDisplayModule = null;
-
-// Context menus module instance (initialized lazily when first needed)
-let contextMenusModule = null;
-
-// Mobile UI module instance (initialized lazily when first needed)
-let mobileUIModule = null;
-
-// List navigation module instance (initialized lazily when first needed)
-let listNavModule = null;
-
-// Editable fields module instance (initialized lazily when first needed)
-let editableFieldsModule = null;
-
-// Sorting module instance (initialized lazily when first needed)
-let sortingModule = null;
-
-// Import conflict handler module instance (initialized lazily when first needed)
-let importConflictModule = null;
-
-// Now playing module instance (initialized lazily when first needed)
-let nowPlayingModule = null;
-
-// Realtime sync module instance (initialized on page load)
+// Realtime sync module instance (initialized on page load, referenced directly for null checks)
 let realtimeSyncModule = null;
 
 /**
  * Get or initialize the album display module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getAlbumDisplayModule() {
-  if (!albumDisplayModule) {
-    albumDisplayModule = createAlbumDisplay({
-      getListData,
-      getListMetadata,
-      getCurrentList: () => currentListId,
-      saveList,
-      showToast,
-      apiCall,
-      fetchTracksForAlbum,
-      makeCountryEditable,
-      makeGenreEditable,
-      makeCommentEditable,
-      attachLinkPreview,
-      showTrackSelectionMenu,
-      showMobileEditForm,
-      showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
-      showMobileSummarySheet: (summary, albumName, artist) =>
-        window.showMobileSummarySheet(summary, albumName, artist),
-      playTrackSafe: (albumId) => window.playTrackSafe(albumId),
-      getTrackName,
-      getTrackLength,
-      formatTrackTime,
-      reapplyNowPlayingBorder,
-      initializeUnifiedSorting,
-      destroySorting,
-      setContextAlbum: (index, albumId) => {
-        currentContextAlbum = index;
-        currentContextAlbumId = albumId;
-      },
-    });
-  }
-  return albumDisplayModule;
-}
+const getAlbumDisplayModule = createLazyModule(() =>
+  createAlbumDisplay({
+    getListData,
+    getListMetadata,
+    getCurrentList: () => currentListId,
+    saveList,
+    showToast,
+    apiCall,
+    fetchTracksForAlbum,
+    makeCountryEditable,
+    makeGenreEditable,
+    makeCommentEditable,
+    attachLinkPreview,
+    showTrackSelectionMenu,
+    showMobileEditForm,
+    showMobileAlbumMenu: (el) => window.showMobileAlbumMenu(el),
+    showMobileSummarySheet: (summary, albumName, artist) =>
+      window.showMobileSummarySheet(summary, albumName, artist),
+    playTrackSafe: (albumId) => window.playTrackSafe(albumId),
+    getTrackName,
+    getTrackLength,
+    formatTrackTime,
+    reapplyNowPlayingBorder,
+    initializeUnifiedSorting,
+    destroySorting,
+    setContextAlbum: (index, albumId) => {
+      currentContextAlbum = index;
+      currentContextAlbumId = albumId;
+    },
+  })
+);
 
 // Wrapper functions that delegate to the module
 function displayAlbums(albums, options = {}) {
@@ -135,55 +126,52 @@ window.displayAlbums = displayAlbums;
  * Get or initialize the context menus module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getContextMenusModule() {
-  if (!contextMenusModule) {
-    contextMenusModule = createContextMenus({
-      getListData,
-      getListMetadata,
-      getCurrentList: () => currentListId,
-      getLists: () => lists,
-      saveList,
-      selectList,
-      showToast,
-      showConfirmation,
-      apiCall,
-      findAlbumByIdentity,
-      downloadListAsJSON,
-      downloadListAsPDF,
-      downloadListAsCSV,
-      updatePlaylist,
-      openRenameModal,
-      updateListNav,
-      updateListMetadata,
-      showMobileEditForm,
-      playAlbum,
-      playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
-      loadLists,
-      getContextState: () => ({
-        album: currentContextAlbum,
-        albumId: currentContextAlbumId,
-        list: currentContextList,
-      }),
-      setContextState: (state) => {
-        if ('album' in state) currentContextAlbum = state.album;
-        if ('albumId' in state) currentContextAlbumId = state.albumId;
-        if ('list' in state) currentContextList = state.list;
-      },
-      setCurrentList: (listName) => {
-        currentListId = listName;
-      },
-      refreshMobileBarVisibility: () => {
-        if (window.refreshMobileBarVisibility) {
-          window.refreshMobileBarVisibility();
-        }
-      },
-      toggleMainStatus,
-      getSortedGroups,
-      refreshGroupsAndLists,
-    });
-  }
-  return contextMenusModule;
-}
+const getContextMenusModule = createLazyModule(() =>
+  createContextMenus({
+    getListData,
+    getListMetadata,
+    getCurrentList: () => currentListId,
+    getLists: () => lists,
+    saveList,
+    selectList,
+    showToast,
+    showConfirmation,
+    apiCall,
+    findAlbumByIdentity,
+    downloadListAsJSON,
+    downloadListAsPDF,
+    downloadListAsCSV,
+    updatePlaylist,
+    openRenameModal,
+    updateListNav,
+    updateListMetadata,
+    showMobileEditForm,
+    playAlbum,
+    playAlbumSafe: (albumId) => window.playAlbumSafe(albumId),
+    loadLists,
+    getContextState: () => ({
+      album: currentContextAlbum,
+      albumId: currentContextAlbumId,
+      list: currentContextList,
+    }),
+    setContextState: (state) => {
+      if ('album' in state) currentContextAlbum = state.album;
+      if ('albumId' in state) currentContextAlbumId = state.albumId;
+      if ('list' in state) currentContextList = state.list;
+    },
+    setCurrentList: (listName) => {
+      currentListId = listName;
+    },
+    refreshMobileBarVisibility: () => {
+      if (window.refreshMobileBarVisibility) {
+        window.refreshMobileBarVisibility();
+      }
+    },
+    toggleMainStatus,
+    getSortedGroups,
+    refreshGroupsAndLists,
+  })
+);
 
 // Wrapper functions for context menus module
 function getListMenuConfig(listName) {
@@ -202,59 +190,56 @@ function initializeContextMenu() {
  * Get or initialize the mobile UI module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getMobileUIModule() {
-  if (!mobileUIModule) {
-    mobileUIModule = createMobileUI({
-      getListData,
-      getListMetadata,
-      getCurrentList: () => currentListId,
-      getLists: () => lists,
-      setListData,
-      saveList,
-      selectList,
-      showToast,
-      showConfirmation,
-      apiCall,
-      getTrackName,
-      getTrackLength,
-      formatTrackTime,
-      displayAlbums,
-      updateListNav,
-      fetchTracksForAlbum,
-      playAlbum,
-      playAlbumOnDeviceMobile,
-      openRenameModal,
-      downloadListAsJSON,
-      downloadListAsPDF,
-      downloadListAsCSV,
-      updatePlaylist,
-      toggleMainStatus,
-      getDeviceIcon,
-      getListMenuConfig,
-      getAvailableCountries: () => availableCountries,
-      getAvailableGenres: () => availableGenres,
-      setCurrentContextAlbum: (idx) => {
-        currentContextAlbum = idx;
-      },
-      refreshMobileBarVisibility: () => {
-        if (window.refreshMobileBarVisibility) {
-          window.refreshMobileBarVisibility();
-        }
-      },
-      showDiscoveryModal: (type, data) => {
-        import('./modules/discovery.js').then(({ showDiscoveryModal }) => {
-          showDiscoveryModal(type, data);
-        });
-      },
-      playSpecificTrack,
-      getSortedGroups,
-      refreshGroupsAndLists,
-      isViewingRecommendations,
-      recommendAlbum,
-    });
-  }
-  return mobileUIModule;
-}
+const getMobileUIModule = createLazyModule(() =>
+  createMobileUI({
+    getListData,
+    getListMetadata,
+    getCurrentList: () => currentListId,
+    getLists: () => lists,
+    setListData,
+    saveList,
+    selectList,
+    showToast,
+    showConfirmation,
+    apiCall,
+    getTrackName,
+    getTrackLength,
+    formatTrackTime,
+    displayAlbums,
+    updateListNav,
+    fetchTracksForAlbum,
+    playAlbum,
+    playAlbumOnDeviceMobile,
+    openRenameModal,
+    downloadListAsJSON,
+    downloadListAsPDF,
+    downloadListAsCSV,
+    updatePlaylist,
+    toggleMainStatus,
+    getDeviceIcon,
+    getListMenuConfig,
+    getAvailableCountries: () => availableCountries,
+    getAvailableGenres: () => availableGenres,
+    setCurrentContextAlbum: (idx) => {
+      currentContextAlbum = idx;
+    },
+    refreshMobileBarVisibility: () => {
+      if (window.refreshMobileBarVisibility) {
+        window.refreshMobileBarVisibility();
+      }
+    },
+    showDiscoveryModal: (type, data) => {
+      import('./modules/discovery.js').then(({ showDiscoveryModal }) => {
+        showDiscoveryModal(type, data);
+      });
+    },
+    playSpecificTrack,
+    getSortedGroups,
+    refreshGroupsAndLists,
+    isViewingRecommendations,
+    recommendAlbum,
+  })
+);
 
 // Wrapper functions for mobile UI module
 function showMobileAlbumMenu(indexOrElement) {
@@ -371,32 +356,29 @@ async function refreshGroupsAndLists() {
   }
 }
 
-function getListNavModule() {
-  if (!listNavModule) {
-    listNavModule = createListNav({
-      getLists: () => lists,
-      getListMetadata,
-      getGroups,
-      getSortedGroups,
-      getCurrentList: () => currentListId,
-      selectList,
-      getListMenuConfig,
-      hideAllContextMenus,
-      positionContextMenu,
-      toggleMobileLists,
-      setCurrentContextList: (listName) => {
-        currentContextList = listName;
-      },
-      setCurrentContextGroup: (group) => {
-        currentContextGroup = group;
-      },
-      apiCall,
-      showToast,
-      refreshGroupsAndLists,
-    });
-  }
-  return listNavModule;
-}
+const getListNavModule = createLazyModule(() =>
+  createListNav({
+    getLists: () => lists,
+    getListMetadata,
+    getGroups,
+    getSortedGroups,
+    getCurrentList: () => currentListId,
+    selectList,
+    getListMenuConfig,
+    hideAllContextMenus,
+    positionContextMenu,
+    toggleMobileLists,
+    setCurrentContextList: (listName) => {
+      currentContextList = listName;
+    },
+    setCurrentContextGroup: (group) => {
+      currentContextGroup = group;
+    },
+    apiCall,
+    showToast,
+    refreshGroupsAndLists,
+  })
+);
 
 // Wrapper functions for list navigation module
 function updateListNav() {
@@ -420,20 +402,17 @@ window.updateListNav = updateListNav;
  * Get or initialize the editable fields module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getEditableFieldsModule() {
-  if (!editableFieldsModule) {
-    editableFieldsModule = createEditableFields({
-      getListData,
-      getCurrentList: () => currentListId,
-      apiCall,
-      showToast,
-      getAvailableCountries: () => availableCountries,
-      getAvailableGenres: () => availableGenres,
-      isTextTruncated,
-    });
-  }
-  return editableFieldsModule;
-}
+const getEditableFieldsModule = createLazyModule(() =>
+  createEditableFields({
+    getListData,
+    getCurrentList: () => currentListId,
+    apiCall,
+    showToast,
+    getAvailableCountries: () => availableCountries,
+    getAvailableGenres: () => availableGenres,
+    isTextTruncated,
+  })
+);
 
 // Wrapper functions for editable fields module
 function makeCountryEditable(countryDiv, albumIndex) {
@@ -493,19 +472,16 @@ async function saveReorder(listName, list) {
  * Get or initialize the sorting module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getSortingModule() {
-  if (!sortingModule) {
-    sortingModule = createSorting({
-      getListData,
-      getCurrentList: () => currentListId,
-      debouncedSaveList,
-      saveReorder, // Add lightweight reorder function
-      updatePositionNumbers,
-      showToast,
-    });
-  }
-  return sortingModule;
-}
+const getSortingModule = createLazyModule(() =>
+  createSorting({
+    getListData,
+    getCurrentList: () => currentListId,
+    debouncedSaveList,
+    saveReorder, // Add lightweight reorder function
+    updatePositionNumbers,
+    showToast,
+  })
+);
 
 // Wrapper functions for sorting module
 function initializeUnifiedSorting(container, isMobile) {
@@ -520,28 +496,25 @@ function destroySorting(container) {
  * Get or initialize the import conflict handler module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getImportConflictModule() {
-  if (!importConflictModule) {
-    importConflictModule = createImportConflictHandler({
-      getListData,
-      getLists: () => lists,
-      findListByName,
-      saveList,
-      importList,
-      selectList,
-      updateListNav,
-      getPendingImport: () => ({
-        data: pendingImportData,
-        filename: pendingImportFilename,
-      }),
-      setPendingImport: (data, filename) => {
-        pendingImportData = data;
-        pendingImportFilename = filename;
-      },
-    });
-  }
-  return importConflictModule;
-}
+const getImportConflictModule = createLazyModule(() =>
+  createImportConflictHandler({
+    getListData,
+    getLists: () => lists,
+    findListByName,
+    saveList,
+    importList,
+    selectList,
+    updateListNav,
+    getPendingImport: () => ({
+      data: pendingImportData,
+      filename: pendingImportFilename,
+    }),
+    setPendingImport: (data, filename) => {
+      pendingImportData = data;
+      pendingImportFilename = filename;
+    },
+  })
+);
 
 // Wrapper function for import conflict handling
 function initializeImportConflictHandling() {
@@ -552,17 +525,15 @@ function initializeImportConflictHandling() {
  * Get or initialize the now-playing module
  * Uses lazy initialization to avoid dependency ordering issues
  */
-function getNowPlayingModule() {
-  if (!nowPlayingModule) {
-    nowPlayingModule = createNowPlaying({
-      getListData,
-      getCurrentList: () => currentListId,
-    });
-    // Initialize event listeners
-    nowPlayingModule.initialize();
-  }
-  return nowPlayingModule;
-}
+const getNowPlayingModule = createLazyModule(() => {
+  const mod = createNowPlaying({
+    getListData,
+    getCurrentList: () => currentListId,
+  });
+  // Initialize event listeners
+  mod.initialize();
+  return mod;
+});
 
 // Wrapper function for now-playing module (reapplyNowPlayingBorder is passed to album-display)
 function reapplyNowPlayingBorder() {
@@ -697,33 +668,8 @@ Object.defineProperty(window, 'currentListId', {
 });
 
 // Process static data at module load time
-const availableGenres = genresText
-  .split('\n')
-  .map((g) => g.trim())
-  .filter((g, index) => {
-    // Keep the first empty line if it exists, but remove other empty lines
-    return g.length > 0 || (index === 0 && g === '');
-  })
-  .sort((a, b) => {
-    // Keep empty string at top if it exists
-    if (a === '') return -1;
-    if (b === '') return 1;
-    return a.localeCompare(b);
-  });
-
-const availableCountries = countriesText
-  .split('\n')
-  .map((c) => c.trim())
-  .filter((c, index) => {
-    // Keep the first empty line if it exists, but remove other empty lines
-    return c.length > 0 || (index === 0 && c === '');
-  })
-  .sort((a, b) => {
-    // Keep empty string at top if it exists
-    if (a === '') return -1;
-    if (b === '') return 1;
-    return a.localeCompare(b);
-  });
+const availableGenres = parseStaticList(genresText);
+const availableCountries = parseStaticList(countriesText);
 
 // Expose to window for access from other modules
 window.availableCountries = availableCountries;
@@ -2006,19 +1952,15 @@ function initializeAlbumContextMenu() {
 
     // Verify the album is still at the expected index, fallback to identity search
     const albumsForEdit = getListData(currentListId);
-    const expectedAlbum = albumsForEdit && albumsForEdit[currentContextAlbum];
-    if (expectedAlbum && currentContextAlbumId) {
-      const expectedId =
-        `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
-      if (expectedId === currentContextAlbumId) {
-        // Index is still valid
-        showMobileEditForm(currentContextAlbum);
-        return;
-      }
-    }
-
-    // Index is stale, search by identity
-    if (currentContextAlbumId) {
+    const result = verifyAlbumAtIndex(
+      albumsForEdit,
+      currentContextAlbum,
+      currentContextAlbumId,
+      findAlbumByIdentity
+    );
+    if (result) {
+      showMobileEditForm(result.index);
+    } else if (currentContextAlbumId) {
       showMobileEditFormSafe(currentContextAlbumId);
     } else {
       showToast('Album not found - it may have been moved or removed', 'error');
@@ -2026,31 +1968,13 @@ function initializeAlbumContextMenu() {
   };
 
   // Handle play option - show submenu with devices (for Spotify) or direct play (for Tidal/local)
-  let playHideTimeout;
-
-  playOption.addEventListener('mouseenter', () => {
-    if (playHideTimeout) clearTimeout(playHideTimeout);
-    showPlayAlbumSubmenu();
-  });
-
-  playOption.addEventListener('mouseleave', (e) => {
-    const submenu = document.getElementById('playAlbumSubmenu');
-    const toSubmenu =
-      submenu &&
-      (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
-
-    if (!toSubmenu) {
-      playHideTimeout = setTimeout(() => {
-        if (submenu) submenu.classList.add('hidden');
-        playOption.classList.remove('bg-gray-700', 'text-white');
-      }, 100);
-    }
-  });
-
-  playOption.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    showPlayAlbumSubmenu();
+  setupSubmenuHover(playOption, {
+    onShow: showPlayAlbumSubmenu,
+    relatedElements: () => [document.getElementById('playAlbumSubmenu')],
+    onHide: () => {
+      const submenu = document.getElementById('playAlbumSubmenu');
+      if (submenu) submenu.classList.add('hidden');
+    },
   });
 
   // Handle remove option click
@@ -2060,30 +1984,18 @@ function initializeAlbumContextMenu() {
 
     // Verify the album is still at the expected index, fallback to identity search
     const albumsForRemove = getListData(currentListId);
-    let album = albumsForRemove && albumsForRemove[currentContextAlbum];
-    let indexToRemove = currentContextAlbum;
-
-    if (album && currentContextAlbumId) {
-      const expectedId =
-        `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-      if (expectedId !== currentContextAlbumId) {
-        // Index is stale, search by identity
-        const result = findAlbumByIdentity(currentContextAlbumId);
-        if (result) {
-          album = result.album;
-          indexToRemove = result.index;
-        } else {
-          showToast(
-            'Album not found - it may have been moved or removed',
-            'error'
-          );
-          return;
-        }
-      }
-    } else if (!album) {
+    const verified = verifyAlbumAtIndex(
+      albumsForRemove,
+      currentContextAlbum,
+      currentContextAlbumId,
+      findAlbumByIdentity
+    );
+    if (!verified) {
       showToast('Album not found - it may have been moved or removed', 'error');
       return;
     }
+    const album = verified.album;
+    const indexToRemove = verified.index;
 
     showConfirmation(
       'Remove Album',
@@ -2125,39 +2037,19 @@ function initializeAlbumContextMenu() {
   // Handle move option click - show submenu
   const moveOption = document.getElementById('moveAlbumOption');
   if (moveOption) {
-    let hideTimeout;
-
-    moveOption.addEventListener('mouseenter', () => {
-      if (hideTimeout) clearTimeout(hideTimeout);
-      showMoveToListSubmenu();
-    });
-
-    moveOption.addEventListener('mouseleave', (e) => {
-      const submenu = document.getElementById('albumMoveSubmenu');
-      const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
-      // Check if moving to year submenu or lists submenu
-      const toSubmenu =
-        submenu &&
-        (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
-      const toListsSubmenu =
-        listsSubmenu &&
-        (e.relatedTarget === listsSubmenu ||
-          listsSubmenu.contains(e.relatedTarget));
-
-      if (!toSubmenu && !toListsSubmenu) {
-        hideTimeout = setTimeout(() => {
-          if (submenu) submenu.classList.add('hidden');
-          if (listsSubmenu) listsSubmenu.classList.add('hidden');
-          moveOption.classList.remove('bg-gray-700', 'text-white');
-          currentHighlightedYear = null;
-        }, 100);
-      }
-    });
-
-    moveOption.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      showMoveToListSubmenu();
+    setupSubmenuHover(moveOption, {
+      onShow: showMoveToListSubmenu,
+      relatedElements: () => [
+        document.getElementById('albumMoveSubmenu'),
+        document.getElementById('albumMoveListsSubmenu'),
+      ],
+      onHide: () => {
+        const submenu = document.getElementById('albumMoveSubmenu');
+        const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
+        if (submenu) submenu.classList.add('hidden');
+        if (listsSubmenu) listsSubmenu.classList.add('hidden');
+        currentHighlightedYear = null;
+      },
     });
   }
 
@@ -2169,16 +2061,13 @@ function initializeAlbumContextMenu() {
 
       // Get the album from the currently selected context
       const albumsData = getListData(currentListId);
-      let album = albumsData && albumsData[currentContextAlbum];
-
-      if (album && currentContextAlbumId) {
-        const expectedId =
-          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-        if (expectedId !== currentContextAlbumId) {
-          const result = findAlbumByIdentity(currentContextAlbumId);
-          if (result) album = result.album;
-        }
-      }
+      const verified = verifyAlbumAtIndex(
+        albumsData,
+        currentContextAlbum,
+        currentContextAlbumId,
+        findAlbumByIdentity
+      );
+      const album = verified?.album;
 
       if (!album || !album.artist || !album.album) {
         showToast('Could not find album data', 'error');
@@ -2214,16 +2103,13 @@ function initializeAlbumContextMenu() {
 
       // Get the artist name from the currently selected album
       const albumsData = getListData(currentListId);
-      let album = albumsData && albumsData[currentContextAlbum];
-
-      if (album && currentContextAlbumId) {
-        const expectedId =
-          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-        if (expectedId !== currentContextAlbumId) {
-          const result = findAlbumByIdentity(currentContextAlbumId);
-          if (result) album = result.album;
-        }
-      }
+      const verified = verifyAlbumAtIndex(
+        albumsData,
+        currentContextAlbum,
+        currentContextAlbumId,
+        findAlbumByIdentity
+      );
+      const album = verified?.album;
 
       if (album && album.artist) {
         // Import and call showDiscoveryModal dynamically
@@ -2248,16 +2134,13 @@ function initializeAlbumContextMenu() {
 
       // Get the album from the currently selected context
       const albumsData = getListData(currentListId);
-      let album = albumsData && albumsData[currentContextAlbum];
-
-      if (album && currentContextAlbumId) {
-        const expectedId =
-          `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-        if (expectedId !== currentContextAlbumId) {
-          const result = findAlbumByIdentity(currentContextAlbumId);
-          if (result) album = result.album;
-        }
-      }
+      const verified = verifyAlbumAtIndex(
+        albumsData,
+        currentContextAlbum,
+        currentContextAlbumId,
+        findAlbumByIdentity
+      );
+      const album = verified?.album;
 
       if (!album || !album.artist || !album.album) {
         showToast('Could not find album data', 'error');
@@ -2590,12 +2473,7 @@ function initializeCategoryContextMenu() {
 // Open rename category modal
 function openRenameCategoryModal(groupId, currentName) {
   // Escape HTML for safe insertion
-  const escapedName = currentName
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+  const escapedName = escapeHtmlAttr(currentName);
 
   // Use the existing confirmation modal pattern with an input
   const modal = document.createElement('div');
@@ -2711,55 +2589,12 @@ let moveListsHideTimeout = null;
 
 // Group lists by year for the move submenu (only lists with years, excluding current list)
 function groupListsForMove() {
-  const listsByYear = {};
-
-  Object.keys(lists).forEach((listName) => {
-    // Skip current list
-    if (listName === currentListId) return;
-
-    const meta = lists[listName];
-    const year = meta?.year;
-
-    // Only include lists that have a year
-    if (year) {
-      if (!listsByYear[year]) {
-        listsByYear[year] = [];
-      }
-      listsByYear[year].push(listName);
-    }
-  });
-
-  // Sort years descending
-  const sortedYears = Object.keys(listsByYear).sort(
-    (a, b) => parseInt(b) - parseInt(a)
-  );
-
-  return { listsByYear, sortedYears };
+  return groupListsByYear(lists, { excludeListId: currentListId });
 }
 
 // Group user's lists by year for add-to-list from recommendations
 function groupUserListsForAdd() {
-  const listsByYear = {};
-
-  Object.keys(lists).forEach((listId) => {
-    const meta = lists[listId];
-    const year = meta?.year;
-
-    // Only include lists that have a year (no collections)
-    if (year) {
-      if (!listsByYear[year]) {
-        listsByYear[year] = [];
-      }
-      listsByYear[year].push(listId);
-    }
-  });
-
-  // Sort years descending
-  const sortedYears = Object.keys(listsByYear).sort(
-    (a, b) => parseInt(b) - parseInt(a)
-  );
-
-  return { listsByYear, sortedYears };
+  return groupListsByYear(lists);
 }
 
 // Show the move to list submenu for desktop (now shows years)
@@ -2958,90 +2793,34 @@ function hideSubmenuOnLeave() {
 
   if (!contextMenu) return;
 
-  let submenuTimeout;
-
-  const hideSubmenus = () => {
-    submenuTimeout = setTimeout(() => {
-      if (moveSubmenu) {
-        moveSubmenu.classList.add('hidden');
-        moveOption?.classList.remove('bg-gray-700', 'text-white');
-      }
-      if (playSubmenu) {
-        playSubmenu.classList.add('hidden');
-        playOption?.classList.remove('bg-gray-700', 'text-white');
-      }
-      // Also hide the lists submenu (third level for move)
-      if (moveListsSubmenu) {
-        moveListsSubmenu.classList.add('hidden');
-      }
-      // Reset highlighted year
-      currentHighlightedYear = null;
-    }, 100);
-  };
-
-  const cancelHide = () => {
-    if (submenuTimeout) clearTimeout(submenuTimeout);
-  };
-
-  contextMenu.addEventListener('mouseleave', (e) => {
-    // Check if moving to any submenu
-    const toMoveSubmenu =
-      moveSubmenu &&
-      (e.relatedTarget === moveSubmenu ||
-        moveSubmenu.contains(e.relatedTarget));
-    const toMoveListsSubmenu =
-      moveListsSubmenu &&
-      (e.relatedTarget === moveListsSubmenu ||
-        moveListsSubmenu.contains(e.relatedTarget));
-    const toPlaySubmenu =
-      playSubmenu &&
-      (e.relatedTarget === playSubmenu ||
-        playSubmenu.contains(e.relatedTarget));
-
-    if (!toMoveSubmenu && !toMoveListsSubmenu && !toPlaySubmenu) {
-      hideSubmenus();
-    }
-  });
-
+  const submenus = [];
   if (moveSubmenu) {
-    moveSubmenu.addEventListener('mouseenter', cancelHide);
-    moveSubmenu.addEventListener('mouseleave', (e) => {
-      // Check if moving to the lists submenu (third level)
-      const toListsSubmenu =
-        moveListsSubmenu &&
-        (e.relatedTarget === moveListsSubmenu ||
-          moveListsSubmenu.contains(e.relatedTarget));
-      // Check if moving back to context menu
-      const toContextMenu =
-        contextMenu &&
-        (e.relatedTarget === contextMenu ||
-          contextMenu.contains(e.relatedTarget));
-
-      if (!toListsSubmenu && !toContextMenu) {
-        hideSubmenus();
-      }
+    submenus.push({
+      element: moveSubmenu,
+      triggerElement: moveOption,
+      relatedMenus: [moveListsSubmenu].filter(Boolean),
     });
   }
-
   if (moveListsSubmenu) {
-    moveListsSubmenu.addEventListener('mouseenter', cancelHide);
-    moveListsSubmenu.addEventListener('mouseleave', (e) => {
-      // Check if moving back to year submenu
-      const toMoveSubmenu =
-        moveSubmenu &&
-        (e.relatedTarget === moveSubmenu ||
-          moveSubmenu.contains(e.relatedTarget));
-
-      if (!toMoveSubmenu) {
-        hideSubmenus();
-      }
+    submenus.push({
+      element: moveListsSubmenu,
+      relatedMenus: [moveSubmenu].filter(Boolean),
+    });
+  }
+  if (playSubmenu) {
+    submenus.push({
+      element: playSubmenu,
+      triggerElement: playOption,
     });
   }
 
-  if (playSubmenu) {
-    playSubmenu.addEventListener('mouseenter', cancelHide);
-    playSubmenu.addEventListener('mouseleave', hideSubmenus);
-  }
+  setupChainedSubmenus({
+    contextMenu,
+    submenus,
+    onHideAll: () => {
+      currentHighlightedYear = null;
+    },
+  });
 }
 
 // Show the play album submenu with device options
@@ -3207,17 +2986,15 @@ function triggerPlayAlbum() {
   if (currentContextAlbum === null) return;
 
   const albumsForPlay = getListData(currentListId);
-  const expectedAlbum = albumsForPlay && albumsForPlay[currentContextAlbum];
-  if (expectedAlbum && currentContextAlbumId) {
-    const expectedId =
-      `${expectedAlbum.artist}::${expectedAlbum.album}::${expectedAlbum.release_date || ''}`.toLowerCase();
-    if (expectedId === currentContextAlbumId) {
-      playAlbum(currentContextAlbum);
-      return;
-    }
-  }
-
-  if (currentContextAlbumId) {
+  const result = verifyAlbumAtIndex(
+    albumsForPlay,
+    currentContextAlbum,
+    currentContextAlbumId,
+    findAlbumByIdentity
+  );
+  if (result) {
+    playAlbum(result.index);
+  } else if (currentContextAlbumId) {
     playAlbumSafe(currentContextAlbumId);
   } else {
     showToast('Album not found - it may have been moved or removed', 'error');
@@ -3231,67 +3008,21 @@ async function playAlbumOnSpotifyDevice(deviceId) {
     return;
   }
 
-  // Get the album data
+  // Get the album data and verify identity
   const albumsForPlay = getListData(currentListId);
-  let album = albumsForPlay && albumsForPlay[currentContextAlbum];
+  const verified = verifyAlbumAtIndex(
+    albumsForPlay,
+    currentContextAlbum,
+    currentContextAlbumId,
+    findAlbumByIdentity
+  );
 
-  // Verify album identity
-  if (album && currentContextAlbumId) {
-    const expectedId =
-      `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-    if (expectedId !== currentContextAlbumId) {
-      const result = findAlbumByIdentity(currentContextAlbumId);
-      if (result) {
-        album = result.album;
-      } else {
-        showToast('Album not found', 'error');
-        return;
-      }
-    }
-  }
-
-  if (!album) {
+  if (!verified) {
     showToast('Album not found', 'error');
     return;
   }
 
-  showToast('Starting playback...', 'info');
-
-  try {
-    // First, search for the album on Spotify to get the ID
-    const searchQuery = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
-    const searchResp = await fetch(`/api/spotify/album?${searchQuery}`, {
-      credentials: 'include',
-    });
-    const searchData = await searchResp.json();
-
-    if (!searchResp.ok || !searchData.id) {
-      showToast(searchData.error || 'Album not found on Spotify', 'error');
-      return;
-    }
-
-    // Now play the album on the device
-    const playResp = await fetch('/api/spotify/play', {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        albumId: searchData.id,
-        deviceId: deviceId,
-      }),
-    });
-
-    const playData = await playResp.json();
-
-    if (playResp.ok && playData.success) {
-      showToast(`Now playing "${album.album}"`, 'success');
-    } else {
-      showToast(playData.error || 'Failed to start playback', 'error');
-    }
-  } catch (err) {
-    console.error('Spotify Connect playback error:', err);
-    showToast('Failed to start playback', 'error');
-  }
+  await playOnSpotifyDevice(verified.album, deviceId, showToast);
 }
 
 // Play album on a specific Spotify Connect device (mobile version using albumId)
@@ -3302,44 +3033,7 @@ async function playAlbumOnDeviceMobile(albumId, deviceId) {
     return;
   }
 
-  const album = result.album;
-  showToast('Starting playback...', 'info');
-
-  try {
-    // First, search for the album on Spotify to get the ID
-    const searchQuery = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
-    const searchResp = await fetch(`/api/spotify/album?${searchQuery}`, {
-      credentials: 'include',
-    });
-    const searchData = await searchResp.json();
-
-    if (!searchResp.ok || !searchData.id) {
-      showToast(searchData.error || 'Album not found on Spotify', 'error');
-      return;
-    }
-
-    // Now play the album on the device
-    const playResp = await fetch('/api/spotify/play', {
-      method: 'PUT',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        albumId: searchData.id,
-        deviceId: deviceId,
-      }),
-    });
-
-    const playData = await playResp.json();
-
-    if (playResp.ok && playData.success) {
-      showToast(`Now playing "${album.album}"`, 'success');
-    } else {
-      showToast(playData.error || 'Failed to start playback', 'error');
-    }
-  } catch (err) {
-    console.error('Spotify Connect playback error:', err);
-    showToast('Failed to start playback', 'error');
-  }
+  await playOnSpotifyDevice(result.album, deviceId, showToast);
 }
 
 // Play the selected album on the connected music service
@@ -3348,68 +3042,15 @@ function playAlbum(index) {
   const album = albums && albums[index];
   if (!album) return;
 
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-  const preferred = window.currentUser?.musicService;
-
-  const chooseService = () => {
-    if (preferred === 'spotify' && hasSpotify) {
-      return Promise.resolve('spotify');
-    }
-    if (preferred === 'tidal' && hasTidal) {
-      return Promise.resolve('tidal');
-    }
-    if (hasSpotify && hasTidal) {
-      return showServicePicker(true, true);
-    } else if (hasSpotify) {
-      return Promise.resolve('spotify');
-    } else if (hasTidal) {
-      return Promise.resolve('tidal');
-    } else {
-      showToast('No music service connected', 'error');
-      return Promise.resolve(null);
-    }
-  };
-
-  chooseService().then((service) => {
+  chooseService(showServicePicker, showToast).then((service) => {
     hideConfirmation();
     if (!service) return;
-
-    const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
-    const endpoint =
-      service === 'spotify' ? '/api/spotify/album' : '/api/tidal/album';
-
-    fetch(`${endpoint}?${query}`, { credentials: 'include' })
-      .then(async (r) => {
-        let data;
-        try {
-          data = await r.json();
-        } catch (_) {
-          throw new Error('Invalid response');
-        }
-
-        if (!r.ok) {
-          throw new Error(data.error || 'Request failed');
-        }
-        return data;
-      })
-      .then((data) => {
-        if (data.id) {
-          if (service === 'spotify') {
-            window.location.href = `spotify:album:${data.id}`;
-          } else {
-            window.location.href = `tidal://album/${data.id}`;
-          }
-        } else if (data.error) {
-          showToast(data.error, 'error');
-        } else {
-          showToast('Album not found on ' + service, 'error');
-        }
-      })
-      .catch((err) => {
-        console.error('Play album error:', err);
-        showToast(err.message || 'Failed to open album', 'error');
-      });
+    openInMusicApp(
+      service,
+      'album',
+      { artist: album.artist, album: album.album },
+      showToast
+    );
   });
 }
 
@@ -3425,68 +3066,15 @@ function playTrack(index) {
     return;
   }
 
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-  const preferred = window.currentUser?.musicService;
-
-  const chooseService = () => {
-    if (preferred === 'spotify' && hasSpotify) {
-      return Promise.resolve('spotify');
-    }
-    if (preferred === 'tidal' && hasTidal) {
-      return Promise.resolve('tidal');
-    }
-    if (hasSpotify && hasTidal) {
-      return showServicePicker(true, true);
-    } else if (hasSpotify) {
-      return Promise.resolve('spotify');
-    } else if (hasTidal) {
-      return Promise.resolve('tidal');
-    } else {
-      showToast('No music service connected', 'error');
-      return Promise.resolve(null);
-    }
-  };
-
-  chooseService().then((service) => {
+  chooseService(showServicePicker, showToast).then((service) => {
     hideConfirmation();
     if (!service) return;
-
-    const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}&track=${encodeURIComponent(trackPick)}`;
-    const endpoint =
-      service === 'spotify' ? '/api/spotify/track' : '/api/tidal/track';
-
-    fetch(`${endpoint}?${query}`, { credentials: 'include' })
-      .then(async (r) => {
-        let data;
-        try {
-          data = await r.json();
-        } catch (_) {
-          throw new Error('Invalid response');
-        }
-
-        if (!r.ok) {
-          throw new Error(data.error || 'Request failed');
-        }
-        return data;
-      })
-      .then((data) => {
-        if (data.id) {
-          if (service === 'spotify') {
-            window.location.href = `spotify:track:${data.id}`;
-          } else {
-            window.location.href = `tidal://track/${data.id}`;
-          }
-        } else if (data.error) {
-          showToast(data.error, 'error');
-        } else {
-          showToast('Track not found on ' + service, 'error');
-        }
-      })
-      .catch((err) => {
-        console.error('Play track error:', err);
-        showToast(err.message || 'Failed to open track', 'error');
-      });
+    openInMusicApp(
+      service,
+      'track',
+      { artist: album.artist, album: album.album, track: trackPick },
+      showToast
+    );
   });
 }
 window.playTrack = playTrack;
@@ -3512,68 +3100,15 @@ function playSpecificTrack(index, trackName) {
     return;
   }
 
-  const hasSpotify = window.currentUser?.spotifyAuth;
-  const hasTidal = window.currentUser?.tidalAuth;
-  const preferred = window.currentUser?.musicService;
-
-  const chooseService = () => {
-    if (preferred === 'spotify' && hasSpotify) {
-      return Promise.resolve('spotify');
-    }
-    if (preferred === 'tidal' && hasTidal) {
-      return Promise.resolve('tidal');
-    }
-    if (hasSpotify && hasTidal) {
-      return showServicePicker(true, true);
-    } else if (hasSpotify) {
-      return Promise.resolve('spotify');
-    } else if (hasTidal) {
-      return Promise.resolve('tidal');
-    } else {
-      showToast('No music service connected', 'error');
-      return Promise.resolve(null);
-    }
-  };
-
-  chooseService().then((service) => {
+  chooseService(showServicePicker, showToast).then((service) => {
     hideConfirmation();
     if (!service) return;
-
-    const query = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}&track=${encodeURIComponent(trackName)}`;
-    const endpoint =
-      service === 'spotify' ? '/api/spotify/track' : '/api/tidal/track';
-
-    fetch(`${endpoint}?${query}`, { credentials: 'include' })
-      .then(async (r) => {
-        let data;
-        try {
-          data = await r.json();
-        } catch (_) {
-          throw new Error('Invalid response');
-        }
-
-        if (!r.ok) {
-          throw new Error(data.error || 'Request failed');
-        }
-        return data;
-      })
-      .then((data) => {
-        if (data.id) {
-          if (service === 'spotify') {
-            window.location.href = `spotify:track:${data.id}`;
-          } else {
-            window.location.href = `tidal://track/${data.id}`;
-          }
-        } else if (data.error) {
-          showToast(data.error, 'error');
-        } else {
-          showToast('Track not found on ' + service, 'error');
-        }
-      })
-      .catch((err) => {
-        console.error('Play track error:', err);
-        showToast(err.message || 'Failed to open track', 'error');
-      });
+    openInMusicApp(
+      service,
+      'track',
+      { artist: album.artist, album: album.album, track: trackName },
+      showToast
+    );
   });
 }
 window.playSpecificTrack = playSpecificTrack;
@@ -3685,13 +3220,7 @@ function initializeCreateList() {
   };
 
   cancelBtn.onclick = closeModal;
-
-  // Click outside to close
-  modal.onclick = (e) => {
-    if (e.target === modal) {
-      closeModal();
-    }
-  };
+  setupModalBehavior(modal, closeModal);
 
   /**
    * Validate a year value
@@ -3847,13 +3376,6 @@ function initializeCreateList() {
       createList();
     }
   };
-
-  // ESC key to close
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      closeModal();
-    }
-  });
 }
 
 // Create collection functionality
@@ -3883,13 +3405,7 @@ function initializeCreateCollection() {
   };
 
   cancelBtn.onclick = closeModal;
-
-  // Click outside to close
-  modal.onclick = (e) => {
-    if (e.target === modal) {
-      closeModal();
-    }
-  };
+  setupModalBehavior(modal, closeModal);
 
   // Create collection
   const createCollection = async () => {
@@ -3943,13 +3459,6 @@ function initializeCreateCollection() {
       createCollection();
     }
   };
-
-  // ESC key to close
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !modal.classList.contains('hidden')) {
-      closeModal();
-    }
-  });
 }
 
 // Edit list details functionality (formerly Rename list)
@@ -3973,13 +3482,7 @@ function initializeRenameList() {
   };
 
   cancelBtn.onclick = closeModal;
-
-  // Click outside to close
-  modal.onclick = (e) => {
-    if (e.target === modal) {
-      closeModal();
-    }
-  };
+  setupModalBehavior(modal, closeModal);
 
   // Validate year input (optional for editing)
   const validateYear = (yearValue) => {
@@ -4636,28 +4139,14 @@ function showMobileRecommendationMenu(rec, year, locked) {
     editReasoningBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       close();
-      const newReasoning = await showReasoningModal(
+      await editRecommendationReasoning(
         rec,
         year,
-        rec.reasoning || '',
-        true // isEditMode
+        apiCall,
+        showReasoningModal,
+        showToast,
+        selectRecommendations
       );
-
-      if (newReasoning !== null) {
-        try {
-          await apiCall(
-            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}/reasoning`,
-            {
-              method: 'PATCH',
-              body: JSON.stringify({ reasoning: newReasoning }),
-            }
-          );
-          showToast('Reasoning updated', 'success');
-          selectRecommendations(year);
-        } catch (_err) {
-          showToast('Failed to update reasoning', 'error');
-        }
-      }
     });
   }
 
@@ -4673,26 +4162,14 @@ function showMobileRecommendationMenu(rec, year, locked) {
     removeBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       close();
-
-      const confirmed = await showConfirmation(
-        'Remove Recommendation',
-        `Remove "${rec.album}" by ${rec.artist} from recommendations?`,
-        "This will remove the album from this year's recommendations.",
-        'Remove'
+      await removeRecommendation(
+        rec,
+        year,
+        apiCall,
+        showConfirmation,
+        showToast,
+        selectRecommendations
       );
-
-      if (confirmed) {
-        try {
-          await apiCall(
-            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}`,
-            { method: 'DELETE' }
-          );
-          showToast('Recommendation removed', 'success');
-          selectRecommendations(year);
-        } catch (_err) {
-          showToast('Failed to remove recommendation', 'error');
-        }
-      }
     });
   }
 }
@@ -4704,27 +4181,9 @@ function showMobileRecommendationMenu(rec, year, locked) {
  */
 function showMobileAddRecommendationToListSheet(rec, year) {
   // Get user's lists grouped by year
-  const listsByYear = {};
-  const listsWithoutYear = [];
-
-  Object.keys(lists).forEach((listId) => {
-    const meta = lists[listId];
-    const listName = meta?.name || 'Unknown';
-    const listYear = meta?.year;
-
-    if (listYear) {
-      if (!listsByYear[listYear]) {
-        listsByYear[listYear] = [];
-      }
-      listsByYear[listYear].push({ id: listId, name: listName });
-    } else {
-      listsWithoutYear.push({ id: listId, name: listName });
-    }
-  });
-
-  // Sort years descending
-  const sortedYears = Object.keys(listsByYear).sort(
-    (a, b) => parseInt(b) - parseInt(a)
+  const { listsByYear, sortedYears, listsWithoutYear } = groupListsByYear(
+    lists,
+    { includeWithoutYear: true, includeNames: true }
   );
 
   const hasAnyLists = sortedYears.length > 0 || listsWithoutYear.length > 0;
@@ -5153,26 +4612,14 @@ function initializeRecommendationContextMenu() {
       if (!currentRecommendationContext) return;
       const { rec, year } = currentRecommendationContext;
 
-      const confirmed = await showConfirmation(
-        'Remove Recommendation',
-        `Remove "${rec.album}" by ${rec.artist} from recommendations?`,
-        "This will remove the album from this year's recommendations.",
-        'Remove'
+      await removeRecommendation(
+        rec,
+        year,
+        apiCall,
+        showConfirmation,
+        showToast,
+        selectRecommendations
       );
-
-      if (confirmed) {
-        try {
-          await apiCall(
-            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}`,
-            { method: 'DELETE' }
-          );
-          showToast('Recommendation removed', 'success');
-          // Refresh recommendations
-          selectRecommendations(year);
-        } catch (_err) {
-          showToast('Failed to remove recommendation', 'error');
-        }
-      }
 
       currentRecommendationContext = null;
     });
@@ -5187,30 +4634,14 @@ function initializeRecommendationContextMenu() {
       if (!currentRecommendationContext) return;
       const { rec, year } = currentRecommendationContext;
 
-      // Show reasoning modal in edit mode with existing reasoning
-      const newReasoning = await showReasoningModal(
+      await editRecommendationReasoning(
         rec,
         year,
-        rec.reasoning || '',
-        true // isEditMode
+        apiCall,
+        showReasoningModal,
+        showToast,
+        selectRecommendations
       );
-
-      if (newReasoning) {
-        try {
-          await apiCall(
-            `/api/recommendations/${year}/${encodeURIComponent(rec.album_id)}/reasoning`,
-            {
-              method: 'PATCH',
-              body: JSON.stringify({ reasoning: newReasoning }),
-            }
-          );
-          showToast('Reasoning updated', 'success');
-          // Refresh recommendations
-          selectRecommendations(year);
-        } catch (_err) {
-          showToast('Failed to update reasoning', 'error');
-        }
-      }
 
       currentRecommendationContext = null;
     });
@@ -5219,32 +4650,16 @@ function initializeRecommendationContextMenu() {
   // Handle add to list option - show submenu with years
   const addToListOption = document.getElementById('addToListOption');
   if (addToListOption) {
-    let addHideTimeout;
-
-    addToListOption.addEventListener('mouseenter', () => {
-      if (addHideTimeout) clearTimeout(addHideTimeout);
-      showRecommendationAddSubmenu();
-    });
-
-    addToListOption.addEventListener('mouseleave', (e) => {
-      const submenu = document.getElementById('recommendationAddSubmenu');
-      const toSubmenu =
-        submenu &&
-        (e.relatedTarget === submenu || submenu.contains(e.relatedTarget));
-
-      if (!toSubmenu) {
-        addHideTimeout = setTimeout(() => {
-          if (submenu) submenu.classList.add('hidden');
-          addToListOption.classList.remove('bg-gray-700', 'text-white');
-          currentRecommendationAddHighlightedYear = null;
-        }, 100);
-      }
-    });
-
-    addToListOption.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      showRecommendationAddSubmenu();
+    setupSubmenuHover(addToListOption, {
+      onShow: showRecommendationAddSubmenu,
+      relatedElements: () => [
+        document.getElementById('recommendationAddSubmenu'),
+      ],
+      onHide: () => {
+        const submenu = document.getElementById('recommendationAddSubmenu');
+        if (submenu) submenu.classList.add('hidden');
+        currentRecommendationAddHighlightedYear = null;
+      },
     });
   }
 }
