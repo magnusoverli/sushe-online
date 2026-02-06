@@ -46,6 +46,8 @@ import { createActionSheet } from './ui-factories.js';
  * @param {Function} deps.playSpecificTrack - Play a specific track by name
  * @param {Function} deps.getSortedGroups - Get groups sorted by sort_order
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists after changes
+ * @param {Function} deps.isViewingRecommendations - Check if currently viewing recommendations
+ * @param {Function} deps.recommendAlbum - Shared recommendation flow (reasoning modal + API)
  * @returns {Object} Mobile UI module API
  */
 export function createMobileUI(deps = {}) {
@@ -84,6 +86,8 @@ export function createMobileUI(deps = {}) {
     playSpecificTrack,
     getSortedGroups,
     refreshGroupsAndLists,
+    isViewingRecommendations,
+    recommendAlbum,
   } = deps;
 
   /**
@@ -307,6 +311,15 @@ export function createMobileUI(deps = {}) {
       showSpotifyConnect = true;
     }
 
+    // Determine if recommend option should be shown
+    const listMeta = getListMetadata(getCurrentList());
+    const isYearBased =
+      listMeta && listMeta.year !== null && listMeta.year !== undefined;
+    const viewingRecs = isViewingRecommendations
+      ? isViewingRecommendations()
+      : false;
+    const showRecommend = isYearBased && !viewingRecs;
+
     const { sheet: actionSheet, close } = createActionSheet({
       contentHtml: `
           <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
@@ -360,6 +373,17 @@ export function createMobileUI(deps = {}) {
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-arrow-right mr-3 text-gray-400"></i>Move to List...
           </button>
+
+          ${
+            showRecommend
+              ? `
+          <button data-action="recommend"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-thumbs-up mr-3 text-blue-400"></i>Recommend
+          </button>
+          `
+              : ''
+          }
 
           ${
             hasLastfm
@@ -524,6 +548,21 @@ export function createMobileUI(deps = {}) {
       close();
       showMobileMoveToListSheet(index, albumId);
     });
+
+    // Recommend option handler
+    const recommendBtn = actionSheet.querySelector('[data-action="recommend"]');
+
+    if (recommendBtn) {
+      recommendBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+        const year = getListMetadata(getCurrentList())?.year;
+        if (year && recommendAlbum) {
+          recommendAlbum(album, year);
+        }
+      });
+    }
 
     // Last.fm discovery option handlers
     const similarArtistsBtn = actionSheet.querySelector(

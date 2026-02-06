@@ -249,6 +249,8 @@ function getMobileUIModule() {
       playSpecificTrack,
       getSortedGroups,
       refreshGroupsAndLists,
+      isViewingRecommendations,
+      recommendAlbum,
     });
   }
   return mobileUIModule;
@@ -1955,6 +1957,38 @@ function updateMobileHeader() {
   }
 }
 
+/**
+ * Shared recommendation flow: show reasoning modal, call API, handle response.
+ * Used by both desktop context menu and mobile action sheet.
+ * @param {Object} album - Album object with artist, album, etc.
+ * @param {number} year - Year to recommend for
+ */
+async function recommendAlbum(album, year) {
+  const reasoning = await showReasoningModal(album, year);
+  if (!reasoning) return; // User cancelled
+
+  try {
+    const response = await apiCall(`/api/recommendations/${year}`, {
+      method: 'POST',
+      body: JSON.stringify({ album, reasoning }),
+    });
+
+    if (response.error) {
+      showToast(response.error, 'info');
+    } else {
+      showToast(`Recommended "${album.album}" by ${album.artist}`, 'success');
+    }
+  } catch (err) {
+    if (err.status === 409) {
+      showToast(err.error || 'This album was already recommended', 'info');
+    } else if (err.status === 403) {
+      showToast('Recommendations are locked for this year', 'error');
+    } else {
+      showToast('Error adding recommendation', 'error');
+    }
+  }
+}
+
 // Initialize album context menu
 function initializeAlbumContextMenu() {
   const contextMenu = document.getElementById('albumContextMenu');
@@ -2164,40 +2198,7 @@ function initializeAlbumContextMenu() {
         return;
       }
 
-      // Show reasoning modal
-      const reasoning = await showReasoningModal(album, year);
-      if (!reasoning) {
-        // User cancelled
-        currentContextAlbum = null;
-        currentContextAlbumId = null;
-        return;
-      }
-
-      try {
-        const response = await apiCall(`/api/recommendations/${year}`, {
-          method: 'POST',
-          body: JSON.stringify({ album, reasoning }),
-        });
-
-        if (response.error) {
-          showToast(response.error, 'info');
-        } else {
-          showToast(
-            `Recommended "${album.album}" by ${album.artist}`,
-            'success'
-          );
-        }
-      } catch (err) {
-        // Check if it's an "already recommended" error
-        if (err.status === 409) {
-          const data = (await err.json?.()) || {};
-          showToast(data.error || 'This album was already recommended', 'info');
-        } else if (err.status === 403) {
-          showToast('Recommendations are locked for this year', 'error');
-        } else {
-          showToast('Error adding recommendation', 'error');
-        }
-      }
+      await recommendAlbum(album, year);
 
       currentContextAlbum = null;
       currentContextAlbumId = null;

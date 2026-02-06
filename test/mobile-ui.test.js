@@ -352,4 +352,73 @@ describe('Mobile UI Module - Unit Tests', () => {
       assert.strictEqual(isChecked, false);
     });
   });
+
+  describe('Recommend option visibility logic', () => {
+    /**
+     * Helper that mirrors the showRecommend logic in showMobileAlbumMenu.
+     * The mobile action sheet shows the recommend button only when:
+     * 1. The current list has a year (is year-based)
+     * 2. The user is NOT currently viewing the recommendations view
+     */
+    function computeShowRecommend(listMeta, isViewingRecommendations) {
+      const isYearBased =
+        listMeta && listMeta.year !== null && listMeta.year !== undefined;
+      const viewingRecs = isViewingRecommendations
+        ? isViewingRecommendations()
+        : false;
+      return isYearBased && !viewingRecs;
+    }
+
+    it('should show recommend for year-based list when not viewing recommendations', () => {
+      const listMeta = { year: 2025, name: 'My 2025 List' };
+      const isViewingRecs = () => false;
+
+      assert.strictEqual(computeShowRecommend(listMeta, isViewingRecs), true);
+    });
+
+    it('should hide recommend when list has no year (null)', () => {
+      const listMeta = { year: null, name: 'Custom List' };
+      const isViewingRecs = () => false;
+
+      assert.strictEqual(computeShowRecommend(listMeta, isViewingRecs), false);
+    });
+
+    it('should hide recommend when list has no year (undefined)', () => {
+      const listMeta = { name: 'Custom List' };
+      const isViewingRecs = () => false;
+
+      assert.strictEqual(computeShowRecommend(listMeta, isViewingRecs), false);
+    });
+
+    it('should hide recommend when viewing recommendations', () => {
+      const listMeta = { year: 2025, name: 'My 2025 List' };
+      const isViewingRecs = () => true;
+
+      assert.strictEqual(computeShowRecommend(listMeta, isViewingRecs), false);
+    });
+
+    it('should hide recommend when listMeta is null', () => {
+      const isViewingRecs = () => false;
+
+      assert.ok(!computeShowRecommend(null, isViewingRecs));
+    });
+
+    it('should handle missing isViewingRecommendations dependency gracefully', () => {
+      const listMeta = { year: 2025, name: 'My 2025 List' };
+
+      // When isViewingRecommendations is not provided (null/undefined),
+      // should default to not viewing recommendations and show the option
+      assert.strictEqual(computeShowRecommend(listMeta, null), true);
+      assert.strictEqual(computeShowRecommend(listMeta, undefined), true);
+    });
+
+    it('should show recommend for year 0 (falsy but valid year)', () => {
+      // Year 0 is technically a valid number but falsy - the check uses
+      // !== null && !== undefined, so year 0 should pass
+      const listMeta = { year: 0, name: 'Year Zero' };
+      const isViewingRecs = () => false;
+
+      assert.strictEqual(computeShowRecommend(listMeta, isViewingRecs), true);
+    });
+  });
 });
