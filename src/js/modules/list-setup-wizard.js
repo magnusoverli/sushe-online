@@ -3,8 +3,7 @@
  * Prompts users to complete list setup (year assignment + main list designation)
  */
 
-import { apiCall } from './utils.js';
-import { showToast } from './ui-utils.js';
+import { apiCall, showToast } from './utils.js';
 import { escapeHtml } from './html-utils.js';
 
 // State for the wizard

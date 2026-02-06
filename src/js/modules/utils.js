@@ -1,7 +1,15 @@
 import { apiCall as appApiCall } from '../app.js';
-import { showToast as uiShowToast } from './ui-utils.js';
 
-export const showToast = uiShowToast;
+export { showToast, calculateToastDuration } from './toast.js';
+export {
+  showConfirmation,
+  hideConfirmation,
+  showReasoningModal,
+  hideReasoningModal,
+  showViewReasoningModal,
+  hideViewReasoningModal,
+} from './modals.js';
+export { positionContextMenu } from './context-menu.js';
 export const apiCall = appApiCall;
 
 /**

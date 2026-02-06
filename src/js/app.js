@@ -11,15 +11,15 @@ import { createImportConflictHandler } from './modules/import-export.js';
 // Date utilities are imported directly by modules that need them
 import { createNowPlaying } from './modules/now-playing.js';
 import { createRealtimeSync } from './modules/realtime-sync.js';
+import { showToast } from './modules/toast.js';
 import {
-  positionContextMenu,
-  showToast,
   showConfirmation,
   hideConfirmation,
   showReasoningModal,
   hideReasoningModal,
   showViewReasoningModal,
-} from './modules/ui-utils.js';
+} from './modules/modals.js';
+import { positionContextMenu } from './modules/context-menu.js';
 import { escapeHtml } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';

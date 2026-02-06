@@ -6,6 +6,7 @@
  */
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+import { showToast } from './utils.js';
 
 let modalElement = null;
 let currentPairs = [];
@@ -491,15 +492,6 @@ function setButtonsLoading(loading) {
   buttons.forEach((btn) => {
     btn.disabled = loading;
   });
-}
-
-function showToast(message, type = 'info') {
-  // Try to use the global showToast if available
-  if (typeof window.showToast === 'function') {
-    window.showToast(message, type);
-  } else {
-    console.log(`[${type}] ${message}`);
-  }
 }
 
 /**
