@@ -28,6 +28,9 @@ module.exports = (appInstance, deps) => {
     helpers: { upsertAlbumRecord },
   } = deps;
 
+  const { createAsyncHandler } = require('../../middleware/async-handler');
+  const asyncHandler = createAsyncHandler(logger);
+
   /**
    * Helper to check if recommendations are locked for a year
    */
@@ -72,9 +75,12 @@ module.exports = (appInstance, deps) => {
    * GET /api/recommendations/years
    * Get all years that have recommendations or settings
    */
-  app.get('/api/recommendations/years', ensureAuthAPI, async (req, res) => {
-    try {
-      const result = await pool.query(`
+  app.get(
+    '/api/recommendations/years',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const result = await pool.query(`
         SELECT DISTINCT year FROM (
           SELECT year FROM recommendations
           UNION
@@ -83,14 +89,12 @@ module.exports = (appInstance, deps) => {
         ORDER BY year DESC
       `);
 
-      res.json({ years: result.rows.map((r) => r.year) });
-    } catch (err) {
-      logger.error('Error fetching recommendation years', {
-        error: err.message,
-      });
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
+        res.json({ years: result.rows.map((r) => r.year) });
+      },
+      'fetching recommendation years',
+      { errorMessage: 'Database error' }
+    )
+  );
 
   /**
    * GET /api/recommendations/:year
@@ -100,8 +104,8 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // Check access
@@ -157,14 +161,10 @@ module.exports = (appInstance, deps) => {
             created_at: row.created_at,
           })),
         });
-      } catch (err) {
-        logger.error('Error fetching recommendations', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching recommendations',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -175,8 +175,8 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // Check access
@@ -313,18 +313,10 @@ module.exports = (appInstance, deps) => {
           year,
           recommended_by: req.user.username,
         });
-      } catch (err) {
-        if (err instanceof TransactionAbort) {
-          return res.status(err.statusCode).json(err.body);
-        }
-        logger.error('Error adding recommendation', {
-          error: err.message,
-          year: req.params.year,
-          userId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'adding recommendation',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -336,8 +328,8 @@ module.exports = (appInstance, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const { albumId } = req.params;
         if (!albumId) {
@@ -368,16 +360,10 @@ module.exports = (appInstance, deps) => {
           year,
           albumId,
         });
-      } catch (err) {
-        logger.error('Error removing recommendation', {
-          error: err.message,
-          year: req.params.year,
-          albumId: req.params.albumId,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'removing recommendation',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -388,8 +374,8 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/:albumId/reasoning',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const { albumId } = req.params;
         if (!albumId) {
@@ -443,16 +429,10 @@ module.exports = (appInstance, deps) => {
           albumId,
           reasoning: trimmedReasoning,
         });
-      } catch (err) {
-        logger.error('Error updating recommendation reasoning', {
-          error: err.message,
-          year: req.params.year,
-          albumId: req.params.albumId,
-          userId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'updating recommendation reasoning',
+      { errorMessage: 'Database error' }
+    )
   );
 
   // ============ STATUS ENDPOINT ============
@@ -465,8 +445,8 @@ module.exports = (appInstance, deps) => {
     '/api/recommendations/:year/status',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const locked = await isRecommendationsLocked(year);
         const hasAccess = await hasRecommendationAccess(year, req.user._id);
@@ -483,14 +463,10 @@ module.exports = (appInstance, deps) => {
           hasAccess,
           count: parseInt(countResult.rows[0].count, 10),
         });
-      } catch (err) {
-        logger.error('Error fetching recommendation status', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching recommendation status',
+      { errorMessage: 'Database error' }
+    )
   );
 
   // ============ LOCK/UNLOCK ENDPOINTS ============
@@ -504,8 +480,8 @@ module.exports = (appInstance, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         await pool.query(
           `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
@@ -525,15 +501,10 @@ module.exports = (appInstance, deps) => {
         });
 
         res.json({ success: true, year, locked: true });
-      } catch (err) {
-        logger.error('Error locking recommendations', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'locking recommendations',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -545,8 +516,8 @@ module.exports = (appInstance, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         await pool.query(
           `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
@@ -566,15 +537,10 @@ module.exports = (appInstance, deps) => {
         });
 
         res.json({ success: true, year, locked: false });
-      } catch (err) {
-        logger.error('Error unlocking recommendations', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'unlocking recommendations',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -584,20 +550,17 @@ module.exports = (appInstance, deps) => {
   app.get(
     '/api/recommendations/locked-years',
     ensureAuthAPI,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const result = await pool.query(
           `SELECT year FROM recommendation_settings WHERE locked = TRUE ORDER BY year DESC`
         );
 
         res.json({ years: result.rows.map((r) => r.year) });
-      } catch (err) {
-        logger.error('Error fetching locked recommendation years', {
-          error: err.message,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching locked recommendation years',
+      { errorMessage: 'Database error' }
+    )
   );
 
   // ============ ACCESS CONTROL ENDPOINTS ============
@@ -611,8 +574,8 @@ module.exports = (appInstance, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const result = await pool.query(
           `SELECT 
@@ -643,14 +606,10 @@ module.exports = (appInstance, deps) => {
             added_by: row.added_by_username,
           })),
         });
-      } catch (err) {
-        logger.error('Error fetching recommendation access', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching recommendation access',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -663,8 +622,8 @@ module.exports = (appInstance, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const { userIds } = req.body;
         if (!Array.isArray(userIds)) {
@@ -706,15 +665,10 @@ module.exports = (appInstance, deps) => {
           isRestricted: userIds.length > 0,
           userCount: userIds.length,
         });
-      } catch (err) {
-        logger.error('Error setting recommendation access', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'setting recommendation access',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -726,8 +680,8 @@ module.exports = (appInstance, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // Get all approved users with their current access status
@@ -753,13 +707,9 @@ module.exports = (appInstance, deps) => {
             has_access: row.has_access,
           })),
         });
-      } catch (err) {
-        logger.error('Error fetching eligible users for recommendations', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching eligible users for recommendations',
+      { errorMessage: 'Database error' }
+    )
   );
 };

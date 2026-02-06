@@ -55,6 +55,9 @@ module.exports = (app, deps) => {
     deleteGroupIfEmptyAutoGroup,
   } = deps.helpers;
 
+  const { createAsyncHandler } = require('../../middleware/async-handler');
+  const asyncHandler = createAsyncHandler(logger);
+
   /**
    * Helper to find a list by ID and verify ownership
    * @param {string} listId - The list _id
@@ -328,329 +331,325 @@ module.exports = (app, deps) => {
     '/api/lists',
     ensureAuthAPI,
     cacheConfigs.userSpecific,
-    async (req, res) => {
-      try {
-        const userLists = await listsAsync.find({ userId: req.user._id });
-        const { full } = req.query;
+    asyncHandler(async (req, res) => {
+      const userLists = await listsAsync.find({ userId: req.user._id });
+      const { full } = req.query;
 
-        // Changed: Key by _id instead of name
-        const listsObj = {};
+      // Changed: Key by _id instead of name
+      const listsObj = {};
 
-        if (full === 'true') {
-          // FULL MODE: Return all album data (backward compatibility)
-          if (typeof listsAsync.findAllUserListsWithItems !== 'function') {
-            logger.error('Full list fetch requires optimized DB method', {
-              userId: req.user._id,
+      if (full === 'true') {
+        // FULL MODE: Return all album data (backward compatibility)
+        if (typeof listsAsync.findAllUserListsWithItems !== 'function') {
+          logger.error('Full list fetch requires optimized DB method', {
+            userId: req.user._id,
+          });
+          return res.status(500).json({ error: 'Error fetching lists' });
+        }
+
+        const allRows = await listsAsync.findAllUserListsWithItems(
+          req.user._id
+        );
+
+        // Group rows by list _id
+        const listMap = new Map();
+        for (const list of userLists) {
+          listMap.set(list._id, { ...list, items: [] });
+        }
+
+        for (const row of allRows) {
+          if (!row.list_id) continue;
+          if (!listMap.has(row.list_id)) {
+            listMap.set(row.list_id, {
+              _id: row.list_id,
+              name: row.list_name,
+              year: row.year,
+              isMain: row.is_main,
+              items: [],
             });
-            return res.status(500).json({ error: 'Error fetching lists' });
           }
-
-          const allRows = await listsAsync.findAllUserListsWithItems(
-            req.user._id
-          );
-
-          // Group rows by list _id
-          const listMap = new Map();
-          for (const list of userLists) {
-            listMap.set(list._id, { ...list, items: [] });
-          }
-
-          for (const row of allRows) {
-            if (!row.list_id) continue;
-            if (!listMap.has(row.list_id)) {
-              listMap.set(row.list_id, {
-                _id: row.list_id,
-                name: row.list_name,
-                year: row.year,
-                isMain: row.is_main,
-                items: [],
-              });
-            }
-            if (row.position !== null && row.item_id !== null) {
-              listMap.get(row.list_id).items.push({
-                _id: row.item_id,
-                artist: row.artist || '',
-                album: row.album || '',
-                album_id: row.album_id || '',
-                release_date: row.release_date || '',
-                country: row.country || '',
-                genre_1: row.genre_1 || '',
-                genre_2: row.genre_2 || '',
-                track_pick: row.primary_track || '',
-                primary_track: row.primary_track || null,
-                secondary_track: row.secondary_track || null,
-                comments: row.comments || '',
-                tracks: row.tracks || null,
-                cover_image: row.cover_image || '',
-                cover_image_format: row.cover_image_format || '',
-                summary: row.summary || '',
-                summary_source: row.summary_source || '',
-              });
-            }
-          }
-
-          for (const [listId, listData] of listMap) {
-            listsObj[listId] = listData.items;
-          }
-        } else {
-          // METADATA MODE (default): Return only list metadata for fast loading
-          // Changed: Key by _id instead of name
-          if (typeof listsAsync.findWithCounts === 'function') {
-            const listsWithCounts = await listsAsync.findWithCounts({
-              userId: req.user._id,
+          if (row.position !== null && row.item_id !== null) {
+            listMap.get(row.list_id).items.push({
+              _id: row.item_id,
+              artist: row.artist || '',
+              album: row.album || '',
+              album_id: row.album_id || '',
+              release_date: row.release_date || '',
+              country: row.country || '',
+              genre_1: row.genre_1 || '',
+              genre_2: row.genre_2 || '',
+              track_pick: row.primary_track || '',
+              primary_track: row.primary_track || null,
+              secondary_track: row.secondary_track || null,
+              comments: row.comments || '',
+              tracks: row.tracks || null,
+              cover_image: row.cover_image || '',
+              cover_image_format: row.cover_image_format || '',
+              summary: row.summary || '',
+              summary_source: row.summary_source || '',
             });
-            for (const list of listsWithCounts) {
-              listsObj[list._id] = {
-                _id: list._id,
-                name: list.name,
-                year: list.year || null,
-                isMain: list.isMain || false,
-                count: list.itemCount,
-                groupId: list.group?._id || null,
-                sortOrder: list.sortOrder || 0,
-                updatedAt: list.updatedAt,
-                createdAt: list.createdAt,
-              };
-            }
-          } else {
-            // Fallback to N+1 pattern
-            for (const list of userLists) {
-              const count = await listItemsAsync.count({ listId: list._id });
-              listsObj[list._id] = {
-                _id: list._id,
-                name: list.name,
-                year: list.year || null,
-                isMain: list.isMain || false,
-                count: count,
-                groupId: list.groupId || null,
-                sortOrder: list.sortOrder || 0,
-                updatedAt: list.updatedAt,
-                createdAt: list.createdAt,
-              };
-            }
           }
         }
 
-        res.json(listsObj);
-      } catch (err) {
-        logger.error('Error fetching lists', {
-          error: err.message,
-          userId: req.user._id,
-        });
-        return res.status(500).json({ error: 'Error fetching lists' });
+        for (const [listId, listData] of listMap) {
+          listsObj[listId] = listData.items;
+        }
+      } else {
+        // METADATA MODE (default): Return only list metadata for fast loading
+        // Changed: Key by _id instead of name
+        if (typeof listsAsync.findWithCounts === 'function') {
+          const listsWithCounts = await listsAsync.findWithCounts({
+            userId: req.user._id,
+          });
+          for (const list of listsWithCounts) {
+            listsObj[list._id] = {
+              _id: list._id,
+              name: list.name,
+              year: list.year || null,
+              isMain: list.isMain || false,
+              count: list.itemCount,
+              groupId: list.group?._id || null,
+              sortOrder: list.sortOrder || 0,
+              updatedAt: list.updatedAt,
+              createdAt: list.createdAt,
+            };
+          }
+        } else {
+          // Fallback to N+1 pattern
+          for (const list of userLists) {
+            const count = await listItemsAsync.count({ listId: list._id });
+            listsObj[list._id] = {
+              _id: list._id,
+              name: list.name,
+              year: list.year || null,
+              isMain: list.isMain || false,
+              count: count,
+              groupId: list.groupId || null,
+              sortOrder: list.sortOrder || 0,
+              updatedAt: list.updatedAt,
+              createdAt: list.createdAt,
+            };
+          }
+        }
       }
-    }
+
+      res.json(listsObj);
+    }, 'fetching lists')
   );
 
   // Check if user needs to complete list setup (year assignment + main list designation)
-  app.get('/api/lists/setup-status', ensureAuthAPI, async (req, res) => {
-    try {
-      const result = await pool.query(
-        `SELECT l._id, l.name, l.year, l.is_main, l.group_id, g.year as group_year
+  app.get(
+    '/api/lists/setup-status',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const result = await pool.query(
+          `SELECT l._id, l.name, l.year, l.is_main, l.group_id, g.year as group_year
          FROM lists l
          LEFT JOIN list_groups g ON l.group_id = g.id
          WHERE l.user_id = $1`,
-        [req.user._id]
-      );
+          [req.user._id]
+        );
 
-      const listRows = result.rows;
+        const listRows = result.rows;
 
-      // Lists need year assignment ONLY if:
-      // 1. The list has no year set (l.year === null)
-      // 2. AND the list is in a group (l.group_id !== null)
-      // 3. AND that group is a year-group (l.group_year !== null)
-      const listsWithoutYear = listRows.filter(
-        (l) => l.year === null && l.group_id !== null && l.group_year !== null
-      );
-      const yearsWithLists = [
-        ...new Set(listRows.filter((l) => l.year !== null).map((l) => l.year)),
-      ];
+        // Lists need year assignment ONLY if:
+        // 1. The list has no year set (l.year === null)
+        // 2. AND the list is in a group (l.group_id !== null)
+        // 3. AND that group is a year-group (l.group_year !== null)
+        const listsWithoutYear = listRows.filter(
+          (l) => l.year === null && l.group_id !== null && l.group_year !== null
+        );
+        const yearsWithLists = [
+          ...new Set(
+            listRows.filter((l) => l.year !== null).map((l) => l.year)
+          ),
+        ];
 
-      const yearsWithMainList = listRows
-        .filter((l) => l.is_main && l.year !== null)
-        .map((l) => l.year);
+        const yearsWithMainList = listRows
+          .filter((l) => l.is_main && l.year !== null)
+          .map((l) => l.year);
 
-      const yearsNeedingMain = yearsWithLists.filter(
-        (year) => !yearsWithMainList.includes(year)
-      );
+        const yearsNeedingMain = yearsWithLists.filter(
+          (year) => !yearsWithMainList.includes(year)
+        );
 
-      const needsSetup =
-        listsWithoutYear.length > 0 || yearsNeedingMain.length > 0;
+        const needsSetup =
+          listsWithoutYear.length > 0 || yearsNeedingMain.length > 0;
 
-      res.json({
-        needsSetup,
-        listsWithoutYear: listsWithoutYear.map((l) => ({
-          id: l._id,
-          name: l.name,
-        })),
-        yearsNeedingMain,
-        yearsSummary: yearsWithLists.map((year) => ({
-          year,
-          hasMain: yearsWithMainList.includes(year),
-          lists: listRows
-            .filter((l) => l.year === year)
-            .map((l) => ({
-              id: l._id,
-              name: l.name,
-              isMain: l.is_main,
-            })),
-        })),
-        dismissedUntil: req.user.listSetupDismissedUntil || null,
-      });
-    } catch (err) {
-      logger.error('Error checking list setup status', {
-        error: err.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Failed to check setup status' });
-    }
-  });
+        res.json({
+          needsSetup,
+          listsWithoutYear: listsWithoutYear.map((l) => ({
+            id: l._id,
+            name: l.name,
+          })),
+          yearsNeedingMain,
+          yearsSummary: yearsWithLists.map((year) => ({
+            year,
+            hasMain: yearsWithMainList.includes(year),
+            lists: listRows
+              .filter((l) => l.year === year)
+              .map((l) => ({
+                id: l._id,
+                name: l.name,
+                isMain: l.is_main,
+              })),
+          })),
+          dismissedUntil: req.user.listSetupDismissedUntil || null,
+        });
+      },
+      'checking list setup status',
+      { errorMessage: 'Failed to check setup status' }
+    )
+  );
 
   // Bulk update lists (year assignment and main list designation)
-  app.post('/api/lists/bulk-update', ensureAuthAPI, async (req, res) => {
-    const { updates } = req.body;
+  app.post(
+    '/api/lists/bulk-update',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const { updates } = req.body;
 
-    if (!Array.isArray(updates)) {
-      return res.status(400).json({ error: 'Updates must be an array' });
-    }
+        if (!Array.isArray(updates)) {
+          return res.status(400).json({ error: 'Updates must be an array' });
+        }
 
-    // Note: Year lock checks are done per-update in the loop below
-    // to properly handle main list locking rules
+        // Note: Year lock checks are done per-update in the loop below
+        // to properly handle main list locking rules
 
-    try {
-      const results = [];
-      const yearsToRecompute = new Set();
-      const { isYearLocked } = require('../../utils/year-lock');
+        const results = [];
+        const yearsToRecompute = new Set();
+        const { isYearLocked } = require('../../utils/year-lock');
 
-      await withTransaction(pool, async (client) => {
-        for (const update of updates) {
-          const { listId, year, isMain } = update;
+        await withTransaction(pool, async (client) => {
+          for (const update of updates) {
+            const { listId, year, isMain } = update;
 
-          if (!listId) {
-            results.push({ listId, success: false, error: 'Missing listId' });
-            continue;
-          }
+            if (!listId) {
+              results.push({ listId, success: false, error: 'Missing listId' });
+              continue;
+            }
 
-          const listCheck = await client.query(
-            'SELECT _id, year, is_main FROM lists WHERE _id = $1 AND user_id = $2',
-            [listId, req.user._id]
-          );
+            const listCheck = await client.query(
+              'SELECT _id, year, is_main FROM lists WHERE _id = $1 AND user_id = $2',
+              [listId, req.user._id]
+            );
 
-          if (listCheck.rows.length === 0) {
-            results.push({ listId, success: false, error: 'List not found' });
-            continue;
-          }
+            if (listCheck.rows.length === 0) {
+              results.push({ listId, success: false, error: 'List not found' });
+              continue;
+            }
 
-          const oldList = listCheck.rows[0];
-          const oldYear = oldList.year;
-          const newYear = year !== undefined ? year : oldList.year;
-          const newIsMain = isMain !== undefined ? isMain : oldList.is_main;
+            const oldList = listCheck.rows[0];
+            const oldYear = oldList.year;
+            const newYear = year !== undefined ? year : oldList.year;
+            const newIsMain = isMain !== undefined ? isMain : oldList.is_main;
 
-          if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
-            results.push({ listId, success: false, error: 'Invalid year' });
-            continue;
-          }
+            if (newYear !== null && (newYear < 1000 || newYear > 9999)) {
+              results.push({ listId, success: false, error: 'Invalid year' });
+              continue;
+            }
 
-          // Check year lock rules for main list changes
-          const effectiveYear = newYear || oldYear;
-          if (effectiveYear) {
-            const yearLocked = await isYearLocked(pool, effectiveYear);
-            if (yearLocked) {
-              // Block changing main status in locked years
-              if (isMain !== undefined && isMain !== oldList.is_main) {
-                results.push({
-                  listId,
-                  success: false,
-                  error: `Cannot change main status: Year ${effectiveYear} is locked`,
-                });
-                continue;
-              }
-              // Block updates to main lists in locked years
-              if (oldList.is_main) {
-                results.push({
-                  listId,
-                  success: false,
-                  error: `Cannot update main list: Year ${effectiveYear} is locked`,
-                });
-                continue;
+            // Check year lock rules for main list changes
+            const effectiveYear = newYear || oldYear;
+            if (effectiveYear) {
+              const yearLocked = await isYearLocked(pool, effectiveYear);
+              if (yearLocked) {
+                // Block changing main status in locked years
+                if (isMain !== undefined && isMain !== oldList.is_main) {
+                  results.push({
+                    listId,
+                    success: false,
+                    error: `Cannot change main status: Year ${effectiveYear} is locked`,
+                  });
+                  continue;
+                }
+                // Block updates to main lists in locked years
+                if (oldList.is_main) {
+                  results.push({
+                    listId,
+                    success: false,
+                    error: `Cannot update main list: Year ${effectiveYear} is locked`,
+                  });
+                  continue;
+                }
               }
             }
-          }
 
-          if (newIsMain && newYear !== null) {
-            await client.query(
-              `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
+            if (newIsMain && newYear !== null) {
+              await client.query(
+                `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
                WHERE user_id = $1 AND year = $2 AND is_main = TRUE AND _id != $3`,
-              [req.user._id, newYear, listId]
+                [req.user._id, newYear, listId]
+              );
+            }
+
+            await client.query(
+              `UPDATE lists SET year = $1, is_main = $2, updated_at = NOW() WHERE _id = $3`,
+              [newYear, newIsMain, listId]
             );
+
+            results.push({ listId, success: true });
+
+            if (oldYear !== null) yearsToRecompute.add(oldYear);
+            if (newYear !== null && newIsMain) yearsToRecompute.add(newYear);
           }
+        });
 
-          await client.query(
-            `UPDATE lists SET year = $1, is_main = $2, updated_at = NOW() WHERE _id = $3`,
-            [newYear, newIsMain, listId]
-          );
+        responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
 
-          results.push({ listId, success: true });
-
-          if (oldYear !== null) yearsToRecompute.add(oldYear);
-          if (newYear !== null && newIsMain) yearsToRecompute.add(newYear);
+        for (const y of yearsToRecompute) {
+          triggerAggregateListRecompute(y);
         }
-      });
 
-      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
-
-      for (const y of yearsToRecompute) {
-        triggerAggregateListRecompute(y);
-      }
-
-      res.json({
-        success: true,
-        results,
-        recomputingYears: [...yearsToRecompute],
-      });
-    } catch (err) {
-      logger.error('Error bulk updating lists', {
-        error: err.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Failed to update lists' });
-    }
-  });
+        res.json({
+          success: true,
+          results,
+          recomputingYears: [...yearsToRecompute],
+        });
+      },
+      'bulk updating lists',
+      { errorMessage: 'Failed to update lists' }
+    )
+  );
 
   // Dismiss list setup wizard (temporary)
-  app.post('/api/lists/setup-dismiss', ensureAuthAPI, async (req, res) => {
-    try {
-      const dismissedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  app.post(
+    '/api/lists/setup-dismiss',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const dismissedUntil = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      await pool.query(
-        `UPDATE users SET list_setup_dismissed_until = $1 WHERE _id = $2`,
-        [dismissedUntil, req.user._id]
-      );
+        await pool.query(
+          `UPDATE users SET list_setup_dismissed_until = $1 WHERE _id = $2`,
+          [dismissedUntil, req.user._id]
+        );
 
-      res.json({ success: true, dismissedUntil });
-    } catch (err) {
-      logger.error('Error dismissing setup wizard', {
-        error: err.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Failed to dismiss wizard' });
-    }
-  });
+        res.json({ success: true, dismissedUntil });
+      },
+      'dismissing setup wizard',
+      { errorMessage: 'Failed to dismiss wizard' }
+    )
+  );
 
   // Create a new list
-  app.post('/api/lists', ensureAuthAPI, async (req, res) => {
-    const { name, groupId: requestGroupId, year, data: rawAlbums } = req.body;
+  app.post(
+    '/api/lists',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { name, groupId: requestGroupId, year, data: rawAlbums } = req.body;
 
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return res.status(400).json({ error: 'List name is required' });
-    }
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return res.status(400).json({ error: 'List name is required' });
+      }
 
-    const trimmedName = name.trim();
+      const trimmedName = name.trim();
 
-    const listId = crypto.randomBytes(12).toString('hex');
-    const timestamp = new Date();
+      const listId = crypto.randomBytes(12).toString('hex');
+      const timestamp = new Date();
 
-    try {
       const listYear = await withTransaction(pool, async (client) => {
         // Determine the target group
         let resultYear = null;
@@ -767,122 +766,103 @@ module.exports = (app, deps) => {
         groupId: requestGroupId || null,
         count: rawAlbums?.length || 0,
       });
-    } catch (err) {
-      if (err instanceof TransactionAbort) {
-        return res.status(err.statusCode).json(err.body);
-      }
-      logger.error('Error creating list', {
-        error: err.message,
-        stack: err.stack,
-        userId: req.user._id,
-        listName: name,
-      });
-      res.status(500).json({ error: 'Error creating list' });
-    }
-  });
+    }, 'creating list')
+  );
 
   // Get a single list by ID
   app.get(
     '/api/lists/:id',
     ensureAuthAPI,
     cacheConfigs.userSpecific,
-    async (req, res) => {
-      try {
-        const { id } = req.params;
-        const isExport = req.query.export === 'true';
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      const isExport = req.query.export === 'true';
 
-        logger.debug('Fetching list by ID', {
-          listId: id,
-          userId: req.user._id,
-          isExport,
-        });
+      logger.debug('Fetching list by ID', {
+        listId: id,
+        userId: req.user._id,
+        isExport,
+      });
 
-        const list = await findListById(id, req.user._id);
+      const list = await findListById(id, req.user._id);
 
-        if (!list) {
-          logger.warn('List not found', { listId: id, userId: req.user._id });
-          return res.status(404).json({ error: 'List not found' });
-        }
-
-        logger.debug('List found', { listId: list._id, name: list.name });
-
-        const items = await listItemsAsync.findWithAlbumData(
-          list._id,
-          req.user._id
-        );
-
-        const data = items.map((item, index) => ({
-          _id: item._id,
-          artist: item.artist,
-          album: item.album,
-          album_id: item.albumId,
-          release_date: item.releaseDate,
-          country: item.country,
-          genre_1: item.genre1,
-          genre_2: item.genre2,
-          track_pick: item.primaryTrack || '',
-          primary_track: item.primaryTrack || null,
-          secondary_track: item.secondaryTrack || null,
-          comments: item.comments,
-          tracks: item.tracks,
-          cover_image_format: item.coverImageFormat,
-          summary: item.summary || '',
-          summary_source: item.summarySource || '',
-          ...(isExport
-            ? {
-                cover_image: item.coverImage
-                  ? Buffer.isBuffer(item.coverImage)
-                    ? item.coverImage.toString('base64')
-                    : item.coverImage
-                  : '',
-                rank: index + 1,
-                points: getPointsForPosition(index + 1),
-              }
-            : (() => {
-                // Normal mode: Always return URL instead of base64 for better performance
-                // This reduces payload size from ~5MB to ~50KB for 100 albums
-                if (item.albumId) {
-                  return {
-                    cover_image_url: `/api/albums/${item.albumId}/cover`,
-                  };
-                } else {
-                  return {};
-                }
-              })()),
-        }));
-
-        if (isExport) {
-          res.json({
-            _metadata: {
-              list_id: list._id,
-              list_name: list.name,
-              year: list.year || null,
-              group_id: list.groupExternalId || null,
-              group_name: list.groupName || null,
-            },
-            albums: data,
-          });
-        } else {
-          res.json(data);
-        }
-      } catch (err) {
-        logger.error('Error fetching list:', {
-          error: err.message,
-          stack: err.stack,
-          listId: req.params.id,
-          userId: req.user?._id,
-        });
-        return res.status(500).json({ error: 'Error fetching list' });
+      if (!list) {
+        logger.warn('List not found', { listId: id, userId: req.user._id });
+        return res.status(404).json({ error: 'List not found' });
       }
-    }
+
+      logger.debug('List found', { listId: list._id, name: list.name });
+
+      const items = await listItemsAsync.findWithAlbumData(
+        list._id,
+        req.user._id
+      );
+
+      const data = items.map((item, index) => ({
+        _id: item._id,
+        artist: item.artist,
+        album: item.album,
+        album_id: item.albumId,
+        release_date: item.releaseDate,
+        country: item.country,
+        genre_1: item.genre1,
+        genre_2: item.genre2,
+        track_pick: item.primaryTrack || '',
+        primary_track: item.primaryTrack || null,
+        secondary_track: item.secondaryTrack || null,
+        comments: item.comments,
+        tracks: item.tracks,
+        cover_image_format: item.coverImageFormat,
+        summary: item.summary || '',
+        summary_source: item.summarySource || '',
+        ...(isExport
+          ? {
+              cover_image: item.coverImage
+                ? Buffer.isBuffer(item.coverImage)
+                  ? item.coverImage.toString('base64')
+                  : item.coverImage
+                : '',
+              rank: index + 1,
+              points: getPointsForPosition(index + 1),
+            }
+          : (() => {
+              // Normal mode: Always return URL instead of base64 for better performance
+              // This reduces payload size from ~5MB to ~50KB for 100 albums
+              if (item.albumId) {
+                return {
+                  cover_image_url: `/api/albums/${item.albumId}/cover`,
+                };
+              } else {
+                return {};
+              }
+            })()),
+      }));
+
+      if (isExport) {
+        res.json({
+          _metadata: {
+            list_id: list._id,
+            list_name: list.name,
+            year: list.year || null,
+            group_id: list.groupExternalId || null,
+            group_name: list.groupName || null,
+          },
+          albums: data,
+        });
+      } else {
+        res.json(data);
+      }
+    }, 'fetching list')
   );
 
   // Update list metadata (rename, change year, move to group)
-  app.patch('/api/lists/:id', ensureAuthAPI, async (req, res) => {
-    const { id } = req.params;
-    const { name: newName, year, groupId: newGroupId } = req.body;
+  app.patch(
+    '/api/lists/:id',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      const { name: newName, year, groupId: newGroupId } = req.body;
 
-    try {
       const result = await withTransaction(pool, async (client) => {
         // Find the list
         const listResult = await client.query(
@@ -1025,125 +1005,115 @@ module.exports = (app, deps) => {
       });
 
       res.json({ success: true });
-    } catch (err) {
-      if (err instanceof TransactionAbort) {
-        return res.status(err.statusCode).json(err.body);
-      }
-      logger.error('Error updating list', {
-        error: err.message,
-        userId: req.user._id,
-        listId: id,
-      });
-      res.status(500).json({ error: 'Error updating list' });
-    }
-  });
+    }, 'updating list')
+  );
 
   // Update list items (full replacement)
-  app.put('/api/lists/:id', ensureAuthAPI, async (req, res) => {
-    const { id } = req.params;
-    const { data: rawAlbums } = req.body;
+  app.put(
+    '/api/lists/:id',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const { id } = req.params;
+        const { data: rawAlbums } = req.body;
 
-    if (!rawAlbums || !Array.isArray(rawAlbums)) {
-      return res.status(400).json({ error: 'Invalid albums array' });
-    }
-
-    try {
-      const list = await findListById(id, req.user._id);
-      if (!list) {
-        return res.status(404).json({ error: 'List not found' });
-      }
-
-      try {
-        await validateMainListNotLocked(
-          pool,
-          list.year,
-          list.isMain,
-          'modify list items'
-        );
-      } catch (lockErr) {
-        return res.status(403).json({
-          error: lockErr.message,
-          yearLocked: true,
-          year: list.year,
-        });
-      }
-
-      const timestamp = new Date();
-
-      await withTransaction(pool, async (client) => {
-        // Delete existing items
-        await client.query('DELETE FROM list_items WHERE list_id = $1', [
-          list._id,
-        ]);
-
-        // Insert new items
-        for (let i = 0; i < rawAlbums.length; i++) {
-          const album = rawAlbums[i];
-          const albumId = await upsertAlbumRecord(album, timestamp, client);
-
-          const itemId = crypto.randomBytes(12).toString('hex');
-          await client.query(
-            `INSERT INTO list_items (
-              _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [
-              itemId,
-              list._id,
-              albumId,
-              i + 1,
-              album.comments || null,
-              album.primary_track || null,
-              album.secondary_track || null,
-              timestamp,
-              timestamp,
-            ]
-          );
+        if (!rawAlbums || !Array.isArray(rawAlbums)) {
+          return res.status(400).json({ error: 'Invalid albums array' });
         }
 
-        // Update list timestamp
-        await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
-          timestamp,
-          list._id,
-        ]);
-      });
+        const list = await findListById(id, req.user._id);
+        if (!list) {
+          return res.status(404).json({ error: 'List not found' });
+        }
 
-      // Invalidate caches
-      invalidateListCaches(req.user._id, id);
+        try {
+          await validateMainListNotLocked(
+            pool,
+            list.year,
+            list.isMain,
+            'modify list items'
+          );
+        } catch (lockErr) {
+          return res.status(403).json({
+            error: lockErr.message,
+            yearLocked: true,
+            year: list.year,
+          });
+        }
 
-      // Trigger aggregate recompute if year is set
-      if (list.year) {
-        triggerAggregateListRecompute(list.year);
-      }
+        const timestamp = new Date();
 
-      logger.info('List items replaced', {
-        userId: req.user._id,
-        listId: id,
-        listName: list.name,
-        albumCount: rawAlbums.length,
-      });
+        await withTransaction(pool, async (client) => {
+          // Delete existing items
+          await client.query('DELETE FROM list_items WHERE list_id = $1', [
+            list._id,
+          ]);
 
-      res.json({ success: true, count: rawAlbums.length });
-    } catch (err) {
-      logger.error('Error updating list items', {
-        error: err.message,
-        stack: err.stack,
-        userId: req.user._id,
-        listId: id,
-      });
-      res.status(500).json({ error: 'Error updating list' });
-    }
-  });
+          // Insert new items
+          for (let i = 0; i < rawAlbums.length; i++) {
+            const album = rawAlbums[i];
+            const albumId = await upsertAlbumRecord(album, timestamp, client);
+
+            const itemId = crypto.randomBytes(12).toString('hex');
+            await client.query(
+              `INSERT INTO list_items (
+              _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+              [
+                itemId,
+                list._id,
+                albumId,
+                i + 1,
+                album.comments || null,
+                album.primary_track || null,
+                album.secondary_track || null,
+                timestamp,
+                timestamp,
+              ]
+            );
+          }
+
+          // Update list timestamp
+          await client.query(
+            'UPDATE lists SET updated_at = $1 WHERE _id = $2',
+            [timestamp, list._id]
+          );
+        });
+
+        // Invalidate caches
+        invalidateListCaches(req.user._id, id);
+
+        // Trigger aggregate recompute if year is set
+        if (list.year) {
+          triggerAggregateListRecompute(list.year);
+        }
+
+        logger.info('List items replaced', {
+          userId: req.user._id,
+          listId: id,
+          listName: list.name,
+          albumCount: rawAlbums.length,
+        });
+
+        res.json({ success: true, count: rawAlbums.length });
+      },
+      'updating list items',
+      { errorMessage: 'Error updating list' }
+    )
+  );
 
   // Reorder list items (lightweight endpoint for drag-and-drop)
-  app.post('/api/lists/:id/reorder', ensureAuthAPI, async (req, res) => {
-    const { id } = req.params;
-    const { order } = req.body;
+  app.post(
+    '/api/lists/:id/reorder',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
+      const { order } = req.body;
 
-    if (!order || !Array.isArray(order)) {
-      return res.status(400).json({ error: 'Invalid order array' });
-    }
+      if (!order || !Array.isArray(order)) {
+        return res.status(400).json({ error: 'Invalid order array' });
+      }
 
-    try {
       const list = await findListById(id, req.user._id);
       if (!list) {
         return res.status(404).json({ error: 'List not found' });
@@ -1231,21 +1201,14 @@ module.exports = (app, deps) => {
       });
 
       res.json({ success: true });
-    } catch (err) {
-      logger.error('Error reordering list', {
-        error: err.message,
-        userId: req.user._id,
-        listId: id,
-      });
-      res.status(500).json({ error: 'Error reordering list' });
-    }
-  });
+    }, 'reordering list')
+  );
 
   // Update single album's comment (lightweight endpoint for inline editing)
   app.patch(
     '/api/lists/:id/items/:identifier/comment',
     ensureAuthAPI,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       const { id, identifier } = req.params;
       const { comment } = req.body;
 
@@ -1258,84 +1221,6 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Invalid comment value' });
       }
 
-      try {
-        const list = await findListById(id, req.user._id);
-        if (!list) {
-          return res.status(404).json({ error: 'List not found' });
-        }
-
-        try {
-          await validateMainListNotLocked(
-            pool,
-            list.year,
-            list.isMain,
-            'update comment'
-          );
-        } catch (lockErr) {
-          return res.status(403).json({
-            error: lockErr.message,
-            yearLocked: true,
-            year: list.year,
-          });
-        }
-
-        const trimmedComment = comment ? comment.trim() : null;
-
-        await withTransaction(pool, async (client) => {
-          // Try album_id first (modern albums)
-          let updateResult = await client.query(
-            'UPDATE list_items SET comments = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id',
-            [trimmedComment, new Date(), list._id, identifier]
-          );
-
-          // Fallback to _id (legacy albums without album_id)
-          if (updateResult.rowCount === 0) {
-            updateResult = await client.query(
-              'UPDATE list_items SET comments = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id',
-              [trimmedComment, new Date(), identifier, list._id]
-            );
-          }
-
-          if (updateResult.rowCount === 0) {
-            throw new TransactionAbort(404, {
-              error: 'Album not found in list',
-            });
-          }
-        });
-
-        invalidateListCaches(req.user._id, id, { full: false });
-
-        logger.info('Comment updated', {
-          userId: req.user._id,
-          listId: id,
-          identifier,
-        });
-
-        res.json({ success: true });
-      } catch (err) {
-        if (err instanceof TransactionAbort) {
-          return res.status(err.statusCode).json(err.body);
-        }
-        logger.error('Error updating comment', {
-          error: err.message,
-          userId: req.user._id,
-          listId: id,
-        });
-        res.status(500).json({ error: 'Error updating comment' });
-      }
-    }
-  );
-
-  // Incremental list update (add/remove/update items without full rebuild)
-  app.patch('/api/lists/:id/items', ensureAuthAPI, async (req, res) => {
-    const { id } = req.params;
-    const { added, removed, updated } = req.body;
-
-    if (!added && !removed && !updated) {
-      return res.status(400).json({ error: 'No changes specified' });
-    }
-
-    try {
       const list = await findListById(id, req.user._id);
       if (!list) {
         return res.status(404).json({ error: 'List not found' });
@@ -1346,7 +1231,7 @@ module.exports = (app, deps) => {
           pool,
           list.year,
           list.isMain,
-          'modify list items'
+          'update comment'
         );
       } catch (lockErr) {
         return res.status(403).json({
@@ -1356,237 +1241,298 @@ module.exports = (app, deps) => {
         });
       }
 
-      const timestamp = new Date();
-      let changeCount = 0;
-      const addedItems = [];
-      const duplicateAlbums = [];
+      const trimmedComment = comment ? comment.trim() : null;
 
       await withTransaction(pool, async (client) => {
-        // Process removals first (by album_id)
-        changeCount += await processRemovals(client, list._id, removed);
-
-        // Process additions (with position)
-        const addResult = await processAdditions(
-          client,
-          list,
-          added,
-          timestamp,
-          { batchUpsertAlbumRecords, crypto, logger }
-        );
-        addedItems.push(...addResult.addedItems);
-        duplicateAlbums.push(...addResult.duplicateAlbums);
-        changeCount += addResult.changeCount;
-
-        // Process position updates (for reordering existing items)
-        changeCount += await processPositionUpdates(
-          client,
-          list._id,
-          updated,
-          timestamp
+        // Try album_id first (modern albums)
+        let updateResult = await client.query(
+          'UPDATE list_items SET comments = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id',
+          [trimmedComment, new Date(), list._id, identifier]
         );
 
-        // Update list timestamp
-        await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
-          timestamp,
-          list._id,
-        ]);
+        // Fallback to _id (legacy albums without album_id)
+        if (updateResult.rowCount === 0) {
+          updateResult = await client.query(
+            'UPDATE list_items SET comments = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id',
+            [trimmedComment, new Date(), identifier, list._id]
+          );
+        }
+
+        if (updateResult.rowCount === 0) {
+          throw new TransactionAbort(404, {
+            error: 'Album not found in list',
+          });
+        }
       });
 
-      invalidateListCaches(req.user._id, id);
+      invalidateListCaches(req.user._id, id, { full: false });
 
-      const broadcast = req.app.locals.broadcast;
-      if (broadcast) {
-        const excludeSocketId = req.headers['x-socket-id'];
-        broadcast.listUpdated(req.user._id, list._id, { excludeSocketId });
-      }
-
-      if (list.year) {
-        triggerAggregateListRecompute(list.year);
-      }
-
-      logger.info('List incrementally updated', {
+      logger.info('Comment updated', {
         userId: req.user._id,
         listId: id,
-        listName: list.name,
-        added: added?.length || 0,
-        removed: removed?.length || 0,
-        updated: updated?.length || 0,
-        totalChanges: changeCount,
-        duplicates: duplicateAlbums?.length || 0,
+        identifier,
       });
 
-      // Trigger async playcount refresh for newly added albums
-      triggerPlaycountRefresh(
-        pool,
-        logger,
-        req.user,
-        addedItems,
-        refreshPlaycountsInBackground
-      );
+      res.json({ success: true });
+    }, 'updating comment')
+  );
 
-      res.json({
-        success: true,
-        changes: changeCount,
-        addedItems,
-        duplicates: duplicateAlbums,
-      });
-    } catch (err) {
-      logger.error('Error incrementally updating list', {
-        error: err.message,
-        stack: err.stack,
-        userId: req.user._id,
-        listId: id,
-      });
-      res.status(500).json({ error: 'Error updating list' });
-    }
-  });
+  // Incremental list update (add/remove/update items without full rebuild)
+  app.patch(
+    '/api/lists/:id/items',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const { id } = req.params;
+        const { added, removed, updated } = req.body;
+
+        if (!added && !removed && !updated) {
+          return res.status(400).json({ error: 'No changes specified' });
+        }
+
+        const list = await findListById(id, req.user._id);
+        if (!list) {
+          return res.status(404).json({ error: 'List not found' });
+        }
+
+        try {
+          await validateMainListNotLocked(
+            pool,
+            list.year,
+            list.isMain,
+            'modify list items'
+          );
+        } catch (lockErr) {
+          return res.status(403).json({
+            error: lockErr.message,
+            yearLocked: true,
+            year: list.year,
+          });
+        }
+
+        const timestamp = new Date();
+        let changeCount = 0;
+        const addedItems = [];
+        const duplicateAlbums = [];
+
+        await withTransaction(pool, async (client) => {
+          // Process removals first (by album_id)
+          changeCount += await processRemovals(client, list._id, removed);
+
+          // Process additions (with position)
+          const addResult = await processAdditions(
+            client,
+            list,
+            added,
+            timestamp,
+            { batchUpsertAlbumRecords, crypto, logger }
+          );
+          addedItems.push(...addResult.addedItems);
+          duplicateAlbums.push(...addResult.duplicateAlbums);
+          changeCount += addResult.changeCount;
+
+          // Process position updates (for reordering existing items)
+          changeCount += await processPositionUpdates(
+            client,
+            list._id,
+            updated,
+            timestamp
+          );
+
+          // Update list timestamp
+          await client.query(
+            'UPDATE lists SET updated_at = $1 WHERE _id = $2',
+            [timestamp, list._id]
+          );
+        });
+
+        invalidateListCaches(req.user._id, id);
+
+        const broadcast = req.app.locals.broadcast;
+        if (broadcast) {
+          const excludeSocketId = req.headers['x-socket-id'];
+          broadcast.listUpdated(req.user._id, list._id, { excludeSocketId });
+        }
+
+        if (list.year) {
+          triggerAggregateListRecompute(list.year);
+        }
+
+        logger.info('List incrementally updated', {
+          userId: req.user._id,
+          listId: id,
+          listName: list.name,
+          added: added?.length || 0,
+          removed: removed?.length || 0,
+          updated: updated?.length || 0,
+          totalChanges: changeCount,
+          duplicates: duplicateAlbums?.length || 0,
+        });
+
+        // Trigger async playcount refresh for newly added albums
+        triggerPlaycountRefresh(
+          pool,
+          logger,
+          req.user,
+          addedItems,
+          refreshPlaycountsInBackground
+        );
+
+        res.json({
+          success: true,
+          changes: changeCount,
+          addedItems,
+          duplicates: duplicateAlbums,
+        });
+      },
+      'incrementally updating list',
+      { errorMessage: 'Error updating list' }
+    )
+  );
 
   // Toggle main list status for a year
-  app.post('/api/lists/:id/main', ensureAuthAPI, async (req, res) => {
-    const { id } = req.params;
-    const { isMain } = req.body;
+  app.post(
+    '/api/lists/:id/main',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const { id } = req.params;
+        const { isMain } = req.body;
 
-    if (typeof isMain !== 'boolean') {
-      return res.status(400).json({ error: 'isMain must be a boolean' });
-    }
+        if (typeof isMain !== 'boolean') {
+          return res.status(400).json({ error: 'isMain must be a boolean' });
+        }
 
-    try {
-      const result = await withTransaction(pool, async (client) => {
-        const listResult = await client.query(
-          `SELECT l.id, l._id, l.name, l.year, l.is_main, g.year as group_year
+        const result = await withTransaction(pool, async (client) => {
+          const listResult = await client.query(
+            `SELECT l.id, l._id, l.name, l.year, l.is_main, g.year as group_year
            FROM lists l
            LEFT JOIN list_groups g ON l.group_id = g.id
            WHERE l._id = $1 AND l.user_id = $2`,
-          [id, req.user._id]
-        );
-
-        if (listResult.rows.length === 0) {
-          throw new TransactionAbort(404, { error: 'List not found' });
-        }
-
-        const list = listResult.rows[0];
-        const listYear = list.year || list.group_year;
-
-        // Check if year is locked
-        try {
-          await validateYearNotLocked(pool, listYear, 'change main status');
-        } catch (lockErr) {
-          throw new TransactionAbort(403, {
-            error: lockErr.message,
-            yearLocked: true,
-            year: listYear,
-          });
-        }
-
-        if (isMain === false) {
-          await client.query(
-            `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1`,
-            [list.id]
+            [id, req.user._id]
           );
-          return { list, year: listYear, isRemoval: true };
-        }
 
-        if (!listYear) {
-          throw new TransactionAbort(400, {
-            error: 'List must be assigned to a year to be marked as main',
-          });
-        }
+          if (listResult.rows.length === 0) {
+            throw new TransactionAbort(404, { error: 'List not found' });
+          }
 
-        // Find all OTHER lists that share the same year and are currently main
-        const previousMainResult = await client.query(
-          `SELECT l._id, l.name FROM lists l
+          const list = listResult.rows[0];
+          const listYear = list.year || list.group_year;
+
+          // Check if year is locked
+          try {
+            await validateYearNotLocked(pool, listYear, 'change main status');
+          } catch (lockErr) {
+            throw new TransactionAbort(403, {
+              error: lockErr.message,
+              yearLocked: true,
+              year: listYear,
+            });
+          }
+
+          if (isMain === false) {
+            await client.query(
+              `UPDATE lists SET is_main = FALSE, updated_at = NOW() WHERE id = $1`,
+              [list.id]
+            );
+            return { list, year: listYear, isRemoval: true };
+          }
+
+          if (!listYear) {
+            throw new TransactionAbort(400, {
+              error: 'List must be assigned to a year to be marked as main',
+            });
+          }
+
+          // Find all OTHER lists that share the same year and are currently main
+          const previousMainResult = await client.query(
+            `SELECT l._id, l.name FROM lists l
            LEFT JOIN list_groups g ON l.group_id = g.id
            WHERE l.user_id = $1 
              AND (l.year = $2 OR g.year = $2)
              AND l.is_main = TRUE
              AND l._id != $3`,
-          [req.user._id, listYear, id]
-        );
+            [req.user._id, listYear, id]
+          );
 
-        // Clear main status for all lists in the same year (direct or via group)
-        await client.query(
-          `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
+          // Clear main status for all lists in the same year (direct or via group)
+          await client.query(
+            `UPDATE lists SET is_main = FALSE, updated_at = NOW() 
            WHERE user_id = $1 
              AND id IN (
                SELECT l.id FROM lists l
                LEFT JOIN list_groups g ON l.group_id = g.id
                WHERE l.user_id = $1 AND (l.year = $2 OR g.year = $2)
              )`,
-          [req.user._id, listYear]
-        );
+            [req.user._id, listYear]
+          );
 
-        await client.query(
-          `UPDATE lists SET is_main = TRUE, updated_at = NOW() 
+          await client.query(
+            `UPDATE lists SET is_main = TRUE, updated_at = NOW() 
            WHERE id = $1`,
-          [list.id]
-        );
+            [list.id]
+          );
 
-        return {
-          list,
-          year: listYear,
-          isRemoval: false,
-          previousMainResult: previousMainResult.rows,
-        };
-      });
+          return {
+            list,
+            year: listYear,
+            isRemoval: false,
+            previousMainResult: previousMainResult.rows,
+          };
+        });
 
-      invalidateListCaches(req.user._id, null, { full: false });
+        invalidateListCaches(req.user._id, null, { full: false });
 
-      if (result.year) {
-        triggerAggregateListRecompute(result.year);
-      }
+        if (result.year) {
+          triggerAggregateListRecompute(result.year);
+        }
 
-      if (result.isRemoval) {
-        logger.info('Main status removed from list', {
+        if (result.isRemoval) {
+          logger.info('Main status removed from list', {
+            userId: req.user._id,
+            listId: id,
+            listName: result.list.name,
+            year: result.year || null,
+          });
+          return res.json({ success: true, year: result.year || null });
+        }
+
+        logger.info('Main status set for list', {
           userId: req.user._id,
           listId: id,
           listName: result.list.name,
-          year: result.year || null,
+          year: result.year,
+          previousMainList:
+            result.previousMainResult.length > 0
+              ? result.previousMainResult[0].name
+              : null,
         });
-        return res.json({ success: true, year: result.year || null });
-      }
 
-      logger.info('Main status set for list', {
-        userId: req.user._id,
-        listId: id,
-        listName: result.list.name,
-        year: result.year,
-        previousMainList:
-          result.previousMainResult.length > 0
-            ? result.previousMainResult[0].name
-            : null,
-      });
-
-      res.json({
-        success: true,
-        year: result.year,
-        previousMainListId:
-          result.previousMainResult.length > 0
-            ? result.previousMainResult[0]._id
-            : null,
-        previousMainList:
-          result.previousMainResult.length > 0
-            ? result.previousMainResult[0].name
-            : null,
-      });
-    } catch (err) {
-      if (err instanceof TransactionAbort) {
-        return res.status(err.statusCode).json(err.body);
-      }
-      logger.error('Error toggling main list status', {
-        error: err.message,
-        userId: req.user._id,
-        listId: id,
-        isMain,
-      });
-      res.status(500).json({ error: 'Failed to update main list status' });
-    }
-  });
+        res.json({
+          success: true,
+          year: result.year,
+          previousMainListId:
+            result.previousMainResult.length > 0
+              ? result.previousMainResult[0]._id
+              : null,
+          previousMainList:
+            result.previousMainResult.length > 0
+              ? result.previousMainResult[0].name
+              : null,
+        });
+      },
+      'toggling main list status',
+      { errorMessage: 'Failed to update main list status' }
+    )
+  );
 
   // Delete a list
-  app.delete('/api/lists/:id', ensureAuthAPI, async (req, res) => {
-    const { id } = req.params;
+  app.delete(
+    '/api/lists/:id',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { id } = req.params;
 
-    try {
       const list = await withTransaction(pool, async (client) => {
         const listResult = await client.query(
           `SELECT id, _id, name, year, group_id, is_main FROM lists WHERE _id = $1 AND user_id = $2`,
@@ -1634,16 +1580,6 @@ module.exports = (app, deps) => {
       });
 
       res.json({ success: true });
-    } catch (err) {
-      if (err instanceof TransactionAbort) {
-        return res.status(err.statusCode).json(err.body);
-      }
-      logger.error('Error deleting list', {
-        error: err.message,
-        userId: req.user._id,
-        listId: id,
-      });
-      res.status(500).json({ error: 'Error deleting list' });
-    }
-  });
+    }, 'deleting list')
+  );
 };

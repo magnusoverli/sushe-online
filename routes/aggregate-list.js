@@ -6,6 +6,8 @@ const { validateYearParam } = require('../middleware/validate-params');
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const { ensureAuthAPI, ensureAuth, ensureAdmin, pool } = deps;
+  const { createAsyncHandler } = require('../middleware/async-handler');
+  const asyncHandler = createAsyncHandler(logger);
 
   // Create aggregate list utility instance
   const aggregateList = createAggregateList({ pool, logger });
@@ -35,8 +37,8 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const record = await aggregateList.get(year);
 
@@ -60,14 +62,10 @@ module.exports = (app, deps) => {
           revealedAt: record.revealed_at,
           data: record.data,
         });
-      } catch (err) {
-        logger.error('Error fetching aggregate list', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching aggregate list',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -78,19 +76,15 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/status',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const status = await aggregateList.getStatus(year);
         res.json(status);
-      } catch (err) {
-        logger.error('Error fetching aggregate list status', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching aggregate list status',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -102,8 +96,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // First ensure the aggregate list is computed
@@ -126,14 +120,10 @@ module.exports = (app, deps) => {
           revealed: record.revealed,
           stats: record.stats,
         });
-      } catch (err) {
-        logger.error('Error fetching aggregate list stats', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching aggregate list stats',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -145,8 +135,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const result = await aggregateList.addConfirmation(year, req.user._id);
 
@@ -162,15 +152,10 @@ module.exports = (app, deps) => {
           revealed: result.revealed,
           status: result.status,
         });
-      } catch (err) {
-        logger.error('Error confirming aggregate list reveal', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'confirming aggregate list reveal',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -182,8 +167,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const result = await aggregateList.removeConfirmation(
           year,
@@ -202,30 +187,28 @@ module.exports = (app, deps) => {
           success: true,
           status: result.status,
         });
-      } catch (err) {
-        logger.error('Error revoking aggregate list confirmation', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'revoking aggregate list confirmation',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
    * GET /api/aggregate-list/years
    * Get list of years with revealed aggregate lists
    */
-  app.get('/api/aggregate-list-years', ensureAuthAPI, async (req, res) => {
-    try {
-      const years = await aggregateList.getRevealedYears();
-      res.json({ years });
-    } catch (err) {
-      logger.error('Error fetching revealed years', { error: err.message });
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
+  app.get(
+    '/api/aggregate-list-years',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const years = await aggregateList.getRevealedYears();
+        res.json({ years });
+      },
+      'fetching revealed years',
+      { errorMessage: 'Database error' }
+    )
+  );
 
   /**
    * GET /api/aggregate-list-years/with-main-lists
@@ -235,8 +218,8 @@ module.exports = (app, deps) => {
     '/api/aggregate-list-years/with-main-lists',
     ensureAuthAPI,
     ensureAdmin,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const result = await pool.query(`
           SELECT DISTINCT year 
           FROM lists 
@@ -244,13 +227,10 @@ module.exports = (app, deps) => {
           ORDER BY year DESC
         `);
         res.json({ years: result.rows.map((r) => r.year) });
-      } catch (err) {
-        logger.error('Error fetching years with main lists', {
-          error: err.message,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching years with main lists',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -262,8 +242,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         await aggregateList.recompute(year);
         const status = await aggregateList.getStatus(year);
@@ -273,15 +253,10 @@ module.exports = (app, deps) => {
           message: `Aggregate list for ${year} recomputed`,
           status,
         });
-      } catch (err) {
-        logger.error('Error recomputing aggregate list', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'recomputing aggregate list',
+      { errorMessage: 'Database error' }
+    )
   );
 
   // ============ REVEAL VIEW TRACKING ENDPOINTS ============
@@ -294,20 +269,15 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/has-seen',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const hasSeen = await aggregateList.hasSeen(year, req.user._id);
         res.json({ hasSeen, year });
-      } catch (err) {
-        logger.error('Error checking reveal view status', {
-          error: err.message,
-          year: req.params.year,
-          userId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'checking reveal view status',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -318,20 +288,15 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/:year/mark-seen',
     ensureAuthAPI,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         await aggregateList.markSeen(year, req.user._id);
         res.json({ success: true, year });
-      } catch (err) {
-        logger.error('Error marking reveal as seen', {
-          error: err.message,
-          year: req.params.year,
-          userId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'marking reveal as seen',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -343,8 +308,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const result = await aggregateList.resetSeen(year, req.user._id);
         res.json({
@@ -354,15 +319,10 @@ module.exports = (app, deps) => {
             ? `Reveal view status reset for ${year}`
             : 'No view record found to reset',
         });
-      } catch (err) {
-        logger.error('Error resetting reveal view status', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'resetting reveal view status',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -373,18 +333,14 @@ module.exports = (app, deps) => {
     '/api/aggregate-list/viewed-years',
     ensureAuthAPI,
     ensureAdmin,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const viewedYears = await aggregateList.getViewedYears(req.user._id);
         res.json({ viewedYears });
-      } catch (err) {
-        logger.error('Error fetching viewed years', {
-          error: err.message,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching viewed years',
+      { errorMessage: 'Database error' }
+    )
   );
 
   // ============ CONTRIBUTOR MANAGEMENT ENDPOINTS ============
@@ -398,19 +354,15 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const contributors = await aggregateList.getContributors(year);
         res.json({ year, contributors });
-      } catch (err) {
-        logger.error('Error fetching contributors', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching contributors',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -422,19 +374,15 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const eligibleUsers = await aggregateList.getEligibleUsers(year);
         res.json({ year, eligibleUsers });
-      } catch (err) {
-        logger.error('Error fetching eligible users', {
-          error: err.message,
-          year: req.params.year,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'fetching eligible users',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -446,8 +394,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // Check if year is locked
@@ -475,16 +423,10 @@ module.exports = (app, deps) => {
           success: true,
           message: `User added as contributor for ${year}`,
         });
-      } catch (err) {
-        logger.error('Error adding contributor', {
-          error: err.message,
-          year: req.params.year,
-          userId: req.body.userId,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'adding contributor',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -496,8 +438,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // Check if year is locked
@@ -528,16 +470,10 @@ module.exports = (app, deps) => {
             ? `User removed as contributor for ${year}`
             : 'User was not a contributor',
         });
-      } catch (err) {
-        logger.error('Error removing contributor', {
-          error: err.message,
-          year: req.params.year,
-          userId: req.params.userId,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'removing contributor',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -549,8 +485,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         const { userIds } = req.body;
         if (!Array.isArray(userIds)) {
@@ -567,16 +503,10 @@ module.exports = (app, deps) => {
           count: userIds.length,
           message: `Set ${userIds.length} contributors for ${year}`,
         });
-      } catch (err) {
-        logger.error('Error setting contributors', {
-          error: err.message,
-          year: req.params.year,
-          count: req.body.userIds?.length,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'setting contributors',
+      { errorMessage: 'Database error' }
+    )
   );
 
   // ============ YEAR LOCKING ENDPOINTS ============
@@ -590,8 +520,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
 
         // Create master_lists record if doesn't exist, or update existing
@@ -615,15 +545,10 @@ module.exports = (app, deps) => {
         });
 
         res.json({ success: true, year, locked: true });
-      } catch (err) {
-        logger.error('Error locking year', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'locking year',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
@@ -635,8 +560,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     ensureAdmin,
     validateYearParam,
-    async (req, res) => {
-      try {
+    asyncHandler(
+      async (req, res) => {
         const year = req.validatedYear;
         await pool.query(
           `
@@ -656,38 +581,36 @@ module.exports = (app, deps) => {
         });
 
         res.json({ success: true, year, locked: false });
-      } catch (err) {
-        logger.error('Error unlocking year', {
-          error: err.message,
-          year: req.params.year,
-          adminId: req.user._id,
-        });
-        res.status(500).json({ error: 'Database error' });
-      }
-    }
+      },
+      'unlocking year',
+      { errorMessage: 'Database error' }
+    )
   );
 
   /**
    * GET /api/locked-years
    * Get list of all locked years
    */
-  app.get('/api/locked-years', ensureAuthAPI, async (req, res) => {
-    try {
-      const result = await pool.query(
-        `
+  app.get(
+    '/api/locked-years',
+    ensureAuthAPI,
+    asyncHandler(
+      async (req, res) => {
+        const result = await pool.query(
+          `
         SELECT year 
         FROM master_lists 
         WHERE locked = TRUE 
         ORDER BY year DESC
       `
-      );
+        );
 
-      res.json({ years: result.rows.map((r) => r.year) });
-    } catch (err) {
-      logger.error('Error fetching locked years', { error: err.message });
-      res.status(500).json({ error: 'Database error' });
-    }
-  });
+        res.json({ years: result.rows.map((r) => r.year) });
+      },
+      'fetching locked years',
+      { errorMessage: 'Database error' }
+    )
+  );
 
   // Export the aggregateList instance for use in triggers
   return { aggregateList };
