@@ -9,6 +9,7 @@
 
 import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
+import { createActionSheet } from './ui-factories.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -282,20 +283,6 @@ export function createMobileUI(deps = {}) {
     const albumId =
       `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
 
-    // Remove any existing action sheets first
-    const existingSheet = document.querySelector(
-      '.fixed.inset-0.z-50.lg\\:hidden'
-    );
-    if (existingSheet) {
-      existingSheet.remove();
-    }
-
-    // Hide FAB when mobile action sheet is shown
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = 'none';
-    }
-
     const hasSpotify = window.currentUser?.spotifyAuth;
     const hasTidal = window.currentUser?.tidalAuth;
     const hasAnyService = hasSpotify || hasTidal;
@@ -320,13 +307,8 @@ export function createMobileUI(deps = {}) {
       showSpotifyConnect = true;
     }
 
-    const actionSheet = document.createElement('div');
-    actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+    const { sheet: actionSheet, close } = createActionSheet({
+      contentHtml: `
           <h3 class="font-semibold text-white mb-1 truncate">${album.album}</h3>
           <p class="text-sm text-gray-400 mb-4 truncate">${album.artist}</p>
           
@@ -401,14 +383,10 @@ export function createMobileUI(deps = {}) {
           <button data-action="cancel"
                   class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(actionSheet);
+          </button>`,
+    });
 
     // Attach event listeners
-    const backdrop = actionSheet.querySelector('[data-backdrop]');
     const editBtn = actionSheet.querySelector('[data-action="edit"]');
     const playToggleBtn = actionSheet.querySelector(
       '[data-action="play-toggle"]'
@@ -419,18 +397,9 @@ export function createMobileUI(deps = {}) {
     const deviceList = actionSheet.querySelector('[data-device-list]');
     const moveBtn = actionSheet.querySelector('[data-action="move"]');
     const removeBtn = actionSheet.querySelector('[data-action="remove"]');
-    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
 
     let isPlayExpanded = false;
     let devicesLoaded = false;
-
-    const closeSheet = () => {
-      actionSheet.remove();
-      const fabElement = document.getElementById('addAlbumFAB');
-      if (fabElement && currentList) {
-        fabElement.style.display = 'flex';
-      }
-    };
 
     // Toggle play options expansion
     const togglePlayOptions = async () => {
@@ -441,7 +410,7 @@ export function createMobileUI(deps = {}) {
 
       // If no Spotify (only Tidal), just play directly
       if (!hasSpotify) {
-        closeSheet();
+        close();
         playAlbumSafe(albumId);
         return;
       }
@@ -504,7 +473,7 @@ export function createMobileUI(deps = {}) {
                 e.preventDefault();
                 e.stopPropagation();
                 const deviceId = btn.dataset.deviceId;
-                closeSheet();
+                close();
                 playAlbumOnDeviceMobile(albumId, deviceId);
               });
             });
@@ -527,13 +496,10 @@ export function createMobileUI(deps = {}) {
       }
     };
 
-    backdrop.addEventListener('click', closeSheet);
-    cancelBtn.addEventListener('click', closeSheet);
-
     editBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       showMobileEditFormSafe(albumId);
     });
 
@@ -547,7 +513,7 @@ export function createMobileUI(deps = {}) {
       openAppBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        closeSheet();
+        close();
         playAlbumSafe(albumId);
       });
     }
@@ -555,7 +521,7 @@ export function createMobileUI(deps = {}) {
     moveBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       showMobileMoveToListSheet(index, albumId);
     });
 
@@ -568,7 +534,7 @@ export function createMobileUI(deps = {}) {
       similarArtistsBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        closeSheet();
+        close();
         if (showDiscoveryModal && album.artist) {
           showDiscoveryModal('similar', { artist: album.artist });
         } else if (!album.artist) {
@@ -580,7 +546,7 @@ export function createMobileUI(deps = {}) {
     removeBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       removeAlbumSafe(albumId);
     });
   }
@@ -648,23 +614,11 @@ export function createMobileUI(deps = {}) {
     const { listsByYear, sortedYears, listsWithoutYear } = groupListsForMove();
     const hasAnyLists = sortedYears.length > 0 || listsWithoutYear.length > 0;
 
-    // Remove any existing sheets
-    const existingSheet = document.querySelector(
-      '.fixed.inset-0.z-50.lg\\:hidden'
-    );
-    if (existingSheet) {
-      existingSheet.remove();
-    }
-
-    const actionSheet = document.createElement('div');
-    actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+    let actionSheet, close;
 
     if (!hasAnyLists) {
-      actionSheet.innerHTML = `
-        <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-        <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-          <div class="p-4">
-            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+      ({ sheet: actionSheet, close } = createActionSheet({
+        contentHtml: `
             <h3 class="font-semibold text-white mb-1">Move to List</h3>
             <p class="text-sm text-gray-400 mb-4">${album.album} by ${album.artist}</p>
             
@@ -675,10 +629,10 @@ export function createMobileUI(deps = {}) {
             <button data-action="cancel"
                     class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
               Cancel
-            </button>
-          </div>
-        </div>
-      `;
+            </button>`,
+        hideFAB: false,
+        restoreFAB: false,
+      }));
     } else {
       // Build year accordion sections
       const yearSections = sortedYears
@@ -743,11 +697,8 @@ export function createMobileUI(deps = {}) {
         `
           : '';
 
-      actionSheet.innerHTML = `
-        <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-        <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[80vh] overflow-y-auto">
-          <div class="p-4">
-            <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+      ({ sheet: actionSheet, close } = createActionSheet({
+        contentHtml: `
             <h3 class="font-semibold text-white mb-1">Move to List</h3>
             <p class="text-sm text-gray-400 mb-4 truncate">${album.album} by ${album.artist}</p>
             
@@ -757,16 +708,12 @@ export function createMobileUI(deps = {}) {
             <button data-action="cancel"
                     class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
               Cancel
-            </button>
-          </div>
-        </div>
-      `;
+            </button>`,
+        panelClasses: 'max-h-[80vh] overflow-y-auto',
+        hideFAB: false,
+        restoreFAB: false,
+      }));
     }
-
-    document.body.appendChild(actionSheet);
-
-    const backdrop = actionSheet.querySelector('[data-backdrop]');
-    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
 
     // Track expanded state for each year
     const expandedYears = new Set();
@@ -781,13 +728,6 @@ export function createMobileUI(deps = {}) {
         firstChevron.style.transform = 'rotate(180deg)';
       }
     }
-
-    const closeSheet = () => {
-      actionSheet.remove();
-    };
-
-    backdrop.addEventListener('click', closeSheet);
-    cancelBtn.addEventListener('click', closeSheet);
 
     // Attach toggle handlers to year headers
     actionSheet
@@ -833,7 +773,7 @@ export function createMobileUI(deps = {}) {
         e.preventDefault();
         e.stopPropagation();
         const targetList = btn.dataset.targetList;
-        closeSheet();
+        close();
         showMoveConfirmation(albumId, targetList);
       });
     });
@@ -850,25 +790,8 @@ export function createMobileUI(deps = {}) {
     const listName = listMeta?.name || listId;
     const menuConfig = getListMenuConfig(listId);
 
-    // Remove any existing action sheets first
-    const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
-    if (existingSheet) {
-      existingSheet.remove();
-    }
-
-    // Hide FAB when mobile action sheet is shown
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = 'none';
-    }
-
-    const actionSheet = document.createElement('div');
-    actionSheet.className = 'fixed inset-0 z-60';
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+    const { sheet: actionSheet, close } = createActionSheet({
+      contentHtml: `
           <h3 class="font-semibold text-white mb-4">${listName}</h3>
           
           <!-- Expandable Download Section -->
@@ -943,14 +866,12 @@ export function createMobileUI(deps = {}) {
           <button data-action="cancel"
                   class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(actionSheet);
+          </button>`,
+      zIndex: '60',
+      lgHidden: false,
+    });
 
     // Attach event listeners
-    const backdrop = actionSheet.querySelector('[data-backdrop]');
     const downloadToggleBtn = actionSheet.querySelector(
       '[data-action="download-toggle"]'
     );
@@ -977,18 +898,6 @@ export function createMobileUI(deps = {}) {
       '[data-action="send-to-service"]'
     );
     const deleteBtn = actionSheet.querySelector('[data-action="delete"]');
-    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-    const closeSheet = () => {
-      actionSheet.remove();
-      const fabElement = document.getElementById('addAlbumFAB');
-      if (fabElement && currentList) {
-        fabElement.style.display = 'flex';
-      }
-    };
-
-    backdrop.addEventListener('click', closeSheet);
-    cancelBtn.addEventListener('click', closeSheet);
 
     // Toggle download options expansion
     let isDownloadExpanded = false;
@@ -1019,28 +928,28 @@ export function createMobileUI(deps = {}) {
     downloadJsonBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       downloadListAsJSON(listId);
     });
 
     downloadPdfBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       downloadListAsPDF(listId);
     });
 
     downloadCsvBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       downloadListAsCSV(listId);
     });
 
     editBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       openRenameModal(listId);
     });
 
@@ -1048,7 +957,7 @@ export function createMobileUI(deps = {}) {
       toggleMainBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        closeSheet();
+        close();
         toggleMainStatus(listId);
       });
     }
@@ -1056,7 +965,7 @@ export function createMobileUI(deps = {}) {
     sendToServiceBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
       try {
         const listData = getListData(listId) || [];
         await updatePlaylist(listId, listData);
@@ -1073,7 +982,7 @@ export function createMobileUI(deps = {}) {
       moveToCollectionBtn.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        closeSheet();
+        close();
         showMobileCollectionPicker(listId);
       });
     }
@@ -1081,7 +990,7 @@ export function createMobileUI(deps = {}) {
     deleteBtn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      closeSheet();
+      close();
 
       const confirmed = await showConfirmation(
         'Delete List',
@@ -1141,8 +1050,6 @@ export function createMobileUI(deps = {}) {
    * @param {string} listName - Name of the list to move
    */
   function showMobileCollectionPicker(listName) {
-    const currentList = getCurrentList();
-
     // Get current list's group ID
     const listMeta = getListMetadata(listName);
     const currentGroupId = listMeta?.groupId;
@@ -1150,18 +1057,6 @@ export function createMobileUI(deps = {}) {
     // Get all collections (groups without years)
     const groups = getSortedGroups ? getSortedGroups() : [];
     const collections = groups.filter((g) => !g.isYearGroup);
-
-    // Remove any existing action sheets first
-    const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
-    if (existingSheet) {
-      existingSheet.remove();
-    }
-
-    // Hide FAB when mobile action sheet is shown
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = 'none';
-    }
 
     let collectionsHtml = '';
     if (collections.length === 0) {
@@ -1193,13 +1088,8 @@ export function createMobileUI(deps = {}) {
       });
     }
 
-    const actionSheet = document.createElement('div');
-    actionSheet.className = 'fixed inset-0 z-60';
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[70vh] overflow-y-auto">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+    const { sheet: actionSheet, close } = createActionSheet({
+      contentHtml: `
           <h3 class="font-semibold text-white mb-2">Move "${listName}"</h3>
           <p class="text-sm text-gray-500 mb-4">Select a collection</p>
           
@@ -1208,26 +1098,11 @@ export function createMobileUI(deps = {}) {
           <button data-action="cancel"
                   class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(actionSheet);
-
-    // Attach event listeners
-    const backdrop = actionSheet.querySelector('[data-backdrop]');
-    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-    const closeSheet = () => {
-      actionSheet.remove();
-      const fabElement = document.getElementById('addAlbumFAB');
-      if (fabElement && currentList) {
-        fabElement.style.display = 'flex';
-      }
-    };
-
-    backdrop.addEventListener('click', closeSheet);
-    cancelBtn.addEventListener('click', closeSheet);
+          </button>`,
+      zIndex: '60',
+      lgHidden: false,
+      panelClasses: 'max-h-[70vh] overflow-y-auto',
+    });
 
     // Handle collection selection
     actionSheet
@@ -1238,7 +1113,7 @@ export function createMobileUI(deps = {}) {
           e.stopPropagation();
           const groupId = btn.dataset.groupId;
           const groupName = btn.dataset.groupName;
-          closeSheet();
+          close();
 
           try {
             await apiCall(`/api/lists/${encodeURIComponent(listName)}/move`, {
@@ -1274,27 +1149,8 @@ export function createMobileUI(deps = {}) {
       return;
     }
 
-    const currentList = getCurrentList();
-
-    // Remove any existing action sheets first
-    const existingSheet = document.querySelector('.fixed.inset-0.z-\\[60\\]');
-    if (existingSheet) {
-      existingSheet.remove();
-    }
-
-    // Hide FAB when mobile action sheet is shown
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = 'none';
-    }
-
-    const actionSheet = document.createElement('div');
-    actionSheet.className = 'fixed inset-0 z-60';
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+    const { sheet: actionSheet, close } = createActionSheet({
+      contentHtml: `
           <h3 class="font-semibold text-white mb-4">${groupName}</h3>
           
           ${
@@ -1326,33 +1182,19 @@ export function createMobileUI(deps = {}) {
           <button data-action="cancel"
                   class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(actionSheet);
+          </button>`,
+      zIndex: '60',
+      lgHidden: false,
+    });
 
     // Attach event listeners
-    const backdrop = actionSheet.querySelector('[data-backdrop]');
     const renameBtn = actionSheet.querySelector('[data-action="rename"]');
     const deleteBtn = actionSheet.querySelector('[data-action="delete"]');
-    const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-    const closeSheet = () => {
-      actionSheet.remove();
-      const fabElement = document.getElementById('addAlbumFAB');
-      if (fabElement && currentList) {
-        fabElement.style.display = 'flex';
-      }
-    };
-
-    backdrop.addEventListener('click', closeSheet);
-    cancelBtn.addEventListener('click', closeSheet);
 
     // Handle rename
     if (renameBtn) {
       renameBtn.addEventListener('click', () => {
-        closeSheet();
+        close();
 
         // Year groups can't be renamed (shouldn't reach here due to UI)
         if (isYearGroup) {
@@ -1375,7 +1217,7 @@ export function createMobileUI(deps = {}) {
     // Handle delete
     if (deleteBtn) {
       deleteBtn.addEventListener('click', async () => {
-        closeSheet();
+        close();
 
         // Year groups can't be deleted manually (shouldn't reach here due to UI)
         if (isYearGroup) {

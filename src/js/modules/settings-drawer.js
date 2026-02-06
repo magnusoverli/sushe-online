@@ -10,6 +10,7 @@
 import { openDuplicateReviewModal } from './duplicate-review-modal.js';
 import { openManualAlbumAudit } from './manual-album-audit-modal.js';
 import { escapeHtml } from './html-utils.js';
+import { createSettingsModal as createSettingsModalBase } from './ui-factories.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -3331,19 +3332,10 @@ export function createSettingsDrawer(deps = {}) {
    * Create password change modal
    */
   function createPasswordModal() {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal';
-    modal.id = 'passwordChangeModal';
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">Change Password</h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body">
+    const { modal, close } = createSettingsModalBase({
+      id: 'passwordChangeModal',
+      title: 'Change Password',
+      bodyHtml: `
           <form id="passwordChangeForm">
             <div class="settings-form-group">
               <label class="settings-label" for="currentPasswordInput">Current Password</label>
@@ -3359,32 +3351,18 @@ export function createSettingsDrawer(deps = {}) {
               <input type="password" id="confirmPasswordInput" class="settings-input" required minlength="8" />
             </div>
             <div id="passwordError" class="text-red-500 text-sm mt-2 hidden"></div>
-          </form>
-        </div>
-        <div class="settings-modal-footer">
+          </form>`,
+      footerHtml: `
           <button id="cancelPasswordBtn" class="settings-button">Cancel</button>
-          <button id="savePasswordBtn" class="settings-button">Change Password</button>
-        </div>
-      </div>
-    `;
+          <button id="savePasswordBtn" class="settings-button">Change Password</button>`,
+    });
 
     // Attach handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
     const cancelBtn = modal.querySelector('#cancelPasswordBtn');
     const saveBtn = modal.querySelector('#savePasswordBtn');
     const form = modal.querySelector('#passwordChangeForm');
 
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        document.body.removeChild(modal);
-      }, 300);
-    };
-
-    backdrop?.addEventListener('click', closeModal);
-    closeBtn?.addEventListener('click', closeModal);
-    cancelBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', close);
 
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -3626,22 +3604,12 @@ export function createSettingsDrawer(deps = {}) {
    * Create Telegram setup modal
    */
   function createTelegramModal() {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal';
-    modal.id = 'telegramSetupModal';
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content" style="max-width: 32rem;">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">
-            <i class="fab fa-telegram text-blue-400 mr-2"></i>
-            Configure Telegram
-          </h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body">
+    const { modal, close } = createSettingsModalBase({
+      id: 'telegramSetupModal',
+      title:
+        '<i class="fab fa-telegram text-blue-400 mr-2"></i>\n            Configure Telegram',
+      maxWidth: '32rem',
+      bodyHtml: `
           <!-- Step 1: Bot Token -->
           <div id="telegramStep1" class="telegram-step active" data-step="1">
             <h4 class="text-sm font-semibold text-white uppercase tracking-wide mb-3 flex items-center gap-2">
@@ -3716,17 +3684,15 @@ export function createSettingsDrawer(deps = {}) {
                 <i class="fas fa-save mr-2"></i>Save & Enable
               </button>
             </div>
-          </div>
-        </div>
-        <div class="settings-modal-footer">
-          <button id="closeTelegramModalBtn" class="settings-button">Cancel</button>
-        </div>
-      </div>
-    `;
+          </div>`,
+      footerHtml:
+        '<button id="closeTelegramModalBtn" class="settings-button">Cancel</button>',
+      onClose: () => {
+        telegramModalState = null;
+      },
+    });
 
     // Attach handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
     const cancelBtn = modal.querySelector('#closeTelegramModalBtn');
     const validateBtn = modal.querySelector('#validateTelegramTokenBtn');
     const detectBtn = modal.querySelector('#detectTelegramGroupsBtn');
@@ -3735,19 +3701,7 @@ export function createSettingsDrawer(deps = {}) {
     const testBtn = modal.querySelector('#sendTelegramTestBtn');
     const saveBtn = modal.querySelector('#saveTelegramConfigBtn');
 
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        if (document.body.contains(modal)) {
-          document.body.removeChild(modal);
-        }
-        telegramModalState = null;
-      }, 300);
-    };
-
-    backdrop?.addEventListener('click', closeModal);
-    closeBtn?.addEventListener('click', closeModal);
-    cancelBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', close);
 
     validateBtn?.addEventListener('click', () =>
       handleValidateTelegramToken(modal)
@@ -4330,21 +4284,10 @@ export function createSettingsDrawer(deps = {}) {
    * Create restore database modal
    */
   async function createRestoreModal() {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal hidden';
-    modal.id = 'restoreDatabaseModal';
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content" style="max-width: 500px;">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">
-            <i class="fas fa-upload mr-2 text-red-500"></i>Restore Database
-          </h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body">
+    const { modal, close } = createSettingsModalBase({
+      id: 'restoreDatabaseModal',
+      title: '<i class="fas fa-upload mr-2 text-red-500"></i>Restore Database',
+      bodyHtml: `
           <div class="bg-red-900/20 border border-red-800/50 rounded-lg p-4 mb-4">
             <p class="text-red-400 text-sm font-semibold mb-2">⚠️ Warning</p>
             <p class="text-gray-300 text-sm">This will replace the entire database with the backup file. All current data will be permanently lost. The server will restart automatically after restoration.</p>
@@ -4362,36 +4305,22 @@ export function createSettingsDrawer(deps = {}) {
                 <span id="restoreProgressText">Uploading backup...</span>
               </div>
             </div>
-          </form>
-        </div>
-        <div class="settings-modal-footer">
+          </form>`,
+      footerHtml: `
           <button id="cancelRestoreBtn" class="settings-button">Cancel</button>
-          <button id="confirmRestoreBtn" class="settings-button settings-button-danger" disabled>Restore Database</button>
-        </div>
-      </div>
-    `;
+          <button id="confirmRestoreBtn" class="settings-button settings-button-danger" disabled>Restore Database</button>`,
+      maxWidth: '500px',
+      startHidden: true,
+    });
 
-    // Attach close handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
+    // Attach handlers
     const cancelBtn = modal.querySelector('#cancelRestoreBtn');
     const confirmBtn = modal.querySelector('#confirmRestoreBtn');
     const form = modal.querySelector('#restoreDatabaseForm');
     const fileInput = modal.querySelector('#backupFileInput');
     const errorEl = modal.querySelector('#restoreError');
 
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        if (document.body.contains(modal)) {
-          document.body.removeChild(modal);
-        }
-      }, 300);
-    };
-
-    backdrop?.addEventListener('click', closeModal);
-    closeBtn?.addEventListener('click', closeModal);
-    cancelBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', close);
 
     // Enable/disable restore button based on file selection
     fileInput.addEventListener('change', () => {
@@ -5082,19 +5011,10 @@ export function createSettingsDrawer(deps = {}) {
    * Create user lists modal
    */
   function createUserListsModal(lists) {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal';
-    modal.id = 'userListsModal';
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content" style="max-width: 32rem;">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">User Lists</h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body">
+    const { modal, close } = createSettingsModalBase({
+      id: 'userListsModal',
+      title: 'User Lists',
+      bodyHtml: `
           ${
             lists.length === 0
               ? `
@@ -5119,29 +5039,15 @@ export function createSettingsDrawer(deps = {}) {
                 .join('')}
             </div>
           `
-          }
-        </div>
-        <div class="settings-modal-footer">
-          <button id="closeUserListsBtn" class="settings-button">Close</button>
-        </div>
-      </div>
-    `;
+          }`,
+      footerHtml: `
+          <button id="closeUserListsBtn" class="settings-button">Close</button>`,
+      maxWidth: '32rem',
+    });
 
     // Attach handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
     const closeUserListsBtn = modal.querySelector('#closeUserListsBtn');
-
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        document.body.removeChild(modal);
-      }, 300);
-    };
-
-    backdrop?.addEventListener('click', closeModal);
-    closeBtn?.addEventListener('click', closeModal);
-    closeUserListsBtn?.addEventListener('click', closeModal);
+    closeUserListsBtn?.addEventListener('click', close);
 
     return modal;
   }
@@ -5627,10 +5533,6 @@ export function createSettingsDrawer(deps = {}) {
    * @param {Object} diagnosticData - Diagnostic data with overlap stats
    */
   async function showAuditResultsModal(year, auditData, diagnosticData = null) {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal';
-    modal.id = `audit-modal-${year}`;
-
     const { summary, duplicates } = auditData;
     const hasDuplicates = duplicates && duplicates.length > 0;
 
@@ -5685,18 +5587,10 @@ export function createSettingsDrawer(deps = {}) {
         `
         : '';
 
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content" style="max-width: 700px; max-height: 80vh;">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">
-            <i class="fas fa-search mr-2"></i>Data Audit Results - ${year}
-          </h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body" style="max-height: 60vh; overflow-y: auto;">
+    const { modal, close } = createSettingsModalBase({
+      id: `audit-modal-${year}`,
+      title: '<i class="fas fa-search mr-2"></i>Data Audit Results - ' + year,
+      bodyHtml: `
           <!-- Summary Section -->
           <div class="bg-gray-800/50 rounded-lg p-4 mb-4">
             <h4 class="text-white font-semibold mb-3">
@@ -5748,9 +5642,8 @@ export function createSettingsDrawer(deps = {}) {
             <p class="text-gray-400 text-sm mt-1">No data integrity issues found for ${year}.</p>
           </div>
           `
-          }
-        </div>
-        <div class="settings-modal-footer">
+          }`,
+      footerHtml: `
           <button id="closeAuditBtn-${year}" class="settings-button">Close</button>
           ${
             hasDuplicates && summary.totalChangesNeeded > 0
@@ -5763,32 +5656,19 @@ export function createSettingsDrawer(deps = {}) {
           </button>
           `
               : ''
-          }
-        </div>
-      </div>
-    `;
+          }`,
+      maxWidth: '700px',
+      maxHeight: '80vh',
+      bodyStyle: 'max-height: 60vh; overflow-y: auto;',
+      appendToBody: true,
+    });
 
-    document.body.appendChild(modal);
-
-    // Attach close handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
+    // Attach handlers
     const closeAuditBtn = modal.querySelector(`#closeAuditBtn-${year}`);
     const previewFixBtn = modal.querySelector(`#previewFixBtn-${year}`);
     const applyFixBtn = modal.querySelector(`#applyFixBtn-${year}`);
 
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        if (document.body.contains(modal)) {
-          document.body.removeChild(modal);
-        }
-      }, 300);
-    };
-
-    backdrop.addEventListener('click', closeModal);
-    closeBtn.addEventListener('click', closeModal);
-    closeAuditBtn.addEventListener('click', closeModal);
+    closeAuditBtn?.addEventListener('click', close);
 
     if (previewFixBtn) {
       previewFixBtn.addEventListener('click', async () => {
@@ -5850,7 +5730,7 @@ export function createSettingsDrawer(deps = {}) {
               `Applied ${result.changesApplied} changes successfully`,
               'success'
             );
-            closeModal();
+            close();
 
             // Reload admin data
             categoryData.admin = null;
@@ -5869,7 +5749,7 @@ export function createSettingsDrawer(deps = {}) {
     // Handle escape key
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        closeModal();
+        close();
         document.removeEventListener('keydown', handleEscape);
       }
     };
@@ -5880,55 +5760,30 @@ export function createSettingsDrawer(deps = {}) {
    * Create contributor management modal
    */
   async function createContributorModal(year) {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal hidden';
-    modal.id = `contributor-modal-${year}`;
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content" style="max-width: 600px;">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">
-            <i class="fas fa-users mr-2"></i>Manage Contributors - ${year}
-          </h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body">
+    const { modal, close } = createSettingsModalBase({
+      id: `contributor-modal-${year}`,
+      title: '<i class="fas fa-users mr-2"></i>Manage Contributors - ' + year,
+      bodyHtml: `
           <div class="text-center py-4">
             <i class="fas fa-spinner fa-spin text-gray-500"></i>
             <p class="text-gray-400 mt-2">Loading eligible users...</p>
-          </div>
-        </div>
-        <div class="settings-modal-footer">
+          </div>`,
+      footerHtml: `
           <button id="cancelContributorBtn-${year}" class="settings-button">Cancel</button>
-          <button id="saveContributorBtn-${year}" class="settings-button" disabled>Save Changes</button>
-        </div>
-      </div>
-    `;
+          <button id="saveContributorBtn-${year}" class="settings-button" disabled>Save Changes</button>`,
+      maxWidth: '600px',
+      startHidden: true,
+    });
 
-    // Attach close handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
+    // Attach handlers
     const cancelBtn = modal.querySelector(`#cancelContributorBtn-${year}`);
     const saveBtn = modal.querySelector(`#saveContributorBtn-${year}`);
+
+    cancelBtn?.addEventListener('click', close);
 
     // Track original state and current state
     const originalState = new Map();
     const currentState = new Map();
-
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        if (document.body.contains(modal)) {
-          document.body.removeChild(modal);
-        }
-      }, 300);
-    };
-
-    backdrop?.addEventListener('click', closeModal);
-    closeBtn?.addEventListener('click', closeModal);
-    cancelBtn?.addEventListener('click', closeModal);
 
     // Load eligible users
     try {
@@ -6086,7 +5941,7 @@ export function createSettingsDrawer(deps = {}) {
             categoryData.admin = null;
             await loadCategoryData('admin');
 
-            closeModal();
+            close();
           } else {
             throw new Error(response.error || 'Failed to save contributors');
           }
@@ -6128,55 +5983,32 @@ export function createSettingsDrawer(deps = {}) {
    * Create recommender management modal
    */
   async function createRecommenderModal(year) {
-    const modal = document.createElement('div');
-    modal.className = 'settings-modal hidden';
-    modal.id = `recommender-modal-${year}`;
-    modal.innerHTML = `
-      <div class="settings-modal-backdrop"></div>
-      <div class="settings-modal-content" style="max-width: 600px;">
-        <div class="settings-modal-header">
-          <h3 class="settings-modal-title">
-            <i class="fas fa-thumbs-up text-blue-400 mr-2"></i>Manage Recommenders - ${year}
-          </h3>
-          <button class="settings-modal-close" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="settings-modal-body">
+    const { modal, close } = createSettingsModalBase({
+      id: `recommender-modal-${year}`,
+      title:
+        '<i class="fas fa-thumbs-up text-blue-400 mr-2"></i>Manage Recommenders - ' +
+        year,
+      bodyHtml: `
           <div class="text-center py-4">
             <i class="fas fa-spinner fa-spin text-gray-500"></i>
             <p class="text-gray-400 mt-2">Loading users...</p>
-          </div>
-        </div>
-        <div class="settings-modal-footer">
+          </div>`,
+      footerHtml: `
           <button id="cancelRecommenderBtn-${year}" class="settings-button">Cancel</button>
-          <button id="saveRecommenderBtn-${year}" class="settings-button" disabled>Save Changes</button>
-        </div>
-      </div>
-    `;
+          <button id="saveRecommenderBtn-${year}" class="settings-button" disabled>Save Changes</button>`,
+      maxWidth: '600px',
+      startHidden: true,
+    });
 
-    // Attach close handlers
-    const backdrop = modal.querySelector('.settings-modal-backdrop');
-    const closeBtn = modal.querySelector('.settings-modal-close');
+    // Attach handlers
     const cancelBtn = modal.querySelector(`#cancelRecommenderBtn-${year}`);
     const saveBtn = modal.querySelector(`#saveRecommenderBtn-${year}`);
+
+    cancelBtn?.addEventListener('click', close);
 
     // Track original state and current state
     const originalState = new Map();
     const currentState = new Map();
-
-    const closeModal = () => {
-      modal.classList.add('hidden');
-      setTimeout(() => {
-        if (document.body.contains(modal)) {
-          document.body.removeChild(modal);
-        }
-      }, 300);
-    };
-
-    backdrop.addEventListener('click', closeModal);
-    closeBtn.addEventListener('click', closeModal);
-    cancelBtn.addEventListener('click', closeModal);
 
     // Load users
     try {
@@ -6323,7 +6155,7 @@ export function createSettingsDrawer(deps = {}) {
                 : `Recommendation access updated for ${year}`,
               'success'
             );
-            closeModal();
+            close();
 
             // Reload admin data
             categoryData.admin = null;

@@ -23,6 +23,7 @@ import {
 import { escapeHtml } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
+import { createActionSheet } from './modules/ui-factories.js';
 import {
   invalidateLockedYearsCache,
   invalidateLockedRecommendationYearsCache,
@@ -4538,27 +4539,7 @@ function showMobileRecommendationMenu(rec, year, locked) {
     window.currentUser?.spotifyAuth || window.currentUser?.tidalAuth;
   const hasReasoning = rec.reasoning && rec.reasoning.trim().length > 0;
 
-  // Remove any existing action sheets
-  const existingSheet = document.querySelector(
-    '.fixed.inset-0.z-50.lg\\:hidden'
-  );
-  if (existingSheet) {
-    existingSheet.remove();
-  }
-
-  // Hide FAB when action sheet is shown
-  const fab = document.getElementById('addAlbumFAB');
-  if (fab) {
-    fab.style.display = 'none';
-  }
-
-  const actionSheet = document.createElement('div');
-  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
-  actionSheet.innerHTML = `
-    <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-    <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-      <div class="p-4">
-        <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+  const contentHtml = `
         <h3 class="font-semibold text-white mb-1 truncate">${escapeHtml(rec.album)}</h3>
         <p class="text-sm text-gray-400 mb-4 truncate">${escapeHtml(rec.artist)}</p>
         
@@ -4615,39 +4596,27 @@ function showMobileRecommendationMenu(rec, year, locked) {
         <button data-action="cancel"
                 class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
           Cancel
-        </button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(actionSheet);
+        </button>`;
 
-  const backdrop = actionSheet.querySelector('[data-backdrop]');
-  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-  const playBtn = actionSheet.querySelector('[data-action="play"]');
-  const viewReasoningBtn = actionSheet.querySelector(
+  const { sheet, close } = createActionSheet({
+    contentHtml,
+    checkCurrentList: false,
+  });
+
+  const playBtn = sheet.querySelector('[data-action="play"]');
+  const viewReasoningBtn = sheet.querySelector(
     '[data-action="view-reasoning"]'
   );
-  const editReasoningBtn = actionSheet.querySelector(
+  const editReasoningBtn = sheet.querySelector(
     '[data-action="edit-reasoning"]'
   );
-  const addToListBtn = actionSheet.querySelector('[data-action="add-to-list"]');
-  const removeBtn = actionSheet.querySelector('[data-action="remove"]');
-
-  const closeSheet = () => {
-    actionSheet.remove();
-    const fabElement = document.getElementById('addAlbumFAB');
-    if (fabElement) {
-      fabElement.style.display = 'flex';
-    }
-  };
-
-  backdrop.addEventListener('click', closeSheet);
-  cancelBtn.addEventListener('click', closeSheet);
+  const addToListBtn = sheet.querySelector('[data-action="add-to-list"]');
+  const removeBtn = sheet.querySelector('[data-action="remove"]');
 
   if (playBtn) {
     playBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      closeSheet();
+      close();
       if (window.playAlbumSafe) {
         window.playAlbumSafe(rec.album_id);
       }
@@ -4657,7 +4626,7 @@ function showMobileRecommendationMenu(rec, year, locked) {
   if (viewReasoningBtn) {
     viewReasoningBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      closeSheet();
+      close();
       showViewReasoningModal(rec);
     });
   }
@@ -4665,7 +4634,7 @@ function showMobileRecommendationMenu(rec, year, locked) {
   if (editReasoningBtn) {
     editReasoningBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      closeSheet();
+      close();
       const newReasoning = await showReasoningModal(
         rec,
         year,
@@ -4694,7 +4663,7 @@ function showMobileRecommendationMenu(rec, year, locked) {
   if (addToListBtn) {
     addToListBtn.addEventListener('click', (e) => {
       e.preventDefault();
-      closeSheet();
+      close();
       showMobileAddRecommendationToListSheet(rec, year);
     });
   }
@@ -4702,7 +4671,7 @@ function showMobileRecommendationMenu(rec, year, locked) {
   if (removeBtn) {
     removeBtn.addEventListener('click', async (e) => {
       e.preventDefault();
-      closeSheet();
+      close();
 
       const confirmed = await showConfirmation(
         'Remove Recommendation',
@@ -4759,23 +4728,11 @@ function showMobileAddRecommendationToListSheet(rec, year) {
 
   const hasAnyLists = sortedYears.length > 0 || listsWithoutYear.length > 0;
 
-  // Remove any existing sheets
-  const existingSheet = document.querySelector(
-    '.fixed.inset-0.z-50.lg\\:hidden'
-  );
-  if (existingSheet) {
-    existingSheet.remove();
-  }
-
-  const actionSheet = document.createElement('div');
-  actionSheet.className = 'fixed inset-0 z-50 lg:hidden';
+  let contentHtml;
+  let panelClasses = '';
 
   if (!hasAnyLists) {
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+    contentHtml = `
           <h3 class="font-semibold text-white mb-1">Add to List</h3>
           <p class="text-sm text-gray-400 mb-4">${escapeHtml(rec.album)} by ${escapeHtml(rec.artist)}</p>
           
@@ -4786,11 +4743,10 @@ function showMobileAddRecommendationToListSheet(rec, year) {
           <button data-action="cancel"
                   class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
-          </button>
-        </div>
-      </div>
-    `;
+          </button>`;
   } else {
+    panelClasses = 'max-h-[80vh] overflow-y-auto';
+
     // Build year accordion sections
     const yearSections = sortedYears
       .map(
@@ -4854,11 +4810,7 @@ function showMobileAddRecommendationToListSheet(rec, year) {
       `
         : '';
 
-    actionSheet.innerHTML = `
-      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
-      <div class="absolute bottom-0 left-0 right-0 bg-gray-900 rounded-t-2xl safe-area-bottom max-h-[80vh] overflow-y-auto">
-        <div class="p-4">
-          <div class="w-12 h-1 bg-gray-600 rounded-full mx-auto mb-4"></div>
+    contentHtml = `
           <h3 class="font-semibold text-white mb-1">Add to List</h3>
           <p class="text-sm text-gray-400 mb-4 truncate">${escapeHtml(rec.album)} by ${escapeHtml(rec.artist)}</p>
           
@@ -4868,29 +4820,21 @@ function showMobileAddRecommendationToListSheet(rec, year) {
           <button data-action="cancel"
                   class="w-full text-center py-3 px-4 mt-2 bg-gray-800 rounded-sm">
             Cancel
-          </button>
-        </div>
-      </div>
-    `;
+          </button>`;
   }
 
-  document.body.appendChild(actionSheet);
-
-  const backdrop = actionSheet.querySelector('[data-backdrop]');
-  const cancelBtn = actionSheet.querySelector('[data-action="cancel"]');
-
-  const closeSheet = () => {
-    actionSheet.remove();
-  };
-
-  backdrop.addEventListener('click', closeSheet);
-  cancelBtn.addEventListener('click', closeSheet);
+  const { sheet, close } = createActionSheet({
+    contentHtml,
+    panelClasses,
+    hideFAB: false,
+    restoreFAB: false,
+  });
 
   // Track expanded years
   const expandedYears = new Set();
   if (sortedYears.length > 0) {
     expandedYears.add(sortedYears[0]);
-    const firstChevron = actionSheet.querySelector(
+    const firstChevron = sheet.querySelector(
       `[data-year-chevron="${sortedYears[0]}"]`
     );
     if (firstChevron) {
@@ -4899,15 +4843,13 @@ function showMobileAddRecommendationToListSheet(rec, year) {
   }
 
   // Attach toggle handlers
-  actionSheet.querySelectorAll('[data-action="toggle-year"]').forEach((btn) => {
+  sheet.querySelectorAll('[data-action="toggle-year"]').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
       const yr = btn.dataset.year;
-      const listContainer = actionSheet.querySelector(
-        `[data-year-lists="${yr}"]`
-      );
-      const chevron = actionSheet.querySelector(`[data-year-chevron="${yr}"]`);
+      const listContainer = sheet.querySelector(`[data-year-lists="${yr}"]`);
+      const chevron = sheet.querySelector(`[data-year-chevron="${yr}"]`);
 
       if (!listContainer) return;
 
@@ -4931,12 +4873,12 @@ function showMobileAddRecommendationToListSheet(rec, year) {
   });
 
   // Attach list selection handlers
-  actionSheet.querySelectorAll('[data-target-list]').forEach((btn) => {
+  sheet.querySelectorAll('[data-target-list]').forEach((btn) => {
     btn.addEventListener('click', async (e) => {
       e.preventDefault();
       e.stopPropagation();
       const targetList = btn.dataset.targetList;
-      closeSheet();
+      close();
 
       try {
         await addRecommendationToListMobile(rec, targetList, year);
