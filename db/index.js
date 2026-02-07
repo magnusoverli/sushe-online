@@ -170,6 +170,7 @@ let users,
   albumsAsync,
   listGroupsAsync,
   pool;
+// eslint-disable-next-line no-useless-assignment -- default for when DATABASE_URL is not set
 let ready = Promise.resolve();
 
 if (process.env.DATABASE_URL) {

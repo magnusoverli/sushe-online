@@ -14,8 +14,11 @@ FROM base AS builder
 # Cache-busting arg - changes with each build to ensure fresh source code
 ARG CACHE_BUST=1
 
-# Copy package files and install all dependencies (dev included)
+# Copy package files and patches, then install all dependencies (dev included)
+# patches/ must be present before npm ci so that the postinstall patch-package
+# script can apply them (see eslint.config.mjs header for workaround details)
 COPY package*.json ./
+COPY patches/ patches/
 RUN npm ci --prefer-offline --no-audit --no-fund
 
 # Copy the rest of the source and build assets
@@ -49,6 +52,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends postgresql-client-18 \
     && apt-get purge -y --auto-remove curl gnupg \
     && rm -rf /var/lib/apt/lists/* /usr/share/doc /usr/share/man
+
+# Copy patches so postinstall patch-package can apply them during npm ci
+COPY patches/ patches/
 
 # Install dependencies - include dev dependencies only if INSTALL_DEV_DEPS=true
 RUN if [ "$INSTALL_DEV_DEPS" = "true" ]; then \

@@ -104,7 +104,7 @@ class ChangelogUpdater {
     const today = new Date().toISOString().split('T')[0];
 
     // Read existing changelog
-    let content = '';
+    let content;
     if (fs.existsSync(CHANGELOG_PATH)) {
       content = fs.readFileSync(CHANGELOG_PATH, 'utf8');
     } else {

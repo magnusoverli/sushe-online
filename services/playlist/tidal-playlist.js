@@ -196,7 +196,7 @@ function createTidalPlaylistService(deps) {
 
     // Check if playlist exists
     let playlistId = null;
-    let existingPlaylist = null;
+    let existingPlaylist;
 
     try {
       const playlistsResp = await fetch(`${BASE_URL}/me/playlists?limit=50`, {

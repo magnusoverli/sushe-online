@@ -180,7 +180,7 @@ function createTrackFetchQueue(deps = {}) {
       return result;
     };
 
-    let result = null;
+    let result;
     try {
       result = await Promise.any([
         wrapFetch(() => fetchDeezerTracks(artistClean, albumClean)),

@@ -838,7 +838,8 @@ async function addAlbumToList(info, tab, listId, listName) {
       } catch (injectErr) {
         console.error('Failed to inject content script:', injectErr.message);
         throw new Error(
-          'Could not communicate with page. Try refreshing RateYourMusic.'
+          'Could not communicate with page. Try refreshing RateYourMusic.',
+          { cause: injectErr }
         );
       }
     }

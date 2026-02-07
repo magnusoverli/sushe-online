@@ -256,7 +256,6 @@ class PgDatastore {
   update(query, update, options = {}, cb) {
     if (typeof options === 'function') {
       cb = options;
-      options = {};
     }
     const promise = (async () => {
       const { $set = {}, $unset = {} } = update;
@@ -285,7 +284,6 @@ class PgDatastore {
   remove(query, options = {}, cb) {
     if (typeof options === 'function') {
       cb = options;
-      options = {};
     }
     const promise = (async () => {
       const { text, values } = this._buildWhere(query);

@@ -23,7 +23,9 @@
     } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
-        throw new Error(`Request timed out after ${timeout / 1000} seconds`);
+        throw new Error(`Request timed out after ${timeout / 1000} seconds`, {
+          cause: error,
+        });
       }
       throw error;
     }

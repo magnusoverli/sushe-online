@@ -693,7 +693,7 @@ function createListService(deps = {}) {
 
     const listYear = await withTransaction(pool, async (client) => {
       let resultYear = null;
-      let groupIdInternal = null;
+      let groupIdInternal;
 
       if (requestGroupId) {
         const groupResult = await client.query(

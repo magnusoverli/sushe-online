@@ -151,7 +151,7 @@ class QueryBuilder {
       .join(', ');
 
     let query = `UPDATE ${table} SET ${setClause}`;
-    let values = [...dataValues];
+    let values;
 
     if (where.clause) {
       query += ` WHERE ${where.clause}`;
@@ -178,7 +178,7 @@ class QueryBuilder {
    */
   async delete(table, where) {
     let query = `DELETE FROM ${table}`;
-    let values = [];
+    let values;
 
     if (where.clause) {
       query += ` WHERE ${where.clause}`;

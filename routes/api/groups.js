@@ -438,7 +438,7 @@ module.exports = (app, deps) => {
           const list = listResult.rows[0];
           const oldYear = list.current_group_year;
           let targetGroupId;
-          let targetYear = null;
+          let targetYear;
 
           if (year !== undefined) {
             // Moving to a year-group

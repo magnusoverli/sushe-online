@@ -1,0 +1,26 @@
+diff --git a/node_modules/eslint-plugin-security/rules/detect-no-csrf-before-method-override.js b/node_modules/eslint-plugin-security/rules/detect-no-csrf-before-method-override.js
+index cda1a55..31159ba 100644
+--- a/node_modules/eslint-plugin-security/rules/detect-no-csrf-before-method-override.js
++++ b/node_modules/eslint-plugin-security/rules/detect-no-csrf-before-method-override.js
+@@ -24,7 +24,7 @@ module.exports = {
+ 
+     return {
+       CallExpression: function (node) {
+-        const token = context.getSourceCode().getTokens(node)[0];
++        const token = context.sourceCode.getTokens(node)[0];
+         const nodeValue = token.value;
+ 
+         if (nodeValue === 'express') {
+diff --git a/node_modules/eslint-plugin-security/rules/detect-unsafe-regex.js b/node_modules/eslint-plugin-security/rules/detect-unsafe-regex.js
+index d6c9a30..bfa3a49 100644
+--- a/node_modules/eslint-plugin-security/rules/detect-unsafe-regex.js
++++ b/node_modules/eslint-plugin-security/rules/detect-unsafe-regex.js
+@@ -28,7 +28,7 @@ module.exports = {
+   create(context) {
+     return {
+       Literal: function (node) {
+-        const token = context.getSourceCode().getTokens(node)[0];
++        const token = context.sourceCode.getTokens(node)[0];
+         const nodeType = token.type;
+         const nodeValue = token.value;
+ 

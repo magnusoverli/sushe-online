@@ -123,7 +123,7 @@ function sortAndRankAlbums(albumMap) {
     });
 
   // Assign ranks with shared positions for ties
-  let currentRank = 1;
+  let currentRank;
   for (let i = 0; i < albums.length; i++) {
     if (i > 0) {
       const prev = albums[i - 1];

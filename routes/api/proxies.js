@@ -108,8 +108,6 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     cacheConfigs.public,
     asyncHandler(async (req, res) => {
-      let response = null;
-
       const { endpoint, priority } = req.query;
       if (!endpoint) {
         return res
@@ -125,7 +123,7 @@ module.exports = (app, deps) => {
 
       // Use the MusicBrainz rate-limited fetch function with priority
       const url = `https://musicbrainz.org/ws/2/${endpoint}`;
-      response = await mbFetch(
+      const response = await mbFetch(
         url,
         {
           headers: {

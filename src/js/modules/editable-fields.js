@@ -347,7 +347,7 @@ export function createEditableFields(deps = {}) {
       }
 
       // Determine what to display based on value and field
-      let displayValue = valueToDisplay;
+      let displayValue;
       let displayClass;
 
       if (genreField === 'genre_1') {

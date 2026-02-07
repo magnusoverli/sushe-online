@@ -1,3 +1,35 @@
+/**
+ * ESLint 10 Upgrade Workarounds
+ *
+ * Two temporary workarounds are in place to support eslint 10 with plugins
+ * that haven't fully caught up yet. Remove each one when the upstream fix
+ * ships — the steps are noted inline.
+ *
+ * 1. eslint-plugin-security (v3.0.1)
+ *    Two rules use the removed `context.getSourceCode()` API (replaced by
+ *    `context.sourceCode` in eslint 8.40, removed in eslint 10). We patch
+ *    them at install time via patch-package.
+ *    - Patch file:   patches/eslint-plugin-security+3.0.1.patch
+ *    - postinstall:  "patch-package || true" in package.json (|| true because
+ *                    patch-package is a devDep, absent in production installs)
+ *    - Dockerfile:   patches/ is COPYed before npm ci so postinstall can find them
+ *    - Upstream:     https://github.com/eslint-community/eslint-plugin-security/issues/185
+ *    - To remove:    Once eslint-plugin-security >= 3.1 (or whichever version
+ *                    fixes #185) is released, upgrade the dependency and delete
+ *                    the patch file. If no other patches remain, also remove the
+ *                    patch-package devDependency, postinstall script, and the
+ *                    COPY patches/ lines from the Dockerfile.
+ *
+ * 2. eslint-plugin-import (v2.32.0)
+ *    Declares peerDependencies: { eslint: "^9" } but works correctly with
+ *    eslint 10 at runtime. An npm `overrides` entry in package.json forces
+ *    npm to accept the mismatch.
+ *    - Config:    "overrides" section in package.json
+ *    - Upstream:  https://github.com/import-js/eslint-plugin-import/issues/3227
+ *    - To remove: Once eslint-plugin-import publishes a version whose
+ *                 peerDependencies include eslint 10 (or ^10), remove the
+ *                 "overrides" section from package.json.
+ */
 import js from '@eslint/js';
 import prettier from 'eslint-plugin-prettier';
 import prettierConfig from 'eslint-config-prettier';

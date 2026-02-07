@@ -33,8 +33,8 @@ export async function openInMusicApp(service, type, params, showToast) {
     let data;
     try {
       data = await r.json();
-    } catch (_) {
-      throw new Error('Invalid response');
+    } catch (_e) {
+      throw new Error('Invalid response', { cause: _e });
     }
 
     if (!r.ok) {
