@@ -360,6 +360,7 @@ module.exports = (app, deps) => {
                 __dirname,
                 '../../.restart-trigger'
               );
+              let restartTriggered = false;
               try {
                 // Touch the file to trigger nodemon's file watcher
                 const now = new Date();
@@ -367,6 +368,7 @@ module.exports = (app, deps) => {
                 logger.info(
                   `[${restoreId}] Triggered nodemon restart via file touch`
                 );
+                restartTriggered = true;
               } catch (_err) {
                 // File doesn't exist, create it
                 try {
@@ -374,6 +376,7 @@ module.exports = (app, deps) => {
                   logger.info(
                     `[${restoreId}] Created restart trigger file for nodemon`
                   );
+                  restartTriggered = true;
                 } catch (createErr) {
                   logger.warn(
                     `[${restoreId}] Could not create restart trigger file`,
@@ -381,10 +384,22 @@ module.exports = (app, deps) => {
                   );
                 }
               }
+
+              // In dev mode, if file touch succeeded, nodemon will restart gracefully
+              // No need to call process.exit()
+              if (restartTriggered) {
+                logger.info(
+                  `[${restoreId}] Nodemon will restart gracefully via file change detection`
+                );
+                return;
+              }
             }
 
-            // Exit the process - Docker will restart the container
-            // Use exit code 1 to force restart even in dev mode
+            // Exit the process - Docker will restart the container in production
+            // Or fallback if file touch failed in development
+            logger.info(
+              `[${restoreId}] Triggering hard restart via process.exit()`
+            );
             process.exit(1);
           }, 3000);
         } else {
