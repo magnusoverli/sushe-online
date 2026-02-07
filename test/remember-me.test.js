@@ -76,6 +76,29 @@ function createTestApp() {
 
   const testUser = { _id: 'user-1', email: 'test@example.com' };
 
+  const mockUsers = { update: mock.fn((_q, _u, _o, cb) => cb(null, 1)) };
+  const mockUsersAsync = {
+    update: mock.fn(async () => 1),
+    findOne: mock.fn(async () => testUser),
+    insert: mock.fn(async () => ({ _id: 'new-user' })),
+  };
+  const mockBcrypt = { hash: mock.fn(), compare: mock.fn() };
+
+  // Create service instances
+  const { createAuthService } = require('../services/auth-service');
+  const { createUserService } = require('../services/user-service');
+
+  const authService = createAuthService({
+    usersAsync: mockUsersAsync,
+    bcrypt: mockBcrypt,
+    logger: mockLogger,
+  });
+  const userService = createUserService({
+    users: mockUsers,
+    usersAsync: mockUsersAsync,
+    logger: mockLogger,
+  });
+
   const deps = {
     csrfProtection: (req, res, next) => next(),
     ensureAuth: (req, res, next) => {
@@ -88,13 +111,11 @@ function createTestApp() {
     registerTemplate: () => '<div>register</div>',
     loginTemplate: () => '<div>login</div>',
     spotifyTemplate: () => '<div>home</div>',
+    extensionAuthTemplate: () => '<html>Extension Auth</html>',
     isTokenValid: () => true,
     isTokenUsable: () => true,
-    users: { update: mock.fn((_q, _u, _o, cb) => cb(null, 1)) },
-    usersAsync: {
-      update: mock.fn(async () => 1),
-      findOne: mock.fn(async () => testUser),
-    },
+    users: mockUsers,
+    usersAsync: mockUsersAsync,
     listsAsync: {
       find: mock.fn(async () => []),
       count: mock.fn(async () => 0),
@@ -103,11 +124,13 @@ function createTestApp() {
       count: mock.fn(async () => 0),
       find: mock.fn(async () => []),
     },
-    bcrypt: { hash: mock.fn(), compare: mock.fn() },
+    bcrypt: mockBcrypt,
     isValidEmail: () => true,
     isValidUsername: () => true,
     isValidPassword: () => true,
     sanitizeUser: (u) => u,
+    authService,
+    userService,
     adminCodeState: {
       adminCodeAttempts: new Map(),
       get adminCode() {

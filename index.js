@@ -52,6 +52,7 @@ const {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
+  extensionAuthTemplate,
 } = require('./templates');
 const { isTokenValid, isTokenUsable } = require('./auth-utils');
 const {
@@ -256,6 +257,13 @@ const apiRoutes = require('./routes/api/index');
 const preferencesRoutes = require('./routes/preferences');
 const aggregateListRoutes = require('./routes/aggregate-list');
 
+// Create service instances for auth routes
+const { createAuthService } = require('./services/auth-service');
+const { createUserService } = require('./services/user-service');
+
+const authService = createAuthService({ usersAsync, bcrypt, logger });
+const userService = createUserService({ users, usersAsync, logger });
+
 const deps = {
   htmlTemplate,
   registerTemplate,
@@ -264,6 +272,7 @@ const deps = {
   resetPasswordTemplate,
   invalidTokenTemplate,
   spotifyTemplate,
+  extensionAuthTemplate,
   isTokenValid,
   isTokenUsable,
   csrfProtection,
@@ -293,6 +302,8 @@ const deps = {
   pool,
   passport,
   invalidateUserCache,
+  authService,
+  userService,
 };
 
 // Health check and metrics routes

@@ -136,6 +136,7 @@ function createTestApp(options = {}) {
         return Promise.resolve(null);
       }),
     insert: mock.fn(() => Promise.resolve({ _id: 'new-user' })),
+    update: mock.fn(() => Promise.resolve(1)),
   };
 
   // Mock auth-utils for token operations
@@ -213,6 +214,21 @@ function createTestApp(options = {}) {
   // Rate limit mock
   const mockRateLimitAdminRequest = (req, res, next) => next();
 
+  // Create service instances with test mocks
+  const { createAuthService } = require('../services/auth-service');
+  const { createUserService } = require('../services/user-service');
+
+  const authService = createAuthService({
+    usersAsync: mockUsersAsync,
+    bcrypt: mockBcrypt,
+    logger: mockLogger,
+  });
+  const userService = createUserService({
+    users: mockUsers,
+    usersAsync: mockUsersAsync,
+    logger: mockLogger,
+  });
+
   // Create deps object
   const deps = {
     csrfProtection: (req, res, next) => next(),
@@ -242,8 +258,11 @@ function createTestApp(options = {}) {
     registerTemplate: mockRegisterTemplate,
     loginTemplate: mockLoginTemplate,
     spotifyTemplate: mockSpotifyTemplate,
+    extensionAuthTemplate: () => '<html>Extension Auth</html>',
     isTokenValid: mockIsTokenValid,
     isTokenUsable: mockIsTokenUsable,
+    authService,
+    userService,
     adminCodeState: {
       adminCodeAttempts: mockAdminCodeAttempts,
       get adminCode() {
@@ -351,7 +370,7 @@ describe('POST /api/auth/extension-token', () => {
     const response = await request(app).post('/api/auth/extension-token');
 
     assert.strictEqual(response.status, 500);
-    assert.strictEqual(response.body.error, 'Error generating token');
+    assert.strictEqual(response.body.error, 'Error generating extension token');
   });
 });
 
@@ -461,7 +480,7 @@ describe('GET /api/auth/validate-token', () => {
       .set('Authorization', 'Bearer valid-token');
 
     assert.strictEqual(response.status, 500);
-    assert.strictEqual(response.body.error, 'Error validating token');
+    assert.strictEqual(response.body.error, 'Error validating extension token');
   });
 });
 
@@ -554,7 +573,7 @@ describe('DELETE /api/auth/extension-token', () => {
       .send({ token: 'my-token' });
 
     assert.strictEqual(response.status, 500);
-    assert.strictEqual(response.body.error, 'Error revoking token');
+    assert.strictEqual(response.body.error, 'Error revoking extension token');
   });
 });
 
@@ -640,7 +659,7 @@ describe('GET /api/auth/extension-tokens', () => {
     const response = await request(app).get('/api/auth/extension-tokens');
 
     assert.strictEqual(response.status, 500);
-    assert.strictEqual(response.body.error, 'Error listing tokens');
+    assert.strictEqual(response.body.error, 'Error listing extension tokens');
   });
 });
 
@@ -712,7 +731,7 @@ describe('POST /api/auth/cleanup-tokens', () => {
     const response = await request(app).post('/api/auth/cleanup-tokens');
 
     assert.strictEqual(response.status, 500);
-    assert.strictEqual(response.body.error, 'Error cleaning up tokens');
+    assert.strictEqual(response.body.error, 'Error cleaning up expired tokens');
   });
 });
 

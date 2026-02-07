@@ -156,9 +156,10 @@ function createTestApp(options = {}) {
   } = require('../validators');
 
   // Mock async datastores
-  const mockUsersAsync = {
+  const mockUsersAsync = options.usersAsyncOverride || {
     findOne: mock.fn(() => Promise.resolve(null)),
     insert: mock.fn(() => Promise.resolve({ _id: 'new-user' })),
+    update: mock.fn(() => Promise.resolve(1)),
   };
 
   const mockListsAsync = {
@@ -173,6 +174,21 @@ function createTestApp(options = {}) {
   const mockPool = {
     query: mock.fn(() => Promise.resolve({ rows: [], rowCount: 0 })),
   };
+
+  // Create service instances with test mocks
+  const { createAuthService } = require('../services/auth-service');
+  const { createUserService } = require('../services/user-service');
+
+  const authService = createAuthService({
+    usersAsync: mockUsersAsync,
+    bcrypt: mockBcrypt,
+    logger: mockLogger,
+  });
+  const userService = createUserService({
+    users: mockUsers,
+    usersAsync: mockUsersAsync,
+    logger: mockLogger,
+  });
 
   // Create deps object - mimics what auth routes expect
   const deps = {
@@ -203,8 +219,11 @@ function createTestApp(options = {}) {
     registerTemplate: mockRegisterTemplate,
     loginTemplate: mockLoginTemplate,
     spotifyTemplate: mockSpotifyTemplate,
+    extensionAuthTemplate: () => '<html>Extension Auth</html>',
     isTokenValid: () => true,
     isTokenUsable: () => true,
+    authService,
+    userService,
     adminCodeState: {
       adminCodeAttempts: mockAdminCodeAttempts,
       get adminCode() {
@@ -231,6 +250,7 @@ function createTestApp(options = {}) {
   return {
     app,
     mockUsers,
+    mockUsersAsync,
     mockBcrypt,
     mockAdminCodeAttempts,
     mockGenerateAdminCode,
@@ -241,7 +261,7 @@ function createTestApp(options = {}) {
 
 describe('POST /settings/change-password', () => {
   it('should change password with valid inputs', async () => {
-    const { app, mockUsers, mockBcrypt } = createTestApp();
+    const { app, mockUsersAsync, mockBcrypt } = createTestApp();
 
     const response = await request(app)
       .post('/settings/change-password')
@@ -256,7 +276,7 @@ describe('POST /settings/change-password', () => {
     assert.strictEqual(response.headers.location, '/');
     assert.strictEqual(mockBcrypt.compare.mock.calls.length, 1);
     assert.strictEqual(mockBcrypt.hash.mock.calls.length, 1);
-    assert.strictEqual(mockUsers.update.mock.calls.length, 1);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
   });
 
   it('should reject missing current password', async () => {
@@ -389,10 +409,14 @@ describe('POST /settings/change-password', () => {
   });
 
   it('should handle database errors', async () => {
+    const mockUsersAsyncOverride = {
+      findOne: mock.fn(() => Promise.resolve(null)),
+      insert: mock.fn(() => Promise.resolve({ _id: 'new-user' })),
+      update: mock.fn(() => Promise.reject(new Error('Database error'))),
+    };
+
     const { app } = createTestApp({
-      usersUpdate: mock.fn((q, u, o, callback) => {
-        callback(new Error('Database error'));
-      }),
+      usersAsyncOverride: mockUsersAsyncOverride,
     });
 
     const response = await request(app)
@@ -413,7 +437,7 @@ describe('POST /settings/change-password', () => {
 
 describe('POST /settings/request-admin', () => {
   it('should grant admin with valid code', async () => {
-    const { app, mockUsers, mockGenerateAdminCode } = createTestApp({
+    const { app, mockUsersAsync, mockGenerateAdminCode } = createTestApp({
       adminCode: 'VALID123',
       adminCodeExpiry: new Date(Date.now() + 3600000),
     });
@@ -425,10 +449,10 @@ describe('POST /settings/request-admin', () => {
 
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/');
-    assert.strictEqual(mockUsers.update.mock.calls.length, 1);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
 
     // Should grant admin role
-    const updateCall = mockUsers.update.mock.calls[0];
+    const updateCall = mockUsersAsync.update.mock.calls[0];
     assert.strictEqual(updateCall.arguments[1].$set.role, 'admin');
     assert.ok(updateCall.arguments[1].$set.adminGrantedAt);
 
@@ -437,7 +461,7 @@ describe('POST /settings/request-admin', () => {
   });
 
   it('should accept code case-insensitively', async () => {
-    const { app, mockUsers } = createTestApp({
+    const { app, mockUsersAsync } = createTestApp({
       adminCode: 'VALID123',
       adminCodeExpiry: new Date(Date.now() + 3600000),
     });
@@ -448,11 +472,11 @@ describe('POST /settings/request-admin', () => {
       .send({ code: 'valid123' });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(mockUsers.update.mock.calls.length, 1);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
   });
 
   it('should reject invalid code', async () => {
-    const { app, mockUsers, mockAdminCodeAttempts } = createTestApp({
+    const { app, mockUsersAsync, mockAdminCodeAttempts } = createTestApp({
       adminCode: 'VALID123',
       adminCodeExpiry: new Date(Date.now() + 3600000),
     });
@@ -465,13 +489,13 @@ describe('POST /settings/request-admin', () => {
     assert.strictEqual(response.status, 302);
     assert.strictEqual(response.headers.location, '/');
     // Should NOT update user role
-    assert.strictEqual(mockUsers.update.mock.calls.length, 0);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 0);
     // Should increment failed attempts
     assert.ok(mockAdminCodeAttempts.get('user-123'));
   });
 
   it('should reject expired code', async () => {
-    const { app, mockUsers } = createTestApp({
+    const { app, mockUsersAsync } = createTestApp({
       adminCode: 'VALID123',
       adminCodeExpiry: new Date(Date.now() - 60000), // Expired 1 minute ago
     });
@@ -483,11 +507,11 @@ describe('POST /settings/request-admin', () => {
 
     assert.strictEqual(response.status, 302);
     // Should NOT update user role
-    assert.strictEqual(mockUsers.update.mock.calls.length, 0);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 0);
   });
 
   it('should reject empty code', async () => {
-    const { app, mockUsers } = createTestApp();
+    const { app, mockUsersAsync } = createTestApp();
 
     const response = await request(app)
       .post('/settings/request-admin')
@@ -495,7 +519,7 @@ describe('POST /settings/request-admin', () => {
       .send({ code: '' });
 
     assert.strictEqual(response.status, 302);
-    assert.strictEqual(mockUsers.update.mock.calls.length, 0);
+    assert.strictEqual(mockUsersAsync.update.mock.calls.length, 0);
   });
 
   it('should track failed attempts', async () => {
@@ -542,12 +566,16 @@ describe('POST /settings/request-admin', () => {
   });
 
   it('should handle database errors', async () => {
+    const mockUsersAsyncOverride = {
+      findOne: mock.fn(() => Promise.resolve(null)),
+      insert: mock.fn(() => Promise.resolve({ _id: 'new-user' })),
+      update: mock.fn(() => Promise.reject(new Error('Database error'))),
+    };
+
     const { app } = createTestApp({
       adminCode: 'VALID123',
       adminCodeExpiry: new Date(Date.now() + 3600000),
-      usersUpdate: mock.fn((q, u, o, callback) => {
-        callback(new Error('Database error'));
-      }),
+      usersAsyncOverride: mockUsersAsyncOverride,
     });
 
     const response = await request(app)

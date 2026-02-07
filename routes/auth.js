@@ -1,3 +1,12 @@
+/**
+ * Authentication & User Settings Routes
+ *
+ * Thin route layer — delegates business logic to authService and userService.
+ * Handles only HTTP concerns: request parsing, response formatting,
+ * session management, flash messages, and redirects.
+ *
+ * @module routes/auth
+ */
 module.exports = (app, deps) => {
   const logger = require('../utils/logger');
   const { recordAuthAttempt } = require('../utils/metrics');
@@ -10,32 +19,126 @@ module.exports = (app, deps) => {
     registerRateLimit,
     sensitiveSettingsRateLimit,
   } = require('../middleware/rate-limit');
+  const { createAsyncHandler } = require('../middleware/async-handler');
+  const {
+    generateExtensionToken,
+    validateExtensionToken,
+    cleanupExpiredTokens,
+  } = require('../auth-utils');
+  const { EXTENSION_TOKEN_EXPIRY_MS } = require('../services/auth-service');
+
   const {
     htmlTemplate,
     registerTemplate,
     loginTemplate,
-
+    extensionAuthTemplate,
     spotifyTemplate,
     csrfProtection,
     ensureAuth,
     ensureAuthAPI,
     rateLimitAdminRequest,
-    users,
     usersAsync,
-    bcrypt,
     isValidEmail,
     isValidUsername,
     isValidPassword,
-
     sanitizeUser,
     adminCodeState,
     pool,
     passport,
+    authService,
+    userService,
   } = deps;
 
-  // ============ ROUTES ============
+  const asyncHandler = createAsyncHandler(logger);
 
-  // Registration routes
+  // ── Helper: respond with JSON or flash+redirect ────────────────────────
+
+  function respondWithError(req, res, statusCode, message, redirectPath) {
+    if (req.accepts('json')) {
+      return res.status(statusCode).json({ error: message });
+    }
+    req.flash('error', message);
+    return res.redirect(redirectPath);
+  }
+
+  function respondWithSuccess(req, res, message, redirectPath) {
+    if (req.accepts('json')) {
+      return res.json({ success: true, message });
+    }
+    req.flash('success', message);
+    return res.redirect(redirectPath);
+  }
+
+  // ── Settings update helper (DRY: eliminates 4 identical handlers) ──────
+
+  /**
+   * Create a route handler for a simple user setting update.
+   * Validates via userService.validateSetting, updates via userService.updateSetting,
+   * then syncs the session.
+   */
+  function settingsHandler(field) {
+    return asyncHandler(async (req, res) => {
+      const value = req.body[field];
+      const validation = userService.validateSetting(field, value);
+
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      await userService.updateSetting(req.user._id, field, validation.value);
+
+      // Sync session
+      req.user[field] = validation.value;
+      saveSessionSafe(req, `${field} update`);
+      res.json({ success: true });
+    }, `updating ${field}`);
+  }
+
+  // ── Unique field update helper (DRY: eliminates 2 identical handlers) ──
+
+  /**
+   * Create a route handler for a unique-constrained field update (email/username).
+   * Validates format, checks uniqueness via userService, updates, syncs session.
+   */
+  function uniqueFieldHandler(field, validator, validationError) {
+    return asyncHandler(async (req, res) => {
+      const value = req.body[field];
+
+      if (!value || !value.trim()) {
+        return res
+          .status(400)
+          .json({ error: `${capitalize(field)} is required` });
+      }
+
+      if (!validator(value)) {
+        return res.status(400).json({ error: validationError });
+      }
+
+      const result = await userService.updateUniqueField(
+        req.user._id,
+        field,
+        value
+      );
+
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+
+      // Sync session
+      req.user[field] = value.trim();
+      saveSessionSafe(req, `${field} update`);
+      req.flash('success', `${capitalize(field)} updated successfully`);
+      res.json({ success: true });
+    }, `updating ${field}`);
+  }
+
+  function capitalize(str) {
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  }
+
+  // ============ PAGE ROUTES ============
+
+  // Registration page
   app.get('/register', csrfProtection, (req, res) => {
     res.send(
       htmlTemplate(
@@ -45,135 +148,31 @@ module.exports = (app, deps) => {
     );
   });
 
+  // Registration handler
   app.post('/register', registerRateLimit, csrfProtection, async (req, res) => {
     try {
       const { email, username, password, confirmPassword } = req.body;
 
-      // Validate all fields are present
-      if (!email || !username || !password || !confirmPassword) {
-        req.flash('error', 'All fields are required');
-        return res.redirect('/register');
-      }
+      const { user, validation } = await authService.registerUser(
+        { email, username, password, confirmPassword },
+        { isValidEmail, isValidUsername, isValidPassword }
+      );
 
-      // Check passwords match
-      if (password !== confirmPassword) {
-        req.flash('error', 'Passwords do not match');
-        return res.redirect('/register');
-      }
-
-      // Validate email format
-      if (!isValidEmail(email)) {
-        req.flash('error', 'Please enter a valid email address');
-        return res.redirect('/register');
-      }
-
-      // Validate username format/length
-      if (!isValidUsername(username)) {
-        req.flash(
-          'error',
-          'Username can only contain letters, numbers, and underscores and must be 3-30 characters'
-        );
-        return res.redirect('/register');
-      }
-
-      // Validate password length
-      if (!isValidPassword(password)) {
-        req.flash('error', 'Password must be at least 8 characters');
-        return res.redirect('/register');
-      }
-
-      // Check if email already exists
-      try {
-        const existingEmailUser = await usersAsync.findOne({ email });
-        if (existingEmailUser) {
-          req.flash('error', 'Email already registered');
-          return res.redirect('/register');
-        }
-
-        // Check if username already exists
-        const existingUsernameUser = await usersAsync.findOne({ username });
-
-        if (existingUsernameUser) {
-          req.flash('error', 'Username already taken');
-          return res.redirect('/register');
-        }
-
-        // Hash password and create user
-        const hash = await bcrypt.hash(password, 12);
-        if (!hash) {
-          req.flash('error', 'Registration error. Please try again.');
-          return res.redirect('/register');
-        }
-
-        // Insert new user with pending approval status
-        const newUser = await usersAsync.insert({
-          email,
-          username,
-          hash,
-          spotifyAuth: null,
-          tidalAuth: null,
-          tidalCountry: null,
-          accentColor: '#dc2626',
-          timeFormat: '24h',
-          dateFormat: 'MM/DD/YYYY',
-          approvalStatus: 'pending',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        });
-
-        logger.info('New user registered (pending approval)', {
-          email,
-          username,
-        });
-
-        // Create admin event for approval with Telegram notification
-        try {
-          const adminEventService = app.locals.adminEventService;
-          if (adminEventService) {
-            await adminEventService.createEvent({
-              type: 'account_approval',
-              title: 'New User Registration',
-              description: `User "${username}" (${email}) has registered and needs approval.`,
-              data: {
-                userId: newUser._id,
-                username,
-                email,
-              },
-              priority: 'normal',
-              actions: [
-                { id: 'approve', label: '✅ Approve' },
-                { id: 'reject', label: '❌ Reject' },
-              ],
-            });
-            logger.info('Admin event created for registration approval', {
-              username,
-            });
-          } else {
-            logger.warn(
-              'Admin event service not available, skipping approval event'
-            );
-          }
-        } catch (eventError) {
-          // Don't fail registration if event creation fails
-          logger.error('Failed to create admin event for registration', {
-            error: eventError.message,
-          });
-        }
-
-        recordAuthAttempt('register', 'success');
-        req.flash(
-          'success',
-          'Registration successful! Your account is pending admin approval.'
-        );
-        res.redirect('/login');
-      } catch (err) {
-        logger.error('Database error during registration', {
-          error: err.message,
-        });
+      if (!validation.valid) {
+        req.flash('error', validation.error);
         recordAuthAttempt('register', 'failure');
-        req.flash('error', 'Registration error. Please try again.');
         return res.redirect('/register');
       }
+
+      // Fire-and-forget admin approval event
+      await authService.createApprovalEvent(app.locals.adminEventService, user);
+
+      recordAuthAttempt('register', 'success');
+      req.flash(
+        'success',
+        'Registration successful! Your account is pending admin approval.'
+      );
+      res.redirect('/login');
     } catch (error) {
       logger.error('Registration error', { error: error.message });
       recordAuthAttempt('register', 'failure');
@@ -182,47 +181,12 @@ module.exports = (app, deps) => {
     }
   });
 
-  // Update last selected list (now by list ID instead of name)
-  app.post('/api/user/last-list', ensureAuthAPI, (req, res) => {
-    // Support both listId (new) and listName (legacy) for backward compatibility
-    const listId = req.body.listId || req.body.listName;
-
-    if (!listId) {
-      return res.status(400).json({ error: 'listId is required' });
-    }
-
-    users.update(
-      { _id: req.user._id },
-      { $set: { lastSelectedList: listId, updatedAt: new Date() } },
-      {},
-      (err) => {
-        if (err) {
-          logger.error('Error updating last selected list', {
-            error: err.message,
-            userId: req.user._id,
-          });
-          return res
-            .status(500)
-            .json({ error: 'Error updating last selected list' });
-        }
-
-        // Update the session user object
-        req.user.lastSelectedList = listId;
-        saveSessionSafe(req, 'lastSelectedList update');
-
-        res.json({ success: true });
-      }
-    );
-  });
-
-  // Login routes
+  // Login page
   app.get('/login', csrfProtection, (req, res) => {
-    // Redirect if already authenticated
     if (req.isAuthenticated()) {
       return res.redirect('/');
     }
 
-    // Debug CSRF token generation
     logger.debug('Login GET - CSRF token generation', {
       hasSession: !!req.session,
       hasSecret: !!req.session?.csrfSecret,
@@ -235,6 +199,7 @@ module.exports = (app, deps) => {
     );
   });
 
+  // Login handler
   app.post('/login', loginRateLimit, csrfProtection, async (req, res, next) => {
     logger.debug('Login POST request received', {
       email: req.body.email,
@@ -262,11 +227,9 @@ module.exports = (app, deps) => {
         recordAuthAttempt('login', 'failure');
         req.flash('error', info.message || 'Invalid credentials');
 
-        // Force session save before redirect to ensure flash messages persist
         try {
           await saveSessionAsync(req);
         } catch (err) {
-          // Log but don't fail the redirect
           logger.error('Session save error', {
             error: err.message,
             requestId: req.id,
@@ -286,34 +249,24 @@ module.exports = (app, deps) => {
       logger.info('User logged in successfully', { email: user.email });
       recordAuthAttempt('login', 'success');
 
-      // "Remember me" support:
-      // The login form sends `remember=on` (checkbox). If set, extend the session cookie.
-      // Otherwise keep the default shorter session lifetime.
-      // Note: express-session persists cookie options into the session store on save.
-      const remember =
-        req.body.remember === 'on' ||
-        req.body.remember === 'true' ||
-        req.body.remember === true;
-      const oneDayMs = 1000 * 60 * 60 * 24;
-      const rememberMs = 30 * oneDayMs;
-      req.session.cookie.maxAge = remember ? rememberMs : oneDayMs;
+      // "Remember me" — extend or use default session lifetime
+      req.session.cookie.maxAge = authService.getSessionMaxAge(
+        req.body.remember
+      );
 
-      // Record last activity (always update on login)
+      // Record last activity
       const timestamp = new Date();
       req.user.lastActivity = timestamp;
-      // Set debounce timestamp so subsequent requests don't immediately re-update
       req.session.lastActivityUpdatedAt = Date.now();
       await usersAsync.update(
         { _id: req.user._id },
         { $set: { lastActivity: timestamp } }
       );
 
-      // Force session save and handle errors
       try {
         await saveSessionAsync(req);
       } catch (err) {
         logger.error('Session save error', { error: err.message });
-        // Continue anyway - session might still work
       }
 
       // Check if this login was for extension authorization
@@ -336,183 +289,71 @@ module.exports = (app, deps) => {
     req.logout(() => res.redirect('/login'));
   });
 
-  // Home (protected) - Spotify-like interface
+  // Home (protected)
   app.get('/', ensureAuth, csrfProtection, (req, res) => {
     res.send(spotifyTemplate(sanitizeUser(req.user), req.csrfToken()));
   });
 
-  // Update accent color endpoint
-  app.post('/settings/update-accent-color', ensureAuth, async (req, res) => {
-    try {
-      const { accentColor } = req.body;
+  // ============ USER SETTINGS ============
 
-      // Validate hex color format
-      const hexColorRegex = /^#[0-9A-F]{6}$/i;
-      if (!hexColorRegex.test(accentColor)) {
-        return res.status(400).json({
-          error: 'Invalid color format. Please use hex format (#RRGGBB)',
-        });
+  // Simple settings — all use the same DRY handler
+  app.post(
+    '/settings/update-accent-color',
+    ensureAuth,
+    settingsHandler('accentColor')
+  );
+  app.post(
+    '/settings/update-time-format',
+    ensureAuth,
+    settingsHandler('timeFormat')
+  );
+  app.post(
+    '/settings/update-date-format',
+    ensureAuth,
+    settingsHandler('dateFormat')
+  );
+  app.post(
+    '/settings/update-music-service',
+    ensureAuth,
+    settingsHandler('musicService')
+  );
+
+  // Unique-field settings
+  app.post(
+    '/settings/update-email',
+    ensureAuth,
+    uniqueFieldHandler('email', isValidEmail, 'Invalid email format')
+  );
+  app.post(
+    '/settings/update-username',
+    ensureAuth,
+    uniqueFieldHandler(
+      'username',
+      isValidUsername,
+      'Username can only contain letters, numbers, and underscores and must be 3-30 characters'
+    )
+  );
+
+  // Update last selected list
+  app.post(
+    '/api/user/last-list',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const listId = req.body.listId || req.body.listName;
+
+      if (!listId) {
+        return res.status(400).json({ error: 'listId is required' });
       }
 
-      // Update user's accent color
-      users.update(
-        { _id: req.user._id },
-        { $set: { accentColor, updatedAt: new Date() } },
-        {},
-        (err) => {
-          if (err) {
-            logger.error('Error updating accent color', {
-              error: err.message,
-              userId: req.user._id,
-            });
-            return res
-              .status(500)
-              .json({ error: 'Error updating theme color' });
-          }
+      await userService.updateLastSelectedList(req.user._id, listId);
 
-          // Update session
-          req.user.accentColor = accentColor;
-          saveSessionSafe(req, 'accentColor update');
-          res.json({ success: true });
+      req.user.lastSelectedList = listId;
+      saveSessionSafe(req, 'lastSelectedList update');
+      res.json({ success: true });
+    }, 'updating last selected list')
+  );
 
-          logger.info(
-            `User ${req.user.email} updated accent color to ${accentColor}`
-          );
-        }
-      );
-    } catch (error) {
-      logger.error('Update accent color error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error updating theme color' });
-    }
-  });
-
-  // Update time format endpoint
-  app.post('/settings/update-time-format', ensureAuth, async (req, res) => {
-    try {
-      const { timeFormat } = req.body;
-      if (!['12h', '24h'].includes(timeFormat)) {
-        return res.status(400).json({ error: 'Invalid time format' });
-      }
-
-      users.update(
-        { _id: req.user._id },
-        { $set: { timeFormat, updatedAt: new Date() } },
-        {},
-        (err) => {
-          if (err) {
-            logger.error('Error updating time format', {
-              error: err.message,
-              userId: req.user._id,
-            });
-            return res
-              .status(500)
-              .json({ error: 'Error updating time format' });
-          }
-
-          req.user.timeFormat = timeFormat;
-          saveSessionSafe(req, 'timeFormat update');
-          res.json({ success: true });
-
-          logger.info(
-            `User ${req.user.email} updated time format to ${timeFormat}`
-          );
-        }
-      );
-    } catch (error) {
-      logger.error('Update time format error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error updating time format' });
-    }
-  });
-
-  // Update date format endpoint
-  app.post('/settings/update-date-format', ensureAuth, async (req, res) => {
-    try {
-      const { dateFormat } = req.body;
-      if (!['MM/DD/YYYY', 'DD/MM/YYYY'].includes(dateFormat)) {
-        return res.status(400).json({ error: 'Invalid date format' });
-      }
-
-      users.update(
-        { _id: req.user._id },
-        { $set: { dateFormat, updatedAt: new Date() } },
-        {},
-        (err) => {
-          if (err) {
-            logger.error('Error updating date format', {
-              error: err.message,
-              userId: req.user._id,
-            });
-            return res
-              .status(500)
-              .json({ error: 'Error updating date format' });
-          }
-
-          req.user.dateFormat = dateFormat;
-          saveSessionSafe(req, 'dateFormat update');
-          res.json({ success: true });
-
-          logger.info(
-            `User ${req.user.email} updated date format to ${dateFormat}`
-          );
-        }
-      );
-    } catch (error) {
-      logger.error('Update date format error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error updating date format' });
-    }
-  });
-
-  // Update preferred music service endpoint
-  app.post('/settings/update-music-service', ensureAuth, async (req, res) => {
-    try {
-      const { musicService } = req.body;
-      if (musicService && !['spotify', 'tidal'].includes(musicService)) {
-        return res.status(400).json({ error: 'Invalid music service' });
-      }
-
-      users.update(
-        { _id: req.user._id },
-        { $set: { musicService: musicService || null, updatedAt: new Date() } },
-        {},
-        (err) => {
-          if (err) {
-            logger.error('Error updating music service', {
-              error: err.message,
-              userId: req.user._id,
-            });
-            return res
-              .status(500)
-              .json({ error: 'Error updating music service' });
-          }
-
-          req.user.musicService = musicService || null;
-          saveSessionSafe(req, 'musicService update');
-          res.json({ success: true });
-
-          logger.info(
-            `User ${req.user.email} updated music service to ${musicService}`
-          );
-        }
-      );
-    } catch (error) {
-      logger.error('Update music service error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error updating music service' });
-    }
-  });
-
-  // Change password endpoint
+  // Change password
   app.post(
     '/settings/change-password',
     ensureAuth,
@@ -520,97 +361,39 @@ module.exports = (app, deps) => {
     csrfProtection,
     async (req, res) => {
       try {
-        const { currentPassword, newPassword, confirmPassword } = req.body;
+        const result = await authService.changePassword(
+          req.user._id,
+          req.user.hash,
+          req.body,
+          isValidPassword
+        );
 
-        // Validate inputs
-        if (!currentPassword || !newPassword || !confirmPassword) {
-          if (req.accepts('json')) {
-            return res.status(400).json({ error: 'All fields are required' });
-          }
-          req.flash('error', 'All fields are required');
-          return res.redirect('/');
+        if (!result.success) {
+          return respondWithError(req, res, 400, result.error, '/');
         }
 
-        if (newPassword !== confirmPassword) {
-          if (req.accepts('json')) {
-            return res
-              .status(400)
-              .json({ error: 'New passwords do not match' });
-          }
-          req.flash('error', 'New passwords do not match');
-          return res.redirect('/');
-        }
-
-        if (!isValidPassword(newPassword)) {
-          if (req.accepts('json')) {
-            return res
-              .status(400)
-              .json({ error: 'New password must be at least 8 characters' });
-          }
-          req.flash('error', 'New password must be at least 8 characters');
-          return res.redirect('/');
-        }
-
-        // Verify current password
-        const isMatch = await bcrypt.compare(currentPassword, req.user.hash);
-        if (!isMatch) {
-          if (req.accepts('json')) {
-            return res
-              .status(400)
-              .json({ error: 'Current password is incorrect' });
-          }
-          req.flash('error', 'Current password is incorrect');
-          return res.redirect('/');
-        }
-
-        // Hash new password
-        const newHash = await bcrypt.hash(newPassword, 12);
-
-        // Update user
-        users.update(
+        await usersAsync.update(
           { _id: req.user._id },
-          { $set: { hash: newHash, updatedAt: new Date() } },
-          {},
-          (err) => {
-            if (err) {
-              logger.error('Error updating password', {
-                error: err.message,
-                userId: req.user._id,
-              });
-              if (req.accepts('json')) {
-                return res
-                  .status(500)
-                  .json({ error: 'Error updating password' });
-              }
-              req.flash('error', 'Error updating password');
-              return res.redirect('/');
-            }
+          { $set: { hash: result.newHash, updatedAt: new Date() } }
+        );
 
-            if (req.accepts('json')) {
-              return res.json({
-                success: true,
-                message: 'Password updated successfully',
-              });
-            }
-            req.flash('success', 'Password updated successfully');
-            res.redirect('/');
-          }
+        return respondWithSuccess(
+          req,
+          res,
+          'Password updated successfully',
+          '/'
         );
       } catch (error) {
         logger.error('Password change error', {
           error: error.message,
           userId: req.user._id,
         });
-        if (req.accepts('json')) {
-          return res.status(500).json({ error: 'Error changing password' });
-        }
-        req.flash('error', 'Error changing password');
-        res.redirect('/');
+        return respondWithError(req, res, 500, 'Error changing password', '/');
       }
     }
   );
 
-  // Admin request endpoint
+  // Request admin access
   app.post(
     '/settings/request-admin',
     ensureAuth,
@@ -625,19 +408,13 @@ module.exports = (app, deps) => {
 
       try {
         const { code } = req.body;
+        const codeResult = authService.validateAdminCode(
+          code,
+          req.user._id,
+          adminCodeState
+        );
 
-        // Validate code
-        const submittedCode = code ? code.toUpperCase().trim() : null;
-        const isExpired = new Date() > adminCodeState.adminCodeExpiry;
-
-        logger.info('Admin code validation', {
-          submittedCode,
-          expectedCode: adminCodeState.adminCode,
-          isExpired,
-          expiresAt: adminCodeState.adminCodeExpiry.toISOString(),
-        });
-
-        if (!code || submittedCode !== adminCodeState.adminCode || isExpired) {
+        if (!codeResult.valid) {
           logger.info('Invalid code attempt');
 
           // Increment failed attempts
@@ -645,219 +422,48 @@ module.exports = (app, deps) => {
           attempts.count++;
           adminCodeState.adminCodeAttempts.set(req.user._id, attempts);
 
-          if (req.accepts('json')) {
-            return res
-              .status(400)
-              .json({ error: 'Invalid or expired admin code' });
-          }
-          req.flash('error', 'Invalid or expired admin code');
-          return res.redirect('/');
+          return respondWithError(req, res, 400, codeResult.error, '/');
         }
 
         // Clear failed attempts on success
         adminCodeState.adminCodeAttempts.delete(req.user._id);
 
-        // Grant admin
-        users.update(
+        // Grant admin role in DB
+        await usersAsync.update(
           { _id: req.user._id },
-          {
-            $set: {
-              role: 'admin',
-              adminGrantedAt: new Date(),
-            },
-          },
-          {},
-          (err, _numUpdated) => {
-            if (err) {
-              logger.error('Error granting admin', {
-                error: err.message,
-                userId: req.user._id,
-              });
-              if (req.accepts('json')) {
-                return res
-                  .status(500)
-                  .json({ error: 'Error granting admin access' });
-              }
-              req.flash('error', 'Error granting admin access');
-              return res.redirect('/');
-            }
-
-            logger.info(`✅ Admin access granted to: ${req.user.email}`);
-
-            // Track code usage
-            adminCodeState.lastCodeUsedBy = req.user.email;
-            adminCodeState.lastCodeUsedAt = Date.now();
-
-            // REGENERATE CODE IMMEDIATELY after successful use
-            logger.info('🔄 Regenerating admin code after successful use...');
-            adminCodeState.generateAdminCode();
-
-            // Update the session
-            req.user.role = 'admin';
-            saveSessionSafe(req, 'admin role update');
-            if (req.accepts('json')) {
-              return res.json({
-                success: true,
-                message: 'Admin access granted!',
-              });
-            }
-            req.flash('success', 'Admin access granted!');
-            res.redirect('/');
-          }
+          { $set: { role: 'admin', adminGrantedAt: new Date() } }
         );
+
+        logger.info(`Admin access granted to: ${req.user.email}`);
+        authService.finalizeAdminCodeUsage(adminCodeState, req.user.email);
+
+        // Update session
+        req.user.role = 'admin';
+        saveSessionSafe(req, 'admin role update');
+
+        return respondWithSuccess(req, res, 'Admin access granted!', '/');
       } catch (error) {
         logger.error('Admin request error', {
           error: error.message,
           userId: req.user._id,
         });
-        if (req.accepts('json')) {
-          return res
-            .status(500)
-            .json({ error: 'Error processing admin request' });
-        }
-        req.flash('error', 'Error processing admin request');
-        res.redirect('/');
+        return respondWithError(
+          req,
+          res,
+          500,
+          'Error processing admin request',
+          '/'
+        );
       }
     }
   );
 
-  // Update email endpoint
-  app.post('/settings/update-email', ensureAuth, async (req, res) => {
-    try {
-      const { email } = req.body;
-
-      // Validate email
-      if (!email || !email.trim()) {
-        return res.status(400).json({ error: 'Email is required' });
-      }
-
-      if (!isValidEmail(email)) {
-        return res.status(400).json({ error: 'Invalid email format' });
-      }
-
-      // Check if email is already taken by another user
-      users.findOne(
-        { email, _id: { $ne: req.user._id } },
-        (err, existingUser) => {
-          if (err) {
-            logger.error('Database error', {
-              error: err.message,
-              operation: 'findOne',
-            });
-            return res.status(500).json({ error: 'Database error' });
-          }
-
-          if (existingUser) {
-            return res.status(400).json({ error: 'Email already in use' });
-          }
-
-          // Update user email
-          users.update(
-            { _id: req.user._id },
-            { $set: { email: email.trim(), updatedAt: new Date() } },
-            {},
-            (err) => {
-              if (err) {
-                logger.error('Error updating email', {
-                  error: err.message,
-                  userId: req.user._id,
-                });
-                return res.status(500).json({ error: 'Error updating email' });
-              }
-
-              // Update session
-              req.user.email = email.trim();
-              saveSessionSafe(req, 'email update');
-              req.flash('success', 'Email updated successfully');
-              res.json({ success: true });
-            }
-          );
-        }
-      );
-    } catch (error) {
-      logger.error('Update email error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error updating email' });
-    }
-  });
-
-  // Update username endpoint
-  app.post('/settings/update-username', ensureAuth, async (req, res) => {
-    try {
-      const { username } = req.body;
-
-      // Validate username
-      if (!username || !username.trim()) {
-        return res.status(400).json({ error: 'Username is required' });
-      }
-
-      if (!isValidUsername(username)) {
-        return res.status(400).json({
-          error:
-            'Username can only contain letters, numbers, and underscores and must be 3-30 characters',
-        });
-      }
-
-      // Check if username is already taken by another user
-      users.findOne(
-        { username, _id: { $ne: req.user._id } },
-        (err, existingUser) => {
-          if (err) {
-            logger.error('Database error', {
-              error: err.message,
-              operation: 'findOne',
-            });
-            return res.status(500).json({ error: 'Database error' });
-          }
-
-          if (existingUser) {
-            return res.status(400).json({ error: 'Username already taken' });
-          }
-
-          // Update username
-          users.update(
-            { _id: req.user._id },
-            { $set: { username: username.trim(), updatedAt: new Date() } },
-            {},
-            (err) => {
-              if (err) {
-                logger.error('Error updating username', {
-                  error: err.message,
-                  userId: req.user._id,
-                });
-                return res
-                  .status(500)
-                  .json({ error: 'Error updating username' });
-              }
-
-              // Update session
-              req.user.username = username.trim();
-              saveSessionSafe(req, 'username update');
-              req.flash('success', 'Username updated successfully');
-              res.json({ success: true });
-            }
-          );
-        }
-      );
-    } catch (error) {
-      logger.error('Update username error', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error updating username' });
-    }
-  });
-
   // ============ EXTENSION AUTHENTICATION ============
 
-  // Extension login page - redirects user to login, then generates token
+  // Extension login page — redirects to login, then generates token
   app.get('/extension/auth', async (req, res) => {
     if (!req.isAuthenticated()) {
-      // Save the extension auth intent in session
       req.session.extensionAuth = true;
-      // Force session save before redirect to ensure flag persists
       try {
         await saveSessionAsync(req);
       } catch (err) {
@@ -866,206 +472,18 @@ module.exports = (app, deps) => {
       return res.redirect('/login');
     }
 
-    // User is already logged in, render token generation page
-    res.send(`
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Authorize SuShe Extension</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #000;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-    }
-    .container {
-      max-width: 500px;
-      padding: 40px;
-      text-align: center;
-    }
-    h1 {
-      font-size: 32px;
-      margin: 0 0 16px 0;
-      color: #dc2626;
-    }
-    p {
-      font-size: 16px;
-      line-height: 1.6;
-      color: #9ca3af;
-      margin: 0 0 24px 0;
-    }
-    .success {
-      padding: 16px;
-      background: #065f46;
-      border-radius: 8px;
-      margin-bottom: 24px;
-      font-size: 14px;
-      color: #d1fae5;
-    }
-    .token-box {
-      padding: 16px;
-      background: #1f2937;
-      border: 1px solid #374151;
-      border-radius: 8px;
-      margin-bottom: 24px;
-      word-break: break-all;
-      font-family: 'Courier New', monospace;
-      font-size: 12px;
-      color: #60a5fa;
-    }
-    button {
-      padding: 12px 24px;
-      background: #dc2626;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s;
-      width: 100%;
-      margin-bottom: 12px;
-    }
-    button:hover {
-      background: #b91c1c;
-    }
-    button:disabled {
-      background: #374151;
-      cursor: not-allowed;
-    }
-    .info {
-      font-size: 14px;
-      color: #6b7280;
-      margin-top: 24px;
-    }
-    .spinner {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid #fff;
-      border-radius: 50%;
-      border-top-color: transparent;
-      animation: spin 0.6s linear infinite;
-      margin-right: 8px;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <h1>🤘 Authorize Browser Extension</h1>
-    <p>Click the button below to authorize the SuShe Online browser extension.</p>
-    
-    <div id="status"></div>
-    
-    <button id="authorizeBtn" onclick="generateToken()">
-      Authorize Extension
-    </button>
-    
-    <div class="info">
-      This will generate a secure token that allows your browser extension to access your SuShe lists.
-      You can revoke this access anytime from your settings page.
-    </div>
-  </div>
-
-  <script>
-    async function generateToken() {
-      const btn = document.getElementById('authorizeBtn');
-      const status = document.getElementById('status');
-      
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span>Generating token...';
-      status.innerHTML = '';
-      
-      try {
-        const response = await fetch('/api/auth/extension-token', {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (!response.ok) {
-          throw new Error('Failed to generate token');
-        }
-        
-        const data = await response.json();
-        
-        status.innerHTML = \`
-          <div class="success">
-            ✓ Authorization successful!
-            <br><br>
-            Connecting to extension...
-          </div>
-        \`;
-        
-        btn.innerHTML = 'Authorization Complete';
-        
-        // Dispatch custom event for content script to receive token
-        window.dispatchEvent(new CustomEvent('sushe-auth-complete', {
-          detail: {
-            token: data.token,
-            expiresAt: data.expiresAt
-          }
-        }));
-        
-        // Give the extension time to pick up the event
-        setTimeout(() => {
-          status.innerHTML = \`
-            <div class="success">
-              ✓ Extension should now be authorized!
-              <br><br>
-              You can close this window.
-            </div>
-          \`;
-          
-          // Auto-close after another 2 seconds
-          setTimeout(() => {
-            window.close();
-          }, 2000);
-        }, 500);
-        
-      } catch (error) {
-        console.error('Error generating token:', error);
-        status.innerHTML = \`
-          <div style="padding: 16px; background: #7f1d1d; border-radius: 8px; margin-bottom: 24px; color: #fecaca;">
-            ✗ Failed to generate token. Please try again.
-          </div>
-        \`;
-        btn.disabled = false;
-        btn.innerHTML = 'Retry';
-      }
-    }
-  </script>
-</body>
-</html>
-    `);
+    res.send(extensionAuthTemplate());
   });
 
   // ============ EXTENSION TOKEN ENDPOINTS ============
 
-  const {
-    generateExtensionToken,
-    validateExtensionToken,
-    cleanupExpiredTokens,
-  } = require('../auth-utils');
-
-  // Generate a new extension token (requires active session)
-  app.post('/api/auth/extension-token', ensureAuth, async (req, res) => {
-    try {
+  // Generate extension token
+  app.post(
+    '/api/auth/extension-token',
+    ensureAuth,
+    asyncHandler(async (req, res) => {
       const token = generateExtensionToken();
-      const expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000); // 90 days
+      const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
       const userAgent = req.get('User-Agent') || 'Unknown';
 
       await pool.query(
@@ -1079,22 +497,14 @@ module.exports = (app, deps) => {
         email: req.user.email,
       });
 
-      res.json({
-        token,
-        expiresAt: expiresAt.toISOString(),
-      });
-    } catch (error) {
-      logger.error('Error generating extension token', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error generating token' });
-    }
-  });
+      res.json({ token, expiresAt: expiresAt.toISOString() });
+    }, 'generating extension token')
+  );
 
-  // Validate extension token (for testing)
-  app.get('/api/auth/validate-token', async (req, res) => {
-    try {
+  // Validate extension token
+  app.get(
+    '/api/auth/validate-token',
+    asyncHandler(async (req, res) => {
       const authHeader = req.get('Authorization');
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'No token provided' });
@@ -1112,29 +522,24 @@ module.exports = (app, deps) => {
         return res.status(401).json({ error: 'User not found' });
       }
 
-      res.json({
-        valid: true,
-        user: sanitizeUser(user),
-      });
-    } catch (error) {
-      logger.error('Error validating token', { error: error.message });
-      res.status(500).json({ error: 'Error validating token' });
-    }
-  });
+      res.json({ valid: true, user: sanitizeUser(user) });
+    }, 'validating extension token')
+  );
 
   // Revoke extension token
-  app.delete('/api/auth/extension-token', ensureAuth, async (req, res) => {
-    try {
+  app.delete(
+    '/api/auth/extension-token',
+    ensureAuth,
+    asyncHandler(async (req, res) => {
       const { token } = req.body;
 
       if (!token) {
         return res.status(400).json({ error: 'Token required' });
       }
 
-      // Only allow users to revoke their own tokens
       const result = await pool.query(
-        `UPDATE extension_tokens 
-         SET is_revoked = TRUE 
+        `UPDATE extension_tokens
+         SET is_revoked = TRUE
          WHERE token = $1 AND user_id = $2`,
         [token, req.user._id]
       );
@@ -1149,52 +554,38 @@ module.exports = (app, deps) => {
       });
 
       res.json({ success: true });
-    } catch (error) {
-      logger.error('Error revoking token', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error revoking token' });
-    }
-  });
+    }, 'revoking extension token')
+  );
 
-  // List user's extension tokens
-  app.get('/api/auth/extension-tokens', ensureAuth, async (req, res) => {
-    try {
+  // List extension tokens
+  app.get(
+    '/api/auth/extension-tokens',
+    ensureAuth,
+    asyncHandler(async (req, res) => {
       const result = await pool.query(
         `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
-         FROM extension_tokens 
+         FROM extension_tokens
          WHERE user_id = $1
          ORDER BY created_at DESC`,
         [req.user._id]
       );
 
       res.json({ tokens: result.rows });
-    } catch (error) {
-      logger.error('Error listing tokens', {
-        error: error.message,
-        userId: req.user._id,
-      });
-      res.status(500).json({ error: 'Error listing tokens' });
-    }
-  });
+    }, 'listing extension tokens')
+  );
 
-  // Cleanup expired tokens (can be called periodically or manually)
-  app.post('/api/auth/cleanup-tokens', ensureAuth, async (req, res) => {
-    try {
-      // Only allow admins to cleanup all tokens
+  // Cleanup expired tokens (admin only)
+  app.post(
+    '/api/auth/cleanup-tokens',
+    ensureAuth,
+    asyncHandler(async (req, res) => {
       if (req.user.role !== 'admin') {
         return res.status(403).json({ error: 'Admin access required' });
       }
 
       const deletedCount = await cleanupExpiredTokens(pool);
-
       logger.info('Cleaned up expired tokens', { count: deletedCount });
-
       res.json({ deletedCount });
-    } catch (error) {
-      logger.error('Error cleaning up tokens', { error: error.message });
-      res.status(500).json({ error: 'Error cleaning up tokens' });
-    }
-  });
+    }, 'cleaning up expired tokens')
+  );
 };
