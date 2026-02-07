@@ -10,6 +10,7 @@
 import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 import { createActionSheet } from './ui-factories.js';
+import { transferAlbumToList } from './album-transfer.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -112,16 +113,19 @@ export function createMobileUI(deps = {}) {
     return null;
   }
 
-  /**
-   * Check if album exists in a list
-   * @param {Object} albumToCheck - Album to check
-   * @param {Array} list - List to check against
-   * @returns {boolean} True if album exists in list
-   */
-  function isAlbumInList(albumToCheck, list) {
-    const key = `${albumToCheck.artist}::${albumToCheck.album}`.toLowerCase();
-    return list.some((a) => `${a.artist}::${a.album}`.toLowerCase() === key);
-  }
+  // Shared dependencies for album transfer operations
+  const transferDeps = {
+    getCurrentList,
+    getLists,
+    getListData,
+    setListData,
+    getListMetadata,
+    saveList,
+    selectList,
+    showToast,
+    apiCall,
+    findAlbumByIdentity,
+  };
 
   /**
    * Move album from current list to target list
@@ -130,83 +134,27 @@ export function createMobileUI(deps = {}) {
    * @param {string} targetListId - Target list ID
    */
   async function moveAlbumToList(index, albumId, targetListId) {
-    const currentListId = getCurrentList();
-    const lists = getLists();
+    return transferAlbumToList(transferDeps, {
+      index,
+      albumId,
+      targetListId,
+      mode: 'move',
+    });
+  }
 
-    if (
-      !currentListId ||
-      !lists[currentListId] ||
-      !targetListId ||
-      !lists[targetListId]
-    ) {
-      throw new Error('Invalid source or target list');
-    }
-
-    const sourceAlbums = getListData(currentListId);
-    if (!sourceAlbums) throw new Error('Source list data not loaded');
-
-    let album = sourceAlbums[index];
-    let indexToMove = index;
-
-    if (album && albumId) {
-      const expectedId =
-        `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-      if (expectedId !== albumId) {
-        const result = findAlbumByIdentity(albumId);
-        if (result) {
-          album = result.album;
-          indexToMove = result.index;
-        } else {
-          throw new Error('Album not found');
-        }
-      }
-    } else if (!album) {
-      throw new Error('Album not found');
-    }
-
-    const albumToMove = { ...album };
-
-    // Get list names for user-facing messages
-    const targetListMeta = getListMetadata(targetListId);
-    const targetListName = targetListMeta?.name || 'Unknown';
-
-    // Check for duplicate in target list
-    const targetAlbums = getListData(targetListId);
-    if (isAlbumInList(albumToMove, targetAlbums || [])) {
-      showToast(
-        `"${albumToMove.album}" already exists in "${targetListName}"`,
-        'error'
-      );
-      return;
-    }
-
-    // Remove from source list
-    sourceAlbums.splice(indexToMove, 1);
-
-    // Add to target list
-    let targetData = targetAlbums;
-    if (!targetData) {
-      targetData = await apiCall(
-        `/api/lists/${encodeURIComponent(targetListId)}`
-      );
-      setListData(targetListId, targetData);
-    }
-    targetData.push(albumToMove);
-
-    try {
-      await Promise.all([
-        saveList(currentListId, sourceAlbums),
-        saveList(targetListId, targetData),
-      ]);
-
-      selectList(currentListId);
-      showToast(`Moved "${album.album}" to "${targetListName}"`);
-    } catch (error) {
-      console.error('Error saving lists after move:', error);
-      sourceAlbums.splice(indexToMove, 0, albumToMove);
-      targetData.pop();
-      throw error;
-    }
+  /**
+   * Copy album from current list to target list (keeps album in source)
+   * @param {number} index - Album index
+   * @param {string} albumId - Album identity string
+   * @param {string} targetListId - Target list ID
+   */
+  async function copyAlbumToList(index, albumId, targetListId) {
+    return transferAlbumToList(transferDeps, {
+      index,
+      albumId,
+      targetListId,
+      mode: 'copy',
+    });
   }
 
   /**
@@ -246,6 +194,48 @@ export function createMobileUI(deps = {}) {
         } catch (error) {
           console.error('Error moving album:', error);
           showToast('Error moving album', 'error');
+        }
+      }
+    );
+  }
+
+  /**
+   * Show confirmation modal for copying album to another list
+   * @param {string} albumId - Album identity string
+   * @param {string} targetListId - Target list ID
+   */
+  function showCopyConfirmation(albumId, targetListId) {
+    if (!albumId || !targetListId) {
+      console.error('Invalid albumId or targetListId');
+      return;
+    }
+
+    const result = findAlbumByIdentity(albumId);
+    if (!result) {
+      showToast('Album not found - it may have been moved or removed', 'error');
+      return;
+    }
+
+    const { album, index } = result;
+    const currentListId = getCurrentList();
+
+    // Get list names from metadata for display
+    const currentListMeta = getListMetadata(currentListId);
+    const targetListMeta = getListMetadata(targetListId);
+    const currentListName = currentListMeta?.name || 'Unknown';
+    const targetListName = targetListMeta?.name || 'Unknown';
+
+    showConfirmation(
+      'Copy Album',
+      `Copy "${album.album}" by ${album.artist} to "${targetListName}"?`,
+      `This will add the album to "${targetListName}" while keeping it in "${currentListName}".`,
+      'Copy',
+      async () => {
+        try {
+          await copyAlbumToList(index, albumId, targetListId);
+        } catch (error) {
+          console.error('Error copying album:', error);
+          showToast('Error copying album', 'error');
         }
       }
     );
@@ -372,6 +362,11 @@ export function createMobileUI(deps = {}) {
           <button data-action="move"
                   class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
             <i class="fas fa-arrow-right mr-3 text-gray-400"></i>Move to List...
+          </button>
+
+          <button data-action="copy"
+                  class="w-full text-left py-3 px-4 hover:bg-gray-800 rounded-sm">
+            <i class="fas fa-copy mr-3 text-gray-400"></i>Copy to List...
           </button>
 
           ${
@@ -549,6 +544,14 @@ export function createMobileUI(deps = {}) {
       showMobileMoveToListSheet(index, albumId);
     });
 
+    const copyBtn = actionSheet.querySelector('[data-action="copy"]');
+    copyBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      close();
+      showMobileCopyToListSheet(index, albumId);
+    });
+
     // Recommend option handler
     const recommendBtn = actionSheet.querySelector('[data-action="recommend"]');
 
@@ -627,27 +630,30 @@ export function createMobileUI(deps = {}) {
   }
 
   /**
-   * Show mobile sheet to select target list for moving album
-   * Uses year-based accordion grouping to match desktop behavior
-   * @param {number} index - Album index
-   * @param {string} albumId - Album identity string
+   * Show a mobile list selection sheet with year-based accordion grouping.
+   * Shared by both move and copy flows.
+   * @param {Object} options - Sheet options
+   * @param {string} options.title - Sheet title (e.g. "Move to List", "Copy to List")
+   * @param {number} options.index - Album index
+   * @param {string} options.albumId - Album identity string
+   * @param {Function} options.onSelect - Callback when a target list is selected: (albumId, targetListId) => void
    */
-  function showMobileMoveToListSheet(index, albumId) {
+  function showMobileListSelectionSheet({ title, index, albumId, onSelect }) {
     const currentList = getCurrentList();
 
     // Validate index
-    const albumsForMove = getListData(currentList);
+    const albumsForSheet = getListData(currentList);
     if (
       isNaN(index) ||
       index < 0 ||
-      !albumsForMove ||
-      index >= albumsForMove.length
+      !albumsForSheet ||
+      index >= albumsForSheet.length
     ) {
       console.error('Invalid album index:', index);
       return;
     }
 
-    const album = albumsForMove[index];
+    const album = albumsForSheet[index];
 
     // Group lists by year
     const { listsByYear, sortedYears, listsWithoutYear } = groupListsForMove();
@@ -658,7 +664,7 @@ export function createMobileUI(deps = {}) {
     if (!hasAnyLists) {
       ({ sheet: actionSheet, close } = createActionSheet({
         contentHtml: `
-            <h3 class="font-semibold text-white mb-1">Move to List</h3>
+            <h3 class="font-semibold text-white mb-1">${title}</h3>
             <p class="text-sm text-gray-400 mb-4">${album.album} by ${album.artist}</p>
             
             <div class="py-8 text-center text-gray-500">
@@ -738,7 +744,7 @@ export function createMobileUI(deps = {}) {
 
       ({ sheet: actionSheet, close } = createActionSheet({
         contentHtml: `
-            <h3 class="font-semibold text-white mb-1">Move to List</h3>
+            <h3 class="font-semibold text-white mb-1">${title}</h3>
             <p class="text-sm text-gray-400 mb-4 truncate">${album.album} by ${album.artist}</p>
             
             ${yearSections}
@@ -813,8 +819,36 @@ export function createMobileUI(deps = {}) {
         e.stopPropagation();
         const targetList = btn.dataset.targetList;
         close();
-        showMoveConfirmation(albumId, targetList);
+        onSelect(albumId, targetList);
       });
+    });
+  }
+
+  /**
+   * Show mobile sheet to select target list for moving album
+   * @param {number} index - Album index
+   * @param {string} albumId - Album identity string
+   */
+  function showMobileMoveToListSheet(index, albumId) {
+    showMobileListSelectionSheet({
+      title: 'Move to List',
+      index,
+      albumId,
+      onSelect: showMoveConfirmation,
+    });
+  }
+
+  /**
+   * Show mobile sheet to select target list for copying album
+   * @param {number} index - Album index
+   * @param {string} albumId - Album identity string
+   */
+  function showMobileCopyToListSheet(index, albumId) {
+    showMobileListSelectionSheet({
+      title: 'Copy to List',
+      index,
+      albumId,
+      onSelect: showCopyConfirmation,
     });
   }
 
@@ -2323,6 +2357,7 @@ export function createMobileUI(deps = {}) {
     findAlbumByIdentity,
     showMobileAlbumMenu,
     showMobileMoveToListSheet,
+    showMobileCopyToListSheet,
     showMobileListMenu,
     showMobileCategoryMenu,
     showMobileEditForm,
@@ -2330,7 +2365,9 @@ export function createMobileUI(deps = {}) {
     playAlbumSafe,
     removeAlbumSafe,
     moveAlbumToList,
+    copyAlbumToList,
     showMoveConfirmation,
+    showCopyConfirmation,
     showMobileSummarySheet,
   };
 }

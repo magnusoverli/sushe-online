@@ -7,6 +7,8 @@
  * @module context-menus
  */
 
+import { transferAlbumToList } from './album-transfer.js';
+
 /**
  * Factory function to create the context menus module with injected dependencies
  *
@@ -143,6 +145,11 @@ export function createContextMenus(deps = {}) {
       albumMoveSubmenu.classList.add('hidden');
     }
 
+    const albumCopySubmenu = document.getElementById('albumCopySubmenu');
+    if (albumCopySubmenu) {
+      albumCopySubmenu.classList.add('hidden');
+    }
+
     const playAlbumSubmenu = document.getElementById('playAlbumSubmenu');
     if (playAlbumSubmenu) {
       playAlbumSubmenu.classList.add('hidden');
@@ -155,9 +162,11 @@ export function createContextMenus(deps = {}) {
 
     // Remove highlights from submenu parent options
     const moveOption = document.getElementById('moveAlbumOption');
+    const copyOption = document.getElementById('copyAlbumOption');
     const playOption = document.getElementById('playAlbumOption');
     const downloadOption = document.getElementById('downloadListOption');
     moveOption?.classList.remove('bg-gray-700', 'text-white');
+    copyOption?.classList.remove('bg-gray-700', 'text-white');
     playOption?.classList.remove('bg-gray-700', 'text-white');
     downloadOption?.classList.remove('bg-gray-700', 'text-white');
 
@@ -261,13 +270,19 @@ export function createContextMenus(deps = {}) {
     const moveOption = document.getElementById('moveAlbumOption');
     const playSubmenu = document.getElementById('playAlbumSubmenu');
     const playOption = document.getElementById('playAlbumOption');
+    const copySubmenu = document.getElementById('albumCopySubmenu');
+    const copyOption = document.getElementById('copyAlbumOption');
 
     if (!submenu || !moveOption) return;
 
-    // Hide the other submenu first
+    // Hide the other submenus first
     if (playSubmenu) {
       playSubmenu.classList.add('hidden');
       playOption?.classList.remove('bg-gray-700', 'text-white');
+    }
+    if (copySubmenu) {
+      copySubmenu.classList.add('hidden');
+      copyOption?.classList.remove('bg-gray-700', 'text-white');
     }
 
     // Highlight the parent menu item
@@ -317,6 +332,83 @@ export function createContextMenus(deps = {}) {
 
     submenu.style.left = `${menuRect.right}px`;
     submenu.style.top = `${moveRect.top}px`;
+    submenu.classList.remove('hidden');
+  }
+
+  /**
+   * Show copy to list submenu for desktop
+   */
+  function showCopyToListSubmenu() {
+    const currentList = getCurrentList();
+    const lists = getLists();
+    const { albumId } = getContextState();
+
+    const submenu = document.getElementById('albumCopySubmenu');
+    const copyOption = document.getElementById('copyAlbumOption');
+    const playSubmenu = document.getElementById('playAlbumSubmenu');
+    const playOption = document.getElementById('playAlbumOption');
+    const moveSubmenu = document.getElementById('albumMoveSubmenu');
+    const moveOption = document.getElementById('moveAlbumOption');
+
+    if (!submenu || !copyOption) return;
+
+    // Hide other submenus first
+    if (playSubmenu) {
+      playSubmenu.classList.add('hidden');
+      playOption?.classList.remove('bg-gray-700', 'text-white');
+    }
+    if (moveSubmenu) {
+      moveSubmenu.classList.add('hidden');
+      moveOption?.classList.remove('bg-gray-700', 'text-white');
+    }
+
+    // Highlight the parent menu item
+    copyOption.classList.add('bg-gray-700', 'text-white');
+
+    // Get all list IDs except the current one
+    const listIds = Object.keys(lists).filter((id) => id !== currentList);
+
+    if (listIds.length === 0) {
+      submenu.innerHTML =
+        '<div class="px-4 py-2 text-sm text-gray-500">No other lists available</div>';
+    } else {
+      submenu.innerHTML = listIds
+        .map((listId) => {
+          const meta = getListMetadata(listId);
+          const listName = meta?.name || 'Unknown';
+          return `
+          <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-target-list="${listId}">
+            <span class="mr-2">&bull;</span>${listName}
+          </button>
+        `;
+        })
+        .join('');
+
+      // Add click handlers to each list option
+      submenu.querySelectorAll('[data-target-list]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const targetListId = btn.dataset.targetList;
+
+          // Hide both menus and remove highlight
+          document.getElementById('albumContextMenu')?.classList.add('hidden');
+          submenu.classList.add('hidden');
+          copyOption?.classList.remove('bg-gray-700', 'text-white');
+
+          // Show confirmation modal
+          showCopyConfirmation(albumId, targetListId);
+        });
+      });
+    }
+
+    // Position submenu next to the copy option
+    const copyRect = copyOption.getBoundingClientRect();
+    const contextMenu = document.getElementById('albumContextMenu');
+    const menuRect = contextMenu.getBoundingClientRect();
+
+    submenu.style.left = `${menuRect.right}px`;
+    submenu.style.top = `${copyRect.top}px`;
     submenu.classList.remove('hidden');
   }
 
@@ -453,93 +545,88 @@ export function createContextMenus(deps = {}) {
   }
 
   /**
+   * Show confirmation modal for copying album to another list
+   * @param {string} albumId - Album identity string
+   * @param {string} targetListId - Target list ID
+   */
+  function showCopyConfirmation(albumId, targetListId) {
+    if (!albumId || !targetListId) {
+      console.error('Invalid albumId or targetListId');
+      return;
+    }
+
+    const result = findAlbumByIdentity(albumId);
+    if (!result) {
+      showToast('Album not found - it may have been moved or removed', 'error');
+      return;
+    }
+
+    const { album, index } = result;
+    const currentListId = getCurrentList();
+
+    // Get list names from metadata for display
+    const currentListMeta = getListMetadata(currentListId);
+    const targetListMeta = getListMetadata(targetListId);
+    const currentListName = currentListMeta?.name || 'Unknown';
+    const targetListName = targetListMeta?.name || 'Unknown';
+
+    showConfirmation(
+      'Copy Album',
+      `Copy "${album.album}" by ${album.artist} to "${targetListName}"?`,
+      `This will add the album to "${targetListName}" while keeping it in "${currentListName}".`,
+      'Copy',
+      async () => {
+        try {
+          await copyAlbumToList(index, albumId, targetListId);
+        } catch (error) {
+          console.error('Error copying album:', error);
+          showToast('Error copying album', 'error');
+        }
+      }
+    );
+  }
+
+  // Shared dependencies for album transfer operations
+  const transferDeps = {
+    getCurrentList,
+    getLists,
+    getListData,
+    getListMetadata,
+    saveList,
+    selectList,
+    showToast,
+    apiCall,
+    findAlbumByIdentity,
+  };
+
+  /**
    * Move album from current list to target list
    * @param {number} index - Album index
    * @param {string} albumId - Album identity string
    * @param {string} targetListId - Target list ID
    */
   async function moveAlbumToList(index, albumId, targetListId) {
-    const currentListId = getCurrentList();
-    const lists = getLists();
+    return transferAlbumToList(transferDeps, {
+      index,
+      albumId,
+      targetListId,
+      mode: 'move',
+    });
+  }
 
-    if (
-      !currentListId ||
-      !lists[currentListId] ||
-      !targetListId ||
-      !lists[targetListId]
-    ) {
-      throw new Error('Invalid source or target list');
-    }
-
-    const sourceAlbums = getListData(currentListId);
-    if (!sourceAlbums) throw new Error('Source list data not loaded');
-
-    let album = sourceAlbums[index];
-    let indexToMove = index;
-
-    if (album && albumId) {
-      const expectedId =
-        `${album.artist}::${album.album}::${album.release_date || ''}`.toLowerCase();
-      if (expectedId !== albumId) {
-        const result = findAlbumByIdentity(albumId);
-        if (result) {
-          album = result.album;
-          indexToMove = result.index;
-        } else {
-          throw new Error('Album not found');
-        }
-      }
-    } else if (!album) {
-      throw new Error('Album not found');
-    }
-
-    const albumToMove = { ...album };
-
-    // Get list names for user-facing messages
-    const targetListMeta = getListMetadata(targetListId);
-    const targetListName = targetListMeta?.name || 'Unknown';
-
-    // Check for duplicate in target list
-    const targetAlbums = getListData(targetListId);
-    const isAlbumInList = (albumToCheck, list) => {
-      const key = `${albumToCheck.artist}::${albumToCheck.album}`.toLowerCase();
-      return list.some((a) => `${a.artist}::${a.album}`.toLowerCase() === key);
-    };
-
-    if (isAlbumInList(albumToMove, targetAlbums || [])) {
-      showToast(
-        `"${albumToMove.album}" already exists in "${targetListName}"`,
-        'error'
-      );
-      return;
-    }
-
-    // Remove from source list
-    sourceAlbums.splice(indexToMove, 1);
-
-    // Add to target list
-    let targetData = targetAlbums;
-    if (!targetData) {
-      targetData = await apiCall(
-        `/api/lists/${encodeURIComponent(targetListId)}`
-      );
-    }
-    targetData.push(albumToMove);
-
-    try {
-      await Promise.all([
-        saveList(currentListId, sourceAlbums),
-        saveList(targetListId, targetData),
-      ]);
-
-      selectList(currentListId);
-      showToast(`Moved "${album.album}" to "${targetListName}"`);
-    } catch (error) {
-      console.error('Error saving lists after move:', error);
-      sourceAlbums.splice(indexToMove, 0, albumToMove);
-      targetData.pop();
-      throw error;
-    }
+  /**
+   * Copy album from current list to target list (keeps album in source)
+   * @param {number} index - Album index
+   * @param {string} albumId - Album identity string
+   * @param {string} targetListId - Target list ID
+   */
+  async function copyAlbumToList(index, albumId, targetListId) {
+    return transferAlbumToList(transferDeps, {
+      index,
+      albumId,
+      targetListId,
+      mode: 'copy',
+    });
   }
 
   /**
@@ -548,8 +635,10 @@ export function createContextMenus(deps = {}) {
   function setupSubmenuHideOnLeave() {
     const contextMenu = document.getElementById('albumContextMenu');
     const moveSubmenu = document.getElementById('albumMoveSubmenu');
+    const copySubmenu = document.getElementById('albumCopySubmenu');
     const playSubmenu = document.getElementById('playAlbumSubmenu');
     const moveOption = document.getElementById('moveAlbumOption');
+    const copyOption = document.getElementById('copyAlbumOption');
     const playOption = document.getElementById('playAlbumOption');
 
     if (!contextMenu) return;
@@ -561,6 +650,10 @@ export function createContextMenus(deps = {}) {
         if (moveSubmenu) {
           moveSubmenu.classList.add('hidden');
           moveOption?.classList.remove('bg-gray-700', 'text-white');
+        }
+        if (copySubmenu) {
+          copySubmenu.classList.add('hidden');
+          copyOption?.classList.remove('bg-gray-700', 'text-white');
         }
         if (playSubmenu) {
           playSubmenu.classList.add('hidden');
@@ -578,12 +671,16 @@ export function createContextMenus(deps = {}) {
         moveSubmenu &&
         (e.relatedTarget === moveSubmenu ||
           moveSubmenu.contains(e.relatedTarget));
+      const toCopySubmenu =
+        copySubmenu &&
+        (e.relatedTarget === copySubmenu ||
+          copySubmenu.contains(e.relatedTarget));
       const toPlaySubmenu =
         playSubmenu &&
         (e.relatedTarget === playSubmenu ||
           playSubmenu.contains(e.relatedTarget));
 
-      if (!toMoveSubmenu && !toPlaySubmenu) {
+      if (!toMoveSubmenu && !toCopySubmenu && !toPlaySubmenu) {
         hideSubmenus();
       }
     });
@@ -591,6 +688,11 @@ export function createContextMenus(deps = {}) {
     if (moveSubmenu) {
       moveSubmenu.addEventListener('mouseenter', cancelHide);
       moveSubmenu.addEventListener('mouseleave', hideSubmenus);
+    }
+
+    if (copySubmenu) {
+      copySubmenu.addEventListener('mouseenter', cancelHide);
+      copySubmenu.addEventListener('mouseleave', hideSubmenus);
     }
 
     if (playSubmenu) {
@@ -624,13 +726,19 @@ export function createContextMenus(deps = {}) {
     const playOption = document.getElementById('playAlbumOption');
     const moveSubmenu = document.getElementById('albumMoveSubmenu');
     const moveOption = document.getElementById('moveAlbumOption');
+    const copySubmenu = document.getElementById('albumCopySubmenu');
+    const copyOption = document.getElementById('copyAlbumOption');
 
     if (!submenu || !playOption) return;
 
-    // Hide the other submenu first
+    // Hide the other submenus first
     if (moveSubmenu) {
       moveSubmenu.classList.add('hidden');
       moveOption?.classList.remove('bg-gray-700', 'text-white');
+    }
+    if (copySubmenu) {
+      copySubmenu.classList.add('hidden');
+      copyOption?.classList.remove('bg-gray-700', 'text-white');
     }
 
     // Highlight the parent menu item
@@ -1161,8 +1269,11 @@ export function createContextMenus(deps = {}) {
     getDeviceIcon,
     getListMenuConfig,
     showMoveToListSubmenu,
+    showCopyToListSubmenu,
     showMoveConfirmation,
+    showCopyConfirmation,
     moveAlbumToList,
+    copyAlbumToList,
     setupSubmenuHideOnLeave,
     positionPlaySubmenu,
     showPlayAlbumSubmenu,

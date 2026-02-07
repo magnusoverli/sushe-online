@@ -425,6 +425,10 @@ const contextMenusComponent = () => `
       <span><i class="fas fa-arrow-right mr-2 w-4 text-center"></i>Move to List</span>
       <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
     </button>
+    <button id="copyAlbumOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
+      <span><i class="fas fa-copy mr-2 w-4 text-center"></i>Copy to List</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
+    </button>
     <!-- Recommend option (shown only for year-based lists) -->
     <button id="recommendAlbumOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors whitespace-nowrap">
       <i class="fas fa-thumbs-up mr-2 w-4 text-center text-blue-400"></i>Recommend
@@ -453,6 +457,11 @@ const contextMenusComponent = () => `
   <!-- Submenu for Move to List - Lists within a year -->
   <div id="albumMoveListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
     <!-- Populated dynamically with lists for selected year -->
+  </div>
+  
+  <!-- Submenu for Copy to List -->
+  <div id="albumCopySubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
+    <!-- Populated dynamically with available lists -->
   </div>
   
   <!-- Submenu for Play Album (Spotify Connect devices) -->

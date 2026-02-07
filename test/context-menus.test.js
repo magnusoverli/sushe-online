@@ -51,8 +51,11 @@ describe('context-menus module', () => {
       assert.strictEqual(typeof module.getDeviceIcon, 'function');
       assert.strictEqual(typeof module.getListMenuConfig, 'function');
       assert.strictEqual(typeof module.showMoveToListSubmenu, 'function');
+      assert.strictEqual(typeof module.showCopyToListSubmenu, 'function');
       assert.strictEqual(typeof module.showMoveConfirmation, 'function');
+      assert.strictEqual(typeof module.showCopyConfirmation, 'function');
       assert.strictEqual(typeof module.moveAlbumToList, 'function');
+      assert.strictEqual(typeof module.copyAlbumToList, 'function');
       assert.strictEqual(typeof module.setupSubmenuHideOnLeave, 'function');
       assert.strictEqual(typeof module.positionPlaySubmenu, 'function');
       assert.strictEqual(typeof module.showPlayAlbumSubmenu, 'function');
@@ -226,6 +229,7 @@ describe('context-menus module', () => {
         getLists: mock.fn(() => ({})), // Empty lists
         getListData: mock.fn(() => null),
         showToast: mock.fn(),
+        findAlbumByIdentity: mock.fn(),
       };
 
       const module = createContextMenus(mockDeps);
@@ -242,6 +246,7 @@ describe('context-menus module', () => {
         getLists: mock.fn(() => ({ source: {}, target: {} })),
         getListData: mock.fn(() => null),
         showToast: mock.fn(),
+        findAlbumByIdentity: mock.fn(),
       };
 
       const module = createContextMenus(mockDeps);
@@ -261,12 +266,59 @@ describe('context-menus module', () => {
           return [];
         }),
         showToast: mock.fn(),
+        findAlbumByIdentity: mock.fn(),
       };
 
       const module = createContextMenus(mockDeps);
 
       await assert.rejects(
         () => module.moveAlbumToList(0, 'album-id', 'target'),
+        { message: 'Album not found' }
+      );
+    });
+  });
+
+  describe('copyAlbumToList', () => {
+    let createContextMenus;
+
+    beforeEach(async () => {
+      const module = await import('../src/js/modules/context-menus.js');
+      createContextMenus = module.createContextMenus;
+    });
+
+    it('should throw error for invalid source list', async () => {
+      const mockDeps = {
+        getCurrentList: mock.fn(() => 'source'),
+        getLists: mock.fn(() => ({})),
+        getListData: mock.fn(() => null),
+        showToast: mock.fn(),
+        findAlbumByIdentity: mock.fn(),
+      };
+
+      const module = createContextMenus(mockDeps);
+
+      await assert.rejects(
+        () => module.copyAlbumToList(0, 'album-id', 'target'),
+        { message: 'Invalid source or target list' }
+      );
+    });
+
+    it('should throw error when album not found', async () => {
+      const mockDeps = {
+        getCurrentList: mock.fn(() => 'source'),
+        getLists: mock.fn(() => ({ source: {}, target: {} })),
+        getListData: mock.fn((name) => {
+          if (name === 'source') return [];
+          return [];
+        }),
+        showToast: mock.fn(),
+        findAlbumByIdentity: mock.fn(),
+      };
+
+      const module = createContextMenus(mockDeps);
+
+      await assert.rejects(
+        () => module.copyAlbumToList(0, 'album-id', 'target'),
         { message: 'Album not found' }
       );
     });
