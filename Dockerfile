@@ -4,7 +4,7 @@
 FROM node:24-slim AS base
 
 # Update npm to specific version (done once, inherited by both stages)
-RUN npm install -g npm@11.7.0 --no-fund
+RUN npm install -g npm@11.9.0 --no-fund
 
 WORKDIR /app
 
