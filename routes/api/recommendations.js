@@ -81,11 +81,7 @@ module.exports = (appInstance, deps) => {
     asyncHandler(
       async (req, res) => {
         const result = await pool.query(`
-        SELECT DISTINCT year FROM (
-          SELECT year FROM recommendations
-          UNION
-          SELECT year FROM recommendation_settings
-        ) combined
+        SELECT DISTINCT year FROM recommendations
         ORDER BY year DESC
       `);
 

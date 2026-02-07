@@ -22,6 +22,9 @@ let currentListId = '';
 /** Year if viewing recommendations, null otherwise */
 let currentRecommendationsYear = null;
 
+/** Set of years that have actual recommendations (for sidebar visibility) */
+let recommendationYears = new Set();
+
 // ============ CONTEXT MENU STATE ============
 
 /** Currently right-clicked album index */
@@ -389,6 +392,31 @@ export function getCurrentRecommendationsYear() {
 export function setCurrentRecommendationsYear(year) {
   currentRecommendationsYear = year;
   window.currentRecommendationsYear = year;
+}
+
+/**
+ * Get the set of years that have recommendations
+ * @returns {Set<number>}
+ */
+export function getRecommendationYears() {
+  return recommendationYears;
+}
+
+/**
+ * Set the years that have recommendations (from API response)
+ * @param {number[]} years - Array of years
+ */
+export function setRecommendationYears(years) {
+  recommendationYears = new Set(years);
+}
+
+/**
+ * Check if a specific year has recommendations
+ * @param {number} year
+ * @returns {boolean}
+ */
+export function yearHasRecommendations(year) {
+  return recommendationYears.has(year);
 }
 
 // ============ CONTEXT MENU STATE ACCESSORS ============

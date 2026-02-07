@@ -26,6 +26,7 @@
  * @param {Function} deps.apiCall - Make API calls
  * @param {Function} deps.showToast - Show toast notifications
  * @param {Function} deps.refreshGroupsAndLists - Refresh groups and lists from server
+ * @param {Function} deps.yearHasRecommendations - Check if a year has recommendations
  * @returns {Object} List navigation module API
  */
 export function createListNav(deps = {}) {
@@ -45,6 +46,7 @@ export function createListNav(deps = {}) {
     apiCall,
     showToast,
     refreshGroupsAndLists,
+    yearHasRecommendations,
   } = deps;
 
   // Track sortable instances for cleanup
@@ -599,10 +601,13 @@ export function createListNav(deps = {}) {
       listsContainer.appendChild(li);
     });
 
-    // Add recommendations button at the bottom of year groups
+    // Add recommendations button at the bottom of year groups (only if recommendations exist)
     if (isYearGroup && year) {
-      const recommendationsLi = createRecommendationsButton(year, isMobile);
-      listsContainer.appendChild(recommendationsLi);
+      const hasRecs = yearHasRecommendations && yearHasRecommendations(year);
+      if (hasRecs) {
+        const recommendationsLi = createRecommendationsButton(year, isMobile);
+        listsContainer.appendChild(recommendationsLi);
+      }
     }
 
     section.appendChild(listsContainer);

@@ -35,6 +35,7 @@ export function createRecommendations(deps = {}) {
     updateHeaderTitle,
     updateMobileHeader,
     showLoadingSpinner,
+    refreshRecommendationYears,
   } = deps;
 
   // ============ PRIVATE STATE ============
@@ -70,6 +71,8 @@ export function createRecommendations(deps = {}) {
         showToast(response.error, 'info');
       } else {
         showToast(`Recommended "${album.album}" by ${album.artist}`, 'success');
+        // Refresh sidebar to show/update recommendations button for this year
+        if (refreshRecommendationYears) refreshRecommendationYears();
       }
     } catch (err) {
       if (err.status === 409) {
@@ -138,6 +141,8 @@ export function createRecommendations(deps = {}) {
             year,
             response.locked
           );
+          // Refresh sidebar to reflect any add/remove changes
+          if (refreshRecommendationYears) refreshRecommendationYears();
         }
       } catch (err) {
         console.warn('Failed to fetch recommendations:', err);

@@ -86,6 +86,8 @@ import {
   getAvailableCountries,
   setAvailableCountries,
   initWindowGlobals,
+  setRecommendationYears,
+  yearHasRecommendations,
 } from './modules/app-state.js';
 
 // Early window global — needed by year-lock module before consolidated section
@@ -123,6 +125,20 @@ const getLinkPreviewModule = createLazyModule(() =>
 );
 
 /**
+ * Refresh which years have recommendations and rebuild the sidebar.
+ * Called after adding/removing recommendations to keep sidebar in sync.
+ */
+async function refreshRecommendationYears() {
+  try {
+    const data = await apiCall('/api/recommendations/years');
+    setRecommendationYears(data.years || []);
+    updateListNav();
+  } catch (_err) {
+    // Non-critical — sidebar just won't update until next page load
+  }
+}
+
+/**
  * Get or initialize the recommendations module
  * Uses lazy initialization since it depends on many app.js functions
  */
@@ -154,6 +170,7 @@ const getRecommendationsModule = createLazyModule(() =>
     updateHeaderTitle,
     updateMobileHeader,
     showLoadingSpinner,
+    refreshRecommendationYears,
   })
 );
 
@@ -607,6 +624,7 @@ const getListNavModule = createLazyModule(() =>
     apiCall,
     showToast,
     refreshGroupsAndLists,
+    yearHasRecommendations,
   })
 );
 
@@ -1077,22 +1095,30 @@ async function loadLists() {
     const serverLastListId = window.lastSelectedList;
     const targetListId = localLastListId || serverLastListId;
 
-    // OPTIMIZATION: Parallel execution - fetch metadata, groups, and target list simultaneously
+    // OPTIMIZATION: Parallel execution - fetch metadata, groups, rec years, and target list simultaneously
     // This dramatically improves page refresh performance by:
     // 1. Loading only metadata (tiny payload) for the sidebar
     // 2. Loading groups (tiny payload) for sidebar organization
-    // 3. Loading the target list data in parallel (only what's needed)
+    // 3. Loading recommendation years (tiny payload) for sidebar visibility
+    // 4. Loading the target list data in parallel (only what's needed)
     const metadataPromise = apiCall('/api/lists'); // Metadata only (default)
     const groupsPromise = apiCall('/api/groups'); // Groups for sidebar
+    const recYearsPromise = apiCall('/api/recommendations/years').catch(() => ({
+      years: [],
+    })); // Non-critical
     const listDataPromise = targetListId
       ? apiCall(`/api/lists/${encodeURIComponent(targetListId)}`)
       : null;
 
-    // Wait for metadata and groups (fast - small payloads)
-    const [fetchedLists, fetchedGroups] = await Promise.all([
+    // Wait for metadata, groups, and rec years (fast - small payloads)
+    const [fetchedLists, fetchedGroups, recYearsData] = await Promise.all([
       metadataPromise,
       groupsPromise,
+      recYearsPromise,
     ]);
+
+    // Store which years have recommendations (for sidebar visibility)
+    setRecommendationYears(recYearsData.years || []);
 
     // Initialize groups via centralized state store
     updateGroupsFromServer(fetchedGroups);
