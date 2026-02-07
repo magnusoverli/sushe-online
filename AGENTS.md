@@ -175,6 +175,555 @@ This installs:
 git commit --no-verify  # Skip for emergency commits only
 ```
 
+## Design Principles: DRY, SoC, and SOLID
+
+**CRITICAL: All code changes MUST adhere to these principles.** When writing or modifying code, actively check against each principle below.
+
+### DRY (Don't Repeat Yourself)
+
+**Rule**: Every piece of knowledge should have a single, authoritative representation in the codebase.
+
+#### When to Apply DRY
+
+- **Repeated logic** (3+ lines appearing 2+ times) → Extract to a function
+- **Repeated values** (magic numbers/strings) → Extract to constants
+- **Similar patterns** (slight variations) → Extract to parameterized function
+- **Duplicated validation** → Create reusable validators
+- **Copy-pasted code blocks** → Refactor immediately
+
+#### DRY Examples
+
+```javascript
+// ❌ BAD: Repeated validation logic
+app.post('/api/users', (req, res) => {
+  if (!req.body.email || !req.body.email.includes('@')) {
+    return res.status(400).json({ error: 'Invalid email' });
+  }
+  // ... user creation
+});
+
+app.post('/api/profile', (req, res) => {
+  if (!req.body.email || !req.body.email.includes('@')) {
+    return res.status(400).json({ error: 'Invalid email' });
+  }
+  // ... profile update
+});
+
+// ✅ GOOD: Extract validation to reusable validator
+// validators.js
+function validateEmail(email) {
+  if (!email || !email.includes('@')) {
+    throw new ValidationError('Invalid email');
+  }
+}
+
+// routes
+app.post('/api/users', (req, res) => {
+  validateEmail(req.body.email);
+  // ... user creation
+});
+
+app.post('/api/profile', (req, res) => {
+  validateEmail(req.body.email);
+  // ... profile update
+});
+```
+
+```javascript
+// ❌ BAD: Magic numbers and strings
+if (user.attempts >= 5) {
+  lockAccount(user, 900000); // What is 900000?
+}
+
+// ✅ GOOD: Named constants
+const MAX_LOGIN_ATTEMPTS = 5;
+const ACCOUNT_LOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+
+if (user.attempts >= MAX_LOGIN_ATTEMPTS) {
+  lockAccount(user, ACCOUNT_LOCK_DURATION_MS);
+}
+```
+
+#### DRY Checklist Before Committing
+
+- [ ] No code blocks repeated more than once
+- [ ] All magic numbers/strings replaced with named constants
+- [ ] Similar functions consolidated with parameters
+- [ ] Validation logic reused via `validators.js`
+- [ ] Database queries extracted to repository/model layer
+
+### SoC (Separation of Concerns)
+
+**Rule**: Each module/function should handle ONE concern. Different concerns should live in different modules.
+
+#### Layered Architecture (Required Pattern)
+
+```
+routes/        → HTTP request/response, route definitions (THIN)
+  ↓ delegates to
+controllers/   → Request validation, response formatting (optional layer)
+  ↓ delegates to
+services/      → Business logic, orchestration
+  ↓ delegates to
+db/            → Data access, database queries
+utils/         → Pure functions, helpers (no side effects)
+middleware/    → Cross-cutting concerns (auth, logging, errors)
+```
+
+#### What Belongs Where
+
+| Layer           | Responsibilities                             | Should NOT Do                          |
+| --------------- | -------------------------------------------- | -------------------------------------- |
+| **Routes**      | Define endpoints, attach middleware          | Business logic, DB queries             |
+| **Controllers** | Parse req, validate input, format response   | Complex logic, direct DB access        |
+| **Services**    | Business rules, orchestration, transactions  | HTTP concerns, response formatting     |
+| **DB/Models**   | Queries, data access, schema                 | Business logic, HTTP concerns          |
+| **Utils**       | Pure functions, formatting, calculations     | Side effects, DB access, HTTP          |
+| **Middleware**  | Auth, logging, rate limiting, error handling | Business logic specific to one feature |
+
+#### SoC Examples
+
+```javascript
+// ❌ BAD: Everything in route (violation of SoC)
+app.post('/api/lists', async (req, res) => {
+  try {
+    // Validation mixed with business logic
+    if (!req.body.name || req.body.name.length < 3) {
+      return res.status(400).json({ error: 'Name too short' });
+    }
+
+    // Database logic in route
+    const existingList = await db.query(
+      'SELECT * FROM lists WHERE user_id = ? AND name = ?',
+      [req.user.id, req.body.name]
+    );
+
+    if (existingList.length > 0) {
+      return res.status(409).json({ error: 'List already exists' });
+    }
+
+    // Business logic in route
+    const isPremium = req.user.subscription === 'premium';
+    const maxLists = isPremium ? 100 : 10;
+    const userLists = await db.query(
+      'SELECT COUNT(*) as count FROM lists WHERE user_id = ?',
+      [req.user.id]
+    );
+
+    if (userLists[0].count >= maxLists) {
+      return res.status(403).json({ error: 'List limit reached' });
+    }
+
+    // More DB logic
+    await db.query(
+      'INSERT INTO lists (user_id, name, created_at) VALUES (?, ?, ?)',
+      [req.user.id, req.body.name, new Date()]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ✅ GOOD: Proper separation of concerns
+// routes/lists.js (THIN - only routing)
+const listService = require('../services/list-service');
+const { validateListCreation } = require('../validators');
+
+app.post('/api/lists', ensureAuthAPI, async (req, res, next) => {
+  try {
+    validateListCreation(req.body); // Validation layer
+    const list = await listService.createList(req.user, req.body); // Service layer
+    res.json({ success: true, list }); // Response formatting
+  } catch (err) {
+    next(err); // Error middleware handles formatting
+  }
+});
+
+// services/list-service.js (Business logic)
+const listRepository = require('../db/list-repository');
+
+async function createList(user, data) {
+  // Business rule: Check for duplicate
+  const exists = await listRepository.findByUserAndName(user.id, data.name);
+  if (exists) {
+    throw new ConflictError('List already exists');
+  }
+
+  // Business rule: Check limits
+  const count = await listRepository.countUserLists(user.id);
+  const maxLists = user.subscription === 'premium' ? 100 : 10;
+  if (count >= maxLists) {
+    throw new ForbiddenError('List limit reached');
+  }
+
+  // Delegate data access
+  return await listRepository.create(user.id, data);
+}
+
+module.exports = { createList };
+
+// db/list-repository.js (Data access only)
+async function findByUserAndName(userId, name) {
+  return db.query(
+    'SELECT * FROM lists WHERE user_id = ? AND name = ? LIMIT 1',
+    [userId, name]
+  );
+}
+
+async function countUserLists(userId) {
+  const result = await db.query(
+    'SELECT COUNT(*) as count FROM lists WHERE user_id = ?',
+    [userId]
+  );
+  return result[0].count;
+}
+
+async function create(userId, data) {
+  return db.query(
+    'INSERT INTO lists (user_id, name, created_at) VALUES (?, ?, ?)',
+    [userId, data.name, new Date()]
+  );
+}
+
+module.exports = { findByUserAndName, countUserLists, create };
+```
+
+#### SoC Checklist Before Committing
+
+- [ ] Routes are thin (< 15 lines, mostly delegation)
+- [ ] Business logic is in service layer
+- [ ] Database queries are in repository/db layer
+- [ ] Validation is in validators or middleware
+- [ ] No HTTP concerns (req/res) in services or db layer
+- [ ] No business logic in routes or middleware
+
+### SOLID Principles
+
+#### S - Single Responsibility Principle
+
+**Rule**: A module/function should have ONE reason to change.
+
+```javascript
+// ❌ BAD: Multiple responsibilities
+function handleUserRegistration(userData) {
+  // Responsibility 1: Validation
+  if (!userData.email) throw new Error('Email required');
+
+  // Responsibility 2: Password hashing
+  const hash = bcrypt.hashSync(userData.password, 10);
+
+  // Responsibility 3: Database insertion
+  db.query('INSERT INTO users ...');
+
+  // Responsibility 4: Email sending
+  sendWelcomeEmail(userData.email);
+
+  // Responsibility 5: Logging
+  logger.info('User registered', { email: userData.email });
+}
+
+// ✅ GOOD: Single responsibility per function
+function registerUser(userData) {
+  const validatedData = validateUserData(userData); // Validation concern
+  const hashedPassword = hashPassword(validatedData.password); // Security concern
+  const user = createUserInDB({ ...validatedData, password: hashedPassword }); // Persistence concern
+  queueWelcomeEmail(user.email); // Email concern (async)
+  logUserRegistration(user); // Logging concern
+  return user;
+}
+```
+
+**How to identify violations:**
+
+- Function does 3+ distinct operations
+- Function name contains "and" or "then"
+- Changes to unrelated features require modifying this function
+
+#### O - Open/Closed Principle
+
+**Rule**: Code should be open for extension, closed for modification.
+
+```javascript
+// ❌ BAD: Must modify function to add new payment types
+function processPayment(order, type) {
+  if (type === 'credit_card') {
+    return processCreditCard(order);
+  } else if (type === 'paypal') {
+    return processPayPal(order);
+  } else if (type === 'crypto') {
+    return processCrypto(order);
+  }
+  // Adding new payment type requires modifying this function
+}
+
+// ✅ GOOD: Use strategy pattern - extend without modifying
+const paymentStrategies = {
+  credit_card: processCreditCard,
+  paypal: processPayPal,
+  crypto: processCrypto,
+  // Add new strategies here without changing core logic
+};
+
+function processPayment(order, type) {
+  const strategy = paymentStrategies[type];
+  if (!strategy) {
+    throw new Error(`Unknown payment type: ${type}`);
+  }
+  return strategy(order);
+}
+
+// To add new payment type, just add to the map:
+paymentStrategies.bank_transfer = processBankTransfer; // Extension, not modification
+```
+
+#### L - Liskov Substitution Principle
+
+**Rule**: Subtypes/implementations must be substitutable for their base types.
+
+```javascript
+// ❌ BAD: Violates LSP - UserRepository throws unexpected error
+class Repository {
+  async findById(id) {
+    return db.query('SELECT * FROM table WHERE id = ?', [id]);
+  }
+}
+
+class UserRepository extends Repository {
+  async findById(id) {
+    if (!id) throw new Error('ID required'); // Unexpected precondition!
+    return db.query('SELECT * FROM users WHERE id = ?', [id]);
+  }
+}
+
+// ✅ GOOD: Consistent behavior across implementations
+class Repository {
+  async findById(id) {
+    if (!id) return null; // Consistent null handling
+    return db.query('SELECT * FROM table WHERE id = ?', [id]);
+  }
+}
+
+class UserRepository extends Repository {
+  async findById(id) {
+    if (!id) return null; // Same behavior as parent
+    return db.query('SELECT * FROM users WHERE id = ?', [id]);
+  }
+}
+```
+
+#### I - Interface Segregation Principle
+
+**Rule**: Don't force modules to depend on methods they don't use.
+
+```javascript
+// ❌ BAD: Fat interface - forces all implementations to have all methods
+class DataStore {
+  save(data) {}
+  find(id) {}
+  update(id, data) {}
+  delete(id) {}
+  backup() {}
+  restore() {}
+  migrate() {}
+  // Read-only stores don't need save/update/delete
+  // Simple stores don't need backup/restore/migrate
+}
+
+// ✅ GOOD: Segregated interfaces - compose only what you need
+class Readable {
+  find(id) {}
+}
+
+class Writable {
+  save(data) {}
+  update(id, data) {}
+  delete(id) {}
+}
+
+class Backupable {
+  backup() {}
+  restore() {}
+}
+
+// Implementations pick what they need
+class ReadOnlyCache extends Readable {
+  find(id) {
+    return cache.get(id);
+  }
+}
+
+class DatabaseStore extends Readable {
+  constructor() {
+    super();
+    Object.assign(this, new Writable(), new Backupable());
+  }
+  // Implement all methods from composed interfaces
+}
+```
+
+#### D - Dependency Inversion Principle
+
+**Rule**: Depend on abstractions (interfaces), not concrete implementations. High-level modules should not depend on low-level modules.
+
+**This project uses Dependency Injection pattern (see "Writing Testable Code" section) to implement DIP.**
+
+```javascript
+// ❌ BAD: Direct dependency on concrete implementation
+// services/user-service.js
+const PostgresDB = require('../db/postgres'); // Concrete dependency
+
+async function createUser(data) {
+  const db = new PostgresDB(); // Tightly coupled to Postgres
+  return db.insert('users', data);
+}
+
+// ✅ GOOD: Depend on abstraction via dependency injection
+// services/user-service.js
+function createUserService(deps = {}) {
+  const db = deps.db || require('../db'); // Abstraction - any DB implementation
+
+  async function createUser(data) {
+    return db.insert('users', data); // Works with any DB that implements insert()
+  }
+
+  return { createUser };
+}
+
+const defaultInstance = createUserService();
+module.exports = { createUserService, ...defaultInstance };
+
+// Now you can inject ANY database implementation:
+// - Production: PostgreSQL
+// - Testing: In-memory mock
+// - Future: MongoDB, Redis, etc.
+```
+
+#### SOLID Checklist Before Committing
+
+- [ ] Each function/module has one clear responsibility (SRP)
+- [ ] New features added via extension, not modification (OCP)
+- [ ] Implementations are substitutable without surprises (LSP)
+- [ ] Modules don't depend on unused methods (ISP)
+- [ ] Dependencies are injected, not hardcoded (DIP)
+
+### Code Organization Patterns
+
+#### File/Folder Structure
+
+```
+routes/           # HTTP routing only (THIN)
+├── auth.js       # Authentication routes
+├── lists.js      # List management routes
+└── api.js        # API endpoint aggregation
+
+services/         # Business logic (CORE)
+├── auth-service.js
+├── list-service.js
+└── spotify-service.js
+
+db/               # Data access layer
+├── repositories/
+│   ├── user-repository.js
+│   └── list-repository.js
+├── migrations/
+└── index.js      # DB connection pool
+
+utils/            # Pure functions, helpers
+├── validators.js # Input validation
+├── formatters.js # Data formatting
+├── constants.js  # Application constants
+└── logger.js     # Logging utility
+
+middleware/       # Cross-cutting concerns
+├── auth.js       # Authentication middleware
+├── rate-limit.js # Rate limiting
+├── error-handler.js
+└── security.js   # CSRF, headers, etc.
+```
+
+#### When to Create a New File
+
+- **New feature/domain**: Create new service + repository
+- **Shared logic**: Extract to `utils/` if pure function, `services/` if has side effects
+- **Cross-cutting concern**: Add to `middleware/`
+- **File > 300 lines**: Consider splitting by responsibility
+
+#### When to Refactor
+
+Refactor immediately when you notice:
+
+1. **Code duplication** (2+ occurrences of 3+ lines)
+2. **Function > 50 lines** (break into smaller functions)
+3. **File > 300 lines** (split by responsibility)
+4. **Deep nesting** (> 3 levels of if/for/try)
+5. **God objects** (class/module doing too much)
+6. **Tight coupling** (module directly accessing internals of another)
+
+### Anti-Patterns to Avoid
+
+#### ❌ God Objects/Functions
+
+```javascript
+// BAD: One function doing everything
+async function handleUserAction(req, res) {
+  // 200+ lines of validation, business logic, DB access, email sending...
+}
+
+// GOOD: Orchestrate smaller, focused functions
+async function handleUserAction(req, res) {
+  const validated = validateInput(req.body);
+  const result = await userService.performAction(validated);
+  await notificationService.notify(result);
+  return formatResponse(result);
+}
+```
+
+#### ❌ Tight Coupling
+
+```javascript
+// BAD: Direct access to internals
+class UserService {
+  updateUser(id, data) {
+    // Directly accessing db internals
+    global.db.connection.query('UPDATE users...');
+  }
+}
+
+// GOOD: Depend on abstraction
+function createUserService(deps = {}) {
+  const db = deps.db || require('../db');
+
+  async function updateUser(id, data) {
+    return db.update('users', id, data); // Abstract interface
+  }
+
+  return { updateUser };
+}
+```
+
+#### ❌ Callback Hell / Promise Chains
+
+```javascript
+// BAD: Nested callbacks
+doSomething(function (result) {
+  doSomethingElse(result, function (newResult) {
+    doThirdThing(newResult, function (finalResult) {
+      // ...
+    });
+  });
+});
+
+// GOOD: Async/await
+async function processData() {
+  const result = await doSomething();
+  const newResult = await doSomethingElse(result);
+  const finalResult = await doThirdThing(newResult);
+  return finalResult;
+}
+```
+
 ## Code Style & Best Practices
 
 - **Imports**: Prefer ES6 modules (`import`/`export`) when possible, use CommonJS for Node.js compatibility
