@@ -400,6 +400,10 @@ export function createAlbumDisplay(deps = {}) {
     const summary = album.summary || '';
     const summarySource = album.summary_source || album.summarySource || '';
 
+    // Recommendation cross-reference (from backend)
+    const recommendedBy = album.recommended_by || null;
+    const recommendedAt = album.recommended_at || null;
+
     // Get playcount from cache (keyed by list item _id)
     // Cache now stores { playcount, status } objects or null
     const itemId = album._id || '';
@@ -454,6 +458,8 @@ export function createAlbumDisplay(deps = {}) {
       playcountDisplay,
       summary,
       summarySource,
+      recommendedBy,
+      recommendedAt,
     };
   }
 
@@ -677,6 +683,18 @@ export function createAlbumDisplay(deps = {}) {
       </div>`;
     }
 
+    // Recommendation badge HTML (shown if album is on the year's recommendations list)
+    let recommendationBadgeHtml = '';
+    if (data.recommendedBy) {
+      recommendationBadgeHtml = `<div class="recommendation-badge"
+        data-recommended-by="${escapeHtml(data.recommendedBy)}"
+        data-recommended-at="${escapeHtml(data.recommendedAt || '')}"
+        data-album-name="${escapeHtml(data.albumName)}"
+        data-artist="${escapeHtml(data.artist)}">
+        <i class="fas fa-thumbs-up"></i>
+      </div>`;
+    }
+
     row.innerHTML = `
       ${data.position !== null ? `<div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>` : '<div></div>'}
       <div class="flex items-center">
@@ -704,6 +722,7 @@ export function createAlbumDisplay(deps = {}) {
           `
           }
           ${summaryBadgeHtml}
+          ${recommendationBadgeHtml}
         </div>
       </div>
       <div class="flex flex-col justify-center">
@@ -1051,6 +1070,19 @@ export function createAlbumDisplay(deps = {}) {
         </div>`;
     }
 
+    // === RECOMMENDATION BADGE (shown if album is on the year's recommendations) ===
+    let mobileRecommendationBadgeHtml = '';
+    if (data.recommendedBy) {
+      mobileRecommendationBadgeHtml = `
+        <div class="recommendation-badge recommendation-badge-mobile"
+             data-recommended-by="${escapeHtml(data.recommendedBy)}"
+             data-recommended-at="${escapeHtml(data.recommendedAt || '')}"
+             data-album-name="${escapeHtml(data.albumName)}"
+             data-artist="${escapeHtml(data.artist)}">
+          <i class="fas fa-thumbs-up"></i>
+        </div>`;
+    }
+
     // === POSITION BADGE ===
     // Circular badge showing album rank, positioned in top-right of menu section
     const getPositionBadgeHtml = (position) => {
@@ -1105,6 +1137,7 @@ export function createAlbumDisplay(deps = {}) {
                 : `<i class="fas fa-compact-disc text-xl text-gray-600"></i>`
             }
             ${summaryBadgeHtml}
+            ${mobileRecommendationBadgeHtml}
           </div>
           <!-- Release date -->
           <div class="flex-1 flex items-center mt-1">
@@ -1237,6 +1270,32 @@ export function createAlbumDisplay(deps = {}) {
         if (summary) {
           showMobileSummarySheet(summary, albumName, artist);
         }
+      });
+    }
+
+    // Attach recommendation badge handler (if recommended)
+    const recBadge = card.querySelector('.recommendation-badge-mobile');
+    if (recBadge) {
+      recBadge.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      recBadge.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+
+      recBadge.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showMobileRecommendationSheet(recBadge);
       });
     }
 
@@ -1946,14 +2005,22 @@ export function createAlbumDisplay(deps = {}) {
   const TOOLTIP_HIDE_DELAY = 80; // 80ms delay before hiding (prevents accidental dismissal)
 
   /**
-   * Initialize summary tooltips for badges (Last.fm and Wikipedia)
+   * Initialize summary and recommendation tooltips for badges
    * @param {HTMLElement} container - Container element
    */
   function initSummaryTooltips(container) {
-    const badges = container.querySelectorAll('.summary-badge');
-
-    badges.forEach((badge) => {
+    const summaryBadges = container.querySelectorAll('.summary-badge');
+    summaryBadges.forEach((badge) => {
       badge.addEventListener('mouseenter', handleBadgeMouseEnter);
+      badge.addEventListener('mouseleave', handleBadgeMouseLeave);
+    });
+
+    // Also initialize recommendation badge tooltips (desktop only)
+    const recBadges = container.querySelectorAll(
+      '.recommendation-badge:not(.recommendation-badge-mobile)'
+    );
+    recBadges.forEach((badge) => {
+      badge.addEventListener('mouseenter', handleRecommendationBadgeMouseEnter);
       badge.addEventListener('mouseleave', handleBadgeMouseLeave);
     });
   }
@@ -2041,6 +2108,88 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
+   * Format a recommendation date for display.
+   * @param {string} dateStr - ISO date string
+   * @returns {string} Formatted date (e.g. "Jan 15, 2025")
+   */
+  function formatRecommendationDate(dateStr) {
+    if (!dateStr) return '';
+    try {
+      const date = new Date(dateStr);
+      return date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    } catch (_e) {
+      return '';
+    }
+  }
+
+  /**
+   * Handle mouse enter on recommendation badge (creates styled tooltip)
+   * @param {MouseEvent} e - Mouse event
+   */
+  function handleRecommendationBadgeMouseEnter(e) {
+    const badge = e.currentTarget;
+    const recommendedBy = badge.dataset.recommendedBy;
+    const recommendedAt = badge.dataset.recommendedAt;
+    const albumName = badge.dataset.albumName;
+    const artist = badge.dataset.artist;
+
+    if (!recommendedBy) return;
+
+    // Clear any pending hide/removal timeouts
+    if (tooltipHideTimeout) {
+      clearTimeout(tooltipHideTimeout);
+      tooltipHideTimeout = null;
+    }
+    if (tooltipRemoveTimeout) {
+      clearTimeout(tooltipRemoveTimeout);
+      tooltipRemoveTimeout = null;
+    }
+
+    // If tooltip already showing for this badge, just reposition
+    if (activeTooltip && activeBadge === badge && activeTooltip.parentNode) {
+      activeTooltip.classList.add('visible');
+      positionTooltip(badge, activeTooltip);
+      return;
+    }
+
+    // Remove existing tooltip if showing for a different badge
+    if (activeTooltip && activeBadge !== badge) {
+      hideTooltip();
+    }
+
+    const dateDisplay = formatRecommendationDate(recommendedAt);
+
+    const tooltip = document.createElement('div');
+    tooltip.className = 'summary-tooltip recommendation-tooltip';
+    tooltip.innerHTML = `
+      <div class="summary-tooltip-header">
+        <i class="fas fa-thumbs-up"></i>
+        <span>${escapeHtml(albumName)} - ${escapeHtml(artist)}</span>
+      </div>
+      <div class="summary-tooltip-content">
+        Recommended by <strong style="color: #bfdbfe;">${escapeHtml(recommendedBy)}</strong>${dateDisplay ? ` on ${dateDisplay}` : ''}
+      </div>
+    `;
+
+    tooltip.addEventListener('mouseenter', handleTooltipMouseEnter);
+    tooltip.addEventListener('mouseleave', handleTooltipMouseLeave);
+
+    document.body.appendChild(tooltip);
+    activeTooltip = tooltip;
+    activeBadge = badge;
+
+    positionTooltip(badge, tooltip);
+
+    requestAnimationFrame(() => {
+      tooltip.classList.add('visible');
+    });
+  }
+
+  /**
    * Handle mouse leave on summary badge
    */
   function handleBadgeMouseLeave(e) {
@@ -2049,6 +2198,81 @@ export function createAlbumDisplay(deps = {}) {
     // This prevents hiding when moving between badges
     if (activeBadge === badge) {
       scheduleHideTooltip();
+    }
+  }
+
+  /**
+   * Show mobile recommendation sheet (similar to mobile summary sheet).
+   * @param {HTMLElement} badge - The recommendation badge element
+   */
+  function showMobileRecommendationSheet(badge) {
+    const recommendedBy = badge.dataset.recommendedBy;
+    const recommendedAt = badge.dataset.recommendedAt;
+    const albumName = badge.dataset.albumName;
+    const artist = badge.dataset.artist;
+
+    if (!recommendedBy) return;
+
+    const dateDisplay = formatRecommendationDate(recommendedAt);
+
+    // Remove any existing recommendation modals
+    const existing = document.querySelectorAll('[data-recommendation-modal]');
+    existing.forEach((m) => m.remove());
+
+    // Hide FAB when modal is shown
+    const fab = document.getElementById('addAlbumFAB');
+    if (fab) {
+      fab.style.display = 'none';
+    }
+
+    const modal = document.createElement('div');
+    modal.className =
+      'fixed inset-0 z-50 flex items-center justify-center p-4 safe-area-modal';
+    modal.setAttribute('data-recommendation-modal', 'true');
+    modal.innerHTML = `
+      <div class="absolute inset-0 bg-black bg-opacity-50" data-backdrop></div>
+      <div class="relative bg-gray-900 rounded-lg shadow-2xl flex flex-col w-full max-w-lg overflow-hidden">
+        <div class="flex items-center justify-between p-4 border-b border-gray-800 shrink-0">
+          <button data-close-rec class="p-2 -m-2 text-gray-400 hover:text-white active:text-white">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+          <div class="flex-1 text-center px-4">
+            <div class="flex items-center justify-center gap-2 mb-1">
+              <i class="fas fa-thumbs-up text-blue-400"></i>
+              <h3 class="text-lg font-semibold text-white truncate">${escapeHtml(albumName)}</h3>
+            </div>
+            <p class="text-sm text-gray-400 truncate">${escapeHtml(artist)}</p>
+          </div>
+          <div class="w-10"></div>
+        </div>
+        <div class="p-4">
+          <p class="text-sm text-gray-300 leading-relaxed">
+            Recommended by <strong class="text-blue-300">${escapeHtml(recommendedBy)}</strong>${dateDisplay ? ` on ${dateDisplay}` : ''}
+          </p>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    const closeModal = () => {
+      modal.remove();
+      const fabEl = document.getElementById('addAlbumFAB');
+      if (fabEl && getCurrentList()) {
+        fabEl.style.display = 'flex';
+      }
+    };
+
+    const backdrop = modal.querySelector('[data-backdrop]');
+    if (backdrop) backdrop.addEventListener('click', closeModal);
+
+    const closeBtn = modal.querySelector('[data-close-rec]');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        closeModal();
+      });
     }
   }
 

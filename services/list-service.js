@@ -64,6 +64,45 @@ function createListService(deps = {}) {
   // ============================================
 
   /**
+   * Fetch recommendation data for given years and build per-year maps.
+   * Returns a Map<year, Map<album_id, { recommendedBy, recommendedAt }>>.
+   * @param {number[]} years - Array of years to query
+   * @param {Object} [context] - Logging context (e.g. { userId } or { listId })
+   * @returns {Promise<Map<number, Map<string, Object>>>}
+   */
+  async function fetchRecommendationMaps(years, context = {}) {
+    const result = new Map();
+    if (!years || years.length === 0) return result;
+
+    try {
+      const recResult = await pool.query(
+        `SELECT r.year, r.album_id, r.created_at, u.username as recommended_by
+         FROM recommendations r
+         JOIN users u ON r.recommended_by = u._id
+         WHERE r.year = ANY($1::int[])`,
+        [years]
+      );
+      for (const row of recResult.rows) {
+        if (!result.has(row.year)) {
+          result.set(row.year, new Map());
+        }
+        result.get(row.year).set(row.album_id, {
+          recommendedBy: row.recommended_by,
+          recommendedAt: row.created_at,
+        });
+      }
+    } catch (err) {
+      log.warn('Failed to fetch recommendations for cross-reference', {
+        ...context,
+        years,
+        error: err.message,
+      });
+    }
+
+    return result;
+  }
+
+  /**
    * Find a list by ID and verify ownership.
    * @param {string} listId - The list _id
    * @param {string} userId - The user _id
@@ -333,6 +372,37 @@ function createListService(deps = {}) {
   // ============================================
 
   /**
+   * Map a database row from findAllUserListsWithItems to a list item object.
+   * @param {Object} row - Database row
+   * @param {Map<string, Object>|null} yearRecMap - Recommendation map for this list's year
+   * @returns {Object} List item object
+   */
+  function mapRowToListItem(row, yearRecMap) {
+    const rec = yearRecMap?.get(row.album_id) || null;
+    return {
+      _id: row.item_id,
+      artist: row.artist || '',
+      album: row.album || '',
+      album_id: row.album_id || '',
+      release_date: row.release_date || '',
+      country: row.country || '',
+      genre_1: row.genre_1 || '',
+      genre_2: row.genre_2 || '',
+      track_pick: row.primary_track || '',
+      primary_track: row.primary_track || null,
+      secondary_track: row.secondary_track || null,
+      comments: row.comments || '',
+      tracks: row.tracks || null,
+      cover_image: row.cover_image || '',
+      cover_image_format: row.cover_image_format || '',
+      summary: row.summary || '',
+      summary_source: row.summary_source || '',
+      recommended_by: rec?.recommendedBy || null,
+      recommended_at: rec?.recommendedAt || null,
+    };
+  }
+
+  /**
    * Build full-mode list data with all album details.
    * @param {string} userId - User ID
    * @param {Array} userLists - Pre-fetched user lists
@@ -352,6 +422,16 @@ function createListService(deps = {}) {
       listMap.set(list._id, { ...list, items: [] });
     }
 
+    // Fetch recommendation data for all list years (for cross-referencing)
+    const yearsSet = new Set();
+    for (const list of userLists) {
+      if (list.year) yearsSet.add(list.year);
+    }
+    const recommendationsByYear = await fetchRecommendationMaps(
+      Array.from(yearsSet),
+      { userId }
+    );
+
     for (const row of allRows) {
       if (!row.list_id) continue;
       if (!listMap.has(row.list_id)) {
@@ -364,25 +444,9 @@ function createListService(deps = {}) {
         });
       }
       if (row.position !== null && row.item_id !== null) {
-        listMap.get(row.list_id).items.push({
-          _id: row.item_id,
-          artist: row.artist || '',
-          album: row.album || '',
-          album_id: row.album_id || '',
-          release_date: row.release_date || '',
-          country: row.country || '',
-          genre_1: row.genre_1 || '',
-          genre_2: row.genre_2 || '',
-          track_pick: row.primary_track || '',
-          primary_track: row.primary_track || null,
-          secondary_track: row.secondary_track || null,
-          comments: row.comments || '',
-          tracks: row.tracks || null,
-          cover_image: row.cover_image || '',
-          cover_image_format: row.cover_image_format || '',
-          summary: row.summary || '',
-          summary_source: row.summary_source || '',
-        });
+        const listEntry = listMap.get(row.list_id);
+        const yearRecMap = recommendationsByYear.get(listEntry.year) || null;
+        listEntry.items.push(mapRowToListItem(row, yearRecMap));
       }
     }
 
@@ -467,43 +531,55 @@ function createListService(deps = {}) {
 
     const items = await listItemsAsync.findWithAlbumData(list._id, userId);
 
-    const data = items.map((item, index) => ({
-      _id: item._id,
-      artist: item.artist,
-      album: item.album,
-      album_id: item.albumId,
-      release_date: item.releaseDate,
-      country: item.country,
-      genre_1: item.genre1,
-      genre_2: item.genre2,
-      track_pick: item.primaryTrack || '',
-      primary_track: item.primaryTrack || null,
-      secondary_track: item.secondaryTrack || null,
-      comments: item.comments,
-      tracks: item.tracks,
-      cover_image_format: item.coverImageFormat,
-      summary: item.summary || '',
-      summary_source: item.summarySource || '',
-      ...(isExport
-        ? {
-            cover_image: item.coverImage
-              ? Buffer.isBuffer(item.coverImage)
-                ? item.coverImage.toString('base64')
-                : item.coverImage
-              : '',
-            rank: index + 1,
-            points: getPointsForPosition(index + 1),
-          }
-        : (() => {
-            if (item.albumId) {
-              return {
-                cover_image_url: `/api/albums/${item.albumId}/cover`,
-              };
-            } else {
-              return {};
+    // Cross-reference with recommendations for this list's year
+    const recMaps = await fetchRecommendationMaps(
+      list.year ? [list.year] : [],
+      { listId }
+    );
+    const recommendationMap = recMaps.get(list.year) || new Map();
+
+    const data = items.map((item, index) => {
+      const rec = recommendationMap.get(item.albumId) || null;
+      return {
+        _id: item._id,
+        artist: item.artist,
+        album: item.album,
+        album_id: item.albumId,
+        release_date: item.releaseDate,
+        country: item.country,
+        genre_1: item.genre1,
+        genre_2: item.genre2,
+        track_pick: item.primaryTrack || '',
+        primary_track: item.primaryTrack || null,
+        secondary_track: item.secondaryTrack || null,
+        comments: item.comments,
+        tracks: item.tracks,
+        cover_image_format: item.coverImageFormat,
+        summary: item.summary || '',
+        summary_source: item.summarySource || '',
+        recommended_by: rec?.recommendedBy || null,
+        recommended_at: rec?.recommendedAt || null,
+        ...(isExport
+          ? {
+              cover_image: item.coverImage
+                ? Buffer.isBuffer(item.coverImage)
+                  ? item.coverImage.toString('base64')
+                  : item.coverImage
+                : '',
+              rank: index + 1,
+              points: getPointsForPosition(index + 1),
             }
-          })()),
-    }));
+          : (() => {
+              if (item.albumId) {
+                return {
+                  cover_image_url: `/api/albums/${item.albumId}/cover`,
+                };
+              } else {
+                return {};
+              }
+            })()),
+      };
+    });
 
     return { list, items: data };
   }

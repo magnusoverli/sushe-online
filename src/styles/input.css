@@ -2620,6 +2620,62 @@ body.now-playing-bar-visible #addAlbumFAB {
   color: #d97706;
 }
 
+/* Recommendation badge (shown on albums that appear in the year's recommendations) */
+/* Desktop: mirrors .summary-badge but positioned top-left */
+.recommendation-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: all 0.2s ease;
+  z-index: 1;
+}
+
+.recommendation-badge i {
+  font-size: 10px;
+  color: #3b82f6; /* blue-500 - vivid blue */
+}
+
+.recommendation-badge:hover {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(1.1);
+}
+
+/* Mobile: mirrors .summary-badge-mobile but positioned top-left */
+.recommendation-badge-mobile {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  transition: all 0.2s ease;
+  z-index: 1;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.recommendation-badge-mobile i {
+  font-size: 11px;
+  color: #3b82f6; /* blue-500 - vivid blue */
+}
+
+.recommendation-badge-mobile:active {
+  background: rgba(0, 0, 0, 0.9);
+  transform: scale(0.95);
+}
+
 /* Base summary tooltip styles */
 .summary-tooltip {
   position: fixed;
@@ -2708,6 +2764,20 @@ body.now-playing-bar-visible #addAlbumFAB {
 
 .summary-tooltip.claude-tooltip .summary-tooltip-link:hover {
   background: #b45309;
+}
+
+/* Recommendation tooltip - blue theme (reuses summary-tooltip structure) */
+.summary-tooltip.recommendation-tooltip .summary-tooltip-header i {
+  color: #60a5fa; /* blue-400 */
+}
+
+.summary-tooltip.recommendation-tooltip .summary-tooltip-link {
+  background: #2563eb; /* blue-600 */
+  cursor: default;
+}
+
+.summary-tooltip.recommendation-tooltip .summary-tooltip-link:hover {
+  background: #1d4ed8; /* blue-700 */
 }
 
 /* Legacy class aliases for backwards compatibility */
