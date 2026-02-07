@@ -2,14 +2,70 @@
  * Modals Module
  *
  * Confirmation and reasoning modal dialogs.
+ * Uses modal-factory for consistent lifecycle management.
  *
  * @module modals
  */
+
+import { createModal } from './modal-factory.js';
 
 /**
  * @typedef {Object} ConfirmationOptions
  * @property {string} [checkboxLabel] - If provided, shows a checkbox that must be checked
  */
+
+/**
+ * Internal helper: set up a confirmation modal with the modal factory.
+ * Used by both callback and promise styles to eliminate duplication.
+ *
+ * @param {Object} params - Configuration
+ * @param {HTMLElement} params.modal - Modal element
+ * @param {HTMLElement} params.confirmBtn - Confirm button
+ * @param {HTMLElement} params.cancelBtn - Cancel button
+ * @param {HTMLElement} params.checkbox - Checkbox element
+ * @param {boolean} params.requiresCheckbox - Whether checkbox is required
+ * @param {Function} params.onConfirm - Called when confirmed
+ * @param {Function} params.onCancel - Called when cancelled
+ */
+function setupConfirmationModal({
+  modal,
+  confirmBtn,
+  cancelBtn,
+  checkbox,
+  requiresCheckbox,
+  onConfirm,
+  onCancel,
+}) {
+  const modalController = createModal({
+    element: modal,
+    backdrop: modal,
+    closeButton: cancelBtn,
+    onClose: () => {
+      if (requiresCheckbox) {
+        checkbox.checked = false;
+      }
+      onCancel();
+    },
+  });
+
+  // Handle checkbox state if required
+  if (requiresCheckbox) {
+    modalController.addListener(checkbox, 'change', () => {
+      confirmBtn.disabled = !checkbox.checked;
+      confirmBtn.classList.toggle('opacity-50', !checkbox.checked);
+      confirmBtn.classList.toggle('cursor-not-allowed', !checkbox.checked);
+    });
+  }
+
+  // Handle confirm button
+  modalController.addListener(confirmBtn, 'click', () => {
+    modalController.close();
+    onConfirm();
+  });
+
+  modalController.open();
+  setTimeout(() => confirmBtn.focus(), 100);
+}
 
 /**
  * Show a confirmation modal
@@ -65,124 +121,29 @@ export function showConfirmation(
 
   // If onConfirm is provided, use callback style
   if (onConfirm) {
-    const handleCheckboxChange = requiresCheckbox
-      ? () => {
-          if (checkbox.checked) {
-            confirmBtn.disabled = false;
-            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-          } else {
-            confirmBtn.disabled = true;
-            confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-          }
-        }
-      : null;
-
-    const cleanup = () => {
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-      if (requiresCheckbox && handleCheckboxChange) {
-        checkbox.removeEventListener('change', handleCheckboxChange);
-        checkbox.checked = false;
-      }
-    };
-
-    const handleConfirm = () => {
-      modal.classList.add('hidden');
-      cleanup();
-      onConfirm();
-    };
-
-    const handleCancel = () => {
-      modal.classList.add('hidden');
-      cleanup();
-    };
-
-    const handleBackdropClick = (e) => {
-      if (e.target === modal) {
-        handleCancel();
-      }
-    };
-
-    const handleEscKey = (e) => {
-      if (e.key === 'Escape') {
-        handleCancel();
-      }
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    modal.addEventListener('click', handleBackdropClick);
-    document.addEventListener('keydown', handleEscKey);
-    if (requiresCheckbox && handleCheckboxChange) {
-      checkbox.addEventListener('change', handleCheckboxChange);
-    }
-
-    modal.classList.remove('hidden');
-    setTimeout(() => confirmBtn.focus(), 100);
+    setupConfirmationModal({
+      modal,
+      confirmBtn,
+      cancelBtn,
+      checkbox,
+      requiresCheckbox,
+      onConfirm,
+      onCancel: () => {}, // No-op for callback style
+    });
     return;
   }
 
   // Otherwise return a promise for async/await style
   return new Promise((resolve) => {
-    const handleCheckboxChange = requiresCheckbox
-      ? () => {
-          if (checkbox.checked) {
-            confirmBtn.disabled = false;
-            confirmBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-          } else {
-            confirmBtn.disabled = true;
-            confirmBtn.classList.add('opacity-50', 'cursor-not-allowed');
-          }
-        }
-      : null;
-
-    const cleanup = () => {
-      confirmBtn.removeEventListener('click', handleConfirm);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-      if (requiresCheckbox && handleCheckboxChange) {
-        checkbox.removeEventListener('change', handleCheckboxChange);
-        checkbox.checked = false;
-      }
-    };
-
-    const handleConfirm = () => {
-      modal.classList.add('hidden');
-      cleanup();
-      resolve(true);
-    };
-
-    const handleCancel = () => {
-      modal.classList.add('hidden');
-      cleanup();
-      resolve(false);
-    };
-
-    const handleBackdropClick = (e) => {
-      if (e.target === modal) {
-        handleCancel();
-      }
-    };
-
-    const handleEscKey = (e) => {
-      if (e.key === 'Escape') {
-        handleCancel();
-      }
-    };
-
-    confirmBtn.addEventListener('click', handleConfirm);
-    cancelBtn.addEventListener('click', handleCancel);
-    modal.addEventListener('click', handleBackdropClick);
-    document.addEventListener('keydown', handleEscKey);
-    if (requiresCheckbox && handleCheckboxChange) {
-      checkbox.addEventListener('change', handleCheckboxChange);
-    }
-
-    modal.classList.remove('hidden');
-    setTimeout(() => confirmBtn.focus(), 100);
+    setupConfirmationModal({
+      modal,
+      confirmBtn,
+      cancelBtn,
+      checkbox,
+      requiresCheckbox,
+      onConfirm: () => resolve(true),
+      onCancel: () => resolve(false),
+    });
   });
 }
 
@@ -248,55 +209,31 @@ export function showReasoningModal(
   errorEl.classList.add('hidden');
 
   return new Promise((resolve) => {
-    const updateCharCount = () => {
+    const modalController = createModal({
+      element: modal,
+      backdrop: modal,
+      closeButton: cancelBtn,
+      onClose: () => resolve(null),
+    });
+
+    // Track character count
+    modalController.addListener(textareaEl, 'input', () => {
       charCountEl.textContent = textareaEl.value.length.toString();
-    };
+    });
 
-    const cleanup = () => {
-      textareaEl.removeEventListener('input', updateCharCount);
-      submitBtn.removeEventListener('click', handleSubmit);
-      cancelBtn.removeEventListener('click', handleCancel);
-      modal.removeEventListener('click', handleBackdropClick);
-      document.removeEventListener('keydown', handleEscKey);
-    };
-
-    const handleSubmit = () => {
+    // Handle submit
+    modalController.addListener(submitBtn, 'click', () => {
       const reasoning = textareaEl.value.trim();
       if (!reasoning) {
         errorEl.classList.remove('hidden');
         textareaEl.focus();
         return;
       }
-      modal.classList.add('hidden');
-      cleanup();
+      modalController.close();
       resolve(reasoning);
-    };
+    });
 
-    const handleCancel = () => {
-      modal.classList.add('hidden');
-      cleanup();
-      resolve(null);
-    };
-
-    const handleBackdropClick = (e) => {
-      if (e.target === modal) {
-        handleCancel();
-      }
-    };
-
-    const handleEscKey = (e) => {
-      if (e.key === 'Escape') {
-        handleCancel();
-      }
-    };
-
-    textareaEl.addEventListener('input', updateCharCount);
-    submitBtn.addEventListener('click', handleSubmit);
-    cancelBtn.addEventListener('click', handleCancel);
-    modal.addEventListener('click', handleBackdropClick);
-    document.addEventListener('keydown', handleEscKey);
-
-    modal.classList.remove('hidden');
+    modalController.open();
     setTimeout(() => textareaEl.focus(), 100);
   });
 }
@@ -342,30 +279,13 @@ export function showViewReasoningModal(rec) {
       '<i class="fas fa-compact-disc text-gray-500"></i>';
   }
 
-  const hideModal = () => {
-    modal.classList.add('hidden');
-    closeBtn.removeEventListener('click', hideModal);
-    modal.removeEventListener('click', handleBackdropClick);
-    document.removeEventListener('keydown', handleEscKey);
-  };
+  const modalController = createModal({
+    element: modal,
+    backdrop: modal,
+    closeButton: closeBtn,
+  });
 
-  const handleBackdropClick = (e) => {
-    if (e.target === modal) {
-      hideModal();
-    }
-  };
-
-  const handleEscKey = (e) => {
-    if (e.key === 'Escape') {
-      hideModal();
-    }
-  };
-
-  closeBtn.addEventListener('click', hideModal);
-  modal.addEventListener('click', handleBackdropClick);
-  document.addEventListener('keydown', handleEscKey);
-
-  modal.classList.remove('hidden');
+  modalController.open();
 }
 
 /**

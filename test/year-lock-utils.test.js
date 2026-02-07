@@ -118,8 +118,9 @@ test('validateYearNotLocked should not throw for null year', async () => {
   await validateYearNotLocked(pool, null, 'test operation');
 });
 
-test('validateYearNotLocked should throw for locked year', async () => {
+test('validateYearNotLocked should throw TransactionAbort for locked year', async () => {
   const { validateYearNotLocked } = require('../utils/year-lock.js');
+  const { TransactionAbort } = require('../db/transaction.js');
   const pool = createMockPool(true);
 
   await assert.rejects(
@@ -127,8 +128,10 @@ test('validateYearNotLocked should throw for locked year', async () => {
       await validateYearNotLocked(pool, 2024, 'test operation');
     },
     (err) => {
-      assert.ok(err.message.includes('locked'));
-      assert.ok(err.message.includes('2024'));
+      assert.ok(err instanceof TransactionAbort);
+      assert.strictEqual(err.statusCode, 403);
+      assert.ok(err.body.error.includes('locked'));
+      assert.ok(err.body.error.includes('2024'));
       return true;
     }
   );
@@ -162,8 +165,9 @@ test('validateMainListNotLocked should not throw for non-main list', async () =>
   await validateMainListNotLocked(pool, 2024, false, 'test operation');
 });
 
-test('validateMainListNotLocked should throw for main list in locked year', async () => {
+test('validateMainListNotLocked should throw TransactionAbort for main list in locked year', async () => {
   const { validateMainListNotLocked } = require('../utils/year-lock.js');
+  const { TransactionAbort } = require('../db/transaction.js');
   const pool = createMockPool(true);
 
   await assert.rejects(
@@ -171,8 +175,10 @@ test('validateMainListNotLocked should throw for main list in locked year', asyn
       await validateMainListNotLocked(pool, 2024, true, 'test operation');
     },
     (err) => {
-      assert.ok(err.message.includes('locked'));
-      assert.ok(err.message.includes('2024'));
+      assert.ok(err instanceof TransactionAbort);
+      assert.strictEqual(err.statusCode, 403);
+      assert.ok(err.body.error.includes('locked'));
+      assert.ok(err.body.error.includes('2024'));
       return true;
     }
   );

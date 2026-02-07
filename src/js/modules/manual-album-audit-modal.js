@@ -7,8 +7,10 @@
 
 import { showToast } from './utils.js';
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+import { createModal } from './modal-factory.js';
 
 let modalElement = null;
+let modalController = null;
 let currentData = null;
 let currentIndex = 0;
 let isLoading = false;
@@ -39,7 +41,7 @@ export async function openManualAlbumAudit(
 
     // Create modal if doesn't exist
     if (!modalElement) {
-      createModal();
+      createModalDOM();
     }
 
     // Show loading state only if we need to fetch
@@ -87,7 +89,7 @@ export async function openManualAlbumAudit(
   }
 }
 
-function createModal() {
+function createModalDOM() {
   modalElement = document.createElement('div');
   modalElement.id = 'manualAlbumAuditModal';
   modalElement.className =
@@ -144,54 +146,61 @@ function createModal() {
     </div>
   `;
 
-  // Event listeners
-  modalElement.addEventListener('click', (e) => {
-    if (e.target === modalElement) {
-      closeModal();
-    }
-  });
-
-  modalElement
-    .querySelector('#auditCloseBtn')
-    .addEventListener('click', closeModal);
-  modalElement
-    .querySelector('#auditMergeBtn')
-    .addEventListener('click', handleMerge);
-  modalElement
-    .querySelector('#auditDistinctBtn')
-    .addEventListener('click', handleMarkDistinct);
-  modalElement
-    .querySelector('#auditSkipBtn')
-    .addEventListener('click', handleSkip);
-
-  // Escape key
-  document.addEventListener('keydown', handleEscapeKey);
-
   document.body.appendChild(modalElement);
 }
 
-function handleEscapeKey(e) {
-  if (
-    e.key === 'Escape' &&
-    modalElement &&
-    !modalElement.classList.contains('hidden')
-  ) {
-    closeModal();
-  }
+function setupModalController() {
+  const closeBtn = modalElement.querySelector('#auditCloseBtn');
+
+  modalController = createModal({
+    element: modalElement,
+    backdrop: modalElement, // Click on the overlay itself closes (the outer div IS the backdrop)
+    closeButton: closeBtn,
+    closeOnEscape: true,
+    closeOnBackdrop: true,
+    onClose: () => {
+      currentData = null;
+      currentIndex = 0;
+      modalController = null;
+    },
+  });
+
+  // Button handlers - tracked for automatic cleanup
+  modalController.addListener(
+    modalElement.querySelector('#auditMergeBtn'),
+    'click',
+    handleMerge
+  );
+  modalController.addListener(
+    modalElement.querySelector('#auditDistinctBtn'),
+    'click',
+    handleMarkDistinct
+  );
+  modalController.addListener(
+    modalElement.querySelector('#auditSkipBtn'),
+    'click',
+    handleSkip
+  );
 }
 
 function showModal() {
   if (!modalElement) return;
-  modalElement.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
+  if (!modalController) {
+    setupModalController();
+  }
+  modalController.open();
 }
 
 function closeModal() {
-  if (!modalElement) return;
-  modalElement.classList.add('hidden');
-  document.body.style.overflow = '';
-  currentData = null;
-  currentIndex = 0;
+  if (modalController) {
+    modalController.close();
+    modalController = null;
+  } else if (modalElement) {
+    modalElement.classList.add('hidden');
+    document.body.style.overflow = '';
+    currentData = null;
+    currentIndex = 0;
+  }
 }
 
 function setLoadingState(loading) {
@@ -370,17 +379,36 @@ function showIntegrityIssues() {
     }
   `;
 
-  modalElement
-    .querySelector('#auditCloseIntegrityBtn')
-    .addEventListener('click', closeModal);
+  if (modalController) {
+    modalController.addListener(
+      modalElement.querySelector('#auditCloseIntegrityBtn'),
+      'click',
+      closeModal
+    );
 
-  if (currentData.totalWithMatches > 0) {
+    if (currentData.totalWithMatches > 0) {
+      modalController.addListener(
+        modalElement.querySelector('#auditProceedBtn'),
+        'click',
+        () => {
+          currentData.integrityIssues = []; // Clear issues to proceed
+          showCurrentItem();
+        }
+      );
+    }
+  } else {
     modalElement
-      .querySelector('#auditProceedBtn')
-      .addEventListener('click', () => {
-        currentData.integrityIssues = []; // Clear issues to proceed
-        showCurrentItem();
-      });
+      .querySelector('#auditCloseIntegrityBtn')
+      .addEventListener('click', closeModal);
+
+    if (currentData.totalWithMatches > 0) {
+      modalElement
+        .querySelector('#auditProceedBtn')
+        .addEventListener('click', () => {
+          currentData.integrityIssues = []; // Clear issues to proceed
+          showCurrentItem();
+        });
+    }
   }
 }
 

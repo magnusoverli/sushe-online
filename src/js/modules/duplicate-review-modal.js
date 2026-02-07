@@ -7,8 +7,10 @@
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
 import { showToast } from './utils.js';
+import { createModal } from './modal-factory.js';
 
 let modalElement = null;
+let modalController = null;
 let currentPairs = [];
 let currentIndex = 0;
 let onComplete = null;
@@ -40,13 +42,13 @@ export function openDuplicateReviewModal(pairs, onCompleteCallback = null) {
       resolve(result);
     };
 
-    createModal();
+    createModalDOM();
     renderCurrentPair();
     showModal();
   });
 }
 
-function createModal() {
+function createModalDOM() {
   if (modalElement) {
     modalElement.remove();
   }
@@ -94,56 +96,72 @@ function createModal() {
     </div>
   `;
 
-  // Event listeners
-  const backdrop = modalElement.querySelector('.settings-modal-backdrop');
-  const closeBtn = modalElement.querySelector('#duplicateModalClose');
-
-  if (backdrop) {
-    backdrop.addEventListener('click', handleClose);
-  }
-  if (closeBtn) {
-    closeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      handleClose();
-    });
-  }
-  modalElement
-    .querySelector('#keepLeftBtn')
-    .addEventListener('click', () => handleMerge('left'));
-  modalElement
-    .querySelector('#keepRightBtn')
-    .addEventListener('click', () => handleMerge('right'));
-  modalElement
-    .querySelector('#markDistinctBtn')
-    .addEventListener('click', handleMarkDistinct);
-  modalElement
-    .querySelector('#skipPairBtn')
-    .addEventListener('click', handleSkip);
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', handleKeyboard);
-
   document.body.appendChild(modalElement);
 }
 
+function setupModalController() {
+  const backdrop = modalElement.querySelector('.settings-modal-backdrop');
+  const closeBtn = modalElement.querySelector('#duplicateModalClose');
+
+  modalController = createModal({
+    element: modalElement,
+    backdrop: backdrop,
+    closeButton: closeBtn,
+    closeOnEscape: false, // We handle keyboard shortcuts ourselves
+    onClose: () => {
+      if (onComplete) onComplete();
+    },
+  });
+
+  // Keyboard shortcuts (including Escape) - managed via addListener for cleanup
+  modalController.addListener(document, 'keydown', handleKeyboard);
+
+  // Button handlers
+  modalController.addListener(
+    modalElement.querySelector('#keepLeftBtn'),
+    'click',
+    () => handleMerge('left')
+  );
+  modalController.addListener(
+    modalElement.querySelector('#keepRightBtn'),
+    'click',
+    () => handleMerge('right')
+  );
+  modalController.addListener(
+    modalElement.querySelector('#markDistinctBtn'),
+    'click',
+    handleMarkDistinct
+  );
+  modalController.addListener(
+    modalElement.querySelector('#skipPairBtn'),
+    'click',
+    handleSkip
+  );
+}
+
 function showModal() {
-  modalElement.classList.remove('hidden');
-  document.body.style.overflow = 'hidden';
+  if (!modalController) {
+    setupModalController();
+  }
+  modalController.open();
 }
 
 function hideModal() {
-  modalElement.classList.add('hidden');
-  document.body.style.overflow = '';
-  document.removeEventListener('keydown', handleKeyboard);
+  if (modalController) {
+    modalController.close();
+    modalController = null;
+  } else {
+    modalElement.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
 }
 
 function handleClose() {
   hideModal();
-  if (onComplete) onComplete();
 }
 
 function handleKeyboard(e) {
-  if (modalElement.classList.contains('hidden')) return;
+  if (!modalController || !modalController.isOpen()) return;
 
   switch (e.key) {
     case 'Escape':

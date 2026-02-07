@@ -1,4 +1,5 @@
 const logger = require('./logger');
+const { TransactionAbort } = require('../db/transaction');
 
 /**
  * Year Lock Utilities
@@ -45,14 +46,16 @@ async function isYearLocked(pool, year) {
  * @param {object} pool - PostgreSQL connection pool
  * @param {number|null} year - Year to validate
  * @param {string} operation - Description of the operation being attempted
- * @throws {Error} - If year is locked
+ * @throws {TransactionAbort} - 403 if year is locked
  */
 async function validateYearNotLocked(pool, year, operation) {
   if (!year) return; // null years are fine (collections)
 
   const locked = await isYearLocked(pool, year);
   if (locked) {
-    throw new Error(`Cannot ${operation}: Year ${year} is locked`);
+    throw new TransactionAbort(403, {
+      error: `Cannot ${operation}: Year ${year} is locked`,
+    });
   }
 }
 
@@ -76,16 +79,16 @@ async function isMainListLocked(pool, year, isMain) {
  * @param {number|null} year - Year to validate
  * @param {boolean} isMain - Whether the list is the main list
  * @param {string} operation - Description of the operation being attempted
- * @throws {Error} - If list is locked (year locked + is main)
+ * @throws {TransactionAbort} - 403 if list is locked (year locked + is main)
  */
 async function validateMainListNotLocked(pool, year, isMain, operation) {
   if (!year || !isMain) return; // Non-main lists are never locked
 
   const locked = await isYearLocked(pool, year);
   if (locked) {
-    throw new Error(
-      `Cannot ${operation}: Main list for year ${year} is locked`
-    );
+    throw new TransactionAbort(403, {
+      error: `Cannot ${operation}: Main list for year ${year} is locked`,
+    });
   }
 }
 

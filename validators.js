@@ -85,11 +85,206 @@ function validateListName(name) {
   return { valid: true, value: trimmed };
 }
 
+/**
+ * Validate optional string field
+ * @param {*} value - Value to validate
+ * @param {string} fieldName - Field name for error messages
+ * @param {Object} options - Validation options
+ * @param {number} [options.maxLength] - Max length
+ * @param {number} [options.minLength] - Min length
+ * @returns {{valid: boolean, value: string|null, error?: string}}
+ */
+function validateOptionalString(value, fieldName, options = {}) {
+  if (value === null || value === undefined || value === '') {
+    return { valid: true, value: null };
+  }
+
+  if (typeof value !== 'string') {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must be a string`,
+    };
+  }
+
+  const { maxLength, minLength } = options;
+
+  if (maxLength && value.length > maxLength) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} exceeds max length of ${maxLength}`,
+    };
+  }
+
+  if (minLength && value.length < minLength) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must be at least ${minLength} characters`,
+    };
+  }
+
+  return { valid: true, value };
+}
+
+/**
+ * Validate required string field
+ * @param {*} value - Value to validate
+ * @param {string} fieldName - Field name for error messages
+ * @param {Object} options - Validation options
+ * @returns {{valid: boolean, value: string|null, error?: string}}
+ */
+function validateRequiredString(value, fieldName, options = {}) {
+  if (!value || typeof value !== 'string') {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} is required and must be a string`,
+    };
+  }
+
+  return validateOptionalString(value, fieldName, options);
+}
+
+/**
+ * Validate array field
+ * @param {*} value - Value to validate
+ * @param {string} fieldName - Field name for error messages
+ * @param {Object} options - Validation options
+ * @param {number} [options.minLength] - Min array length
+ * @param {number} [options.maxLength] - Max array length
+ * @param {boolean} [options.required] - Is array required
+ * @returns {{valid: boolean, value: Array|null, error?: string}}
+ */
+function validateArray(value, fieldName, options = {}) {
+  const { required = false, minLength, maxLength } = options;
+
+  if (value === null || value === undefined) {
+    if (required) {
+      return { valid: false, value: null, error: `${fieldName} is required` };
+    }
+    return { valid: true, value: [] };
+  }
+
+  if (!Array.isArray(value)) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must be an array`,
+    };
+  }
+
+  if (minLength !== undefined && value.length < minLength) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must have at least ${minLength} items`,
+    };
+  }
+
+  if (maxLength !== undefined && value.length > maxLength) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must have at most ${maxLength} items`,
+    };
+  }
+
+  return { valid: true, value };
+}
+
+/**
+ * Validate enum value
+ * @param {*} value - Value to validate
+ * @param {Array} allowedValues - Allowed values
+ * @param {string} fieldName - Field name for error messages
+ * @param {Object} options - Validation options
+ * @param {boolean} [options.required] - Is value required
+ * @returns {{valid: boolean, value: *|null, error?: string}}
+ */
+function validateEnum(value, allowedValues, fieldName, options = {}) {
+  const { required = false } = options;
+
+  if (value === null || value === undefined || value === '') {
+    if (required) {
+      return { valid: false, value: null, error: `${fieldName} is required` };
+    }
+    return { valid: true, value: null };
+  }
+
+  if (!allowedValues.includes(value)) {
+    return {
+      valid: false,
+      value: null,
+      error: `Invalid ${fieldName}. Valid values: ${allowedValues.join(', ')}`,
+    };
+  }
+
+  return { valid: true, value };
+}
+
+/**
+ * Validate integer field
+ * @param {*} value - Value to validate
+ * @param {string} fieldName - Field name for error messages
+ * @param {Object} options - Validation options
+ * @param {number} [options.min] - Minimum value
+ * @param {number} [options.max] - Maximum value
+ * @param {boolean} [options.required] - Is value required
+ * @returns {{valid: boolean, value: number|null, error?: string}}
+ */
+function validateInteger(value, fieldName, options = {}) {
+  const { required = false, min, max } = options;
+
+  if (value === null || value === undefined || value === '') {
+    if (required) {
+      return { valid: false, value: null, error: `${fieldName} is required` };
+    }
+    return { valid: true, value: null };
+  }
+
+  const numValue = typeof value === 'string' ? parseInt(value, 10) : value;
+
+  if (!Number.isInteger(numValue)) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must be an integer`,
+    };
+  }
+
+  if (min !== undefined && numValue < min) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must be at least ${min}`,
+    };
+  }
+
+  if (max !== undefined && numValue > max) {
+    return {
+      valid: false,
+      value: null,
+      error: `${fieldName} must be at most ${max}`,
+    };
+  }
+
+  return { valid: true, value: numValue };
+}
+
 module.exports = {
+  // Existing validators
   isValidEmail,
   isValidUsername,
   isValidPassword,
   validateYear,
   validateListId,
   validateListName,
+  // New validators
+  validateOptionalString,
+  validateRequiredString,
+  validateArray,
+  validateEnum,
+  validateInteger,
 };

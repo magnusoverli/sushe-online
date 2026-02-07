@@ -7,6 +7,11 @@ const {
   validateYear,
   validateListId,
   validateListName,
+  validateOptionalString,
+  validateRequiredString,
+  validateArray,
+  validateEnum,
+  validateInteger,
 } = require('../validators.js');
 
 // =============================================================================
@@ -246,4 +251,325 @@ test('validateListName should allow exactly 200 chars', () => {
   const maxName = 'a'.repeat(200);
   const result = validateListName(maxName);
   assert.strictEqual(result.valid, true);
+});
+
+// =============================================================================
+// validateOptionalString tests
+// =============================================================================
+
+test('validateOptionalString should accept null value', () => {
+  const result = validateOptionalString(null, 'field');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateOptionalString should accept undefined value', () => {
+  const result = validateOptionalString(undefined, 'field');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateOptionalString should accept empty string', () => {
+  const result = validateOptionalString('', 'field');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateOptionalString should accept valid string', () => {
+  const result = validateOptionalString('hello', 'field');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'hello');
+});
+
+test('validateOptionalString should reject non-string value', () => {
+  const result = validateOptionalString(123, 'field');
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error, 'field must be a string');
+});
+
+test('validateOptionalString should reject boolean value', () => {
+  const result = validateOptionalString(true, 'field');
+  assert.strictEqual(result.valid, false);
+  assert.strictEqual(result.error, 'field must be a string');
+});
+
+test('validateOptionalString should validate maxLength', () => {
+  const result = validateOptionalString('toolong', 'field', { maxLength: 5 });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('max length'));
+});
+
+test('validateOptionalString should accept string within maxLength', () => {
+  const result = validateOptionalString('ok', 'field', { maxLength: 5 });
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'ok');
+});
+
+test('validateOptionalString should validate minLength', () => {
+  const result = validateOptionalString('ab', 'field', { minLength: 3 });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('at least 3 characters'));
+});
+
+test('validateOptionalString should accept string at exact minLength', () => {
+  const result = validateOptionalString('abc', 'field', { minLength: 3 });
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'abc');
+});
+
+// =============================================================================
+// validateRequiredString tests
+// =============================================================================
+
+test('validateRequiredString should reject null value', () => {
+  const result = validateRequiredString(null, 'name');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('required'));
+});
+
+test('validateRequiredString should reject undefined value', () => {
+  const result = validateRequiredString(undefined, 'name');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('required'));
+});
+
+test('validateRequiredString should reject empty string', () => {
+  const result = validateRequiredString('', 'name');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('required'));
+});
+
+test('validateRequiredString should reject number', () => {
+  const result = validateRequiredString(42, 'name');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('must be a string'));
+});
+
+test('validateRequiredString should accept valid string', () => {
+  const result = validateRequiredString('hello', 'name');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'hello');
+});
+
+test('validateRequiredString should validate maxLength on valid strings', () => {
+  const result = validateRequiredString('toolongstring', 'name', {
+    maxLength: 5,
+  });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('max length'));
+});
+
+// =============================================================================
+// validateArray tests
+// =============================================================================
+
+test('validateArray should accept valid array', () => {
+  const result = validateArray([1, 2, 3], 'items');
+  assert.strictEqual(result.valid, true);
+  assert.deepStrictEqual(result.value, [1, 2, 3]);
+});
+
+test('validateArray should accept empty array when not required', () => {
+  const result = validateArray([], 'items');
+  assert.strictEqual(result.valid, true);
+  assert.deepStrictEqual(result.value, []);
+});
+
+test('validateArray should return empty array for null when not required', () => {
+  const result = validateArray(null, 'items');
+  assert.strictEqual(result.valid, true);
+  assert.deepStrictEqual(result.value, []);
+});
+
+test('validateArray should return empty array for undefined when not required', () => {
+  const result = validateArray(undefined, 'items');
+  assert.strictEqual(result.valid, true);
+  assert.deepStrictEqual(result.value, []);
+});
+
+test('validateArray should reject null when required', () => {
+  const result = validateArray(null, 'items', { required: true });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('required'));
+});
+
+test('validateArray should reject non-array', () => {
+  const result = validateArray('not array', 'items');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('must be an array'));
+});
+
+test('validateArray should reject object', () => {
+  const result = validateArray({ a: 1 }, 'items');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('must be an array'));
+});
+
+test('validateArray should validate minLength', () => {
+  const result = validateArray([1], 'items', { minLength: 2 });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('at least 2 items'));
+});
+
+test('validateArray should validate maxLength', () => {
+  const result = validateArray([1, 2, 3, 4], 'items', { maxLength: 3 });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('at most 3 items'));
+});
+
+test('validateArray should accept array within bounds', () => {
+  const result = validateArray([1, 2], 'items', {
+    minLength: 1,
+    maxLength: 3,
+  });
+  assert.strictEqual(result.valid, true);
+  assert.deepStrictEqual(result.value, [1, 2]);
+});
+
+// =============================================================================
+// validateEnum tests
+// =============================================================================
+
+test('validateEnum should accept valid enum value', () => {
+  const result = validateEnum('red', ['red', 'green', 'blue'], 'color');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 'red');
+});
+
+test('validateEnum should reject invalid enum value', () => {
+  const result = validateEnum('yellow', ['red', 'green', 'blue'], 'color');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('Valid values: red, green, blue'));
+});
+
+test('validateEnum should accept null when not required', () => {
+  const result = validateEnum(null, ['red', 'green', 'blue'], 'color');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateEnum should accept undefined when not required', () => {
+  const result = validateEnum(undefined, ['red', 'green', 'blue'], 'color');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateEnum should accept empty string when not required', () => {
+  const result = validateEnum('', ['red', 'green', 'blue'], 'color');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateEnum should reject null when required', () => {
+  const result = validateEnum(null, ['red', 'green', 'blue'], 'color', {
+    required: true,
+  });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('required'));
+});
+
+test('validateEnum should work with non-string values', () => {
+  const result = validateEnum(1, [1, 2, 3], 'priority');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 1);
+});
+
+test('validateEnum should reject invalid non-string value', () => {
+  const result = validateEnum(4, [1, 2, 3], 'priority');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('Valid values'));
+});
+
+// =============================================================================
+// validateInteger tests
+// =============================================================================
+
+test('validateInteger should accept valid integer', () => {
+  const result = validateInteger(42, 'age');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 42);
+});
+
+test('validateInteger should accept zero', () => {
+  const result = validateInteger(0, 'count');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 0);
+});
+
+test('validateInteger should accept negative integer', () => {
+  const result = validateInteger(-5, 'offset');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, -5);
+});
+
+test('validateInteger should parse string integer', () => {
+  const result = validateInteger('42', 'age');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 42);
+});
+
+test('validateInteger should accept null when not required', () => {
+  const result = validateInteger(null, 'age');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateInteger should accept undefined when not required', () => {
+  const result = validateInteger(undefined, 'age');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateInteger should accept empty string when not required', () => {
+  const result = validateInteger('', 'age');
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, null);
+});
+
+test('validateInteger should reject null when required', () => {
+  const result = validateInteger(null, 'age', { required: true });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('required'));
+});
+
+test('validateInteger should reject float', () => {
+  const result = validateInteger(3.14, 'age');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('must be an integer'));
+});
+
+test('validateInteger should reject non-numeric string', () => {
+  const result = validateInteger('abc', 'age');
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('must be an integer'));
+});
+
+test('validateInteger should validate min', () => {
+  const result = validateInteger(3, 'age', { min: 5 });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('at least 5'));
+});
+
+test('validateInteger should validate max', () => {
+  const result = validateInteger(100, 'age', { max: 50 });
+  assert.strictEqual(result.valid, false);
+  assert.ok(result.error.includes('at most 50'));
+});
+
+test('validateInteger should accept value within range', () => {
+  const result = validateInteger(25, 'age', { min: 1, max: 100 });
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 25);
+});
+
+test('validateInteger should accept value at exact min', () => {
+  const result = validateInteger(1, 'age', { min: 1 });
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 1);
+});
+
+test('validateInteger should accept value at exact max', () => {
+  const result = validateInteger(100, 'age', { max: 100 });
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.value, 100);
 });

@@ -6,8 +6,10 @@
  */
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+import { createModal } from './modal-factory.js';
 
 let modalElement = null;
+let modalController = null;
 let resolveCallback = null;
 
 /**
@@ -85,21 +87,45 @@ function showSimilarAlbumModal(newAlbum, existingMatch) {
   return new Promise((resolve) => {
     resolveCallback = resolve;
 
-    // Create modal if it doesn't exist
+    // Create modal DOM if it doesn't exist
     if (!modalElement) {
-      createModal();
+      createModalDOM();
     }
 
     // Populate modal content
     populateModal(newAlbum, existingMatch);
 
-    // Show modal
-    modalElement.classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    // Create controller with modal factory (handles escape, backdrop, body overflow)
+    modalController = createModal({
+      element: modalElement,
+      backdrop: modalElement,
+      onClose: () => closeModal('cancelled'),
+      closeOnEscape: true,
+      closeOnBackdrop: true,
+    });
+
+    // Attach button handlers via controller for automatic cleanup
+    modalController.addListener(
+      modalElement.querySelector('#similarAlbumSame'),
+      'click',
+      () => closeModal('use_existing')
+    );
+    modalController.addListener(
+      modalElement.querySelector('#similarAlbumDifferent'),
+      'click',
+      () => closeModal('add_new_mark_distinct')
+    );
+    modalController.addListener(
+      modalElement.querySelector('#similarAlbumCancel'),
+      'click',
+      () => closeModal('cancelled')
+    );
+
+    modalController.open();
   });
 }
 
-function createModal() {
+function createModalDOM() {
   modalElement = document.createElement('div');
   modalElement.id = 'similarAlbumModal';
   modalElement.className =
@@ -132,45 +158,7 @@ function createModal() {
     </div>
   `;
 
-  // Event listeners
-  modalElement.addEventListener('click', (e) => {
-    if (e.target === modalElement) {
-      closeModal('cancelled');
-    }
-  });
-
-  modalElement
-    .querySelector('#similarAlbumSame')
-    .addEventListener('click', () => {
-      closeModal('use_existing');
-    });
-
-  modalElement
-    .querySelector('#similarAlbumDifferent')
-    .addEventListener('click', () => {
-      closeModal('add_new_mark_distinct');
-    });
-
-  modalElement
-    .querySelector('#similarAlbumCancel')
-    .addEventListener('click', () => {
-      closeModal('cancelled');
-    });
-
-  // Escape key handler
-  document.addEventListener('keydown', handleEscapeKey);
-
   document.body.appendChild(modalElement);
-}
-
-function handleEscapeKey(e) {
-  if (
-    e.key === 'Escape' &&
-    modalElement &&
-    !modalElement.classList.contains('hidden')
-  ) {
-    closeModal('cancelled');
-  }
 }
 
 function populateModal(newAlbum, existingMatch) {
@@ -264,8 +252,15 @@ async function closeModal(action) {
   const existingAlbum = modalElement.dataset.existingAlbum;
   const newAlbumId = modalElement.dataset.newAlbumId;
 
-  modalElement.classList.add('hidden');
-  document.body.style.overflow = '';
+  // Use controller to handle hide + cleanup if available, otherwise manual
+  if (modalController && modalController.isOpen()) {
+    // Temporarily clear onClose to avoid recursive call
+    modalController.close();
+    modalController = null;
+  } else {
+    modalElement.classList.add('hidden');
+    document.body.style.overflow = '';
+  }
 
   const result = { action };
 

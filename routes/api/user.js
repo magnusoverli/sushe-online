@@ -4,6 +4,8 @@
  * Handles user-related endpoints.
  */
 
+const { createAsyncHandler } = require('../../middleware/async-handler');
+
 /**
  * Register user routes
  * @param {Object} app - Express app instance
@@ -11,10 +13,13 @@
  */
 module.exports = (app, deps) => {
   const { ensureAuthAPI, pool, logger } = deps;
+  const asyncHandler = createAsyncHandler(logger);
 
   // GET /api/user/lists-summary - Get list names for the current user (for "Add to..." dropdown)
-  app.get('/api/user/lists-summary', ensureAuthAPI, async (req, res) => {
-    try {
+  app.get(
+    '/api/user/lists-summary',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
       const result = await pool.query(
         `SELECT _id, name, year FROM lists WHERE user_id = $1 ORDER BY name`,
         [req.user._id]
@@ -27,9 +32,6 @@ module.exports = (app, deps) => {
           year: row.year,
         })),
       });
-    } catch (error) {
-      logger.error('Lists summary error:', error);
-      res.status(500).json({ error: 'Failed to fetch lists' });
-    }
-  });
+    }, 'fetching lists summary')
+  );
 };

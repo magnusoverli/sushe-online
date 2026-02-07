@@ -9,6 +9,7 @@
  */
 
 const { normalizeForExternalApi } = require('../../utils/normalization');
+const { createAsyncHandler } = require('../../middleware/async-handler');
 
 /**
  * Register Spotify routes
@@ -24,6 +25,8 @@ module.exports = (app, deps) => {
     pool,
     refreshPlaycountsInBackground,
   } = deps;
+
+  const asyncHandler = createAsyncHandler(logger);
 
   /**
    * Shared helper for simple Spotify player control commands.
@@ -114,7 +117,7 @@ module.exports = (app, deps) => {
     '/api/spotify/album',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       const spotifyAuth = req.spotifyAuth;
       const { artist, album } = req.query;
       if (!artist || !album) {
@@ -122,63 +125,53 @@ module.exports = (app, deps) => {
       }
       logger.info('Spotify album search', { artist, album });
 
-      try {
-        // Normalize artist/album names for better Spotify matching
-        // Strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
-        const normalizedArtist = normalizeForExternalApi(artist);
-        const normalizedAlbum = normalizeForExternalApi(album);
-        const query = `album:${normalizedAlbum} artist:${normalizedArtist}`;
-        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
-        const resp = await fetch(url, {
-          headers: {
-            Authorization: `Bearer ${spotifyAuth.access_token}`,
-          },
-        });
-        if (!resp.ok) {
-          const errorData = await resp.json().catch(() => ({}));
-          const errorMsg =
-            errorData?.error?.message || `Spotify API error ${resp.status}`;
-          logger.error('Spotify search API error:', {
-            status: resp.status,
-            statusText: resp.statusText,
-            error: errorMsg,
-            artist,
-            album,
-          });
-
-          if (resp.status === 401) {
-            return res.status(401).json({
-              error: 'Spotify authentication expired',
-              code: 'TOKEN_EXPIRED',
-              service: 'spotify',
-            });
-          }
-          return res
-            .status(resp.status >= 400 && resp.status < 500 ? resp.status : 502)
-            .json({
-              error: errorMsg,
-              code: 'SPOTIFY_ERROR',
-              service: 'spotify',
-            });
-        }
-        const data = await resp.json();
-        if (!data.albums || !data.albums.items.length) {
-          logger.info('Album not found on Spotify', { artist, album });
-          return res.status(404).json({ error: 'Album not found' });
-        }
-        const albumId = data.albums.items[0].id;
-        logger.info('Spotify search result', { albumId, artist, album });
-        res.json({ id: albumId });
-      } catch (err) {
-        logger.error('Spotify search error:', {
-          error: err.message,
-          stack: err.stack,
+      // Normalize artist/album names for better Spotify matching
+      // Strips diacritics (e.g., "Exxul" -> "Exxul") and normalizes special chars
+      const normalizedArtist = normalizeForExternalApi(artist);
+      const normalizedAlbum = normalizeForExternalApi(album);
+      const query = `album:${normalizedAlbum} artist:${normalizedArtist}`;
+      const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=album&limit=1`;
+      const resp = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${spotifyAuth.access_token}`,
+        },
+      });
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        const errorMsg =
+          errorData?.error?.message || `Spotify API error ${resp.status}`;
+        logger.error('Spotify search API error:', {
+          status: resp.status,
+          statusText: resp.statusText,
+          error: errorMsg,
           artist,
           album,
         });
-        res.status(500).json({ error: 'Failed to search Spotify' });
+
+        if (resp.status === 401) {
+          return res.status(401).json({
+            error: 'Spotify authentication expired',
+            code: 'TOKEN_EXPIRED',
+            service: 'spotify',
+          });
+        }
+        return res
+          .status(resp.status >= 400 && resp.status < 500 ? resp.status : 502)
+          .json({
+            error: errorMsg,
+            code: 'SPOTIFY_ERROR',
+            service: 'spotify',
+          });
       }
-    }
+      const data = await resp.json();
+      if (!data.albums || !data.albums.items.length) {
+        logger.info('Album not found on Spotify', { artist, album });
+        return res.status(404).json({ error: 'Album not found' });
+      }
+      const albumId = data.albums.items[0].id;
+      logger.info('Spotify search result', { albumId, artist, album });
+      res.json({ id: albumId });
+    }, 'searching Spotify album')
   );
 
   // Get Spotify access token for Web Playback SDK
@@ -196,64 +189,56 @@ module.exports = (app, deps) => {
     '/api/spotify/devices',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       const spotifyAuth = req.spotifyAuth;
 
-      try {
-        const resp = await fetch(
-          'https://api.spotify.com/v1/me/player/devices',
-          {
-            headers: {
-              Authorization: `Bearer ${spotifyAuth.access_token}`,
-            },
-          }
-        );
+      const resp = await fetch('https://api.spotify.com/v1/me/player/devices', {
+        headers: {
+          Authorization: `Bearer ${spotifyAuth.access_token}`,
+        },
+      });
 
-        if (!resp.ok) {
-          const errorData = await resp.json().catch(() => ({}));
-          return handleSpotifyPlayerError(resp, errorData, res, 'devices');
-        }
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'devices');
+      }
 
-        const data = await resp.json();
+      const data = await resp.json();
 
-        logger.info('Spotify API returned devices (raw):', {
-          count: data.devices?.length || 0,
-          devices: (data.devices || []).map((d) => ({
+      logger.info('Spotify API returned devices (raw):', {
+        count: data.devices?.length || 0,
+        devices: (data.devices || []).map((d) => ({
+          name: d.name,
+          id: d.id ? `${d.id.substring(0, 8)}...` : null,
+          type: d.type,
+          is_restricted: d.is_restricted,
+          is_active: d.is_active,
+        })),
+      });
+
+      // Filter out restricted devices
+      const usableDevices = (data.devices || []).filter(
+        (d) => !d.is_restricted && d.id
+      );
+
+      const filteredOut = (data.devices || []).filter(
+        (d) => d.is_restricted || !d.id
+      );
+      if (filteredOut.length > 0) {
+        logger.info('Devices filtered out:', {
+          devices: filteredOut.map((d) => ({
             name: d.name,
-            id: d.id ? `${d.id.substring(0, 8)}...` : null,
-            type: d.type,
-            is_restricted: d.is_restricted,
-            is_active: d.is_active,
+            reason: !d.id ? 'no device ID' : 'is_restricted',
           })),
         });
-
-        // Filter out restricted devices
-        const usableDevices = (data.devices || []).filter(
-          (d) => !d.is_restricted && d.id
-        );
-
-        const filteredOut = (data.devices || []).filter(
-          (d) => d.is_restricted || !d.id
-        );
-        if (filteredOut.length > 0) {
-          logger.info('Devices filtered out:', {
-            devices: filteredOut.map((d) => ({
-              name: d.name,
-              reason: !d.id ? 'no device ID' : 'is_restricted',
-            })),
-          });
-        }
-
-        logger.info(
-          'Spotify devices found:',
-          usableDevices.map((d) => d.name)
-        );
-        res.json({ devices: usableDevices });
-      } catch (err) {
-        logger.error('Spotify devices error', { error: err.message });
-        res.status(500).json({ error: 'Failed to get Spotify devices' });
       }
-    }
+
+      logger.info(
+        'Spotify devices found:',
+        usableDevices.map((d) => d.name)
+      );
+      res.json({ devices: usableDevices });
+    }, 'fetching Spotify devices')
   );
 
   // Play an album on a specific Spotify Connect device
@@ -261,7 +246,7 @@ module.exports = (app, deps) => {
     '/api/spotify/play',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       const spotifyAuth = req.spotifyAuth;
       const { albumId, deviceId } = req.body;
 
@@ -269,106 +254,101 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'albumId is required' });
       }
 
-      try {
-        const url = deviceId
-          ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`
-          : 'https://api.spotify.com/v1/me/player/play';
+      const url = deviceId
+        ? `https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`
+        : 'https://api.spotify.com/v1/me/player/play';
 
-        const resp = await fetch(url, {
-          method: 'PUT',
-          headers: {
-            Authorization: `Bearer ${spotifyAuth.access_token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            context_uri: `spotify:album:${albumId}`,
-          }),
-        });
+      const resp = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${spotifyAuth.access_token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          context_uri: `spotify:album:${albumId}`,
+        }),
+      });
 
-        if (resp.status === 204 || resp.status === 202) {
-          logger.info(
-            'Spotify playback started on device:',
-            deviceId || 'active'
-          );
+      if (resp.status === 204 || resp.status === 202) {
+        logger.info(
+          'Spotify playback started on device:',
+          deviceId || 'active'
+        );
 
-          // Trigger delayed playcount refresh (60 seconds to allow scrobble to register)
-          // This is fire-and-forget - don't block the response
-          if (req.user.lastfmUsername) {
-            const PLAY_REFRESH_DELAY_MS = 60000; // 60 seconds
+        // Trigger delayed playcount refresh (60 seconds to allow scrobble to register)
+        // This is fire-and-forget - don't block the response
+        if (req.user.lastfmUsername) {
+          const PLAY_REFRESH_DELAY_MS = 60000; // 60 seconds
 
-            // Look up album details from database using Spotify album ID
-            pool
-              .query(
-                `SELECT album_id, artist, album FROM albums WHERE spotify_id = $1`,
-                [albumId]
-              )
-              .then((result) => {
-                if (result.rows.length > 0) {
-                  const album = result.rows[0];
-                  logger.debug('Scheduling playcount refresh after play', {
-                    artist: album.artist,
-                    album: album.album,
-                    delayMs: PLAY_REFRESH_DELAY_MS,
-                  });
-
-                  // Delay the refresh to allow scrobble to register on Last.fm
-                  setTimeout(() => {
-                    refreshPlaycountsInBackground(
-                      req.user._id,
-                      req.user.lastfmUsername,
-                      [
-                        {
-                          itemId: album.album_id,
-                          artist: album.artist,
-                          album: album.album,
-                          albumId: album.album_id,
-                        },
-                      ],
-                      pool,
-                      logger
-                    ).catch((err) => {
-                      logger.warn('Playcount refresh after play failed', {
-                        error: err.message,
-                      });
-                    });
-                  }, PLAY_REFRESH_DELAY_MS);
-                }
-              })
-              .catch((err) => {
-                logger.warn('Failed to look up album for playcount refresh', {
-                  albumId,
-                  error: err.message,
+          // Look up album details from database using Spotify album ID
+          pool
+            .query(
+              `SELECT album_id, artist, album FROM albums WHERE spotify_id = $1`,
+              [albumId]
+            )
+            .then((result) => {
+              if (result.rows.length > 0) {
+                const album = result.rows[0];
+                logger.debug('Scheduling playcount refresh after play', {
+                  artist: album.artist,
+                  album: album.album,
+                  delayMs: PLAY_REFRESH_DELAY_MS,
                 });
+
+                // Delay the refresh to allow scrobble to register on Last.fm
+                setTimeout(() => {
+                  refreshPlaycountsInBackground(
+                    req.user._id,
+                    req.user.lastfmUsername,
+                    [
+                      {
+                        itemId: album.album_id,
+                        artist: album.artist,
+                        album: album.album,
+                        albumId: album.album_id,
+                      },
+                    ],
+                    pool,
+                    logger
+                  ).catch((err) => {
+                    logger.warn('Playcount refresh after play failed', {
+                      error: err.message,
+                    });
+                  });
+                }, PLAY_REFRESH_DELAY_MS);
+              }
+            })
+            .catch((err) => {
+              logger.warn('Failed to look up album for playcount refresh', {
+                albumId,
+                error: err.message,
               });
-          }
-
-          return res.json({ success: true });
+            });
         }
 
-        if (resp.status === 404) {
-          return res.status(404).json({
-            error:
-              'No active device found. Please open Spotify on a device first.',
-            code: 'NO_DEVICE',
-            service: 'spotify',
-          });
-        }
-
-        if (resp.status === 403) {
-          return res.status(403).json({
-            error: 'Spotify Premium is required for playback control.',
-            code: 'PREMIUM_REQUIRED',
-            service: 'spotify',
-          });
-        }
-
-        const errorData = await resp.json().catch(() => ({}));
-        return handleSpotifyPlayerError(resp, errorData, res, 'play');
-      } catch (err) {
-        logger.error('Spotify play error', { error: err.message });
-        res.status(500).json({ error: 'Failed to start playback' });
+        return res.json({ success: true });
       }
-    }
+
+      if (resp.status === 404) {
+        return res.status(404).json({
+          error:
+            'No active device found. Please open Spotify on a device first.',
+          code: 'NO_DEVICE',
+          service: 'spotify',
+        });
+      }
+
+      if (resp.status === 403) {
+        return res.status(403).json({
+          error: 'Spotify Premium is required for playback control.',
+          code: 'PREMIUM_REQUIRED',
+          service: 'spotify',
+        });
+      }
+
+      const errorData = await resp.json().catch(() => ({}));
+      return handleSpotifyPlayerError(resp, errorData, res, 'play');
+    }, 'starting Spotify playback')
   );
 
   // Get current playback state
@@ -376,35 +356,25 @@ module.exports = (app, deps) => {
     '/api/spotify/playback',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
-      try {
-        const resp = await fetch('https://api.spotify.com/v1/me/player', {
-          headers: {
-            Authorization: `Bearer ${req.spotifyAuth.access_token}`,
-          },
-        });
+    asyncHandler(async (req, res) => {
+      const resp = await fetch('https://api.spotify.com/v1/me/player', {
+        headers: {
+          Authorization: `Bearer ${req.spotifyAuth.access_token}`,
+        },
+      });
 
-        if (resp.status === 204) {
-          return res.json({ is_playing: false, device: null, item: null });
-        }
-
-        if (!resp.ok) {
-          const errorData = await resp.json().catch(() => ({}));
-          return handleSpotifyPlayerError(
-            resp,
-            errorData,
-            res,
-            'playback state'
-          );
-        }
-
-        const data = await resp.json();
-        res.json(data);
-      } catch (err) {
-        logger.error('Spotify playback state error', { error: err.message });
-        res.status(500).json({ error: 'Failed to get playback state' });
+      if (resp.status === 204) {
+        return res.json({ is_playing: false, device: null, item: null });
       }
-    }
+
+      if (!resp.ok) {
+        const errorData = await resp.json().catch(() => ({}));
+        return handleSpotifyPlayerError(resp, errorData, res, 'playback state');
+      }
+
+      const data = await resp.json();
+      res.json(data);
+    }, 'fetching Spotify playback state')
   );
 
   // Pause playback
@@ -514,7 +484,7 @@ module.exports = (app, deps) => {
     '/api/spotify/track',
     ensureAuthAPI,
     requireSpotifyAuth,
-    async (req, res) => {
+    asyncHandler(async (req, res) => {
       const spotifyAuth = req.spotifyAuth;
       const { artist, album, track } = req.query;
       if (!artist || !album || !track) {
@@ -534,145 +504,134 @@ module.exports = (app, deps) => {
         Authorization: `Bearer ${spotifyAuth.access_token}`,
       };
 
-      try {
-        // Normalize artist/album names for better Spotify matching
-        // Strips diacritics (e.g., "Exxûl" → "Exxul") and normalizes special chars
-        const normalizedArtist = normalizeForExternalApi(artist);
-        const normalizedAlbum = normalizeForExternalApi(album);
+      // Normalize artist/album names for better Spotify matching
+      // Strips diacritics (e.g., "Exxul" -> "Exxul") and normalizes special chars
+      const normalizedArtist = normalizeForExternalApi(artist);
+      const normalizedAlbum = normalizeForExternalApi(album);
 
-        // First, find the album
-        const albumQuery = `album:${normalizedAlbum} artist:${normalizedArtist}`;
-        const albumResp = await fetch(
-          `https://api.spotify.com/v1/search?q=${encodeURIComponent(albumQuery)}&type=album&limit=1`,
-          { headers }
-        );
-        if (!albumResp.ok) {
-          const errorText = await albumResp.text();
-          logger.error('Spotify album search failed:', {
-            status: albumResp.status,
-            statusText: albumResp.statusText,
-            error: errorText,
-            query: albumQuery,
-          });
-
-          if (albumResp.status === 403) {
-            return res.status(403).json({
-              error:
-                'Spotify access denied. You may need to reconnect your Spotify account.',
-              code: 'SPOTIFY_FORBIDDEN',
-              service: 'spotify',
-              action: 'reauth',
-            });
-          }
-
-          if (albumResp.status === 401) {
-            return res.status(401).json({
-              error: 'Spotify authentication expired',
-              code: 'TOKEN_EXPIRED',
-              service: 'spotify',
-            });
-          }
-
-          if (albumResp.status === 429) {
-            return res.status(429).json({
-              error: 'Spotify rate limit exceeded. Please try again later.',
-              code: 'RATE_LIMITED',
-              service: 'spotify',
-            });
-          }
-
-          return res.status(502).json({
-            error: `Spotify API error: ${albumResp.statusText}`,
-            code: 'SPOTIFY_API_ERROR',
-            service: 'spotify',
-          });
-        }
-        const albumData = await albumResp.json();
-        if (!albumData.albums || !albumData.albums.items.length) {
-          logger.info('Album not found on Spotify', { artist, album });
-          return res.status(404).json({ error: 'Album not found' });
-        }
-        const spotifyAlbumId = albumData.albums.items[0].id;
-
-        // Get album tracks
-        const tracksResp = await fetch(
-          `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks?limit=50`,
-          { headers }
-        );
-        if (!tracksResp.ok) {
-          return res.status(502).json({
-            error: `Spotify API error: ${tracksResp.statusText}`,
-            code: 'SPOTIFY_API_ERROR',
-            service: 'spotify',
-          });
-        }
-        const tracksData = await tracksResp.json();
-        const tracks = tracksData.items;
-
-        if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
-          return res.status(404).json({ error: 'Album has no tracks' });
-        }
-
-        // Try to match by track number first
-        const trackNum = parseInt(track);
-        if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
-          const matchedTrack = tracks[trackNum - 1];
-          logger.info('Spotify track matched by number:', {
-            trackId: matchedTrack.id,
-            trackName: matchedTrack.name,
-          });
-          return res.json({ id: matchedTrack.id });
-        }
-
-        // Extract track name from format like "3. Track Name"
-        const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
-        const searchName = trackNameMatch ? trackNameMatch[1] : track;
-
-        // Try to match by track name
-        const matchingTrack = tracks.find(
-          (t) =>
-            t.name.toLowerCase() === searchName.toLowerCase() ||
-            t.name.toLowerCase().includes(searchName.toLowerCase()) ||
-            searchName.toLowerCase().includes(t.name.toLowerCase())
-        );
-        if (matchingTrack) {
-          logger.info('Spotify track matched by name:', {
-            trackId: matchingTrack.id,
-            trackName: matchingTrack.name,
-          });
-          return res.json({ id: matchingTrack.id });
-        }
-
-        // Fallback: general track search with normalized names
-        const normalizedTrack = normalizeForExternalApi(searchName);
-        const fallbackQuery = `track:${normalizedTrack} album:${normalizedAlbum} artist:${normalizedArtist}`;
-        const fallbackResp = await fetch(
-          `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=1`,
-          { headers }
-        );
-        if (fallbackResp.ok) {
-          const fallbackData = await fallbackResp.json();
-          if (fallbackData.tracks.items.length > 0) {
-            logger.info('Spotify track matched by fallback search:', {
-              trackId: fallbackData.tracks.items[0].id,
-              trackName: fallbackData.tracks.items[0].name,
-            });
-            return res.json({ id: fallbackData.tracks.items[0].id });
-          }
-        }
-
-        logger.info('Track not found on Spotify:', { artist, album, track });
-        return res.status(404).json({ error: 'Track not found' });
-      } catch (err) {
-        logger.error('Spotify track search error:', {
-          error: err.message,
-          stack: err.stack,
-          artist,
-          album,
-          track,
+      // First, find the album
+      const albumQuery = `album:${normalizedAlbum} artist:${normalizedArtist}`;
+      const albumResp = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(albumQuery)}&type=album&limit=1`,
+        { headers }
+      );
+      if (!albumResp.ok) {
+        const errorText = await albumResp.text();
+        logger.error('Spotify album search failed:', {
+          status: albumResp.status,
+          statusText: albumResp.statusText,
+          error: errorText,
+          query: albumQuery,
         });
-        res.status(500).json({ error: 'Failed to search Spotify' });
+
+        if (albumResp.status === 403) {
+          return res.status(403).json({
+            error:
+              'Spotify access denied. You may need to reconnect your Spotify account.',
+            code: 'SPOTIFY_FORBIDDEN',
+            service: 'spotify',
+            action: 'reauth',
+          });
+        }
+
+        if (albumResp.status === 401) {
+          return res.status(401).json({
+            error: 'Spotify authentication expired',
+            code: 'TOKEN_EXPIRED',
+            service: 'spotify',
+          });
+        }
+
+        if (albumResp.status === 429) {
+          return res.status(429).json({
+            error: 'Spotify rate limit exceeded. Please try again later.',
+            code: 'RATE_LIMITED',
+            service: 'spotify',
+          });
+        }
+
+        return res.status(502).json({
+          error: `Spotify API error: ${albumResp.statusText}`,
+          code: 'SPOTIFY_API_ERROR',
+          service: 'spotify',
+        });
       }
-    }
+      const albumData = await albumResp.json();
+      if (!albumData.albums || !albumData.albums.items.length) {
+        logger.info('Album not found on Spotify', { artist, album });
+        return res.status(404).json({ error: 'Album not found' });
+      }
+      const spotifyAlbumId = albumData.albums.items[0].id;
+
+      // Get album tracks
+      const tracksResp = await fetch(
+        `https://api.spotify.com/v1/albums/${spotifyAlbumId}/tracks?limit=50`,
+        { headers }
+      );
+      if (!tracksResp.ok) {
+        return res.status(502).json({
+          error: `Spotify API error: ${tracksResp.statusText}`,
+          code: 'SPOTIFY_API_ERROR',
+          service: 'spotify',
+        });
+      }
+      const tracksData = await tracksResp.json();
+      const tracks = tracksData.items;
+
+      if (!tracks || !Array.isArray(tracks) || tracks.length === 0) {
+        return res.status(404).json({ error: 'Album has no tracks' });
+      }
+
+      // Try to match by track number first
+      const trackNum = parseInt(track);
+      if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
+        const matchedTrack = tracks[trackNum - 1];
+        logger.info('Spotify track matched by number:', {
+          trackId: matchedTrack.id,
+          trackName: matchedTrack.name,
+        });
+        return res.json({ id: matchedTrack.id });
+      }
+
+      // Extract track name from format like "3. Track Name"
+      const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
+      const searchName = trackNameMatch ? trackNameMatch[1] : track;
+
+      // Try to match by track name
+      const matchingTrack = tracks.find(
+        (t) =>
+          t.name.toLowerCase() === searchName.toLowerCase() ||
+          t.name.toLowerCase().includes(searchName.toLowerCase()) ||
+          searchName.toLowerCase().includes(t.name.toLowerCase())
+      );
+      if (matchingTrack) {
+        logger.info('Spotify track matched by name:', {
+          trackId: matchingTrack.id,
+          trackName: matchingTrack.name,
+        });
+        return res.json({ id: matchingTrack.id });
+      }
+
+      // Fallback: general track search with normalized names
+      const normalizedTrack = normalizeForExternalApi(searchName);
+      const fallbackQuery = `track:${normalizedTrack} album:${normalizedAlbum} artist:${normalizedArtist}`;
+      const fallbackResp = await fetch(
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(fallbackQuery)}&type=track&limit=1`,
+        { headers }
+      );
+      if (fallbackResp.ok) {
+        const fallbackData = await fallbackResp.json();
+        if (fallbackData.tracks.items.length > 0) {
+          logger.info('Spotify track matched by fallback search:', {
+            trackId: fallbackData.tracks.items[0].id,
+            trackName: fallbackData.tracks.items[0].name,
+          });
+          return res.json({ id: fallbackData.tracks.items[0].id });
+        }
+      }
+
+      logger.info('Track not found on Spotify:', { artist, album, track });
+      return res.status(404).json({ error: 'Track not found' });
+    }, 'searching Spotify track')
   );
 };

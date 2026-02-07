@@ -11,21 +11,19 @@
 const { test, expect } = require('@playwright/test');
 
 test.describe('API Contract Tests - Lists', () => {
-  test('POST /api/lists/:name should accept "data" field for albums', async ({
+  test('POST /api/lists should accept "data" field for albums', async ({
     request,
   }) => {
-    // Skip auth for now - test the endpoint directly
-    // In a real scenario, we'd authenticate first
-
     // Test that the endpoint accepts the correct field structure
-    const response = await request.post('/api/lists/TestList', {
+    const response = await request.post('/api/lists', {
       data: {
+        name: 'TestList',
         data: [], // This is what the frontend sends
         year: 2024,
       },
     });
 
-    // Without auth, we expect 401, but the point is it shouldn't fail
+    // Without auth, we expect 401 - the point is it shouldn't fail
     // on "Invalid albums array" if the field names are correct
     expect(response.status()).toBe(401);
 
@@ -34,11 +32,12 @@ test.describe('API Contract Tests - Lists', () => {
     expect(body.error).not.toBe('Invalid albums array');
   });
 
-  test('POST /api/lists/:name should accept "groupId" for collections', async ({
+  test('POST /api/lists should accept "groupId" for collections', async ({
     request,
   }) => {
-    const response = await request.post('/api/lists/CollectionList', {
+    const response = await request.post('/api/lists', {
       data: {
+        name: 'CollectionList',
         data: [],
         groupId: 'some-group-id',
       },
@@ -49,23 +48,21 @@ test.describe('API Contract Tests - Lists', () => {
     expect(body.error).not.toBe('Invalid albums array');
   });
 
-  test('POST /api/lists/:name should reject "albums" field (wrong name)', async ({
+  test('POST /api/lists should reject "albums" field (wrong name)', async ({
     request,
   }) => {
     // This test documents that using "albums" instead of "data" would fail
-    // Note: After our fix, even unauthenticated requests check data field first
-    const response = await request.post('/api/lists/WrongFieldList', {
+    const response = await request.post('/api/lists', {
       data: {
+        name: 'WrongFieldList',
         albums: [], // Wrong field name!
         year: 2024,
       },
     });
 
-    // This should fail with 400 "Invalid albums array" because the field is wrong
-    // (assuming the endpoint checks the field before auth - which it does)
-    // The endpoint should complain about missing/invalid data
-    // Either 400 for invalid data, or 401 for auth (order depends on middleware)
-    expect([400, 401]).toContain(response.status());
+    // Auth middleware runs first on POST /api/lists, so we expect 401
+    // for unauthenticated requests regardless of field names
+    expect(response.status()).toBe(401);
   });
 });
 
