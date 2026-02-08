@@ -205,6 +205,20 @@ export function createPlayback(deps = {}) {
   // ========================================================
 
   /**
+   * Choose a music service and play content on it.
+   * Centralises the chooseService -> hideConfirmation -> openInMusicApp pattern.
+   * @param {string} type - Content type ('album' or 'track')
+   * @param {Object} params - Params for openInMusicApp (artist, album, track?)
+   */
+  function playOnService(type, params) {
+    chooseService(showServicePicker, showToast).then((service) => {
+      hideConfirmation();
+      if (!service) return;
+      openInMusicApp(service, type, params, showToast);
+    });
+  }
+
+  /**
    * Trigger the existing play album flow (open in app) using context menu state
    */
   function triggerPlayAlbum() {
@@ -273,16 +287,7 @@ export function createPlayback(deps = {}) {
     const album = albums && albums[index];
     if (!album) return;
 
-    chooseService(showServicePicker, showToast).then((service) => {
-      hideConfirmation();
-      if (!service) return;
-      openInMusicApp(
-        service,
-        'album',
-        { artist: album.artist, album: album.album },
-        showToast
-      );
-    });
+    playOnService('album', { artist: album.artist, album: album.album });
   }
 
   /**
@@ -299,15 +304,10 @@ export function createPlayback(deps = {}) {
       return;
     }
 
-    chooseService(showServicePicker, showToast).then((service) => {
-      hideConfirmation();
-      if (!service) return;
-      openInMusicApp(
-        service,
-        'track',
-        { artist: album.artist, album: album.album, track: trackPick },
-        showToast
-      );
+    playOnService('track', {
+      artist: album.artist,
+      album: album.album,
+      track: trackPick,
     });
   }
 
@@ -336,15 +336,10 @@ export function createPlayback(deps = {}) {
       return;
     }
 
-    chooseService(showServicePicker, showToast).then((service) => {
-      hideConfirmation();
-      if (!service) return;
-      openInMusicApp(
-        service,
-        'track',
-        { artist: album.artist, album: album.album, track: trackName },
-        showToast
-      );
+    playOnService('track', {
+      artist: album.artist,
+      album: album.album,
+      track: trackName,
     });
   }
 

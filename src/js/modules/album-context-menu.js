@@ -19,6 +19,7 @@ import {
   setupChainedSubmenus,
 } from '../utils/submenu-behavior.js';
 import { groupListsByYear } from '../utils/list-grouping.js';
+import { hideAllContextMenus as hideAllMenusBase } from './context-menu.js';
 
 /**
  * Create the album context menu module
@@ -60,79 +61,26 @@ export function createAlbumContextMenu(deps = {}) {
   // ========================================================
 
   /**
-   * Hide all context menus helper
+   * Hide all context menus and perform module-specific cleanup.
+   * Delegates to shared hideAllMenusBase() then clears album context state.
    */
   function hideAllContextMenus() {
-    const contextMenu = document.getElementById('contextMenu');
-    if (contextMenu) {
-      contextMenu.classList.add('hidden');
+    hideAllMenusBase();
+
+    // Module-specific cleanup: clear context album and cancel track fetches
+    setContextAlbum(null);
+    setContextAlbumId(null);
+
+    const trackAbortController = getTrackAbortController();
+    if (trackAbortController) {
+      trackAbortController.abort();
+      setTrackAbortController(null);
     }
 
-    const albumContextMenu = document.getElementById('albumContextMenu');
-    if (albumContextMenu) {
-      albumContextMenu.classList.add('hidden');
-      // Clear context album references when menu is hidden
-      setContextAlbum(null);
-      setContextAlbumId(null);
-
-      // Cancel any pending track fetches
-      const trackAbortController = getTrackAbortController();
-      if (trackAbortController) {
-        trackAbortController.abort();
-        setTrackAbortController(null);
-      }
-    }
-
-    const albumMoveSubmenu = document.getElementById('albumMoveSubmenu');
-    if (albumMoveSubmenu) {
-      albumMoveSubmenu.classList.add('hidden');
-    }
-
-    const albumCopySubmenu = document.getElementById('albumCopySubmenu');
-    if (albumCopySubmenu) {
-      albumCopySubmenu.classList.add('hidden');
-    }
-
-    const playAlbumSubmenu = document.getElementById('playAlbumSubmenu');
-    if (playAlbumSubmenu) {
-      playAlbumSubmenu.classList.add('hidden');
-    }
-
-    const recommendationContextMenu = document.getElementById(
-      'recommendationContextMenu'
-    );
-    if (recommendationContextMenu) {
-      recommendationContextMenu.classList.add('hidden');
-    }
-
-    const recommendationAddSubmenu = document.getElementById(
-      'recommendationAddSubmenu'
-    );
-    if (recommendationAddSubmenu) {
-      recommendationAddSubmenu.classList.add('hidden');
-    }
-
-    const recommendationAddListsSubmenu = document.getElementById(
-      'recommendationAddListsSubmenu'
-    );
-    if (recommendationAddListsSubmenu) {
-      recommendationAddListsSubmenu.classList.add('hidden');
-    }
-
-    // Remove highlights from submenu parent options
-    const moveOption = document.getElementById('moveAlbumOption');
-    const copyOption = document.getElementById('copyAlbumOption');
-    const playOption = document.getElementById('playAlbumOption');
-    const addToListOption = document.getElementById('addToListOption');
-    moveOption?.classList.remove('bg-gray-700', 'text-white');
-    copyOption?.classList.remove('bg-gray-700', 'text-white');
-    playOption?.classList.remove('bg-gray-700', 'text-white');
-    addToListOption?.classList.remove('bg-gray-700', 'text-white');
-
-    // Restore FAB visibility if a list or recommendations is selected
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab && (getCurrentListId() || getCurrentRecommendationsYear())) {
-      fab.style.display = 'flex';
+    // Only show FAB when a list or recommendations view is active
+    if (!getCurrentListId() && !getCurrentRecommendationsYear()) {
+      const fab = document.getElementById('addAlbumFAB');
+      if (fab) fab.style.display = 'none';
     }
   }
 

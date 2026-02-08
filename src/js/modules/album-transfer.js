@@ -2,7 +2,11 @@
  * Album Transfer Module
  *
  * Shared logic for moving and copying albums between lists.
- * Eliminates duplication between context-menus.js and mobile-ui.js.
+ * Provides transferAlbumToList (core) and createTransferHelpers (convenience
+ * factory that returns moveAlbumToList, copyAlbumToList, showMoveConfirmation,
+ * and showCopyConfirmation).
+ *
+ * Used by context-menus.js and mobile-ui.js.
  *
  * @module album-transfer
  */
@@ -151,4 +155,134 @@ export async function transferAlbumToList(deps, options) {
 
     throw error;
   }
+}
+
+/**
+ * Create convenience helpers for album transfer with confirmation dialogs.
+ * Returns moveAlbumToList, copyAlbumToList, showMoveConfirmation, showCopyConfirmation.
+ *
+ * @param {Object} transferDeps - Dependencies for transferAlbumToList
+ * @param {Object} uiDeps - Additional UI dependencies
+ * @param {Function} uiDeps.showConfirmation - Show confirmation dialog
+ * @param {Function} uiDeps.showToast - Show toast notification
+ * @param {Function} uiDeps.findAlbumByIdentity - Find album by identity string
+ * @param {Function} uiDeps.getCurrentList - Get current list ID
+ * @param {Function} uiDeps.getListMetadata - Get metadata for a list
+ * @returns {Object} { moveAlbumToList, copyAlbumToList, showMoveConfirmation, showCopyConfirmation }
+ */
+export function createTransferHelpers(transferDeps, uiDeps) {
+  const {
+    showConfirmation,
+    showToast,
+    findAlbumByIdentity,
+    getCurrentList,
+    getListMetadata,
+  } = uiDeps;
+
+  async function moveAlbumToList(index, albumId, targetListId) {
+    return transferAlbumToList(transferDeps, {
+      index,
+      albumId,
+      targetListId,
+      mode: 'move',
+    });
+  }
+
+  async function copyAlbumToList(index, albumId, targetListId) {
+    return transferAlbumToList(transferDeps, {
+      index,
+      albumId,
+      targetListId,
+      mode: 'copy',
+    });
+  }
+
+  /**
+   * Show confirmation modal for moving album to another list
+   * @param {string} albumId - Album identity string
+   * @param {string} targetListId - Target list ID
+   */
+  function showMoveConfirmation(albumId, targetListId) {
+    if (!albumId || !targetListId) {
+      console.error('Invalid albumId or targetListId');
+      return;
+    }
+
+    const result = findAlbumByIdentity(albumId);
+    if (!result) {
+      showToast('Album not found - it may have been moved or removed', 'error');
+      return;
+    }
+
+    const { album, index } = result;
+    const currentListId = getCurrentList();
+
+    const currentListMeta = getListMetadata(currentListId);
+    const targetListMeta = getListMetadata(targetListId);
+    const currentListName = currentListMeta?.name || 'Unknown';
+    const targetListName = targetListMeta?.name || 'Unknown';
+
+    showConfirmation(
+      'Move Album',
+      `Move "${album.album}" by ${album.artist} to "${targetListName}"?`,
+      `This will remove the album from "${currentListName}" and add it to "${targetListName}".`,
+      'Move',
+      async () => {
+        try {
+          await moveAlbumToList(index, albumId, targetListId);
+        } catch (error) {
+          console.error('Error moving album:', error);
+          showToast('Error moving album', 'error');
+        }
+      }
+    );
+  }
+
+  /**
+   * Show confirmation modal for copying album to another list
+   * @param {string} albumId - Album identity string
+   * @param {string} targetListId - Target list ID
+   */
+  function showCopyConfirmation(albumId, targetListId) {
+    if (!albumId || !targetListId) {
+      console.error('Invalid albumId or targetListId');
+      return;
+    }
+
+    const result = findAlbumByIdentity(albumId);
+    if (!result) {
+      showToast('Album not found - it may have been moved or removed', 'error');
+      return;
+    }
+
+    const { album, index } = result;
+    const currentListId = getCurrentList();
+
+    const currentListMeta = getListMetadata(currentListId);
+    const targetListMeta = getListMetadata(targetListId);
+    const currentListName = currentListMeta?.name || 'Unknown';
+    const targetListName = targetListMeta?.name || 'Unknown';
+
+    showConfirmation(
+      'Copy Album',
+      `Copy "${album.album}" by ${album.artist} to "${targetListName}"?`,
+      `This will add the album to "${targetListName}" while keeping it in "${currentListName}".`,
+      'Copy',
+      async () => {
+        try {
+          await copyAlbumToList(index, albumId, targetListId);
+        } catch (error) {
+          console.error('Error copying album:', error);
+          showToast('Error copying album', 'error');
+        }
+      }
+    );
+  }
+
+  return {
+    moveAlbumToList,
+    copyAlbumToList,
+    showMoveConfirmation,
+    showCopyConfirmation,
+  };
 }

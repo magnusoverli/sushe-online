@@ -1,7 +1,8 @@
 /**
  * Context Menu Module
  *
- * Positioning utilities for context menus with viewport overflow handling.
+ * Shared utilities for context menu positioning and visibility management.
+ * Imported by context-menus.js, album-display.js, album-context-menu.js, etc.
  *
  * @module context-menu
  */
@@ -56,4 +57,50 @@ export function positionContextMenu(menu, x, y) {
       menu.style.top = `${adjustedY}px`;
     }
   });
+}
+
+// All known menu/submenu element IDs that should be hidden
+const MENU_IDS = [
+  'contextMenu',
+  'albumContextMenu',
+  'albumMoveSubmenu',
+  'albumCopySubmenu',
+  'playAlbumSubmenu',
+  'downloadListSubmenu',
+  'recommendationContextMenu',
+  'recommendationAddSubmenu',
+  'recommendationAddListsSubmenu',
+];
+
+// Option elements that receive highlights when their submenu is open
+const OPTION_IDS = [
+  'moveAlbumOption',
+  'copyAlbumOption',
+  'playAlbumOption',
+  'downloadListOption',
+  'addToListOption',
+];
+
+/**
+ * Hide all known context menus and submenus, remove option highlights, restore FAB.
+ * Modules should call this then perform any additional module-specific cleanup
+ * (e.g., clearing context state, canceling abort controllers).
+ */
+export function hideAllContextMenus() {
+  // Hide all known menus
+  for (const id of MENU_IDS) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('hidden');
+  }
+
+  // Remove highlights from submenu parent options
+  for (const id of OPTION_IDS) {
+    document.getElementById(id)?.classList.remove('bg-gray-700', 'text-white');
+  }
+
+  // Restore FAB visibility
+  const fab = document.getElementById('addAlbumFAB');
+  if (fab) {
+    fab.style.display = 'flex';
+  }
 }

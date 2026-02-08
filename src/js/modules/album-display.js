@@ -14,6 +14,10 @@ import {
 } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 import { isListLocked } from './year-lock.js';
+import {
+  positionContextMenu,
+  hideAllContextMenus as hideAllMenusBase,
+} from './context-menu.js';
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -603,41 +607,17 @@ export function createAlbumDisplay(deps = {}) {
   }
 
   /**
-   * Hide all context menus
+   * Hide all context menus and perform module-specific cleanup.
+   * Delegates to shared hideAllMenusBase() then conditionally adjusts FAB.
    */
   function hideAllContextMenus() {
+    hideAllMenusBase();
+
+    // Only show FAB when a list is actually selected
     const currentList = getCurrentList();
-
-    const contextMenu = document.getElementById('contextMenu');
-    if (contextMenu) {
-      contextMenu.classList.add('hidden');
-    }
-
-    const albumContextMenu = document.getElementById('albumContextMenu');
-    if (albumContextMenu) {
-      albumContextMenu.classList.add('hidden');
-    }
-
-    const albumMoveSubmenu = document.getElementById('albumMoveSubmenu');
-    if (albumMoveSubmenu) {
-      albumMoveSubmenu.classList.add('hidden');
-    }
-
-    const playAlbumSubmenu = document.getElementById('playAlbumSubmenu');
-    if (playAlbumSubmenu) {
-      playAlbumSubmenu.classList.add('hidden');
-    }
-
-    // Remove highlights from submenu parent options
-    const moveOption = document.getElementById('moveAlbumOption');
-    const playOption = document.getElementById('playAlbumOption');
-    moveOption?.classList.remove('bg-gray-700', 'text-white');
-    playOption?.classList.remove('bg-gray-700', 'text-white');
-
-    // Restore FAB visibility if a list is selected
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab && currentList) {
-      fab.style.display = 'flex';
+    if (!currentList) {
+      const fab = document.getElementById('addAlbumFAB');
+      if (fab) fab.style.display = 'none';
     }
   }
 
@@ -949,45 +929,6 @@ export function createAlbumDisplay(deps = {}) {
 
       // Position the menu
       positionContextMenu(contextMenu, e.clientX, e.clientY);
-    });
-  }
-
-  /**
-   * Position a context menu, adjusting if it would overflow viewport
-   * @param {HTMLElement} menu - Menu element
-   * @param {number} x - X position
-   * @param {number} y - Y position
-   */
-  function positionContextMenu(menu, x, y) {
-    // Hide FAB when context menu is shown
-    const fab = document.getElementById('addAlbumFAB');
-    if (fab) {
-      fab.style.display = 'none';
-    }
-
-    menu.style.left = `${x}px`;
-    menu.style.top = `${y}px`;
-    menu.classList.remove('hidden');
-
-    requestAnimationFrame(() => {
-      const rect = menu.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-
-      let adjustedX = x;
-      let adjustedY = y;
-
-      if (rect.right > viewportWidth) {
-        adjustedX = x - rect.width;
-      }
-      if (rect.bottom > viewportHeight) {
-        adjustedY = y - rect.height;
-      }
-
-      if (adjustedX !== x || adjustedY !== y) {
-        menu.style.left = `${adjustedX}px`;
-        menu.style.top = `${adjustedY}px`;
-      }
     });
   }
 

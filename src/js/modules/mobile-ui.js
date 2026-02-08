@@ -10,7 +10,7 @@
 import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 import { createActionSheet } from './ui-factories.js';
-import { transferAlbumToList } from './album-transfer.js';
+import { createTransferHelpers } from './album-transfer.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -113,133 +113,33 @@ export function createMobileUI(deps = {}) {
     return null;
   }
 
-  // Shared dependencies for album transfer operations
-  const transferDeps = {
-    getCurrentList,
-    getLists,
-    getListData,
-    setListData,
-    getListMetadata,
-    saveList,
-    selectList,
-    showToast,
-    apiCall,
-    findAlbumByIdentity,
-  };
-
-  /**
-   * Move album from current list to target list
-   * @param {number} index - Album index
-   * @param {string} albumId - Album identity string
-   * @param {string} targetListId - Target list ID
-   */
-  async function moveAlbumToList(index, albumId, targetListId) {
-    return transferAlbumToList(transferDeps, {
-      index,
-      albumId,
-      targetListId,
-      mode: 'move',
-    });
-  }
-
-  /**
-   * Copy album from current list to target list (keeps album in source)
-   * @param {number} index - Album index
-   * @param {string} albumId - Album identity string
-   * @param {string} targetListId - Target list ID
-   */
-  async function copyAlbumToList(index, albumId, targetListId) {
-    return transferAlbumToList(transferDeps, {
-      index,
-      albumId,
-      targetListId,
-      mode: 'copy',
-    });
-  }
-
-  /**
-   * Show confirmation modal for moving album to another list
-   * @param {string} albumId - Album identity string
-   * @param {string} targetListId - Target list ID
-   */
-  function showMoveConfirmation(albumId, targetListId) {
-    if (!albumId || !targetListId) {
-      console.error('Invalid albumId or targetListId');
-      return;
+  // Create transfer helpers (move/copy with confirmation dialogs)
+  const {
+    moveAlbumToList,
+    copyAlbumToList,
+    showMoveConfirmation,
+    showCopyConfirmation,
+  } = createTransferHelpers(
+    {
+      getCurrentList,
+      getLists,
+      getListData,
+      setListData,
+      getListMetadata,
+      saveList,
+      selectList,
+      showToast,
+      apiCall,
+      findAlbumByIdentity,
+    },
+    {
+      showConfirmation,
+      showToast,
+      findAlbumByIdentity,
+      getCurrentList,
+      getListMetadata,
     }
-
-    const result = findAlbumByIdentity(albumId);
-    if (!result) {
-      showToast('Album not found - it may have been moved or removed', 'error');
-      return;
-    }
-
-    const { album, index } = result;
-    const currentListId = getCurrentList();
-
-    // Get list names from metadata for display
-    const currentListMeta = getListMetadata(currentListId);
-    const targetListMeta = getListMetadata(targetListId);
-    const currentListName = currentListMeta?.name || 'Unknown';
-    const targetListName = targetListMeta?.name || 'Unknown';
-
-    showConfirmation(
-      'Move Album',
-      `Move "${album.album}" by ${album.artist} to "${targetListName}"?`,
-      `This will remove the album from "${currentListName}" and add it to "${targetListName}".`,
-      'Move',
-      async () => {
-        try {
-          await moveAlbumToList(index, albumId, targetListId);
-        } catch (error) {
-          console.error('Error moving album:', error);
-          showToast('Error moving album', 'error');
-        }
-      }
-    );
-  }
-
-  /**
-   * Show confirmation modal for copying album to another list
-   * @param {string} albumId - Album identity string
-   * @param {string} targetListId - Target list ID
-   */
-  function showCopyConfirmation(albumId, targetListId) {
-    if (!albumId || !targetListId) {
-      console.error('Invalid albumId or targetListId');
-      return;
-    }
-
-    const result = findAlbumByIdentity(albumId);
-    if (!result) {
-      showToast('Album not found - it may have been moved or removed', 'error');
-      return;
-    }
-
-    const { album, index } = result;
-    const currentListId = getCurrentList();
-
-    // Get list names from metadata for display
-    const currentListMeta = getListMetadata(currentListId);
-    const targetListMeta = getListMetadata(targetListId);
-    const currentListName = currentListMeta?.name || 'Unknown';
-    const targetListName = targetListMeta?.name || 'Unknown';
-
-    showConfirmation(
-      'Copy Album',
-      `Copy "${album.album}" by ${album.artist} to "${targetListName}"?`,
-      `This will add the album to "${targetListName}" while keeping it in "${currentListName}".`,
-      'Copy',
-      async () => {
-        try {
-          await copyAlbumToList(index, albumId, targetListId);
-        } catch (error) {
-          console.error('Error copying album:', error);
-          showToast('Error copying album', 'error');
-        }
-      }
-    );
-  }
+  );
 
   /**
    * Show mobile album action menu (bottom sheet)

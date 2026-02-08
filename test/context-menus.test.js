@@ -57,8 +57,6 @@ describe('context-menus module', () => {
       assert.strictEqual(typeof module.moveAlbumToList, 'function');
       assert.strictEqual(typeof module.copyAlbumToList, 'function');
       assert.strictEqual(typeof module.setupSubmenuHideOnLeave, 'function');
-      assert.strictEqual(typeof module.positionPlaySubmenu, 'function');
-      assert.strictEqual(typeof module.showPlayAlbumSubmenu, 'function');
     });
 
     it('should handle empty dependencies gracefully', () => {

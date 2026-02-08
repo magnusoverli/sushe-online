@@ -11,6 +11,24 @@ import { showToast, getAlbumKey } from './utils.js';
 import { jsPDF } from 'jspdf';
 
 /**
+ * Trigger a browser file download from a Blob.
+ * Creates a temporary <a> element, clicks it, then cleans up.
+ *
+ * @param {Blob} blob - File content
+ * @param {string} filename - Suggested download filename
+ */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Download list as JSON file with embedded images
  * @param {string} listId - ID of the list to export
  */
@@ -40,15 +58,7 @@ export async function downloadListAsJSON(listId) {
 
     const jsonStr = JSON.stringify(exportData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${listName}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${listName}.json`);
 
     try {
       await navigator.clipboard.writeText(jsonStr);
@@ -361,15 +371,7 @@ export async function downloadListAsCSV(listId) {
     // Create CSV content
     const csvContent = rows.join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${listName}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    downloadBlob(blob, `${listName}.csv`);
 
     showToast('CSV exported successfully!', 'success');
   } catch (error) {
