@@ -65,50 +65,103 @@ function formatDate(dateStr) {
 }
 
 /**
- * Render a single changelog entry row (no date — shown by the group header).
- * @param {Object} entry - { date, category, description }
+ * Format a commit message body into readable HTML.
+ * Preserves bullet points and paragraph breaks.
+ * @param {string} msg - Full commit message (subject + body)
  * @returns {string} HTML
  */
-function renderEntry(entry) {
-  const meta = CATEGORY_META[entry.category] || CATEGORY_META.feature;
+function formatCommitMessage(msg) {
+  const escaped = escapeHtml(msg);
+  const lines = escaped.split('\n');
 
-  return `
-    <div class="flex items-start gap-2.5 py-1.5">
-      <div class="flex-shrink-0 w-6 h-6 rounded-full ${meta.bg} flex items-center justify-center mt-0.5">
-        <i class="fas ${meta.icon} ${meta.color}" style="font-size: 0.6rem;"></i>
-      </div>
-      <p class="text-sm text-gray-200 leading-snug pt-0.5">${escapeHtml(entry.description)}</p>
-    </div>`;
+  // First line is the subject — skip it since description already covers it
+  // Body starts after first blank line
+  const blankIdx = lines.indexOf('', 1);
+  if (blankIdx < 0) return ''; // no body, nothing extra to show
+
+  const bodyLines = lines.slice(blankIdx + 1);
+  if (bodyLines.every((l) => l.trim() === '')) return '';
+
+  // Convert lines to HTML: bullet lines stay as-is, blank lines become breaks
+  const htmlParts = [];
+  for (const line of bodyLines) {
+    const trimmed = line.trim();
+    if (trimmed === '') {
+      htmlParts.push('<br>');
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      htmlParts.push(
+        `<div class="flex gap-1.5 pl-1"><span class="text-gray-600 select-none">&bull;</span><span>${trimmed.slice(2)}</span></div>`
+      );
+    } else {
+      htmlParts.push(`<div>${trimmed}</div>`);
+    }
+  }
+
+  return htmlParts.join('');
 }
 
 /**
- * Group a flat array of entries by date.
- * @param {Array} entries
- * @returns {Array<{date: string, entries: Array}>}
+ * Render a single changelog entry row (no date — shown by the group header).
+ * If the entry has a commitMessage, clicking it toggles an inline expansion.
+ * @param {Object} entry - { date, category, description, hash?, commitMessage? }
+ * @param {number} idx - unique index for this entry (used for DOM IDs)
+ * @returns {string} HTML
  */
-function groupByDate(entries) {
+function renderEntry(entry, idx) {
+  const meta = CATEGORY_META[entry.category] || CATEGORY_META.feature;
+  const text = escapeHtml(entry.description);
+  const hasDetail = entry.commitMessage && entry.commitMessage.includes('\n\n');
+  const cursorClass = hasDetail ? 'cursor-pointer hover:text-white' : '';
+  const chevron = hasDetail
+    ? `<i class="fas fa-chevron-right text-gray-600 text-[0.5rem] mt-1.5 ml-auto shrink-0 transition-transform duration-150" data-chevron="${idx}"></i>`
+    : '';
+
+  const detailHtml = hasDetail
+    ? `<div class="hidden pl-8.5 pr-2 pb-2 text-xs text-gray-400 leading-relaxed" data-detail="${idx}">${formatCommitMessage(entry.commitMessage)}</div>`
+    : '';
+
+  return `
+    <div class="flex items-start gap-2.5 py-1.5 ${cursorClass} transition" ${hasDetail ? `data-toggle="${idx}"` : ''}>
+      <div class="flex-shrink-0 w-6 h-6 rounded-full ${meta.bg} flex items-center justify-center mt-0.5">
+        <i class="fas ${meta.icon} ${meta.color}" style="font-size: 0.6rem;"></i>
+      </div>
+      <span class="text-sm text-gray-200 leading-snug pt-0.5">${text}</span>
+      ${chevron}
+    </div>${detailHtml}`;
+}
+
+/**
+ * Group a flat array of entries by date, preserving a global index
+ * so each entry gets a unique ID for toggle behaviour.
+ * @param {Array} entries
+ * @param {number} [startIdx=0] - starting index offset
+ * @returns {Array<{date: string, entries: Array<{entry: Object, idx: number}>}>}
+ */
+function groupByDate(entries, startIdx = 0) {
   const groups = [];
   let current = null;
 
-  for (const entry of entries) {
+  entries.forEach((entry, i) => {
     if (!current || current.date !== entry.date) {
       current = { date: entry.date, entries: [] };
       groups.push(current);
     }
-    current.entries.push(entry);
-  }
+    current.entries.push({ entry, idx: startIdx + i });
+  });
 
   return groups;
 }
 
 /**
  * Render a date group (header + its entries).
- * @param {Object} group - { date, entries }
+ * @param {Object} group - { date, entries: Array<{entry, idx}> }
  * @returns {string} HTML
  */
 function renderGroup(group) {
   const dateLabel = group.date ? formatDate(group.date) : '';
-  const rows = group.entries.map(renderEntry).join('');
+  const rows = group.entries
+    .map(({ entry, idx }) => renderEntry(entry, idx))
+    .join('');
 
   return `
     <div class="py-2.5 px-1">
@@ -190,6 +243,22 @@ export function initAboutModal() {
     document.body.style.overflow = '';
   }
 
+  /**
+   * Toggle inline expansion for a changelog entry.
+   * @param {number} idx - entry index
+   */
+  function toggleDetail(idx) {
+    const detail = content.querySelector(`[data-detail="${idx}"]`);
+    const chevron = content.querySelector(`[data-chevron="${idx}"]`);
+    if (!detail) return;
+
+    const isHidden = detail.classList.contains('hidden');
+    detail.classList.toggle('hidden', !isHidden);
+    if (chevron) {
+      chevron.style.transform = isHidden ? 'rotate(90deg)' : '';
+    }
+  }
+
   function attachHandlers() {
     // Close button
     const closeBtn = document.getElementById('aboutModalClose');
@@ -207,7 +276,7 @@ export function initAboutModal() {
           const remaining = entries.slice(INITIAL_COUNT);
           const list = document.getElementById('aboutChangelogList');
           if (list && remaining.length > 0) {
-            const groups = groupByDate(remaining);
+            const groups = groupByDate(remaining, INITIAL_COUNT);
             const extraHtml = groups
               .map(
                 (group) =>
@@ -222,6 +291,14 @@ export function initAboutModal() {
       );
     }
   }
+
+  // Delegated click for entry expansion toggles
+  content.addEventListener('click', (e) => {
+    const toggle = e.target.closest('[data-toggle]');
+    if (toggle) {
+      toggleDetail(toggle.dataset.toggle);
+    }
+  });
 
   // Backdrop click closes
   modal.addEventListener('click', (e) => {

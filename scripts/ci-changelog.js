@@ -99,7 +99,17 @@ function getNewCommits(sinceDate) {
         // ignore
       }
 
-      return { hash, date, message, files };
+      // Get full commit message (subject + body) for the commitMessage field
+      let fullMessage = message;
+      try {
+        fullMessage = execSync(`git log --format="%B" -1 ${hash}`, {
+          encoding: 'utf8',
+        }).trim();
+      } catch {
+        // Fall back to subject only
+      }
+
+      return { hash, date, message, files, fullMessage };
     })
     .filter(Boolean);
 }
@@ -176,18 +186,20 @@ function deduplicateCommits(commits, existingEntries) {
 
 /**
  * Call Claude to classify and rewrite commits.
- * @param {Array} commits - Array of { date, message, files }
- * @returns {Promise<Array>} Array of { date, category, description }
+ * @param {Array} commits - Array of { hash, date, message, files, fullMessage }
+ * @returns {Promise<Array>} Array of { date, category, description, hash?, commitMessage? }
  */
 async function classifyWithClaude(commits) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic();
 
+  // Build a lookup so we can attach the hash after Claude responds
+  const commitsByIndex = new Map();
   const commitList = commits
-    .map(
-      (c, i) =>
-        `${i + 1}. [${c.date}] "${c.message}" (files: ${c.files.split('\n').slice(0, 5).join(', ')})`
-    )
+    .map((c, i) => {
+      commitsByIndex.set(i + 1, c.hash);
+      return `${i + 1}. [${c.date}] [hash:${c.hash}] "${c.message}" (files: ${c.files.split('\n').slice(0, 5).join(', ')})`;
+    })
     .join('\n');
 
   const response = await client.messages.create({
@@ -204,13 +216,14 @@ RULES:
 - Each description must be ONE short sentence, max 12 words, written for non-technical users
 - Examples of good descriptions: "Added drag-and-drop reordering on mobile", "Faster album cover loading", "Fixed track picks disappearing after refresh"
 - Category must be one of: feature, fix, ui, perf, security
+- Each commit line includes a [hash:...] tag — copy the hash value into the "hash" field of the output entry
 - Return ONLY a JSON array. No markdown, no explanation, no wrapping.
 - If NO commits are user-facing, return an empty array: []
 
 COMMITS:
 ${commitList}
 
-Return a JSON array of objects with "date", "category", and "description" fields. Only include user-facing changes.`,
+Return a JSON array of objects with "date", "category", "description", and "hash" fields. Only include user-facing changes.`,
       },
     ],
   });
@@ -221,15 +234,36 @@ Return a JSON array of objects with "date", "category", and "description" fields
     const parsed = JSON.parse(text);
     if (!Array.isArray(parsed)) return [];
 
-    // Validate each entry
-    return parsed.filter(
-      (entry) =>
-        entry &&
-        typeof entry.date === 'string' &&
-        typeof entry.description === 'string' &&
-        VALID_CATEGORIES.has(entry.category) &&
-        entry.description.length >= 5
-    );
+    // Validate each entry and ensure hash is present
+    return parsed
+      .filter(
+        (entry) =>
+          entry &&
+          typeof entry.date === 'string' &&
+          typeof entry.description === 'string' &&
+          VALID_CATEGORIES.has(entry.category) &&
+          entry.description.length >= 5
+      )
+      .map((entry) => {
+        const result = {
+          date: entry.date,
+          category: entry.category,
+          description: entry.description,
+        };
+        // Include hash and full commit message if available
+        if (
+          typeof entry.hash === 'string' &&
+          /^[0-9a-f]{7,40}$/.test(entry.hash)
+        ) {
+          result.hash = entry.hash;
+          // Find the original commit to get the full message
+          const original = commits.find((c) => c.hash === entry.hash);
+          if (original && original.fullMessage) {
+            result.commitMessage = original.fullMessage;
+          }
+        }
+        return result;
+      });
   } catch (e) {
     console.error('Failed to parse Claude response:', e.message);
     console.error('Raw response:', text.slice(0, 500));

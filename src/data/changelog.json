@@ -2,596 +2,799 @@
   {
     "date": "2026-02-08",
     "category": "feature",
-    "description": "Added changelog to view recent app updates"
+    "description": "Added changelog feature with curated update history",
+    "hash": "5c6045fac92c20db7c619e484d60c1e407b48ea6",
+    "commitMessage": "Add changelog feature with info button, curated history, and CI automation\n\n- Info icon in header opens What's New modal with scrollable changelog\n- Hand-curated 6 months of user-facing changes from git history (108 entries)\n- CI step uses Claude to auto-classify and write new changelog entries on each push\n- update-changelog.js dual-writes to CHANGELOG.md and changelog.json\n- Font Awesome icons fixed to use free-tier only (fa-plus, fa-wrench, etc.)\n- Test loader updated to handle JSON imports in Node.js ESM"
   },
   {
     "date": "2026-02-08",
     "category": "ui",
-    "description": "Made recommendation badges more visible"
+    "description": "Made badges more visible with improved opacity",
+    "hash": "cbac5ba477ac8f1c1c3cc47de5d7fe2c1c4a37c0",
+    "commitMessage": "Increase badge opacity - 85% default, 100% on hover/active"
   },
   {
     "date": "2026-02-08",
     "category": "ui",
-    "description": "Hidden recommendation sidebar for years without recommendations"
+    "description": "Hide recommendations sidebar for years without recommendations",
+    "hash": "874b2ccf8a449aad1ef1b21676644de41657b9c6",
+    "commitMessage": "Only show recommendations in sidebar for years that have them\n\n- Fetch recommendation years on app init (parallel with metadata/groups)\n- Store in centralized app-state as a Set for O(1) lookups\n- Sidebar conditionally renders recommendations button only when year has data\n- Refresh recommendation years after add/remove to keep sidebar in sync\n- Simplified /api/recommendations/years to only query actual recommendations"
   },
   {
     "date": "2026-02-08",
     "category": "feature",
-    "description": "Added recommendation badges to album lists"
+    "description": "Added recommendation badges to album lists",
+    "hash": "98727672497b6c160f646ffea7f1ffc6e3ae9983",
+    "commitMessage": "Add recommendation badge to album lists\n\n- Cross-reference list items with recommendations for the list's year\n- Show a blue thumbs-up badge on album covers (top-left, mirroring AI summary badge top-right)\n- Desktop: styled tooltip on hover showing who recommended and when\n- Mobile: modal sheet on tap with same info\n- Backend: reusable fetchRecommendationMaps() helper, extracted mapRowToListItem() to reduce complexity\n- Both getListById and buildFullListData paths enriched with recommended_by/recommended_at"
   },
   {
     "date": "2026-02-08",
     "category": "feature",
-    "description": "Added changelog feature with curated update history"
-  },
-  {
-    "date": "2026-02-08",
-    "category": "ui",
-    "description": "Made badges more visible with improved opacity"
-  },
-  {
-    "date": "2026-02-08",
-    "category": "ui",
-    "description": "Hide recommendations sidebar for years without recommendations"
+    "description": "Added What's New changelog accessible from the header",
+    "hash": "5c6045fac92c20db7c619e484d60c1e407b48ea6",
+    "commitMessage": "Add changelog feature with info button, curated history, and CI automation\n\n- Info icon in header opens What's New modal with scrollable changelog\n- Hand-curated 6 months of user-facing changes from git history (108 entries)\n- CI step uses Claude to auto-classify and write new changelog entries on each push\n- update-changelog.js dual-writes to CHANGELOG.md and changelog.json\n- Font Awesome icons fixed to use free-tier only (fa-plus, fa-wrench, etc.)\n- Test loader updated to handle JSON imports in Node.js ESM"
   },
   {
     "date": "2026-02-08",
     "category": "feature",
-    "description": "Added recommendation badges to album lists"
-  },
-  {
-    "date": "2026-02-08",
-    "category": "feature",
-    "description": "Added What's New changelog accessible from the header"
-  },
-  {
-    "date": "2026-02-08",
-    "category": "feature",
-    "description": "Recommendation indicator shown on albums in your lists"
+    "description": "Recommendation indicator shown on albums in your lists",
+    "hash": "98727672497b6c160f646ffea7f1ffc6e3ae9983",
+    "commitMessage": "Add recommendation badge to album lists\n\n- Cross-reference list items with recommendations for the list's year\n- Show a blue thumbs-up badge on album covers (top-left, mirroring AI summary badge top-right)\n- Desktop: styled tooltip on hover showing who recommended and when\n- Mobile: modal sheet on tap with same info\n- Backend: reusable fetchRecommendationMaps() helper, extracted mapRowToListItem() to reduce complexity\n- Both getListById and buildFullListData paths enriched with recommended_by/recommended_at"
   },
   {
     "date": "2026-02-07",
     "category": "feature",
-    "description": "Added copy album to other lists feature"
+    "description": "Added copy to list feature for albums",
+    "hash": "e8dfc313092424758ba6c6231b607e47f18189d0",
+    "commitMessage": "Add 'Copy to List' feature for albums (desktop + mobile)\n\n- Extract shared transferAlbumToList() into album-transfer.js (DRY refactor of duplicated move logic from context-menus.js and mobile-ui.js)\n- Add 'Copy to List' option in desktop context menu with submenu\n- Add 'Copy to List' option in mobile action sheet with year-accordion picker\n- Copy keeps album in source list, only saves target list\n- Confirmation dialog with copy-specific messaging\n- Extract showMobileListSelectionSheet() shared helper for move/copy accordion UI\n- 12 new tests for album-transfer.js, 2 new tests in context-menus.test.js"
   },
   {
     "date": "2026-02-07",
     "category": "feature",
-    "description": "Added copy to list feature for albums"
-  },
-  {
-    "date": "2026-02-07",
-    "category": "feature",
-    "description": "Copy albums to another list without removing from the original"
+    "description": "Copy albums to another list without removing from the original",
+    "hash": "e8dfc313092424758ba6c6231b607e47f18189d0",
+    "commitMessage": "Add 'Copy to List' feature for albums (desktop + mobile)\n\n- Extract shared transferAlbumToList() into album-transfer.js (DRY refactor of duplicated move logic from context-menus.js and mobile-ui.js)\n- Add 'Copy to List' option in desktop context menu with submenu\n- Add 'Copy to List' option in mobile action sheet with year-accordion picker\n- Copy keeps album in source list, only saves target list\n- Confirmation dialog with copy-specific messaging\n- Extract showMobileListSelectionSheet() shared helper for move/copy accordion UI\n- 12 new tests for album-transfer.js, 2 new tests in context-menus.test.js"
   },
   {
     "date": "2026-02-06",
     "category": "feature",
-    "description": "Recommend albums from the mobile action menu"
+    "description": "Recommend albums from the mobile action menu",
+    "hash": "0c90f444c8b8a0144d5bf005d90b323f7578ea36",
+    "commitMessage": "Add album recommendation to mobile action sheet\n\n- Extract shared recommendAlbum() function from desktop context menu handler to eliminate duplication\n- Add Recommend button to mobile album action sheet (shown for year-based lists, hidden when viewing recommendations)\n- Inject isViewingRecommendations and recommendAlbum as dependencies into createMobileUI, keeping mobile-ui.js free of API/business logic\n- Add 7 tests for recommend visibility logic"
   },
   {
     "date": "2026-02-05",
     "category": "fix",
-    "description": "Fixed occasional errors when saving lists"
+    "description": "Fixed occasional errors when saving lists",
+    "hash": "72399fabd1586c83d04e1b9561e82a85c264fb0d",
+    "commitMessage": "Fix UNNEST scalar/array type mismatch causing 500 errors on list saves\n\nAll three batch UNNEST queries were passing scalar values (list_id,\ntimestamps) where PostgreSQL requires arrays, causing 'function\npg_catalog.unnest(text) does not exist' errors. This broke every\nincremental list save that added items (move album, add album, import,\netc.).\n\n- routes/api/lists.js: processAdditions batch INSERT - fix list_id\n  (::text -> ::text[]) and timestamps (/ timestamptz -> timestamptz[])\n- utils/album-canonical.js: batchUpsertCanonical (both with/without\n  album_id paths) - fix timestamps (/0 timestamptz -> timestamptz[])"
   },
   {
     "date": "2026-02-03",
     "category": "feature",
-    "description": "Genres shown on recommended albums"
+    "description": "Genres shown on recommended albums",
+    "hash": "17cc8171f430a34b2e97768bd44532c89368b093",
+    "commitMessage": "Add genre display to recommendations lists\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-02-03",
     "category": "perf",
-    "description": "Smarter playcount updates from Last.fm"
+    "description": "Smarter playcount updates from Last.fm",
+    "hash": "9db6a5934849c624e94d76ee3e96f4701d5ea522",
+    "commitMessage": "Implement hybrid playcount refresh strategy with status tracking\n\nThree-tier refresh approach for Last.fm playcounts: background job (24h), staleness-based list view refresh (2h threshold), and immediate refresh on album play/add. Adds lastfm_status column to distinguish between zero plays and albums not found on Last.fm, showing a red X icon for not-found albums. Also fixes pre-existing formatting issues.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-02-02",
     "category": "feature",
-    "description": "Browser extension automatically fetches track info for added albums"
+    "description": "Browser extension automatically fetches track info for added albums",
+    "hash": "49183ade8e3aeee0d5d6312b08ede3c1331c167b",
+    "commitMessage": "Add automatic track fetching for browser extension albums\n\nWhen albums are added via the browser extension, tracks are now automatically fetched in the background from Deezer/iTunes APIs.\n\n- Add TrackFetchQueue utility for async track fetching\n\n- Add needsTracksFetch flag to album canonical upsert returns\n\n- Trigger track fetch in upsertAlbumRecord and batchUpsertAlbumRecords\n\n- Initialize TrackFetchQueue at server startup\n\n- Add comprehensive unit tests (23 tests)\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-02-02",
     "category": "fix",
-    "description": "Fixed AI summaries occasionally showing internal reasoning"
+    "description": "Fixed AI summaries occasionally showing internal reasoning",
+    "hash": "7fd8a157090daad38ca40d3115c8d8d9eb3bbd42",
+    "commitMessage": "Fix Claude summary LLM reasoning leakage in album summaries\n\nFixed issue where internal LLM reasoning text like 'I need to search for more information about X to complete the requirements' was appearing in album summaries. The problem was caused by the prompt framing ideology as a mandatory checklist item (Include:), which made the LLM feel obligated to explain when it couldn't fulfill what it perceived as a requirement.\n\nPrompt improvements: Reframed ideology from mandatory Include: to flexible Cover these elements when information is available, added explicit prohibition against meta-commentary and search process explanations, strengthened the instruction to write only the final summary without preambles.\n\nEnhanced preamble stripping: Added 11 new regex patterns to catch internal reasoning phrases including I need to search, I will search, Unable to find, and to complete the requirements variations.\n\nTesting: Added 3 new test cases validating that meta-commentary gets stripped, covering the exact reasoning text patterns that were appearing in production (27 total tests passing).\n\nExpected impact: Cleaner summaries with ideology information naturally integrated when relevant, no internal reasoning leakage.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-01-31",
     "category": "feature",
-    "description": "Share album recommendations with other users"
+    "description": "Share album recommendations with other users",
+    "hash": "77294be35c93b0a91fdd5b80e16c690720e4dd24",
+    "commitMessage": "Add shared recommendations feature with reasoning\n\nIntroduces a new recommendations system where users can recommend albums\nto others in their group, with required reasoning explaining why.\n\nFeatures:\n- Shared recommendations list per year, accessible via sidebar\n- Required reasoning field (max 500 chars) when recommending\n- Reasoning displayed via tooltip icon, clickable to view full text\n- Recommenders can edit their own reasoning via context menu\n- Admins can lock/unlock recommendations per year (separate from year lock)\n- Admins can remove recommendations via context menu\n- Add recommended albums to personal lists via context menu submenu\n- FAB support for adding recommendations when viewing recommendations list\n- \"Recommend\" option in album context menu for year-based lists\n\nDatabase:\n- New recommendations table with album references and reasoning\n- New recommendation_settings table for lock state\n- New recommendation_access table for granular access control\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-01-31",
     "category": "feature",
-    "description": "Receive album recommendations via Telegram"
+    "description": "Receive album recommendations via Telegram",
+    "hash": "93b39b62a373fb86ae21abaa1c3981381c27d94a",
+    "commitMessage": "Add Rate Your Music search link to Telegram recommendations\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-01-31",
     "category": "ui",
-    "description": "Improved Album of the Year reveal pacing"
+    "description": "Improved Album of the Year reveal pacing",
+    "hash": "5620a141b2d3e463a203f7ee03b83bfc28771af2",
+    "commitMessage": "Adjust aggregate list reveal pacing - larger groups for lower ranks\n\n- Ranks > 40: groups of 20 (faster reveal of bottom positions)\n- Ranks 6-40: groups of 5 (more dramatic as we approach top)\n- Ranks 1-5: individual reveals (unchanged)\n\nCo-authored-by: Cursor <cursoragent@cursor.com>"
   },
   {
     "date": "2026-01-29",
     "category": "feature",
-    "description": "Drag-and-drop list reordering on mobile sidebar"
+    "description": "Drag-and-drop list reordering on mobile sidebar",
+    "hash": "49390b639bce377c569a0e64da0b9d9019f06f2d",
+    "commitMessage": "Add drag-and-drop reordering for mobile sidebar\n\n- Enable touch-and-hold drag for groups and lists in mobile sidebar\n- Add 300ms delay before drag starts to distinguish from scrolling\n- Include 200ms scroll grace period for natural touch interactions\n- Add haptic feedback when drag starts on supported devices\n- Add visual feedback (scale, shadow) for dragged items\n- Filter menu buttons to prevent accidental drags"
   },
   {
     "date": "2026-01-29",
     "category": "ui",
-    "description": "Duplicate review works better on mobile"
+    "description": "Duplicate review works better on mobile",
+    "hash": "342c4d699ed5fbf9c309cac2408fe8ef5139fec9",
+    "commitMessage": "Make duplicate review modal mobile-friendly with side-by-side layout\n\n- Always show both albums in 2-column grid (no stacking on mobile)\n- Compact button labels with icons, 2x2 grid layout for actions\n- Tighter spacing and smaller text on mobile while staying readable\n- Touch-friendly 44px button heights\n- Match settings drawer visual aesthetic"
   },
   {
     "date": "2026-01-28",
     "category": "feature",
-    "description": "Year locking prevents changes to finalized lists"
+    "description": "Year locking prevents changes to finalized lists",
+    "hash": "7d9ead8943e4c761205abe6f50487da0aa984b8d",
+    "commitMessage": "Add year locking feature for aggregate lists\n\nAdmins can now lock specific years to prevent any list modifications across all users. When a year is locked, users can't create new lists, edit existing lists, or reorder albums for that year. Main lists are also protected from deletion regardless of lock status.\n\nBackend changes:\n- New migration adds locked column to master_lists table\n- Year lock validation added to all list mutation endpoints (create, edit, reorder, delete, move)\n- Lock/unlock API endpoints for admin control\n- Contributor management blocked for locked years\n- Main list deletion permanently blocked (independent of lock)\n\nFrontend improvements:\n- Lock/unlock buttons in admin settings with live status updates\n- Yellow banner shows on locked year lists with drag-and-drop disabled\n- Real-time UI refresh when locking/unlocking (no page reload needed)\n- Admin settings stay expanded when toggling lock status\n- Locked years cache with automatic invalidation\n\nUI polish:\n- Removed \"Pending\" badge from aggregate years (cleaner look)\n- Renamed \"Fetch Summaries\" to \"Fetch Missing\" for clarity\n- Added confirmation modal for \"Regenerate All\" to prevent accidental API costs\n- Hide \"Regenerate All\" button while summary fetch is running\n- Moved Database Management section to bottom (rarely used)\n\nDatabase restore improvements:\n- Fixed automatic restart after restore with dual-strategy approach\n- Dev mode: touches trigger file + exit code 1 for nodemon\n- Production: exit code 1 triggers Docker restart\n- Migrations run automatically after restore\n\nAll locks are reversible and admins can unlock years at any time to manage contributors or allow edits again."
   },
   {
     "date": "2026-01-28",
     "category": "ui",
-    "description": "Improved settings panel on mobile"
+    "description": "Improved settings panel on mobile",
+    "hash": "4c6e92fd35ed5ead9a2a78b817a086b5fd8eca53",
+    "commitMessage": "Polish settings drawer content elements on mobile\n\n- Add gradient backgrounds and glass borders to buttons\n- Update inputs/selects with inner shadow and refined styling\n- Add backdrop blur to badges for frosted glass effect\n- Modernize color picker with larger radius and shadow\n- Add subtle dividers between settings rows\n- Apply glassmorphism to stat cards in Preferences"
   },
   {
     "date": "2026-01-28",
     "category": "perf",
-    "description": "Smarter duplicate album detection"
+    "description": "Smarter duplicate album detection",
+    "hash": "20fca03a0cd2f72b2cd4971263a93049d7a5b4e1",
+    "commitMessage": "Exterminate the duplicate key villain blocking album additions\n\nThe browser extension was throwing 500 errors when trying to add albums that already existed in the canonical albums table. Turned out migration 046 forgot to evict the old idx_albums_unique_artist_album bouncer from migration 032, causing a constraint violation brawl before ON CONFLICT could diplomatically handle duplicates.\n\nChanges:\n- Updated migration 046 to drop the old global index (should have done this originally)\n- Added migration 047 to fix existing databases with the conflicting index\n- ON CONFLICT in upsertCanonical() now works as designed: finds existing albums gracefully instead of throwing tantrums\n\nThe fix: Two partial indexes (album_id + normalized name) replace one grumpy global index, letting the upsert logic do its job without drama."
   },
   {
     "date": "2026-01-27",
     "category": "perf",
-    "description": "Significantly faster album adding experience"
+    "description": "Significantly faster album adding experience",
+    "hash": "0e89a60475f18ee588fdcda3da0cbdfe4eabd077",
+    "commitMessage": "Fix: Fetch canonical album genres after adding albums\n\nThe genre ghosting trick has been exposed! When adding albums to lists, genres were playing hide-and-seek - invisible on add, magically appearing after refresh.\n\n**The Culprit:**\nFrontend was creating albums with empty genre fields, backend was correctly merging with canonical albums table (preserving genres from other users), but UI never fetched the merged result. It kept showing the local ghost data until a refresh forced a server fetch.\n\n**The Fix:**\nClear local cache after saving albums, forcing immediate refetch of merged data. Genres now appear instantly like they're supposed to.\n\n**Changes:**\n- MusicBrainz album add: Clear cache before selectList refresh\n- Manual album add: Clear cache before selectList refresh\n- Discovery feature add: Clear cache before selectList refresh\n\n**Impact:**\nUsers adding existing albums (e.g., 'The Blue Nowhere' by Between the Buried and Me) now see canonical genres ('Progressive Metal', 'Avant-Garde Metal') immediately instead of after F5 gymnastics.\n\nNo more genre hide-and-seek. 🎭→🎸"
   },
   {
     "date": "2026-01-27",
     "category": "perf",
-    "description": "Browser extension uses much less data"
+    "description": "Browser extension uses much less data",
+    "hash": "9a75208516e4a448368442153532fbba2ee26123",
+    "commitMessage": "Speed demon unleashed: browser extension gets 25-35% faster\n\nEliminate RestCountries API dependency and move country code resolution\nserver-side where it belongs. Now adding albums feels snappy instead of\nlike watching paint dry.\n\nPerformance improvements:\n• Browser extension: 600-900ms → 400-600ms per album addition\n• Removed external API dependency (one less thing to go wrong)\n• Eliminated ~150 lines of redundant client-side resolution code\n\nServer-side changes (backward compatible):\n• Expanded COUNTRY_CODE_MAP to full ISO 3166-1 coverage (249 codes)\n• Auto-resolve 2-letter codes during album upsert\n• Gracefully handles both codes (NO) and full names (Norway)\n• Special MusicBrainz codes (XW/XE/XU) supported\n\nBrowser extension v1.7.1:\n• Send country codes directly to server (no more RestCountries calls)\n• Removed resolveCountryCode() function and all API integration\n• Old extension continues working during app store review period\n\nFrontend improvements:\n• Simplified country display logic\n• Show 2-letter codes in search (resolved server-side on save)\n\nTesting:\n• Added 4 comprehensive test cases for country code resolution\n• All tests passing (2-letter codes, full names, unknown codes, special codes)\n• Backward compatibility verified\n\nDeployment notes:\n• Server changes are backward compatible - deploy immediately\n• Extension update can be submitted for review (3-7 day approval)\n• No data migration needed, existing albums work unchanged"
   },
   {
     "date": "2026-01-25",
     "category": "fix",
-    "description": "Fixed delete and move dialogs showing list IDs instead of names"
+    "description": "Fixed delete and move dialogs showing list IDs instead of names",
+    "hash": "ca5e3da36624a08c1a799af101a9dfbf31a901d0",
+    "commitMessage": "Fix move album dialog showing list IDs instead of names\n\nThe move album confirmation dialog was displaying database IDs instead of user-friendly list names after the migration to ID-based list storage.\n\nChanges:\n- Desktop context menu: Retrieve list names from metadata for display\n- Mobile action sheet: Return {id, name} objects and display names\n- Confirmation dialogs: Show list names in both question and description\n- Toast messages: Display list names instead of IDs\n- Internal operations: Continue using IDs for data operations\n\nExample improvement:\n  Before: Move to \"112c009304a661802916a032\"?\n  After: Move to \"My 2024 Favorites\"?\n\nAffected files:\n- src/js/modules/context-menus.js (desktop flow)\n- src/js/modules/mobile-ui.js (mobile flow)"
   },
   {
     "date": "2026-01-25",
     "category": "ui",
-    "description": "Improved collection management with smarter auto-hide"
+    "description": "Improved collection management with smarter auto-hide",
+    "hash": "c40d5252dd11d85a9271599da718ed74be7b8e5f",
+    "commitMessage": "Supercharge category UX: smart auto-hide, checkbox confirmations, and year-group protection\n\nCategory management just got a major upgrade with intelligent behavior and safety rails:\n\n**Year Groups Now Read-Only** 🔒\n- Hide rename option from desktop context menu and mobile action sheet\n- Add validation in handlers to prevent accidental rename attempts\n- Year names must always match their year value (auto-created, auto-managed)\n\n**Checkbox Confirmation for Dangerous Deletes** ✅\n- Added optional checkbox support to confirmation modal (templates.js)\n- Enhanced showConfirmation() with checkboxLabel option (ui-utils.js)\n- Confirm button disabled until user checks \"I understand...\" box\n- Used when deleting collections that contain lists\n- Clear messaging: lists will move to \"Uncategorized\"\n\n**Uncategorized Auto-Hide Magic** ✨\n- GET /api/groups now filters out empty \"Uncategorized\" groups\n- Auto-delete \"Uncategorized\" when last list deleted/moved (like year groups)\n- No more cluttered sidebar with empty categories\n- Appears only when there are actually uncategorized lists\n\n**Database Safety & Performance** 🛡️\n- Fixed: Lists now move to \"Uncategorized\" instead of NULL group_id (respects NOT NULL constraint)\n- Auto-create \"Uncategorized\" group when needed during collection delete\n- Comprehensive cache invalidation: groups + lists on all mutations\n- Frontend now calls refreshGroupsAndLists() after list delete (not just updateListNav)\n\n**Code Quality Cleanup** 🧹\n- Removed unused cancelPollingForList() function\n- Fixed: pollingControllers should be const (Map methods don't reassign)\n- Consistent error handling and user messaging across desktop/mobile\n\nFiles changed: 9 files, +246/-53 lines\nBackend: routes/api/groups.js, routes/api/lists.js\nFrontend: app.js, context-menus.js, list-nav.js, mobile-ui.js, ui-utils.js, templates.js, album-display.js\n\nResult: Categories that behave intelligently, delete confirmations that prevent accidents, and a UI that stays fresh without manual refreshes!"
   },
   {
     "date": "2026-01-23",
     "category": "feature",
-    "description": "Track data prefers full albums over singles"
+    "description": "Track data prefers full albums over singles",
+    "hash": "c9e760af18786025c36c7faa6d1cc1c12fe9bf48",
+    "commitMessage": "Prefer full albums over singles when fetching tracks from MusicBrainz\n\nWhen multiple release groups exist for the same album name (e.g., a single\nreleased before the full album), the track fetcher now prioritizes:\nAlbum > EP > Single > Other\n\nThis fixes cases like 'The Blue Nowhere' by Between The Buried And Me where\na 3-track single was being selected instead of the 10-track full album."
   },
   {
     "date": "2026-01-22",
     "category": "fix",
-    "description": "Fixed track selection not working on newly added albums"
+    "description": "Fixed track selection not working on newly added albums",
+    "hash": "eae0245c55b6f353c3d936c6f69893089cd21a19",
+    "commitMessage": "Fix track selection failing for newly added albums\n\nPATCH endpoint now returns IDs for added list items, and the client\nupdates local album objects with these IDs immediately after save.\nPreviously, albums added via the UI lacked _id until a page refresh,\ncausing 'missing list item ID' errors when selecting tracks."
   },
   {
     "date": "2026-01-21",
     "category": "feature",
-    "description": "Lists can have the same name in different collections"
+    "description": "Lists can have the same name in different collections",
+    "hash": "1bfdf743f33b607886a94cb522847650a85d460d",
+    "commitMessage": "Pivot to list IDs: duplicate names now welcome in different categories\n\nThis is the big one - lists are now identified by ID instead of name, which means:\n\n- You can have 'Hovedliste' in 2024 AND 2025 (finally!)\n- API endpoints now use :id instead of :name\n- Browser extension updated to use IDs for add-to-list\n- New migration (044) removes the unique name constraint\n\nAlso squashed some bugs along the way:\n- Fixed toast showing cryptic IDs instead of list names when toggling main status\n- Fixed multiple lists keeping their 'main' star (now properly exclusive per year)\n- Deduplicated toggleMainStatus logic (context-menus.js now delegates to app.js)\n\nBreaking changes for API consumers:\n- GET/PUT/DELETE /api/lists/:name → /api/lists/:id\n- POST /api/lists/:name → POST /api/lists (name in body)\n- /api/lists response now keyed by ID, not name"
   },
   {
     "date": "2026-01-21",
     "category": "perf",
-    "description": "Smarter album matching reduces import conflicts"
+    "description": "Smarter album matching reduces import conflicts",
+    "hash": "2b3fffebb6b4228277dac520e33480c09686d31b",
+    "commitMessage": "Smarter album matching: auto-merge obvious duplicates, stop pestering users\n\n- Add tiered matching thresholds: 98%+ auto-merge, 10-97% show modal, <10% ignore\n- Skip the merge decision modal entirely for near-identical albums (same artist/album after normalization)\n- Raise the 'worth asking about' floor from 20% to 10% confidence\n- Add shouldAutoMerge flag throughout the matching pipeline\n- Maintain backward compatibility with legacy numeric threshold parameter\n- Add 11 new tests covering threshold constants and auto-merge behavior"
   },
   {
     "date": "2026-01-21",
     "category": "fix",
-    "description": "Fixed track picks disappearing after page refresh"
+    "description": "Fixed track picks disappearing after page refresh",
+    "hash": "cfa2e1a4f15903301bb7e1e46b5d498acdcdbf55",
+    "commitMessage": "Fix track picks vanishing after page refresh\n\n- Add primary_track/secondary_track to list save INSERT statement\n- Invalidate response cache when track picks are updated via API\n- Root cause: track-picks API updated DB but cached list data was served on refresh"
   },
   {
     "date": "2026-01-21",
     "category": "ui",
-    "description": "Track selection menu stays open for picking multiple tracks"
+    "description": "Track selection menu stays open for picking multiple tracks",
+    "hash": "bc7538cc32c95bd8dd3e710f458b4bd5124f5c75",
+    "commitMessage": "Keep desktop track selection menu open for multi-click workflow\n\n- Menu no longer closes after each click, matching mobile UI behavior\n- Added updateMenuUI() to refresh visual state (stars, highlighting) after selections\n- Users can now click once for secondary (☆), click again for primary (★)"
   },
   {
     "date": "2026-01-20",
     "category": "fix",
-    "description": "Fixed genre changes reverting after page refresh"
+    "description": "Fixed genre changes reverting after page refresh",
+    "hash": "fb8657a70e509e32e54a01c5535e3245e193f765",
+    "commitMessage": "Fix genre edits reverting after page refresh\n\nCache invalidation pattern was too specific (GET:/api/lists:userId),\nmissing the actual cached list endpoints (GET:/api/lists/ListName:userId).\nChanged pattern to just :userId to match all user cache entries.\n\nGenre updates now properly invalidate both metadata and specific list\ncaches, so edits persist across page refreshes."
   },
   {
     "date": "2026-01-19",
     "category": "feature",
-    "description": "Searchable genre picker replaces basic dropdown"
+    "description": "Searchable genre picker replaces basic dropdown",
+    "hash": "d9bd9804cffeef3aec779eb031d462dbb4e85384",
+    "commitMessage": "Upgrade genre pickers: from datalist/select to searchable dropdowns\n\n- editable-fields: replace datalist with custom searchable dropdown\n  - Search/filter with match highlighting, matches float to top\n  - Non-matches dimmed but visible, \"Other genres\" separator\n  - Clear option, keyboard nav (arrows, Enter, Escape), click-outside close\n- mobile-ui: add initSearchableGenreSelect and use it for genre_1/genre_2\n  - Same search/filter/highlight/clear behavior as desktop\n  - Overlay panel with search input and scrollable options"
   },
   {
     "date": "2026-01-19",
     "category": "feature",
-    "description": "Move lists between collections via right-click menu"
+    "description": "Move lists between collections via right-click menu",
+    "hash": "4ed552babeb52b095ec27d579dc13fca5818b670",
+    "commitMessage": "Add 'Move to Collection' option to list context menu\n\n- Add context menu option for lists in collections (not year-groups)\n- Show submenu with available collections, current one marked with checkmark\n- Support both desktop (hover submenu) and mobile (action sheet picker)\n- Orphaned/uncategorized lists can also be moved to collections\n- Lists in year-groups don't see this option (organized by year)"
   },
   {
     "date": "2026-01-19",
     "category": "perf",
-    "description": "Faster initial list loading"
+    "description": "Faster initial list loading",
+    "hash": "09661f2e0370ac9da1c5615d91ebcc5074ce30d6",
+    "commitMessage": "Jump-start list loading: fetch data while the UI wakes up\n\n- Start loadLists() immediately after auth check instead of after other init\n- List fetch runs in parallel with settings drawer and other setup\n- Context menus and dependent features still await listLoadPromise before init"
   },
   {
     "date": "2026-01-18",
     "category": "perf",
-    "description": "Faster drag-and-drop reordering for large lists"
+    "description": "Faster drag-and-drop reordering for large lists",
+    "hash": "b7e9d6d4b842762a154f867eef7f4b0fe2822652",
+    "commitMessage": "Lightweight list reorder: drag-and-drop that won’t blow up on huge lists\n\n- Add POST /api/lists/:name/reorder: accepts only album IDs in new order\n  (avoids payload-too-large when reordering lists with many albums)\n- Use reorder endpoint from sorting module instead of full debounced save\n- Broadcast list:reordered over WebSockets; realtime-sync refreshes other tabs\n- Extract createBroadcast() in websocket to satisfy max-lines-per-function"
   },
   {
     "date": "2026-01-16",
     "category": "feature",
-    "description": "Organize lists into custom collections and year groups"
+    "description": "Organize lists into custom collections and year groups",
+    "hash": "0c0d38b8ceaa8d451a360664162ae5288eb3c8ba",
+    "commitMessage": "Merge feature/unified-list-groups: Add collections and custom list organization\n\nThis introduces a unified grouping system where users can:\n- Organize lists into custom collections (no year required)\n- Drag-and-drop to reorder groups and lists\n- Move lists between groups\n\nYear-based organization preserved for aggregate list functionality."
   },
   {
     "date": "2026-01-16",
     "category": "feature",
-    "description": "Rename and delete list collections"
+    "description": "Rename and delete list collections",
+    "hash": "4b527bcd3a425e53d40ddfccd924587e954534e1",
+    "commitMessage": "Add category management features: rename, delete, and improved list creation\n\n- Add collection deletion with force option to unassign lists\n- Add category context menu (rename/delete) for desktop and mobile\n- Refactor list creation to use category dropdown instead of year input\n- Support creating lists in existing or new years/collections\n- Improve error handling in API calls with JSON error parsing\n- Add mobile action sheet for category menu options\n- Update setup status check to exclude lists in collections"
   },
   {
     "date": "2026-01-16",
     "category": "ui",
-    "description": "Colored sidebar categories for better organization"
+    "description": "Colored sidebar categories for better organization",
+    "hash": "9fb80ca0dfb5c299fc6637af82ef2e1ea67d7013",
+    "commitMessage": "Polish sidebar categories: remove counts, add colored borders, improve spacing\n\n- Remove count numbers from Year and Collection category headers\n- Add subtle colored borders matching category background colors (green for years, purple for collections)\n- Add proper spacing: 4px left/top margins on headers, 6px right and 2px bottom margins on headers and lists\n- Update hover effects to use category background colors instead of gray\n- Clean up function signatures by removing unused count parameter"
   },
   {
     "date": "2026-01-15",
     "category": "fix",
-    "description": "More accurate Last.fm playcount matching"
+    "description": "More accurate Last.fm playcount matching",
+    "hash": "ff83725cd0d23aadf1cfea48f016b01467ad0dfd",
+    "commitMessage": "Improve Last.fm album matching with edition suffix stripping and better fallback\n\n- Add stripEditionSuffix function to remove edition suffixes (Deluxe, Remastered, etc.)\n- Switch fallback from album.search to artist.getTopAlbums for more reliable matching\n- Refactor fetchAlbumInfoExact into separate function for better code organization\n- Enhanced matching strategy: exact match -> without edition suffix -> artist.getTopAlbums\n- Handles cases like 'Album (Deluxe Edition)' matching 'Album' more effectively"
   },
   {
     "date": "2026-01-14",
     "category": "feature",
-    "description": "Click album covers to see a larger preview"
+    "description": "Click album covers to see a larger preview",
+    "hash": "f3d1d6c3869c2c39eb53979ace0cc1b91d8ad369",
+    "commitMessage": "Enhance album covers: add zoom preview + upgrade to 512x512 quality\n\n✨ New Features:\n- Click album covers on desktop to open smooth zoom preview\n- Inline expansion with blur background and elegant animations\n- ESC key or click-anywhere to close preview\n- Cursor changes to zoom-in to indicate interactivity\n\n📸 Image Quality Upgrade (256x256 @ 85% → 512x512 @ 100%):\n- Updated all image processing to use higher quality\n- Backend API proxy now fetches 512x512 @ 100% JPEG\n- Frontend manual uploads resized to 512x512\n- Mobile cover edits upgraded to 512x512\n- Created auto-migration (036) to upgrade existing images\n- Migration runs automatically on deployment, processes in batches\n- Images <200KB upgraded, larger ones skipped (already high-quality)\n\n🎨 UX Improvements:\n- Preview size optimized to 64% viewport (not too large)\n- Smooth cubic-bezier animations (0.4s)\n- Prevents body scroll when preview active\n- High-quality images maintained for preview display\n\n📝 Technical Details:\n- Clone & animate pattern for smoothest transitions\n- Maintains aspect ratio for all image types\n- Uses highest quality source available (data-lazy-src or base64)\n- Migration is idempotent and safe to run multiple times"
   },
   {
     "date": "2026-01-14",
     "category": "ui",
-    "description": "Higher quality album cover images"
+    "description": "Higher quality album cover images",
+    "hash": "9186eca7833be5a3728845b0427fa0c8df7d6fa2",
+    "commitMessage": "Add admin feature to refetch album images from external sources\n\n- New image-refetch.js service fetches from Cover Art Archive + iTunes fallback\n- Reprocesses all images at 512x512 @ 100% JPEG quality using sharp\n- Rate-limited at 200ms between requests, processes in batches of 50\n- Admin API: GET stats, POST refetch (with stop support)\n- Settings drawer UI: stats display, refetch button, progress feedback\n- Tracks success/failed counts and total duration"
   },
   {
     "date": "2026-01-13",
     "category": "feature",
-    "description": "Pick two favorite tracks per album (primary and secondary)"
+    "description": "Pick two favorite tracks per album (primary and secondary)",
+    "hash": "dcc972e4a8bb05832ac02348301c4bf7448ad5e6",
+    "commitMessage": "Implement dual track pick system: primary and secondary tracks per album\n\nThis major feature adds support for selecting two tracks per album (primary ★ and secondary ○), with track picks now scoped to user+album rather than list-item, meaning picks persist across all lists.\n\nDatabase & Backend:\n- Add track_picks table migration (035) with user+album scoped picks\n- Create trackPicks datastore with setTrackPick, removeTrackPick, findTrackPicksForAlbums methods\n- Add API endpoints: POST /api/track-picks/:albumId, DELETE /api/track-picks/:albumId, POST /api/track-picks/bulk\n- Update findWithAlbumData to optionally include track picks via JOIN\n- Support priority system: priority=1 (primary), priority=2 (secondary)\n- Migrate existing track_pick data from list_items to track_picks table\n\nFrontend Display:\n- Update album display to show stacked tracks: primary (★ yellow) and secondary (○ gray)\n- Add track cell styling for dual track display with proper spacing\n- Display track durations next to each track pick\n- Update mobile UI to show both tracks with visual indicators\n\nTrack Selection Logic:\n- First click = secondary (priority 2)\n- Second click = promote to primary (priority 1), old primary becomes secondary\n- Clicking primary again = deselect\n- Track picks persist when moving albums between lists\n\nPlaylist Creation:\n- Support both primary and secondary tracks in playlist generation\n- Process both tracks when creating playlists (adds both to playlist)\n- Update validation to count albums with primary-only vs both tracks\n- Enhanced error reporting for track resolution\n\nImport/Export:\n- Update CSV export to include primary_track and secondary_track columns\n- Maintain backward compatibility with legacy track_pick field\n\nUI Polish:\n- Add soft blurred left border to comment cell for visual separation\n- Improve track cell layout for stacked display\n- Add visual indicators (★/○) for track priority\n- Enhanced mobile track pick UI with click-to-select behavior"
   },
   {
     "date": "2026-01-13",
     "category": "ui",
-    "description": "Softer, more refined visual design across the app"
+    "description": "Softer, more refined visual design across the app",
+    "hash": "5694fb7c8e62ce0c9adf58e71d04c1db8637852f",
+    "commitMessage": "Replace hard borders with soft shadows across main UI elements\n\n- Add soft shadow edge to main header (desktop only)\n- Replace album header border with subtle shadow\n- Replace sidebar border with layered soft shadows\n- Convert album row borders to inset shadows for refined separation\n- Create consistent soft-edge aesthetic throughout the interface"
   },
   {
     "date": "2026-01-12",
     "category": "ui",
-    "description": "Year-grouped list picker when moving albums on mobile"
+    "description": "Year-grouped list picker when moving albums on mobile",
+    "hash": "3b1c970c69b1ee8361721b196d886644bcf6fc3a",
+    "commitMessage": "Add year-based accordion grouping to mobile move-to-list sheet\n\nThis commit improves the mobile UI for moving albums between lists by adding\nyear-based accordion grouping, matching the desktop behavior for consistency.\n\nKey improvements:\n- Year-based grouping: Lists are now organized by year in collapsible sections\n- Accordion interface: Years can be expanded/collapsed with smooth animations\n- First year expanded by default: Most recent year (highest number) is open\n  by default for quick access\n- \"Other\" section: Lists without a year are grouped in a separate collapsible\n  section\n- Visual indicators: Chevron icons rotate to show expand/collapse state\n- List counts: Each year section shows the number of lists it contains\n\nUI enhancements:\n- Smooth transitions for expand/collapse animations\n- Visual hierarchy with indented list items under year headers\n- Border styling to show nested structure\n- Consistent styling with desktop move-to-list interface\n\nThis makes it easier to navigate long lists of lists on mobile devices, especially\nwhen users have many lists across multiple years."
   },
   {
     "date": "2026-01-11",
     "category": "feature",
-    "description": "Automatic detection and merging of duplicate albums"
+    "description": "Automatic detection and merging of duplicate albums",
+    "hash": "4bc721bb283f6bda9962568099184a1dacdf8996",
+    "commitMessage": "Vanquish duplicate albums: canonical deduplication with fuzzy matching and smart merging\n\nThis commit implements a comprehensive album deduplication system that ensures\nonly ONE canonical entry exists per unique artist/album combination, regardless\nof source (Spotify, MusicBrainz, Tidal, manual entry).\n\nCore features:\n- Canonical album deduplication: Albums are identified by normalized artist/album\n  name (case-insensitive, trimmed), preventing duplicates from different sources\n- Smart metadata merging: First entry establishes baseline, subsequent entries\n  enhance with better/missing metadata (prefers larger cover images, fills gaps)\n- Fuzzy matching: Detects potential duplicates using Levenshtein distance and\n  token-based matching for typo detection and word reordering\n- Duplicate scanning: Admin tool to scan database and review potential duplicates\n- Aggregate list audit: Identifies albums with different IDs that normalize to\n  same name, with preview and fix capabilities\n- User-facing duplicate detection: Prompts users when adding albums that may\n  already exist, allowing them to use existing or mark as distinct\n\nDatabase changes:\n- Migration 031: Deduplicates existing canonical albums (merges 212 duplicates)\n- Migration 032: Adds unique constraint on normalized artist/album\n- Migration 033: Creates album_distinct_pairs table for user-marked distinct albums\n- Migration 034: Adds unique constraint on list_items (user_id, list_id, position)\n\nAPI endpoints:\n- POST /api/albums/check-similar: Check for similar albums before adding\n- POST /api/albums/mark-distinct: Mark two albums as distinct (not duplicates)\n- GET /admin/api/scan-duplicates: Scan database for potential duplicates\n- POST /admin/api/merge-albums: Merge two albums (smart metadata merge)\n- GET /api/admin/aggregate-audit/:year: Audit aggregate list data integrity\n- GET /api/admin/aggregate-audit/:year/preview: Preview fix changes\n- POST /api/admin/aggregate-audit/:year/fix: Execute data integrity fix\n\nUI enhancements:\n- Duplicate review modal: Review and merge potential duplicates from scan\n- Similar album modal: Prompt when adding albums that may already exist\n- Settings drawer: Duplicate scanner and aggregate audit tools for admins\n- Improved restore logic: Drops all tables before restore to avoid FK conflicts\n\nTesting:\n- Comprehensive test coverage for canonical deduplication logic\n- Fuzzy matching algorithm tests with various edge cases\n- Aggregate audit utility tests\n- Aggregate list tests verify grouping by normalized name (not album_id)\n\nThis fixes the root cause of duplicate albums appearing in aggregate lists,\nensuring clean data while preserving all user votes and metadata."
   },
   {
     "date": "2026-01-09",
     "category": "ui",
-    "description": "Aggregate list shows top 40 positions"
+    "description": "Aggregate list shows top 40 positions",
+    "hash": "6f7c470fe9de0c6c3a91ee8b16ac5fea136de231",
+    "commitMessage": "Limit aggregate list to top 40 positions only\n\nOnly albums in positions 1-40 of user lists are now eligible for the aggregate list. Albums beyond position 40 are completely excluded from aggregate calculations.\n\nChanges:\n- Updated getPositionPoints() to return 0 for positions > 40 (instead of 1)\n- Added SQL filter to only fetch list items with position <= 40\n- Added defensive filtering to exclude albums with 0 total points\n- Updated tests to verify albums beyond position 40 are excluded\n\nThis change only affects aggregate list calculations - individual user lists and preferences remain unchanged."
   },
   {
     "date": "2026-01-08",
     "category": "ui",
-    "description": "Move-to-list menu organized by year"
+    "description": "Move-to-list menu organized by year",
+    "hash": "0ef51a3f197f365f4d84920199df2564aa144002",
+    "commitMessage": "Organize move menu with year-based hierarchy: making list navigation less chaotic\n\n- Refactor 'Move to List' submenu into two-level hierarchy (years → lists)\n- Group lists by year in the move submenu for easier navigation\n- Add nested submenu support with proper hover handling and timeout management\n- Reduce submenu hide timeout from 200ms to 100ms for snappier UX\n- Track highlighted year state to properly manage nested menu interactions"
   },
   {
     "date": "2026-01-06",
     "category": "ui",
-    "description": "Improved Spotify mini player controls and compatibility"
+    "description": "Improved Spotify mini player controls and compatibility",
+    "hash": "163fa42e5963a8f658b544e833140e655c076799",
+    "commitMessage": "Improve device compatibility and UI for miniplayer controls\n\n• Only hide miniplayer for Premium errors on playback state requests\n• Allow volume/seek actions to fail gracefully on unsupported devices (e.g., iPhone)\n• Hide volume control when device doesn't support volume changes\n• Redesign device picker as single clickable button with chevron indicator\n• Center device dropdown below button for better visual alignment\n• Improved spacing and visual hierarchy in miniplayer layout"
   },
   {
     "date": "2026-01-04",
     "category": "feature",
-    "description": "AI-generated album descriptions powered by Claude"
+    "description": "AI-generated album descriptions powered by Claude",
+    "hash": "4b20ea10a357525e40bc595fbf9291070accde84",
+    "commitMessage": "Replace Last.fm/Wikipedia with Claude AI for album summaries\n\n• Integrated Claude API with web search for generating 4-6 sentence album descriptions\n• Added Claude summary service with rate limiting and comprehensive error handling\n• Updated UI to always show Claude badges/tooltips (even for legacy summaries)\n• Added 'Regenerate All' button to migrate existing summaries to Claude\n• Removed deprecated Last.fm and Wikipedia summary fetching code\n• Enhanced error logging with stack traces and detailed context\n• Fixed false positive error toast when batch jobs complete\n• Added Claude API environment variables to docker-compose files\n• Created migration documenting transition to Claude as primary source\n• Comprehensive test coverage for Claude integration"
   },
   {
     "date": "2026-01-04",
     "category": "feature",
-    "description": "Album summaries available on mobile"
+    "description": "Album summaries available on mobile",
+    "hash": "8e5424a7b2a28bd9aa9fad039ad282f9ea4ac7f6",
+    "commitMessage": "Bring album summaries to mobile: badge + modal for mobile users\n\n- Add summary badge to mobile album cards (positioned on cover, similar to desktop)\n- Create centered modal dialog for displaying summaries (replaces full-screen approach)\n- Add touch-friendly event handlers with proper event propagation handling\n- Style mobile badge with 24px touch target and active states\n- Integrate with existing mobile UI patterns and dependency injection\n- Modal features backdrop click-to-close and proper scrolling for long summaries"
   },
   {
     "date": "2026-01-04",
     "category": "feature",
-    "description": "Album genres are now consistent across all lists"
+    "description": "Album genres are now consistent across all lists",
+    "hash": "450237f48a0743e9887f09e4081fac28621c16eb",
+    "commitMessage": "Add PDF export feature for album lists\n\nTransform your album lists into beautiful PDF documents with a single click!\n\n- Add jsPDF library for client-side PDF generation\n- Create downloadListAsPDF() function with elegant list layout\n- Include album covers, rank, artist, album, release date, country, and genres\n- Exclude comments and points as specified\n- Add PDF option to desktop context menu download submenu\n- Add PDF option to mobile action sheet download section\n- Handle page breaks gracefully for long lists\n- Show placeholder rectangles for missing cover images\n- Proper error handling and user feedback via toast notifications\n\nThe PDF features a clean, professional design with cover thumbnails,\nhierarchical typography, and automatic pagination. Users can now\nexport their lists in a shareable, printable format alongside\nthe existing JSON export option."
   },
   {
     "date": "2026-01-03",
     "category": "feature",
-    "description": "New slide-over settings panel"
+    "description": "New slide-over settings panel",
+    "hash": "d8c10d7214d5f71e7fb0860f03ed6247ab5c8bdd",
+    "commitMessage": "Add settings drawer with slide-over UI and fix ESLint errors\n\n- Add new settings-drawer.js module for slide-over settings panel\n- Add admin stats API endpoint (/api/admin/stats)\n- Add JSON response support to password change and admin code endpoints\n- Add CSRF token to apiCall for POST/PUT/DELETE/PATCH requests\n- Initialize settings drawer in app.js with long-press navigation to /settings\n- Fix 9 ESLint no-unused-vars errors:\n  - Prefix unused caught errors with underscore (_e)\n  - Prefix unused functions with underscore (_getCountryFlag, _disableTelegramStep, etc.)\n  - Remove unused event parameter in admin handlers\n- Update toast z-index to appear above drawer"
   },
   {
     "date": "2026-01-03",
     "category": "feature",
-    "description": "Export album lists as PDF"
+    "description": "Export album lists as PDF",
+    "hash": "450237f48a0743e9887f09e4081fac28621c16eb",
+    "commitMessage": "Add PDF export feature for album lists\n\nTransform your album lists into beautiful PDF documents with a single click!\n\n- Add jsPDF library for client-side PDF generation\n- Create downloadListAsPDF() function with elegant list layout\n- Include album covers, rank, artist, album, release date, country, and genres\n- Exclude comments and points as specified\n- Add PDF option to desktop context menu download submenu\n- Add PDF option to mobile action sheet download section\n- Handle page breaks gracefully for long lists\n- Show placeholder rectangles for missing cover images\n- Proper error handling and user feedback via toast notifications\n\nThe PDF features a clean, professional design with cover thumbnails,\nhierarchical typography, and automatic pagination. Users can now\nexport their lists in a shareable, printable format alongside\nthe existing JSON export option."
   },
   {
     "date": "2026-01-03",
     "category": "feature",
-    "description": "Export album lists as CSV"
+    "description": "Export album lists as CSV",
+    "hash": "450237f48a0743e9887f09e4081fac28621c16eb",
+    "commitMessage": "Add PDF export feature for album lists\n\nTransform your album lists into beautiful PDF documents with a single click!\n\n- Add jsPDF library for client-side PDF generation\n- Create downloadListAsPDF() function with elegant list layout\n- Include album covers, rank, artist, album, release date, country, and genres\n- Exclude comments and points as specified\n- Add PDF option to desktop context menu download submenu\n- Add PDF option to mobile action sheet download section\n- Handle page breaks gracefully for long lists\n- Show placeholder rectangles for missing cover images\n- Proper error handling and user feedback via toast notifications\n\nThe PDF features a clean, professional design with cover thumbnails,\nhierarchical typography, and automatic pagination. Users can now\nexport their lists in a shareable, printable format alongside\nthe existing JSON export option."
   },
   {
     "date": "2026-01-03",
     "category": "feature",
-    "description": "Track durations shown in album details"
+    "description": "Track durations shown in album details",
+    "hash": "39b309cb39697df014562ac91a377902b7811134",
+    "commitMessage": "Add track length support: fetch duration and display playtime\n\n- Extract track duration from MusicBrainz API (t.length or t.recording.length)\n- Extract duration from iTunes fallback (trackTimeMillis)\n- Extract duration from Deezer fallback (duration in seconds, converted to ms)\n- Store tracks as objects with name and length properties instead of strings\n- Add helper functions (getTrackName, getTrackLength, formatTrackTime) for backward compatibility\n- Display track length in track selection dropdown and mobile edit modal\n- Auto-upgrade existing string-based tracks to objects when lists are loaded\n- Update all track comparisons and string operations to use getTrackName() helper\n- Maintain backward compatibility with existing string-based track data"
   },
   {
     "date": "2026-01-01",
     "category": "fix",
-    "description": "No more duplicate notifications on your own device"
+    "description": "No more duplicate notifications on your own device",
+    "hash": "09207fdf98c8be622ecb1a12eaeeb29e696ff0ec",
+    "commitMessage": "Stop notifying originating device of its own list changes\n\n- Add X-Socket-ID header to API calls when WebSocket is connected\n- Pass excludeSocketId to broadcast.listUpdated() to skip originating client\n- Fixes spurious 'List updated from another device' notifications"
   },
   {
     "date": "2025-12-31",
     "category": "fix",
-    "description": "Fixed header scrolling away on long lists"
+    "description": "Fixed header scrolling away on long lists",
+    "hash": "cf518b0a2118ab8b86d9ac1a1ce5b8a05bf8c096",
+    "commitMessage": "Tame the scrolling header: make it actually stick\n\nThe album list header was pretending to be sticky while secretly scrolling away like a ninja. Turns out CSS position:sticky needs to be a direct child of the scrolling container—who knew? (Everyone who reads the spec, apparently.)\n\n- Restructured DOM in templates.js: #albumContainer is now the scrolling container\n- Simplified album-display.js: removed unnecessary wrapper div, header and rows append directly\n- Updated spotify-app.css: target specific children (.album-header, .album-rows-container)\n- Header now actually sticks to top while list scrolls beneath it\n- All 340 tests still passing, ESLint still happy\n\nThe header can no longer escape. It must watch every album scroll by for eternity."
   },
   {
     "date": "2025-12-30",
     "category": "ui",
-    "description": "Improved Album of the Year scoring — passion beats volume"
+    "description": "Improved Album of the Year scoring — passion beats volume",
+    "hash": "cb59de3eabdccea9e3093793eb17e05e45068f34",
+    "commitMessage": "Revamp aggregate list scoring: passion now beats volume\n\nRefactored the aggregate list point system and tiebreaker logic to reward quality over quantity:\n\n- Updated position-to-points mapping for smoother linear progression (positions 12-40 now scale 29→1)\n- Albums beyond position 40 now earn 1 point instead of being ignored completely (every vote counts!)\n- New tiebreaker: when albums have equal points, the one with the highest individual ranking wins\n  - Rewards passionate fans who ranked an album #1 over albums with lukewarm mid-list support\n  - Example: Album at [#1, #20] beats album at [#2, #14] when both have 81 points\n- Shared rankings now consider both points AND highest position (not voter count)\n  - Multiple albums can tie if they have identical points and highest ranking\n  - Ranks skip correctly after ties (1, 1, 1 → next is 4)\n- All 1,138 tests pass, including new tiebreaker and shared ranking scenarios"
   },
   {
     "date": "2025-12-29",
     "category": "feature",
-    "description": "Lists sync in real-time across devices"
+    "description": "Lists sync in real-time across devices",
+    "hash": "dd6a571abc3c6c5d205e7aa56812b938ec8ed1d6",
+    "commitMessage": "Real-time list sync: because waiting for manual refresh is so 2010\n\n- Add Socket.io for bidirectional WebSocket communication\n- Implement server-side broadcast service for list events:\n  - list:updated, list:created, list:deleted, list:renamed, list:main-changed\n- Create client-side realtime-sync module with auto-reconnection\n- Integrate with Express server using shared session middleware\n- Add broadcast calls to all list mutation API endpoints\n- Track local saves to prevent 'updated from another device' on originating browser\n- Fix album covers not loading after realtime sync (now calls fetchAndApplyCovers)\n- Add comprehensive unit tests for WebSocket service\n\nFiles changed:\n- package.json: Added socket.io and socket.io-client dependencies\n- utils/websocket.js: New WebSocket service with room-based broadcasting\n- index.js: HTTP server wrapper, Socket.io setup, graceful shutdown\n- routes/api.js: Broadcast events after list mutations\n- src/js/modules/realtime-sync.js: Client-side Socket.io handler\n- src/js/app.js: Local save tracking, realtime module integration\n- test/websocket.test.js: Unit tests for WebSocket service"
   },
   {
     "date": "2025-12-29",
     "category": "ui",
-    "description": "Dramatic reveal animation for aggregate list"
+    "description": "Dramatic reveal animation for aggregate list",
+    "hash": "9466fdce82c6c98dfde8816e595e724ee3858705",
+    "commitMessage": "Summon the fog: dramatic reveal experience for aggregate list\n\nThe aggregate list now rises from the mist like a phoenix from mysterious depths:\n\n- New table 'aggregate_list_views' tracks who's witnessed the grand unveiling\n- Fog parting animation as users scroll up from #40 to #1\n- Albums materialize through atmospheric blur with Intersection Observer magic\n- Top 3 get special glow treatment, #1 triggers a celebration burst\n- Progress bar shows how deep into the mist you've ventured\n- Floating particle effects for that extra mystique\n\nAdmin goodies:\n- 'Reset Reveal' button in settings to re-experience the drama (for testing)\n- API endpoints: has-seen, mark-seen, reset-seen, viewed-years\n\nOnce you've witnessed the reveal, subsequent visits show the normal list.\nTwo-admin consent still required to unlock the fog gates."
   },
   {
     "date": "2025-12-27",
     "category": "feature",
-    "description": "Upload custom cover images for albums missing artwork"
+    "description": "Upload custom cover images for albums missing artwork",
+    "hash": "69010ce933788844a4ccea8839873c1a3242045a",
+    "commitMessage": "Let users add cover images to albums that are missing them\n\n- Add cover art editing section to album edit modal (mobile-ui.js)\n  - File input with 5MB limit and image type validation\n  - Image preview with immediate feedback\n  - Resizes to 256x256 JPEG before saving (matching manual add flow)\n\n- Fix cover image not rendering immediately after save (album-display.js)\n  - Reversed priority: inline coverImage data now takes precedence over albumId\n  - Desktop and mobile rows both fixed\n  - No more page refresh needed to see newly added covers"
   },
   {
     "date": "2025-12-26",
     "category": "feature",
-    "description": "Collaborative Album of the Year list combining everyone's picks"
+    "description": "Collaborative Album of the Year list combining everyone's picks",
+    "hash": "492b3d60ad2fc758e8c18b23f9b37b9e46a6a4dd",
+    "commitMessage": "Add collaborative Album of the Year master list + list setup wizard\n\nMaster List Feature:\n- Aggregates official lists from all users into a ranked AOTY master list\n- Uses existing POSITION_POINTS system for weighted scoring\n- Two-admin confirmation required for reveal ceremony\n- Anonymous stats preview for admins before reveal\n- Background recomputation when official lists change\n- AOTY page with position placeholders before reveal\n\nList Setup Wizard:\n- Prompts users to assign years to lists without them\n- Guides users to designate one official list per year\n- Bulk update API for efficient list configuration\n- Dismiss option (24h cooldown) for gentle persistence\n- Auto-triggers after page load when setup incomplete\n\nNew files:\n- routes/master-list.js - API endpoints and page route\n- utils/master-list.js - Core aggregation logic\n- src/js/modules/list-setup-wizard.js - Frontend wizard\n- db/migrations/017_add_master_lists.js - Master list tables\n- db/migrations/018_add_list_setup_dismissed.js - Wizard dismiss column\n- test/master-list.test.js - Comprehensive test coverage\n\nAlso: Added coverage/ to .dockerignore to fix build permissions"
   },
   {
     "date": "2025-12-26",
     "category": "feature",
-    "description": "Telegram notifications for admin events"
+    "description": "Telegram notifications for admin events",
+    "hash": "8f547875fc05bcaa35cc426f613552b0408213d3",
+    "commitMessage": "Add Telegram integration for admin notifications\n\n- New admin events system for tracking actions requiring admin attention\n- Telegram bot integration with UI-based setup wizard (modal flow)\n- Secure bot token storage with AES-256-GCM encryption\n- Forum/topic support for targeting specific Telegram topics\n- Graceful handling of non-HTTPS environments (webhooks skipped locally)\n- Admin notifications section styled consistently with Music Services\n\nNew files:\n- utils/telegram.js - Telegram Bot API integration\n- utils/admin-events.js - Core admin events service\n- db/migrations/020_admin_events_telegram.js - Database schema\n- test/telegram.test.js & test/admin-events.test.js - Unit tests\n\nBug fixes during development:\n- Fixed group detection parsing for various Telegram update types\n- Fixed topic detection from message thread IDs\n- Added webhook clearing before getUpdates to fix polling issues\n- Added test-preview endpoint for pre-save message testing"
   },
   {
     "date": "2025-12-26",
     "category": "feature",
-    "description": "New user registration requires admin approval"
+    "description": "New user registration requires admin approval",
+    "hash": "abc9280f628b320f776305cfd25dd9ecabe47040",
+    "commitMessage": "Add registration approval workflow: new users need admin blessing\n\n- Add approval_status column to users table (existing users default to 'approved')\n- New registrations create admin events with Telegram approve/reject buttons\n- Block login for pending/rejected users with friendly messages\n- Register approve/reject action handlers in admin routes\n- Add 13 tests covering the full approval flow\n\nExisting users remain blissfully unaware of this change - backwards compatibility FTW!"
   },
   {
     "date": "2025-12-23",
     "category": "feature",
-    "description": "Browser extension captures genres from RateYourMusic"
+    "description": "Browser extension captures genres from RateYourMusic",
+    "hash": "d962c2f67eecc1cc571fac93661dadd968abd6a1",
+    "commitMessage": "Remove duplicate genres.txt file from public directory\n\nThe active genres file is src/data/genres.txt which is imported via Vite.\nThe public/genres.txt file was a legacy duplicate and not used by the application."
   },
   {
     "date": "2025-12-23",
     "category": "feature",
-    "description": "Genre corrections apply across all users' lists"
+    "description": "Genre corrections apply across all users' lists",
+    "hash": "5713517fa886620ab377350bf382bfeec1eb8d42",
+    "commitMessage": "Genre corrections now ripple across users' lists like a musical butterfly effect\n\n- Change album upsert from 'first writer wins' to 'last writer wins'\n  - COALESCE(albums.field, EXCLUDED) → COALESCE(NULLIF(EXCLUDED, ''), albums.field)\n  - Non-empty values update canonical, empty values preserve existing\n\n- Add cross-user cache invalidation when canonical album data changes\n  - New invalidateCachesForAlbumUsers() finds all users with the album\n  - Invalidates their list caches so they see updated genres immediately\n  - Runs in parallel, non-blocking to avoid slowing down saves\n\n- Why this matters:\n  - User A adds album with genre 'Rock', User B corrects to 'Jazz'\n  - User A now sees 'Jazz' on their next page refresh\n  - Users with explicit overrides keep their custom values\n  - No migration needed - only affects saves from this point forward"
   },
   {
     "date": "2025-12-23",
     "category": "feature",
-    "description": "Stay logged in longer with Remember Me option"
+    "description": "Stay logged in longer with Remember Me option",
+    "hash": "76c966487445b4cf411e653889cdffb83a026408",
+    "commitMessage": "Remember me: persist session longer on login\n\n- Apply remember-me checkbox by extending session cookie maxAge\\n- Make date utils safe in Node (no window) for tests\\n- Add integration test for cookie lifetime"
   },
   {
     "date": "2025-12-22",
     "category": "feature",
-    "description": "Automatically selects your connected music service"
+    "description": "Automatically selects your connected music service",
+    "hash": "832ffc89a22054bedaaa2edbd04f1cd1c7cf2eaf",
+    "commitMessage": "Auto-detect music service when only one is authenticated\n\nThe playlist creation was failing with NO_SERVICE error even when users had authenticated with Spotify (or Tidal). This happened because the app required an explicit music service preference to be set, even when only one service was connected.\n\nChanges:\n- Smart service detection: automatically uses the authenticated service if only one is connected\n- Better error messages: distinguishes between 'not authenticated' vs 'multiple services but no preference set'\n- Improved UX: users can now send playlists immediately after connecting their first music service without needing to visit settings\n\nThe preference selection is now only required when users have authenticated with multiple services (Spotify AND Tidal), which makes much more sense."
   },
   {
     "date": "2025-12-06",
     "category": "feature",
-    "description": "Play individual tracks directly from the edit dialog"
+    "description": "Play individual tracks directly from the edit dialog",
+    "hash": "4306885294891a222111f12a1ac3ebb742f334b1",
+    "commitMessage": "Make tracks in edit modal clickable to play in Spotify/Tidal\n\n- Add playSpecificTrack function to play any track by name (not just saved pick)\n- Update mobile-ui track list: track names are now clickable green links\n- Clicking a track name opens it in Spotify/Tidal (same as mobile card behavior)\n- Works in edit modal on both desktop and mobile views\n\nTests:\n- Add track-search-routes.test.js: 51 tests for /api/spotify/track and /api/tidal/track\n- Add track-play-links.spec.js: 15 E2E tests for track play link UI/behavior\n- Update mobile-ui.test.js: 11 new tests for track play links logic"
   },
   {
     "date": "2025-12-06",
     "category": "fix",
-    "description": "Better handling for Spotify Free accounts"
+    "description": "Better handling for Spotify Free accounts",
+    "hash": "ab1316c1be15cd5b391f1d2ffd2c47d9eb04362c",
+    "commitMessage": "Improve Spotify search and play endpoint error handling"
   },
   {
     "date": "2025-12-01",
     "category": "feature",
-    "description": "Music Preferences section showing your listening habits"
+    "description": "Music Preferences section showing your listening habits",
+    "hash": "23e2b88f104c5fdddc3793fe4a9210744455e428",
+    "commitMessage": "Add Music Preferences section to Settings page\n\n- Fetch user preferences data in GET /settings route\n- Add full-width musicPreferencesSection component showing:\n  - Top genres with affinity score bars (accent color gradient)\n  - Top artists with affinity score bars\n  - Top countries as tags with album counts\n  - Spotify recent/medium-term favorites (if connected)\n  - Last.fm scrobble count and top artists (if connected)\n  - Data sources summary footer\n- Add 'Sync Now' button with loading state animation\n- Add syncPreferences() JavaScript function calling /api/preferences/sync\n- Show relative timestamps for last sync times\n- Graceful empty state when no preferences exist yet"
   },
   {
     "date": "2025-12-01",
     "category": "feature",
-    "description": "Tidal widget in the sidebar for Tidal users"
+    "description": "Tidal widget in the sidebar for Tidal users",
+    "hash": "49315a4a1c152f728b0b51ffa318049ceea3cb4a",
+    "commitMessage": "Give Tidal users a home in the sidebar: service-aware widgets and menus\n\n- Add Tidal sidebar widget with connected/not-connected states\n- Show Spotify miniplayer OR Tidal widget based on user's music service preference\n- Update 'Play album' context menu to show 'Open in Tidal' or 'Open in Spotify' with proper icons\n- Apply same service-aware logic to mobile action sheets\n- Tidal widget informs users to right-click albums (no remote playback control available)"
   },
   {
     "date": "2025-12-01",
     "category": "ui",
-    "description": "Music service preference auto-saves on change"
+    "description": "Music service preference auto-saves on change",
+    "hash": "cce6f00779af80232f9781898e7a0850c06c6d8c",
+    "commitMessage": "Ditch the Save button: music service selection now auto-saves on change"
   },
   {
     "date": "2025-11-30",
     "category": "feature",
-    "description": "Last.fm integration with playcount tracking and auto-scrobbling"
+    "description": "Last.fm integration with playcount tracking and auto-scrobbling",
+    "hash": "7c7ff83dc2b573a4628dd7b7acb81ea85245d8a0",
+    "commitMessage": "Implement Last.fm Phase 2: playcounts and auto-scrobbling\n\nFrontend Integration:\n- Display play counts on album rows (desktop: next to album name, mobile: inline with artist)\n- Fetch and cache playcounts from Last.fm API when loading lists\n- Background refresh for stale playcount data (>24h old)\n\nAuto-Scrobbling:\n- Automatic scrobble when track plays 50% or 4 minutes (whichever first)\n- Send 'now playing' update when track starts on Spotify\n- Track play time across pause/resume\n\nBackend:\n- New user_album_stats table (migration 012) for per-user playcount caching\n- GET /api/lastfm/list-playcounts/:listId - returns cached counts, triggers background refresh\n- POST /api/lastfm/refresh-playcounts - force refresh specific albums\n- Rate-limited batch processing (~5 req/sec to respect Last.fm limits)\n\nAPI changes:\n- List items now include _id field for playcount tracking\n- List metadata includes _id for API calls"
   },
   {
     "date": "2025-11-30",
     "category": "feature",
-    "description": "Discover similar artists via Last.fm"
+    "description": "Discover similar artists via Last.fm",
+    "hash": "44886e0fe9402b119921479c2375b3d10eb21a41",
+    "commitMessage": "Add Last.fm discovery: similar artists and recommendations (Phase 3)\n\n- New 'Show Similar Artists' context menu option shows artists with their top album and match %\n- New 'Personal Recommendations' option suggests albums based on Last.fm listening history\n- Recommendations filtered against user's existing lists to avoid duplicates\n- Discovery modal with skeleton loaders, error states, and 'Add to List' popover\n- Three new API endpoints: /api/lastfm/recommendations, /api/lastfm/similar-artists-with-albums, /api/user/lists-summary\n- Menu options only visible when Last.fm is connected"
   },
   {
     "date": "2025-11-29",
     "category": "feature",
-    "description": "Currently playing album highlighted in your list"
+    "description": "Currently playing album highlighted in your list",
+    "hash": "2755a140de15635396e05f438fc310c05480da4f",
+    "commitMessage": "Add 'Now Playing' album highlight feature with Spotify-styled auth button\n\n✨ Now Playing Album Highlight:\n- Animated Spotify-green snaking border on album covers matching current playback\n- Works on both desktop (full miniplayer) and mobile (headless polling)\n- Border persists when paused, removed when playback stops\n- Fuzzy matching handles diacritics and punctuation differences\n\n🎨 Spotify Player UI Improvements:\n- New Spotify-styled 'Log in with Spotify' button when not authenticated\n- Updated 'Connected' state shows Spotify icon badge\n- Uses official Spotify green (#1DB954) with proper branding\n\n🔧 Technical Changes:\n- spotify-player.js: Added event emission, headless polling for mobile\n- app.js: Album matching logic with normalization\n- main.js: Conditional init for desktop/mobile\n- input.css: Animated conic-gradient border effect\n- eslint.config.mjs: Added CustomEvent global"
   },
   {
     "date": "2025-11-29",
     "category": "feature",
-    "description": "Now playing bar on mobile"
+    "description": "Now playing bar on mobile",
+    "hash": "f259b60d3214bda52f1e2be4e8ab68e31b4eb447",
+    "commitMessage": "Hide mobile now-playing bar when sidebar menu is open"
   },
   {
     "date": "2025-11-28",
     "category": "ui",
-    "description": "Proper display on iPhones with notch and Dynamic Island"
+    "description": "Proper display on iPhones with notch and Dynamic Island",
+    "hash": "0099725c2c127dca1eb6ac8f711e65d56839901d",
+    "commitMessage": "Add standalone/PWA mode detection and improve safe area handling\n\n- Detect when app is opened from home screen shortcut (standalone mode)\n- Add standalone-mode class to body/html for CSS targeting\n- Add left/right safe area padding to mobile miniplayer\n- Ensure safe areas work correctly in both browser and standalone modes\n- Supports iOS Safari standalone, standard PWA, and fullscreen modes"
   },
   {
     "date": "2025-11-27",
     "category": "feature",
-    "description": "Spotify mini player with volume control in the sidebar"
+    "description": "Spotify mini player with volume control in the sidebar",
+    "hash": "1cd49ddd22207c9f6975861aa0724f935e6aa3ad",
+    "commitMessage": "Unleash the Spotify Hybrid Miniplayer: control any device from your browser\n\n- Add 7 new API endpoints for playback control (pause, resume, seek, volume, etc.)\n- Implement hybrid SDK/API player that switches modes automagically\n- SDK mode for real-time when browser is active device\n- API polling with smooth interpolation when controlling other devices\n- Device picker dropdown to transfer playback with one click\n- Debounced seek/volume to keep Spotify's API happy\n- Smart visibility handling: stops polling when tab is hidden\n- Slick animations and Spotify green accents because we're fancy like that\n- Include implementation plan doc for posterity"
   },
   {
     "date": "2025-11-27",
     "category": "feature",
-    "description": "Choose which device to play on with Spotify Connect"
+    "description": "Choose which device to play on with Spotify Connect",
+    "hash": "797d8e99ddd51afdb7775ce238beaf5e2ee92898",
+    "commitMessage": "Add expandable Play Album menu on mobile with device selection\n\nMobile action sheet now has an expandable Play section:\n- Tap 'Play Album' to expand/collapse options\n- 'Open in Spotify' option (same as before)\n- Spotify Connect device list with loading state\n- Tap any device to start playback directly\n\nFeatures:\n- Smooth expand/collapse animation with chevron rotation\n- Devices fetched on-demand when section is expanded\n- Shows loading spinner while fetching devices\n- Handles no devices / fetch errors gracefully\n- New playAlbumOnDeviceMobile() function for identity-based play\n\nThis brings mobile to parity with desktop's Play Album submenu."
   },
   {
     "date": "2025-11-27",
     "category": "feature",
-    "description": "Play albums from mobile with device selection"
+    "description": "Play albums from mobile with device selection",
+    "hash": "797d8e99ddd51afdb7775ce238beaf5e2ee92898",
+    "commitMessage": "Add expandable Play Album menu on mobile with device selection\n\nMobile action sheet now has an expandable Play section:\n- Tap 'Play Album' to expand/collapse options\n- 'Open in Spotify' option (same as before)\n- Spotify Connect device list with loading state\n- Tap any device to start playback directly\n\nFeatures:\n- Smooth expand/collapse animation with chevron rotation\n- Devices fetched on-demand when section is expanded\n- Shows loading spinner while fetching devices\n- Handles no devices / fetch errors gracefully\n- New playAlbumOnDeviceMobile() function for identity-based play\n\nThis brings mobile to parity with desktop's Play Album submenu."
   },
   {
     "date": "2025-11-26",
     "category": "feature",
-    "description": "Click tracks to play them directly"
+    "description": "Click tracks to play them directly",
+    "hash": "80fa0ba9c140afa17cb8ea48facb58c833f8c806",
+    "commitMessage": "Add clickable track selection to play individual tracks\n\n- New API endpoints /api/spotify/track and /api/tidal/track\n  - Search for track by artist, album, and track name/number\n  - Match by track number first, then by name, with fallback search\n- New playTrack() and playTrackSafe() functions in app.js\n  - Opens spotify:track:{id} or tidal://track/{id} deep links\n- Mobile album card track line now clickable when track is selected\n  - Tap the green track text to play that specific track\n  - Visual feedback with cursor-pointer and active:opacity-70"
   },
   {
     "date": "2025-11-26",
     "category": "perf",
-    "description": "Faster and more reliable album cover loading"
+    "description": "Faster and more reliable album cover loading",
+    "hash": "625c7dea0c8a2cee881cafbdc5482e744279d48e",
+    "commitMessage": "Speed up album cover loading with direct CAA redirect URLs\n\n- Use Cover Art Archive direct redirect endpoint (/front-250) instead of metadata API\n- Images now load immediately via img src without waiting for API calls\n- Deezer search only triggered as fallback on 404 via onerror handler\n- Eliminates 2 HTTP requests per album before browser can start loading images"
   },
   {
     "date": "2025-11-25",
     "category": "ui",
-    "description": "Position badges shown on album covers for main lists"
+    "description": "Position badges shown on album covers for main lists",
+    "hash": "c4a7950aecf1378d864f35fe51095ca2bb97bc52",
+    "commitMessage": "Float position badges to the upper right: because who needs a whole column for one number?"
   },
   {
     "date": "2025-11-24",
     "category": "ui",
-    "description": "Redesigned album cards on mobile"
+    "description": "Redesigned album cards on mobile",
+    "hash": "1bdbcfcec3f5273b71abd119f20904179cea6305",
+    "commitMessage": "Mobile album cards get structured makeover: 5 fixed-height info lines with unified icons and colors\n\n- Position number slimmed down from 20px to 17px\n- Album cards now use fixed 5-line structure (102px total height):\n  • Line 1 (20px): Album name with disc icon\n  • Line 2 (20px): Artist with user icon\n  • Line 3 (16px): Country with globe icon (may be empty)\n  • Line 4 (16px): Genres with guitar icon (may be empty)\n  • Line 5 (16px): Track selection with music icon (may be empty)\n- All content lines get Font Awesome icons at fa-xs size with 4px right margin\n- Unified text colors: album name stays white, metadata becomes gray-400, selected tracks pop in blue-400\n- Added 10px left padding to main content for breathing room from album image\n- Three-dot menu shrinks from 25px to 20px width\n- Mobile header trimmed down: 12px → 2px top/bottom padding (saves 20px)\n- Login page horizontal padding: 16px → 10px for edge-to-edge consistency\n\nResult: Cleaner, more scannable mobile album cards with predictable layout and better visual hierarchy"
   },
   {
     "date": "2025-11-24",
     "category": "ui",
-    "description": "Improved album list layout on desktop"
+    "description": "Improved album list layout on desktop",
+    "hash": "3b3a52d354a77597047880b357d34baa6abf1b72",
+    "commitMessage": "Desktop album row facelift: bigger covers, centered album names, and tidier typography\n\n- Bump album cover size from 64px to 80px with fixed dimensions (no more shrinking)\n- Center album name vertically on cover art\n- Position release date independently below album name using absolute positioning\n- Slightly increase album name font size (0.95rem)\n- Reduce position number font size for better visual hierarchy"
   },
   {
     "date": "2025-11-24",
     "category": "ui",
-    "description": "Albums from the wrong year highlighted in red"
+    "description": "Albums from the wrong year highlighted in red",
+    "hash": "d04041d5c79459fe6ccb3183995775e667017a86",
+    "commitMessage": "Highlight albums from the wrong decade: subtle red tint on release dates that don't match list year\n\n- Add year mismatch detection for album release dates vs list year\n- Show subtle red background (bg-red-900/25) with tooltip on mismatched dates\n- Works on desktop and mobile, for new albums and edits\n- Fix list data access in musicbrainz.js to use proper getListData/setListData helpers\n- Improve MusicBrainz proxy error logging with more context"
   },
   {
     "date": "2025-11-24",
     "category": "feature",
-    "description": "Designate one list per year as your main list"
+    "description": "Designate one list per year as your main list",
+    "hash": "aa5d575fed4c2fbca8e77f530c407f1a76576072",
+    "commitMessage": "Official lists: let users crown one list per year as their submission\n\n- Add is_official column to lists table with unique constraint per user/year\n- New API endpoint POST /api/lists/:name/official to toggle status\n- Sidebar shows yellow star badge on official lists (slightly smaller)\n- Context menu option to set/remove official status\n- Auto-replaces previous official list when setting a new one\n- Year count badges in sidebar now slightly more compact"
   },
   {
     "date": "2025-11-23",
     "category": "feature",
-    "description": "Lists organized by year in the sidebar"
+    "description": "Lists organized by year in the sidebar",
+    "hash": "421a01f7c001541f71480237c3c978369f7bceb3",
+    "commitMessage": "Plant the year column: lists can now remember what era they belong to"
   },
   {
     "date": "2025-11-22",
     "category": "feature",
-    "description": "Album covers included in list exports"
+    "description": "Album covers included in list exports",
+    "hash": "af9837ce09892c641e081488bfbedd7364f986b3",
+    "commitMessage": "Embed album art in list exports: ?export=true returns base64 images with rank/points baked in\n\n- Add export query param to GET /api/lists/:name endpoint\n- When export=true, return cover_image (base64) instead of cover_image_url\n- Include rank and points in server response (moved from client-side calculation)\n- Simplify import-export.js to fetch from API with embedded images\n- Exported JSON files are now self-contained and shareable with full artwork"
   },
   {
     "date": "2025-11-22",
     "category": "fix",
-    "description": "Prevent duplicate albums when moving between lists"
+    "description": "Prevent duplicate albums when moving between lists",
+    "hash": "a3ead6c420785db4504ac1b4f8ad341659ff8c94",
+    "commitMessage": "Prevent duplicate albums when moving between lists\n\n- Add duplicate check in moveAlbumToList before mutating lists\n- Uses 3-part identity key (artist::album::release_date) for consistency\n- Shows user-friendly error toast if album already exists in target"
   },
   {
     "date": "2025-11-21",
     "category": "perf",
-    "description": "Faster switching between lists"
+    "description": "Faster switching between lists",
+    "hash": "a3ead6c420785db4504ac1b4f8ad341659ff8c94",
+    "commitMessage": "Prevent duplicate albums when moving between lists\n\n- Add duplicate check in moveAlbumToList before mutating lists\n- Uses 3-part identity key (artist::album::release_date) for consistency\n- Shows user-friendly error toast if album already exists in target"
   },
   {
     "date": "2025-11-20",
     "category": "perf",
-    "description": "Significantly faster list loading"
+    "description": "Significantly faster list loading",
+    "hash": "7fa105af86e90922464cbd6c254589666f338bce",
+    "commitMessage": "Supercharge list loading: from sluggish to snappy! 🚀\n\nPerformance optimizations that make clicking between lists feel instant:\n\nClient-side improvements:\n- Reorder execution to update UI immediately before API calls (perceived performance boost)\n- Replace full sidebar DOM rebuilds with surgical CSS class updates (updateListNavActiveState)\n- Switch to atomic DOM replacement with replaceChildren() - all images render simultaneously now\n- Remove lazy loading and add async decoding to prevent staggered image rendering\n- Add defensive localStorage error handling for QuotaExceededError (graceful degradation)\n\nServer-side database optimization:\n- Combine 3 separate DB queries into single SQL JOIN for list items + album data\n- Use COALESCE with NULLIF to intelligently merge list_items and albums fields\n- Increase cache TTL from 1 to 5 minutes for better hit rates\n- Add explicit cache invalidation on list deletion\n\nThe result? Lists load faster, images appear together, and the UI feels responsive.\nDocker tested and ready to ship!"
   },
   {
     "date": "2025-11-20",
     "category": "fix",
-    "description": "Fixed album artwork disappearing"
+    "description": "Fixed album artwork disappearing",
+    "hash": "ad17441e9c80fe2f3973244e1852d3bf1925b80d",
+    "commitMessage": "Slay the localStorage dragon and resurrect missing album artwork\n\nThe Great localStorage Quota Saga has reached its epic conclusion! 🐉\n\n**Problem 1: The Quota Kraken**\n- Album images (base64-encoded) were chomping 50-200KB each\n- Caching entire lists quickly devoured the 5-10MB localStorage limit\n- QuotaExceededError was throwing tantrums left and right\n\n**Problem 2: The Vanishing Album Art Mystery**\n- Cached data showed instantly but looked naked (no images)\n- Fresh data fetches were skipped when cache existed\n- Users stared at placeholder icons instead of beautiful album covers\n\n**The Solution: Smart Caching Strategy**\n- Strip cover images from localStorage cache (95% size reduction!)\n- Cache = instant display of list structure\n- Always fetch fresh from server for the eye candy\n- Images appear smoothly after initial load\n\n**Changes:**\n- Added stripImagesForCache() helper to remove image bloat\n- Updated saveList(), loadLists(), cacheListData() to strip images\n- Modified selectList() to always fetch fresh data with images\n- Applied fix to delete/rename operations too\n\n**Result:**\n✅ No more quota errors (localStorage usage slashed)\n✅ Images display correctly (fetched fresh every time)\n✅ Fast initial load (cached structure shows instantly)\n✅ Smooth UX (images appear without jarring reloads)\n\nlocalStorage is happy. Images are back. Users are delighted. 🎨✨"
   },
   {
     "date": "2025-11-18",
     "category": "ui",
-    "description": "Replaced browser notifications with in-app toast messages"
+    "description": "Replaced browser notifications with in-app toast messages",
+    "hash": "6b1095a5483dbdba05c784899898c6dfdb60cfb1",
+    "commitMessage": "Browser extension v1.1.0: Persistent authentication with bearer tokens\n\n🎉 Users can finally stay logged in! Cookie-based auth has left the building.\n\nFrontend changes:\n- Switched from session cookies to bearer token authentication\n- Tokens stored in chrome.storage.local (persistent across restarts)\n- New auth-listener.js content script for /extension/auth page\n- Auto-updates when token changes (reactive storage listener)\n- Login/Logout buttons in popup with proper state management\n\nUser experience improvements:\n- One-click authorization flow via /extension/auth\n- Token automatically sent with all API requests via Authorization header\n- Extension shows logged-in/logged-out state clearly\n- Update notification for users upgrading from v1.0.x\n- Lists auto-refresh when auth state changes\n\nTechnical details:\n- Bearer tokens sent via Authorization: Bearer <token> header\n- Token validation on every API request\n- Cache invalidation on auth changes\n- Proper error handling for expired/revoked tokens\n- Update notification system for major releases\n\nFiles changed:\n- background.js: Token storage, bearer auth, update notifications\n- popup.js: Login/logout UI, token-based requests\n- popup.html: Added logout button\n- manifest.json: v1.1.0, new content script for auth page\n- auth-listener.js: NEW - Captures token from auth page\n- package-for-store.sh: Include auth-listener.js in zip\n- sushe-online-extension.zip: Updated build"
   },
   {
     "date": "2025-11-18",
     "category": "fix",
-    "description": "Fixed deleted lists reappearing on other devices"
+    "description": "Fixed deleted lists reappearing on other devices",
+    "hash": "9924af6f2454a1f89f157d26b10a42fd7cd9cab4",
+    "commitMessage": "Fix deleted lists haunting users across devices via SSE broadcasts\n\n- Add SSE delete/create events so all browsers know when lists vanish or appear\n- Implement connection rate limiting (10 per user) to prevent SSE stampedes\n- Add global list subscription endpoint alongside per-list updates\n- Client now subscribes to user-level events for instant cross-device sync\n- Ghost lists can no longer lurk in other browser tabs after deletion"
   },
   {
     "date": "2025-11-17",
     "category": "feature",
-    "description": "Move albums between lists"
+    "description": "Move albums between lists",
+    "hash": "dadef87042f45bdd6c4b0ecf348c31b057abf2eb",
+    "commitMessage": "Liberate albums from their list prisons: add cross-list teleportation powers\n\nGive users the superpower to beam their albums between lists with just a few clicks:\n\n• Desktop delight: Right-click any album → \"Move to List...\" → hover-powered submenu shows all escape routes → confirm and watch it vanish-reappear elsewhere\n• Mobile magic: Tap the three-dot oracle → \"Move to List...\" → sleek bottom sheet reveals destination portals → tap, confirm, profit\n• Smart submenu positioning that doesn't require a PhD in CSS\n• Confirmation modal that actually tells you what you're about to do (novel concept!)\n• Bulletproof identity tracking prevents the dreaded \"oops wrong album\" syndrome\n• Atomic move operation with rollback safety net (because Murphy's Law loves databases)\n• Preserves all metadata during interdimensional travel (comments, covers, the works)\n• Gracefully handles edge cases like \"you only have one list, silly\"\n\nTechnical wizardry:\n- moveAlbumToList(): removes from source, adds to target, saves both atomically\n- showMoveToListSubmenu(): dynamic list population with smart filtering\n- showMobileMoveToListSheet(): responsive bottom sheet with max-height scrolling\n- Identity-based lookup prevents stale index disasters after drag-and-drop chaos\n- Clean event delegation and proper cleanup (no memory leak gremlins here)\n\nTested on production database with real users. Works like a charm on both desktop hover menus and mobile touch sheets. No albums were harmed in the making of this feature."
   },
   {
     "date": "2025-11-17",
     "category": "feature",
-    "description": "Browser extension stays logged in between sessions"
+    "description": "Browser extension stays logged in between sessions",
+    "hash": "b68f6aa17e5a27f90595bf34f23d2d6471f50924",
+    "commitMessage": "Tame ESLint: fix browser extension linting errors blocking CI\n\n- Add proper global declarations for browser APIs (CustomEvent, sessionStorage)\n- Add ESLint exemptions for legitimate console usage in error handlers\n- Create .eslintrc.json for browser-extension with appropriate rules\n- Repackage extension (v1.1.1) with linting fixes\n\nNo functional changes - pure code quality improvements to unblock CI pipeline."
   },
   {
     "date": "2025-11-17",
     "category": "perf",
-    "description": "Much faster album cover image loading"
+    "description": "Much faster album cover image loading",
+    "hash": "8b1a5af9a6b2726f2dec70bf387309cb17b1c2ef",
+    "commitMessage": "Make album covers load like it's 2025, not 1995: 13x faster with parallel fetching\n\n- Use 250px thumbnails (35KB) instead of 1200px (460KB) for MusicBrainz covers\n- Images displayed at 64-80px don't need high-res originals\n- Parallel requests: try Deezer and MusicBrainz simultaneously\n- 3-second timeout on Deezer prevents waiting forever\n- Use whichever source responds first with valid result\n- Eliminates slow progressive/piece-by-piece image loading\n- Dramatic speed improvement for underground albums not on Deezer"
   },
   {
     "date": "2025-11-17",
     "category": "fix",
-    "description": "Fixed password reset not working"
+    "description": "Fixed password reset not working",
+    "hash": "bde5e0ea82b1829b6cb3da50640ebb750d1c5e53",
+    "commitMessage": "Polish password reset messaging for professional appeal\n\nUpdated email and form copy to be more professional while maintaining the dark, edgy aesthetic:\n\nEmail Updates (forgot_email.js):\n- Changed 'KVLT' → 'SuShe Online' (more recognizable brand)\n- Improved message clarity: 'We received a request to reset the password for your SuShe Online account'\n- Signature changed from 'Magnus' → '- The SuShe Online Team' (more professional)\n\nReset Form Updates (templates.js):\n- Title: 'FORGE NEW DARKNESS' → 'Reset Your Password'\n- Subtitle: 'secure your soul' → 'for your account'\n- Button: 'Seal the Pact' → 'Reset Password'\n\nInvalid Token Updates:\n- 'recovery rune has expired or been corrupted' → 'password reset link has expired or is invalid'\n- 'Request new recovery rune' → 'Request a new reset link'\n\nAll changes tested:\n✅ 38 tests passing\n✅ Image built and pushed to ghcr.io/magnusoverli/sushe-online:latest\n✅ Professional tone maintained while keeping dark theme intact"
   },
   {
     "date": "2025-11-06",
     "category": "feature",
-    "description": "Browser extension for adding albums from RateYourMusic"
+    "description": "Browser extension for adding albums from RateYourMusic",
+    "hash": "65c39870cc991d4a66f18418137d44fc8ad75b1b",
+    "commitMessage": "Add Chrome extension for RateYourMusic integration\n\nBehold, the birth of browser extension enlightenment! 🎸✨\n\nWhat's new:\n• Chrome extension to add albums from RateYourMusic to SuShe Online lists\n• Right-click context menu integration on RateYourMusic.com\n• Full MusicBrainz + Deezer metadata fetching (artist, album, cover art, release date, country)\n• Configurable SuShe Online instance URL via options page\n• Duplicate detection and intelligent list management\n• Browser notifications for user feedback\n• Clean, privacy-first design (no data collection, no tracking)\n\nTechnical goodness:\n• Manifest V3 compliant\n• Content script for URL extraction (no page scraping!)\n• Background service worker for API orchestration\n• Respects MusicBrainz rate limits via SuShe proxy\n• Country code resolution for consistency\n• Session-based authentication using existing login\n\nFiles included:\n- Core extension: manifest.json, background.js, content-script.js\n- UI: popup.html/js, options.html/js\n- Icons: 16x16, 48x48, 128x128\n- Documentation: README.md, PRIVACY_POLICY.md\n- Packaging: package-for-store.sh (automated ZIP creation)\n- Promotional templates: HTML templates for store graphics\n\nReady for Chrome Web Store submission! 🚀\n\nThis makes it delightfully easy for users to build their music collections\nwhile browsing RateYourMusic. One right-click, boom, album added with full\nmetadata. Music nerds everywhere will rejoice!"
   },
   {
     "date": "2025-10-07",
     "category": "feature",
-    "description": "Warning when creating playlists with missing track selections"
+    "description": "Warning when creating playlists with missing track selections",
+    "hash": "0d8e290889b9a09b58de527ed839c387e3802bd8",
+    "commitMessage": "Warn users about incomplete track selections before creating playlists\n\nNobody likes surprises, especially when half their playlist is missing tracks.\n\nThe problem: Users would click 'Send to Spotify' and wonder why their playlist only had\n5 tracks when they selected 10 albums. Turns out they forgot to pick specific tracks.\n\nNow we're proactive about it:\n• Check track selections before sending to music service\n• Count albums with vs. without track picks\n• Show clear warning: 'Only X of Y albums have tracks selected'\n• Explain the consequence: 'Only selected tracks will be added to your playlist'\n• Let user decide: continue anyway or go back and select tracks\n\nSmart edge case handling:\n• Empty lists? Skip the check (nothing to validate)\n• All tracks selected? Skip the warning (nothing to warn about)\n• No tracks selected? Show the warning (0 of Y - that's a problem!)\n• Whitespace-only selections? Treated as empty (because they are)\n\nThe validation happens immediately after clicking 'Send to Spotify/Tidal', before any API\ncalls, so canceling is instant and costs nothing. Users stay in control and know exactly\nwhat they're creating."
   },
   {
     "date": "2025-10-07",
     "category": "fix",
-    "description": "Fixed album context menu showing wrong album after reordering"
+    "description": "Fixed album context menu showing wrong album after reordering",
+    "hash": "804123c9f4e4844a9b2106fd48a80c018f0844de",
+    "commitMessage": "Fix stale index bug in album context menu after drag-and-drop\n\nSquash the bug where context menu operations targeted the wrong album after reordering:\n\n• Event handlers were capturing album indices in closures at row creation time\n• After drag-and-drop, SortableJS reordered DOM elements and updated the data array\n• BUT handlers still referenced stale closure indices, causing operations to target wrong albums\n• Example: drag album 1→2, then remove what's now at position 1 would remove position 2\n\nFixed by reading current index from row.dataset.index (updated after every drag-drop):\n• Track cell click handler - now reads live index\n• Country/genre/comment cell handlers - now read live indices\n• Context menu handler - now reads live index\n• Double-click edit handler - now reads live index\n\nAll interactive operations now correctly target the album at its current visual position."
   },
   {
     "date": "2025-10-06",
     "category": "feature",
-    "description": "Double-click albums to edit on desktop"
+    "description": "Double-click albums to edit on desktop",
+    "hash": "85b4f44a0e45768d273e2650575cb14b8dcfd6aa",
+    "commitMessage": "Add double-click to edit albums on desktop (no interference with drag-drop)\n\n- Double-click any non-interactive cell (position, cover, album name, artist) to open edit modal\n- Protected interactive cells (country, genres, comment, track) from triggering modal\n- Removed jarring zoom/scale effects when clicking albums\n- Replaced with subtle color-based feedback only (no transforms)\n- Drag-and-drop functionality remains fully intact\n- Desktop-only feature, mobile unchanged"
   },
   {
     "date": "2025-10-06",
     "category": "feature",
-    "description": "Tooltips for long album comments"
+    "description": "Tooltips for long album comments",
+    "hash": "df7c8e7471832f14267dda6093a6fccbd185b879",
+    "commitMessage": "Add line-wrapping tooltip for long comments in album list\n\n- Custom CSS tooltip appears on hover over comment cells\n- Tooltip wraps text at 400px max width (no more endless horizontal tooltips)\n- Shows full comment text even when truncated with line-clamp-2\n- Smooth fade-in/out transition\n- Only appears when comment exists (empty comments show nothing)\n- Positioned above the cell with proper spacing and shadow\n- Doesn't interfere with click-to-edit functionality"
   },
   {
     "date": "2025-10-05",
     "category": "perf",
-    "description": "Faster and more reliable artist search"
+    "description": "Faster and more reliable artist search",
+    "hash": "152fc9cb60ad6c1d98a41d95284876e4e5384a22",
+    "commitMessage": "Banish the artist search gremlins with turbocharged API wizardry 🚀\n\nThe artist search was taking forever because of CORS demons and a global sequential bottleneck that made everyone wait in line like it's the DMV. Not anymore!\n\nWhat we vanquished:\n• CORS errors from direct MusicBrainz/Wikidata API calls (those 503 nightmares)\n• Sequential API queue that made multiple users block each other\n• Slow artist image loading (MusicBrainz first, Deezer later)\n• Zero intelligence in request prioritization\n\nWhat we conjured up:\n• Backend proxy endpoints for MusicBrainz & Wikidata (CORS? Never heard of her)\n• Smart priority-based request queue (high/normal/low - like VIP club access)\n• Instant artist results with lazy-loaded images (placeholders → progressive loading)\n• Deezer-first image strategy (fast parallel loading, Wikidata as fallback)\n• User searches jump the queue while background images wait politely\n\nThe magic spell breakdown:\n- Artist search: HIGH priority (users are impatient)\n- Album listings: HIGH priority (they clicked, they want it NOW)\n- Artist metadata: NORMAL priority (nice to have, not critical)\n- Wikidata images: LOW priority (background eye candy, can chill)\n\nBefore: Search 'Bruce' → wait 20+ seconds → cry\nAfter: Search 'Bruce' → instant results → click artist → albums in 2 sec → profit\n\nThe queue is still respectful (1 req/sec to MusicBrainz) but now it's SMART about what to fetch first. Multiple users can search simultaneously without blocking each other. Background image fetching happens while users browse albums. It's like turning a single-lane road into a priority highway system!\n\nPerformance gains: 10x faster for concurrent users, instant perceived performance for everyone.\n\nTests: Manually verified artist search, album loading, image fetching, multi-tab scenarios.\nNo breaking changes, all existing functionality intact, just way faster! ⚡"
   },
   {
     "date": "2025-10-01",
     "category": "perf",
-    "description": "Faster playlist creation"
+    "description": "Faster playlist creation",
+    "hash": "c2ad18e41a6fab810c66f0098025d7a205b13c15",
+    "commitMessage": "Supercharge playlist operations: 5-8x faster with parallel API calls\n\nThe old approach was like waiting in line at the DMV - painful, sequential, and way too slow:\n- Sending a 30-track playlist? Grab a coffee, it'll take 15-25 seconds\n- Each track searched one by one, no matter how many times we'd seen that album\n- MusicBrainz throttled harder than a helicopter parent\n\nThe new hotness:\n✨ Parallel track searches with batching (10 concurrent requests)\n   - Process multiple tracks at once instead of one-by-one\n   - Respect rate limits while maximizing throughput\n\n🗄️ Smart album caching across batch\n   - Same album searched multiple times? Not anymore!\n   - 30-40% reduction in redundant API calls\n\n⚡ MusicBrainz rate limit optimized (3s → 1s)\n   - Was being overly cautious, official limit is 1 req/sec\n   - 2x faster track fetching from MusicBrainz\n\n🏃 Race iTunes vs Deezer fallbacks\n   - Use Promise.any to return first successful result\n   - 1-2 seconds saved when MusicBrainz fails\n\nPerformance improvement:\n📊 Before: 15-25 seconds for 30-track playlist\n📊 After: 3-5 seconds for 30-track playlist\n📊 Result: 5-8x faster! ⚡\n\nTechnical details:\n- Spotify: Batch processing in handleSpotifyPlaylist (routes/api.js:1615-1690)\n- Tidal: Batch processing in handleTidalPlaylist (routes/api.js:1838-1975)\n- Caching: Added albumCache Map to both findSpotifyTrack & findTidalTrack\n- Error handling: Promise.allSettled ensures one failure doesn't break the batch\n\nAll tests pass (110/111). Detailed analysis in API_PERFORMANCE_ANALYSIS.md"
   },
   {
     "date": "2025-10-01",
     "category": "fix",
-    "description": "Fixed Spotify requiring frequent reconnection"
+    "description": "Fixed Spotify requiring frequent reconnection",
+    "hash": "24d7a0470967f5e120248885b96b1270716bd06c",
+    "commitMessage": "Fix Spotify token auto-refresh: banish the dreaded 'Reconnect' nag screen\n\nThe automatic token refresh had a logic bug that made it about as useful as a chocolate teapot:\n- Only refreshed tokens expiring *soon* (within 1 minute)\n- Completely ignored already-expired tokens (the most common case!)\n- Result: Users kept seeing 'Please Reconnect' messages despite having valid refresh tokens\n\nWhat changed:\n- Now refreshes tokens that are expired OR expiring within 5 minutes\n- Extended refresh window from 1 minute to 5 minutes for better reliability\n- Applied fix to both /api/spotify/album and /api/playlists endpoints\n\nNo more manual reconnection dance when sending playlists to Spotify! 🎉"
   },
   {
     "date": "2025-09-01",
     "category": "fix",
-    "description": "Fixed album edits not saving after page refresh"
+    "description": "Fixed album edits not saving after page refresh",
+    "hash": "f850a26a34f2e5cc04ace4ba7308fba24a3c377a",
+    "commitMessage": "Fix data persistence: user edits now survive the refresh boss fight 🎮\n\nThis patch tackles two critical issues that were making users lose their carefully curated album metadata:\n\n1. Comment Field UX Fix:\n   - Placeholder text 'Comment' now persists when users exit editor without entering text\n   - No more invisible, unclickable comment fields haunting the UI\n   - Proper visual distinction between placeholder (gray) and actual content\n\n2. Album Metadata Persistence Fix:\n   - User-specific edits (genres, country, artist, album, etc.) now properly persist after page refresh\n   - Fixed API logic to prioritize user's list_items data over shared albums table data\n   - Each user's edits are now truly their own - no more shared album data overriding personal changes\n\nTechnical details:\n- Changed API data loading priority from 'albumData || itemData' to 'itemData || albumData'\n- Ensures list_items table (user-specific) takes precedence over albums table (shared)\n- Affects all editable fields: genres, country, artist, album, release date, tracks, cover images\n\nThe root cause was the API preferring shared album data over user-specific list data,\nessentially treating your carefully tagged genres like they never happened. Not anymore!"
   },
   {
     "date": "2025-08-31",
     "category": "feature",
-    "description": "Track selection for albums in your lists"
+    "description": "Track selection for albums in your lists",
+    "hash": "a7e1dfa6c28ccdb9266f7379315604276e4f379c",
+    "commitMessage": "Move track selection to table instead of context menu"
   },
   {
     "date": "2025-08-31",
     "category": "feature",
-    "description": "Export playlists to your preferred music service"
+    "description": "Export playlists to your preferred music service",
+    "hash": "68030043d857697b932b26265b7ff7ca5c8a2432",
+    "commitMessage": "Update list conext menu option to send playlist to user-selected music service."
   },
   {
     "date": "2025-08-31",
     "category": "perf",
-    "description": "Faster album cover art loading"
+    "description": "Faster album cover art loading",
+    "hash": "2785b4853007c0d264317b26a6cc42c2da521976",
+    "commitMessage": "Optimize sources for album cover art"
   }
 ]

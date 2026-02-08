@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
@@ -199,8 +200,23 @@ class ChangelogUpdater {
       }
     }
 
+    // Get current commit hash and full message
+    let hash;
+    let commitMessage;
+    try {
+      hash = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
+      commitMessage = execSync('git log --format="%B" -1', {
+        encoding: 'utf8',
+      }).trim();
+    } catch {
+      // Not in a git repo or git not available — skip hash
+    }
+
     // Prepend new entry (newest first)
-    entries.unshift({ date: today, category, description });
+    const entry = { date: today, category, description };
+    if (hash) entry.hash = hash;
+    if (commitMessage) entry.commitMessage = commitMessage;
+    entries.unshift(entry);
 
     fs.writeFileSync(
       CHANGELOG_JSON_PATH,
