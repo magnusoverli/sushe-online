@@ -22,6 +22,7 @@ import { positionContextMenu } from './modules/context-menu.js';
 import { escapeHtml } from './modules/html-utils.js';
 import { checkListSetupStatus } from './modules/list-setup-wizard.js';
 import { createSettingsDrawer } from './modules/settings-drawer.js';
+import { initAboutModal } from './modules/about-modal.js';
 import { createActionSheet } from './modules/ui-factories.js';
 import {
   invalidateLockedYearsCache,
@@ -1795,6 +1796,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize settings drawer
   initializeSettingsDrawer();
+
+  // Initialize about modal
+  initAboutModal();
 
   // Sidebar collapse functionality
   function initializeSidebarCollapse() {

@@ -110,13 +110,13 @@ if echo "$COMMIT_MSG" | grep -qE "^(feat|fix|perf|security|ui):" || \
    if [[ "$response" == "y" || "$response" == "Y" ]]; then
       npm run changelog
       
-      # Check if changelog was modified
-      if git status --porcelain | grep -q "CHANGELOG.md"; then
-         echo ""
-         echo "✅ Changelog updated! Don't forget to commit the changelog update:"
-         echo "   git add CHANGELOG.md"
-         echo "   git commit -m 'docs: Update changelog'"
-      fi
+       # Check if changelog was modified
+       if git status --porcelain | grep -qE "CHANGELOG.md|changelog.json"; then
+          echo ""
+          echo "✅ Changelog updated! Don't forget to commit the changelog update:"
+          echo "   git add CHANGELOG.md src/data/changelog.json"
+          echo "   git commit -m 'docs: Update changelog'"
+       fi
    else
       echo "⚠️  Remember to update the changelog before release!"
    fi

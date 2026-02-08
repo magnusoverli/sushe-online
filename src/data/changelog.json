@@ -1,0 +1,542 @@
+[
+  {
+    "date": "2026-02-08",
+    "category": "feature",
+    "description": "Recommendation indicator shown on albums in your lists"
+  },
+  {
+    "date": "2026-02-07",
+    "category": "feature",
+    "description": "Copy albums to another list without removing from the original"
+  },
+  {
+    "date": "2026-02-06",
+    "category": "feature",
+    "description": "Recommend albums from the mobile action menu"
+  },
+  {
+    "date": "2026-02-05",
+    "category": "fix",
+    "description": "Fixed occasional errors when saving lists"
+  },
+  {
+    "date": "2026-02-03",
+    "category": "feature",
+    "description": "Genres shown on recommended albums"
+  },
+  {
+    "date": "2026-02-03",
+    "category": "perf",
+    "description": "Smarter playcount updates from Last.fm"
+  },
+  {
+    "date": "2026-02-02",
+    "category": "feature",
+    "description": "Browser extension automatically fetches track info for added albums"
+  },
+  {
+    "date": "2026-02-02",
+    "category": "fix",
+    "description": "Fixed AI summaries occasionally showing internal reasoning"
+  },
+  {
+    "date": "2026-01-31",
+    "category": "feature",
+    "description": "Share album recommendations with other users"
+  },
+  {
+    "date": "2026-01-31",
+    "category": "feature",
+    "description": "Receive album recommendations via Telegram"
+  },
+  {
+    "date": "2026-01-31",
+    "category": "ui",
+    "description": "Improved Album of the Year reveal pacing"
+  },
+  {
+    "date": "2026-01-29",
+    "category": "feature",
+    "description": "Drag-and-drop list reordering on mobile sidebar"
+  },
+  {
+    "date": "2026-01-29",
+    "category": "ui",
+    "description": "Duplicate review works better on mobile"
+  },
+  {
+    "date": "2026-01-28",
+    "category": "feature",
+    "description": "Year locking prevents changes to finalized lists"
+  },
+  {
+    "date": "2026-01-28",
+    "category": "ui",
+    "description": "Improved settings panel on mobile"
+  },
+  {
+    "date": "2026-01-28",
+    "category": "perf",
+    "description": "Smarter duplicate album detection"
+  },
+  {
+    "date": "2026-01-27",
+    "category": "perf",
+    "description": "Significantly faster album adding experience"
+  },
+  {
+    "date": "2026-01-27",
+    "category": "perf",
+    "description": "Browser extension uses much less data"
+  },
+  {
+    "date": "2026-01-25",
+    "category": "fix",
+    "description": "Fixed delete and move dialogs showing list IDs instead of names"
+  },
+  {
+    "date": "2026-01-25",
+    "category": "ui",
+    "description": "Improved collection management with smarter auto-hide"
+  },
+  {
+    "date": "2026-01-23",
+    "category": "feature",
+    "description": "Track data prefers full albums over singles"
+  },
+  {
+    "date": "2026-01-22",
+    "category": "fix",
+    "description": "Fixed track selection not working on newly added albums"
+  },
+  {
+    "date": "2026-01-21",
+    "category": "feature",
+    "description": "Lists can have the same name in different collections"
+  },
+  {
+    "date": "2026-01-21",
+    "category": "perf",
+    "description": "Smarter album matching reduces import conflicts"
+  },
+  {
+    "date": "2026-01-21",
+    "category": "fix",
+    "description": "Fixed track picks disappearing after page refresh"
+  },
+  {
+    "date": "2026-01-21",
+    "category": "ui",
+    "description": "Track selection menu stays open for picking multiple tracks"
+  },
+  {
+    "date": "2026-01-20",
+    "category": "fix",
+    "description": "Fixed genre changes reverting after page refresh"
+  },
+  {
+    "date": "2026-01-19",
+    "category": "feature",
+    "description": "Searchable genre picker replaces basic dropdown"
+  },
+  {
+    "date": "2026-01-19",
+    "category": "feature",
+    "description": "Move lists between collections via right-click menu"
+  },
+  {
+    "date": "2026-01-19",
+    "category": "perf",
+    "description": "Faster initial list loading"
+  },
+  {
+    "date": "2026-01-18",
+    "category": "perf",
+    "description": "Faster drag-and-drop reordering for large lists"
+  },
+  {
+    "date": "2026-01-16",
+    "category": "feature",
+    "description": "Organize lists into custom collections and year groups"
+  },
+  {
+    "date": "2026-01-16",
+    "category": "feature",
+    "description": "Rename and delete list collections"
+  },
+  {
+    "date": "2026-01-16",
+    "category": "ui",
+    "description": "Colored sidebar categories for better organization"
+  },
+  {
+    "date": "2026-01-15",
+    "category": "fix",
+    "description": "More accurate Last.fm playcount matching"
+  },
+  {
+    "date": "2026-01-14",
+    "category": "feature",
+    "description": "Click album covers to see a larger preview"
+  },
+  {
+    "date": "2026-01-14",
+    "category": "ui",
+    "description": "Higher quality album cover images"
+  },
+  {
+    "date": "2026-01-13",
+    "category": "feature",
+    "description": "Pick two favorite tracks per album (primary and secondary)"
+  },
+  {
+    "date": "2026-01-13",
+    "category": "ui",
+    "description": "Softer, more refined visual design across the app"
+  },
+  {
+    "date": "2026-01-12",
+    "category": "ui",
+    "description": "Year-grouped list picker when moving albums on mobile"
+  },
+  {
+    "date": "2026-01-11",
+    "category": "feature",
+    "description": "Automatic detection and merging of duplicate albums"
+  },
+  {
+    "date": "2026-01-09",
+    "category": "ui",
+    "description": "Aggregate list shows top 40 positions"
+  },
+  {
+    "date": "2026-01-08",
+    "category": "ui",
+    "description": "Move-to-list menu organized by year"
+  },
+  {
+    "date": "2026-01-06",
+    "category": "ui",
+    "description": "Improved Spotify mini player controls and compatibility"
+  },
+  {
+    "date": "2026-01-04",
+    "category": "feature",
+    "description": "AI-generated album descriptions powered by Claude"
+  },
+  {
+    "date": "2026-01-04",
+    "category": "feature",
+    "description": "Album summaries available on mobile"
+  },
+  {
+    "date": "2026-01-04",
+    "category": "feature",
+    "description": "Album genres are now consistent across all lists"
+  },
+  {
+    "date": "2026-01-03",
+    "category": "feature",
+    "description": "New slide-over settings panel"
+  },
+  {
+    "date": "2026-01-03",
+    "category": "feature",
+    "description": "Export album lists as PDF"
+  },
+  {
+    "date": "2026-01-03",
+    "category": "feature",
+    "description": "Export album lists as CSV"
+  },
+  {
+    "date": "2026-01-03",
+    "category": "feature",
+    "description": "Track durations shown in album details"
+  },
+  {
+    "date": "2026-01-01",
+    "category": "fix",
+    "description": "No more duplicate notifications on your own device"
+  },
+  {
+    "date": "2025-12-31",
+    "category": "fix",
+    "description": "Fixed header scrolling away on long lists"
+  },
+  {
+    "date": "2025-12-30",
+    "category": "ui",
+    "description": "Improved Album of the Year scoring — passion beats volume"
+  },
+  {
+    "date": "2025-12-29",
+    "category": "feature",
+    "description": "Lists sync in real-time across devices"
+  },
+  {
+    "date": "2025-12-29",
+    "category": "ui",
+    "description": "Dramatic reveal animation for aggregate list"
+  },
+  {
+    "date": "2025-12-27",
+    "category": "feature",
+    "description": "Upload custom cover images for albums missing artwork"
+  },
+  {
+    "date": "2025-12-26",
+    "category": "feature",
+    "description": "Collaborative Album of the Year list combining everyone's picks"
+  },
+  {
+    "date": "2025-12-26",
+    "category": "feature",
+    "description": "Telegram notifications for admin events"
+  },
+  {
+    "date": "2025-12-26",
+    "category": "feature",
+    "description": "New user registration requires admin approval"
+  },
+  {
+    "date": "2025-12-23",
+    "category": "feature",
+    "description": "Browser extension captures genres from RateYourMusic"
+  },
+  {
+    "date": "2025-12-23",
+    "category": "feature",
+    "description": "Genre corrections apply across all users' lists"
+  },
+  {
+    "date": "2025-12-23",
+    "category": "feature",
+    "description": "Stay logged in longer with Remember Me option"
+  },
+  {
+    "date": "2025-12-22",
+    "category": "feature",
+    "description": "Automatically selects your connected music service"
+  },
+  {
+    "date": "2025-12-06",
+    "category": "feature",
+    "description": "Play individual tracks directly from the edit dialog"
+  },
+  {
+    "date": "2025-12-06",
+    "category": "fix",
+    "description": "Better handling for Spotify Free accounts"
+  },
+  {
+    "date": "2025-12-01",
+    "category": "feature",
+    "description": "Music Preferences section showing your listening habits"
+  },
+  {
+    "date": "2025-12-01",
+    "category": "feature",
+    "description": "Tidal widget in the sidebar for Tidal users"
+  },
+  {
+    "date": "2025-12-01",
+    "category": "ui",
+    "description": "Music service preference auto-saves on change"
+  },
+  {
+    "date": "2025-11-30",
+    "category": "feature",
+    "description": "Last.fm integration with playcount tracking and auto-scrobbling"
+  },
+  {
+    "date": "2025-11-30",
+    "category": "feature",
+    "description": "Discover similar artists via Last.fm"
+  },
+  {
+    "date": "2025-11-29",
+    "category": "feature",
+    "description": "Currently playing album highlighted in your list"
+  },
+  {
+    "date": "2025-11-29",
+    "category": "feature",
+    "description": "Now playing bar on mobile"
+  },
+  {
+    "date": "2025-11-28",
+    "category": "ui",
+    "description": "Proper display on iPhones with notch and Dynamic Island"
+  },
+  {
+    "date": "2025-11-27",
+    "category": "feature",
+    "description": "Spotify mini player with volume control in the sidebar"
+  },
+  {
+    "date": "2025-11-27",
+    "category": "feature",
+    "description": "Choose which device to play on with Spotify Connect"
+  },
+  {
+    "date": "2025-11-27",
+    "category": "feature",
+    "description": "Play albums from mobile with device selection"
+  },
+  {
+    "date": "2025-11-26",
+    "category": "feature",
+    "description": "Click tracks to play them directly"
+  },
+  {
+    "date": "2025-11-26",
+    "category": "perf",
+    "description": "Faster and more reliable album cover loading"
+  },
+  {
+    "date": "2025-11-25",
+    "category": "ui",
+    "description": "Position badges shown on album covers for main lists"
+  },
+  {
+    "date": "2025-11-24",
+    "category": "ui",
+    "description": "Redesigned album cards on mobile"
+  },
+  {
+    "date": "2025-11-24",
+    "category": "ui",
+    "description": "Improved album list layout on desktop"
+  },
+  {
+    "date": "2025-11-24",
+    "category": "ui",
+    "description": "Albums from the wrong year highlighted in red"
+  },
+  {
+    "date": "2025-11-24",
+    "category": "feature",
+    "description": "Designate one list per year as your main list"
+  },
+  {
+    "date": "2025-11-23",
+    "category": "feature",
+    "description": "Lists organized by year in the sidebar"
+  },
+  {
+    "date": "2025-11-22",
+    "category": "feature",
+    "description": "Album covers included in list exports"
+  },
+  {
+    "date": "2025-11-22",
+    "category": "fix",
+    "description": "Prevent duplicate albums when moving between lists"
+  },
+  {
+    "date": "2025-11-21",
+    "category": "perf",
+    "description": "Faster switching between lists"
+  },
+  {
+    "date": "2025-11-20",
+    "category": "perf",
+    "description": "Significantly faster list loading"
+  },
+  {
+    "date": "2025-11-20",
+    "category": "fix",
+    "description": "Fixed album artwork disappearing"
+  },
+  {
+    "date": "2025-11-18",
+    "category": "ui",
+    "description": "Replaced browser notifications with in-app toast messages"
+  },
+  {
+    "date": "2025-11-18",
+    "category": "fix",
+    "description": "Fixed deleted lists reappearing on other devices"
+  },
+  {
+    "date": "2025-11-17",
+    "category": "feature",
+    "description": "Move albums between lists"
+  },
+  {
+    "date": "2025-11-17",
+    "category": "feature",
+    "description": "Browser extension stays logged in between sessions"
+  },
+  {
+    "date": "2025-11-17",
+    "category": "perf",
+    "description": "Much faster album cover image loading"
+  },
+  {
+    "date": "2025-11-17",
+    "category": "fix",
+    "description": "Fixed password reset not working"
+  },
+  {
+    "date": "2025-11-06",
+    "category": "feature",
+    "description": "Browser extension for adding albums from RateYourMusic"
+  },
+  {
+    "date": "2025-10-07",
+    "category": "feature",
+    "description": "Warning when creating playlists with missing track selections"
+  },
+  {
+    "date": "2025-10-07",
+    "category": "fix",
+    "description": "Fixed album context menu showing wrong album after reordering"
+  },
+  {
+    "date": "2025-10-06",
+    "category": "feature",
+    "description": "Double-click albums to edit on desktop"
+  },
+  {
+    "date": "2025-10-06",
+    "category": "feature",
+    "description": "Tooltips for long album comments"
+  },
+  {
+    "date": "2025-10-05",
+    "category": "perf",
+    "description": "Faster and more reliable artist search"
+  },
+  {
+    "date": "2025-10-01",
+    "category": "perf",
+    "description": "Faster playlist creation"
+  },
+  {
+    "date": "2025-10-01",
+    "category": "fix",
+    "description": "Fixed Spotify requiring frequent reconnection"
+  },
+  {
+    "date": "2025-09-01",
+    "category": "fix",
+    "description": "Fixed album edits not saving after page refresh"
+  },
+  {
+    "date": "2025-08-31",
+    "category": "feature",
+    "description": "Track selection for albums in your lists"
+  },
+  {
+    "date": "2025-08-31",
+    "category": "feature",
+    "description": "Export playlists to your preferred music service"
+  },
+  {
+    "date": "2025-08-31",
+    "category": "perf",
+    "description": "Faster album cover art loading"
+  }
+]

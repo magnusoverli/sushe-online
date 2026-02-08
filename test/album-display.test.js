@@ -15,6 +15,8 @@ register(
   'data:text/javascript,' +
     encodeURIComponent(`
   const PROJECT_ROOT = ${JSON.stringify(projectRoot)};
+  import { readFileSync } from 'node:fs';
+  import { fileURLToPath } from 'node:url';
   export function resolve(specifier, context, next) {
     if (specifier.startsWith('@utils/')) {
       const resolved = 'file://' + PROJECT_ROOT + '/utils/' + specifier.slice(7);
@@ -23,11 +25,19 @@ register(
     if (specifier.endsWith('.txt') || specifier.includes('.txt?')) {
       return { url: new URL(specifier.split('?')[0], context.parentURL).href, shortCircuit: true };
     }
+    if (specifier.endsWith('.json') && !specifier.includes('node_modules')) {
+      return { url: new URL(specifier, context.parentURL).href, shortCircuit: true };
+    }
     return next(specifier, context);
   }
   export function load(url, context, next) {
     if (url.endsWith('.txt')) {
       return { format: 'module', source: 'export default ""', shortCircuit: true };
+    }
+    if (url.endsWith('.json') && !url.includes('node_modules')) {
+      const filePath = fileURLToPath(url);
+      const json = readFileSync(filePath, 'utf8');
+      return { format: 'module', source: 'export default ' + json, shortCircuit: true };
     }
     return next(url, context);
   }

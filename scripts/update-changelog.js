@@ -5,6 +5,22 @@ const path = require('path');
 const readline = require('readline');
 
 const CHANGELOG_PATH = path.join(__dirname, '..', 'CHANGELOG.md');
+const CHANGELOG_JSON_PATH = path.join(
+  __dirname,
+  '..',
+  'src',
+  'data',
+  'changelog.json'
+);
+
+// Categories that appear in the user-facing changelog JSON
+const USER_FACING_CATEGORIES = new Set([
+  'feature',
+  'fix',
+  'perf',
+  'security',
+  'ui',
+]);
 
 class ChangelogUpdater {
   constructor() {
@@ -154,12 +170,43 @@ class ChangelogUpdater {
       lines.splice(insertIndex, 0, entry);
     }
 
-    // Write back to file
+    // Write back to markdown file
     fs.writeFileSync(CHANGELOG_PATH, lines.join('\n'), 'utf8');
+
+    // Also write to JSON for the user-facing UI (skip docs category)
+    if (USER_FACING_CATEGORIES.has(category)) {
+      this.updateChangelogJson(category, description);
+    }
 
     console.log(`\n✅ Changelog updated successfully!`);
     console.log(`   Category: ${this.categories[category]}`);
-    console.log(`   Entry: ${entry}\n`);
+    console.log(`   Entry: ${entry}`);
+    if (USER_FACING_CATEGORIES.has(category)) {
+      console.log(`   📱 Also added to user-facing changelog JSON`);
+    }
+    console.log();
+  }
+
+  updateChangelogJson(category, description) {
+    const today = new Date().toISOString().split('T')[0];
+
+    let entries = [];
+    if (fs.existsSync(CHANGELOG_JSON_PATH)) {
+      try {
+        entries = JSON.parse(fs.readFileSync(CHANGELOG_JSON_PATH, 'utf8'));
+      } catch {
+        entries = [];
+      }
+    }
+
+    // Prepend new entry (newest first)
+    entries.unshift({ date: today, category, description });
+
+    fs.writeFileSync(
+      CHANGELOG_JSON_PATH,
+      JSON.stringify(entries, null, 2) + '\n',
+      'utf8'
+    );
   }
 
   async quickUpdate(description, category = 'feature') {
@@ -214,13 +261,13 @@ Usage:
   node scripts/update-changelog.js category "desc"    # Quick update with category
   node scripts/update-changelog.js --git "msg"        # Parse from git commit
 
-Categories:
+Categories (user-facing entries also update src/data/changelog.json):
   feature  - New features
   fix      - Bug fixes  
   perf     - Performance improvements
   security - Security updates
   ui       - UI/UX changes
-  docs     - Documentation
+  docs     - Documentation (markdown only, not shown to users)
 
 Examples:
   npm run changelog                                   # Interactive
