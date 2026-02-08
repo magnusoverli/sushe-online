@@ -136,6 +136,88 @@ function createListService(deps = {}) {
   }
 
   /**
+   * Find a list by ID, verify ownership, and validate year lock.
+   * Throws TransactionAbort if not found or year is locked.
+   * @param {string} listId - The list _id
+   * @param {string} userId - The user _id
+   * @param {string} action - Description of the action (for error message)
+   * @returns {Promise<Object>} The list object
+   */
+  async function findListByIdOrThrow(listId, userId, action) {
+    const list = await findListById(listId, userId);
+    if (!list) {
+      throw new TransactionAbort(404, { error: 'List not found' });
+    }
+    await validateMainListNotLocked(pool, list.year, list.isMain, action);
+    return list;
+  }
+
+  /**
+   * Insert albums as list items within a transaction.
+   * Handles upsertAlbumRecord + list_items INSERT for each album.
+   * @param {Object} client - Database transaction client
+   * @param {string} listId - The list _id
+   * @param {Array<Object>} albums - Array of album objects
+   * @param {Date} timestamp - Timestamp for created_at/updated_at
+   * @returns {Promise<void>}
+   */
+  async function insertListItems(client, listId, albums, timestamp) {
+    for (let i = 0; i < albums.length; i++) {
+      const album = albums[i];
+      const albumId = await upsertAlbumRecord(album, timestamp, client);
+
+      const itemId = crypto.randomBytes(12).toString('hex');
+      await client.query(
+        `INSERT INTO list_items (
+          _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          itemId,
+          listId,
+          albumId,
+          i + 1,
+          album.comments || null,
+          album.primary_track || null,
+          album.secondary_track || null,
+          timestamp,
+          timestamp,
+        ]
+      );
+    }
+  }
+
+  /**
+   * Check if a list name is already taken within a group.
+   * Throws TransactionAbort(409) if duplicate found.
+   * @param {Object} client - Database transaction client
+   * @param {string} userId - User ID
+   * @param {string} name - List name to check
+   * @param {number} groupId - Internal group ID
+   * @param {string} [excludeListId] - List _id to exclude (for updates)
+   */
+  async function checkDuplicateListName(
+    client,
+    userId,
+    name,
+    groupId,
+    excludeListId
+  ) {
+    const params = [userId, name, groupId];
+    let query =
+      'SELECT 1 FROM lists WHERE user_id = $1 AND name = $2 AND group_id = $3';
+    if (excludeListId) {
+      query += ' AND _id != $4';
+      params.push(excludeListId);
+    }
+    const duplicateCheck = await client.query(query, params);
+    if (duplicateCheck.rows.length > 0) {
+      throw new TransactionAbort(409, {
+        error: 'A list with this name already exists in this category',
+      });
+    }
+  }
+
+  /**
    * Process item removals from a list.
    * @param {Object} client - Database transaction client
    * @param {string} listId - The list _id
@@ -789,16 +871,12 @@ function createListService(deps = {}) {
         groupIdInternal = await findOrCreateUncategorizedGroup(client, userId);
       }
 
-      const duplicateCheck = await client.query(
-        `SELECT 1 FROM lists WHERE user_id = $1 AND name = $2 AND group_id = $3`,
-        [userId, trimmedName, groupIdInternal]
+      await checkDuplicateListName(
+        client,
+        userId,
+        trimmedName,
+        groupIdInternal
       );
-
-      if (duplicateCheck.rows.length > 0) {
-        throw new TransactionAbort(409, {
-          error: 'A list with this name already exists in this category',
-        });
-      }
 
       const maxListOrder = await client.query(
         `SELECT COALESCE(MAX(sort_order), -1) + 1 as next_order FROM lists WHERE group_id = $1`,
@@ -821,28 +899,7 @@ function createListService(deps = {}) {
       );
 
       if (rawAlbums && Array.isArray(rawAlbums)) {
-        for (let i = 0; i < rawAlbums.length; i++) {
-          const album = rawAlbums[i];
-          const albumId = await upsertAlbumRecord(album, timestamp, client);
-
-          const itemId = crypto.randomBytes(12).toString('hex');
-          await client.query(
-            `INSERT INTO list_items (
-              _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-            [
-              itemId,
-              listId,
-              albumId,
-              i + 1,
-              album.comments || null,
-              album.primary_track || null,
-              album.secondary_track || null,
-              timestamp,
-              timestamp,
-            ]
-          );
-        }
+        await insertListItems(client, listId, rawAlbums, timestamp);
       }
 
       return resultYear;
@@ -962,16 +1019,13 @@ function createListService(deps = {}) {
         const trimmedName = newName.trim();
 
         if (trimmedName !== list.name) {
-          const duplicateCheck = await client.query(
-            `SELECT 1 FROM lists WHERE user_id = $1 AND name = $2 AND group_id = $3 AND _id != $4`,
-            [userId, trimmedName, targetGroupId, listId]
+          await checkDuplicateListName(
+            client,
+            userId,
+            trimmedName,
+            targetGroupId,
+            listId
           );
-
-          if (duplicateCheck.rows.length > 0) {
-            throw new TransactionAbort(409, {
-              error: 'A list with this name already exists in this category',
-            });
-          }
         }
 
         fields.push({ column: 'name', value: newName.trim() });
@@ -1004,18 +1058,7 @@ function createListService(deps = {}) {
    * @returns {Promise<{list: Object, count: number}>}
    */
   async function replaceListItems(listId, userId, rawAlbums) {
-    const list = await findListById(listId, userId);
-    if (!list) {
-      throw new TransactionAbort(404, { error: 'List not found' });
-    }
-
-    await validateMainListNotLocked(
-      pool,
-      list.year,
-      list.isMain,
-      'modify list items'
-    );
-
+    const list = await findListByIdOrThrow(listId, userId, 'modify list items');
     const timestamp = new Date();
 
     await withTransaction(pool, async (client) => {
@@ -1023,28 +1066,7 @@ function createListService(deps = {}) {
         list._id,
       ]);
 
-      for (let i = 0; i < rawAlbums.length; i++) {
-        const album = rawAlbums[i];
-        const albumId = await upsertAlbumRecord(album, timestamp, client);
-
-        const itemId = crypto.randomBytes(12).toString('hex');
-        await client.query(
-          `INSERT INTO list_items (
-            _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-          [
-            itemId,
-            list._id,
-            albumId,
-            i + 1,
-            album.comments || null,
-            album.primary_track || null,
-            album.secondary_track || null,
-            timestamp,
-            timestamp,
-          ]
-        );
-      }
+      await insertListItems(client, list._id, rawAlbums, timestamp);
 
       await client.query('UPDATE lists SET updated_at = $1 WHERE _id = $2', [
         timestamp,
@@ -1070,15 +1092,9 @@ function createListService(deps = {}) {
    * @returns {Promise<{list: Object, itemCount: number}>}
    */
   async function reorderItems(listId, userId, order) {
-    const list = await findListById(listId, userId);
-    if (!list) {
-      throw new TransactionAbort(404, { error: 'List not found' });
-    }
-
-    await validateMainListNotLocked(
-      pool,
-      list.year,
-      list.isMain,
+    const list = await findListByIdOrThrow(
+      listId,
+      userId,
       'reorder list items'
     );
 
@@ -1147,17 +1163,7 @@ function createListService(deps = {}) {
    * @returns {Promise<void>}
    */
   async function updateItemComment(listId, userId, identifier, comment) {
-    const list = await findListById(listId, userId);
-    if (!list) {
-      throw new TransactionAbort(404, { error: 'List not found' });
-    }
-
-    await validateMainListNotLocked(
-      pool,
-      list.year,
-      list.isMain,
-      'update comment'
-    );
+    const list = await findListByIdOrThrow(listId, userId, 'update comment');
 
     const trimmedComment = comment ? comment.trim() : null;
 
@@ -1201,17 +1207,7 @@ function createListService(deps = {}) {
     { added, removed, updated },
     user
   ) {
-    const list = await findListById(listId, userId);
-    if (!list) {
-      throw new TransactionAbort(404, { error: 'List not found' });
-    }
-
-    await validateMainListNotLocked(
-      pool,
-      list.year,
-      list.isMain,
-      'modify list items'
-    );
+    const list = await findListByIdOrThrow(listId, userId, 'modify list items');
 
     const timestamp = new Date();
     let changeCount = 0;

@@ -119,6 +119,7 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
   const canonicalArtist = normalizeForLastfm(album.artist).toLowerCase().trim();
   const canonicalAlbum = normalizeForLastfm(album.album).toLowerCase().trim();
   const normalizedKey = normalizeAlbumKey(canonicalArtist, canonicalAlbum);
+  const albumId = album.album_id || album.albumId || null;
 
   await pool.query(
     `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
@@ -133,7 +134,7 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
        updated_at = NOW()`,
     [
       userId,
-      album.album_id || null,
+      albumId,
       canonicalArtist,
       canonicalAlbum,
       normalizedKey,
@@ -458,4 +459,8 @@ function createPlaycountSyncService(deps = {}) {
   };
 }
 
-module.exports = { createPlaycountSyncService };
+module.exports = {
+  createPlaycountSyncService,
+  upsertPlaycount,
+  refreshAlbumPlaycount,
+};

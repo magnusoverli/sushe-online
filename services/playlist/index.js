@@ -9,6 +9,7 @@
 
 const { createSpotifyPlaylistService } = require('./spotify-playlist');
 const { createTidalPlaylistService } = require('./tidal-playlist');
+const { resolveTrackPicks } = require('./playlist-helpers');
 
 /**
  * Create playlist service
@@ -61,13 +62,7 @@ function createPlaylistService(deps) {
     };
 
     for (const item of items) {
-      // Check new normalized track picks first, fallback to legacy field
-      const primaryTrack =
-        item.primaryTrack ||
-        item.primary_track ||
-        item.trackPick ||
-        item.track_pick;
-      const secondaryTrack = item.secondaryTrack || item.secondary_track;
+      const { primaryTrack, secondaryTrack } = resolveTrackPicks(item);
 
       if (primaryTrack && primaryTrack.trim()) {
         validation.albumsWithTracks++;

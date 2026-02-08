@@ -5,6 +5,11 @@
  * and playlist management.
  */
 
+const {
+  resolveTrackPicks,
+  processTrackBatches,
+} = require('./playlist-helpers');
+
 /**
  * Create Tidal playlist service
  * @param {Object} deps - Dependencies
@@ -75,12 +80,8 @@ function createTidalPlaylistService(deps) {
     trackIdentifier = null
   ) {
     // Use explicit trackIdentifier if provided, otherwise fall back to item's track picks
-    const trackPick =
-      trackIdentifier ||
-      item.primaryTrack ||
-      item.primary_track ||
-      item.trackPick ||
-      item.track_pick;
+    const { primaryTrack } = resolveTrackPicks(item);
+    const trackPick = trackIdentifier || primaryTrack;
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
       Accept: 'application/vnd.api+json',
@@ -178,7 +179,6 @@ function createTidalPlaylistService(deps) {
    * @param {Object} result - Result object to populate
    * @returns {Promise<Object>} - Updated result object
    */
-  // eslint-disable-next-line max-lines-per-function -- Complex playlist handling with multiple API calls
   async function handlePlaylist(playlistName, items, auth, user, result) {
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
@@ -253,151 +253,12 @@ function createTidalPlaylistService(deps) {
 
     // Collect track IDs with parallel processing
     // Process both primary and secondary tracks for each album
-    const trackIds = [];
     const albumCache = new Map();
     const countryCode = user.tidalCountry || 'US';
+    const boundFindTrack = (item, trackIdentifier) =>
+      findTrack(item, auth, countryCode, albumCache, trackIdentifier);
 
-    // Process albums in parallel batches to respect rate limits
-    const batchSize = 10;
-    for (let i = 0; i < items.length; i += batchSize) {
-      const batch = items.slice(i, i + batchSize);
-
-      const batchResults = await Promise.allSettled(
-        batch.map(async (item) => {
-          result.processed++;
-
-          // Get primary and secondary tracks from normalized fields or legacy
-          const primaryTrack =
-            item.primaryTrack ||
-            item.primary_track ||
-            item.trackPick ||
-            item.track_pick;
-          const secondaryTrack = item.secondaryTrack || item.secondary_track;
-
-          const itemResults = [];
-
-          // Process primary track
-          if (primaryTrack && primaryTrack.trim()) {
-            try {
-              const trackId = await findTrack(
-                item,
-                auth,
-                countryCode,
-                albumCache,
-                primaryTrack
-              );
-              if (trackId) {
-                itemResults.push({
-                  success: true,
-                  item,
-                  trackId,
-                  trackPick: primaryTrack,
-                  isPrimary: true,
-                });
-              } else {
-                itemResults.push({
-                  success: false,
-                  item,
-                  trackPick: primaryTrack,
-                  isPrimary: true,
-                  error: `Track not found: "${item.artist} - ${item.album}" - Primary: ${primaryTrack}`,
-                });
-              }
-            } catch (err) {
-              itemResults.push({
-                success: false,
-                item,
-                trackPick: primaryTrack,
-                isPrimary: true,
-                error: `Error searching for "${item.artist} - ${item.album}" primary: ${err.message}`,
-              });
-            }
-          } else {
-            itemResults.push({
-              success: false,
-              item,
-              isPrimary: true,
-              error: `Skipped "${item.artist} - ${item.album}": no track selected`,
-            });
-          }
-
-          // Process secondary track if it exists
-          if (secondaryTrack && secondaryTrack.trim()) {
-            try {
-              const trackId = await findTrack(
-                item,
-                auth,
-                countryCode,
-                albumCache,
-                secondaryTrack
-              );
-              if (trackId) {
-                itemResults.push({
-                  success: true,
-                  item,
-                  trackId,
-                  trackPick: secondaryTrack,
-                  isPrimary: false,
-                });
-              } else {
-                itemResults.push({
-                  success: false,
-                  item,
-                  trackPick: secondaryTrack,
-                  isPrimary: false,
-                  error: `Track not found: "${item.artist} - ${item.album}" - Secondary: ${secondaryTrack}`,
-                });
-              }
-            } catch (err) {
-              itemResults.push({
-                success: false,
-                item,
-                trackPick: secondaryTrack,
-                isPrimary: false,
-                error: `Error searching for "${item.artist} - ${item.album}" secondary: ${err.message}`,
-              });
-            }
-          }
-
-          return itemResults;
-        })
-      );
-
-      // Process batch results - flatten since each item can have multiple tracks
-      for (const promiseResult of batchResults) {
-        if (promiseResult.status === 'fulfilled') {
-          const trackResults = promiseResult.value;
-          for (const trackResult of trackResults) {
-            if (trackResult.success) {
-              trackIds.push(trackResult.trackId);
-              result.successful++;
-              result.tracks.push({
-                artist: trackResult.item.artist,
-                album: trackResult.item.album,
-                track: trackResult.trackPick,
-                isPrimary: trackResult.isPrimary,
-                found: true,
-              });
-            } else {
-              result.failed++;
-              result.errors.push(trackResult.error);
-              if (trackResult.trackPick) {
-                result.tracks.push({
-                  artist: trackResult.item.artist,
-                  album: trackResult.item.album,
-                  track: trackResult.trackPick,
-                  isPrimary: trackResult.isPrimary,
-                  found: false,
-                });
-              }
-            }
-          }
-        } else {
-          result.failed++;
-          result.errors.push(`Unexpected error: ${promiseResult.reason}`);
-        }
-      }
-    }
+    const trackIds = await processTrackBatches(items, boundFindTrack, result);
 
     // Update playlist with tracks
     if (trackIds.length > 0) {

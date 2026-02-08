@@ -3,13 +3,12 @@
  *
  * Handles background refreshing of Last.fm play counts for albums.
  * Uses rate limiting to respect Last.fm API limits.
+ *
+ * Delegates to shared helpers in playcount-sync-service for upsert
+ * and single-album refresh logic (DRY).
  */
 
-const {
-  getAlbumInfo: getLastfmAlbumInfo,
-  normalizeForLastfm,
-} = require('../utils/lastfm-auth');
-const { normalizeAlbumKey } = require('../utils/fuzzy-match');
+const { refreshAlbumPlaycount } = require('./playcount-sync-service');
 
 /**
  * Refresh playcounts for albums in background
@@ -37,147 +36,34 @@ async function refreshPlaycountsInBackground(
     const batch = albums.slice(i, i + BATCH_SIZE);
 
     const batchPromises = batch.map(async (album) => {
-      try {
-        logger.debug('Fetching Last.fm playcount', {
-          artist: album.artist,
-          album: album.album,
-          lastfmUsername,
-        });
+      logger.debug('Fetching Last.fm playcount', {
+        artist: album.artist,
+        album: album.album,
+        lastfmUsername,
+      });
 
-        const info = await getLastfmAlbumInfo(
-          album.artist,
-          album.album,
-          lastfmUsername,
-          process.env.LASTFM_API_KEY
-        );
+      const result = await refreshAlbumPlaycount(
+        pool,
+        logger,
+        userId,
+        lastfmUsername,
+        album
+      );
 
-        // Canonicalize artist/album so "…and oceans", "...and oceans", " and oceans" etc.
-        // all map to one row. Prevents duplicate rows for the same logical album.
-        const canonicalArtist = normalizeForLastfm(album.artist)
-          .toLowerCase()
-          .trim();
-        const canonicalAlbum = normalizeForLastfm(album.album)
-          .toLowerCase()
-          .trim();
-        const normalizedKey = normalizeAlbumKey(
-          canonicalArtist,
-          canonicalAlbum
-        );
+      if (result !== null) {
+        // Log if Last.fm returned a different artist name (indicates potential mismatch).
+        // refreshAlbumPlaycount doesn't log this, so we check here for parity.
+        results[album.itemId] = result;
 
-        // Check if album was not found on Last.fm
-        if (info.notFound) {
-          logger.debug('Album not found on Last.fm', {
+        if (result.status === 'success') {
+          logger.debug('Fetched playcount', {
             artist: album.artist,
             album: album.album,
-          });
-
-          await pool.query(
-            `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NULL, 'not_found', NOW(), NOW())
-             ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
-             DO UPDATE SET
-               album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
-               normalized_key = EXCLUDED.normalized_key,
-               lastfm_playcount = NULL,
-               lastfm_status = 'not_found',
-               lastfm_updated_at = NOW(),
-               updated_at = NOW()`,
-            [
-              userId,
-              album.albumId || null,
-              canonicalArtist,
-              canonicalAlbum,
-              normalizedKey,
-            ]
-          );
-
-          results[album.itemId] = { playcount: null, status: 'not_found' };
-          return;
-        }
-
-        const playcount = parseInt(info.userplaycount || 0);
-
-        // Log if Last.fm returned a different artist name (indicates potential mismatch).
-        if (
-          info.artist &&
-          normalizeForLastfm(info.artist) !== normalizeForLastfm(album.artist)
-        ) {
-          logger.info('Last.fm artist name differs from request', {
-            requested: album.artist,
-            returned: info.artist,
-            album: album.album,
+            playcount: result.playcount,
           });
         }
-
-        // Upsert into user_album_stats with success status
-        await pool.query(
-          `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
-           VALUES ($1, $2, $3, $4, $5, $6, 'success', NOW(), NOW())
-           ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
-           DO UPDATE SET
-             album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
-             normalized_key = EXCLUDED.normalized_key,
-             lastfm_playcount = EXCLUDED.lastfm_playcount,
-             lastfm_status = 'success',
-             lastfm_updated_at = NOW(),
-             updated_at = NOW()`,
-          [
-            userId,
-            album.albumId || null,
-            canonicalArtist,
-            canonicalAlbum,
-            normalizedKey,
-            playcount,
-          ]
-        );
-
-        results[album.itemId] = { playcount, status: 'success' };
-        logger.debug('Fetched playcount', {
-          artist: album.artist,
-          album: album.album,
-          playcount,
-        });
-      } catch (err) {
-        logger.warn(
-          `Failed to fetch playcount for ${album.artist} - ${album.album}:`,
-          err.message
-        );
-
-        // Store error status so the album is retried later
-        try {
-          const canonicalArtist = normalizeForLastfm(album.artist)
-            .toLowerCase()
-            .trim();
-          const canonicalAlbum = normalizeForLastfm(album.album)
-            .toLowerCase()
-            .trim();
-          const normalizedKey = normalizeAlbumKey(
-            canonicalArtist,
-            canonicalAlbum
-          );
-          await pool.query(
-            `INSERT INTO user_album_stats (user_id, album_id, artist, album_name, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NULL, 'error', NOW(), NOW())
-             ON CONFLICT (user_id, LOWER(artist), LOWER(album_name))
-             DO UPDATE SET
-               album_id = COALESCE(EXCLUDED.album_id, user_album_stats.album_id),
-               normalized_key = EXCLUDED.normalized_key,
-               lastfm_status = 'error',
-               lastfm_updated_at = NOW(),
-               updated_at = NOW()`,
-            [
-              userId,
-              album.albumId || null,
-              canonicalArtist,
-              canonicalAlbum,
-              normalizedKey,
-            ]
-          );
-          results[album.itemId] = { playcount: null, status: 'error' };
-        } catch (dbErr) {
-          logger.error('Failed to store error status:', dbErr.message);
-          results[album.itemId] = null;
-        }
+      } else {
+        results[album.itemId] = null;
       }
     });
 
