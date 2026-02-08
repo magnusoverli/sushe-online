@@ -59,22 +59,11 @@
   </style>
   <style>
     :root {
-      --accent-color: <%= user?.accentColor || '#dc2626' %>;
-      --accent-hover: <%= adjustColor(user?.accentColor || '#dc2626', -30) %>;
-      --accent-light: <%= adjustColor(user?.accentColor || '#dc2626', 40) %>;
-      --accent-dark: <%= adjustColor(user?.accentColor || '#dc2626', -50) %>;
-      --accent-shadow: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.4) %>;
-      --accent-glow: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.5) %>;
-      --accent-subtle: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.2) %>;
-      --accent-subtle-strong: <%= colorWithOpacity(user?.accentColor || '#dc2626', 0.3) %>;
+      <%- generateAccentCssVars(user) %>
     }
-    .text-red-600, .text-red-500, .text-red-400 { color: var(--accent-color) !important; }
-    .hover\:text-red-500:hover, .hover\:text-red-400:hover { color: var(--accent-color) !important; }
-    .border-red-600, .border-red-500 { border-color: var(--accent-color) !important; }
-    .ring-red-600 { --tw-ring-color: var(--accent-color) !important; }
+    <%- generateAccentOverrides({ includeDark: true }) %>
     /* Input fields use neutral gray colors, not accent color */
     .spotify-input:focus { border-color: #6b7280 !important; box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.3); }
-    .focus\:border-red-600:focus:not(.spotify-input) { border-color: var(--accent-color) !important; }
     @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600&family=Inter:wght@300;400;500;600;700&display=swap');
     .metal-title { font-family: 'Cinzel', serif; text-shadow: 0 0 20px var(--accent-glow); }
     .glow-red { animation: glow 2s ease-in-out infinite alternate; }
@@ -82,8 +71,6 @@
       from { text-shadow: 0 0 10px var(--accent-color), 0 0 20px var(--accent-color), 0 0 30px var(--accent-color); }
       to { text-shadow: 0 0 20px var(--accent-color), 0 0 30px var(--accent-color), 0 0 40px var(--accent-color); }
     }
-    .bg-red-900 { background-color: var(--accent-dark) !important; }
-    .bg-red-800 { background-color: var(--accent-dark) !important; }
     .accent-glow-top { background: radial-gradient(circle, var(--accent-subtle) 0%, transparent 70%); }
     .toast.error { background-color: #dc2626; }
     .album-row.drag-placeholder { background-color: var(--accent-subtle); border-color: var(--accent-color); }

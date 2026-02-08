@@ -39,4 +39,68 @@ function colorWithOpacity(color, opacity) {
   return rgb ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})` : color;
 }
 
-module.exports = { adjustColor, colorWithOpacity };
+// Default accent color used across all templates
+const DEFAULT_ACCENT = '#dc2626';
+
+/**
+ * Generate CSS custom property declarations for accent theming.
+ * Returns a string of CSS variable declarations (without :root wrapper).
+ *
+ * @param {object} [user] - User object with optional accentColor
+ * @param {object} [options]
+ * @param {boolean} [options.includeSubtle=true] - Include --accent-subtle vars
+ * @returns {string} CSS variable declarations
+ */
+function generateAccentCssVars(user, options = {}) {
+  const { includeSubtle = true } = options;
+  const color = user?.accentColor || DEFAULT_ACCENT;
+  let vars = `--accent-color: ${color};
+      --accent-hover: ${adjustColor(color, -30)};
+      --accent-light: ${adjustColor(color, 40)};
+      --accent-dark: ${adjustColor(color, -50)};
+      --accent-shadow: ${colorWithOpacity(color, 0.4)};
+      --accent-glow: ${colorWithOpacity(color, 0.5)};`;
+  if (includeSubtle) {
+    vars += `
+      --accent-subtle: ${colorWithOpacity(color, 0.2)};
+      --accent-subtle-strong: ${colorWithOpacity(color, 0.3)};`;
+  }
+  return vars;
+}
+
+/**
+ * Generate CSS override rules that remap Tailwind red-* classes to accent color.
+ * Returns a string of CSS rules.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.includeBackground=false] - Include bg-red-* overrides
+ * @param {boolean} [options.includeDark=false] - Include bg-red-800/900 overrides
+ * @returns {string} CSS rules
+ */
+function generateAccentOverrides(options = {}) {
+  const { includeBackground = false, includeDark = false } = options;
+  let css = `.text-red-600, .text-red-500, .text-red-400 { color: var(--accent-color) !important; }
+    .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { color: var(--accent-color) !important; }
+    .border-red-600, .border-red-500 { border-color: var(--accent-color) !important; }`;
+  if (includeBackground) {
+    css += `
+    .bg-red-600 { background-color: var(--accent-color) !important; }
+    .hover\\:bg-red-700:hover { background-color: var(--accent-hover) !important; }`;
+  }
+  if (includeDark) {
+    css += `
+    .ring-red-600 { --tw-ring-color: var(--accent-color) !important; }
+    .focus\\:border-red-600:focus:not(.spotify-input) { border-color: var(--accent-color) !important; }
+    .bg-red-900 { background-color: var(--accent-dark) !important; }
+    .bg-red-800 { background-color: var(--accent-dark) !important; }`;
+  }
+  return css;
+}
+
+module.exports = {
+  adjustColor,
+  colorWithOpacity,
+  DEFAULT_ACCENT,
+  generateAccentCssVars,
+  generateAccentOverrides,
+};

@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { adjustColor, colorWithOpacity } = require('../color-utils.js');
+const {
+  adjustColor,
+  colorWithOpacity,
+  DEFAULT_ACCENT,
+  generateAccentCssVars,
+  generateAccentOverrides,
+} = require('../color-utils.js');
 
 // =============================================================================
 // adjustColor tests
@@ -112,4 +118,92 @@ test('colorWithOpacity should return original color for short hex', () => {
 test('colorWithOpacity should handle decimal opacity values', () => {
   const result = colorWithOpacity('#ffffff', 0.333);
   assert.strictEqual(result, 'rgba(255, 255, 255, 0.333)');
+});
+
+// =============================================================================
+// DEFAULT_ACCENT tests
+// =============================================================================
+
+test('DEFAULT_ACCENT should be the standard red', () => {
+  assert.strictEqual(DEFAULT_ACCENT, '#dc2626');
+});
+
+// =============================================================================
+// generateAccentCssVars tests
+// =============================================================================
+
+test('generateAccentCssVars should include all 8 vars by default', () => {
+  const result = generateAccentCssVars();
+  assert.ok(result.includes('--accent-color:'));
+  assert.ok(result.includes('--accent-hover:'));
+  assert.ok(result.includes('--accent-light:'));
+  assert.ok(result.includes('--accent-dark:'));
+  assert.ok(result.includes('--accent-shadow:'));
+  assert.ok(result.includes('--accent-glow:'));
+  assert.ok(result.includes('--accent-subtle:'));
+  assert.ok(result.includes('--accent-subtle-strong:'));
+});
+
+test('generateAccentCssVars should use default accent when no user', () => {
+  const result = generateAccentCssVars();
+  assert.ok(result.includes('#dc2626'));
+});
+
+test('generateAccentCssVars should use user accent color', () => {
+  const result = generateAccentCssVars({ accentColor: '#1DB954' });
+  assert.ok(result.includes('#1DB954'));
+  assert.ok(!result.includes('#dc2626'));
+});
+
+test('generateAccentCssVars should omit subtle vars when includeSubtle=false', () => {
+  const result = generateAccentCssVars(null, { includeSubtle: false });
+  assert.ok(result.includes('--accent-color:'));
+  assert.ok(result.includes('--accent-glow:'));
+  assert.ok(!result.includes('--accent-subtle:'));
+  assert.ok(!result.includes('--accent-subtle-strong:'));
+});
+
+test('generateAccentCssVars should handle null user gracefully', () => {
+  const result = generateAccentCssVars(null);
+  assert.ok(result.includes('#dc2626'));
+});
+
+test('generateAccentCssVars should handle user without accentColor', () => {
+  const result = generateAccentCssVars({ name: 'test' });
+  assert.ok(result.includes('#dc2626'));
+});
+
+// =============================================================================
+// generateAccentOverrides tests
+// =============================================================================
+
+test('generateAccentOverrides should include text and border overrides by default', () => {
+  const result = generateAccentOverrides();
+  assert.ok(result.includes('.text-red-600'));
+  assert.ok(result.includes('.border-red-600'));
+  assert.ok(!result.includes('.bg-red-600'));
+  assert.ok(!result.includes('.ring-red-600'));
+});
+
+test('generateAccentOverrides should include background overrides when requested', () => {
+  const result = generateAccentOverrides({ includeBackground: true });
+  assert.ok(result.includes('.bg-red-600'));
+  assert.ok(result.includes('bg-red-700'));
+});
+
+test('generateAccentOverrides should include dark overrides when requested', () => {
+  const result = generateAccentOverrides({ includeDark: true });
+  assert.ok(result.includes('.ring-red-600'));
+  assert.ok(result.includes('.bg-red-900'));
+  assert.ok(result.includes('.bg-red-800'));
+});
+
+test('generateAccentOverrides should combine background and dark', () => {
+  const result = generateAccentOverrides({
+    includeBackground: true,
+    includeDark: true,
+  });
+  assert.ok(result.includes('.bg-red-600'));
+  assert.ok(result.includes('.ring-red-600'));
+  assert.ok(result.includes('.bg-red-900'));
 });

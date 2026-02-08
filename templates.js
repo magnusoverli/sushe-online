@@ -1,4 +1,9 @@
-const { adjustColor, colorWithOpacity } = require('./color-utils');
+const {
+  adjustColor,
+  colorWithOpacity,
+  generateAccentCssVars,
+  generateAccentOverrides,
+} = require('./color-utils');
 const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');
@@ -24,6 +29,86 @@ const safeJsonStringify = (obj) => {
     .replace(/</g, '\\u003c')
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026');
+};
+
+// =============================================================================
+// Template DRY helpers — shared HTML patterns
+// =============================================================================
+
+/**
+ * Generate a modal shell with overlay, container, header, body, and optional footer.
+ * @param {object} opts
+ * @param {string} opts.id - Modal element id
+ * @param {string} opts.body - Inner HTML for the modal body
+ * @param {string} [opts.maxWidth='max-w-md'] - Tailwind max-width class
+ * @param {string} [opts.title] - Header title text
+ * @param {string} [opts.subtitle] - Header subtitle HTML
+ * @param {string} [opts.footer] - Footer inner HTML
+ * @param {string} [opts.extraContainerClass] - Extra classes on the container div
+ * @param {string} [opts.extraOverlayClass] - Extra classes on the overlay div
+ * @returns {string} Complete modal HTML
+ */
+const modalShell = ({
+  id,
+  body,
+  maxWidth = 'max-w-md',
+  title,
+  subtitle,
+  footer,
+  extraContainerClass = '',
+  extraOverlayClass = '',
+}) => {
+  const header =
+    title != null
+      ? `<div class="p-6 border-b border-gray-800">
+        <h3 class="text-2xl font-bold text-white">${title}</h3>
+        ${subtitle ? `<p class="text-sm text-gray-400 mt-1">${subtitle}</p>` : ''}
+      </div>`
+      : '';
+  const footerHtml = footer
+    ? `<div class="p-6 border-t border-gray-800 flex gap-3 justify-end">${footer}</div>`
+    : '';
+  return `<div id="${id}" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal${extraOverlayClass ? ' ' + extraOverlayClass : ''}">
+    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full ${maxWidth}${extraContainerClass ? ' ' + extraContainerClass : ''}">
+      ${header}
+      <div class="p-6${title ? '' : ' pt-6'}">${body}</div>
+      ${footerHtml}
+    </div>
+  </div>`;
+};
+
+/**
+ * Generate a context menu button item.
+ * @param {object} opts
+ * @param {string} opts.id - Button id
+ * @param {string} opts.icon - Font Awesome icon class (e.g., 'fa-edit')
+ * @param {string} opts.label - Button label text
+ * @param {string} [opts.hoverColor='hover:text-white'] - Hover text color class
+ * @param {boolean} [opts.hasSubmenu=false] - Show chevron for submenu
+ * @param {boolean} [opts.hidden=false] - Start hidden
+ * @param {string} [opts.iconColor] - Custom icon color class
+ * @returns {string} Button HTML
+ */
+const menuItem = ({
+  id,
+  icon,
+  label,
+  hoverColor = 'hover:text-white',
+  hasSubmenu = false,
+  hidden = false,
+  iconColor = '',
+}) => {
+  const hiddenClass = hidden ? 'hidden ' : '';
+  const iconColorClass = iconColor ? ` ${iconColor}` : '';
+  if (hasSubmenu) {
+    return `<button id="${id}" class="${hiddenClass}w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 ${hoverColor} transition-colors whitespace-nowrap relative">
+      <span><i class="fas ${icon} ctx-menu-icon${iconColorClass}"></i>${label}</span>
+      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
+    </button>`;
+  }
+  return `<button id="${id}" class="${hiddenClass}ctx-menu-item ${hoverColor}">
+      <i class="fas ${icon} ctx-menu-icon${iconColorClass}"></i>${label}
+    </button>`;
 };
 
 const formatDate = (date, format = 'MM/DD/YYYY') => {
@@ -107,6 +192,8 @@ const htmlTemplate = (content, title = 'SuShe Auth', user = null) =>
     asset,
     adjustColor,
     colorWithOpacity,
+    generateAccentCssVars,
+    generateAccentOverrides,
   });
 
 // Registration form template - Updated with flash parameter
@@ -346,109 +433,50 @@ const importConflictModalComponent = () => `
     </div>
   </div>
   
-  <!-- Rename Import Modal -->
-  <div id="importRenameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-800">
-        <h3 class="text-2xl font-bold text-white">Choose New Name</h3>
-        <p class="text-sm text-gray-400 mt-1">Original name: <span id="originalImportName" class="text-gray-300"></span></p>
-      </div>
-      
-      <!-- Modal Content -->
-      <div class="p-6">
-        <label class="block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2" for="importNewName">
-          New List Name
-        </label>
-        <input 
-          type="text" 
-          id="importNewName" 
-          placeholder="Enter new name..." 
-          class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200"
-          maxlength="50"
-        >
+  ${modalShell({
+    id: 'importRenameModal',
+    title: 'Choose New Name',
+    subtitle:
+      'Original name: <span id="originalImportName" class="text-gray-300"></span>',
+    body: `
+        <label class="form-label" for="importNewName">New List Name</label>
+        <input type="text" id="importNewName" placeholder="Enter new name..." class="form-input-modal" maxlength="50">
         <p class="text-xs text-gray-500 mt-2">Choose a unique name for the imported list</p>
-      </div>
-      
-      <!-- Modal Footer -->
-      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
-        <button 
-          id="cancelImportRenameBtn" 
-          class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200"
-        >
-          Cancel
-        </button>
-        <button 
-          id="confirmImportRenameBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
-        >
-          Import with New Name
-        </button>
-      </div>
-    </div>
-  </div>
+    `,
+    footer: `
+        <button id="cancelImportRenameBtn" class="btn-modal-cancel">Cancel</button>
+        <button id="confirmImportRenameBtn" class="btn-modal-confirm">Import with New Name</button>
+    `,
+  })}
 `;
 
 // Component: Context Menus
 const contextMenusComponent = () => `
   <!-- Context Menu for Lists -->
   <div id="contextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
-    <button id="downloadListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <span><i class="fas fa-download mr-2 w-4 text-center"></i>Download List...</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>
-    <button id="renameListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
-    </button>
-    <button id="toggleMainOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-star mr-2 w-4 text-center"></i><span id="toggleMainText">Set as Main</span>
-    </button>
-    <button id="updatePlaylistOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-paper-plane mr-2 w-4 text-center"></i><span id="updatePlaylistText">Send to Music Service</span>
-    </button>
-    <button id="moveListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <span><i class="fas fa-folder-open mr-2 w-4 text-center"></i>Move to Collection</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>
-    <button id="deleteListOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
-      <i class="fas fa-trash mr-2 w-4 text-center"></i>Delete List
-    </button>
+    ${menuItem({ id: 'downloadListOption', icon: 'fa-download', label: 'Download List...', hasSubmenu: true })}
+    ${menuItem({ id: 'renameListOption', icon: 'fa-edit', label: 'Edit Details' })}
+    ${menuItem({ id: 'toggleMainOption', icon: 'fa-star', label: '<span id="toggleMainText">Set as Main</span>' })}
+    ${menuItem({ id: 'updatePlaylistOption', icon: 'fa-paper-plane', label: '<span id="updatePlaylistText">Send to Music Service</span>' })}
+    ${menuItem({ id: 'moveListOption', icon: 'fa-folder-open', label: 'Move to Collection', hasSubmenu: true })}
+    ${menuItem({ id: 'deleteListOption', icon: 'fa-trash', label: 'Delete List', hoverColor: 'hover:text-red-400' })}
   </div>
   
   <!-- Context Menu for Albums -->
   <div id="albumContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
-    <button id="editAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-edit mr-2 w-4 text-center"></i>Edit Details
-    </button>
-    <button id="playAlbumOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <span><i class="fas fa-play mr-2 w-4 text-center"></i>Play Album</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>
-    <button id="moveAlbumOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <span><i class="fas fa-arrow-right mr-2 w-4 text-center"></i>Move to List</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>
-    <button id="copyAlbumOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <span><i class="fas fa-copy mr-2 w-4 text-center"></i>Copy to List</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>
-    <!-- Recommend option (shown only for year-based lists) -->
-    <button id="recommendAlbumOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-blue-400 transition-colors whitespace-nowrap">
-      <i class="fas fa-thumbs-up mr-2 w-4 text-center text-blue-400"></i>Recommend
-    </button>
+    ${menuItem({ id: 'editAlbumOption', icon: 'fa-edit', label: 'Edit Details' })}
+    ${menuItem({ id: 'playAlbumOption', icon: 'fa-play', label: 'Play Album', hasSubmenu: true })}
+    ${menuItem({ id: 'moveAlbumOption', icon: 'fa-arrow-right', label: 'Move to List', hasSubmenu: true })}
+    ${menuItem({ id: 'copyAlbumOption', icon: 'fa-copy', label: 'Copy to List', hasSubmenu: true })}
+    ${menuItem({ id: 'recommendAlbumOption', icon: 'fa-thumbs-up', label: 'Recommend', hoverColor: 'hover:text-blue-400', hidden: true, iconColor: 'text-blue-400' })}
     <!-- Last.fm Discovery Options (shown only when connected) -->
     <div id="lastfmMenuDivider" class="hidden context-menu-divider"></div>
-    <button id="similarArtistsOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-users mr-2 w-4 text-center text-purple-400"></i>Show Similar Artists
-    </button>
+    ${menuItem({ id: 'similarArtistsOption', icon: 'fa-users', label: 'Show Similar Artists', hidden: true, iconColor: 'text-purple-400' })}
     <!-- Admin-only option to re-identify album from MusicBrainz -->
     <div id="adminMenuDivider" class="hidden context-menu-divider"></div>
-    <button id="reidentifyAlbumOption" class="hidden w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-yellow-400 transition-colors whitespace-nowrap">
-      <i class="fas fa-sync-alt mr-2 w-4 text-center text-yellow-400"></i>Re-identify Album
-    </button>
+    ${menuItem({ id: 'reidentifyAlbumOption', icon: 'fa-sync-alt', label: 'Re-identify Album', hoverColor: 'hover:text-yellow-400', hidden: true, iconColor: 'text-yellow-400' })}
     <div class="context-menu-divider"></div>
-    <button id="removeAlbumOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-red-400 transition-colors whitespace-nowrap">
-      <i class="fas fa-times mr-2 w-4 text-center"></i>Remove from List
+    ${menuItem({ id: 'removeAlbumOption', icon: 'fa-times', label: 'Remove from List', hoverColor: 'hover:text-red-400' })}
     </button>
   </div>
   
@@ -956,63 +984,34 @@ const addAlbumModalComponent = () => `
 `;
 
 // Component: Confirmation Modal
-const confirmationModalComponent = () => `
-  <div id="confirmationModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-800">
-        <h3 id="confirmationTitle" class="text-xl font-bold text-white">Confirm Action</h3>
-      </div>
-      
-      <!-- Modal Content -->
-      <div class="p-6">
+const confirmationModalComponent = () =>
+  modalShell({
+    id: 'confirmationModal',
+    title: '<span id="confirmationTitle">Confirm Action</span>',
+    extraContainerClass: 'transform transition-all',
+    body: `
         <p id="confirmationMessage" class="text-gray-300"></p>
         <p id="confirmationSubMessage" class="text-sm text-gray-500 mt-2"></p>
-        
-        <!-- Optional checkbox for additional confirmation -->
         <div id="confirmationCheckboxContainer" class="hidden mt-4">
           <label class="flex items-start gap-3 cursor-pointer">
-            <input 
-              type="checkbox" 
-              id="confirmationCheckbox" 
-              class="mt-1 w-4 h-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500 focus:ring-2"
-            />
+            <input type="checkbox" id="confirmationCheckbox" class="mt-1 w-4 h-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500 focus:ring-2" />
             <span id="confirmationCheckboxLabel" class="text-sm text-gray-400 select-none"></span>
           </label>
         </div>
-      </div>
-      
-      <!-- Modal Footer -->
-      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
-        <button 
-          id="confirmationCancelBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition duration-200"
-        >
-          Cancel
-        </button>
-        <button 
-          id="confirmationConfirmBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold"
-        >
-          Remove
-        </button>
-      </div>
-    </div>
-  </div>
-`;
+    `,
+    footer: `
+        <button id="confirmationCancelBtn" class="btn-modal-cancel">Cancel</button>
+        <button id="confirmationConfirmBtn" class="btn-modal-confirm">Remove</button>
+    `,
+  });
 
 // Component: Recommendation Reasoning Modal
-const recommendReasoningModalComponent = () => `
-  <div id="recommendReasoningModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-md transform transition-all">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-800">
-        <h3 class="text-xl font-bold text-white">Why do you recommend this album?</h3>
-      </div>
-      
-      <!-- Modal Content -->
-      <div class="p-6">
-        <!-- Album info display -->
+const recommendReasoningModalComponent = () =>
+  modalShell({
+    id: 'recommendReasoningModal',
+    title: 'Why do you recommend this album?',
+    extraContainerClass: 'transform transition-all',
+    body: `
         <div class="flex items-center gap-4 mb-4 p-3 bg-gray-800 rounded-lg">
           <div id="reasoningAlbumCover" class="w-12 h-12 bg-gray-700 rounded-sm flex items-center justify-center">
             <i class="fas fa-compact-disc text-gray-500"></i>
@@ -1022,46 +1021,25 @@ const recommendReasoningModalComponent = () => `
             <p id="reasoningArtistName" class="text-gray-400 text-sm truncate"></p>
           </div>
         </div>
-        
-        <!-- Reasoning textarea -->
         <div>
           <label class="block text-gray-400 text-sm font-medium mb-2" for="reasoningText">
             Your reasoning <span class="text-red-500">*</span>
           </label>
-          <textarea 
-            id="reasoningText" 
-            rows="4"
-            maxlength="500"
-            class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200 resize-none"
+          <textarea id="reasoningText" rows="4" maxlength="500"
+            class="form-input-modal rounded-lg resize-none"
             placeholder="Tell others why they should listen to this album..."
           ></textarea>
           <div class="flex justify-between mt-2">
             <p id="reasoningError" class="text-red-400 text-sm hidden">Reasoning is required</p>
-            <p class="text-gray-500 text-xs ml-auto">
-              <span id="reasoningCharCount">0</span> / 500
-            </p>
+            <p class="text-gray-500 text-xs ml-auto"><span id="reasoningCharCount">0</span> / 500</p>
           </div>
         </div>
-      </div>
-      
-      <!-- Modal Footer -->
-      <div class="p-6 border-t border-gray-800 flex gap-3 justify-end">
-        <button 
-          id="reasoningCancelBtn" 
-          class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded-sm transition duration-200"
-        >
-          Cancel
-        </button>
-        <button 
-          id="reasoningSubmitBtn" 
-          class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-sm transition duration-200 font-semibold"
-        >
-          Recommend
-        </button>
-      </div>
-    </div>
-  </div>
-`;
+    `,
+    footer: `
+        <button id="reasoningCancelBtn" class="btn-modal-cancel">Cancel</button>
+        <button id="reasoningSubmitBtn" class="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-sm transition duration-200 font-semibold">Recommend</button>
+    `,
+  });
 
 // Component: View Reasoning Modal (read-only, small)
 const viewReasoningModalComponent = () => `
@@ -1093,16 +1071,13 @@ const viewReasoningModalComponent = () => `
 `;
 
 // Component: Service Select Modal
-const serviceSelectModalComponent = () => `
-  <div id="serviceSelectModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 safe-area-modal">
-    <div class="bg-gray-900 border border-gray-800 rounded-lg shadow-2xl w-full max-w-sm">
-      <!-- Modal Header -->
-      <div class="p-6 border-b border-gray-800">
-        <h3 class="text-xl font-bold text-white">Choose Service</h3>
-      </div>
-
-      <!-- Modal Content -->
-      <div class="p-6 space-y-3">
+const serviceSelectModalComponent = () =>
+  modalShell({
+    id: 'serviceSelectModal',
+    maxWidth: 'max-w-sm',
+    title: 'Choose Service',
+    body: `
+      <div class="space-y-3">
         <button id="serviceSpotifyBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200 flex items-center justify-center">
           <i class="fab fa-spotify mr-2"></i>Spotify
         </button>
@@ -1110,14 +1085,11 @@ const serviceSelectModalComponent = () => `
           <i class="fas fa-wave-square mr-2"></i>Tidal
         </button>
       </div>
-
-      <!-- Modal Footer -->
-      <div class="p-6 border-t border-gray-800">
-        <button id="serviceCancelBtn" class="w-full px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200">Cancel</button>
-      </div>
-    </div>
-  </div>
-`;
+    `,
+    footer: `
+        <button id="serviceCancelBtn" class="w-full btn-modal-cancel">Cancel</button>
+    `,
+  });
 
 // Component: Settings Drawer
 const settingsDrawerComponent = (user) => `
@@ -1290,27 +1262,12 @@ const spotifyTemplate = (user, csrfToken = '') => `
   <style>
     /* CSS Custom Properties for theming */
     :root {
-      --accent-color: ${user?.accentColor || '#dc2626'};
-      --accent-hover: ${adjustColor(user?.accentColor || '#dc2626', -30)};
-      --accent-light: ${adjustColor(user?.accentColor || '#dc2626', 40)};
-      --accent-dark: ${adjustColor(user?.accentColor || '#dc2626', -50)};
-      --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
-      --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
-      --accent-subtle: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.2)};
-      --accent-subtle-strong: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.3)};
+      ${generateAccentCssVars(user)}
       --sidebar-transition-duration: 200ms;
     }
     
     /* Apply accent color to text and borders only, not buttons */
-    .text-red-600, .text-red-500, .text-red-400 { 
-      color: var(--accent-color) !important; 
-    }
-    .hover\\:text-red-500:hover, .hover\\:text-red-400:hover { 
-      color: var(--accent-color) !important; 
-    }
-    .border-red-600, .border-red-500 { 
-      border-color: var(--accent-color) !important; 
-    }
+    ${generateAccentOverrides()}
     
     /* Responsive layout system */
     .app-layout {
@@ -1862,18 +1819,10 @@ const aggregateListTemplate = (user, year) => `
   <link href="${asset('/styles/output.css')}" rel="stylesheet">
   <style>
     :root {
-      --accent-color: ${user?.accentColor || '#dc2626'};
-      --accent-hover: ${adjustColor(user?.accentColor || '#dc2626', -30)};
-      --accent-light: ${adjustColor(user?.accentColor || '#dc2626', 40)};
-      --accent-dark: ${adjustColor(user?.accentColor || '#dc2626', -50)};
-      --accent-shadow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.4)};
-      --accent-glow: ${colorWithOpacity(user?.accentColor || '#dc2626', 0.5)};
+      ${generateAccentCssVars(user, { includeSubtle: false })}
     }
     
-    .text-red-600, .text-red-500 { color: var(--accent-color) !important; }
-    .border-red-600 { border-color: var(--accent-color) !important; }
-    .bg-red-600 { background-color: var(--accent-color) !important; }
-    .hover\\:bg-red-700:hover { background-color: var(--accent-hover) !important; }
+    ${generateAccentOverrides({ includeBackground: true })}
     
     .metal-title {
       font-family: 'Cinzel', serif;

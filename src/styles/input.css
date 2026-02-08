@@ -467,6 +467,55 @@
   /* SortableJS Touch-and-Hold Drag Styles */
 }
 @layer components {
+  /* ============================================
+     Shared Form & UI Component Classes
+     Consolidates frequently repeated class patterns
+     ============================================ */
+
+  /* Form text input - used across auth pages and modals (~21 occurrences) */
+  .form-input {
+    @apply w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden transition duration-200;
+  }
+
+  .form-input:focus {
+    border-color: #6b7280;
+  }
+
+  /* Modal variant with explicit focus border */
+  .form-input-modal {
+    @apply w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-sm text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200;
+  }
+
+  /* Form label - used across auth pages and modals (~17 occurrences) */
+  .form-label {
+    @apply block text-gray-400 text-xs font-semibold uppercase tracking-wider mb-2;
+  }
+
+  /* Auth submit button (~3 occurrences) */
+  .btn-submit {
+    @apply w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 px-4 rounded-sm transition duration-200 transform hover:scale-105 uppercase tracking-wider;
+  }
+
+  /* Modal confirm button (~5 occurrences) */
+  .btn-modal-confirm {
+    @apply px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-sm transition duration-200 font-semibold;
+  }
+
+  /* Modal cancel button (~5 occurrences) */
+  .btn-modal-cancel {
+    @apply px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm transition duration-200;
+  }
+
+  /* Context menu item (~27 occurrences) */
+  .ctx-menu-item {
+    @apply w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap;
+  }
+
+  /* Context menu icon - used inside ctx-menu-item */
+  .ctx-menu-icon {
+    @apply mr-2 w-4 text-center;
+  }
+
   @keyframes pulse-drag {
     0%,
     100% {
