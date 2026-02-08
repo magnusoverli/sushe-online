@@ -10,10 +10,8 @@
 const sharp = require('sharp');
 const logger = require('./logger');
 const { normalizeForLookup } = require('./normalization');
-
-// Image processing settings (matching migration 036)
-const TARGET_SIZE = 512;
-const JPEG_QUALITY = 100;
+const { processImage, upscaleItunesArtworkUrl } = require('./image-processing');
+const { wait } = require('./request-queue');
 
 // Rate limiting for external APIs
 const RATE_LIMIT_MS = 200; // 200ms between requests (5 req/sec)
@@ -27,15 +25,6 @@ const SKIP_DIMENSION_THRESHOLD = 512;
 // Cover art providers configuration
 const COVER_ART_ARCHIVE_BASE = 'https://coverartarchive.org';
 const ITUNES_API_BASE = 'https://itunes.apple.com/search';
-const ITUNES_IMAGE_SIZE = 600; // Request 600x600 from iTunes
-
-/**
- * Sleep for a specified duration
- * @param {number} ms - Milliseconds to sleep
- */
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * Fetch image from URL and process it
@@ -63,15 +52,7 @@ async function fetchAndProcessImage(url) {
     const buffer = await response.arrayBuffer();
 
     // Process with sharp: resize and convert to JPEG
-    const processedBuffer = await sharp(Buffer.from(buffer))
-      .resize(TARGET_SIZE, TARGET_SIZE, {
-        fit: 'inside',
-        withoutEnlargement: true,
-      })
-      .jpeg({ quality: JPEG_QUALITY })
-      .toBuffer();
-
-    return processedBuffer;
+    return await processImage(Buffer.from(buffer));
   } catch (_error) {
     // Silently return null for fetch errors
     return null;
@@ -189,10 +170,7 @@ async function fetchFromItunes(artist, album) {
     }
 
     // Convert artwork URL to higher resolution
-    const artworkUrl = bestMatch.artworkUrl100.replace(
-      /\/\d+x\d+bb\./,
-      `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
-    );
+    const artworkUrl = upscaleItunesArtworkUrl(bestMatch.artworkUrl100);
 
     return await fetchAndProcessImage(artworkUrl);
   } catch (_error) {
@@ -219,7 +197,7 @@ async function fetchCoverArt(artist, album) {
   }
 
   // Rate limit before trying next source
-  await sleep(RATE_LIMIT_MS);
+  await wait(RATE_LIMIT_MS);
 
   // Try iTunes as fallback
   imageBuffer = await fetchFromItunes(artist, album);
@@ -523,7 +501,7 @@ function createImageRefetchService(deps = {}) {
               : 0;
 
           // Rate limiting between albums
-          await sleep(RATE_LIMIT_MS);
+          await wait(RATE_LIMIT_MS);
         }
 
         // Log progress every page

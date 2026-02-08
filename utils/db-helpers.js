@@ -205,4 +205,22 @@ function createQueryBuilder(pool) {
   return new QueryBuilder(pool);
 }
 
-module.exports = { QueryBuilder, createQueryBuilder };
+/**
+ * Assert that a PostgreSQL pool is provided.
+ * Throws a descriptive error if pool is falsy.
+ *
+ * @param {Object} pool - PostgreSQL pool
+ * @param {string} [context] - Optional context for the error message
+ * @throws {Error} If pool is falsy
+ */
+function assertPool(pool, context) {
+  if (!pool) {
+    throw new Error(
+      context
+        ? `PostgreSQL pool is required for ${context}`
+        : 'PostgreSQL pool is required'
+    );
+  }
+}
+
+module.exports = { QueryBuilder, createQueryBuilder, assertPool };

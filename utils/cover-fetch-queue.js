@@ -21,17 +21,10 @@ const {
   normalizeForExternalApi,
   stringSimilarity,
 } = require('./normalization');
-const sharp = require('sharp');
-
-// Image processing settings (matching image-refetch.js)
-const TARGET_SIZE = 512;
-const JPEG_QUALITY = 100;
+const { processImage, upscaleItunesArtworkUrl } = require('./image-processing');
 
 // Per-provider timeout in milliseconds
 const PROVIDER_TIMEOUT_MS = 5000;
-
-// iTunes image size (600x600 for good quality before processing)
-const ITUNES_IMAGE_SIZE = 600;
 
 /**
  * Check if string is a valid MusicBrainz UUID
@@ -47,23 +40,6 @@ function isValidMusicBrainzId(id) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
     id
   );
-}
-
-/**
- * Process image buffer through sharp for consistent output
- * Resizes to 512x512 (maintaining aspect ratio) and converts to JPEG
- *
- * @param {Buffer} buffer - Raw image buffer
- * @returns {Promise<Buffer>} - Processed JPEG buffer
- */
-async function processImage(buffer) {
-  return sharp(buffer)
-    .resize(TARGET_SIZE, TARGET_SIZE, {
-      fit: 'inside',
-      withoutEnlargement: true,
-    })
-    .jpeg({ quality: JPEG_QUALITY })
-    .toBuffer();
 }
 
 /**
@@ -194,10 +170,7 @@ function createCoverProviders(fetchFn) {
           }
 
           // Convert artwork URL to high resolution
-          const artworkUrl = bestMatch.artworkUrl100.replace(
-            /\/\d+x\d+bb\./,
-            `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
-          );
+          const artworkUrl = upscaleItunesArtworkUrl(bestMatch.artworkUrl100);
 
           // Fetch the actual image
           const imageResponse = await fetchFn(artworkUrl, {

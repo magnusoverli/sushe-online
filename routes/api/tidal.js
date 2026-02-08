@@ -7,6 +7,11 @@
  */
 
 const { createAsyncHandler } = require('../../middleware/async-handler');
+const {
+  matchTrackByNumber,
+  extractTrackName,
+  matchTrackByName,
+} = require('../../utils/track-matching');
 
 /**
  * Register Tidal routes
@@ -154,18 +159,16 @@ module.exports = (app, deps) => {
       const tracks = tracksData.data || [];
 
       // Try to match by track number first
-      const trackNum = parseInt(track);
-      if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
-        const matchedTrack = tracks[trackNum - 1];
+      const numberMatch = matchTrackByNumber(tracks, track);
+      if (numberMatch) {
         logger.info('Tidal track matched by number', {
-          trackId: matchedTrack.id,
+          trackId: numberMatch.id,
         });
-        return res.json({ id: matchedTrack.id });
+        return res.json({ id: numberMatch.id });
       }
 
       // Extract track name from format like "3. Track Name"
-      const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
-      const searchName = trackNameMatch ? trackNameMatch[1] : track;
+      const searchName = extractTrackName(track);
 
       // For name matching, we need track details - fetch them
       const trackDetailsPromises = tracks.slice(0, 20).map(async (t) => {
@@ -185,13 +188,7 @@ module.exports = (app, deps) => {
       });
 
       const trackDetails = await Promise.all(trackDetailsPromises);
-      const matchingTrack = trackDetails.find(
-        (t) =>
-          t.name &&
-          (t.name.toLowerCase() === searchName.toLowerCase() ||
-            t.name.toLowerCase().includes(searchName.toLowerCase()) ||
-            searchName.toLowerCase().includes(t.name.toLowerCase()))
-      );
+      const matchingTrack = matchTrackByName(trackDetails, searchName);
       if (matchingTrack) {
         logger.info('Tidal track matched by name', {
           trackId: matchingTrack.id,

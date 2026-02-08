@@ -3,7 +3,10 @@
 
 const logger = require('./logger');
 const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
-const { normalizeForExternalApi } = require('./normalization');
+const {
+  normalizeForExternalApi,
+  stripEditionSuffix,
+} = require('./normalization');
 
 const API_URL = 'https://ws.audioscrobbler.com/2.0/';
 
@@ -79,17 +82,6 @@ function normalizeForLastfm(str) {
 }
 
 /**
- * Strip edition suffixes from album names for better Last.fm matching
- * e.g., "Album (Deluxe Edition)" -> "Album"
- */
-const EDITION_PATTERNS = [
-  /\s*\(\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?|bonus\s*track)\s*(edition|version|release)?\s*\)$/i,
-  /\s*\[\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?|bonus\s*track)\s*(edition|version|release)?\s*\]$/i,
-  /\s*[-:]\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited)\s*(edition|version|release)?$/i,
-  /\s*\(\s*\d{4}\s*(remaster|reissue|edition)?\s*\)$/i,
-];
-
-/**
  * Common edition suffixes to try when looking for album variants
  * Used as fallback when artist.getTopAlbums doesn't find matches
  */
@@ -100,14 +92,6 @@ const EDITION_SUFFIXES_TO_TRY = [
   '(Expanded Edition)',
   '(Special Edition)',
 ];
-
-const stripEditionSuffix = (str) => {
-  let result = str;
-  for (const pattern of EDITION_PATTERNS) {
-    result = result.replace(pattern, '');
-  }
-  return result.trim();
-};
 
 /**
  * Generate album name variations to try for Last.fm lookup

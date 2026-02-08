@@ -13,6 +13,11 @@
 
 const { normalizeForExternalApi } = require('../../utils/normalization');
 const { createAsyncHandler } = require('../../middleware/async-handler');
+const {
+  SUSHE_USER_AGENT,
+  selectBestRelease,
+  extractTracksFromMedia,
+} = require('../../utils/musicbrainz-helpers');
 
 /**
  * Register proxy routes
@@ -197,7 +202,7 @@ module.exports = (app, deps) => {
       const url = `https://www.wikidata.org/w/api.php?action=wbgetclaims&entity=${encodeURIComponent(entity)}&property=${encodeURIComponent(property)}&format=json`;
       const response = await fetch(url, {
         headers: {
-          'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+          'User-Agent': SUSHE_USER_AGENT,
           Accept: 'application/json',
         },
       });
@@ -291,7 +296,7 @@ module.exports = (app, deps) => {
       const result = await imageProxyQueue.add(async () => {
         const response = await fetch(url, {
           headers: {
-            'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)',
+            'User-Agent': SUSHE_USER_AGENT,
           },
         });
 
@@ -383,7 +388,7 @@ module.exports = (app, deps) => {
           .json({ error: 'id or artist/album query required' });
       }
 
-      const headers = { 'User-Agent': 'SuSheBot/1.0 (kvlt.example.com)' };
+      const headers = { 'User-Agent': SUSHE_USER_AGENT };
 
       let releaseGroupId = id;
       let directReleaseId = null;
@@ -567,55 +572,7 @@ module.exports = (app, deps) => {
         releasesData = data.releases;
       }
 
-      const EU = new Set([
-        'AT',
-        'BE',
-        'BG',
-        'HR',
-        'CY',
-        'CZ',
-        'DK',
-        'EE',
-        'FI',
-        'FR',
-        'DE',
-        'GR',
-        'HU',
-        'IE',
-        'IT',
-        'LV',
-        'LT',
-        'LU',
-        'MT',
-        'NL',
-        'PL',
-        'PT',
-        'RO',
-        'SK',
-        'SI',
-        'ES',
-        'SE',
-        'GB',
-        'XE',
-      ]);
-
-      const score = (rel) => {
-        if (rel.status !== 'Official' || rel.status === 'Pseudo-Release')
-          return -1;
-        let s = 0;
-        if (EU.has(rel.country)) s += 20;
-        if (rel.country === 'XW') s += 10;
-        if ((rel.media || []).some((m) => (m.format || '').includes('Digital')))
-          s += 15;
-        const date = new Date(rel.date || '1900-01-01');
-        if (!isNaN(date)) s += date.getTime() / 1e10; // minor weight
-        return s;
-      };
-
-      const best = releasesData
-        .map((r) => ({ ...r, _score: score(r) }))
-        .filter((r) => r._score >= 0)
-        .sort((a, b) => b._score - a._score)[0];
+      const best = selectBestRelease(releasesData);
 
       if (!best || !best.media) {
         const fb = await runFallbacks();
@@ -623,18 +580,7 @@ module.exports = (app, deps) => {
         return res.status(404).json({ error: 'No suitable release found' });
       }
 
-      const tracks = [];
-      for (const medium of best.media) {
-        if (Array.isArray(medium.tracks)) {
-          medium.tracks.forEach((t) => {
-            const title = t.title || (t.recording && t.recording.title) || '';
-            // Extract length: prefer track-specific length, fallback to recording length (median)
-            const length =
-              t.length || (t.recording && t.recording.length) || null;
-            tracks.push({ name: title, length });
-          });
-        }
-      }
+      const tracks = extractTracksFromMedia(best.media);
 
       if (!tracks.length) {
         const fb = await runFallbacks();

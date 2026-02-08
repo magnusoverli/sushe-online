@@ -19,6 +19,30 @@
  */
 
 // ============================================
+// Shared Character Normalization
+// ============================================
+
+/**
+ * Normalize common Unicode special characters to ASCII equivalents.
+ * Handles ellipsis, dashes, and smart quotes.
+ *
+ * @param {string} str - String to normalize (must already be a String)
+ * @returns {string} - String with special characters replaced
+ */
+function normalizeSpecialChars(str) {
+  return (
+    str
+      // Convert ellipsis (…) to three periods
+      .replace(/…/g, '...')
+      // Convert en-dash (–) and em-dash (—) to hyphen
+      .replace(/[–—]/g, '-')
+      // Normalize smart quotes to straight quotes
+      .replace(/[\u2018\u2019`]/g, "'")
+      .replace(/[\u201c\u201d]/g, '"')
+  );
+}
+
+// ============================================
 // Storage and Lookup Normalization
 // ============================================
 
@@ -42,23 +66,9 @@
 function sanitizeForStorage(value) {
   if (!value) return '';
 
-  return (
-    String(value)
-      .trim()
-      // Convert ellipsis (…) to three periods for consistent matching
-      // e.g., "…and Oceans" → "...and Oceans"
-      .replace(/…/g, '...')
-      // Convert en-dash (–) and em-dash (—) to hyphen
-      .replace(/[–—]/g, '-')
-      // Normalize smart quotes to straight quotes
-      // U+2018 ('), U+2019 ('), U+0060 (`) -> straight single quote
-      .replace(/[\u2018\u2019`]/g, "'")
-      // U+201C ("), U+201D (") -> straight double quote
-      .replace(/[\u201c\u201d]/g, '"')
-      // Normalize multiple spaces to single space
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  return normalizeSpecialChars(String(value).trim())
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**
@@ -90,27 +100,40 @@ function normalizeForLookup(value) {
 function normalizeForExternalApi(str) {
   if (!str) return '';
 
-  return (
-    String(str)
-      // Convert ellipsis (…) to three periods
-      .replace(/\u2026/g, '...')
-      // Normalize smart quotes to straight quotes
-      .replace(/[\u2018\u2019`]/g, "'")
-      .replace(/[\u201c\u201d]/g, '"')
-      // Convert en-dash (–) and em-dash (—) to hyphen
-      .replace(/[–—]/g, '-')
-      // Strip diacritics (é -> e, ü -> u, û -> u)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  return normalizeSpecialChars(String(str))
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // ============================================
-// Artist Name Normalization
+// Name Normalization (Artist + Album)
 // ============================================
+
+/**
+ * Shared base normalization for cross-source matching of names.
+ * Used by both normalizeArtistName and normalizeAlbumName (which are identical).
+ *
+ * Steps: lowercase, normalize special chars, strip diacritics,
+ * remove "the " prefix, parenthetical/bracket suffixes, and punctuation.
+ *
+ * @param {string} name - Name to normalize
+ * @returns {string} - Normalized name
+ */
+function normalizeNameForMatching(name) {
+  if (!name) return '';
+
+  return normalizeSpecialChars(name.toLowerCase().trim())
+    .replace(/^the\s+/, '')
+    .replace(/\s*\([^)]*\)\s*/g, '')
+    .replace(/\s*\[[^\]]*\]\s*/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[.,!?;:]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 /**
  * Normalize artist name for cross-source matching
@@ -119,37 +142,8 @@ function normalizeForExternalApi(str) {
  * @returns {string} - Normalized name (lowercase, stripped of common variations)
  */
 function normalizeArtistName(name) {
-  if (!name) return '';
-
-  return (
-    name
-      .toLowerCase()
-      .trim()
-      // Convert ellipsis (…) to three periods for consistent matching
-      // e.g., "…and Oceans" -> "...and Oceans"
-      .replace(/…/g, '...')
-      // Remove "the " prefix (e.g., "The Beatles" -> "beatles")
-      .replace(/^the\s+/, '')
-      // Remove common suffixes like "(band)", "[US]", etc.
-      .replace(/\s*\([^)]*\)\s*/g, '')
-      .replace(/\s*\[[^\]]*\]\s*/g, '')
-      // Normalize special characters
-      .replace(/[''`]/g, "'")
-      .replace(/[""]/g, '"')
-      // Remove diacritics (é -> e, ü -> u)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // Remove punctuation except essential ones
-      .replace(/[.,!?;:]/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  return normalizeNameForMatching(name);
 }
-
-// ============================================
-// Album Name Normalization
-// ============================================
 
 /**
  * Normalize album name for cross-source matching
@@ -158,31 +152,7 @@ function normalizeArtistName(name) {
  * @returns {string} - Normalized name
  */
 function normalizeAlbumName(name) {
-  if (!name) return '';
-
-  return (
-    name
-      .toLowerCase()
-      .trim()
-      // Convert ellipsis (…) to three periods for consistent matching
-      .replace(/…/g, '...')
-      // Remove "the " prefix for consistency across sources
-      .replace(/^the\s+/, '')
-      // Remove common suffixes like "(Deluxe Edition)", "[Remaster]", etc.
-      .replace(/\s*\([^)]*\)\s*/g, '')
-      .replace(/\s*\[[^\]]*\]\s*/g, '')
-      // Normalize special characters
-      .replace(/[''`]/g, "'")
-      .replace(/[""]/g, '"')
-      // Remove diacritics (é -> e, ü -> u)
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      // Remove punctuation except essential ones
-      .replace(/[.,!?;:]/g, '')
-      // Normalize whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  return normalizeNameForMatching(name);
 }
 
 // ============================================
@@ -290,6 +260,38 @@ function stringSimilarity(str1, str2) {
   return commonWords.length / Math.max(words1.length, words2.length);
 }
 
+// ============================================
+// Edition Suffix Patterns
+// ============================================
+
+/**
+ * Common edition/remaster suffix patterns for stripping from album names.
+ * Shared between lastfm-auth.js (playcount matching) and fuzzy-match.js (deduplication).
+ *
+ * NOTE: fuzzy-match.js extends this with additional patterns (disc indicators, EP/LP).
+ */
+const EDITION_PATTERNS = [
+  /\s*\(\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?|bonus\s*track)\s*(edition|version|release)?\s*\)$/i,
+  /\s*\[\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?|bonus\s*track)\s*(edition|version|release)?\s*\]$/i,
+  /\s*[-:]\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited)\s*(edition|version|release)?$/i,
+  /\s*\(\s*\d{4}\s*(remaster|reissue|edition)?\s*\)$/i,
+];
+
+/**
+ * Strip edition suffixes from an album name.
+ * e.g., "Album (Deluxe Edition)" -> "Album"
+ *
+ * @param {string} str - Album name
+ * @returns {string} - Album name with edition suffix removed
+ */
+function stripEditionSuffix(str) {
+  let result = str;
+  for (const pattern of EDITION_PATTERNS) {
+    result = result.replace(pattern, '');
+  }
+  return result.trim();
+}
+
 module.exports = {
   // Storage and lookup normalization
   sanitizeForStorage,
@@ -307,4 +309,8 @@ module.exports = {
   albumNamesMatch,
   findArtistInMap,
   stringSimilarity,
+
+  // Edition suffix handling
+  EDITION_PATTERNS,
+  stripEditionSuffix,
 };

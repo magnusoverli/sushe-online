@@ -74,22 +74,20 @@ function similarityRatio(a, b) {
   return 1 - distance / maxLen;
 }
 
+const { EDITION_PATTERNS } = require('./normalization');
+
 /**
  * Common words/suffixes to strip for comparison
- * Applied BEFORE punctuation removal
+ * Applied BEFORE punctuation removal.
+ *
+ * Extends the shared EDITION_PATTERNS with disc indicators and EP/LP patterns.
  */
 const STRIP_PATTERNS = [
-  // Edition suffixes in parentheses or brackets
-  /\s*\(\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?)\s*(edition|version|release)?\s*\)$/i,
-  /\s*\[\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited|collector'?s?)\s*(edition|version|release)?\s*\]$/i,
-  // Edition suffixes without parentheses (at end)
-  /\s*[-:]\s*(deluxe|special|expanded|remastered|remaster|anniversary|limited)\s*(edition|version|release)?$/i,
+  ...EDITION_PATTERNS,
   // Disc indicators
   /\s*\(\s*disc\s*\d+\s*\)$/i,
   /\s*\[\s*disc\s*\d+\s*\]$/i,
   /\s*[-:]\s*cd\s*\d+$/i,
-  // Year suffixes in parentheses
-  /\s*\(\s*\d{4}\s*(remaster|reissue|edition)?\s*\)$/i,
   // EP/LP indicators
   /\s*\(\s*(e\.?p\.?|l\.?p\.?|single)\s*\)$/i,
 ];

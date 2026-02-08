@@ -332,4 +332,5 @@ module.exports = {
   MusicBrainzQueue,
   RequestQueue,
   createMbFetch,
+  wait,
 };

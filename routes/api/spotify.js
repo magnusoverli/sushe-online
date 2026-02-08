@@ -10,6 +10,11 @@
 
 const { normalizeForExternalApi } = require('../../utils/normalization');
 const { createAsyncHandler } = require('../../middleware/async-handler');
+const {
+  matchTrackByNumber,
+  extractTrackName,
+  matchTrackByName,
+} = require('../../utils/track-matching');
 
 /**
  * Register Spotify routes
@@ -583,27 +588,20 @@ module.exports = (app, deps) => {
       }
 
       // Try to match by track number first
-      const trackNum = parseInt(track);
-      if (!isNaN(trackNum) && trackNum > 0 && trackNum <= tracks.length) {
-        const matchedTrack = tracks[trackNum - 1];
+      const numberMatch = matchTrackByNumber(tracks, track);
+      if (numberMatch) {
         logger.info('Spotify track matched by number:', {
-          trackId: matchedTrack.id,
-          trackName: matchedTrack.name,
+          trackId: numberMatch.id,
+          trackName: numberMatch.name,
         });
-        return res.json({ id: matchedTrack.id });
+        return res.json({ id: numberMatch.id });
       }
 
       // Extract track name from format like "3. Track Name"
-      const trackNameMatch = track.match(/^\d+[.\s-]*\s*(.+)$/);
-      const searchName = trackNameMatch ? trackNameMatch[1] : track;
+      const searchName = extractTrackName(track);
 
       // Try to match by track name
-      const matchingTrack = tracks.find(
-        (t) =>
-          t.name.toLowerCase() === searchName.toLowerCase() ||
-          t.name.toLowerCase().includes(searchName.toLowerCase()) ||
-          searchName.toLowerCase().includes(t.name.toLowerCase())
-      );
+      const matchingTrack = matchTrackByName(tracks, searchName);
       if (matchingTrack) {
         logger.info('Spotify track matched by name:', {
           trackId: matchingTrack.id,
