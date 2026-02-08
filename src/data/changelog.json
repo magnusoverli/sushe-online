@@ -2,6 +2,26 @@
   {
     "date": "2026-02-08",
     "category": "feature",
+    "description": "Added changelog to view recent app updates"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "ui",
+    "description": "Made recommendation badges more visible"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "ui",
+    "description": "Hidden recommendation sidebar for years without recommendations"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "feature",
+    "description": "Added recommendation badges to album lists"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "feature",
     "description": "Added changelog feature with curated update history"
   },
   {
@@ -28,6 +48,11 @@
     "date": "2026-02-08",
     "category": "feature",
     "description": "Recommendation indicator shown on albums in your lists"
+  },
+  {
+    "date": "2026-02-07",
+    "category": "feature",
+    "description": "Added copy album to other lists feature"
   },
   {
     "date": "2026-02-07",
