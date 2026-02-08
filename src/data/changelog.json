@@ -2,6 +2,11 @@
   {
     "date": "2026-02-08",
     "category": "feature",
+    "description": "Added What's New changelog accessible from the header"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "feature",
     "description": "Recommendation indicator shown on albums in your lists"
   },
   {

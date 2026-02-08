@@ -59,11 +59,15 @@ function getLastEntryDate(entries) {
  * @returns {Array}
  */
 function getNewCommits(sinceDate) {
-  // Get commits since the day after the last entry to avoid duplicates
   let gitCmd = 'git log --format="%H|%ad|%s" --date=short';
   if (sinceDate) {
-    // Include commits from the same day (they may be new)
-    gitCmd += ` --since="${sinceDate}"`;
+    // Go back one day to avoid timezone edge cases where --since with
+    // a date-only value misses same-day commits. Deduplication later
+    // prevents repeated entries.
+    const d = new Date(sinceDate + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() - 1);
+    const paddedDate = d.toISOString().split('T')[0];
+    gitCmd += ` --since="${paddedDate}"`;
   }
 
   const raw = execSync(gitCmd, {
