@@ -15,7 +15,7 @@
  */
 
 const logger = require('../../utils/logger');
-const { createTelegramNotifier } = require('../../utils/telegram');
+const { createTelegramNotifier } = require('../../services/telegram');
 const { createAsyncHandler } = require('../../middleware/async-handler');
 
 const asyncHandler = createAsyncHandler(logger);

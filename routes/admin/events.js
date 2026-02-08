@@ -12,7 +12,7 @@
  */
 
 const logger = require('../../utils/logger');
-const { createAdminEventService } = require('../../utils/admin-events');
+const { createAdminEventService } = require('../../services/admin-events');
 
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin, usersAsync, pool } = deps;

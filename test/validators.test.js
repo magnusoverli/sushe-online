@@ -13,7 +13,7 @@ const {
   validateEnum,
   validateInteger,
   requireFields,
-} = require('../validators.js');
+} = require('../utils/validators.js');
 
 // =============================================================================
 // isValidEmail tests

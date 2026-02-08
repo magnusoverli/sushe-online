@@ -1,11 +1,11 @@
-// utils/preference-sync.js
+// services/preference-sync.js
 // Background service for syncing user preferences from external APIs
 
-const logger = require('./logger');
-const { createSpotifyAuth } = require('./spotify-auth');
-const { createLastfmAuth } = require('./lastfm-auth');
-const { createUserPreferences } = require('./user-preferences');
-const { createMusicBrainz } = require('./musicbrainz');
+const logger = require('../utils/logger');
+const { createSpotifyAuth } = require('../utils/spotify-auth');
+const { createLastfmAuth } = require('../utils/lastfm-auth');
+const { createUserPreferences } = require('../utils/user-preferences');
+const { createMusicBrainz } = require('../utils/musicbrainz');
 
 // Default intervals
 const DEFAULT_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours

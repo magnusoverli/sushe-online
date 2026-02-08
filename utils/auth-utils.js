@@ -2,7 +2,7 @@
 // Helper to validate OAuth tokens and extension tokens
 
 const crypto = require('crypto');
-const logger = require('./utils/logger');
+const logger = require('./logger');
 
 function isTokenValid(token) {
   if (!token || !token.access_token) return false;

@@ -1,6 +1,6 @@
-const logger = require('./logger');
-const { normalizeAlbumKey } = require('./fuzzy-match');
-const { POSITION_POINTS, getPositionPoints } = require('./scoring');
+const logger = require('../utils/logger');
+const { normalizeAlbumKey } = require('../utils/fuzzy-match');
+const { POSITION_POINTS, getPositionPoints } = require('../utils/scoring');
 const { withTransaction } = require('../db/transaction');
 
 // ============================================

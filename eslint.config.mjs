@@ -233,7 +233,18 @@ export default [
     },
   },
   {
-    files: ['utils/album-summary.js'],
+    files: ['services/**/*.js'],
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+      // Service factory functions can be slightly longer than the default 200-line limit
+      'max-lines-per-function': [
+        'warn',
+        { max: 210, skipBlankLines: true, skipComments: true },
+      ],
+    },
+  },
+  {
+    files: ['services/album-summary.js'],
     rules: {
       // album-summary service has complex responsibilities (batch processing, async fetching, advisory locks)
       // that justify a longer function (266 lines vs 210 limit)

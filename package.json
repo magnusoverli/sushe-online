@@ -23,7 +23,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "format:check:source": "prettier --check '*.{js,mjs,json}' '{src,test,utils,middleware,routes,db,scripts,browser-extension}/**/*.{js,mjs,json,html}'",
+    "format:check:source": "prettier --check '*.{js,mjs,json}' '{src,test,utils,middleware,routes,db,services,scripts,browser-extension}/**/*.{js,mjs,json,html}'",
     "migrate": "node scripts/migrate.js",
     "migrate:up": "node scripts/migrate.js up",
     "migrate:down": "node scripts/migrate.js down",

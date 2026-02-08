@@ -3,7 +3,7 @@ const {
   colorWithOpacity,
   generateAccentCssVars,
   generateAccentOverrides,
-} = require('./color-utils');
+} = require('./utils/color-utils');
 const fs = require('fs');
 const path = require('path');
 const ejs = require('ejs');

@@ -7,7 +7,7 @@ const {
   generateExtensionToken,
   validateExtensionToken,
   cleanupExpiredTokens,
-} = require('../auth-utils.js');
+} = require('../utils/auth-utils.js');
 
 // =============================================================================
 // isTokenValid tests

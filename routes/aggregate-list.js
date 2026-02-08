@@ -1,4 +1,4 @@
-const { createAggregateList } = require('../utils/aggregate-list');
+const { createAggregateList } = require('../services/aggregate-list');
 const { aggregateListTemplate } = require('../templates');
 const { validateYearNotLocked } = require('../utils/year-lock');
 const { validateYearParam } = require('../middleware/validate-params');

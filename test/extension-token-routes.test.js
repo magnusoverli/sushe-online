@@ -162,7 +162,7 @@ function createTestApp(options = {}) {
   };
 
   // Cache the mock auth-utils
-  require.cache[require.resolve('../auth-utils')] = {
+  require.cache[require.resolve('../utils/auth-utils')] = {
     exports: mockAuthUtils,
   };
 
@@ -186,7 +186,7 @@ function createTestApp(options = {}) {
     isValidEmail,
     isValidUsername,
     isValidPassword,
-  } = require('../validators');
+  } = require('../utils/validators');
 
   // Mock bcrypt
   const mockBcrypt = {

@@ -4,7 +4,7 @@
  * Reusable middleware for validating common route parameters.
  */
 
-const { validateYear } = require('../validators');
+const { validateYear } = require('../utils/validators');
 
 /**
  * Middleware to validate :year route parameter.

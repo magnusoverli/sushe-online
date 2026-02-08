@@ -10,7 +10,7 @@
  */
 
 const logger = require('../../utils/logger');
-const { createAlbumSummaryService } = require('../../utils/album-summary');
+const { createAlbumSummaryService } = require('../../services/album-summary');
 const { responseCache } = require('../../middleware/response-cache');
 
 module.exports = (app, deps) => {

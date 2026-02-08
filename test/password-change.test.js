@@ -153,7 +153,7 @@ function createTestApp(options = {}) {
     isValidEmail,
     isValidUsername,
     isValidPassword,
-  } = require('../validators');
+  } = require('../utils/validators');
 
   // Mock async datastores
   const mockUsersAsync = options.usersAsyncOverride || {

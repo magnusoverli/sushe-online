@@ -3,7 +3,7 @@
  * Handles aggregate list audit and manual album reconciliation
  */
 
-const { createAggregateAudit } = require('../../utils/aggregate-audit');
+const { createAggregateAudit } = require('../../services/aggregate-audit');
 const { validateYearParam } = require('../../middleware/validate-params');
 
 module.exports = (app, deps) => {
@@ -210,7 +210,9 @@ module.exports = (app, deps) => {
 
         // Recompute aggregate lists for affected years
         if (result.affectedYears && result.affectedYears.length > 0) {
-          const { createAggregateList } = require('../../utils/aggregate-list');
+          const {
+            createAggregateList,
+          } = require('../../services/aggregate-list');
           const aggregateList = createAggregateList({
             pool: deps.pool,
             logger,
@@ -339,7 +341,9 @@ module.exports = (app, deps) => {
 
         // Recompute affected aggregate lists
         if (affectedYears.length > 0) {
-          const { createAggregateList } = require('../../utils/aggregate-list');
+          const {
+            createAggregateList,
+          } = require('../../services/aggregate-list');
           const aggregateList = createAggregateList({
             pool: deps.pool,
             logger,

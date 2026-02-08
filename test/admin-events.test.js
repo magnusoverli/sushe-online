@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { createAdminEventService } = require('../utils/admin-events.js');
+const { createAdminEventService } = require('../services/admin-events.js');
 
 // Mock logger
 const createMockLogger = () => ({

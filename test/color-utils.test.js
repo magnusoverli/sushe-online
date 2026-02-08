@@ -6,7 +6,7 @@ const {
   DEFAULT_ACCENT,
   generateAccentCssVars,
   generateAccentOverrides,
-} = require('../color-utils.js');
+} = require('../utils/color-utils.js');
 
 // =============================================================================
 // adjustColor tests

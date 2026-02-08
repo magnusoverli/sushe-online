@@ -12,8 +12,11 @@
  * Follows dependency injection pattern for testability.
  */
 
-const logger = require('./logger');
-const { findPotentialDuplicates, normalizeAlbumKey } = require('./fuzzy-match');
+const logger = require('../utils/logger');
+const {
+  findPotentialDuplicates,
+  normalizeAlbumKey,
+} = require('../utils/fuzzy-match');
 const { withTransaction } = require('../db/transaction');
 
 /**

@@ -4,7 +4,7 @@ const {
   createAggregateList,
   POSITION_POINTS,
   getPositionPoints,
-} = require('../utils/aggregate-list.js');
+} = require('../services/aggregate-list.js');
 
 // =============================================================================
 // Helper functions

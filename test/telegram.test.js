@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { createTelegramNotifier } = require('../utils/telegram.js');
+const { createTelegramNotifier } = require('../services/telegram.js');
 
 // Mock logger
 const createMockLogger = () => ({

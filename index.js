@@ -38,12 +38,12 @@ const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const requestIdMiddleware = require('./middleware/request-id');
 const { metricsMiddleware } = require('./utils/metrics');
 const { setup: setupWebSocket, broadcast } = require('./utils/websocket');
-const { composeForgotPasswordEmail } = require('./forgot_email');
+const { composeForgotPasswordEmail } = require('./utils/forgot_email');
 const {
   isValidEmail,
   isValidUsername,
   isValidPassword,
-} = require('./validators');
+} = require('./utils/validators');
 const {
   htmlTemplate,
   registerTemplate,
@@ -54,7 +54,7 @@ const {
   spotifyTemplate,
   extensionAuthTemplate,
 } = require('./templates');
-const { isTokenValid, isTokenUsable } = require('./auth-utils');
+const { isTokenValid, isTokenUsable } = require('./utils/auth-utils');
 const {
   users,
   lists,
@@ -234,7 +234,7 @@ app.use((req, res, next) => {
 
 // ============ AUTH MIDDLEWARE ============
 
-const { validateExtensionToken } = require('./auth-utils');
+const { validateExtensionToken } = require('./utils/auth-utils');
 const ensureAuthAPI = createEnsureAuthAPI({
   usersAsync,
   pool,

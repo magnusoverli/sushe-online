@@ -3,7 +3,7 @@
  * Handles image refetch service operations
  */
 
-const { createImageRefetchService } = require('../../utils/image-refetch');
+const { createImageRefetchService } = require('../../services/image-refetch');
 
 module.exports = (app, deps) => {
   const { ensureAuth, ensureAdmin } = deps;

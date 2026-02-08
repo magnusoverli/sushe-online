@@ -1,8 +1,8 @@
-// utils/telegram.js
+// services/telegram.js
 // Telegram Bot API wrapper for admin notifications
 // Supports forum topics (message_thread_id) for organized notification channels
 
-const logger = require('./logger');
+const logger = require('../utils/logger');
 const crypto = require('crypto');
 
 // Simple encryption for bot token storage

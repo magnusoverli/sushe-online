@@ -9,7 +9,7 @@
  */
 
 const logger = require('../utils/logger');
-const { createPreferenceSyncService } = require('../utils/preference-sync');
+const { createPreferenceSyncService } = require('../services/preference-sync');
 const {
   createPlaycountSyncService,
 } = require('../services/playcount-sync-service');

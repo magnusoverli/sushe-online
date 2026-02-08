@@ -6,7 +6,7 @@ const {
   createAlbumSummaryService,
   fetchAlbumSummary,
   SUMMARY_SOURCES,
-} = require('../utils/album-summary.js');
+} = require('../services/album-summary.js');
 
 // =============================================================================
 // stripHtml tests
@@ -338,7 +338,7 @@ test('fetchAndStoreSummary should skip fetch for whitespace-only artist', async 
 // =============================================================================
 
 test('module should export helper functions for testing', () => {
-  const module = require('../utils/album-summary.js');
+  const module = require('../services/album-summary.js');
 
   assert.strictEqual(typeof module.stripHtml, 'function');
   assert.strictEqual(typeof module.generateNameVariations, 'function');

@@ -1,6 +1,8 @@
 const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
-const { createPreferenceSyncService } = require('../utils/preference-sync.js');
+const {
+  createPreferenceSyncService,
+} = require('../services/preference-sync.js');
 
 // =============================================================================
 // Helper functions

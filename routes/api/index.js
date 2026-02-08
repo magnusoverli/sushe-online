@@ -20,7 +20,7 @@ const {
 
 // Import other utilities
 const { normalizeAlbumKey } = require('../../utils/fuzzy-match');
-const { validateYear } = require('../../validators');
+const { validateYear } = require('../../utils/validators');
 const { URLSearchParams } = require('url');
 const {
   htmlTemplate,

@@ -1,9 +1,12 @@
-// utils/album-summary.js
+// services/album-summary.js
 // Album summary fetching from Claude API
 
-const logger = require('./logger');
-const { observeExternalApiCall, recordExternalApiError } = require('./metrics');
-const { fetchClaudeSummary } = require('./claude-summary');
+const logger = require('../utils/logger');
+const {
+  observeExternalApiCall,
+  recordExternalApiError,
+} = require('../utils/metrics');
+const { fetchClaudeSummary } = require('../utils/claude-summary');
 
 // Summary sources
 const SUMMARY_SOURCES = {

@@ -24,7 +24,7 @@ module.exports = (app, deps) => {
     generateExtensionToken,
     validateExtensionToken,
     cleanupExpiredTokens,
-  } = require('../auth-utils');
+  } = require('../utils/auth-utils');
   const { EXTENSION_TOKEN_EXPIRY_MS } = require('../services/auth-service');
 
   const {

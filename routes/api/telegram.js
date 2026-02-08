@@ -15,8 +15,8 @@ module.exports = (app, deps) => {
   const { pool, logger } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
-  const { createTelegramNotifier } = require('../../utils/telegram');
-  const { createAdminEventService } = require('../../utils/admin-events');
+  const { createTelegramNotifier } = require('../../services/telegram');
+  const { createAdminEventService } = require('../../services/admin-events');
 
   // POST /api/telegram/webhook/:secret - Telegram webhook endpoint
   app.post(

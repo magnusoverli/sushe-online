@@ -3,7 +3,7 @@
 
 const logger = require('../utils/logger');
 const { createUserPreferences } = require('../utils/user-preferences');
-const { createPreferenceSyncService } = require('../utils/preference-sync');
+const { createPreferenceSyncService } = require('../services/preference-sync');
 const { createAsyncHandler } = require('../middleware/async-handler');
 
 const asyncHandler = createAsyncHandler(logger);

@@ -8,10 +8,13 @@
  */
 
 const sharp = require('sharp');
-const logger = require('./logger');
-const { normalizeForLookup } = require('./normalization');
-const { processImage, upscaleItunesArtworkUrl } = require('./image-processing');
-const { wait } = require('./request-queue');
+const logger = require('../utils/logger');
+const { normalizeForLookup } = require('../utils/normalization');
+const {
+  processImage,
+  upscaleItunesArtworkUrl,
+} = require('../utils/image-processing');
+const { wait } = require('../utils/request-queue');
 
 // Rate limiting for external APIs
 const RATE_LIMIT_MS = 200; // 200ms between requests (5 req/sec)

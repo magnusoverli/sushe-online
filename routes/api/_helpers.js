@@ -5,9 +5,9 @@
  */
 
 // Import shared utilities
-const { createAggregateList } = require('../../utils/aggregate-list');
+const { createAggregateList } = require('../../services/aggregate-list');
 const { createAlbumCanonical } = require('../../utils/album-canonical');
-const { validateYear } = require('../../validators');
+const { validateYear } = require('../../utils/validators');
 const { TransactionAbort } = require('../../db/transaction');
 
 /**

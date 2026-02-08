@@ -1,8 +1,8 @@
-// utils/admin-events.js
+// services/admin-events.js
 // Core admin event service - handles events that require admin action
 // Works independently of Telegram; Telegram is an optional notification layer
 
-const logger = require('./logger');
+const logger = require('../utils/logger');
 
 // ============================================
 // QUERY BUILDER HELPERS

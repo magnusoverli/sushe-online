@@ -5,7 +5,7 @@ const {
   selectCanonicalAlbumId,
   normalizeAlbumKey,
   basicNormalizeAlbumKey,
-} = require('../utils/aggregate-audit.js');
+} = require('../services/aggregate-audit.js');
 
 // =============================================================================
 // Helper functions
