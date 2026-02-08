@@ -44,7 +44,7 @@ const CATEGORY_META = {
 };
 
 /** How many entries to show before the "Show more" fold */
-const INITIAL_COUNT = 15;
+const INITIAL_COUNT = 30;
 
 /**
  * Format an ISO date string into a readable date.
@@ -65,23 +65,55 @@ function formatDate(dateStr) {
 }
 
 /**
- * Render a single changelog entry row.
+ * Render a single changelog entry row (no date — shown by the group header).
  * @param {Object} entry - { date, category, description }
  * @returns {string} HTML
  */
 function renderEntry(entry) {
   const meta = CATEGORY_META[entry.category] || CATEGORY_META.feature;
-  const dateLabel = entry.date ? formatDate(entry.date) : '';
 
   return `
-    <div class="flex items-start gap-3 py-2.5 px-1">
-      <div class="flex-shrink-0 w-7 h-7 rounded-full ${meta.bg} flex items-center justify-center mt-0.5">
-        <i class="fas ${meta.icon} ${meta.color} text-xs"></i>
+    <div class="flex items-start gap-2.5 py-1.5">
+      <div class="flex-shrink-0 w-6 h-6 rounded-full ${meta.bg} flex items-center justify-center mt-0.5">
+        <i class="fas ${meta.icon} ${meta.color}" style="font-size: 0.6rem;"></i>
       </div>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm text-gray-200 leading-relaxed">${escapeHtml(entry.description)}</p>
-      </div>
-      ${dateLabel ? `<span class="flex-shrink-0 text-xs text-gray-600 mt-1 tabular-nums">${dateLabel}</span>` : ''}
+      <p class="text-sm text-gray-200 leading-snug pt-0.5">${escapeHtml(entry.description)}</p>
+    </div>`;
+}
+
+/**
+ * Group a flat array of entries by date.
+ * @param {Array} entries
+ * @returns {Array<{date: string, entries: Array}>}
+ */
+function groupByDate(entries) {
+  const groups = [];
+  let current = null;
+
+  for (const entry of entries) {
+    if (!current || current.date !== entry.date) {
+      current = { date: entry.date, entries: [] };
+      groups.push(current);
+    }
+    current.entries.push(entry);
+  }
+
+  return groups;
+}
+
+/**
+ * Render a date group (header + its entries).
+ * @param {Object} group - { date, entries }
+ * @returns {string} HTML
+ */
+function renderGroup(group) {
+  const dateLabel = group.date ? formatDate(group.date) : '';
+  const rows = group.entries.map(renderEntry).join('');
+
+  return `
+    <div class="py-2.5 px-1">
+      <p class="text-xs font-medium text-gray-400 underline underline-offset-4 decoration-gray-700 mb-1.5">${dateLabel}</p>
+      ${rows}
     </div>`;
 }
 
@@ -94,10 +126,11 @@ function renderContent() {
   const visible = entries.slice(0, INITIAL_COUNT);
   const hasMore = entries.length > INITIAL_COUNT;
 
+  const groups = groupByDate(visible);
   const entriesHtml =
-    visible.length > 0
-      ? visible
-          .map(renderEntry)
+    groups.length > 0
+      ? groups
+          .map(renderGroup)
           .join('<div class="border-t border-gray-800/50"></div>')
       : `<div class="text-center py-8">
            <i class="fas fa-clipboard-list text-2xl text-gray-600 mb-2"></i>
@@ -174,10 +207,11 @@ export function initAboutModal() {
           const remaining = entries.slice(INITIAL_COUNT);
           const list = document.getElementById('aboutChangelogList');
           if (list && remaining.length > 0) {
-            const extraHtml = remaining
+            const groups = groupByDate(remaining);
+            const extraHtml = groups
               .map(
-                (entry) =>
-                  `<div class="border-t border-gray-800/50"></div>${renderEntry(entry)}`
+                (group) =>
+                  `<div class="border-t border-gray-800/50"></div>${renderGroup(group)}`
               )
               .join('');
             list.insertAdjacentHTML('beforeend', extraHtml);
