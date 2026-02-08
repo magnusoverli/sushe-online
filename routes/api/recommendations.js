@@ -12,6 +12,7 @@
 const { ensureAdmin } = require('../../middleware/auth');
 const { validateYearParam } = require('../../middleware/validate-params');
 const { withTransaction, TransactionAbort } = require('../../db/transaction');
+const { normalizeImageBuffer } = require('../../utils/image-processing');
 
 /**
  * Register recommendations routes
@@ -40,6 +41,44 @@ module.exports = (appInstance, deps) => {
       [year]
     );
     return result.rows.length > 0 && result.rows[0].locked === true;
+  }
+
+  /**
+   * Validate reasoning text from request body.
+   * Returns the trimmed reasoning or null (with error response sent).
+   * @param {string} reasoning - Raw reasoning text
+   * @param {Object} res - Express response object
+   * @returns {string|null} Trimmed reasoning, or null if invalid (response already sent)
+   */
+  function validateReasoning(reasoning, res) {
+    if (!reasoning || typeof reasoning !== 'string' || !reasoning.trim()) {
+      res.status(400).json({ error: 'Reasoning is required' });
+      return null;
+    }
+    const trimmed = reasoning.trim();
+    if (trimmed.length > 500) {
+      res
+        .status(400)
+        .json({ error: 'Reasoning must be 500 characters or less' });
+      return null;
+    }
+    return trimmed;
+  }
+
+  /**
+   * Set the locked state for a year's recommendations.
+   * @param {number} year
+   * @param {boolean} locked
+   */
+  async function setRecommendationLock(year, locked) {
+    await pool.query(
+      `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
+       VALUES ($1, $2, NOW(), NOW())
+       ON CONFLICT (year) DO UPDATE SET
+         locked = $2,
+         updated_at = NOW()`,
+      [year, locked]
+    );
   }
 
   /**
@@ -200,16 +239,8 @@ module.exports = (appInstance, deps) => {
         }
 
         // Validate reasoning
-        if (!reasoning || typeof reasoning !== 'string' || !reasoning.trim()) {
-          return res.status(400).json({ error: 'Reasoning is required' });
-        }
-
-        const trimmedReasoning = reasoning.trim();
-        if (trimmedReasoning.length > 500) {
-          return res
-            .status(400)
-            .json({ error: 'Reasoning must be 500 characters or less' });
-        }
+        const trimmedReasoning = validateReasoning(reasoning, res);
+        if (trimmedReasoning === null) return;
 
         // Start transaction
         const timestamp = new Date();
@@ -273,9 +304,7 @@ module.exports = (appInstance, deps) => {
               ) {
                 const row = coverResult.rows[0];
                 // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
-                const imageBuffer = Buffer.isBuffer(row.cover_image)
-                  ? row.cover_image
-                  : Buffer.from(row.cover_image, 'base64');
+                const imageBuffer = normalizeImageBuffer(row.cover_image);
                 coverImage = {
                   buffer: imageBuffer,
                   format: row.cover_image_format || 'jpeg',
@@ -379,16 +408,8 @@ module.exports = (appInstance, deps) => {
         }
 
         const { reasoning } = req.body;
-        if (!reasoning || typeof reasoning !== 'string' || !reasoning.trim()) {
-          return res.status(400).json({ error: 'Reasoning is required' });
-        }
-
-        const trimmedReasoning = reasoning.trim();
-        if (trimmedReasoning.length > 500) {
-          return res
-            .status(400)
-            .json({ error: 'Reasoning must be 500 characters or less' });
-        }
+        const trimmedReasoning = validateReasoning(reasoning, res);
+        if (trimmedReasoning === null) return;
 
         // Check if recommendation exists and user is the recommender
         const existing = await pool.query(
@@ -479,14 +500,7 @@ module.exports = (appInstance, deps) => {
     asyncHandler(
       async (req, res) => {
         const year = req.validatedYear;
-        await pool.query(
-          `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
-           VALUES ($1, TRUE, NOW(), NOW())
-           ON CONFLICT (year) DO UPDATE SET
-             locked = TRUE,
-             updated_at = NOW()`,
-          [year]
-        );
+        await setRecommendationLock(year, true);
 
         logger.info('Admin action', {
           action: 'lock_recommendations',
@@ -515,14 +529,7 @@ module.exports = (appInstance, deps) => {
     asyncHandler(
       async (req, res) => {
         const year = req.validatedYear;
-        await pool.query(
-          `INSERT INTO recommendation_settings (year, locked, created_at, updated_at)
-           VALUES ($1, FALSE, NOW(), NOW())
-           ON CONFLICT (year) DO UPDATE SET
-             locked = FALSE,
-             updated_at = NOW()`,
-          [year]
-        );
+        await setRecommendationLock(year, false);
 
         logger.info('Admin action', {
           action: 'unlock_recommendations',

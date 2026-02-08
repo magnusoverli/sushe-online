@@ -11,6 +11,7 @@
 const { findPotentialDuplicates } = require('../../utils/fuzzy-match');
 const { withTransaction } = require('../../db/transaction');
 const { buildPartialUpdate } = require('./_helpers');
+const { normalizeImageBuffer } = require('../../utils/image-processing');
 
 /**
  * Register album routes
@@ -78,9 +79,7 @@ module.exports = (app, deps) => {
 
         // Handle both BYTEA (Buffer) and legacy TEXT (base64 string) formats
         // This ensures compatibility with database backups from before migration 024
-        const imageBuffer = Buffer.isBuffer(album.cover_image)
-          ? album.cover_image
-          : Buffer.from(album.cover_image, 'base64');
+        const imageBuffer = normalizeImageBuffer(album.cover_image);
 
         // Determine content type
         const contentType = album.cover_image_format

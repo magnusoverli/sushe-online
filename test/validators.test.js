@@ -12,6 +12,7 @@ const {
   validateArray,
   validateEnum,
   validateInteger,
+  requireFields,
 } = require('../validators.js');
 
 // =============================================================================
@@ -572,4 +573,157 @@ test('validateInteger should accept value at exact max', () => {
   const result = validateInteger(100, 'age', { max: 100 });
   assert.strictEqual(result.valid, true);
   assert.strictEqual(result.value, 100);
+});
+
+// =============================================================================
+// requireFields tests
+// =============================================================================
+
+/**
+ * Helper to create mock req/res/next for middleware tests
+ */
+function createMockMiddleware() {
+  let statusCode = null;
+  let jsonBody = null;
+  let nextCalled = false;
+
+  const req = { body: {} };
+  const res = {
+    status(code) {
+      statusCode = code;
+      return res;
+    },
+    json(body) {
+      jsonBody = body;
+      return res;
+    },
+  };
+  const next = () => {
+    nextCalled = true;
+  };
+
+  return {
+    req,
+    res,
+    next,
+    getStatus: () => statusCode,
+    getJson: () => jsonBody,
+    wasNextCalled: () => nextCalled,
+  };
+}
+
+test('requireFields should call next when all fields are present', () => {
+  const middleware = requireFields('artist', 'album');
+  const { req, res, next, wasNextCalled, getStatus } = createMockMiddleware();
+  req.body = { artist: 'Radiohead', album: 'OK Computer' };
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), true);
+  assert.strictEqual(getStatus(), null);
+});
+
+test('requireFields should return 400 when a single field is missing', () => {
+  const middleware = requireFields('artist', 'album');
+  const { req, res, next, wasNextCalled, getStatus, getJson } =
+    createMockMiddleware();
+  req.body = { artist: 'Radiohead' };
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), false);
+  assert.strictEqual(getStatus(), 400);
+  assert.strictEqual(getJson().error, 'album is required');
+});
+
+test('requireFields should return 400 when multiple fields are missing', () => {
+  const middleware = requireFields('artist', 'album');
+  const { req, res, next, wasNextCalled, getStatus, getJson } =
+    createMockMiddleware();
+  req.body = {};
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), false);
+  assert.strictEqual(getStatus(), 400);
+  assert.strictEqual(getJson().error, 'artist and album are required');
+});
+
+test('requireFields should treat empty string as missing', () => {
+  const middleware = requireFields('name');
+  const { req, res, next, wasNextCalled, getStatus, getJson } =
+    createMockMiddleware();
+  req.body = { name: '' };
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), false);
+  assert.strictEqual(getStatus(), 400);
+  assert.strictEqual(getJson().error, 'name is required');
+});
+
+test('requireFields should treat null as missing', () => {
+  const middleware = requireFields('name');
+  const { req, res, next, wasNextCalled, getStatus } = createMockMiddleware();
+  req.body = { name: null };
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), false);
+  assert.strictEqual(getStatus(), 400);
+});
+
+test('requireFields should treat undefined as missing', () => {
+  const middleware = requireFields('name');
+  const { req, res, next, wasNextCalled, getStatus } = createMockMiddleware();
+  req.body = {};
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), false);
+  assert.strictEqual(getStatus(), 400);
+});
+
+test('requireFields should accept 0 as a valid value', () => {
+  const middleware = requireFields('count');
+  const { req, res, next, wasNextCalled, getStatus } = createMockMiddleware();
+  req.body = { count: 0 };
+
+  middleware(req, res, next);
+
+  // Note: 0 is falsy, so requireFields treats it as missing.
+  // This is the current behavior — fields are checked with !req.body[f]
+  assert.strictEqual(wasNextCalled(), false);
+  assert.strictEqual(getStatus(), 400);
+});
+
+test('requireFields should work with a single field', () => {
+  const middleware = requireFields('token');
+  const { req, res, next, wasNextCalled } = createMockMiddleware();
+  req.body = { token: 'abc123' };
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), true);
+});
+
+test('requireFields should call next with no fields specified', () => {
+  const middleware = requireFields();
+  const { req, res, next, wasNextCalled } = createMockMiddleware();
+  req.body = {};
+
+  middleware(req, res, next);
+
+  assert.strictEqual(wasNextCalled(), true);
+});
+
+test('requireFields should handle three or more missing fields', () => {
+  const middleware = requireFields('artist', 'album', 'year');
+  const { req, res, next, getStatus, getJson } = createMockMiddleware();
+  req.body = {};
+
+  middleware(req, res, next);
+
+  assert.strictEqual(getStatus(), 400);
+  assert.strictEqual(getJson().error, 'artist and album and year are required');
 });

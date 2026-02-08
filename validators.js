@@ -273,6 +273,30 @@ function validateInteger(value, fieldName, options = {}) {
   return { valid: true, value: numValue };
 }
 
+/**
+ * Express middleware factory that checks for required fields in req.body.
+ * Returns 400 with a descriptive error message if any field is missing/empty.
+ *
+ * @param {...string} fields - Field names to require in req.body
+ * @returns {Function} Express middleware
+ *
+ * @example
+ *   app.post('/api/foo', requireFields('artist', 'album'), async (req, res) => { ... });
+ */
+function requireFields(...fields) {
+  return (req, res, next) => {
+    const missing = fields.filter((f) => !req.body[f]);
+    if (missing.length > 0) {
+      const label =
+        missing.length === 1
+          ? `${missing[0]} is required`
+          : `${missing.join(' and ')} are required`;
+      return res.status(400).json({ error: label });
+    }
+    next();
+  };
+}
+
 module.exports = {
   // Existing validators
   isValidEmail,
@@ -287,4 +311,6 @@ module.exports = {
   validateArray,
   validateEnum,
   validateInteger,
+  // Middleware
+  requireFields,
 };

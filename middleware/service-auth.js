@@ -21,50 +21,59 @@ function createServiceAuthMiddleware(deps) {
     deps;
 
   /**
-   * Middleware to ensure valid Spotify token
-   * Automatically refreshes if needed and attaches to req.spotifyAuth
+   * Factory to create token validation middleware for an external service.
+   * Validates/refreshes the token and attaches it to the request.
+   *
+   * @param {Object} options
+   * @param {string} options.service - Service name ('spotify' or 'tidal')
+   * @param {Function} options.ensureValidToken - Token validation function
+   * @param {string} options.authProp - Property name on tokenResult (e.g. 'spotifyAuth')
+   * @param {string} options.reqProp - Property name to set on req (e.g. 'spotifyAuth')
+   * @returns {Function} Express middleware
    */
-  const requireSpotifyAuth = async (req, res, next) => {
-    try {
-      const tokenResult = await ensureValidSpotifyToken(req.user, users);
-      if (!tokenResult.success) {
-        logger.warn('Spotify auth check failed', { error: tokenResult.error });
-        return res.status(401).json({
-          error: tokenResult.message,
-          code: tokenResult.error,
-          service: 'spotify',
+  function createTokenMiddleware({
+    service,
+    ensureValidToken,
+    authProp,
+    reqProp,
+  }) {
+    return async (req, res, next) => {
+      try {
+        const tokenResult = await ensureValidToken(req.user, users);
+        if (!tokenResult.success) {
+          logger.warn(`${service} auth check failed`, {
+            error: tokenResult.error,
+          });
+          return res.status(401).json({
+            error: tokenResult.message,
+            code: tokenResult.error,
+            service,
+          });
+        }
+        req[reqProp] = tokenResult[authProp];
+        next();
+      } catch (err) {
+        logger.error(`${service} auth middleware error`, {
+          error: err.message,
         });
+        return res.status(500).json({ error: 'Authentication service error' });
       }
-      req.spotifyAuth = tokenResult.spotifyAuth;
-      next();
-    } catch (err) {
-      logger.error('Spotify auth middleware error', { error: err.message });
-      return res.status(500).json({ error: 'Authentication service error' });
-    }
-  };
+    };
+  }
 
-  /**
-   * Middleware to ensure valid Tidal token
-   * Automatically refreshes if needed and attaches to req.tidalAuth
-   */
-  const requireTidalAuth = async (req, res, next) => {
-    try {
-      const tokenResult = await ensureValidTidalToken(req.user, users);
-      if (!tokenResult.success) {
-        logger.warn('Tidal auth check failed', { error: tokenResult.error });
-        return res.status(401).json({
-          error: tokenResult.message,
-          code: tokenResult.error,
-          service: 'tidal',
-        });
-      }
-      req.tidalAuth = tokenResult.tidalAuth;
-      next();
-    } catch (err) {
-      logger.error('Tidal auth middleware error', { error: err.message });
-      return res.status(500).json({ error: 'Authentication service error' });
-    }
-  };
+  const requireSpotifyAuth = createTokenMiddleware({
+    service: 'spotify',
+    ensureValidToken: ensureValidSpotifyToken,
+    authProp: 'spotifyAuth',
+    reqProp: 'spotifyAuth',
+  });
+
+  const requireTidalAuth = createTokenMiddleware({
+    service: 'tidal',
+    ensureValidToken: ensureValidTidalToken,
+    authProp: 'tidalAuth',
+    reqProp: 'tidalAuth',
+  });
 
   /**
    * Middleware to ensure user has connected their Last.fm account
@@ -101,6 +110,7 @@ function createServiceAuthMiddleware(deps) {
     requireTidalAuth,
     requireLastfmAuth,
     requireLastfmSessionKey,
+    createTokenMiddleware,
   };
 }
 
