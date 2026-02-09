@@ -42,6 +42,7 @@ const {
 // Import services
 const { createPlaylistService } = require('../../services/playlist');
 const { createListService } = require('../../services/list-service');
+const { createGroupService } = require('../../services/group-service');
 const {
   refreshPlaycountsInBackground,
 } = require('../../services/playcount-service');
@@ -131,6 +132,16 @@ module.exports = (app, deps) => {
     refreshPlaycountsInBackground,
   });
 
+  // Create group service
+  const groupService = createGroupService({
+    pool,
+    logger,
+    crypto,
+    findOrCreateYearGroup: helpers.findOrCreateYearGroup,
+    findOrCreateUncategorizedGroup: helpers.findOrCreateUncategorizedGroup,
+    deleteGroupIfEmptyAutoGroup: helpers.deleteGroupIfEmptyAutoGroup,
+  });
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -168,6 +179,7 @@ module.exports = (app, deps) => {
     // Services
     playlistService,
     listService,
+    groupService,
     refreshPlaycountsInBackground,
 
     // Helpers
