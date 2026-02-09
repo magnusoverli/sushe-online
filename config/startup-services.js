@@ -122,6 +122,37 @@ function startPersonalRecsScheduler(pool) {
     const { createClaudeClient } = require('../utils/claude-client');
     const { normalizeAlbumKey } = require('../utils/fuzzy-match');
 
+    const { createAlbumCanonical } = require('../utils/album-canonical');
+    const albumCanonical = createAlbumCanonical({ pool, logger });
+
+    // Lightweight upsertAlbumRecord for scheduled generation
+    // Triggers cover/track fetches but skips summary (no Express app context)
+    async function upsertAlbumRecord(album, timestamp) {
+      const albumData = { ...album };
+      delete albumData.cover_image;
+      delete albumData.cover_image_format;
+      const result = await albumCanonical.upsertCanonical(albumData, timestamp);
+      if (result.needsCoverFetch && album.artist && album.album) {
+        try {
+          const {
+            getCoverFetchQueue,
+          } = require('../services/cover-fetch-queue');
+          getCoverFetchQueue().add(result.albumId, album.artist, album.album);
+        } catch (_e) {
+          /* queue not ready */
+        }
+      }
+      if (result.needsTracksFetch && album.artist && album.album) {
+        try {
+          const { getTrackFetchQueue } = require('../utils/track-fetch-queue');
+          getTrackFetchQueue().add(result.albumId, album.artist, album.album);
+        } catch (_e) {
+          /* queue not ready */
+        }
+      }
+      return result.albumId;
+    }
+
     const claudeClient = createClaudeClient({ logger });
     const poolServiceInstance = createNewReleasePoolService({
       pool,
@@ -139,6 +170,7 @@ function startPersonalRecsScheduler(pool) {
       logger,
       recommendationEngine: engine,
       poolService: poolServiceInstance,
+      upsertAlbumRecord,
       normalizeAlbumKey,
     });
 

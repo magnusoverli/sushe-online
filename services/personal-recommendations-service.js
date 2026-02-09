@@ -77,11 +77,12 @@ async function insertRecommendationItems(
     let albumId = null;
     if (upsertAlbumRecord) {
       try {
-        const albumRecord = await upsertAlbumRecord({
-          artist: rec.artist,
-          album: rec.album,
-        });
-        albumId = albumRecord?.album_id || albumRecord?._id;
+        // upsertAlbumRecord returns a plain string (the canonical album_id)
+        albumId =
+          (await upsertAlbumRecord(
+            { artist: rec.artist, album: rec.album },
+            new Date()
+          )) || null;
       } catch (err) {
         log.warn('Failed to upsert album record for recommendation', {
           artist: rec.artist,
