@@ -1004,7 +1004,7 @@ function createListService(deps = {}) {
         }
       } catch (lockErr) {
         throw new TransactionAbort(403, {
-          error: lockErr.message,
+          error: lockErr.body?.error || lockErr.message,
           yearLocked: true,
         });
       }
@@ -1280,7 +1280,7 @@ function createListService(deps = {}) {
         await validateYearNotLocked(pool, listYear, 'change main status');
       } catch (lockErr) {
         throw new TransactionAbort(403, {
-          error: lockErr.message,
+          error: lockErr.body?.error || lockErr.message,
           yearLocked: true,
           year: listYear,
         });
