@@ -101,10 +101,19 @@ async function insertRecommendationItems(
     }
 
     await pool.query(
-      `INSERT INTO personal_recommendation_items (_id, list_id, album_id, position, reasoning)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO personal_recommendation_items (_id, list_id, album_id, position, reasoning, artist, album, genre)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (list_id, position) DO NOTHING`,
-      [itemId, listId, albumId, i + 1, rec.reasoning]
+      [
+        itemId,
+        listId,
+        albumId,
+        i + 1,
+        rec.reasoning,
+        rec.artist || null,
+        rec.album || null,
+        rec.genre || null,
+      ]
     );
   }
 }
@@ -113,7 +122,11 @@ const LIST_WITH_ITEMS_QUERY = `
   SELECT prl.*,
     COALESCE(json_agg(
       json_build_object('_id', pri._id, 'album_id', pri.album_id, 'position', pri.position,
-        'reasoning', pri.reasoning, 'artist', a.artist, 'album', a.album, 'cover_image', a.cover_image)
+        'reasoning', pri.reasoning,
+        'artist', COALESCE(pri.artist, a.artist),
+        'album', COALESCE(pri.album, a.album),
+        'genre', pri.genre,
+        'cover_image', a.cover_image)
       ORDER BY pri.position
     ) FILTER (WHERE pri._id IS NOT NULL), '[]') as items
   FROM personal_recommendation_lists prl
