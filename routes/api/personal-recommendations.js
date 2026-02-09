@@ -150,12 +150,14 @@ module.exports = (app, deps) => {
 
         const weekStart = getCurrentWeekStart();
 
-        // Run async (don't block response)
-        personalRecsService.generateForAllUsers(weekStart).catch((err) => {
-          log.error('Admin-triggered generation failed', {
-            error: err.message,
+        // Run async (don't block response), force regeneration for stale lists
+        personalRecsService
+          .generateForAllUsers(weekStart, { force: true })
+          .catch((err) => {
+            log.error('Admin-triggered generation failed', {
+              error: err.message,
+            });
           });
-        });
 
         res.json({
           success: true,
@@ -214,10 +216,11 @@ module.exports = (app, deps) => {
         await personalRecsService.rotateAndCleanup(weekStart);
         sendEvent('log', { message: 'Rotation complete' });
 
-        // Generate with progress callback
+        // Generate with progress callback and force mode (regenerate stale lists)
         const result = await personalRecsService.generateForAllUsers(
           weekStart,
           {
+            force: true,
             onProgress: (message, data) => {
               if (!aborted) {
                 sendEvent('log', { message, ...data });
@@ -263,9 +266,11 @@ module.exports = (app, deps) => {
 
         const weekStart = getCurrentWeekStart();
 
+        const force = req.body.force !== false; // Default to force for admin
         const result = await personalRecsService.generateForUser(
           req.params.userId,
-          weekStart
+          weekStart,
+          { force }
         );
 
         res.json({ success: true, result, weekStart });

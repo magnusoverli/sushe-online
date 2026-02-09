@@ -298,7 +298,9 @@ async function processAllUsers(ctx, weekStart, options) {
     const userLabel = user.username || user.email || user._id;
     const progress = `[${i + 1}/${totalUsers}]`;
     try {
-      const result = await generateForUser(user._id, weekStart);
+      const result = await generateForUser(user._id, weekStart, {
+        force: options.force,
+      });
       if (!result) {
         skipped++;
         notify(`${progress} ${userLabel}: skipped (ineligible)`, {
@@ -395,24 +397,40 @@ function createPersonalRecommendationsService(deps = {}) {
   }
 
   function getModel() {
-    return env.PERSONAL_RECS_MODEL || 'claude-sonnet-4-5';
+    return env.PERSONAL_RECS_MODEL || 'claude-haiku-4-5';
   }
 
   async function checkUserEligibility(userId) {
     return checkEligibility(pool, userId, MIN_ALBUMS, ACTIVE_DAYS);
   }
 
-  async function generateForUser(userId, weekStart) {
+  async function generateForUser(userId, weekStart, options = {}) {
     const existing = await pool.query(
       'SELECT _id FROM personal_recommendation_lists WHERE user_id = $1 AND week_start = $2',
       [userId, weekStart]
     );
     if (existing.rows.length > 0) {
-      log.info('Recommendations already exist for user+week, skipping', {
-        userId,
-        weekStart,
-      });
-      return existing.rows[0];
+      if (options.force) {
+        log.info('Force regeneration: deleting existing list', {
+          userId,
+          weekStart,
+          existingId: existing.rows[0]._id,
+        });
+        await pool.query(
+          'DELETE FROM personal_recommendation_items WHERE list_id = $1',
+          [existing.rows[0]._id]
+        );
+        await pool.query(
+          'DELETE FROM personal_recommendation_lists WHERE _id = $1',
+          [existing.rows[0]._id]
+        );
+      } else {
+        log.info('Recommendations already exist for user+week, skipping', {
+          userId,
+          weekStart,
+        });
+        return existing.rows[0];
+      }
     }
 
     const { eligible, reason } = await checkUserEligibility(userId);

@@ -112,14 +112,12 @@ function createNewReleaseSources(deps = {}) {
     const releases = [];
     const limit = 50;
     const maxPages = 2; // Up to 100 albums
-    // Use search API with year filter (browse/new-releases was deprecated)
-    const year = dateStart.substring(0, 4);
 
     try {
       for (let page = 0; page < maxPages; page++) {
         const offset = page * limit;
         const data = await spotifyApiRequest(
-          `/v1/search?q=tag%3Anew+year%3A${year}&type=album&limit=${limit}&offset=${offset}`,
+          `/v1/browse/new-releases?limit=${limit}&offset=${offset}`,
           accessToken
         );
 

@@ -717,6 +717,34 @@ input[list]::-webkit-list-button {
   background-color: #1f2937; /* gray-800 */
 }
 
+/* Personal recommendation button styling - same as sidebar list buttons */
+.personal-rec-btn {
+  position: relative;
+  isolation: isolate;
+}
+
+.personal-rec-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 0.375rem;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.personal-rec-btn:hover::before {
+  background-color: #1f2937; /* gray-800 */
+}
+
+.personal-rec-btn.active::before {
+  background-color: #1f2937; /* gray-800 */
+}
+
 /* Year section header styling - subtle background to differentiate from list items */
 .year-section > button:first-child {
   background-color: rgba(75, 85, 99, 0.15); /* subtle gray-600 tint */

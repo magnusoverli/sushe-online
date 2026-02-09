@@ -232,6 +232,64 @@ test('generateForUser skips if recommendations already exist', async () => {
   );
 });
 
+test('generateForUser with force deletes existing and regenerates', async () => {
+  const deletedItems = [];
+  const deletedLists = [];
+  const query = createQueryRouter([
+    {
+      match: 'personal_recommendation_lists WHERE user_id',
+      result: { rows: [{ _id: 'existing-list' }], rowCount: 1 },
+    },
+    {
+      match: 'DELETE FROM personal_recommendation_items',
+      result: (sql, params) => {
+        deletedItems.push(params[0]);
+        return { rows: [], rowCount: 1 };
+      },
+    },
+    {
+      match: 'DELETE FROM personal_recommendation_lists',
+      result: (sql, params) => {
+        deletedLists.push(params[0]);
+        return { rows: [], rowCount: 1 };
+      },
+    },
+    { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
+    {
+      match: 'COUNT(DISTINCT',
+      result: { rows: [{ count: '15' }], rowCount: 1 },
+    },
+    {
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
+    },
+    { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
+    { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
+    { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
+    {
+      match: 'INSERT INTO personal_recommendation_lists',
+      result: { rows: [], rowCount: 1 },
+    },
+    {
+      match: 'INSERT INTO personal_recommendation_items',
+      result: { rows: [], rowCount: 1 },
+    },
+  ]);
+  const { service, mockLogger } = createTestService({ query });
+
+  const result = await service.generateForUser('user-1', '2025-02-03', {
+    force: true,
+  });
+  assert.strictEqual(result.status, 'completed');
+  assert.deepStrictEqual(deletedItems, ['existing-list']);
+  assert.deepStrictEqual(deletedLists, ['existing-list']);
+  assert.ok(
+    mockLogger.info.mock.calls.some((c) =>
+      c.arguments[0].includes('Force regeneration')
+    )
+  );
+});
+
 test('generateForUser returns null when user is not eligible', async () => {
   const query = createQueryRouter([
     {

@@ -388,7 +388,7 @@ test('POST /admin/generate/:userId rejects non-admin', async () => {
   assert.strictEqual(res.statusCode, 403);
 });
 
-test('POST /admin/generate/:userId generates for specific user', async () => {
+test('POST /admin/generate/:userId generates for specific user with force', async () => {
   const generateFn = mock.fn(async () => ({
     _id: 'list-1',
     status: 'completed',
@@ -411,6 +411,10 @@ test('POST /admin/generate/:userId generates for specific user', async () => {
   assert.strictEqual(res.body.success, true);
   assert.strictEqual(res.body.result._id, 'list-1');
   assert.strictEqual(generateFn.mock.calls[0].arguments[0], 'target-user');
+  // Admin endpoints default to force: true
+  assert.deepStrictEqual(generateFn.mock.calls[0].arguments[2], {
+    force: true,
+  });
 });
 
 // =============================================================================
