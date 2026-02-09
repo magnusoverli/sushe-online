@@ -434,6 +434,9 @@ test.describe('List Main Status', () => {
     });
     const listId = createBody._id;
 
+    // Verify list was created before toggling main status
+    expect(createBody.success).toBe(true);
+
     // Set as main using the list ID
     const setMainResponse = await page.request.post(
       `/api/lists/${listId}/main`,
@@ -467,11 +470,13 @@ test.describe('Error Handling', () => {
   test('should return 400 for malformed requests', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    // Missing required 'data' field
+    // Missing required 'name' field
     const response = await page.request.post('/api/lists', {
-      data: { name: 'Malformed Test', year: 2024 },
+      data: { year: 2024, data: [] },
     });
     expect(response.status()).toBe(400);
+    const body = await response.json();
+    expect(body.error).toBe('List name is required');
   });
 });
 
