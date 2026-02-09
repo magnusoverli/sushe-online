@@ -162,6 +162,50 @@ module.exports = (app, deps) => {
     upsertAlbumRecord: helpers.upsertAlbumRecord,
   });
 
+  // Create personal recommendations service (conditional on env)
+  let personalRecsService = null;
+  if (process.env.PERSONAL_RECS_ENABLED !== 'false') {
+    try {
+      const {
+        createPersonalRecommendationsService,
+      } = require('../../services/personal-recommendations-service');
+      const {
+        createRecommendationEngine,
+      } = require('../../utils/personal-recommendations-engine');
+      const {
+        createNewReleasePoolService,
+      } = require('../../services/new-release-pool-service');
+      const { createClaudeClient } = require('../../utils/claude-client');
+
+      const claudeClient = createClaudeClient({ logger });
+      const poolServiceInstance = createNewReleasePoolService({
+        pool,
+        logger,
+        upsertAlbumRecord: helpers.upsertAlbumRecord,
+        callClaude: claudeClient.callClaude,
+        extractTextFromContent: claudeClient.extractTextFromContent,
+      });
+      const engine = createRecommendationEngine({
+        claudeClient,
+        logger,
+        normalizeAlbumKey,
+      });
+
+      personalRecsService = createPersonalRecommendationsService({
+        pool,
+        logger,
+        recommendationEngine: engine,
+        poolService: poolServiceInstance,
+        upsertAlbumRecord: helpers.upsertAlbumRecord,
+        normalizeAlbumKey,
+      });
+    } catch (err) {
+      logger.warn('Failed to initialize personal recommendations service', {
+        error: err.message,
+      });
+    }
+  }
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -202,6 +246,7 @@ module.exports = (app, deps) => {
     groupService,
     albumService,
     recommendationService,
+    personalRecsService,
     refreshPlaycountsInBackground,
 
     // Helpers
@@ -248,6 +293,7 @@ module.exports = (app, deps) => {
   require('./telegram')(app, sharedDeps);
   require('./user')(app, sharedDeps);
   require('./recommendations')(app, sharedDeps);
+  require('./personal-recommendations')(app, sharedDeps);
 
   logger.info('API routes initialized (modular structure)');
 };

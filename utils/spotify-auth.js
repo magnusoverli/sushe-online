@@ -396,6 +396,86 @@ function createSpotifyAuth(deps = {}) {
     }
   }
 
+  // =========================================================================
+  // Client Credentials Flow (app-level auth, no user token needed)
+  // =========================================================================
+
+  let clientCredentialsToken = null;
+  let clientCredentialsExpiresAt = 0;
+
+  /**
+   * Get an app-level access token using the client credentials flow.
+   * Used for endpoints that don't require user authorization (e.g., /v1/browse/new-releases).
+   * Caches the token in memory (valid for ~1 hour).
+   * @returns {Promise<string|null>} Access token or null if credentials not configured
+   */
+  async function getClientCredentialsToken() {
+    // Return cached token if still valid (with 60s buffer)
+    if (
+      clientCredentialsToken &&
+      Date.now() < clientCredentialsExpiresAt - 60000
+    ) {
+      return clientCredentialsToken;
+    }
+
+    const clientId = env.SPOTIFY_CLIENT_ID;
+    const clientSecret = env.SPOTIFY_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
+      log.warn('Spotify client credentials not configured');
+      return null;
+    }
+
+    const startTime = Date.now();
+    try {
+      const response = await fetchFn('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+        },
+        body: 'grant_type=client_credentials',
+      });
+
+      const duration = Date.now() - startTime;
+      observeExternalApiCall(
+        'spotify',
+        '/api/token',
+        duration,
+        response.status ?? 200
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        log.error('Spotify client credentials token request failed', {
+          status: response.status,
+          error: errorText,
+        });
+        recordExternalApiError('spotify', `http_${response.status}`);
+        return null;
+      }
+
+      const data = await response.json();
+      clientCredentialsToken = data.access_token;
+      // expires_in is in seconds; convert to ms and store absolute expiry
+      clientCredentialsExpiresAt =
+        Date.now() + (data.expires_in || 3600) * 1000;
+
+      log.info('Spotify client credentials token obtained', {
+        expires_in: data.expires_in,
+      });
+
+      return clientCredentialsToken;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      observeExternalApiCall('spotify', '/api/token', duration, 0);
+      recordExternalApiError('spotify', 'network_error');
+      log.error('Spotify client credentials token request error', {
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
   // Create data fetcher methods
   const dataFetchers = createDataFetchers(spotifyApiRequest);
 
@@ -404,6 +484,7 @@ function createSpotifyAuth(deps = {}) {
     refreshSpotifyToken,
     ensureValidSpotifyToken,
     spotifyApiRequest,
+    getClientCredentialsToken,
     getTopArtists: dataFetchers.getTopArtists,
     getTopTracks: dataFetchers.getTopTracks,
     getSavedAlbums: dataFetchers.getSavedAlbums,
@@ -424,6 +505,7 @@ module.exports = {
   ensureValidSpotifyToken: defaultInstance.ensureValidSpotifyToken,
   // Spotify Web API functions
   spotifyApiRequest: defaultInstance.spotifyApiRequest,
+  getClientCredentialsToken: defaultInstance.getClientCredentialsToken,
   getTopArtists: defaultInstance.getTopArtists,
   getTopTracks: defaultInstance.getTopTracks,
   getSavedAlbums: defaultInstance.getSavedAlbums,

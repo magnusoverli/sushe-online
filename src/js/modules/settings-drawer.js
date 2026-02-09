@@ -505,6 +505,22 @@ export function createSettingsDrawer(deps = {}) {
         }
       }
 
+      // Fetch personal recommendations prompt settings (non-critical)
+      let personalRecs = { customPrompt: '', isEnabled: true };
+      try {
+        const recsSettings = await apiCall(
+          '/api/personal-recommendations/prompts'
+        );
+        if (recsSettings) {
+          personalRecs = {
+            customPrompt: recsSettings.customPrompt || '',
+            isEnabled: recsSettings.isEnabled !== false,
+          };
+        }
+      } catch (_e) {
+        // Feature may be disabled - use defaults
+      }
+
       return {
         hasData: true,
         totalAlbums: data.totalAlbums || 0,
@@ -523,6 +539,7 @@ export function createSettingsDrawer(deps = {}) {
           topArtistsByRange: lastfmArtistsByRange,
         },
         updatedAt: data.updatedAt,
+        personalRecs,
       };
     } catch (error) {
       console.error('Error loading preferences data:', error);
@@ -629,6 +646,16 @@ export function createSettingsDrawer(deps = {}) {
         console.warn('Could not load users:', e);
       }
 
+      // Load personal recommendations admin stats
+      let personalRecsStats = null;
+      try {
+        personalRecsStats = await apiCall(
+          '/api/admin/personal-recommendations/stats'
+        );
+      } catch (_e) {
+        // Feature may be disabled
+      }
+
       // Load aggregate list years with status and stats
       let aggregateLists = [];
       try {
@@ -733,6 +760,7 @@ export function createSettingsDrawer(deps = {}) {
         stats: stats || null,
         users: users,
         aggregateLists: aggregateLists,
+        personalRecsStats: personalRecsStats?.stats || null,
       };
     } catch (error) {
       console.error('Error loading admin data:', error);
@@ -1527,6 +1555,52 @@ export function createSettingsDrawer(deps = {}) {
         </div>
         `;
         })()}
+
+        <!-- AI Recommendations Section -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">
+            <i class="fas fa-wand-magic-sparkles text-purple-400 mr-2"></i>AI Recommendations
+          </h3>
+          <div class="settings-group-content">
+            <p class="text-xs text-gray-500 mb-4">
+              Every Monday, we suggest 5-10 newly released albums based on your music taste. Your custom preferences are added to our default recommendation criteria.
+            </p>
+
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Enable AI Recommendations</label>
+                <p class="settings-description">Get weekly personalized album picks</p>
+              </div>
+              <div class="settings-row-control">
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="personalRecsToggle" class="sr-only peer" ${data.personalRecs?.isEnabled !== false ? 'checked' : ''}>
+                  <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Custom Preferences</label>
+                <p class="settings-description">Help customize your recommendations</p>
+              </div>
+              <div class="w-full mt-2">
+                <textarea id="personalRecsCustomPrompt"
+                  class="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-purple-500 resize-none"
+                  rows="3"
+                  maxlength="1000"
+                  placeholder="e.g., 'I prefer albums from the 1990s', 'More shoegaze please', 'Avoid country music'"
+                >${data.personalRecs?.customPrompt ? data.personalRecs.customPrompt : ''}</textarea>
+                <div class="flex items-center justify-between mt-1">
+                  <span id="personalRecsCharCount" class="text-xs text-gray-600">${(data.personalRecs?.customPrompt || '').length} / 1000</span>
+                  <button id="savePersonalRecsPrompt" class="settings-button text-xs px-3 py-1">
+                    <i class="fas fa-save mr-1"></i>Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -1963,6 +2037,73 @@ export function createSettingsDrawer(deps = {}) {
           </div>
         </div>
 
+        <!-- Personal Recommendations -->
+        <div class="settings-group">
+          <h3 class="settings-group-title">
+            <i class="fas fa-wand-magic-sparkles mr-2 text-purple-400"></i>
+            Personal Recommendations
+          </h3>
+          <div class="settings-group-content">
+            ${
+              data.personalRecsStats
+                ? `
+              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div class="bg-gray-800/50 rounded p-3 text-center">
+                  <div class="text-2xl font-bold text-white">${data.personalRecsStats.lists?.completed || 0}</div>
+                  <div class="text-xs text-gray-400">Completed</div>
+                </div>
+                <div class="bg-gray-800/50 rounded p-3 text-center">
+                  <div class="text-2xl font-bold text-red-400">${data.personalRecsStats.lists?.failed || 0}</div>
+                  <div class="text-xs text-gray-400">Failed</div>
+                </div>
+                <div class="bg-gray-800/50 rounded p-3 text-center">
+                  <div class="text-2xl font-bold text-purple-400">${data.personalRecsStats.enabledUsers || 0}</div>
+                  <div class="text-xs text-gray-400">Enabled Users</div>
+                </div>
+                <div class="bg-gray-800/50 rounded p-3 text-center">
+                  <div class="text-2xl font-bold text-blue-400">${data.personalRecsStats.lists?.total_lists || 0}</div>
+                  <div class="text-xs text-gray-400">Total Lists (2wk)</div>
+                </div>
+              </div>
+              <div class="text-xs text-gray-500 mb-3">
+                Tokens (2wk): ${Number(data.personalRecsStats.lists?.total_input_tokens || 0).toLocaleString()} in / ${Number(data.personalRecsStats.lists?.total_output_tokens || 0).toLocaleString()} out
+              </div>
+              ${
+                data.personalRecsStats.poolBySource &&
+                data.personalRecsStats.poolBySource.length > 0
+                  ? `
+                <div class="mb-4">
+                  <div class="text-xs text-gray-400 mb-1">Release Pool by Source (2wk)</div>
+                  <div class="flex flex-wrap gap-2">
+                    ${data.personalRecsStats.poolBySource
+                      .map(
+                        (s) =>
+                          `<span class="px-2 py-1 bg-gray-800/50 rounded text-xs text-gray-300">${s.source}: ${s.count}</span>`
+                      )
+                      .join('')}
+                  </div>
+                </div>
+              `
+                  : ''
+              }
+            `
+                : `
+              <div class="text-gray-400 text-sm">No stats available yet. The feature may not have run.</div>
+            `
+            }
+            <div class="settings-row">
+              <div class="settings-row-label">
+                <label class="settings-label">Manual Generation</label>
+                <p class="settings-description">Trigger recommendation generation for all eligible users now</p>
+              </div>
+              <div class="flex gap-2 items-center">
+                <button id="triggerPersonalRecsBtn" class="settings-button">Generate Now</button>
+                <span id="personalRecsGenerateStatus" class="text-xs text-gray-400"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Duplicate Album Scanner -->
         <div class="settings-group">
           <h3 class="settings-group-title">Duplicate Album Scanner</h3>
@@ -2369,6 +2510,64 @@ export function createSettingsDrawer(deps = {}) {
         });
       });
     }
+
+    // Personal Recommendations toggle
+    const personalRecsToggle = document.getElementById('personalRecsToggle');
+    if (personalRecsToggle) {
+      personalRecsToggle.addEventListener('change', async () => {
+        try {
+          await apiCall('/api/personal-recommendations/prompts', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isEnabled: personalRecsToggle.checked }),
+          });
+          showToast(
+            personalRecsToggle.checked
+              ? 'AI Recommendations enabled'
+              : 'AI Recommendations disabled',
+            'success'
+          );
+        } catch (err) {
+          console.error('Failed to toggle personal recs:', err);
+          showToast('Failed to update setting', 'error');
+          personalRecsToggle.checked = !personalRecsToggle.checked;
+        }
+      });
+    }
+
+    // Personal Recommendations custom prompt
+    const promptTextarea = document.getElementById('personalRecsCustomPrompt');
+    const charCount = document.getElementById('personalRecsCharCount');
+    const savePromptBtn = document.getElementById('savePersonalRecsPrompt');
+
+    if (promptTextarea && charCount) {
+      promptTextarea.addEventListener('input', () => {
+        charCount.textContent = `${promptTextarea.value.length} / 1000`;
+      });
+    }
+
+    if (savePromptBtn && promptTextarea) {
+      savePromptBtn.addEventListener('click', async () => {
+        try {
+          savePromptBtn.disabled = true;
+          savePromptBtn.innerHTML =
+            '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
+
+          await apiCall('/api/personal-recommendations/prompts', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ customPrompt: promptTextarea.value }),
+          });
+          showToast('Custom preferences saved', 'success');
+        } catch (err) {
+          console.error('Failed to save custom prompt:', err);
+          showToast('Failed to save preferences', 'error');
+        } finally {
+          savePromptBtn.disabled = false;
+          savePromptBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Save';
+        }
+      });
+    }
   }
 
   /**
@@ -2441,6 +2640,39 @@ export function createSettingsDrawer(deps = {}) {
     const restoreDatabaseBtn = document.getElementById('restoreDatabaseBtn');
     if (restoreDatabaseBtn) {
       restoreDatabaseBtn.addEventListener('click', handleRestoreDatabase);
+    }
+
+    // Personal recommendations handler
+    const triggerPersonalRecsBtn = document.getElementById(
+      'triggerPersonalRecsBtn'
+    );
+    if (triggerPersonalRecsBtn) {
+      triggerPersonalRecsBtn.addEventListener('click', async () => {
+        const statusEl = document.getElementById('personalRecsGenerateStatus');
+        triggerPersonalRecsBtn.disabled = true;
+        triggerPersonalRecsBtn.textContent = 'Generating...';
+        if (statusEl) statusEl.textContent = '';
+        try {
+          const result = await apiCall(
+            '/api/admin/personal-recommendations/generate',
+            { method: 'POST' }
+          );
+          if (statusEl) {
+            statusEl.textContent = `Started for week ${result.weekStart}`;
+            statusEl.classList.remove('text-red-400');
+            statusEl.classList.add('text-green-400');
+          }
+        } catch (err) {
+          if (statusEl) {
+            statusEl.textContent = `Error: ${err.message}`;
+            statusEl.classList.remove('text-green-400');
+            statusEl.classList.add('text-red-400');
+          }
+        } finally {
+          triggerPersonalRecsBtn.disabled = false;
+          triggerPersonalRecsBtn.textContent = 'Generate Now';
+        }
+      });
     }
 
     // User management handlers

@@ -25,6 +25,12 @@ let currentRecommendationsYear = null;
 /** Set of years that have actual recommendations (for sidebar visibility) */
 let recommendationYears = new Set();
 
+/** Personal recommendation lists from API (max 2: current + last week) */
+let personalRecLists = [];
+
+/** Currently active personal recommendation list ID, or null */
+let currentPersonalRecListId = null;
+
 // ============ CONTEXT MENU STATE ============
 
 /** Currently right-clicked album index */
@@ -417,6 +423,48 @@ export function setRecommendationYears(years) {
  */
 export function yearHasRecommendations(year) {
   return recommendationYears.has(year);
+}
+
+// ============ PERSONAL RECOMMENDATIONS STATE ============
+
+/**
+ * Get personal recommendation lists
+ * @returns {Array}
+ */
+export function getPersonalRecLists() {
+  return personalRecLists;
+}
+
+/**
+ * Set personal recommendation lists (from API response)
+ * @param {Array} lists - Array of personal rec list objects
+ */
+export function setPersonalRecLists(lists) {
+  personalRecLists = lists || [];
+}
+
+/**
+ * Get the currently active personal recommendation list ID
+ * @returns {string|null}
+ */
+export function getCurrentPersonalRecListId() {
+  return currentPersonalRecListId;
+}
+
+/**
+ * Set the currently active personal recommendation list ID
+ * @param {string|null} listId
+ */
+export function setCurrentPersonalRecListId(listId) {
+  currentPersonalRecListId = listId;
+}
+
+/**
+ * Check if currently viewing a personal recommendation list
+ * @returns {boolean}
+ */
+export function isViewingPersonalRecs() {
+  return currentPersonalRecListId !== null;
 }
 
 // ============ CONTEXT MENU STATE ACCESSORS ============

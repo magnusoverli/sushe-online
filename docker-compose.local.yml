@@ -36,6 +36,11 @@ services:
       - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-512}
       - CLAUDE_RATE_LIMIT_MS=${CLAUDE_RATE_LIMIT_MS:-500}
       - ALBUM_SUMMARY_CONCURRENCY=${ALBUM_SUMMARY_CONCURRENCY:-2}
+      # Personal recommendations (disabled by default in dev)
+      - PERSONAL_RECS_ENABLED=${PERSONAL_RECS_ENABLED:-false}
+      - PERSONAL_RECS_MODEL=${PERSONAL_RECS_MODEL:-claude-sonnet-4-5}
+      - PERSONAL_RECS_POOL_MODEL=${PERSONAL_RECS_POOL_MODEL:-claude-sonnet-4-5}
+      - PERSONAL_RECS_COUNT=${PERSONAL_RECS_COUNT:-7}
       # Email service (optional for local development)
       - RESEND_API_KEY=${RESEND_API_KEY:-}
       # Disable rate limiting for local development/testing

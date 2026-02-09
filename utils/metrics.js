@@ -227,6 +227,51 @@ const claudeRequestsTotal = new client.Counter({
 });
 
 // ============================================
+// Personal Recommendations Metrics
+// ============================================
+
+/**
+ * Personal recommendations generation outcomes counter
+ */
+const personalRecsGeneratedTotal = new client.Counter({
+  name: 'sushe_personal_recs_generated_total',
+  help: 'Total personal recommendation generation outcomes',
+  labelNames: ['status'], // 'success', 'failed', 'skipped'
+  registers: [register],
+});
+
+/**
+ * Personal recommendations pool size counter (per source per week)
+ */
+const personalRecsPoolSize = new client.Counter({
+  name: 'sushe_personal_recs_pool_size',
+  help: 'Albums gathered per source for new release pool',
+  labelNames: ['source'], // 'spotify', 'musicbrainz', 'claude_search'
+  registers: [register],
+});
+
+/**
+ * Personal recommendations MusicBrainz verification outcomes
+ */
+const personalRecsVerifiedTotal = new client.Counter({
+  name: 'sushe_personal_recs_verified_total',
+  help: 'MusicBrainz verification outcomes for new releases',
+  labelNames: ['result'], // 'verified', 'unverified'
+  registers: [register],
+});
+
+/**
+ * Personal recommendations generation duration histogram
+ */
+const personalRecsGenerationDuration = new client.Histogram({
+  name: 'sushe_personal_recs_generation_duration_seconds',
+  help: 'Duration of personal recommendation generation per user',
+  labelNames: [],
+  buckets: [1, 5, 10, 30, 60, 120, 300],
+  registers: [register],
+});
+
+// ============================================
 // Helper Functions
 // ============================================
 
@@ -434,6 +479,10 @@ module.exports = {
   claudeTokensTotal,
   claudeEstimatedCostTotal,
   claudeRequestsTotal,
+  personalRecsGeneratedTotal,
+  personalRecsPoolSize,
+  personalRecsVerifiedTotal,
+  personalRecsGenerationDuration,
   appInfo,
   appUptime,
 

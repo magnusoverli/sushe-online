@@ -108,7 +108,6 @@ export function createTrackSelection(deps = {}) {
     const primary = processTrack(trackPicks?.primary);
     const secondary = processTrack(trackPicks?.secondary);
 
-    // eslint-disable-next-line no-useless-assignment -- defensive default
     let cellHtml = '';
     if (primary && secondary) {
       cellHtml = `

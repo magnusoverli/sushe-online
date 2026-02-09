@@ -30,6 +30,7 @@ const { registerHealthRoutes } = require('./routes/health');
 const {
   initializeQueues,
   startSyncServices,
+  startPersonalRecsScheduler,
 } = require('./config/startup-services');
 
 // ============ INTERNAL MODULES ============
@@ -402,6 +403,7 @@ ready
 
       // Start background sync services
       startSyncServices(pool);
+      startPersonalRecsScheduler(pool);
     });
   })
   .catch((err) => {
