@@ -20,7 +20,9 @@ const {
  * @param {Object} pool - PostgreSQL connection pool
  */
 function initializeQueues(pool) {
-  const { initializeCoverFetchQueue } = require('../utils/cover-fetch-queue');
+  const {
+    initializeCoverFetchQueue,
+  } = require('../services/cover-fetch-queue');
   initializeCoverFetchQueue(pool);
 
   const { initializeTrackFetchQueue } = require('../utils/track-fetch-queue');

@@ -3,7 +3,7 @@
  *
  * Shared constants and functions for album cover image processing.
  * Centralizes image resize/compress logic used by:
- * - utils/cover-fetch-queue.js (background cover fetching)
+ * - services/cover-fetch-queue.js (background cover fetching)
  * - services/image-refetch.js (batch image re-fetching)
  * - routes/api/proxies.js (image proxy endpoint)
  *

@@ -30,7 +30,7 @@ module.exports = (app, deps) => {
 
   const { isYearLocked } = require('../../utils/year-lock');
   const { withTransaction, TransactionAbort } = require('../../db/transaction');
-  const { buildPartialUpdate } = require('./_helpers');
+  const { buildPartialUpdate } = require('../../utils/query-builder');
   const { createAsyncHandler } = require('../../middleware/async-handler');
   const asyncHandler = createAsyncHandler(logger);
 

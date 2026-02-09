@@ -15,7 +15,7 @@
 
 const logger = require('../utils/logger');
 const { withTransaction, TransactionAbort } = require('../db/transaction');
-const { buildPartialUpdate } = require('../routes/api/_helpers');
+const { buildPartialUpdate } = require('../utils/query-builder');
 const {
   validateYearNotLocked,
   validateMainListNotLocked,

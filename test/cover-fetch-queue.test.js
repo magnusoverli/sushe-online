@@ -1,5 +1,5 @@
 /**
- * Tests for utils/cover-fetch-queue.js
+ * Tests for services/cover-fetch-queue.js
  * Tests cover fetch queue functionality with multi-provider support
  */
 
@@ -9,7 +9,7 @@ const {
   createCoverFetchQueue,
   initializeCoverFetchQueue,
   getCoverFetchQueue,
-} = require('../utils/cover-fetch-queue.js');
+} = require('../services/cover-fetch-queue.js');
 
 // Local wait helper for async operations
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

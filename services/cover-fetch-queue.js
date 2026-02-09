@@ -15,13 +15,16 @@
  * - Converted to JPEG at 100% quality
  */
 
-const { RequestQueue } = require('./request-queue');
-const logger = require('./logger');
+const { RequestQueue } = require('../utils/request-queue');
+const logger = require('../utils/logger');
 const {
   normalizeForExternalApi,
   stringSimilarity,
-} = require('./normalization');
-const { processImage, upscaleItunesArtworkUrl } = require('./image-processing');
+} = require('../utils/normalization');
+const {
+  processImage,
+  upscaleItunesArtworkUrl,
+} = require('../utils/image-processing');
 
 // Per-provider timeout in milliseconds
 const PROVIDER_TIMEOUT_MS = 5000;

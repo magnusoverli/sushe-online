@@ -10,7 +10,7 @@
 
 const { findPotentialDuplicates } = require('../../utils/fuzzy-match');
 const { withTransaction } = require('../../db/transaction');
-const { buildPartialUpdate } = require('./_helpers');
+const { buildPartialUpdate } = require('../../utils/query-builder');
 const { normalizeImageBuffer } = require('../../utils/image-processing');
 
 /**
@@ -53,7 +53,7 @@ module.exports = (app, deps) => {
         if (!album.cover_image && album.artist && album.album) {
           const {
             getCoverFetchQueue,
-          } = require('../../utils/cover-fetch-queue');
+          } = require('../../services/cover-fetch-queue');
           try {
             const coverQueue = getCoverFetchQueue();
             coverQueue.add(album_id, album.artist, album.album);
