@@ -45,6 +45,9 @@ const { createListService } = require('../../services/list-service');
 const { createGroupService } = require('../../services/group-service');
 const { createAlbumService } = require('../../services/album-service');
 const {
+  createRecommendationService,
+} = require('../../services/recommendation-service');
+const {
   refreshPlaycountsInBackground,
 } = require('../../services/playcount-service');
 const {
@@ -151,6 +154,14 @@ module.exports = (app, deps) => {
     invalidateCachesForAlbumUsers: helpers.invalidateCachesForAlbumUsers,
   });
 
+  // Create recommendation service
+  const recommendationService = createRecommendationService({
+    pool,
+    logger,
+    crypto,
+    upsertAlbumRecord: helpers.upsertAlbumRecord,
+  });
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -190,6 +201,7 @@ module.exports = (app, deps) => {
     listService,
     groupService,
     albumService,
+    recommendationService,
     refreshPlaycountsInBackground,
 
     // Helpers
