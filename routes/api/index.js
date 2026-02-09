@@ -43,6 +43,7 @@ const {
 const { createPlaylistService } = require('../../services/playlist');
 const { createListService } = require('../../services/list-service');
 const { createGroupService } = require('../../services/group-service');
+const { createAlbumService } = require('../../services/album-service');
 const {
   refreshPlaycountsInBackground,
 } = require('../../services/playcount-service');
@@ -142,6 +143,14 @@ module.exports = (app, deps) => {
     deleteGroupIfEmptyAutoGroup: helpers.deleteGroupIfEmptyAutoGroup,
   });
 
+  // Create album service
+  const albumService = createAlbumService({
+    pool,
+    logger,
+    upsertAlbumRecord: helpers.upsertAlbumRecord,
+    invalidateCachesForAlbumUsers: helpers.invalidateCachesForAlbumUsers,
+  });
+
   // Shared dependencies for all route modules
   const sharedDeps = {
     // Core dependencies
@@ -180,6 +189,7 @@ module.exports = (app, deps) => {
     playlistService,
     listService,
     groupService,
+    albumService,
     refreshPlaycountsInBackground,
 
     // Helpers
