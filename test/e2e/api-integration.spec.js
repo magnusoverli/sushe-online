@@ -116,6 +116,32 @@ async function setupAuthenticatedUser(page) {
   );
 }
 
+/**
+ * Helper: Create a list via the API and return its ID.
+ * Lists are created via POST /api/lists with the name in the body.
+ */
+async function createList(page, { name, year, data, groupId }) {
+  const body = { name, data: data || [] };
+  if (year !== undefined) body.year = year;
+  if (groupId !== undefined) body.groupId = groupId;
+
+  const response = await page.request.post('/api/lists', { data: body });
+  return { response, json: await response.json() };
+}
+
+/**
+ * Helper: Find a list by name from the ID-keyed metadata response.
+ * GET /api/lists returns { [listId]: { _id, name, ... } }.
+ * GET /api/lists?full=true returns { [listId]: [items...] } (no name).
+ * To find by name, we use the metadata endpoint then look up full data by ID.
+ */
+async function findListByName(page, name) {
+  const response = await page.request.get('/api/lists');
+  const lists = await response.json();
+  const entry = Object.values(lists).find((l) => l.name === name);
+  return entry || null;
+}
+
 // Use serial mode - tests share state and must run in order
 test.describe.configure({ mode: 'serial' });
 
@@ -127,61 +153,54 @@ test.describe('Lists API Integration', () => {
     await setupAuthenticatedUser(page);
 
     // CREATE: Create a new list with albums
-    const createResponse = await page.request.post(
-      '/api/lists/Integration%20Test%20List',
+    const { response: createResponse, json: createBody } = await createList(
+      page,
       {
-        data: {
-          data: [
-            { artist: 'Radiohead', album: 'OK Computer' },
-            { artist: 'Portishead', album: 'Dummy' },
-          ],
-          year: 2024,
-        },
+        name: 'Integration Test List',
+        year: 2024,
+        data: [
+          { artist: 'Radiohead', album: 'OK Computer' },
+          { artist: 'Portishead', album: 'Dummy' },
+        ],
       }
     );
-    expect(createResponse.status()).toBe(200);
-    const createBody = await createResponse.json();
+    expect(createResponse.status()).toBe(201);
     expect(createBody.success).toBe(true);
+    const listId = createBody._id;
 
-    // RETRIEVE: Fetch all lists and verify our list exists
+    // RETRIEVE: Fetch full list data and verify items
     const listsResponse = await page.request.get('/api/lists?full=true');
     expect(listsResponse.status()).toBe(200);
     const listsBody = await listsResponse.json();
-    expect(listsBody).toHaveProperty('Integration Test List');
-    expect(listsBody['Integration Test List']).toHaveLength(2);
-    expect(listsBody['Integration Test List'][0].artist).toBe('Radiohead');
+    expect(listsBody).toHaveProperty(listId);
+    expect(listsBody[listId]).toHaveLength(2);
+    expect(listsBody[listId][0].artist).toBe('Radiohead');
 
-    // UPDATE: Add another album
-    const updateResponse = await page.request.post(
-      '/api/lists/Integration%20Test%20List',
-      {
-        data: {
-          data: [
-            { artist: 'Radiohead', album: 'OK Computer' },
-            { artist: 'Portishead', album: 'Dummy' },
-            { artist: 'Massive Attack', album: 'Mezzanine' },
-          ],
-          year: 2024,
-        },
-      }
-    );
+    // UPDATE: Replace list items with PUT /api/lists/:id
+    const updateResponse = await page.request.put(`/api/lists/${listId}`, {
+      data: {
+        data: [
+          { artist: 'Radiohead', album: 'OK Computer' },
+          { artist: 'Portishead', album: 'Dummy' },
+          { artist: 'Massive Attack', album: 'Mezzanine' },
+        ],
+      },
+    });
     expect(updateResponse.status()).toBe(200);
 
     // Verify update
     const updatedListsResponse = await page.request.get('/api/lists?full=true');
     const updatedBody = await updatedListsResponse.json();
-    expect(updatedBody['Integration Test List']).toHaveLength(3);
+    expect(updatedBody[listId]).toHaveLength(3);
 
-    // DELETE: Remove the list
-    const deleteResponse = await page.request.delete(
-      '/api/lists/Integration%20Test%20List'
-    );
+    // DELETE: Remove the list by ID
+    const deleteResponse = await page.request.delete(`/api/lists/${listId}`);
     expect(deleteResponse.status()).toBe(200);
 
     // Verify deletion
     const finalListsResponse = await page.request.get('/api/lists');
     const finalBody = await finalListsResponse.json();
-    expect(finalBody).not.toHaveProperty('Integration Test List');
+    expect(finalBody).not.toHaveProperty(listId);
   });
 
   test('should create list with groupId (collection)', async ({ page }) => {
@@ -196,24 +215,23 @@ test.describe('Lists API Integration', () => {
     const groupId = groupBody._id;
 
     // Create list in collection
-    const createResponse = await page.request.post(
-      '/api/lists/Collection%20Test%20List',
+    const { response: createResponse, json: createBody } = await createList(
+      page,
       {
-        data: {
-          data: [{ artist: 'Test', album: 'Album' }],
-          groupId: groupId,
-        },
+        name: 'Collection Test List',
+        groupId: groupId,
+        data: [{ artist: 'Test', album: 'Album' }],
       }
     );
-    expect(createResponse.status()).toBe(200);
+    expect(createResponse.status()).toBe(201);
+    const listId = createBody._id;
 
     // Verify list exists
-    const listsResponse = await page.request.get('/api/lists');
-    const listsBody = await listsResponse.json();
-    expect(listsBody).toHaveProperty('Collection Test List');
+    const list = await findListByName(page, 'Collection Test List');
+    expect(list).not.toBeNull();
 
     // Cleanup
-    await page.request.delete('/api/lists/Collection%20Test%20List');
+    await page.request.delete(`/api/lists/${listId}`);
     await page.request.delete(`/api/groups/${groupId}`);
   });
 
@@ -223,16 +241,15 @@ test.describe('Lists API Integration', () => {
     await setupAuthenticatedUser(page);
 
     // Create list with specific year
-    const createResponse = await page.request.post(
-      '/api/lists/Year%20Group%20Test',
+    const { response: createResponse, json: createBody } = await createList(
+      page,
       {
-        data: {
-          data: [],
-          year: 2019,
-        },
+        name: 'Year Group Test',
+        year: 2019,
       }
     );
-    expect(createResponse.status()).toBe(200);
+    expect(createResponse.status()).toBe(201);
+    const listId = createBody._id;
 
     // Verify year group was created
     const groupsResponse = await page.request.get('/api/groups');
@@ -244,15 +261,16 @@ test.describe('Lists API Integration', () => {
     expect(yearGroup.name).toBe('2019');
 
     // Cleanup
-    await page.request.delete('/api/lists/Year%20Group%20Test');
+    await page.request.delete(`/api/lists/${listId}`);
   });
 
   test('should reject invalid data field', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    // Send wrong field name
-    const response = await page.request.post('/api/lists/Bad%20Field%20Test', {
+    // Send wrong field name — 'albums' instead of 'data'
+    const response = await page.request.post('/api/lists', {
       data: {
+        name: 'Bad Field Test',
         albums: [], // Wrong! Should be 'data'
         year: 2024,
       },
@@ -265,8 +283,9 @@ test.describe('Lists API Integration', () => {
   test('should reject invalid groupId', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    const response = await page.request.post('/api/lists/Bad%20Group%20Test', {
+    const response = await page.request.post('/api/lists', {
       data: {
+        name: 'Bad Group Test',
         data: [],
         groupId: 'nonexistent-group-12345',
       },
@@ -347,21 +366,21 @@ test.describe('Track Picks API Integration', () => {
     await setupAuthenticatedUser(page);
 
     // Create a list with an album first
-    await page.request.post('/api/lists/Track%20Pick%20List', {
-      data: {
-        data: [{ artist: 'Test Artist', album: 'Test Album' }],
-        year: 2024,
-      },
+    const { json: createBody } = await createList(page, {
+      name: 'Track Pick List',
+      year: 2024,
+      data: [{ artist: 'Test Artist', album: 'Test Album' }],
     });
+    const listId = createBody._id;
 
-    // Get the list to find _id (list item ID) - track picks now use list item ID
+    // Get full list data to find list item ID — track picks use list item ID
     const listsResponse = await page.request.get('/api/lists?full=true');
     const listsBody = await listsResponse.json();
-    const album = listsBody['Track Pick List']?.[0];
+    const album = listsBody[listId]?.[0];
 
     if (!album?._id) {
       // List item must have _id for track picks API
-      await page.request.delete('/api/lists/Track%20Pick%20List');
+      await page.request.delete(`/api/lists/${listId}`);
       test.skip();
       return;
     }
@@ -392,7 +411,7 @@ test.describe('Track Picks API Integration', () => {
     expect(removeResponse.status()).toBe(200);
 
     // Cleanup
-    await page.request.delete('/api/lists/Track%20Pick%20List');
+    await page.request.delete(`/api/lists/${listId}`);
   });
 });
 
@@ -401,16 +420,15 @@ test.describe('List Main Status', () => {
     await setupAuthenticatedUser(page);
 
     // Create a list
-    await page.request.post('/api/lists/Main%20Status%20Test', {
-      data: {
-        data: [],
-        year: 2024,
-      },
+    const { json: createBody } = await createList(page, {
+      name: 'Main Status Test',
+      year: 2024,
     });
+    const listId = createBody._id;
 
-    // Set as main
+    // Set as main using the list ID
     const setMainResponse = await page.request.post(
-      '/api/lists/Main%20Status%20Test/main',
+      `/api/lists/${listId}/main`,
       {
         data: { isMain: true },
       }
@@ -418,13 +436,12 @@ test.describe('List Main Status', () => {
     expect(setMainResponse.status()).toBe(200);
 
     // Verify via lists endpoint
-    const listsResponse = await page.request.get('/api/lists');
-    const lists = await listsResponse.json();
-    // The list should exist (metadata check would require different endpoint)
-    expect(lists).toHaveProperty('Main Status Test');
+    const list = await findListByName(page, 'Main Status Test');
+    expect(list).not.toBeNull();
+    expect(list.isMain).toBe(true);
 
     // Cleanup
-    await page.request.delete('/api/lists/Main%20Status%20Test');
+    await page.request.delete(`/api/lists/${listId}`);
   });
 });
 
@@ -433,8 +450,8 @@ test.describe('Error Handling', () => {
     request,
   }) => {
     // Use raw request (no session)
-    const response = await request.post('/api/lists/Unauth%20Test', {
-      data: { data: [], year: 2024 },
+    const response = await request.post('/api/lists', {
+      data: { name: 'Unauth Test', data: [], year: 2024 },
     });
     expect(response.status()).toBe(401);
   });
@@ -442,9 +459,9 @@ test.describe('Error Handling', () => {
   test('should return 400 for malformed requests', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    // Missing required field
-    const response = await page.request.post('/api/lists/Malformed%20Test', {
-      data: { year: 2024 }, // Missing 'data' field
+    // Missing required 'data' field
+    const response = await page.request.post('/api/lists', {
+      data: { name: 'Malformed Test', year: 2024 },
     });
     expect(response.status()).toBe(400);
   });
@@ -466,17 +483,17 @@ test.describe('Album Data Preservation', () => {
     };
 
     // Create list with metadata
-    await page.request.post('/api/lists/Metadata%20Preservation', {
-      data: {
-        data: [albumData],
-        year: 2024,
-      },
+    const { json: createBody } = await createList(page, {
+      name: 'Metadata Preservation',
+      year: 2024,
+      data: [albumData],
     });
+    const listId = createBody._id;
 
-    // Retrieve and verify
+    // Retrieve full data and verify
     const listsResponse = await page.request.get('/api/lists?full=true');
     const lists = await listsResponse.json();
-    const savedAlbum = lists['Metadata Preservation']?.[0];
+    const savedAlbum = lists[listId]?.[0];
 
     expect(savedAlbum).toBeDefined();
     expect(savedAlbum.artist).toBe('Metadata Artist');
@@ -484,7 +501,7 @@ test.describe('Album Data Preservation', () => {
     // Note: Some fields may be normalized, but core data should be preserved
 
     // Cleanup
-    await page.request.delete('/api/lists/Metadata%20Preservation');
+    await page.request.delete(`/api/lists/${listId}`);
   });
 });
 
@@ -494,15 +511,17 @@ test.describe('Special Characters', () => {
 
     const specialName = "Best of '90s & 2000s!";
 
-    await page.request.post(`/api/lists/${encodeURIComponent(specialName)}`, {
-      data: { data: [], year: 2024 },
+    const { json: createBody } = await createList(page, {
+      name: specialName,
+      year: 2024,
     });
+    const listId = createBody._id;
 
-    const listsResponse = await page.request.get('/api/lists');
-    const lists = await listsResponse.json();
-    expect(lists).toHaveProperty(specialName);
+    const list = await findListByName(page, specialName);
+    expect(list).not.toBeNull();
+    expect(list.name).toBe(specialName);
 
     // Cleanup
-    await page.request.delete(`/api/lists/${encodeURIComponent(specialName)}`);
+    await page.request.delete(`/api/lists/${listId}`);
   });
 });
