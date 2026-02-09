@@ -60,8 +60,8 @@ function createPersonalRecommendationsScheduler(deps = {}) {
       return false;
     }
 
-    // Default: run after 6 AM
-    const targetHour = parseInt(env.PERSONAL_RECS_RUN_HOUR || '6', 10);
+    // Default: run after midnight (Sunday→Monday)
+    const targetHour = parseInt(env.PERSONAL_RECS_RUN_HOUR || '0', 10);
     if (now.getHours() < targetHour) {
       return false;
     }

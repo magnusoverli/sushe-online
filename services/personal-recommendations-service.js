@@ -242,6 +242,106 @@ async function performRotateAndCleanup(pool, log, weekStart, poolService) {
 }
 
 /**
+ * Process all active users for recommendation generation
+ */
+async function processAllUsers(ctx, weekStart, options) {
+  const { pool, log, poolService, activeDays, rateLimitMs, generateForUser } =
+    ctx;
+  const onProgress = options.onProgress || null;
+  const notify = (msg, data) => {
+    if (onProgress) onProgress(msg, data);
+  };
+
+  notify('Starting weekly pool build...', { phase: 'pool_build' });
+  if (poolService) {
+    const poolCount = await poolService.buildWeeklyPool(weekStart);
+    notify(`Pool ready: ${poolCount} releases gathered`, {
+      phase: 'pool_ready',
+      poolCount,
+    });
+  } else {
+    notify('No pool service configured, skipping pool build', {
+      phase: 'pool_skip',
+    });
+  }
+
+  const usersResult = await pool.query(
+    'SELECT _id, email, username FROM users WHERE last_login > NOW() - $1::interval',
+    [`${activeDays} days`]
+  );
+
+  const totalUsers = usersResult.rows.length;
+  notify(`Found ${totalUsers} active users to evaluate`, {
+    phase: 'users_found',
+    totalUsers,
+  });
+
+  let success = 0;
+  let failed = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < usersResult.rows.length; i++) {
+    const user = usersResult.rows[i];
+    const userLabel = user.username || user.email || user._id;
+    const progress = `[${i + 1}/${totalUsers}]`;
+    try {
+      const result = await generateForUser(user._id, weekStart);
+      if (!result) {
+        skipped++;
+        notify(`${progress} ${userLabel}: skipped (ineligible)`, {
+          phase: 'user_done',
+          userId: user._id,
+          status: 'skipped',
+        });
+      } else if (result.status === 'failed') {
+        failed++;
+        notify(`${progress} ${userLabel}: failed`, {
+          phase: 'user_done',
+          userId: user._id,
+          status: 'failed',
+        });
+      } else {
+        success++;
+        notify(`${progress} ${userLabel}: completed`, {
+          phase: 'user_done',
+          userId: user._id,
+          status: 'completed',
+        });
+      }
+    } catch (err) {
+      log.error('Unexpected error generating for user', {
+        userId: user._id,
+        weekStart,
+        error: err.message,
+      });
+      failed++;
+      notify(`${progress} ${userLabel}: error - ${err.message}`, {
+        phase: 'user_done',
+        userId: user._id,
+        status: 'error',
+      });
+    }
+    await new Promise((r) => setTimeout(r, rateLimitMs));
+  }
+
+  log.info('Completed generation for all users', {
+    weekStart,
+    totalUsers,
+    success,
+    failed,
+    skipped,
+  });
+
+  notify(`Done: ${success} completed, ${failed} failed, ${skipped} skipped`, {
+    phase: 'complete',
+    success,
+    failed,
+    skipped,
+  });
+  return { success, failed, skipped };
+}
+
+/**
  * Create the personal recommendations service
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL connection pool (required)
@@ -410,49 +510,19 @@ function createPersonalRecommendationsService(deps = {}) {
     }
   }
 
-  async function generateForAllUsers(weekStart) {
-    if (poolService) {
-      await poolService.buildWeeklyPool(weekStart);
-    }
-
-    const usersResult = await pool.query(
-      'SELECT _id FROM users WHERE last_login > NOW() - $1::interval',
-      [`${ACTIVE_DAYS} days`]
-    );
-
-    let success = 0;
-    let failed = 0;
-    let skipped = 0;
-
-    for (const user of usersResult.rows) {
-      try {
-        const result = await generateForUser(user._id, weekStart);
-        if (!result) {
-          skipped++;
-        } else if (result.status === 'failed') {
-          failed++;
-        } else {
-          success++;
-        }
-      } catch (err) {
-        log.error('Unexpected error generating for user', {
-          userId: user._id,
-          weekStart,
-          error: err.message,
-        });
-        failed++;
-      }
-      await new Promise((r) => setTimeout(r, RATE_LIMIT_DELAY_MS));
-    }
-
-    log.info('Completed generation for all users', {
+  async function generateForAllUsers(weekStart, options = {}) {
+    return processAllUsers(
+      {
+        pool,
+        log,
+        poolService,
+        activeDays: ACTIVE_DAYS,
+        rateLimitMs: RATE_LIMIT_DELAY_MS,
+        generateForUser,
+      },
       weekStart,
-      totalUsers: usersResult.rows.length,
-      success,
-      failed,
-      skipped,
-    });
-    return { success, failed, skipped };
+      options
+    );
   }
 
   async function rotateAndCleanup(weekStart) {

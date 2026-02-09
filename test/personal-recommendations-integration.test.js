@@ -450,7 +450,7 @@ test('integration: service skips ineligible users in generateForAllUsers', async
   const query = createQueryRouter([
     // generateForAllUsers: get active users
     {
-      match: 'SELECT _id FROM users',
+      match: 'FROM users WHERE last_login',
       result: {
         rows: [{ _id: 'user-1' }, { _id: 'user-2' }],
         rowCount: 2,

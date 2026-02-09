@@ -504,7 +504,7 @@ test('generateForAllUsers builds pool and processes users', async () => {
   const query = mock.fn(async (sql) => {
     // First call: buildWeeklyPool triggers no queries from service directly
     // Users query
-    if (sql.includes('SELECT _id FROM users')) {
+    if (sql.includes('FROM users WHERE last_login')) {
       return { rows: [{ _id: 'user-1' }, { _id: 'user-2' }], rowCount: 2 };
     }
     // For generateForUser calls: existing list check
@@ -534,7 +534,7 @@ test('generateForAllUsers builds pool and processes users', async () => {
 test('generateForAllUsers handles errors for individual users', async () => {
   let userCallCount = 0;
   const query = mock.fn(async (sql) => {
-    if (sql.includes('SELECT _id FROM users')) {
+    if (sql.includes('FROM users WHERE last_login')) {
       return { rows: [{ _id: 'user-1' }], rowCount: 1 };
     }
     if (sql.includes('personal_recommendation_lists WHERE user_id')) {
@@ -566,7 +566,7 @@ test('generateForAllUsers handles errors for individual users', async () => {
 
 test('generateForAllUsers skips pool build when no poolService', async () => {
   const query = mock.fn(async (sql) => {
-    if (sql.includes('SELECT _id FROM users')) {
+    if (sql.includes('FROM users WHERE last_login')) {
       return { rows: [], rowCount: 0 };
     }
     return { rows: [], rowCount: 0 };

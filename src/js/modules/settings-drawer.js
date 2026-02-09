@@ -1579,24 +1579,20 @@ export function createSettingsDrawer(deps = {}) {
               </div>
             </div>
 
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Custom Preferences</label>
-                <p class="settings-description">Help customize your recommendations</p>
-              </div>
-              <div class="w-full mt-2">
-                <textarea id="personalRecsCustomPrompt"
-                  class="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-purple-500 resize-none"
-                  rows="3"
-                  maxlength="1000"
-                  placeholder="e.g., 'I prefer albums from the 1990s', 'More shoegaze please', 'Avoid country music'"
-                >${data.personalRecs?.customPrompt ? data.personalRecs.customPrompt : ''}</textarea>
-                <div class="flex items-center justify-between mt-1">
-                  <span id="personalRecsCharCount" class="text-xs text-gray-600">${(data.personalRecs?.customPrompt || '').length} / 1000</span>
-                  <button id="savePersonalRecsPrompt" class="settings-button text-xs px-3 py-1">
-                    <i class="fas fa-save mr-1"></i>Save
-                  </button>
-                </div>
+            <div class="mt-3 pt-3 border-t border-gray-700/50">
+              <label class="settings-label">Custom Preferences</label>
+              <p class="settings-description mb-2">Tell the AI what you like or dislike to refine your weekly picks</p>
+              <textarea id="personalRecsCustomPrompt"
+                class="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-purple-500 resize-none"
+                rows="3"
+                maxlength="1000"
+                placeholder="e.g., 'I prefer albums from the 1990s', 'More shoegaze please', 'Avoid country music'"
+              >${data.personalRecs?.customPrompt ? data.personalRecs.customPrompt : ''}</textarea>
+              <div class="flex items-center justify-between mt-1">
+                <span id="personalRecsCharCount" class="text-xs text-gray-600">${(data.personalRecs?.customPrompt || '').length} / 1000</span>
+                <button id="savePersonalRecsPrompt" class="settings-button text-xs px-3 py-1">
+                  <i class="fas fa-save mr-1"></i>Save
+                </button>
               </div>
             </div>
           </div>
@@ -2094,12 +2090,25 @@ export function createSettingsDrawer(deps = {}) {
             <div class="settings-row">
               <div class="settings-row-label">
                 <label class="settings-label">Manual Generation</label>
-                <p class="settings-description">Trigger recommendation generation for all eligible users now</p>
+                <p class="settings-description">Trigger recommendation generation for all eligible users with live progress</p>
               </div>
               <div class="flex gap-2 items-center">
-                <button id="triggerPersonalRecsBtn" class="settings-button">Generate Now</button>
-                <span id="personalRecsGenerateStatus" class="text-xs text-gray-400"></span>
+                <button id="triggerPersonalRecsBtn" class="settings-button">
+                  <i class="fas fa-play mr-1"></i>Generate Now
+                </button>
+                <button id="stopPersonalRecsBtn" class="settings-button settings-button-danger hidden">
+                  <i class="fas fa-stop mr-1"></i>Stop
+                </button>
               </div>
+            </div>
+            <div id="personalRecsConsole" class="hidden mt-3">
+              <div class="flex items-center justify-between mb-1">
+                <span class="text-xs text-gray-400 font-mono">Console Output</span>
+                <span id="personalRecsElapsed" class="text-xs text-gray-500 font-mono"></span>
+              </div>
+              <div id="personalRecsLog"
+                class="bg-gray-950 border border-gray-700 rounded-md p-3 font-mono text-xs text-gray-300 max-h-64 overflow-y-auto whitespace-pre-wrap"
+              ></div>
             </div>
           </div>
         </div>
@@ -2642,37 +2651,110 @@ export function createSettingsDrawer(deps = {}) {
       restoreDatabaseBtn.addEventListener('click', handleRestoreDatabase);
     }
 
-    // Personal recommendations handler
+    // Personal recommendations handler (SSE streaming console)
     const triggerPersonalRecsBtn = document.getElementById(
       'triggerPersonalRecsBtn'
     );
+    const stopPersonalRecsBtn = document.getElementById('stopPersonalRecsBtn');
     if (triggerPersonalRecsBtn) {
-      triggerPersonalRecsBtn.addEventListener('click', async () => {
-        const statusEl = document.getElementById('personalRecsGenerateStatus');
-        triggerPersonalRecsBtn.disabled = true;
-        triggerPersonalRecsBtn.textContent = 'Generating...';
-        if (statusEl) statusEl.textContent = '';
-        try {
-          const result = await apiCall(
-            '/api/admin/personal-recommendations/generate',
-            { method: 'POST' }
-          );
-          if (statusEl) {
-            statusEl.textContent = `Started for week ${result.weekStart}`;
-            statusEl.classList.remove('text-red-400');
-            statusEl.classList.add('text-green-400');
-          }
-        } catch (err) {
-          if (statusEl) {
-            statusEl.textContent = `Error: ${err.message}`;
-            statusEl.classList.remove('text-green-400');
-            statusEl.classList.add('text-red-400');
-          }
-        } finally {
-          triggerPersonalRecsBtn.disabled = false;
-          triggerPersonalRecsBtn.textContent = 'Generate Now';
+      let activeEventSource = null;
+      triggerPersonalRecsBtn.addEventListener('click', () => {
+        const consoleEl = document.getElementById('personalRecsConsole');
+        const logEl = document.getElementById('personalRecsLog');
+        const elapsedEl = document.getElementById('personalRecsElapsed');
+        if (!logEl || !consoleEl) return;
+
+        // Show console, reset content
+        consoleEl.classList.remove('hidden');
+        logEl.innerHTML = '';
+        if (elapsedEl) elapsedEl.textContent = '';
+        triggerPersonalRecsBtn.classList.add('hidden');
+        if (stopPersonalRecsBtn) stopPersonalRecsBtn.classList.remove('hidden');
+
+        function appendLog(text, type) {
+          const line = document.createElement('div');
+          line.textContent = text;
+          if (type === 'error') line.className = 'text-red-400';
+          else if (type === 'complete') line.className = 'text-green-400';
+          else if (type === 'skipped') line.className = 'text-gray-500';
+          logEl.appendChild(line);
+          logEl.scrollTop = logEl.scrollHeight;
         }
+
+        function finish() {
+          triggerPersonalRecsBtn.classList.remove('hidden');
+          triggerPersonalRecsBtn.innerHTML =
+            '<i class="fas fa-play mr-1"></i>Generate Now';
+          if (stopPersonalRecsBtn) stopPersonalRecsBtn.classList.add('hidden');
+          activeEventSource = null;
+        }
+
+        appendLog('Connecting to generation stream...');
+
+        const es = new window.EventSource(
+          '/api/admin/personal-recommendations/generate/stream'
+        );
+        activeEventSource = es;
+
+        es.addEventListener('log', (e) => {
+          const data = JSON.parse(e.data);
+          const status = data.status || '';
+          const elapsed = data.elapsed ? ` (${data.elapsed})` : '';
+          const lineType =
+            status === 'error' || status === 'failed'
+              ? 'error'
+              : status === 'skipped'
+                ? 'skipped'
+                : null;
+          appendLog(`${data.message}${elapsed}`, lineType);
+          if (elapsedEl && data.elapsed) elapsedEl.textContent = data.elapsed;
+        });
+
+        es.addEventListener('complete', (e) => {
+          const data = JSON.parse(e.data);
+          appendLog(`\n${data.message} (${data.elapsed})`, 'complete');
+          if (elapsedEl && data.elapsed) elapsedEl.textContent = data.elapsed;
+        });
+
+        es.addEventListener('error', (e) => {
+          if (e.data) {
+            const data = JSON.parse(e.data);
+            appendLog(data.message, 'error');
+          }
+        });
+
+        es.addEventListener('done', () => {
+          es.close();
+          finish();
+        });
+
+        es.onerror = () => {
+          appendLog('Connection lost', 'error');
+          es.close();
+          finish();
+        };
       });
+
+      if (stopPersonalRecsBtn) {
+        stopPersonalRecsBtn.addEventListener('click', () => {
+          if (activeEventSource) {
+            activeEventSource.close();
+            const logEl = document.getElementById('personalRecsLog');
+            if (logEl) {
+              const line = document.createElement('div');
+              line.textContent =
+                'Stopped by user (server may still be processing)';
+              line.className = 'text-yellow-400';
+              logEl.appendChild(line);
+            }
+            triggerPersonalRecsBtn.classList.remove('hidden');
+            triggerPersonalRecsBtn.innerHTML =
+              '<i class="fas fa-play mr-1"></i>Generate Now';
+            stopPersonalRecsBtn.classList.add('hidden');
+            activeEventSource = null;
+          }
+        });
+      }
     }
 
     // User management handlers

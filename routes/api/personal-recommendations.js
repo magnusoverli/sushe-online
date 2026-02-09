@@ -124,9 +124,18 @@ module.exports = (app, deps) => {
   // Admin endpoints
   // =========================================================================
 
+  function getCurrentWeekStart() {
+    const now = new Date();
+    const day = now.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + mondayOffset);
+    return monday.toISOString().split('T')[0];
+  }
+
   /**
    * POST /api/admin/personal-recommendations/generate
-   * Trigger generation for all eligible users (admin only)
+   * Trigger generation for all eligible users (admin only, fire-and-forget)
    */
   app.post(
     '/api/admin/personal-recommendations/generate',
@@ -139,13 +148,7 @@ module.exports = (app, deps) => {
             .json({ success: false, error: 'Admin access required' });
         }
 
-        // Calculate current week start
-        const now = new Date();
-        const day = now.getDay();
-        const mondayOffset = day === 0 ? -6 : 1 - day;
-        const monday = new Date(now);
-        monday.setDate(now.getDate() + mondayOffset);
-        const weekStart = monday.toISOString().split('T')[0];
+        const weekStart = getCurrentWeekStart();
 
         // Run async (don't block response)
         personalRecsService.generateForAllUsers(weekStart).catch((err) => {
@@ -166,6 +169,84 @@ module.exports = (app, deps) => {
   );
 
   /**
+   * GET /api/admin/personal-recommendations/generate/stream
+   * SSE endpoint: trigger generation and stream progress logs (admin only)
+   */
+  app.get(
+    '/api/admin/personal-recommendations/generate/stream',
+    ensureAuthAPI,
+    async (req, res) => {
+      if (req.user.role !== 'admin') {
+        return res
+          .status(403)
+          .json({ success: false, error: 'Admin access required' });
+      }
+
+      // Set up SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      const weekStart = getCurrentWeekStart();
+      const startTime = Date.now();
+
+      function sendEvent(type, data) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        const payload = { ...data, elapsed: `${elapsed}s` };
+        res.write(`event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`);
+      }
+
+      sendEvent('log', {
+        message: `Generation started for week ${weekStart}`,
+      });
+
+      let aborted = false;
+      req.on('close', () => {
+        aborted = true;
+      });
+
+      try {
+        // Rotate old data first
+        sendEvent('log', { message: 'Rotating old recommendation data...' });
+        await personalRecsService.rotateAndCleanup(weekStart);
+        sendEvent('log', { message: 'Rotation complete' });
+
+        // Generate with progress callback
+        const result = await personalRecsService.generateForAllUsers(
+          weekStart,
+          {
+            onProgress: (message, data) => {
+              if (!aborted) {
+                sendEvent('log', { message, ...data });
+              }
+            },
+          }
+        );
+
+        if (!aborted) {
+          sendEvent('complete', {
+            message: 'Generation finished',
+            ...result,
+            weekStart,
+          });
+          res.write('event: done\ndata: {}\n\n');
+          res.end();
+        }
+      } catch (err) {
+        log.error('SSE generation failed', { error: err.message });
+        if (!aborted) {
+          sendEvent('error', { message: `Error: ${err.message}` });
+          res.write('event: done\ndata: {}\n\n');
+          res.end();
+        }
+      }
+    }
+  );
+
+  /**
    * POST /api/admin/personal-recommendations/generate/:userId
    * Trigger generation for a single user (admin only)
    */
@@ -180,12 +261,7 @@ module.exports = (app, deps) => {
             .json({ success: false, error: 'Admin access required' });
         }
 
-        const now = new Date();
-        const day = now.getDay();
-        const mondayOffset = day === 0 ? -6 : 1 - day;
-        const monday = new Date(now);
-        monday.setDate(now.getDate() + mondayOffset);
-        const weekStart = monday.toISOString().split('T')[0];
+        const weekStart = getCurrentWeekStart();
 
         const result = await personalRecsService.generateForUser(
           req.params.userId,
