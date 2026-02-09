@@ -232,6 +232,25 @@ function createTestApp(options = {}) {
   // Mock crypto
   const mockCrypto = require('crypto');
 
+  // Mock duplicate service
+  const mockDuplicateService = {
+    scanDuplicates: mock.fn(() =>
+      Promise.resolve({
+        totalAlbums: 0,
+        potentialDuplicates: 0,
+        excludedPairs: 0,
+        pairs: [],
+      })
+    ),
+    mergeAlbums: mock.fn(() =>
+      Promise.resolve({
+        listItemsUpdated: 0,
+        albumsDeleted: 1,
+        metadataMerged: false,
+      })
+    ),
+  };
+
   // Create deps object
   const deps = {
     ensureAuth,
@@ -249,6 +268,7 @@ function createTestApp(options = {}) {
     },
     crypto: mockCrypto,
     pool: mockPool,
+    duplicateService: mockDuplicateService,
   };
 
   // Import and setup routes

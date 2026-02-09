@@ -260,9 +260,13 @@ const aggregateListRoutes = require('./routes/aggregate-list');
 // Create service instances for auth routes
 const { createAuthService } = require('./services/auth-service');
 const { createUserService } = require('./services/user-service');
+const { createDuplicateService } = require('./services/duplicate-service');
+const { createReidentifyService } = require('./services/reidentify-service');
 
 const authService = createAuthService({ usersAsync, bcrypt, logger });
 const userService = createUserService({ users, usersAsync, logger });
+const duplicateService = createDuplicateService({ pool, logger });
+const reidentifyService = createReidentifyService({ pool, logger });
 
 const deps = {
   htmlTemplate,
@@ -304,6 +308,8 @@ const deps = {
   invalidateUserCache,
   authService,
   userService,
+  duplicateService,
+  reidentifyService,
 };
 
 // Health check and metrics routes

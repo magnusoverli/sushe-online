@@ -914,6 +914,94 @@ function createAggregateAudit(deps = {}) {
     };
   }
 
+  /**
+   * Delete orphaned album references from list_items.
+   * An orphaned reference is a manual-* album_id in list_items that
+   * does not exist in the albums table.
+   *
+   * @param {string} albumId - The orphaned manual album ID to clean up
+   * @param {string} adminUserId - Admin user ID for audit log
+   * @returns {Promise<Object>} Result with deletedListItems, affectedLists, affectedYears
+   */
+  async function deleteOrphanedReferences(albumId, adminUserId) {
+    if (!albumId || !albumId.startsWith('manual-')) {
+      throw new Error('albumId must be a manual album (manual-* prefix)');
+    }
+
+    // Verify the album doesn't exist in albums table
+    const albumCheck = await pool.query(
+      'SELECT album_id FROM albums WHERE album_id = $1',
+      [albumId]
+    );
+
+    if (albumCheck.rows.length > 0) {
+      throw new Error('Album exists in albums table - not orphaned');
+    }
+
+    // Get affected lists before deletion
+    const affectedResult = await pool.query(
+      `
+      SELECT DISTINCT
+        l._id as list_id,
+        l.name as list_name,
+        l.year,
+        u.username
+      FROM list_items li
+      JOIN lists l ON li.list_id = l._id
+      JOIN users u ON l.user_id = u._id
+      WHERE li.album_id = $1
+    `,
+      [albumId]
+    );
+
+    const affectedLists = affectedResult.rows;
+    const affectedYears = [...new Set(affectedLists.map((l) => l.year))];
+
+    // Delete the orphaned references
+    const deleteResult = await pool.query(
+      'DELETE FROM list_items WHERE album_id = $1',
+      [albumId]
+    );
+
+    const deletedCount = deleteResult.rowCount;
+
+    // Log admin event
+    await pool.query(
+      `
+      INSERT INTO admin_events (event_type, event_data, created_by)
+      VALUES ($1, $2, $3)
+    `,
+      [
+        'orphaned_album_deleted',
+        JSON.stringify({
+          albumId,
+          deletedListItems: deletedCount,
+          affectedLists: affectedLists.map((l) => l.list_name),
+          affectedYears,
+        }),
+        adminUserId,
+      ]
+    );
+
+    log.info('Orphaned album references deleted', {
+      albumId,
+      deletedCount,
+      affectedYears,
+    });
+
+    return {
+      albumId,
+      deletedListItems: deletedCount,
+      affectedLists: affectedLists.map((l) => ({
+        listId: l.list_id,
+        listName: l.list_name,
+        year: l.year,
+        username: l.username,
+      })),
+      affectedYears,
+    };
+  }
+
   return {
     findDuplicates,
     diagnoseNormalization,
@@ -922,6 +1010,7 @@ function createAggregateAudit(deps = {}) {
     getAuditReport,
     findManualAlbumsForReconciliation,
     mergeManualAlbum,
+    deleteOrphanedReferences,
     // Export for testing
     normalizeAlbumKey,
     basicNormalizeAlbumKey,

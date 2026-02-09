@@ -13,6 +13,29 @@ module.exports = (app, deps) => {
   // Create aggregate audit instance
   const aggregateAudit = createAggregateAudit({ pool: deps.pool, logger });
 
+  // Shared helper: recompute aggregate lists for affected years
+  async function recomputeAffectedYears(affectedYears) {
+    if (!affectedYears || affectedYears.length === 0) return [];
+
+    const { createAggregateList } = require('../../services/aggregate-list');
+    const aggregateList = createAggregateList({ pool: deps.pool, logger });
+
+    const results = [];
+    for (const year of affectedYears) {
+      try {
+        await aggregateList.recompute(year);
+        results.push({ year, success: true });
+        logger.info(`Recomputed aggregate list for ${year}`);
+      } catch (recomputeErr) {
+        results.push({ year, success: false, error: recomputeErr.message });
+        logger.error(`Failed to recompute aggregate list for ${year}`, {
+          error: recomputeErr.message,
+        });
+      }
+    }
+    return results;
+  }
+
   // ============ AGGREGATE LIST AUDIT ENDPOINTS ============
 
   /**
@@ -210,32 +233,9 @@ module.exports = (app, deps) => {
 
         // Recompute aggregate lists for affected years
         if (result.affectedYears && result.affectedYears.length > 0) {
-          const {
-            createAggregateList,
-          } = require('../../services/aggregate-list');
-          const aggregateList = createAggregateList({
-            pool: deps.pool,
-            logger,
-          });
-
-          const recomputeResults = [];
-          for (const year of result.affectedYears) {
-            try {
-              await aggregateList.recompute(year);
-              recomputeResults.push({ year, success: true });
-              logger.info(`Recomputed aggregate list for ${year} after merge`);
-            } catch (recomputeErr) {
-              recomputeResults.push({
-                year,
-                success: false,
-                error: recomputeErr.message,
-              });
-              logger.error(`Failed to recompute aggregate list for ${year}`, {
-                error: recomputeErr.message,
-              });
-            }
-          }
-          result.recomputeResults = recomputeResults;
+          result.recomputeResults = await recomputeAffectedYears(
+            result.affectedYears
+          );
         }
 
         logger.info('Manual album merged', {
@@ -271,134 +271,34 @@ module.exports = (app, deps) => {
       try {
         const { albumId } = req.body;
 
-        if (!albumId || !albumId.startsWith('manual-')) {
-          return res.status(400).json({
-            error: 'albumId must be a manual album (manual-* prefix)',
-          });
-        }
-
         logger.info('Deleting orphaned album references', {
           albumId,
           adminId: req.user._id,
         });
 
-        // Verify the album doesn't exist in albums table
-        const albumCheck = await deps.pool.query(
-          'SELECT album_id FROM albums WHERE album_id = $1',
-          [albumId]
-        );
-
-        if (albumCheck.rows.length > 0) {
-          return res.status(400).json({
-            error: 'Album exists in albums table - not orphaned',
-          });
-        }
-
-        // Get affected lists before deletion
-        const affectedResult = await deps.pool.query(
-          `
-          SELECT DISTINCT 
-            l._id as list_id,
-            l.name as list_name,
-            l.year,
-            u.username
-          FROM list_items li
-          JOIN lists l ON li.list_id = l._id
-          JOIN users u ON l.user_id = u._id
-          WHERE li.album_id = $1
-        `,
-          [albumId]
-        );
-
-        const affectedLists = affectedResult.rows;
-        const affectedYears = [...new Set(affectedLists.map((l) => l.year))];
-
-        // Delete the orphaned references
-        const deleteResult = await deps.pool.query(
-          'DELETE FROM list_items WHERE album_id = $1',
-          [albumId]
-        );
-
-        const deletedCount = deleteResult.rowCount;
-
-        // Log admin event
-        await deps.pool.query(
-          `
-          INSERT INTO admin_events (event_type, event_data, created_by)
-          VALUES ($1, $2, $3)
-        `,
-          [
-            'orphaned_album_deleted',
-            JSON.stringify({
-              albumId,
-              deletedListItems: deletedCount,
-              affectedLists: affectedLists.map((l) => l.list_name),
-              affectedYears,
-            }),
-            req.user._id,
-          ]
+        const result = await aggregateAudit.deleteOrphanedReferences(
+          albumId,
+          req.user._id
         );
 
         // Recompute affected aggregate lists
-        if (affectedYears.length > 0) {
-          const {
-            createAggregateList,
-          } = require('../../services/aggregate-list');
-          const aggregateList = createAggregateList({
-            pool: deps.pool,
-            logger,
-          });
+        const recomputeResults = await recomputeAffectedYears(
+          result.affectedYears
+        );
 
-          const recomputeResults = [];
-          for (const year of affectedYears) {
-            try {
-              await aggregateList.recompute(year);
-              recomputeResults.push({ year, success: true });
-              logger.info(
-                `Recomputed aggregate list for ${year} after orphan deletion`
-              );
-            } catch (recomputeErr) {
-              recomputeResults.push({
-                year,
-                success: false,
-                error: recomputeErr.message,
-              });
-              logger.error(`Failed to recompute aggregate list for ${year}`, {
-                error: recomputeErr.message,
-              });
-            }
-          }
-
-          res.json({
-            success: true,
-            albumId,
-            deletedListItems: deletedCount,
-            affectedLists: affectedLists.map((l) => ({
-              listId: l.list_id,
-              listName: l.list_name,
-              year: l.year,
-              username: l.username,
-            })),
-            affectedYears,
-            recomputeResults,
-          });
-        } else {
-          res.json({
-            success: true,
-            albumId,
-            deletedListItems: deletedCount,
-            affectedLists: [],
-            affectedYears: [],
-          });
-        }
-
-        logger.info('Orphaned album references deleted', {
-          albumId,
-          deletedCount,
-          affectedYears,
-          adminId: req.user._id,
+        res.json({
+          success: true,
+          ...result,
+          recomputeResults,
         });
       } catch (error) {
+        // Convert known validation errors to 400
+        if (
+          error.message.includes('manual album') ||
+          error.message.includes('not orphaned')
+        ) {
+          return res.status(400).json({ error: error.message });
+        }
         logger.error('Error deleting orphaned references', {
           error: error.message,
         });
