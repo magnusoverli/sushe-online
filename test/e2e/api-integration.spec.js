@@ -21,8 +21,31 @@ const TEST_USER = {
 };
 
 /**
+ * Auto-approve a user directly in the database.
+ * Only works when DATABASE_URL is available (CI or local with DB access).
+ */
+async function approveUserInDB(email) {
+  const DATABASE_URL = process.env.DATABASE_URL;
+  if (!DATABASE_URL) {
+    return false;
+  }
+  const { Pool } = require('pg');
+  const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
+  try {
+    const result = await pool.query(
+      "UPDATE users SET approval_status = 'approved', updated_at = NOW() WHERE email = $1 AND approval_status = 'pending'",
+      [email]
+    );
+    return result.rowCount > 0;
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
  * Setup: Ensure test user exists and is approved, then login.
  * This handles the approval workflow that blocks new registrations.
+ * When DATABASE_URL is available (CI), auto-approves via direct DB query.
  */
 async function setupAuthenticatedUser(page) {
   // First, try to login with existing test user
@@ -42,16 +65,25 @@ async function setupAuthenticatedUser(page) {
     return { email: TEST_USER.email, username: TEST_USER.username };
   }
 
-  // Check for pending approval message
+  // Check for pending approval message — try auto-approving via DB
   const pageContent = await page.content();
   if (pageContent.includes('pending approval')) {
-    // User exists but not approved - can't run tests
+    const approved = await approveUserInDB(TEST_USER.email);
+    if (approved) {
+      // Retry login after approval
+      await page.goto('/login');
+      await page.fill('input[name="email"]', TEST_USER.email);
+      await page.fill('input[name="password"]', TEST_USER.password);
+      await page.click('button[type="submit"]');
+      await page.waitForURL('/', { timeout: 10000 });
+      return { email: TEST_USER.email, username: TEST_USER.username };
+    }
     throw new Error(
       'Test user exists but is pending approval. Please approve the user in admin panel.'
     );
   }
 
-  // User doesn't exist - register them
+  // User doesn't exist — register them
   await page.goto('/register');
   await page.fill('input[name="email"]', TEST_USER.email);
   await page.fill('input[name="username"]', TEST_USER.username);
@@ -62,7 +94,19 @@ async function setupAuthenticatedUser(page) {
   // Registration redirects to login with pending message
   await page.waitForURL('/login', { timeout: 10000 });
 
-  // At this point, user needs manual approval to continue
+  // Try auto-approving via DB (works in CI where DATABASE_URL is set)
+  const approved = await approveUserInDB(TEST_USER.email);
+  if (approved) {
+    // Retry login after approval
+    await page.goto('/login');
+    await page.fill('input[name="email"]', TEST_USER.email);
+    await page.fill('input[name="password"]', TEST_USER.password);
+    await page.click('button[type="submit"]');
+    await page.waitForURL('/', { timeout: 10000 });
+    return { email: TEST_USER.email, username: TEST_USER.username };
+  }
+
+  // No DB access — manual approval required
   throw new Error(
     `Test user "${TEST_USER.email}" registered but needs admin approval.\n` +
       'To run integration tests:\n' +
