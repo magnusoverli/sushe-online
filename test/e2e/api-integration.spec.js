@@ -264,20 +264,28 @@ test.describe('Lists API Integration', () => {
     await page.request.delete(`/api/lists/${listId}`);
   });
 
-  test('should reject invalid data field', async ({ page }) => {
+  test('should reject invalid data field on item update', async ({ page }) => {
     await setupAuthenticatedUser(page);
 
-    // Send wrong field name — 'albums' instead of 'data'
-    const response = await page.request.post('/api/lists', {
+    // Create a valid list first
+    const { json: createBody } = await createList(page, {
+      name: 'Bad Field Test',
+      year: 2024,
+    });
+    const listId = createBody._id;
+
+    // PUT with wrong field name — 'albums' instead of 'data'
+    const response = await page.request.put(`/api/lists/${listId}`, {
       data: {
-        name: 'Bad Field Test',
         albums: [], // Wrong! Should be 'data'
-        year: 2024,
       },
     });
     expect(response.status()).toBe(400);
     const body = await response.json();
     expect(body.error).toBe('Invalid albums array');
+
+    // Cleanup
+    await page.request.delete(`/api/lists/${listId}`);
   });
 
   test('should reject invalid groupId', async ({ page }) => {
