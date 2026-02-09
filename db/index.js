@@ -170,7 +170,7 @@ let users,
   albumsAsync,
   listGroupsAsync,
   pool;
-let ready = Promise.resolve();
+let ready;
 
 if (process.env.DATABASE_URL) {
   logger.info('Using PostgreSQL backend');

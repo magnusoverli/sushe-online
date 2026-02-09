@@ -52,7 +52,8 @@ function createRecommendationEngine(deps = {}) {
       parsed = JSON.parse(jsonText);
     } catch (err) {
       throw new Error(
-        `Failed to parse recommendations JSON: ${err.message}. Response: ${responseText.substring(0, 200)}`
+        `Failed to parse recommendations JSON: ${err.message}. Response: ${responseText.substring(0, 200)}`,
+        { cause: err }
       );
     }
 

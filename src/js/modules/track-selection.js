@@ -108,7 +108,7 @@ export function createTrackSelection(deps = {}) {
     const primary = processTrack(trackPicks?.primary);
     const secondary = processTrack(trackPicks?.secondary);
 
-    let cellHtml = '';
+    let cellHtml;
     if (primary && secondary) {
       cellHtml = `
         <div class="flex flex-col gap-0.5">
