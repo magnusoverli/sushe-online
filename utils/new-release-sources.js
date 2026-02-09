@@ -110,14 +110,16 @@ function createNewReleaseSources(deps = {}) {
     }
 
     const releases = [];
-    let offset = 0;
     const limit = 50;
     const maxPages = 2; // Up to 100 albums
+    // Use search API with year filter (browse/new-releases was deprecated)
+    const year = dateStart.substring(0, 4);
 
     try {
       for (let page = 0; page < maxPages; page++) {
+        const offset = page * limit;
         const data = await spotifyApiRequest(
-          `/v1/browse/new-releases?limit=${limit}&offset=${offset}`,
+          `/v1/search?q=tag%3Anew+year%3A${year}&type=album&limit=${limit}&offset=${offset}`,
           accessToken
         );
 
@@ -134,7 +136,7 @@ function createNewReleaseSources(deps = {}) {
             releases.push({
               artist: album.artists?.[0]?.name || 'Unknown',
               album: album.name,
-              genre: '', // Spotify new-releases doesn't include genres per album
+              genre: '',
               release_date: releaseDate,
               spotify_id: album.id,
             });
@@ -143,7 +145,6 @@ function createNewReleaseSources(deps = {}) {
 
         // Check if there are more pages
         if (!data.albums.next) break;
-        offset += limit;
       }
 
       log.info('Fetched Spotify new releases', {
@@ -258,7 +259,7 @@ function createNewReleaseSources(deps = {}) {
       return [];
     }
 
-    const model = env.PERSONAL_RECS_POOL_MODEL || 'claude-sonnet-4-5';
+    const model = env.PERSONAL_RECS_POOL_MODEL || 'claude-haiku-4-5';
 
     try {
       const response = await callClaude({

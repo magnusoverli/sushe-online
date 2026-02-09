@@ -96,7 +96,7 @@ function createRecommendationEngine(deps = {}) {
    */
   async function generateRecommendations(options = {}) {
     const count = options.count || parseInt(env.PERSONAL_RECS_COUNT || '7', 10);
-    const model = env.PERSONAL_RECS_MODEL || 'claude-sonnet-4-5';
+    const model = env.PERSONAL_RECS_MODEL || 'claude-haiku-4-5';
     const maxTokens = parseInt(env.PERSONAL_RECS_MAX_TOKENS || '1500', 10);
 
     if (!options.newReleases || options.newReleases.length === 0) {

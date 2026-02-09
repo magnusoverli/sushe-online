@@ -130,8 +130,12 @@ function createClaudeClient(deps = {}) {
         if (err.status === 429 && err.headers?.['retry-after']) {
           // Respect Retry-After header (seconds)
           backoffMs = parseInt(err.headers['retry-after'], 10) * 1000;
+        } else if (err.status === 429) {
+          // Rate limit without Retry-After: use longer backoff (15s, 30s, 60s)
+          // Per-minute token limits need longer waits
+          backoffMs = Math.pow(2, attempt - 1) * 15000;
         } else {
-          // Exponential backoff: 1s, 2s, 4s
+          // Server errors: standard exponential backoff (1s, 2s, 4s)
           backoffMs = Math.pow(2, attempt - 1) * 1000;
         }
 
