@@ -8,6 +8,29 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: example
+          POSTGRES_DB: sushe
+          POSTGRES_INITDB_ARGS: '--auth-host=md5'
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sushe"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 30s
+
+    env:
+      DATABASE_URL: postgres://postgres:example@localhost:5432/sushe
+      SESSION_SECRET: ci-test-secret
+      NODE_ENV: test
+      DISABLE_RATE_LIMITING: 'true'
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -21,14 +44,112 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Enable PostgreSQL extensions
+        run: |
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
+
+      - name: Start application server
+        run: |
+          npm run build
+          node index.js &
+          # Wait for server to be ready (up to 60 seconds)
+          for i in $(seq 1 60); do
+            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server is ready"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "Server failed to start within 60 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
+
       - name: Run linter
         run: npm run lint
 
       - name: Run tests
         run: npm test
 
-  build:
+  e2e:
+    runs-on: ubuntu-latest
     needs: test
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: example
+          POSTGRES_DB: sushe
+          POSTGRES_INITDB_ARGS: '--auth-host=md5'
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sushe"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --health-start-period 30s
+
+    env:
+      DATABASE_URL: postgres://postgres:example@localhost:5432/sushe
+      SESSION_SECRET: ci-test-secret
+      NODE_ENV: test
+      DISABLE_RATE_LIMITING: 'true'
+      PLAYWRIGHT_SKIP_SERVER: '1'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Enable PostgreSQL extensions
+        run: |
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+          psql "$DATABASE_URL" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
+
+      - name: Start application server
+        run: |
+          npm run build
+          node index.js &
+          # Wait for server to be ready (up to 60 seconds)
+          for i in $(seq 1 60); do
+            if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+              echo "Server is ready"
+              break
+            fi
+            if [ "$i" = "60" ]; then
+              echo "Server failed to start within 60 seconds"
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Run Playwright e2e tests
+        run: npx playwright test
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
+  build:
+    needs: [test, e2e]
     runs-on: ubuntu-latest
     permissions:
       contents: read

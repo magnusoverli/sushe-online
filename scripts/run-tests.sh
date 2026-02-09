@@ -51,11 +51,12 @@ else
   echo "Skipping integration tests (no database connection available)"
 fi
 
-exit $INTEGRATION_EXIT
-
 # Run playwright tests only if not in CI and playwright is available
-# (Playwright tests are skipped in CI to avoid browser installation overhead)
+# (In CI, Playwright runs as a separate job — see .github/workflows/docker-build.yml)
 # (Playwright is also not available in Docker container)
-if [ "$CI" != "true" ] && command -v playwright >/dev/null 2>&1; then
-  playwright test
+if [ "$CI" != "true" ] && command -v npx >/dev/null 2>&1 && npx playwright --version >/dev/null 2>&1; then
+  echo "=== Phase 3: Playwright e2e tests ==="
+  PLAYWRIGHT_SKIP_SERVER=1 npx playwright test || INTEGRATION_EXIT=1
 fi
+
+exit $INTEGRATION_EXIT
