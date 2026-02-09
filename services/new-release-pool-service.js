@@ -11,7 +11,6 @@ const logger = require('../utils/logger');
  * @param {Function} deps.gatherWeeklyNewReleases - New release source gatherer
  * @param {Function} deps.callClaude - Claude API call function
  * @param {Function} deps.extractTextFromContent - Claude text extraction function
- * @param {Function} deps.upsertAlbumRecord - Function to upsert into canonical albums table
  * @param {Object} deps.env - Environment variables
  */
 function createNewReleasePoolService(deps = {}) {
@@ -26,7 +25,6 @@ function createNewReleasePoolService(deps = {}) {
     require('../utils/new-release-sources').gatherWeeklyNewReleases;
   const callClaude = deps.callClaude || null;
   const extractTextFromContent = deps.extractTextFromContent || null;
-  const upsertAlbumRecord = deps.upsertAlbumRecord || null;
 
   /**
    * Calculate the Monday (week start) and Sunday (week end) for a given date
@@ -86,25 +84,15 @@ function createNewReleasePoolService(deps = {}) {
     let insertedCount = 0;
     for (const release of releases) {
       try {
-        // Upsert into canonical albums table if function provided
-        let albumId = null;
-        if (upsertAlbumRecord) {
-          const albumRecord = await upsertAlbumRecord({
-            artist: release.artist,
-            album: release.album,
-            spotifyId: release.spotify_id || null,
-            musicbrainzId: release.musicbrainz_id || null,
-          });
-          albumId = albumRecord?.album_id || albumRecord?._id;
-        }
-
-        if (!albumId) {
-          // Generate a simple album_id if upsert is not available
-          albumId = `${release.artist}::${release.album}`
+        // Use spotify_id or musicbrainz_id if available, otherwise generate synthetic key
+        // Album upsert into canonical table is deferred until recommendation selection
+        const albumId =
+          release.spotify_id ||
+          release.musicbrainz_id ||
+          `${release.artist}::${release.album}`
             .toLowerCase()
             .replace(/[^a-z0-9:]/g, '_')
             .substring(0, 200);
-        }
 
         await pool.query(
           `INSERT INTO weekly_new_releases (week_start, album_id, source, release_date, artist, album, genre)

@@ -15,14 +15,14 @@ async function up(pool) {
     'Running migration 053: Adding personal recommendations tables...'
   );
 
-  // 1. Shared weekly new release pool
+  // 1. Shared weekly new release pool (no FK on album_id - new releases may not be in albums table)
   await pool.query(`
     CREATE TABLE IF NOT EXISTS weekly_new_releases (
       id SERIAL PRIMARY KEY,
       week_start DATE NOT NULL,
-      album_id TEXT NOT NULL REFERENCES albums(album_id) ON DELETE CASCADE,
+      album_id TEXT NOT NULL,
       source TEXT NOT NULL CHECK (source IN ('spotify', 'musicbrainz', 'claude_search')),
-      release_date DATE,
+      release_date TEXT,
       artist TEXT NOT NULL,
       album TEXT NOT NULL,
       genre TEXT,
@@ -67,7 +67,7 @@ async function up(pool) {
       id SERIAL PRIMARY KEY,
       _id TEXT UNIQUE NOT NULL,
       list_id TEXT NOT NULL REFERENCES personal_recommendation_lists(_id) ON DELETE CASCADE,
-      album_id TEXT NOT NULL REFERENCES albums(album_id) ON DELETE CASCADE,
+      album_id TEXT NOT NULL,
       position INTEGER NOT NULL,
       reasoning TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW(),

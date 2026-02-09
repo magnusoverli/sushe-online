@@ -181,7 +181,6 @@ module.exports = (app, deps) => {
       const poolServiceInstance = createNewReleasePoolService({
         pool,
         logger,
-        upsertAlbumRecord: helpers.upsertAlbumRecord,
         callClaude: claudeClient.callClaude,
         extractTextFromContent: claudeClient.extractTextFromContent,
       });

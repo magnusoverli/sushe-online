@@ -274,10 +274,10 @@ test('integration: service generates and stores recommendations for eligible use
       match: 'COUNT(DISTINCT',
       result: { rows: [{ count: '20' }], rowCount: 1 },
     },
-    // checkEligibility: last_login
+    // checkEligibility: last_activity
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     // fetchUserContext: genre_affinity
     {
@@ -397,8 +397,8 @@ test('integration: service returns failed list when release pool is empty', asyn
       result: { rows: [{ count: '20' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     {
@@ -450,7 +450,7 @@ test('integration: service skips ineligible users in generateForAllUsers', async
   const query = createQueryRouter([
     // generateForAllUsers: get active users
     {
-      match: 'FROM users WHERE last_login',
+      match: 'FROM users WHERE last_activity',
       result: {
         rows: [{ _id: 'user-1' }, { _id: 'user-2' }],
         rowCount: 2,
@@ -732,10 +732,10 @@ test('integration: full flow from pool build to list retrieval', async () => {
       match: 'COUNT(DISTINCT li.album_id)',
       result: { rows: [{ count: '25' }], rowCount: 1 },
     },
-    // Eligibility: last_login
+    // Eligibility: last_activity
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     // fetchUserContext: affinity
     {

@@ -209,7 +209,7 @@ async function checkEligibility(pool, userId, minAlbums, activeDays) {
   }
 
   const activeCheck = await pool.query(
-    'SELECT last_login FROM users WHERE _id = $1 AND last_login > NOW() - $2::interval',
+    'SELECT last_activity FROM users WHERE _id = $1 AND last_activity > NOW() - $2::interval',
     [userId, `${activeDays} days`]
   );
   if (activeCheck.rows.length === 0) {
@@ -266,7 +266,7 @@ async function processAllUsers(ctx, weekStart, options) {
   }
 
   const usersResult = await pool.query(
-    'SELECT _id, email, username FROM users WHERE last_login > NOW() - $1::interval',
+    'SELECT _id, email, username FROM users WHERE last_activity > NOW() - $1::interval',
     [`${activeDays} days`]
   );
 

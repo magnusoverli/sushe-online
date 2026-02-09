@@ -161,7 +161,7 @@ test('checkUserEligibility returns ineligible for inactive user', async () => {
       match: 'COUNT(DISTINCT',
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
-    { match: 'last_login', result: { rows: [], rowCount: 0 } },
+    { match: 'last_activity', result: { rows: [], rowCount: 0 } },
   ]);
   const { service } = createTestService({ query });
 
@@ -178,8 +178,8 @@ test('checkUserEligibility returns eligible for valid user', async () => {
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
   ]);
   const { service } = createTestService({ query });
@@ -200,8 +200,8 @@ test('checkUserEligibility treats enabled user as eligible candidate', async () 
       result: { rows: [{ count: '20' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
   ]);
   const { service } = createTestService({ query });
@@ -266,8 +266,8 @@ test('generateForUser returns null when engine not available', async () => {
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
   ]);
   const { service, mockLogger } = createTestService({
@@ -296,8 +296,8 @@ test('generateForUser creates failed list on empty release pool', async () => {
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
@@ -335,8 +335,8 @@ test('generateForUser creates completed list on success', async () => {
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     {
       match: 'genre_affinity',
@@ -387,8 +387,8 @@ test('generateForUser creates failed list on engine error', async () => {
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
@@ -431,8 +431,8 @@ test('generateForUser creates failed list when engine returns empty', async () =
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
@@ -473,8 +473,8 @@ test('generateForUser uses empty pool when no poolService', async () => {
       result: { rows: [{ count: '15' }], rowCount: 1 },
     },
     {
-      match: 'last_login',
-      result: { rows: [{ last_login: new Date() }], rowCount: 1 },
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
@@ -504,7 +504,7 @@ test('generateForAllUsers builds pool and processes users', async () => {
   const query = mock.fn(async (sql) => {
     // First call: buildWeeklyPool triggers no queries from service directly
     // Users query
-    if (sql.includes('FROM users WHERE last_login')) {
+    if (sql.includes('FROM users WHERE last_activity')) {
       return { rows: [{ _id: 'user-1' }, { _id: 'user-2' }], rowCount: 2 };
     }
     // For generateForUser calls: existing list check
@@ -534,7 +534,7 @@ test('generateForAllUsers builds pool and processes users', async () => {
 test('generateForAllUsers handles errors for individual users', async () => {
   let userCallCount = 0;
   const query = mock.fn(async (sql) => {
-    if (sql.includes('FROM users WHERE last_login')) {
+    if (sql.includes('FROM users WHERE last_activity')) {
       return { rows: [{ _id: 'user-1' }], rowCount: 1 };
     }
     if (sql.includes('personal_recommendation_lists WHERE user_id')) {
@@ -566,7 +566,7 @@ test('generateForAllUsers handles errors for individual users', async () => {
 
 test('generateForAllUsers skips pool build when no poolService', async () => {
   const query = mock.fn(async (sql) => {
-    if (sql.includes('FROM users WHERE last_login')) {
+    if (sql.includes('FROM users WHERE last_activity')) {
       return { rows: [], rowCount: 0 };
     }
     return { rows: [], rowCount: 0 };
