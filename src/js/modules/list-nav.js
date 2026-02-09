@@ -56,6 +56,20 @@ export function createListNav(deps = {}) {
   let groupsSortable = null;
   const listSortables = new Map();
 
+  /**
+   * Get the year that personal recommendation lists should appear in.
+   * Uses the most recent list's week_start to determine the year.
+   * @returns {number|null} Year number or null if no lists
+   */
+  function getPersonalRecYear() {
+    if (!getPersonalRecLists) return null;
+    const lists = getPersonalRecLists();
+    if (!lists || lists.length === 0) return null;
+    const weekStart = lists[0].week_start;
+    if (!weekStart) return null;
+    return new Date(weekStart).getFullYear();
+  }
+
   // ============ EXPAND STATE MANAGEMENT ============
 
   /**
@@ -640,10 +654,9 @@ export function createListNav(deps = {}) {
       }
     }
 
-    // Add personal recommendation buttons in current year group
+    // Add personal recommendation buttons in the year matching the most recent list
     if (isYearGroup && year && getPersonalRecLists) {
-      const currentYear = new Date().getFullYear();
-      if (year === currentYear) {
+      if (year === getPersonalRecYear()) {
         const personalRecs = getPersonalRecLists();
         if (personalRecs && personalRecs.length > 0) {
           personalRecs.forEach((recList) => {
@@ -851,12 +864,38 @@ export function createListNav(deps = {}) {
 
       // Render each group section
       // Show all collections (even empty), but only show year-groups with lists
+      // Also show year-groups that have personal recommendation lists
+      const personalRecYear = getPersonalRecYear();
       groupsWithLists.forEach((group) => {
-        if (group.lists.length > 0 || !group.isYearGroup) {
+        const hasPersonalRecs =
+          group.isYearGroup && group.year === personalRecYear;
+        if (group.lists.length > 0 || !group.isYearGroup || hasPersonalRecs) {
           const section = createGroupSection(group, isMobile, container);
           container.appendChild(section);
         }
       });
+
+      // If personal rec lists exist but no year-group matched, create a synthetic section
+      if (personalRecYear) {
+        const yearGroupExists = groupsWithLists.some(
+          (g) => g.isYearGroup && g.year === personalRecYear
+        );
+        if (!yearGroupExists) {
+          const syntheticGroup = {
+            _id: `personal-recs-${personalRecYear}`,
+            name: String(personalRecYear),
+            year: personalRecYear,
+            isYearGroup: true,
+            lists: [],
+          };
+          const section = createGroupSection(
+            syntheticGroup,
+            isMobile,
+            container
+          );
+          container.appendChild(section);
+        }
+      }
 
       // Add orphaned lists if any (shouldn't happen after migration)
       if (orphaned.length > 0) {
