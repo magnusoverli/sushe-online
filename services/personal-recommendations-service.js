@@ -74,10 +74,34 @@ async function insertRecommendationItems(
     const rec = recommendations[i];
     const itemId = generateId();
 
+    // Step 1: Check if this album already exists in the albums table.
+    // This avoids creating duplicates when the album was previously added
+    // via Spotify, browser extension, or any other source.
     let albumId = null;
-    if (upsertAlbumRecord) {
+    try {
+      const existing = await pool.query(
+        `SELECT album_id FROM albums
+         WHERE LOWER(TRIM(artist)) = LOWER(TRIM($1))
+           AND LOWER(TRIM(album)) = LOWER(TRIM($2))
+         LIMIT 1`,
+        [rec.artist, rec.album]
+      );
+      if (existing.rows.length > 0) {
+        albumId = existing.rows[0].album_id;
+      }
+    } catch (err) {
+      log.warn('Failed to look up existing album', {
+        artist: rec.artist,
+        album: rec.album,
+        error: err.message,
+      });
+    }
+
+    // Step 2: If not found, create a new album record via upsertAlbumRecord.
+    // This creates the album in the albums table and triggers async
+    // cover/track/summary fetches - same path as any other album.
+    if (!albumId && upsertAlbumRecord) {
       try {
-        // upsertAlbumRecord returns a plain string (the canonical album_id)
         albumId =
           (await upsertAlbumRecord(
             { artist: rec.artist, album: rec.album },
@@ -92,6 +116,7 @@ async function insertRecommendationItems(
       }
     }
 
+    // Step 3: Last resort fallback - use pool match or synthetic ID
     if (!albumId) {
       const poolMatch = releasePool.find(
         (r) =>
