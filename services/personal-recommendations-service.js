@@ -57,6 +57,89 @@ async function fetchUserContext(pool, userId, normalizeAlbumKey) {
 }
 
 /**
+ * Build album data for upsert by enriching with pool metadata.
+ * Forwards cover image, tracks, genre, country, release_date from the pool
+ * so the canonical albums record is rich from the start -- same quality as
+ * browser extension additions.
+ * @param {Object} rec - Recommendation item from Claude (artist, album, reasoning)
+ * @param {Object|null} poolMatch - Matching pool entry with full metadata
+ * @returns {Object} Album data ready for upsertAlbumRecord
+ */
+function buildAlbumDataFromPool(rec, poolMatch) {
+  const albumData = { artist: rec.artist, album: rec.album };
+
+  if (!poolMatch) return albumData;
+
+  if (poolMatch.album_id) albumData.album_id = poolMatch.album_id;
+  if (poolMatch.release_date) albumData.release_date = poolMatch.release_date;
+  if (poolMatch.genre_1) albumData.genre_1 = poolMatch.genre_1;
+  if (poolMatch.genre_2) albumData.genre_2 = poolMatch.genre_2;
+  if (poolMatch.country) albumData.country = poolMatch.country;
+  if (poolMatch.tracks) albumData.tracks = poolMatch.tracks;
+  if (poolMatch.cover_image) {
+    albumData.cover_image = poolMatch.cover_image;
+    albumData.cover_image_format = poolMatch.cover_image_format || 'JPEG';
+  }
+
+  return albumData;
+}
+
+/**
+ * Resolve the canonical album_id for a recommendation item.
+ * Tries: (1) existing albums table lookup, (2) upsert with pool data,
+ * (3) pool match fallback, (4) synthetic ID.
+ * @param {Object} ctx - Context with pool, log, upsertAlbumRecord
+ * @param {Object} rec - Recommendation item
+ * @param {Object|null} poolMatch - Matching pool entry
+ * @param {string} fallbackId - Synthetic fallback ID
+ * @returns {Promise<string>} Resolved album_id
+ */
+async function resolveAlbumId(ctx, rec, poolMatch, fallbackId) {
+  const { pool, log, upsertAlbumRecord } = ctx;
+
+  // Step 1: Check if this album already exists in the albums table
+  let albumId = null;
+  try {
+    const existing = await pool.query(
+      `SELECT album_id FROM albums
+       WHERE LOWER(TRIM(artist)) = LOWER(TRIM($1))
+         AND LOWER(TRIM(album)) = LOWER(TRIM($2))
+       LIMIT 1`,
+      [rec.artist, rec.album]
+    );
+    if (existing.rows.length > 0) {
+      albumId = existing.rows[0].album_id;
+    }
+  } catch (err) {
+    log.warn('Failed to look up existing album', {
+      artist: rec.artist,
+      album: rec.album,
+      error: err.message,
+    });
+  }
+
+  // Step 2: Upsert into canonical albums table with full pool metadata.
+  // The smart-merge in upsertCanonical prefers non-empty incoming values,
+  // so existing data is preserved while gaps are filled from the pool.
+  if (upsertAlbumRecord) {
+    try {
+      const albumData = buildAlbumDataFromPool(rec, poolMatch);
+      albumId =
+        (await upsertAlbumRecord(albumData, new Date())) || albumId || null;
+    } catch (err) {
+      log.warn('Failed to upsert album record for recommendation', {
+        artist: rec.artist,
+        album: rec.album,
+        error: err.message,
+      });
+    }
+  }
+
+  // Step 3: Last resort fallback - use pool match or synthetic ID
+  return albumId || poolMatch?.album_id || fallbackId;
+}
+
+/**
  * Insert recommendation items into the database
  * @param {Object} ctx - Context object with pool, log, upsertAlbumRecord, normalizeAlbumKey, generateId
  * @param {string} listId - List ID
@@ -69,62 +152,35 @@ async function insertRecommendationItems(
   recommendations,
   releasePool
 ) {
-  const { pool, log, upsertAlbumRecord, normalizeAlbumKey, generateId } = ctx;
+  const { pool, normalizeAlbumKey, generateId } = ctx;
+
+  // Build a lookup map from pool for O(1) matching
+  const poolByKey = new Map();
+  for (const entry of releasePool) {
+    const key = normalizeAlbumKey(entry.artist, entry.album);
+    poolByKey.set(key, entry);
+  }
+
   for (let i = 0; i < recommendations.length; i++) {
     const rec = recommendations[i];
     const itemId = generateId();
 
-    // Step 1: Check if this album already exists in the albums table.
-    // This avoids creating duplicates when the album was previously added
-    // via Spotify, browser extension, or any other source.
-    let albumId = null;
-    try {
-      const existing = await pool.query(
-        `SELECT album_id FROM albums
-         WHERE LOWER(TRIM(artist)) = LOWER(TRIM($1))
-           AND LOWER(TRIM(album)) = LOWER(TRIM($2))
-         LIMIT 1`,
-        [rec.artist, rec.album]
-      );
-      if (existing.rows.length > 0) {
-        albumId = existing.rows[0].album_id;
-      }
-    } catch (err) {
-      log.warn('Failed to look up existing album', {
-        artist: rec.artist,
-        album: rec.album,
-        error: err.message,
-      });
-    }
+    // Match recommendation back to pool entry for full metadata
+    const recKey = normalizeAlbumKey(rec.artist, rec.album);
+    const poolMatch = poolByKey.get(recKey) || null;
 
-    // Step 2: If not found, create a new album record via upsertAlbumRecord.
-    // This creates the album in the albums table and triggers async
-    // cover/track/summary fetches - same path as any other album.
-    if (!albumId && upsertAlbumRecord) {
-      try {
-        albumId =
-          (await upsertAlbumRecord(
-            { artist: rec.artist, album: rec.album },
-            new Date()
-          )) || null;
-      } catch (err) {
-        log.warn('Failed to upsert album record for recommendation', {
-          artist: rec.artist,
-          album: rec.album,
-          error: err.message,
-        });
-      }
-    }
+    const albumId = await resolveAlbumId(
+      ctx,
+      rec,
+      poolMatch,
+      `rec_${listId}_${i}`
+    );
 
-    // Step 3: Last resort fallback - use pool match or synthetic ID
-    if (!albumId) {
-      const poolMatch = releasePool.find(
-        (r) =>
-          normalizeAlbumKey(r.artist, r.album) ===
-          normalizeAlbumKey(rec.artist, rec.album)
-      );
-      albumId = poolMatch?.album_id || `rec_${listId}_${i}`;
-    }
+    // Use pool metadata for the recommendation item too (Claude only
+    // returns artist/album/reasoning, not genre/country)
+    const genre1 = rec.genre_1 || rec.genre || poolMatch?.genre_1 || null;
+    const genre2 = rec.genre_2 || poolMatch?.genre_2 || null;
+    const country = rec.country || poolMatch?.country || null;
 
     await pool.query(
       `INSERT INTO personal_recommendation_items (_id, list_id, album_id, position, reasoning, artist, album, genre_1, genre_2, country)
@@ -138,9 +194,9 @@ async function insertRecommendationItems(
         rec.reasoning,
         rec.artist || null,
         rec.album || null,
-        rec.genre_1 || rec.genre || null,
-        rec.genre_2 || null,
-        rec.country || null,
+        genre1,
+        genre2,
+        country,
       ]
     );
   }

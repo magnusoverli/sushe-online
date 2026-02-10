@@ -433,6 +433,108 @@ test('generateForUser creates completed list on success', async () => {
   );
 });
 
+test('generateForUser forwards pool metadata to upsertAlbumRecord', async () => {
+  const upsertCalls = [];
+  const storedItems = [];
+  const query = createQueryRouter([
+    {
+      match: 'personal_recommendation_lists WHERE user_id',
+      result: { rows: [], rowCount: 0 },
+    },
+    { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
+    {
+      match: 'COUNT(DISTINCT',
+      result: { rows: [{ count: '15' }], rowCount: 1 },
+    },
+    {
+      match: 'last_activity',
+      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
+    },
+    { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
+    { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
+    { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
+    {
+      match: 'INSERT INTO personal_recommendation_lists',
+      result: { rows: [], rowCount: 1 },
+    },
+    {
+      match: 'INSERT INTO personal_recommendation_items',
+      result: (sql, params) => {
+        storedItems.push({
+          albumId: params[2],
+          genre_1: params[7],
+          genre_2: params[8],
+          country: params[9],
+        });
+        return { rows: [], rowCount: 1 };
+      },
+    },
+  ]);
+
+  const mockCoverImage = Buffer.from('fake-jpeg-data');
+  const mockPoolService = {
+    getPoolForWeek: mock.fn(async () => [
+      {
+        artist: 'Artist1',
+        album: 'Album1',
+        album_id: 'spotify-123',
+        genre_1: 'Electronic',
+        genre_2: 'Ambient',
+        country: 'United Kingdom',
+        release_date: '2025-02-05',
+        cover_image: mockCoverImage,
+        cover_image_format: 'JPEG',
+        tracks: [
+          { name: 'Track 1', length: 240000 },
+          { name: 'Track 2', length: 180000 },
+        ],
+      },
+    ]),
+    buildWeeklyPool: mock.fn(async () => {}),
+    cleanupOldPools: mock.fn(async () => {}),
+  };
+
+  const mockUpsertAlbumRecord = mock.fn(async (albumData) => {
+    upsertCalls.push(albumData);
+    return 'canonical-album-id-1';
+  });
+
+  const { service } = createTestService({
+    query,
+    poolService: mockPoolService,
+    upsertAlbumRecord: mockUpsertAlbumRecord,
+  });
+
+  const result = await service.generateForUser('user-1', '2025-02-03');
+  assert.strictEqual(result.status, 'completed');
+
+  // Verify upsertAlbumRecord was called with full pool metadata
+  assert.strictEqual(upsertCalls.length, 1);
+  const upserted = upsertCalls[0];
+  assert.strictEqual(upserted.artist, 'Artist1');
+  assert.strictEqual(upserted.album, 'Album1');
+  assert.strictEqual(upserted.album_id, 'spotify-123');
+  assert.strictEqual(upserted.genre_1, 'Electronic');
+  assert.strictEqual(upserted.genre_2, 'Ambient');
+  assert.strictEqual(upserted.country, 'United Kingdom');
+  assert.strictEqual(upserted.release_date, '2025-02-05');
+  assert.strictEqual(upserted.cover_image, mockCoverImage);
+  assert.strictEqual(upserted.cover_image_format, 'JPEG');
+  assert.deepStrictEqual(upserted.tracks, [
+    { name: 'Track 1', length: 240000 },
+    { name: 'Track 2', length: 180000 },
+  ]);
+
+  // Verify the returned canonical album_id was used for the recommendation item
+  assert.strictEqual(storedItems.length, 1);
+  assert.strictEqual(storedItems[0].albumId, 'canonical-album-id-1');
+
+  // Verify pool metadata also stored on recommendation item
+  assert.strictEqual(storedItems[0].genre_1, 'Electronic');
+  assert.strictEqual(storedItems[0].genre_2, 'Ambient');
+  assert.strictEqual(storedItems[0].country, 'United Kingdom');
+});
+
 test('generateForUser creates failed list on engine error', async () => {
   const query = createQueryRouter([
     {
