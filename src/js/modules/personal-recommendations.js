@@ -415,7 +415,7 @@ export function createPersonalRecommendations(deps = {}) {
 
     const allLists = getLists();
     const yearGroups = groupListsByYear
-      ? groupListsByYear(allLists)
+      ? groupListsByYear(allLists, { includeNames: true })
       : { sortedYears: [], listsByYear: {} };
 
     if (yearGroups.sortedYears.length === 0) {
