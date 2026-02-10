@@ -53,11 +53,12 @@ test('integration: pool service gathers releases from mocked sources', async () 
       }
       if (sql.includes('INSERT INTO weekly_new_releases')) {
         insertedRows.push({
-          week_start: params[0],
-          album_id: params[1],
-          source: params[2],
-          artist: params[4],
-          album: params[5],
+          _id: params[0],
+          week_start: params[1],
+          album_id: params[2],
+          source: params[3],
+          artist: params[5],
+          album: params[6],
         });
         return { rows: [], rowCount: 1 };
       }
@@ -82,14 +83,16 @@ test('integration: pool service gathers releases from mocked sources', async () 
       artist: 'FKA twigs',
       album: 'Fresh',
       source: 'claude_search',
-      genre: 'electronic',
+      genre_1: 'electronic',
     },
   ]);
 
+  let poolIdCounter = 0;
   const poolService = createNewReleasePoolService({
     pool: mockPool,
     logger: mockLogger,
     gatherWeeklyNewReleases: mockGather,
+    generateId: () => `pool-id-${++poolIdCounter}`,
   });
 
   const count = await poolService.buildWeeklyPool('2026-02-02');
@@ -704,20 +707,21 @@ test('integration: full flow from pool build to list retrieval', async () => {
       match: 'INSERT INTO weekly_new_releases',
       result: (sql, params) => {
         const release = {
-          week_start: params[0],
-          album_id: params[1],
-          source: params[2],
-          artist: params[4],
-          album: params[5],
+          _id: params[0],
+          week_start: params[1],
+          album_id: params[2],
+          source: params[3],
+          artist: params[5],
+          album: params[6],
         };
         poolData.push(release);
         storedReleases.push(release);
         return { rows: [], rowCount: 1 };
       },
     },
-    // Pool getPoolForWeek: SELECT *
+    // Pool getPoolForWeek: SELECT columns FROM weekly_new_releases
     {
-      match: 'SELECT * FROM weekly_new_releases',
+      match: 'cover_image_format, verified',
       result: () => ({ rows: [...poolData], rowCount: poolData.length }),
     },
     // Service: check existing list
@@ -828,10 +832,12 @@ test('integration: full flow from pool build to list retrieval', async () => {
   };
 
   // Step 1: Build pool
+  let poolIdCounter = 0;
   const poolService = createNewReleasePoolService({
     pool: { query },
     logger: createMockLogger(),
     gatherWeeklyNewReleases: mockGather,
+    generateId: () => `pool-id-${++poolIdCounter}`,
   });
 
   await poolService.buildWeeklyPool('2026-02-02');

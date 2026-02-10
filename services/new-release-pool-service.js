@@ -1,6 +1,7 @@
 // services/new-release-pool-service.js
 // Business logic for the weekly new release pool
 
+const crypto = require('crypto');
 const logger = require('../utils/logger');
 
 /**
@@ -11,8 +12,12 @@ const logger = require('../utils/logger');
  * @param {Function} deps.gatherWeeklyNewReleases - New release source gatherer
  * @param {Function} deps.callClaude - Claude API call function
  * @param {Function} deps.extractTextFromContent - Claude text extraction function
+ * @param {Function} deps.fetchAndProcessImage - Image download + processing function
+ * @param {Function} deps.fetchDeezerTracks - Deezer track fetch function
+ * @param {Function} deps.fetchItunesTracks - iTunes track fetch function
  * @param {Object} deps.env - Environment variables
  */
+// eslint-disable-next-line max-lines-per-function -- Cohesive service factory with related pool management functions
 function createNewReleasePoolService(deps = {}) {
   const pool = deps.pool;
   if (!pool) {
@@ -25,6 +30,17 @@ function createNewReleasePoolService(deps = {}) {
     require('../utils/new-release-sources').gatherWeeklyNewReleases;
   const callClaude = deps.callClaude || null;
   const extractTextFromContent = deps.extractTextFromContent || null;
+  const fetchAndProcessImage = deps.fetchAndProcessImage || null;
+  const fetchDeezerTracks = deps.fetchDeezerTracks || null;
+  const fetchItunesTracks = deps.fetchItunesTracks || null;
+
+  /**
+   * Generate a unique _id for pool entries
+   */
+  function generateId() {
+    if (deps.generateId) return deps.generateId();
+    return crypto.randomUUID();
+  }
 
   /**
    * Calculate the Monday (week start) and Sunday (week end) for a given date
@@ -46,6 +62,67 @@ function createNewReleasePoolService(deps = {}) {
       weekStart: monday.toISOString().split('T')[0],
       weekEnd: sunday.toISOString().split('T')[0],
     };
+  }
+
+  /**
+   * Download a cover image from a URL and return as processed Buffer
+   * @param {string} imageUrl - URL to download from
+   * @returns {Promise<{buffer: Buffer, format: string}|null>}
+   */
+  async function downloadCoverImage(imageUrl) {
+    if (!imageUrl) return null;
+
+    // Use injected fetchAndProcessImage if available (same as cover-fetch-queue)
+    if (fetchAndProcessImage) {
+      try {
+        const result = await fetchAndProcessImage(imageUrl);
+        return result ? { buffer: result, format: 'JPEG' } : null;
+      } catch (err) {
+        log.debug('Failed to download cover image via fetchAndProcessImage', {
+          url: imageUrl,
+          error: err.message,
+        });
+        return null;
+      }
+    }
+
+    // Fallback: basic fetch without image processing
+    try {
+      const response = await (deps.fetch || global.fetch)(imageUrl);
+      if (!response.ok) return null;
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      if (buffer.length < 100) return null; // Too small, likely an error
+      return { buffer, format: 'JPEG' };
+    } catch (err) {
+      log.debug('Failed to download cover image', {
+        url: imageUrl,
+        error: err.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Fetch tracks for a release using Deezer/iTunes fallback
+   * @param {string} artist - Artist name
+   * @param {string} album - Album name
+   * @returns {Promise<Array<{name: string, length: number}>|null>}
+   */
+  async function fetchTracksForRelease(artist, album) {
+    if (!fetchDeezerTracks && !fetchItunesTracks) return null;
+
+    const fetchers = [];
+    if (fetchDeezerTracks) fetchers.push(fetchDeezerTracks(artist, album));
+    if (fetchItunesTracks) fetchers.push(fetchItunesTracks(artist, album));
+
+    try {
+      const result = await Promise.any(fetchers);
+      return result?.tracks || null;
+    } catch {
+      // All fetchers failed
+      return null;
+    }
   }
 
   /**
@@ -85,7 +162,6 @@ function createNewReleasePoolService(deps = {}) {
     for (const release of releases) {
       try {
         // Use spotify_id or musicbrainz_id if available, otherwise generate synthetic key
-        // Album upsert into canonical table is deferred until recommendation selection
         const albumId =
           release.spotify_id ||
           release.musicbrainz_id ||
@@ -94,18 +170,45 @@ function createNewReleasePoolService(deps = {}) {
             .replace(/[^a-z0-9:]/g, '_')
             .substring(0, 200);
 
+        // Download cover image if URL is available
+        let coverImage = null;
+        let coverImageFormat = null;
+        if (release.cover_image_url) {
+          const imageResult = await downloadCoverImage(release.cover_image_url);
+          if (imageResult) {
+            coverImage = imageResult.buffer;
+            coverImageFormat = imageResult.format;
+          }
+        }
+
+        // Use tracks from source fetch, or try Deezer/iTunes fallback
+        let tracks = release.tracks || null;
+        if (!tracks || tracks.length === 0) {
+          tracks = await fetchTracksForRelease(release.artist, release.album);
+        }
+
+        const releaseId = generateId();
+
         await pool.query(
-          `INSERT INTO weekly_new_releases (week_start, album_id, source, release_date, artist, album, genre)
-           VALUES ($1, $2, $3, $4, $5, $6, $7)
+          `INSERT INTO weekly_new_releases
+            (_id, week_start, album_id, source, release_date, artist, album,
+             genre_1, genre_2, country, tracks, cover_image, cover_image_format, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
            ON CONFLICT (week_start, album_id) DO NOTHING`,
           [
+            releaseId,
             weekStart,
             albumId,
             release.source,
             release.release_date || null,
             release.artist,
             release.album,
-            release.genre || null,
+            release.genre_1 || null,
+            release.genre_2 || null,
+            release.country || null,
+            tracks ? JSON.stringify(tracks) : null,
+            coverImage,
+            coverImageFormat,
           ]
         );
         insertedCount++;
@@ -202,7 +305,8 @@ function createNewReleasePoolService(deps = {}) {
    * @returns {Promise<Array>} Pool entries
    */
   async function getPoolForWeek(weekStart, verifiedOnly = false) {
-    let query = 'SELECT * FROM weekly_new_releases WHERE week_start = $1';
+    let query =
+      'SELECT _id, week_start, album_id, source, release_date, artist, album, genre_1, genre_2, country, tracks, cover_image, cover_image_format, verified, created_at, updated_at FROM weekly_new_releases WHERE week_start = $1';
     if (verifiedOnly) {
       query += ' AND verified = TRUE';
     }

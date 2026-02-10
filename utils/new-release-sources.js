@@ -11,7 +11,7 @@ const MUSICBRAINZ_RATE_LIMIT_MS = 1100; // 1 req/sec with buffer
 /**
  * Parse Claude's JSON response text into structured release objects
  * @param {string} text - Raw text from Claude response
- * @returns {Array<{artist: string, album: string, genre: string, release_date: string}>}
+ * @returns {Array<{artist: string, album: string, genre_1: string, genre_2: string, country: string, release_date: string}>}
  */
 function parseClaudeReleaseResponse(text) {
   let jsonText = text.trim();
@@ -32,7 +32,13 @@ function parseClaudeReleaseResponse(text) {
     .map((item) => ({
       artist: String(item.artist).trim(),
       album: String(item.album).trim(),
-      genre: item.genre ? String(item.genre).trim() : '',
+      genre_1: item.genre_1
+        ? String(item.genre_1).trim()
+        : item.genre
+          ? String(item.genre).trim()
+          : '',
+      genre_2: item.genre_2 ? String(item.genre_2).trim() : '',
+      country: item.country ? String(item.country).trim() : '',
       release_date: item.release_date ? String(item.release_date).trim() : '',
     }));
 }
@@ -51,18 +57,87 @@ function deduplicateReleases(allReleases, normalizeAlbumKey) {
       seen.set(key, release);
     } else {
       const existing = seen.get(key);
-      if (!existing.genre && release.genre) {
-        existing.genre = release.genre;
+      // Merge genre info from other sources
+      if (!existing.genre_1 && release.genre_1) {
+        existing.genre_1 = release.genre_1;
       }
+      if (!existing.genre_2 && release.genre_2) {
+        existing.genre_2 = release.genre_2;
+      }
+      // Merge country info
+      if (!existing.country && release.country) {
+        existing.country = release.country;
+      }
+      // Merge cover_image_url (prefer Spotify's high-res images)
+      if (!existing.cover_image_url && release.cover_image_url) {
+        existing.cover_image_url = release.cover_image_url;
+      }
+      // Merge tracks (prefer more complete track lists)
+      if (
+        release.tracks &&
+        (!existing.tracks || release.tracks.length > existing.tracks.length)
+      ) {
+        existing.tracks = release.tracks;
+      }
+      // Prefer Spotify/MusicBrainz over Claude search
       if (
         existing.source === 'claude_search' &&
         release.source !== 'claude_search'
       ) {
-        seen.set(key, { ...release, genre: existing.genre || release.genre });
+        seen.set(key, {
+          ...release,
+          genre_1: existing.genre_1 || release.genre_1,
+          genre_2: existing.genre_2 || release.genre_2,
+          country: existing.country || release.country,
+          cover_image_url: release.cover_image_url || existing.cover_image_url,
+          tracks:
+            release.tracks && release.tracks.length > 0
+              ? release.tracks
+              : existing.tracks,
+        });
       }
     }
   }
   return Array.from(seen.values());
+}
+
+/**
+ * Parse a MusicBrainz release-group into a structured release object
+ * @param {Object} group - MusicBrainz release-group object
+ * @returns {{artist: string, album: string, genre_1: string, genre_2: string, country: string, release_date: string, musicbrainz_id: string}}
+ */
+function parseMusicBrainzReleaseGroup(group) {
+  const artistCredit = group['artist-credit'];
+  const artistName =
+    artistCredit?.[0]?.artist?.name || artistCredit?.[0]?.name || 'Unknown';
+
+  // Extract genre tags (sorted by vote count descending)
+  const tags = group.tags || [];
+  const sortedTags = [...tags].sort((a, b) => (b.count || 0) - (a.count || 0));
+
+  // Extract country from first release's release-events
+  let country = '';
+  const groupReleases = group.releases || [];
+  for (const rel of groupReleases) {
+    const events = rel['release-events'] || [];
+    for (const event of events) {
+      if (event.area && event.area.name) {
+        country = event.area.name;
+        break;
+      }
+    }
+    if (country) break;
+  }
+
+  return {
+    artist: artistName,
+    album: group.title || 'Unknown',
+    genre_1: sortedTags[0]?.name || '',
+    genre_2: sortedTags[1]?.name || '',
+    country,
+    release_date: group['first-release-date'] || '',
+    musicbrainz_id: group.id || '',
+  };
 }
 
 /**
@@ -75,6 +150,7 @@ function deduplicateReleases(allReleases, normalizeAlbumKey) {
  * @param {Function} deps.spotifyApiRequest - Spotify API request function
  * @param {Function} deps.normalizeAlbumKey - Album key normalization function
  */
+// eslint-disable-next-line max-lines-per-function -- Cohesive factory with multiple related fetcher functions
 function createNewReleaseSources(deps = {}) {
   const log = deps.logger || logger;
   const fetchFn = deps.fetch || global.fetch;
@@ -95,10 +171,24 @@ function createNewReleaseSources(deps = {}) {
   }
 
   /**
-   * Fetch new releases from Spotify using client credentials flow
+   * Pick the best cover image URL from Spotify's images array
+   * Prefers 640px, then largest available
+   * @param {Array<{url: string, width: number, height: number}>} images
+   * @returns {string} Best image URL or empty string
+   */
+  function pickBestSpotifyImageUrl(images) {
+    if (!images || images.length === 0) return '';
+    // Prefer 640px image (standard large), then sort by width descending
+    const sorted = [...images].sort((a, b) => (b.width || 0) - (a.width || 0));
+    return sorted[0]?.url || '';
+  }
+
+  /**
+   * Fetch new releases from Spotify using client credentials flow.
+   * Captures cover image URL and track listing for each album.
    * @param {string} dateStart - Start date (YYYY-MM-DD)
    * @param {string} dateEnd - End date (YYYY-MM-DD)
-   * @returns {Promise<Array<{artist: string, album: string, genre: string, release_date: string, spotify_id: string}>>}
+   * @returns {Promise<Array>}
    */
   async function fetchSpotifyNewReleases(dateStart, dateEnd) {
     const accessToken = await getClientCredentialsToken();
@@ -134,15 +224,41 @@ function createNewReleaseSources(deps = {}) {
             releases.push({
               artist: album.artists?.[0]?.name || 'Unknown',
               album: album.name,
-              genre: '',
+              genre_1: '',
+              genre_2: '',
+              country: '',
               release_date: releaseDate,
               spotify_id: album.id,
+              cover_image_url: pickBestSpotifyImageUrl(album.images),
             });
           }
         }
 
         // Check if there are more pages
         if (!data.albums.next) break;
+      }
+
+      // Fetch tracks for each Spotify album (batch, with rate limiting)
+      for (const release of releases) {
+        if (!release.spotify_id) continue;
+        try {
+          const trackData = await spotifyApiRequest(
+            `/v1/albums/${release.spotify_id}/tracks?limit=50`,
+            accessToken
+          );
+          if (trackData?.items) {
+            release.tracks = trackData.items.map((t) => ({
+              name: t.name,
+              length: t.duration_ms || 0,
+            }));
+          }
+        } catch (err) {
+          log.debug('Failed to fetch Spotify tracks for album', {
+            spotifyId: release.spotify_id,
+            album: release.album,
+            error: err.message,
+          });
+        }
       }
 
       log.info('Fetched Spotify new releases', {
@@ -162,10 +278,11 @@ function createNewReleaseSources(deps = {}) {
   }
 
   /**
-   * Fetch new releases from MusicBrainz using date range query
+   * Fetch new releases from MusicBrainz using date range query.
+   * Captures genre tags (mapped to genre_1/genre_2) and country from releases.
    * @param {string} dateStart - Start date (YYYY-MM-DD)
    * @param {string} dateEnd - End date (YYYY-MM-DD)
-   * @returns {Promise<Array<{artist: string, album: string, release_date: string, musicbrainz_id: string}>>}
+   * @returns {Promise<Array>}
    */
   async function fetchMusicBrainzNewReleases(dateStart, dateEnd) {
     const releases = [];
@@ -199,18 +316,7 @@ function createNewReleaseSources(deps = {}) {
         if (groups.length === 0) break;
 
         for (const group of groups) {
-          const artistCredit = group['artist-credit'];
-          const artistName =
-            artistCredit?.[0]?.artist?.name ||
-            artistCredit?.[0]?.name ||
-            'Unknown';
-
-          releases.push({
-            artist: artistName,
-            album: group.title || 'Unknown',
-            release_date: group['first-release-date'] || '',
-            musicbrainz_id: group.id || '',
-          });
+          releases.push(parseMusicBrainzReleaseGroup(group));
         }
 
         offset += limit;
@@ -239,12 +345,13 @@ function createNewReleaseSources(deps = {}) {
   }
 
   /**
-   * Fetch new releases via Claude web search
+   * Fetch new releases via Claude web search.
+   * Now requests country and two genre fields.
    * @param {string} dateStart - Start date (YYYY-MM-DD)
    * @param {string} dateEnd - End date (YYYY-MM-DD)
    * @param {Function} callClaude - Claude API call function from claude-client
    * @param {Function} extractTextFromContent - Text extraction function from claude-client
-   * @returns {Promise<Array<{artist: string, album: string, genre: string, release_date: string}>>}
+   * @returns {Promise<Array>}
    */
   async function fetchClaudeSearchNewReleases(
     dateStart,
@@ -272,7 +379,7 @@ function createNewReleaseSources(deps = {}) {
         messages: [
           {
             role: 'user',
-            content: `Search for notable album releases between ${dateStart} and ${dateEnd}. Include indie, underground, and non-Western releases that may not be on major platforms. Return ONLY a JSON array with objects containing "artist", "album", "genre", and "release_date" fields. No other text.`,
+            content: `Search for notable album releases between ${dateStart} and ${dateEnd}. Include indie, underground, and non-Western releases that may not be on major platforms. Return ONLY a JSON array with objects containing these fields: "artist", "album", "genre_1" (primary genre), "genre_2" (secondary genre or empty string), "country" (country of origin), and "release_date". No other text.`,
           },
         ],
         metricsLabel: 'personal_recs_pool_search',
@@ -309,7 +416,7 @@ function createNewReleaseSources(deps = {}) {
    * @param {Object} options - Additional options
    * @param {Function} options.callClaude - Claude API call function
    * @param {Function} options.extractTextFromContent - Text extraction function
-   * @returns {Promise<Array<{artist: string, album: string, genre: string, release_date: string, source: string}>>}
+   * @returns {Promise<Array>}
    */
   async function gatherWeeklyNewReleases(dateStart, dateEnd, options = {}) {
     log.info('Gathering weekly new releases', { dateStart, dateEnd });
@@ -361,6 +468,8 @@ const defaultInstance = createNewReleaseSources();
 
 module.exports = {
   createNewReleaseSources,
+  parseClaudeReleaseResponse,
+  deduplicateReleases,
   fetchSpotifyNewReleases: defaultInstance.fetchSpotifyNewReleases,
   fetchMusicBrainzNewReleases: defaultInstance.fetchMusicBrainzNewReleases,
   fetchClaudeSearchNewReleases: defaultInstance.fetchClaudeSearchNewReleases,

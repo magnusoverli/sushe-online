@@ -55,25 +55,42 @@ test('fetchSpotifyNewReleases should return empty when no token available', asyn
 });
 
 test('fetchSpotifyNewReleases should fetch and filter by date range', async () => {
-  const mockApiRequest = mock.fn(async () => ({
-    albums: {
-      items: [
-        {
-          name: 'In Range',
-          artists: [{ name: 'Artist1' }],
-          release_date: '2025-02-05',
-          id: 'sp1',
-        },
-        {
-          name: 'Out of Range',
-          artists: [{ name: 'Artist2' }],
-          release_date: '2025-01-01',
-          id: 'sp2',
-        },
-      ],
-      next: null,
-    },
-  }));
+  const mockApiRequest = mock.fn(async (url) => {
+    // Track fetch request
+    if (url.includes('/v1/albums/') && url.includes('/tracks')) {
+      return {
+        items: [
+          { name: 'Track 1', duration_ms: 240000 },
+          { name: 'Track 2', duration_ms: 180000 },
+        ],
+      };
+    }
+    // New releases request
+    return {
+      albums: {
+        items: [
+          {
+            name: 'In Range',
+            artists: [{ name: 'Artist1' }],
+            release_date: '2025-02-05',
+            id: 'sp1',
+            images: [
+              { url: 'https://example.com/640.jpg', width: 640, height: 640 },
+              { url: 'https://example.com/300.jpg', width: 300, height: 300 },
+            ],
+          },
+          {
+            name: 'Out of Range',
+            artists: [{ name: 'Artist2' }],
+            release_date: '2025-01-01',
+            id: 'sp2',
+            images: [],
+          },
+        ],
+        next: null,
+      },
+    };
+  });
 
   const { sources } = createTestSources({
     getClientCredentialsToken: mock.fn(async () => 'test-token'),
@@ -88,10 +105,15 @@ test('fetchSpotifyNewReleases should fetch and filter by date range', async () =
   assert.strictEqual(result[0].album, 'In Range');
   assert.strictEqual(result[0].artist, 'Artist1');
   assert.strictEqual(result[0].spotify_id, 'sp1');
+  assert.strictEqual(result[0].cover_image_url, 'https://example.com/640.jpg');
+  assert.ok(Array.isArray(result[0].tracks));
+  assert.strictEqual(result[0].tracks.length, 2);
+  assert.strictEqual(result[0].tracks[0].name, 'Track 1');
 });
 
 test('fetchSpotifyNewReleases should handle API errors gracefully', async () => {
-  const mockApiRequest = mock.fn(async () => {
+  const mockApiRequest = mock.fn(async (url) => {
+    if (url.includes('/tracks')) return { items: [] };
     throw new Error('API error');
   });
 
@@ -112,7 +134,7 @@ test('fetchSpotifyNewReleases should handle API errors gracefully', async () => 
 // fetchMusicBrainzNewReleases
 // =============================================================================
 
-test('fetchMusicBrainzNewReleases should parse release groups', async () => {
+test('fetchMusicBrainzNewReleases should parse release groups with genres and country', async () => {
   const mockFetch = mock.fn(async () => ({
     ok: true,
     json: async () => ({
@@ -122,6 +144,16 @@ test('fetchMusicBrainzNewReleases should parse release groups', async () => {
           'artist-credit': [{ artist: { name: 'Test Artist' } }],
           'first-release-date': '2025-02-05',
           id: 'mb-123',
+          tags: [
+            { name: 'electronic', count: 5 },
+            { name: 'ambient', count: 3 },
+            { name: 'experimental', count: 1 },
+          ],
+          releases: [
+            {
+              'release-events': [{ area: { name: 'United Kingdom' } }],
+            },
+          ],
         },
       ],
     }),
@@ -137,6 +169,9 @@ test('fetchMusicBrainzNewReleases should parse release groups', async () => {
   assert.strictEqual(result[0].artist, 'Test Artist');
   assert.strictEqual(result[0].album, 'Test Album');
   assert.strictEqual(result[0].musicbrainz_id, 'mb-123');
+  assert.strictEqual(result[0].genre_1, 'electronic');
+  assert.strictEqual(result[0].genre_2, 'ambient');
+  assert.strictEqual(result[0].country, 'United Kingdom');
 });
 
 test('fetchMusicBrainzNewReleases should handle API errors', async () => {
@@ -198,7 +233,9 @@ test('fetchClaudeSearchNewReleases should parse Claude response', async () => {
           {
             artist: 'Artist1',
             album: 'Album1',
-            genre: 'Rock',
+            genre_1: 'Rock',
+            genre_2: 'Indie',
+            country: 'United States',
             release_date: '2025-02-05',
           },
         ]),
@@ -223,7 +260,46 @@ test('fetchClaudeSearchNewReleases should parse Claude response', async () => {
   );
   assert.strictEqual(result.length, 1);
   assert.strictEqual(result[0].artist, 'Artist1');
-  assert.strictEqual(result[0].genre, 'Rock');
+  assert.strictEqual(result[0].genre_1, 'Rock');
+  assert.strictEqual(result[0].genre_2, 'Indie');
+  assert.strictEqual(result[0].country, 'United States');
+});
+
+test('fetchClaudeSearchNewReleases should handle legacy genre field', async () => {
+  const mockCallClaude = mock.fn(async () => ({
+    content: [
+      {
+        type: 'text',
+        text: JSON.stringify([
+          {
+            artist: 'Artist1',
+            album: 'Album1',
+            genre: 'Rock',
+            release_date: '2025-02-05',
+          },
+        ]),
+      },
+    ],
+  }));
+  const mockExtract = mock.fn((content) => {
+    const textBlocks = content.filter((b) => b.type === 'text');
+    return textBlocks
+      .map((b) => b.text)
+      .join(' ')
+      .trim();
+  });
+
+  const { sources } = createTestSources();
+
+  const result = await sources.fetchClaudeSearchNewReleases(
+    '2025-02-03',
+    '2025-02-09',
+    mockCallClaude,
+    mockExtract
+  );
+  assert.strictEqual(result.length, 1);
+  assert.strictEqual(result[0].genre_1, 'Rock');
+  assert.strictEqual(result[0].genre_2, '');
 });
 
 test('fetchClaudeSearchNewReleases should return empty when no callClaude provided', async () => {
@@ -261,19 +337,25 @@ test('fetchClaudeSearchNewReleases should handle parse errors', async () => {
 // =============================================================================
 
 test('gatherWeeklyNewReleases should combine and deduplicate from all sources', async () => {
-  const mockApiRequest = mock.fn(async () => ({
-    albums: {
-      items: [
-        {
-          name: 'Album1',
-          artists: [{ name: 'Artist1' }],
-          release_date: '2025-02-05',
-          id: 'sp1',
-        },
-      ],
-      next: null,
-    },
-  }));
+  const mockApiRequest = mock.fn(async (url) => {
+    if (url.includes('/tracks')) {
+      return { items: [] };
+    }
+    return {
+      albums: {
+        items: [
+          {
+            name: 'Album1',
+            artists: [{ name: 'Artist1' }],
+            release_date: '2025-02-05',
+            id: 'sp1',
+            images: [],
+          },
+        ],
+        next: null,
+      },
+    };
+  });
 
   const mockFetch = mock.fn(async () => ({
     ok: true,
@@ -304,7 +386,8 @@ test('gatherWeeklyNewReleases should combine and deduplicate from all sources', 
           {
             artist: 'Artist3',
             album: 'Album3',
-            genre: 'Jazz',
+            genre_1: 'Jazz',
+            country: 'United States',
             release_date: '2025-02-07',
           },
         ]),
@@ -345,9 +428,12 @@ test('gatherWeeklyNewReleases should combine and deduplicate from all sources', 
 });
 
 test('gatherWeeklyNewReleases should prefer non-claude sources for duplicates', async () => {
-  const mockApiRequest = mock.fn(async () => ({
-    albums: { items: [], next: null },
-  }));
+  const mockApiRequest = mock.fn(async (url) => {
+    if (url.includes('/tracks')) {
+      return { items: [] };
+    }
+    return { albums: { items: [], next: null } };
+  });
 
   const mockFetch = mock.fn(async () => ({
     ok: true,

@@ -127,8 +127,8 @@ async function insertRecommendationItems(
     }
 
     await pool.query(
-      `INSERT INTO personal_recommendation_items (_id, list_id, album_id, position, reasoning, artist, album, genre)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO personal_recommendation_items (_id, list_id, album_id, position, reasoning, artist, album, genre_1, genre_2, country)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (list_id, position) DO NOTHING`,
       [
         itemId,
@@ -138,7 +138,9 @@ async function insertRecommendationItems(
         rec.reasoning,
         rec.artist || null,
         rec.album || null,
-        rec.genre || null,
+        rec.genre_1 || rec.genre || null,
+        rec.genre_2 || null,
+        rec.country || null,
       ]
     );
   }
@@ -151,7 +153,9 @@ const LIST_WITH_ITEMS_QUERY = `
         'reasoning', pri.reasoning,
         'artist', COALESCE(pri.artist, a.artist),
         'album', COALESCE(pri.album, a.album),
-        'genre', pri.genre,
+        'genre_1', COALESCE(pri.genre_1, a.genre_1),
+        'genre_2', COALESCE(pri.genre_2, a.genre_2),
+        'country', COALESCE(pri.country, a.country),
         'cover_image', a.cover_image)
       ORDER BY pri.position
     ) FILTER (WHERE pri._id IS NOT NULL), '[]') as items

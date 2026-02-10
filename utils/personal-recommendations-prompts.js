@@ -71,7 +71,15 @@ function formatNewReleasesForPrompt(releases) {
   return releases
     .map((r, i) => {
       const parts = [`${i + 1}. ${r.artist} - ${r.album}`];
-      if (r.genre) parts.push(`Genre: ${r.genre}`);
+      // Support both genre_1/genre_2 and legacy single genre field
+      const genre1 = r.genre_1 || r.genre || '';
+      const genre2 = r.genre_2 || '';
+      if (genre1 && genre2) {
+        parts.push(`Genre: ${genre1}, ${genre2}`);
+      } else if (genre1) {
+        parts.push(`Genre: ${genre1}`);
+      }
+      if (r.country) parts.push(`Country: ${r.country}`);
       if (r.release_date) parts.push(`Released: ${r.release_date}`);
       if (r.source) parts.push(`Source: ${r.source}`);
       if (r.verified) parts.push('(verified)');

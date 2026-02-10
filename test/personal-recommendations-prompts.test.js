@@ -60,7 +60,9 @@ test('formatNewReleasesForPrompt should format releases with all fields', () => 
     {
       artist: 'Radiohead',
       album: 'OK Computer',
-      genre: 'Alternative Rock',
+      genre_1: 'Alternative Rock',
+      genre_2: 'Art Rock',
+      country: 'United Kingdom',
       release_date: '2025-02-03',
       source: 'spotify',
       verified: true,
@@ -69,10 +71,42 @@ test('formatNewReleasesForPrompt should format releases with all fields', () => 
 
   const result = formatNewReleasesForPrompt(releases);
   assert.ok(result.includes('1. Radiohead - OK Computer'));
-  assert.ok(result.includes('Genre: Alternative Rock'));
+  assert.ok(result.includes('Genre: Alternative Rock, Art Rock'));
+  assert.ok(result.includes('Country: United Kingdom'));
   assert.ok(result.includes('Released: 2025-02-03'));
   assert.ok(result.includes('Source: spotify'));
   assert.ok(result.includes('(verified)'));
+});
+
+test('formatNewReleasesForPrompt should handle single genre', () => {
+  const releases = [
+    {
+      artist: 'Radiohead',
+      album: 'OK Computer',
+      genre_1: 'Alternative Rock',
+      release_date: '2025-02-03',
+      source: 'spotify',
+    },
+  ];
+
+  const result = formatNewReleasesForPrompt(releases);
+  assert.ok(result.includes('Genre: Alternative Rock'));
+  assert.ok(!result.includes(','));
+});
+
+test('formatNewReleasesForPrompt should handle legacy genre field', () => {
+  const releases = [
+    {
+      artist: 'Radiohead',
+      album: 'OK Computer',
+      genre: 'Alternative Rock',
+      release_date: '2025-02-03',
+      source: 'spotify',
+    },
+  ];
+
+  const result = formatNewReleasesForPrompt(releases);
+  assert.ok(result.includes('Genre: Alternative Rock'));
 });
 
 test('formatNewReleasesForPrompt should handle releases with minimal fields', () => {
@@ -105,8 +139,8 @@ test('formatNewReleasesForPrompt should handle null input', () => {
 test('buildPrompt should build complete prompt with all data', () => {
   const options = {
     newReleases: [
-      { artist: 'Artist1', album: 'Album1', genre: 'Rock' },
-      { artist: 'Artist2', album: 'Album2', genre: 'Jazz' },
+      { artist: 'Artist1', album: 'Album1', genre_1: 'Rock' },
+      { artist: 'Artist2', album: 'Album2', genre_1: 'Jazz' },
     ],
     genreAffinity: [{ name: 'Rock', score: 95 }],
     artistAffinity: [{ name: 'Radiohead', score: 90 }],

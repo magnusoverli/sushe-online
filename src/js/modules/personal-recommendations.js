@@ -163,16 +163,23 @@ export function createPersonalRecommendations(deps = {}) {
    */
   function createMobileCard(item, index) {
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[150px]';
+    cardWrapper.className = 'album-card-wrapper h-[170px]';
 
     const card = document.createElement('div');
-    card.className = 'album-card album-row relative h-[150px] bg-gray-900';
+    card.className = 'album-card album-row relative h-[170px] bg-gray-900';
     card.dataset.albumId = item.album_id;
     card.dataset.personalRecIndex = index;
 
     const coverSrc = item.album_id
       ? `/api/albums/${encodeURIComponent(item.album_id)}/cover`
       : '';
+
+    const mobileGenre = item.genre_1
+      ? escapeHtml(item.genre_1) +
+        (item.genre_2 ? ', ' + escapeHtml(item.genre_2) : '')
+      : item.genre_2
+        ? escapeHtml(item.genre_2)
+        : '';
 
     card.innerHTML = `
       <div class="flex h-full">
@@ -184,7 +191,8 @@ export function createPersonalRecommendations(deps = {}) {
         <div class="flex-1 min-w-0 p-3 flex flex-col justify-center">
           <p class="text-white text-sm font-medium truncate">${escapeHtml(item.album || 'Unknown Album')}</p>
           <p class="text-gray-400 text-xs truncate mt-0.5">${escapeHtml(item.artist || 'Unknown Artist')}</p>
-          ${item.reasoning ? `<p class="text-gray-500 text-xs mt-2 line-clamp-2"><i class="fas fa-robot text-purple-400 mr-1"></i>${escapeHtml(item.reasoning)}</p>` : ''}
+          ${mobileGenre || item.country ? `<p class="text-gray-500 text-xs truncate mt-1">${mobileGenre ? `<i class="fas fa-tag fa-xs mr-1"></i>${mobileGenre}` : ''}${mobileGenre && item.country ? ' <span class="text-gray-600">&middot;</span> ' : ''}${item.country ? `<i class="fas fa-globe fa-xs mr-1"></i>${escapeHtml(item.country)}` : ''}</p>` : ''}
+          ${item.reasoning ? `<p class="text-gray-500 text-xs mt-1 line-clamp-2"><i class="fas fa-robot text-purple-400 mr-1"></i>${escapeHtml(item.reasoning)}</p>` : ''}
         </div>
         <div class="w-[25px] shrink-0 flex items-center justify-center">
           <button class="personal-rec-mobile-menu p-2 text-gray-400 active:text-gray-200" data-personal-rec-index="${index}">
@@ -233,6 +241,8 @@ export function createPersonalRecommendations(deps = {}) {
           <th class="py-3 px-2 w-12"></th>
           <th class="py-3 px-2">Artist</th>
           <th class="py-3 px-2">Album</th>
+          <th class="py-3 px-2">Genre</th>
+          <th class="py-3 px-2">Country</th>
           <th class="py-3 px-2">AI Reasoning</th>
         </tr>
       </thead>
@@ -251,6 +261,13 @@ export function createPersonalRecommendations(deps = {}) {
         ? `/api/albums/${encodeURIComponent(item.album_id)}/cover`
         : '';
 
+      const genreDisplay = item.genre_1
+        ? escapeHtml(item.genre_1) +
+          (item.genre_2 ? ', ' + escapeHtml(item.genre_2) : '')
+        : item.genre_2
+          ? escapeHtml(item.genre_2)
+          : '';
+
       row.innerHTML = `
         <td class="py-2 px-2">
           <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden relative">
@@ -259,6 +276,8 @@ export function createPersonalRecommendations(deps = {}) {
         </td>
         <td class="py-2 px-2 text-white">${escapeHtml(item.artist || '')}</td>
         <td class="py-2 px-2 text-gray-300">${escapeHtml(item.album || '')}</td>
+        <td class="py-2 px-2 text-gray-400 text-sm">${genreDisplay}</td>
+        <td class="py-2 px-2 text-gray-400 text-sm">${escapeHtml(item.country || '')}</td>
         <td class="py-2 px-2 text-gray-500 text-sm max-w-xs">
           <span class="flex items-center gap-1">
             <i class="fas fa-robot text-purple-400 text-xs shrink-0"></i>
