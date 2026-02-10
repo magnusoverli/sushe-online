@@ -229,12 +229,7 @@ function normalizeItemData(item) {
   // Genre display: combine genre_1 and genre_2
   const g1 = item.genre_1 || '';
   const g2 = item.genre_2 || '';
-  let genreDisplay = '';
-  if (g1 && g2) {
-    genreDisplay = `${g1}, ${g2}`;
-  } else {
-    genreDisplay = g1 || g2;
-  }
+  const genreDisplay = g1 && g2 ? `${g1}, ${g2}` : g1 || g2;
 
   // Cover URL
   const coverUrl = albumId
