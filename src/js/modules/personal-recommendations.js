@@ -40,6 +40,12 @@ export function createPersonalRecommendations(deps = {}) {
 
   let currentContext = null;
 
+  /** Currently highlighted year in add-to-list submenu */
+  let personalRecAddHighlightedYear = null;
+
+  /** Timeout for hiding the lists submenu */
+  let personalRecAddListsHideTimeout = null;
+
   // ============ SELECT & DISPLAY ============
 
   /**
@@ -487,30 +493,39 @@ export function createPersonalRecommendations(deps = {}) {
     );
 
     if (playOption) {
-      playOption.addEventListener('click', () => {
+      playOption.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         if (currentContext?.item && window.playAlbumSafe) {
           window.playAlbumSafe(currentContext.item.album_id);
         }
         hideAllContextMenus();
+        currentContext = null;
       });
     }
 
-    if (addToListOption) {
-      // Set up submenu hover for "Add to List"
-      const addSubmenu = document.getElementById('personalRecAddSubmenu');
-      const addListsSubmenu = document.getElementById(
-        'personalRecAddListsSubmenu'
-      );
-
-      if (addSubmenu && setupSubmenuHover) {
-        setupSubmenuHover(addToListOption, addSubmenu, () => {
-          populateYearSubmenu(addSubmenu, addListsSubmenu);
-        });
-      }
+    if (addToListOption && setupSubmenuHover) {
+      setupSubmenuHover(addToListOption, {
+        onShow: showPersonalRecAddSubmenu,
+        relatedElements: () => [
+          document.getElementById('personalRecAddSubmenu'),
+        ],
+        onHide: () => {
+          const submenu = document.getElementById('personalRecAddSubmenu');
+          if (submenu) submenu.classList.add('hidden');
+          const listsSubmenu = document.getElementById(
+            'personalRecAddListsSubmenu'
+          );
+          if (listsSubmenu) listsSubmenu.classList.add('hidden');
+          personalRecAddHighlightedYear = null;
+        },
+      });
     }
 
     if (viewReasoningOption) {
-      viewReasoningOption.addEventListener('click', () => {
+      viewReasoningOption.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         if (currentContext?.item) {
           showViewReasoningModal({
             artist: currentContext.item.artist,
@@ -520,65 +535,202 @@ export function createPersonalRecommendations(deps = {}) {
           });
         }
         hideAllContextMenus();
+        currentContext = null;
       });
     }
   }
 
   /**
-   * Populate the year submenu for "Add to List".
-   * @param {HTMLElement} yearSubmenu
-   * @param {HTMLElement} listsSubmenu
+   * Show the add-to-list year submenu for personal recommendations.
+   * Positions the submenu relative to the context menu and populates year buttons.
    */
-  function populateYearSubmenu(yearSubmenu, listsSubmenu) {
+  function showPersonalRecAddSubmenu() {
+    const submenu = document.getElementById('personalRecAddSubmenu');
+    const listsSubmenu = document.getElementById('personalRecAddListsSubmenu');
+    const addToListOption = document.getElementById(
+      'addPersonalRecToListOption'
+    );
+    const contextMenu = document.getElementById('personalRecContextMenu');
+
+    if (!submenu || !addToListOption || !contextMenu) return;
+
+    if (listsSubmenu) {
+      listsSubmenu.classList.add('hidden');
+    }
+
+    personalRecAddHighlightedYear = null;
+
+    addToListOption.classList.add('bg-gray-700', 'text-white');
+
     const allLists = getLists();
     const yearGroups = groupListsByYear
       ? groupListsByYear(allLists)
       : { sortedYears: [], listsByYear: {} };
 
-    yearSubmenu.innerHTML = '';
+    if (yearGroups.sortedYears.length === 0) {
+      submenu.innerHTML =
+        '<div class="px-4 py-2 text-sm text-gray-500">No lists available</div>';
+    } else {
+      submenu.innerHTML = yearGroups.sortedYears
+        .map(
+          (year) => `
+          <button class="flex items-center justify-between w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-personal-rec-add-year="${year}">
+            <span>${year}</span>
+            <i class="fas fa-chevron-right text-xs ml-3 text-gray-500"></i>
+          </button>
+        `
+        )
+        .join('');
 
-    yearGroups.sortedYears.forEach((year) => {
-      const btn = document.createElement('button');
-      btn.className =
-        'w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap';
-      btn.innerHTML = `<span>${year}</span><i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>`;
+      submenu
+        .querySelectorAll('[data-personal-rec-add-year]')
+        .forEach((btn) => {
+          btn.addEventListener('mouseenter', () => {
+            if (personalRecAddListsHideTimeout) {
+              clearTimeout(personalRecAddListsHideTimeout);
+              personalRecAddListsHideTimeout = null;
+            }
+            const year = btn.dataset.personalRecAddYear;
+            showPersonalRecAddListsSubmenu(
+              year,
+              btn,
+              yearGroups.listsByYear,
+              submenu
+            );
+          });
 
-      btn.addEventListener('mouseenter', () => {
-        populateListsSubmenu(listsSubmenu, yearGroups.listsByYear[year] || []);
-        const rect = btn.getBoundingClientRect();
-        listsSubmenu.style.left = `${rect.right}px`;
-        listsSubmenu.style.top = `${rect.top}px`;
-        listsSubmenu.classList.remove('hidden');
-      });
+          btn.addEventListener('mouseleave', (e) => {
+            const listsMenu = document.getElementById(
+              'personalRecAddListsSubmenu'
+            );
+            const toListsSubmenu =
+              listsMenu &&
+              (e.relatedTarget === listsMenu ||
+                listsMenu.contains(e.relatedTarget));
 
-      yearSubmenu.appendChild(btn);
-    });
+            if (!toListsSubmenu) {
+              personalRecAddListsHideTimeout = setTimeout(() => {
+                if (listsMenu) listsMenu.classList.add('hidden');
+                btn.classList.remove('bg-gray-700', 'text-white');
+                personalRecAddHighlightedYear = null;
+              }, 100);
+            }
+          });
+        });
+    }
+
+    const optionRect = addToListOption.getBoundingClientRect();
+    const menuRect = contextMenu.getBoundingClientRect();
+
+    submenu.style.left = `${menuRect.right}px`;
+    submenu.style.top = `${optionRect.top}px`;
+    submenu.classList.remove('hidden');
   }
 
   /**
-   * Populate lists submenu for a specific year.
-   * @param {HTMLElement} submenu
-   * @param {Array} yearLists
+   * Show the lists submenu for a specific year in the personal rec add-to-list flow.
+   * @param {string} year - The year to show lists for
+   * @param {HTMLElement} yearButton - The year button element
+   * @param {Object} listsByYear - Map of year to list arrays
+   * @param {HTMLElement} yearSubmenu - The year submenu element
    */
-  function populateListsSubmenu(submenu, yearLists) {
-    submenu.innerHTML = '';
+  function showPersonalRecAddListsSubmenu(
+    year,
+    yearButton,
+    listsByYear,
+    yearSubmenu
+  ) {
+    const listsSubmenu = document.getElementById('personalRecAddListsSubmenu');
 
-    yearLists.forEach((list) => {
-      const listId = list._id || list.id;
-      const btn = document.createElement('button');
-      btn.className =
-        'w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap';
-      btn.textContent = list.name;
+    if (!listsSubmenu || !yearSubmenu) return;
 
-      btn.addEventListener('click', () => {
-        if (currentContext?.item) {
-          addPersonalRecToList(listId, currentContext.item);
-        }
-        hideAllContextMenus();
+    // Remove highlight from previously highlighted year
+    if (
+      personalRecAddHighlightedYear &&
+      personalRecAddHighlightedYear !== year
+    ) {
+      const prevBtn = yearSubmenu.querySelector(
+        `[data-personal-rec-add-year="${personalRecAddHighlightedYear}"]`
+      );
+      if (prevBtn) {
+        prevBtn.classList.remove('bg-gray-700', 'text-white');
+      }
+    }
+
+    yearButton.classList.add('bg-gray-700', 'text-white');
+    personalRecAddHighlightedYear = year;
+
+    const yearLists = listsByYear[year] || [];
+
+    if (yearLists.length === 0) {
+      listsSubmenu.classList.add('hidden');
+      return;
+    }
+
+    listsSubmenu.innerHTML = yearLists
+      .map((list) => {
+        const listId = list._id || list.id;
+        return `
+        <button class="block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap w-full" data-personal-rec-add-target-list="${listId}">
+          <span class="mr-2">\u2022</span>${escapeHtml(list.name)}
+        </button>
+      `;
+      })
+      .join('');
+
+    listsSubmenu
+      .querySelectorAll('[data-personal-rec-add-target-list]')
+      .forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const targetListId = btn.dataset.personalRecAddTargetList;
+
+          hideAllContextMenus();
+
+          if (currentContext?.item) {
+            await addPersonalRecToList(targetListId, currentContext.item);
+          }
+          currentContext = null;
+        });
       });
 
-      submenu.appendChild(btn);
-    });
+    // Coordinate mouse events between year submenu and lists submenu
+    listsSubmenu.onmouseenter = () => {
+      if (personalRecAddListsHideTimeout) {
+        clearTimeout(personalRecAddListsHideTimeout);
+        personalRecAddListsHideTimeout = null;
+      }
+    };
+
+    listsSubmenu.onmouseleave = (e) => {
+      const yearMenu = document.getElementById('personalRecAddSubmenu');
+      const toYearSubmenu =
+        yearMenu &&
+        (e.relatedTarget === yearMenu || yearMenu.contains(e.relatedTarget));
+
+      if (!toYearSubmenu) {
+        personalRecAddListsHideTimeout = setTimeout(() => {
+          listsSubmenu.classList.add('hidden');
+          if (personalRecAddHighlightedYear) {
+            const yearBtn = yearMenu?.querySelector(
+              `[data-personal-rec-add-year="${personalRecAddHighlightedYear}"]`
+            );
+            if (yearBtn) {
+              yearBtn.classList.remove('bg-gray-700', 'text-white');
+            }
+            personalRecAddHighlightedYear = null;
+          }
+        }, 100);
+      }
+    };
+
+    const yearRect = yearButton.getBoundingClientRect();
+    const yearSubmenuRect = yearSubmenu.getBoundingClientRect();
+
+    listsSubmenu.style.left = `${yearSubmenuRect.right}px`;
+    listsSubmenu.style.top = `${yearRect.top}px`;
+    listsSubmenu.classList.remove('hidden');
   }
 
   /**

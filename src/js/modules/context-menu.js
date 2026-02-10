@@ -82,6 +82,7 @@ const OPTION_IDS = [
   'playAlbumOption',
   'downloadListOption',
   'addToListOption',
+  'addPersonalRecToListOption',
 ];
 
 /**
