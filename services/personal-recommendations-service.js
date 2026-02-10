@@ -285,34 +285,16 @@ async function upsertUserPromptSettings(pool, log, userId, settings) {
 }
 
 /**
- * Check if a user is eligible for recommendations
+ * Check if a user is eligible for recommendations.
+ * Only checks whether the user has explicitly opted out.
  */
-async function checkEligibility(pool, userId, minAlbums, activeDays) {
+async function checkEligibility(pool, userId) {
   const promptSettings = await pool.query(
     'SELECT is_enabled FROM personal_recommendation_prompts WHERE user_id = $1',
     [userId]
   );
   if (promptSettings.rows.length > 0 && !promptSettings.rows[0].is_enabled) {
     return { eligible: false, reason: 'recommendations_disabled' };
-  }
-
-  const albumCount = await pool.query(
-    'SELECT COUNT(DISTINCT li.album_id) as count FROM list_items li JOIN lists l ON li.list_id = l._id WHERE l.user_id = $1',
-    [userId]
-  );
-  if (parseInt(albumCount.rows[0].count, 10) < minAlbums) {
-    return {
-      eligible: false,
-      reason: `insufficient_albums (${albumCount.rows[0].count}/${minAlbums})`,
-    };
-  }
-
-  const activeCheck = await pool.query(
-    'SELECT last_activity FROM users WHERE _id = $1 AND last_activity > NOW() - $2::interval',
-    [userId, `${activeDays} days`]
-  );
-  if (activeCheck.rows.length === 0) {
-    return { eligible: false, reason: 'inactive_user' };
   }
 
   return { eligible: true, reason: '' };
@@ -344,8 +326,7 @@ async function performRotateAndCleanup(pool, log, weekStart, poolService) {
  * Process all active users for recommendation generation
  */
 async function processAllUsers(ctx, weekStart, options) {
-  const { pool, log, poolService, activeDays, rateLimitMs, generateForUser } =
-    ctx;
+  const { pool, log, poolService, rateLimitMs, generateForUser } = ctx;
   const onProgress = options.onProgress || null;
   const notify = (msg, data) => {
     if (onProgress) onProgress(msg, data);
@@ -365,12 +346,11 @@ async function processAllUsers(ctx, weekStart, options) {
   }
 
   const usersResult = await pool.query(
-    'SELECT _id, email, username FROM users WHERE last_activity > NOW() - $1::interval',
-    [`${activeDays} days`]
+    'SELECT _id, email, username FROM users'
   );
 
   const totalUsers = usersResult.rows.length;
-  notify(`Found ${totalUsers} active users to evaluate`, {
+  notify(`Found ${totalUsers} users to evaluate`, {
     phase: 'users_found',
     totalUsers,
   });
@@ -474,8 +454,6 @@ function createPersonalRecommendationsService(deps = {}) {
     env.PERSONAL_RECS_RATE_LIMIT_MS || '2000',
     10
   );
-  const MIN_ALBUMS = parseInt(env.PERSONAL_RECS_MIN_ALBUMS || '10', 10);
-  const ACTIVE_DAYS = parseInt(env.PERSONAL_RECS_ACTIVE_DAYS || '30', 10);
 
   function generateId() {
     if (deps.generateId) return deps.generateId();
@@ -487,7 +465,7 @@ function createPersonalRecommendationsService(deps = {}) {
   }
 
   async function checkUserEligibility(userId) {
-    return checkEligibility(pool, userId, MIN_ALBUMS, ACTIVE_DAYS);
+    return checkEligibility(pool, userId);
   }
 
   async function generateForUser(userId, weekStart, options = {}) {
@@ -633,7 +611,6 @@ function createPersonalRecommendationsService(deps = {}) {
         pool,
         log,
         poolService,
-        activeDays: ACTIVE_DAYS,
         rateLimitMs: RATE_LIMIT_DELAY_MS,
         generateForUser,
       },

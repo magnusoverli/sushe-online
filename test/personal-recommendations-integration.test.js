@@ -272,16 +272,6 @@ test('integration: service generates and stores recommendations for eligible use
     },
     // checkEligibility: is_enabled
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    // checkEligibility: album count
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '20' }], rowCount: 1 },
-    },
-    // checkEligibility: last_activity
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     // fetchUserContext: genre_affinity
     {
       match: 'genre_affinity',
@@ -395,14 +385,6 @@ test('integration: service returns failed list when release pool is empty', asyn
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '20' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     {
       match: 'SELECT DISTINCT a.artist',
@@ -451,9 +433,9 @@ test('integration: service skips ineligible users in generateForAllUsers', async
   idCounter = 0;
 
   const query = createQueryRouter([
-    // generateForAllUsers: get active users
+    // generateForAllUsers: get all users
     {
-      match: 'FROM users WHERE last_activity',
+      match: 'FROM users',
       result: {
         rows: [{ _id: 'user-1' }, { _id: 'user-2' }],
         rowCount: 2,
@@ -731,16 +713,6 @@ test('integration: full flow from pool build to list retrieval', async () => {
     },
     // Eligibility: is_enabled
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    // Eligibility: album count (specific match to avoid collision with pool count)
-    {
-      match: 'COUNT(DISTINCT li.album_id)',
-      result: { rows: [{ count: '25' }], rowCount: 1 },
-    },
-    // Eligibility: last_activity
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     // fetchUserContext: affinity
     {
       match: 'genre_affinity',

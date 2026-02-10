@@ -138,49 +138,9 @@ test('checkUserEligibility returns ineligible when recommendations disabled', as
   assert.strictEqual(result.reason, 'recommendations_disabled');
 });
 
-test('checkUserEligibility returns ineligible for insufficient albums', async () => {
+test('checkUserEligibility returns eligible when no prompt settings row exists', async () => {
   const query = createQueryRouter([
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '3' }], rowCount: 1 },
-    },
-  ]);
-  const { service } = createTestService({ query });
-
-  const result = await service.checkUserEligibility('user-1');
-  assert.strictEqual(result.eligible, false);
-  assert.ok(result.reason.includes('insufficient_albums'));
-  assert.ok(result.reason.includes('3/10'));
-});
-
-test('checkUserEligibility returns ineligible for inactive user', async () => {
-  const query = createQueryRouter([
-    { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    { match: 'last_activity', result: { rows: [], rowCount: 0 } },
-  ]);
-  const { service } = createTestService({ query });
-
-  const result = await service.checkUserEligibility('user-1');
-  assert.strictEqual(result.eligible, false);
-  assert.strictEqual(result.reason, 'inactive_user');
-});
-
-test('checkUserEligibility returns eligible for valid user', async () => {
-  const query = createQueryRouter([
-    { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
   ]);
   const { service } = createTestService({ query });
 
@@ -189,19 +149,11 @@ test('checkUserEligibility returns eligible for valid user', async () => {
   assert.strictEqual(result.reason, '');
 });
 
-test('checkUserEligibility treats enabled user as eligible candidate', async () => {
+test('checkUserEligibility returns eligible when explicitly enabled', async () => {
   const query = createQueryRouter([
     {
       match: 'is_enabled',
       result: { rows: [{ is_enabled: true }], rowCount: 1 },
-    },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '20' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
     },
   ]);
   const { service } = createTestService({ query });
@@ -255,14 +207,6 @@ test('generateForUser with force deletes existing and regenerates', async () => 
       },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
     { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
@@ -319,14 +263,6 @@ test('generateForUser returns null when engine not available', async () => {
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
   ]);
   const { service, mockLogger } = createTestService({
     query,
@@ -349,14 +285,6 @@ test('generateForUser creates failed list on empty release pool', async () => {
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
     { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
@@ -388,14 +316,6 @@ test('generateForUser creates completed list on success', async () => {
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     {
       match: 'genre_affinity',
       result: {
@@ -442,14 +362,6 @@ test('generateForUser forwards pool metadata to upsertAlbumRecord', async () => 
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
     { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
@@ -542,14 +454,6 @@ test('generateForUser creates failed list on engine error', async () => {
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
     { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
@@ -586,14 +490,6 @@ test('generateForUser creates failed list when engine returns empty', async () =
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
     { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
@@ -628,14 +524,6 @@ test('generateForUser uses empty pool when no poolService', async () => {
       result: { rows: [], rowCount: 0 },
     },
     { match: 'is_enabled', result: { rows: [], rowCount: 0 } },
-    {
-      match: 'COUNT(DISTINCT',
-      result: { rows: [{ count: '15' }], rowCount: 1 },
-    },
-    {
-      match: 'last_activity',
-      result: { rows: [{ last_activity: new Date() }], rowCount: 1 },
-    },
     { match: 'genre_affinity', result: { rows: [{}], rowCount: 1 } },
     { match: 'SELECT DISTINCT a.artist', result: { rows: [], rowCount: 0 } },
     { match: 'custom_prompt', result: { rows: [], rowCount: 0 } },
@@ -664,7 +552,10 @@ test('generateForAllUsers builds pool and processes users', async () => {
   const query = mock.fn(async (sql) => {
     // First call: buildWeeklyPool triggers no queries from service directly
     // Users query
-    if (sql.includes('FROM users WHERE last_activity')) {
+    if (
+      sql.includes('FROM users') &&
+      !sql.includes('personal_recommendation')
+    ) {
       return { rows: [{ _id: 'user-1' }, { _id: 'user-2' }], rowCount: 2 };
     }
     // For generateForUser calls: existing list check
@@ -692,23 +583,23 @@ test('generateForAllUsers builds pool and processes users', async () => {
 });
 
 test('generateForAllUsers handles errors for individual users', async () => {
-  let userCallCount = 0;
+  let isEnabledCallCount = 0;
   const query = mock.fn(async (sql) => {
-    if (sql.includes('FROM users WHERE last_activity')) {
+    if (
+      sql.includes('FROM users') &&
+      !sql.includes('personal_recommendation')
+    ) {
       return { rows: [{ _id: 'user-1' }], rowCount: 1 };
     }
     if (sql.includes('personal_recommendation_lists WHERE user_id')) {
       return { rows: [], rowCount: 0 };
     }
     if (sql.includes('is_enabled')) {
-      return { rows: [], rowCount: 0 };
-    }
-    if (sql.includes('COUNT(DISTINCT')) {
-      userCallCount++;
-      if (userCallCount === 1) {
+      isEnabledCallCount++;
+      if (isEnabledCallCount === 1) {
         throw new Error('DB error');
       }
-      return { rows: [{ count: '15' }], rowCount: 1 };
+      return { rows: [], rowCount: 0 };
     }
     return { rows: [], rowCount: 0 };
   });
@@ -726,7 +617,10 @@ test('generateForAllUsers handles errors for individual users', async () => {
 
 test('generateForAllUsers skips pool build when no poolService', async () => {
   const query = mock.fn(async (sql) => {
-    if (sql.includes('FROM users WHERE last_activity')) {
+    if (
+      sql.includes('FROM users') &&
+      !sql.includes('personal_recommendation')
+    ) {
       return { rows: [], rowCount: 0 };
     }
     return { rows: [], rowCount: 0 };
