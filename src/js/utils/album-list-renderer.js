@@ -287,7 +287,7 @@ function buildGridTemplate(columns) {
 function createDesktopHeader(columns, gridTemplate) {
   const header = document.createElement('div');
   header.className =
-    'album-grid gap-4 py-3 text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700';
+    'readonly-album-grid gap-4 py-3 text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700';
   header.style.gridTemplateColumns = gridTemplate;
 
   columns.forEach((colId) => {
@@ -319,7 +319,7 @@ function createDesktopRow(
 ) {
   const row = document.createElement('div');
   row.className =
-    'album-row album-grid gap-4 py-2 hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
+    'readonly-album-grid gap-4 py-2 hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
   row.style.gridTemplateColumns = gridTemplate;
   row.dataset.albumId = data.albumId;
   row.dataset.index = index;
@@ -411,10 +411,12 @@ function createMobileCard(
 ) {
   const cardHeight = options.mobileCardHeight || 150;
   const cardWrapper = document.createElement('div');
-  cardWrapper.className = `album-card-wrapper h-[${cardHeight}px]`;
+  cardWrapper.className = 'album-card-wrapper';
+  cardWrapper.style.height = `${cardHeight}px`;
 
   const card = document.createElement('div');
-  card.className = `album-card album-row relative h-[${cardHeight}px] bg-gray-900`;
+  card.className = 'album-card relative bg-gray-900';
+  card.style.height = `${cardHeight}px`;
   card.dataset.albumId = data.albumId;
   card.dataset.rendererIndex = index;
 
