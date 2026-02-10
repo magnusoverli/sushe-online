@@ -7,6 +7,8 @@
  * @module personal-recommendations
  */
 
+import { renderAlbumList } from '../utils/album-list-renderer.js';
+
 /**
  * Create the personal recommendations module with injected dependencies.
  * @param {Object} deps - Dependencies
@@ -98,7 +100,6 @@ export function createPersonalRecommendations(deps = {}) {
     const container = document.getElementById('albumContainer');
     if (!container) return;
 
-    const isMobile = window.innerWidth < 1024;
     container.innerHTML = '';
 
     // Handle failed lists
@@ -144,180 +145,30 @@ export function createPersonalRecommendations(deps = {}) {
       container.appendChild(weekLabel);
     }
 
-    if (isMobile) {
-      const cardContainer = document.createElement('div');
-      cardContainer.className = 'mobile-album-list';
-
-      items.forEach((item, index) => {
-        const card = createMobileCard(item, index);
-        cardContainer.appendChild(card);
-      });
-      container.appendChild(cardContainer);
-    } else {
-      const table = createDesktopTable(items);
-      container.appendChild(table);
-    }
-  }
-
-  // ============ MOBILE CARDS ============
-
-  /**
-   * Create a mobile card for a personal recommendation item.
-   * @param {Object} item - Recommendation item
-   * @param {number} index - Index
-   * @returns {HTMLElement}
-   */
-  function createMobileCard(item, index) {
-    const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[170px]';
-
-    const card = document.createElement('div');
-    card.className = 'album-card album-row relative h-[170px] bg-gray-900';
-    card.dataset.albumId = item.album_id;
-    card.dataset.personalRecIndex = index;
-
-    const coverSrc = item.album_id
-      ? `/api/albums/${encodeURIComponent(item.album_id)}/cover`
-      : '';
-
-    const mobileGenre = item.genre_1
-      ? escapeHtml(item.genre_1) +
-        (item.genre_2 ? ', ' + escapeHtml(item.genre_2) : '')
-      : item.genre_2
-        ? escapeHtml(item.genre_2)
-        : '';
-
-    card.innerHTML = `
-      <div class="flex h-full">
-        <div class="w-[100px] h-full shrink-0">
-          <div class="w-full h-full bg-gray-700 overflow-hidden">
-            ${coverSrc ? `<img src="${coverSrc}" alt="${escapeHtml(item.album || '')}" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc text-2xl\\'></i></div>'">` : '<div class="flex items-center justify-center w-full h-full text-gray-500"><i class="fas fa-compact-disc text-2xl"></i></div>'}
-          </div>
-        </div>
-        <div class="flex-1 min-w-0 p-3 flex flex-col justify-center">
-          <p class="text-white text-sm font-medium truncate">${escapeHtml(item.album || 'Unknown Album')}</p>
-          <p class="text-gray-400 text-xs truncate mt-0.5">${escapeHtml(item.artist || 'Unknown Artist')}</p>
-          ${mobileGenre || item.country ? `<p class="text-gray-500 text-xs truncate mt-1">${mobileGenre ? `<i class="fas fa-tag fa-xs mr-1"></i>${mobileGenre}` : ''}${mobileGenre && item.country ? ' <span class="text-gray-600">&middot;</span> ' : ''}${item.country ? `<i class="fas fa-globe fa-xs mr-1"></i>${escapeHtml(item.country)}` : ''}</p>` : ''}
-          ${item.reasoning ? `<p class="text-gray-500 text-xs mt-1 line-clamp-2"><i class="fas fa-robot text-purple-400 mr-1"></i>${escapeHtml(item.reasoning)}</p>` : ''}
-        </div>
-        <div class="w-[25px] shrink-0 flex items-center justify-center">
-          <button class="personal-rec-mobile-menu p-2 text-gray-400 active:text-gray-200" data-personal-rec-index="${index}">
-            <i class="fas fa-ellipsis-v"></i>
-          </button>
-        </div>
-      </div>
-    `;
-
-    // Position badge
-    const badge = document.createElement('div');
-    const colors =
-      index < 3
-        ? ['bg-yellow-500', 'bg-gray-300', 'bg-amber-600'][index]
-        : 'bg-gray-600';
-    badge.className = `absolute top-1 left-1 ${colors} text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center`;
-    badge.textContent = index + 1;
-    card.querySelector('.flex.h-full').prepend(badge);
-
-    // Mobile menu handler
-    const menuBtn = card.querySelector('.personal-rec-mobile-menu');
-    if (menuBtn) {
-      menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showMobileMenu(item);
-      });
-    }
-
-    cardWrapper.appendChild(card);
-    return cardWrapper;
-  }
-
-  // ============ DESKTOP TABLE ============
-
-  /**
-   * Create the desktop table for personal recommendation items.
-   * @param {Array} items - Recommendation items
-   * @returns {HTMLElement}
-   */
-  function createDesktopTable(items) {
-    const table = document.createElement('table');
-    table.className = 'w-full album-table recommendations-table';
-    table.innerHTML = `
-      <thead>
-        <tr class="text-left text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700">
-          <th class="py-3 px-2 w-12"></th>
-          <th class="py-3 px-2">Artist</th>
-          <th class="py-3 px-2">Album</th>
-          <th class="py-3 px-2">Genre</th>
-          <th class="py-3 px-2">Country</th>
-          <th class="py-3 px-2">AI Reasoning</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    `;
-
-    const tbody = table.querySelector('tbody');
-
-    items.forEach((item, index) => {
-      const row = document.createElement('tr');
-      row.className =
-        'album-row hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
-      row.dataset.albumId = item.album_id;
-
-      const coverSrc = item.album_id
-        ? `/api/albums/${encodeURIComponent(item.album_id)}/cover`
-        : '';
-
-      const genreDisplay = item.genre_1
-        ? escapeHtml(item.genre_1) +
-          (item.genre_2 ? ', ' + escapeHtml(item.genre_2) : '')
-        : item.genre_2
-          ? escapeHtml(item.genre_2)
-          : '';
-
-      row.innerHTML = `
-        <td class="py-2 px-2">
-          <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden relative">
-            ${coverSrc ? `<img src="${coverSrc}" alt="${escapeHtml(item.album || '')}" class="w-full h-full object-cover" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc\\'></i></div>'">` : '<div class="flex items-center justify-center w-full h-full text-gray-500"><i class="fas fa-compact-disc"></i></div>'}
-          </div>
-        </td>
-        <td class="py-2 px-2 text-white">${escapeHtml(item.artist || '')}</td>
-        <td class="py-2 px-2 text-gray-300">${escapeHtml(item.album || '')}</td>
-        <td class="py-2 px-2 text-gray-400 text-sm">${genreDisplay}</td>
-        <td class="py-2 px-2 text-gray-400 text-sm">${escapeHtml(item.country || '')}</td>
-        <td class="py-2 px-2 text-gray-500 text-sm max-w-xs">
-          <span class="flex items-center gap-1">
-            <i class="fas fa-robot text-purple-400 text-xs shrink-0"></i>
-            <span class="truncate">${item.reasoning ? escapeHtml(item.reasoning) : ''}</span>
-            ${item.reasoning ? `<button class="view-reasoning-btn text-gray-500 hover:text-purple-400 p-1 transition-colors shrink-0" title="View full reasoning" data-personal-rec-index="${index}"><i class="fas fa-expand-alt text-xs"></i></button>` : ''}
-          </span>
-        </td>
-      `;
-
-      // Desktop context menu
-      row.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        showDesktopContextMenu(e, item);
-      });
-
-      // View reasoning click
-      const reasoningBtn = row.querySelector('.view-reasoning-btn');
-      if (reasoningBtn) {
-        reasoningBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showViewReasoningModal({
-            artist: item.artist,
-            album: item.album,
-            reasoning: item.reasoning,
-            recommended_by: 'AI',
-          });
-        });
-      }
-
-      tbody.appendChild(row);
+    renderAlbumList({
+      container,
+      items,
+      columns: [
+        'cover',
+        'artist',
+        'albumName',
+        'genre',
+        'country',
+        'reasoning',
+      ],
+      escapeHtml,
+      onContextMenu: (e, item) => showDesktopContextMenu(e, item),
+      onMenuClick: (item) => showMobileMenu(item),
+      onReasoningClick: (item) =>
+        showViewReasoningModal({
+          artist: item.artist,
+          album: item.album,
+          reasoning: item.reasoning,
+          recommended_by: 'AI',
+        }),
+      showPosition: true,
+      mobileCardHeight: 170,
     });
-
-    return table;
   }
 
   // ============ CONTEXT MENUS ============
