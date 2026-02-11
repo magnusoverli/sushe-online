@@ -116,14 +116,14 @@ const COLUMN_DEFS = {
 
   releaseDate: {
     header: 'Released',
-    gridSize: '0.4fr',
+    gridSize: '0.5fr',
     renderDesktop(data, escapeHtml) {
-      return `<span class="text-gray-400 text-sm truncate">${escapeHtml(data.releaseDate)}</span>`;
+      return `<span class="text-gray-400 text-sm truncate">${escapeHtml(data.releaseDateFull)}</span>`;
     },
     renderMobile(data, escapeHtml) {
-      if (!data.releaseDate) return null;
+      if (!data.releaseDateFull) return null;
       return `<p class="text-[13px] text-gray-500 truncate">
-        <i class="fas fa-calendar fa-xs mr-2"></i>${escapeHtml(data.releaseDate)}
+        <i class="fas fa-calendar fa-xs mr-2"></i>${escapeHtml(data.releaseDateFull)}
       </p>`;
     },
   },
@@ -250,10 +250,27 @@ function normalizeItemData(item) {
     ? `/api/albums/${encodeURIComponent(albumId)}/cover`
     : '';
 
-  // Release date
+  // Release date (year only - used under album name)
   const releaseDate = item.release_date
     ? new Date(item.release_date).getFullYear().toString()
     : '';
+
+  // Release date full (used for dedicated releaseDate column)
+  let releaseDateFull = '';
+  if (item.release_date) {
+    const rd = new Date(item.release_date);
+    // If the date has month/day info (not just a year), show "Mon DD, YYYY"
+    const raw = String(item.release_date);
+    if (raw.length > 4 && !isNaN(rd.getTime())) {
+      releaseDateFull = rd.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } else {
+      releaseDateFull = releaseDate; // Just the year
+    }
+  }
 
   // Formatted date (for dateAdded column)
   let formattedDate = '';
@@ -276,6 +293,7 @@ function normalizeItemData(item) {
     genreDisplay,
     coverUrl,
     releaseDate,
+    releaseDateFull,
     formattedDate,
     _raw: item,
   };

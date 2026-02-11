@@ -124,6 +124,11 @@ async function resolveAlbumId(ctx, rec, poolMatch, fallbackId) {
   if (upsertAlbumRecord) {
     try {
       const albumData = buildAlbumDataFromPool(rec, poolMatch);
+      // Prefer the existing album_id (found by name match above) over the
+      // pool's album_id to avoid creating duplicate canonical entries.
+      if (albumId) {
+        albumData.album_id = albumId;
+      }
       albumId =
         (await upsertAlbumRecord(albumData, new Date())) || albumId || null;
     } catch (err) {
@@ -218,7 +223,15 @@ const LIST_WITH_ITEMS_QUERY = `
     ) FILTER (WHERE pri._id IS NOT NULL), '[]') as items
   FROM personal_recommendation_lists prl
   LEFT JOIN personal_recommendation_items pri ON pri.list_id = prl._id
-  LEFT JOIN albums a ON pri.album_id = a.album_id`;
+  LEFT JOIN LATERAL (
+    SELECT genre_1, genre_2, country, release_date, cover_image, artist, album
+    FROM albums
+    WHERE album_id = pri.album_id
+       OR (LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM(COALESCE(pri.artist, '')))
+           AND LOWER(TRIM(COALESCE(album, ''))) = LOWER(TRIM(COALESCE(pri.album, ''))))
+    ORDER BY (album_id = pri.album_id) DESC
+    LIMIT 1
+  ) a ON TRUE`;
 
 /**
  * Query for user's recommendation lists with items
