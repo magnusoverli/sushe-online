@@ -67,15 +67,11 @@ function createHelpers(deps) {
    * @returns {Promise<string>} - The canonical album_id to use
    */
   async function upsertAlbumRecord(album, timestamp, client = null) {
-    // Remove cover_image unless it's already a processed Buffer (e.g., from the
-    // new release pool). This preserves backward compatibility with the browser
-    // extension (which may send base64/URL strings) while allowing pre-fetched
-    // pool cover images to flow through to upsertCanonical.
+    // Remove cover_image for backward compatibility (extension may still send it)
+    // Cover images are now fetched asynchronously in the background
     const albumDataWithoutCover = { ...album };
-    if (!Buffer.isBuffer(albumDataWithoutCover.cover_image)) {
-      delete albumDataWithoutCover.cover_image;
-      delete albumDataWithoutCover.cover_image_format;
-    }
+    delete albumDataWithoutCover.cover_image;
+    delete albumDataWithoutCover.cover_image_format;
 
     const result = await albumCanonical.upsertCanonical(
       albumDataWithoutCover,

@@ -505,22 +505,6 @@ export function createSettingsDrawer(deps = {}) {
         }
       }
 
-      // Fetch personal recommendations prompt settings (non-critical)
-      let personalRecs = { customPrompt: '', isEnabled: true };
-      try {
-        const recsSettings = await apiCall(
-          '/api/personal-recommendations/prompts'
-        );
-        if (recsSettings) {
-          personalRecs = {
-            customPrompt: recsSettings.customPrompt || '',
-            isEnabled: recsSettings.isEnabled !== false,
-          };
-        }
-      } catch (_e) {
-        // Feature may be disabled - use defaults
-      }
-
       return {
         hasData: true,
         totalAlbums: data.totalAlbums || 0,
@@ -539,7 +523,6 @@ export function createSettingsDrawer(deps = {}) {
           topArtistsByRange: lastfmArtistsByRange,
         },
         updatedAt: data.updatedAt,
-        personalRecs,
       };
     } catch (error) {
       console.error('Error loading preferences data:', error);
@@ -646,16 +629,6 @@ export function createSettingsDrawer(deps = {}) {
         console.warn('Could not load users:', e);
       }
 
-      // Load personal recommendations admin stats
-      let personalRecsStats = null;
-      try {
-        personalRecsStats = await apiCall(
-          '/api/admin/personal-recommendations/stats'
-        );
-      } catch (_e) {
-        // Feature may be disabled
-      }
-
       // Load aggregate list years with status and stats
       let aggregateLists = [];
       try {
@@ -760,7 +733,6 @@ export function createSettingsDrawer(deps = {}) {
         stats: stats || null,
         users: users,
         aggregateLists: aggregateLists,
-        personalRecsStats: personalRecsStats?.stats || null,
       };
     } catch (error) {
       console.error('Error loading admin data:', error);
@@ -1555,48 +1527,6 @@ export function createSettingsDrawer(deps = {}) {
         </div>
         `;
         })()}
-
-        <!-- AI Recommendations Section -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">
-            <i class="fas fa-wand-magic-sparkles text-purple-400 mr-2"></i>AI Recommendations
-          </h3>
-          <div class="settings-group-content">
-            <p class="text-xs text-gray-500 mb-4">
-              Every Monday, we suggest 5-10 newly released albums based on your music taste. Your custom preferences are added to our default recommendation criteria.
-            </p>
-
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Enable AI Recommendations</label>
-                <p class="settings-description">Get weekly personalized album picks</p>
-              </div>
-              <div class="settings-row-control">
-                <label class="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" id="personalRecsToggle" class="sr-only peer" ${data.personalRecs?.isEnabled !== false ? 'checked' : ''}>
-                  <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-500"></div>
-                </label>
-              </div>
-            </div>
-
-            <div class="mt-3 pt-3 border-t border-gray-700/50">
-              <label class="settings-label">Custom Preferences</label>
-              <p class="settings-description mb-2">Tell the AI what you like or dislike to refine your weekly picks</p>
-              <textarea id="personalRecsCustomPrompt"
-                class="w-full bg-gray-800 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-300 focus:outline-none focus:border-purple-500 resize-none"
-                rows="3"
-                maxlength="1000"
-                placeholder="e.g., 'I prefer albums from the 1990s', 'More shoegaze please', 'Avoid country music'"
-              >${data.personalRecs?.customPrompt ? data.personalRecs.customPrompt : ''}</textarea>
-              <div class="flex items-center justify-between mt-1">
-                <span id="personalRecsCharCount" class="text-xs text-gray-600">${(data.personalRecs?.customPrompt || '').length} / 1000</span>
-                <button id="savePersonalRecsPrompt" class="settings-button text-xs px-3 py-1">
-                  <i class="fas fa-save mr-1"></i>Save
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     `;
   }
@@ -2033,82 +1963,6 @@ export function createSettingsDrawer(deps = {}) {
           </div>
         </div>
 
-        <!-- Personal Recommendations -->
-        <div class="settings-group">
-          <h3 class="settings-group-title">
-            <i class="fas fa-wand-magic-sparkles mr-2 text-purple-400"></i>
-            Personal Recommendations
-          </h3>
-          <div class="settings-group-content">
-            ${
-              data.personalRecsStats
-                ? `
-              <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                <div class="bg-gray-800/50 rounded p-3 text-center">
-                  <div class="text-2xl font-bold text-white">${data.personalRecsStats.lists?.completed || 0}</div>
-                  <div class="text-xs text-gray-400">Completed</div>
-                </div>
-                <div class="bg-gray-800/50 rounded p-3 text-center">
-                  <div class="text-2xl font-bold text-red-400">${data.personalRecsStats.lists?.failed || 0}</div>
-                  <div class="text-xs text-gray-400">Failed</div>
-                </div>
-                <div class="bg-gray-800/50 rounded p-3 text-center">
-                  <div class="text-2xl font-bold text-purple-400">${data.personalRecsStats.enabledUsers || 0}</div>
-                  <div class="text-xs text-gray-400">Enabled Users</div>
-                </div>
-                <div class="bg-gray-800/50 rounded p-3 text-center">
-                  <div class="text-2xl font-bold text-blue-400">${data.personalRecsStats.lists?.total_lists || 0}</div>
-                  <div class="text-xs text-gray-400">Total Lists (2wk)</div>
-                </div>
-              </div>
-              <div class="text-xs text-gray-500 mb-3">
-                Tokens (2wk): ${Number(data.personalRecsStats.lists?.total_input_tokens || 0).toLocaleString()} in / ${Number(data.personalRecsStats.lists?.total_output_tokens || 0).toLocaleString()} out
-              </div>
-              ${
-                data.personalRecsStats.poolBySource &&
-                data.personalRecsStats.poolBySource.length > 0
-                  ? `
-                <div class="mb-4">
-                  <div class="text-xs text-gray-400 mb-1">Release Pool by Source (2wk)</div>
-                  <div class="flex flex-wrap gap-2">
-                    ${data.personalRecsStats.poolBySource
-                      .map(
-                        (s) =>
-                          `<span class="px-2 py-1 bg-gray-800/50 rounded text-xs text-gray-300">${s.source}: ${s.count}</span>`
-                      )
-                      .join('')}
-                  </div>
-                </div>
-              `
-                  : ''
-              }
-            `
-                : `
-              <div class="text-gray-400 text-sm">No stats available yet. The feature may not have run.</div>
-            `
-            }
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">Manual Generation</label>
-                <p class="settings-description">Generate recommendations for all users</p>
-              </div>
-              <button id="triggerPersonalRecsBtn" class="settings-button">
-                <i class="fas fa-play mr-1"></i>Generate Now
-              </button>
-            </div>
-            <div id="personalRecsProgress" class="hidden mt-3">
-              <div class="flex items-center gap-2 text-sm text-gray-400 mb-2">
-                <i id="personalRecsSpinner" class="fas fa-spinner fa-spin"></i>
-                <span id="personalRecsStatusText">Starting...</span>
-                <span id="personalRecsElapsed" class="text-gray-600 ml-auto text-xs"></span>
-              </div>
-              <div class="w-full bg-gray-800 rounded-full h-2 overflow-hidden">
-                <div id="personalRecsBar" class="bg-purple-500 h-full rounded-full transition-all duration-300" style="width: 0%"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <!-- Duplicate Album Scanner -->
         <div class="settings-group">
           <h3 class="settings-group-title">Duplicate Album Scanner</h3>
@@ -2515,64 +2369,6 @@ export function createSettingsDrawer(deps = {}) {
         });
       });
     }
-
-    // Personal Recommendations toggle
-    const personalRecsToggle = document.getElementById('personalRecsToggle');
-    if (personalRecsToggle) {
-      personalRecsToggle.addEventListener('change', async () => {
-        try {
-          await apiCall('/api/personal-recommendations/prompts', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ isEnabled: personalRecsToggle.checked }),
-          });
-          showToast(
-            personalRecsToggle.checked
-              ? 'AI Recommendations enabled'
-              : 'AI Recommendations disabled',
-            'success'
-          );
-        } catch (err) {
-          console.error('Failed to toggle personal recs:', err);
-          showToast('Failed to update setting', 'error');
-          personalRecsToggle.checked = !personalRecsToggle.checked;
-        }
-      });
-    }
-
-    // Personal Recommendations custom prompt
-    const promptTextarea = document.getElementById('personalRecsCustomPrompt');
-    const charCount = document.getElementById('personalRecsCharCount');
-    const savePromptBtn = document.getElementById('savePersonalRecsPrompt');
-
-    if (promptTextarea && charCount) {
-      promptTextarea.addEventListener('input', () => {
-        charCount.textContent = `${promptTextarea.value.length} / 1000`;
-      });
-    }
-
-    if (savePromptBtn && promptTextarea) {
-      savePromptBtn.addEventListener('click', async () => {
-        try {
-          savePromptBtn.disabled = true;
-          savePromptBtn.innerHTML =
-            '<i class="fas fa-spinner fa-spin mr-1"></i>Saving...';
-
-          await apiCall('/api/personal-recommendations/prompts', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ customPrompt: promptTextarea.value }),
-          });
-          showToast('Custom preferences saved', 'success');
-        } catch (err) {
-          console.error('Failed to save custom prompt:', err);
-          showToast('Failed to save preferences', 'error');
-        } finally {
-          savePromptBtn.disabled = false;
-          savePromptBtn.innerHTML = '<i class="fas fa-save mr-1"></i>Save';
-        }
-      });
-    }
   }
 
   /**
@@ -2645,118 +2441,6 @@ export function createSettingsDrawer(deps = {}) {
     const restoreDatabaseBtn = document.getElementById('restoreDatabaseBtn');
     if (restoreDatabaseBtn) {
       restoreDatabaseBtn.addEventListener('click', handleRestoreDatabase);
-    }
-
-    // Personal recommendations handler (progress bar)
-    const triggerPersonalRecsBtn = document.getElementById(
-      'triggerPersonalRecsBtn'
-    );
-    if (triggerPersonalRecsBtn) {
-      triggerPersonalRecsBtn.addEventListener('click', () => {
-        const progressEl = document.getElementById('personalRecsProgress');
-        const statusText = document.getElementById('personalRecsStatusText');
-        const elapsedEl = document.getElementById('personalRecsElapsed');
-        const barEl = document.getElementById('personalRecsBar');
-        const spinnerEl = document.getElementById('personalRecsSpinner');
-        if (!progressEl || !statusText || !barEl) return;
-
-        // Show progress, reset state
-        progressEl.classList.remove('hidden');
-        statusText.textContent = 'Starting...';
-        statusText.className = 'text-gray-400';
-        if (elapsedEl) elapsedEl.textContent = '';
-        barEl.style.width = '0%';
-        barEl.className =
-          'bg-purple-500 h-full rounded-full transition-all duration-300';
-        if (spinnerEl) {
-          spinnerEl.className = 'fas fa-spinner fa-spin';
-        }
-        triggerPersonalRecsBtn.disabled = true;
-        triggerPersonalRecsBtn.innerHTML =
-          '<i class="fas fa-spinner fa-spin mr-1"></i>Generating...';
-
-        let totalUsers = 0;
-        let processed = 0;
-
-        function updateBar() {
-          if (totalUsers > 0) {
-            const pct = Math.round((processed / totalUsers) * 100);
-            barEl.style.width = `${pct}%`;
-          }
-        }
-
-        function finish(success) {
-          triggerPersonalRecsBtn.disabled = false;
-          triggerPersonalRecsBtn.innerHTML =
-            '<i class="fas fa-play mr-1"></i>Generate Now';
-          if (spinnerEl) {
-            spinnerEl.className = success
-              ? 'fas fa-check text-green-400'
-              : 'fas fa-exclamation-triangle text-red-400';
-          }
-        }
-
-        const es = new window.EventSource(
-          '/api/admin/personal-recommendations/generate/stream'
-        );
-
-        es.addEventListener('log', (e) => {
-          const data = JSON.parse(e.data);
-          if (elapsedEl && data.elapsed) elapsedEl.textContent = data.elapsed;
-
-          if (data.phase === 'pool_build') {
-            statusText.textContent = 'Building release pool...';
-          } else if (data.phase === 'pool_ready') {
-            statusText.textContent = `Pool ready: ${data.poolCount} releases`;
-          } else if (data.phase === 'users_found') {
-            totalUsers = data.totalUsers || 0;
-            statusText.textContent = `Processing ${totalUsers} users...`;
-          } else if (data.phase === 'user_done') {
-            processed++;
-            updateBar();
-            statusText.textContent = `Processing users... (${processed}/${totalUsers})`;
-          } else if (data.phase === 'complete') {
-            barEl.style.width = '100%';
-            statusText.textContent = data.message;
-          } else {
-            statusText.textContent = data.message;
-          }
-        });
-
-        es.addEventListener('complete', (e) => {
-          const data = JSON.parse(e.data);
-          barEl.style.width = '100%';
-          barEl.className =
-            'bg-green-500 h-full rounded-full transition-all duration-300';
-          statusText.textContent = data.message;
-          statusText.className = 'text-green-400';
-          if (elapsedEl && data.elapsed) elapsedEl.textContent = data.elapsed;
-        });
-
-        es.addEventListener('error', (e) => {
-          if (e.data) {
-            const data = JSON.parse(e.data);
-            barEl.className =
-              'bg-red-500 h-full rounded-full transition-all duration-300';
-            statusText.textContent = data.message;
-            statusText.className = 'text-red-400';
-          }
-        });
-
-        es.addEventListener('done', () => {
-          es.close();
-          finish(true);
-        });
-
-        es.onerror = () => {
-          statusText.textContent = 'Connection lost';
-          statusText.className = 'text-red-400';
-          barEl.className =
-            'bg-red-500 h-full rounded-full transition-all duration-300';
-          es.close();
-          finish(false);
-        };
-      });
     }
 
     // User management handlers

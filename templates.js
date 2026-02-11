@@ -540,29 +540,6 @@ const contextMenusComponent = () => `
     <!-- Populated dynamically with lists for selected year -->
   </div>
   
-  <!-- Context Menu for Personal Recommendation Albums -->
-  <div id="personalRecContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
-    <button id="playPersonalRecOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-play mr-2 w-4 text-center"></i>Play Album
-    </button>
-    <button id="addPersonalRecToListOption" class="w-full flex items-center justify-between px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap relative">
-      <span><i class="fas fa-plus mr-2 w-4 text-center"></i>Add to List...</span>
-      <i class="fas fa-chevron-right text-xs text-gray-500 ml-4"></i>
-    </button>
-    <div class="context-menu-divider"></div>
-    <button id="viewPersonalRecReasoningOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">
-      <i class="fas fa-comment-alt mr-2 w-4 text-center"></i>View AI Reasoning
-    </button>
-  </div>
-  
-  <!-- Submenu for Personal Rec Add to List - Years -->
-  <div id="personalRecAddSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
-  </div>
-  
-  <!-- Submenu for Personal Rec Add to List - Lists within a year -->
-  <div id="personalRecAddListsSubmenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50 max-h-64 overflow-y-auto min-w-36">
-  </div>
-  
   <!-- Context Menu for Categories (Groups) -->
   <div id="categoryContextMenu" class="hidden fixed bg-gray-800 border border-gray-700 rounded-md shadow-lg py-1 z-50">
     <button id="renameCategoryOption" class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap">

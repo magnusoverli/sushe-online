@@ -932,10 +932,6 @@ body.now-playing-bar-visible #addAlbumFAB {
   background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
 }
 
-.group-section.year-group .personal-rec-btn:hover::before {
-  background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
-}
-
 /* Sidebar scrollbar - hidden by default, visible on hover */
 @media (min-width: 769px) {
   #sidebar nav {

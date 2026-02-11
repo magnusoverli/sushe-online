@@ -47,28 +47,11 @@ export function createListNav(deps = {}) {
     showToast,
     refreshGroupsAndLists,
     yearHasRecommendations,
-    getPersonalRecLists,
-    selectPersonalRecList,
-    getCurrentPersonalRecListId,
   } = deps;
 
   // Track sortable instances for cleanup
   let groupsSortable = null;
   const listSortables = new Map();
-
-  /**
-   * Get the year that personal recommendation lists should appear in.
-   * Uses the most recent list's week_start to determine the year.
-   * @returns {number|null} Year number or null if no lists
-   */
-  function getPersonalRecYear() {
-    if (!getPersonalRecLists) return null;
-    const lists = getPersonalRecLists();
-    if (!lists || lists.length === 0) return null;
-    const weekStart = lists[0].week_start;
-    if (!weekStart) return null;
-    return new Date(weekStart).getFullYear();
-  }
 
   // ============ EXPAND STATE MANAGEMENT ============
 
@@ -351,33 +334,6 @@ export function createListNav(deps = {}) {
   }
 
   /**
-   * Generate HTML for a personal recommendation list button
-   * @param {Object} recList - Personal rec list object
-   * @param {boolean} isActive - Whether currently selected
-   * @param {boolean} isMobile - Whether rendering for mobile
-   * @returns {string} HTML string
-   */
-  function createPersonalRecButtonHTML(recList, isActive, isMobile) {
-    const paddingClass = isMobile ? 'py-3' : 'py-2';
-    const widthClass = isMobile ? 'flex-1' : 'w-full';
-    const activeClass = isActive ? 'active' : '';
-    const isFailed = recList.status === 'failed';
-    const iconColor = isFailed ? 'text-gray-500' : 'text-purple-400';
-    const weekDate = new Date(recList.week_start);
-    const now = new Date();
-    const diffDays = Math.floor((now - weekDate) / (1000 * 60 * 60 * 24));
-    const label = diffDays < 7 ? "This Week's Picks" : "Last Week's Picks";
-
-    return `
-      <button data-personal-rec-id="${recList._id}" class="personal-rec-btn ${widthClass} text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-gray-300 ${activeClass} flex items-center">
-        <i class="fas fa-wand-magic-sparkles mr-2 shrink-0 ${iconColor}"></i>
-        <span class="truncate flex-1">${label}</span>
-        ${isFailed ? '<i class="fas fa-exclamation-circle text-yellow-600 ml-1 text-xs shrink-0" title="Generation failed"></i>' : ''}
-      </button>
-    `;
-  }
-
-  /**
    * Generate HTML for list button
    * @param {string} listId - List ID
    * @param {string} listName - List name (for display)
@@ -654,19 +610,6 @@ export function createListNav(deps = {}) {
       }
     }
 
-    // Add personal recommendation buttons in the year matching the most recent list
-    if (isYearGroup && year && getPersonalRecLists) {
-      if (year === getPersonalRecYear()) {
-        const personalRecs = getPersonalRecLists();
-        if (personalRecs && personalRecs.length > 0) {
-          personalRecs.forEach((recList) => {
-            const li = createPersonalRecButton(recList, isMobile);
-            listsContainer.appendChild(li);
-          });
-        }
-      }
-    }
-
     section.appendChild(listsContainer);
     return section;
   }
@@ -694,37 +637,6 @@ export function createListNav(deps = {}) {
     button.onclick = () => {
       if (window.selectRecommendations) {
         window.selectRecommendations(year);
-      }
-      if (isMobile && toggleMobileLists) {
-        toggleMobileLists();
-      }
-    };
-
-    return li;
-  }
-
-  /**
-   * Create a personal recommendation button element with event handlers
-   * @param {Object} recList - Personal rec list object
-   * @param {boolean} isMobile - Whether rendering for mobile
-   * @returns {HTMLElement} List item element
-   */
-  function createPersonalRecButton(recList, isMobile) {
-    const currentRecId =
-      getCurrentPersonalRecListId && getCurrentPersonalRecListId();
-    const isActive = currentRecId === recList._id;
-
-    const li = document.createElement('li');
-    if (isMobile) {
-      li.className = 'flex items-center';
-    }
-    li.innerHTML = createPersonalRecButtonHTML(recList, isActive, isMobile);
-
-    const button = li.querySelector('[data-personal-rec-id]');
-
-    button.onclick = () => {
-      if (selectPersonalRecList) {
-        selectPersonalRecList(recList._id);
       }
       if (isMobile && toggleMobileLists) {
         toggleMobileLists();
@@ -864,38 +776,12 @@ export function createListNav(deps = {}) {
 
       // Render each group section
       // Show all collections (even empty), but only show year-groups with lists
-      // Also show year-groups that have personal recommendation lists
-      const personalRecYear = getPersonalRecYear();
       groupsWithLists.forEach((group) => {
-        const hasPersonalRecs =
-          group.isYearGroup && group.year === personalRecYear;
-        if (group.lists.length > 0 || !group.isYearGroup || hasPersonalRecs) {
+        if (group.lists.length > 0 || !group.isYearGroup) {
           const section = createGroupSection(group, isMobile, container);
           container.appendChild(section);
         }
       });
-
-      // If personal rec lists exist but no year-group matched, create a synthetic section
-      if (personalRecYear) {
-        const yearGroupExists = groupsWithLists.some(
-          (g) => g.isYearGroup && g.year === personalRecYear
-        );
-        if (!yearGroupExists) {
-          const syntheticGroup = {
-            _id: `personal-recs-${personalRecYear}`,
-            name: String(personalRecYear),
-            year: personalRecYear,
-            isYearGroup: true,
-            lists: [],
-          };
-          const section = createGroupSection(
-            syntheticGroup,
-            isMobile,
-            container
-          );
-          container.appendChild(section);
-        }
-      }
 
       // Add orphaned lists if any (shouldn't happen after migration)
       if (orphaned.length > 0) {
@@ -1264,12 +1150,10 @@ export function createListNav(deps = {}) {
    * Update only the active state in sidebar (optimized - no DOM rebuild)
    * @param {string} activeListId - ID of the active list
    * @param {number|null} activeRecommendationsYear - Year if recommendations is active
-   * @param {string|null} activePersonalRecId - Personal rec list ID if active
    */
   function updateListNavActiveState(
     activeListId,
-    activeRecommendationsYear = null,
-    activePersonalRecId = null
+    activeRecommendationsYear = null
   ) {
     const nav = document.getElementById('listNav');
     const mobileNav = document.getElementById('mobileListNav');
@@ -1283,11 +1167,9 @@ export function createListNav(deps = {}) {
         const listId = button.dataset.listId;
         if (!listId) return;
 
-        const isActive =
-          listId === activeListId &&
-          !activeRecommendationsYear &&
-          !activePersonalRecId;
+        const isActive = listId === activeListId && !activeRecommendationsYear;
 
+        // Toggle active class - background is handled by ::before pseudo-element in CSS
         if (isActive) {
           button.classList.add('active');
         } else {
@@ -1302,21 +1184,6 @@ export function createListNav(deps = {}) {
       recommendationsButtons.forEach((button) => {
         const year = parseInt(button.dataset.recommendationsYear, 10);
         const isActive = activeRecommendationsYear === year;
-
-        if (isActive) {
-          button.classList.add('active');
-        } else {
-          button.classList.remove('active');
-        }
-      });
-
-      // Update personal recommendation buttons active state
-      const personalRecButtons = container.querySelectorAll(
-        '[data-personal-rec-id]'
-      );
-      personalRecButtons.forEach((button) => {
-        const recId = button.dataset.personalRecId;
-        const isActive = activePersonalRecId === recId;
 
         if (isActive) {
           button.classList.add('active');

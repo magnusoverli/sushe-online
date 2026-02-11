@@ -1,12 +1,34 @@
 // utils/claude-summary.js
 // Album summary fetching from Claude API with web search
 
+const Anthropic = require('@anthropic-ai/sdk');
 const logger = require('./logger');
-const { createClaudeClient } = require('./claude-client');
-const { recordClaudeUsage, observeExternalApiCall } = require('./metrics');
+const {
+  observeExternalApiCall,
+  recordExternalApiError,
+  recordClaudeUsage,
+} = require('./metrics');
 
 // Summary source constant
 const SUMMARY_SOURCE = 'claude';
+
+// Rate limiter: 2 requests per second (500ms = 120 RPM, safe for all tiers)
+const RATE_LIMIT_MS = parseInt(process.env.CLAUDE_RATE_LIMIT_MS || '500', 10);
+let lastRequestTime = 0;
+
+/**
+ * Wait for rate limit
+ */
+async function waitForRateLimit() {
+  const now = Date.now();
+  const timeSinceLastRequest = now - lastRequestTime;
+  if (timeSinceLastRequest < RATE_LIMIT_MS) {
+    await new Promise((r) =>
+      setTimeout(r, RATE_LIMIT_MS - timeSinceLastRequest)
+    );
+  }
+  lastRequestTime = Date.now();
+}
 
 /**
  * Build the prompt with configurable length guidance
@@ -76,8 +98,6 @@ function stripPreambles(text) {
 
 /**
  * Extract summary text from Claude's response content
- * Uses the shared extractTextFromContent for text block extraction,
- * then applies summary-specific preamble stripping and logging
  */
 function extractSummaryFromContent(content, artist, album, log) {
   if (!content || !Array.isArray(content)) {
@@ -167,22 +187,156 @@ function validateSummary(summary, artist, album, log) {
 }
 
 /**
+ * Handle Claude API errors with appropriate logging and metrics
+ */
+function handleApiError(
+  err,
+  artist,
+  album,
+  duration,
+  log,
+  model = 'claude-sonnet-4-5'
+) {
+  recordExternalApiError('claude', 'api_error');
+
+  // Record request failure metrics
+  const status = err.status === 429 ? 'rate_limited' : 'error';
+  recordClaudeUsage(model, 0, 0, status);
+
+  if (err.status === 429) {
+    log.warn('Claude API rate limit exceeded', {
+      artist,
+      album,
+      error: err.message,
+      status: err.status,
+      retryAfter: err.headers?.['retry-after'] || err.retryAfter,
+    });
+    observeExternalApiCall('claude', 'messages.create', duration, 429);
+  } else if (err.status >= 500) {
+    log.error('Claude API server error', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+      stack: err.stack,
+      type: err.type,
+    });
+    observeExternalApiCall(
+      'claude',
+      'messages.create',
+      duration,
+      err.status || 500
+    );
+  } else if (err.status === 401 || err.status === 403) {
+    log.error('Claude API authentication error', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+      type: err.type,
+    });
+    observeExternalApiCall(
+      'claude',
+      'messages.create',
+      duration,
+      err.status || 401
+    );
+  } else {
+    log.error('Claude API error', {
+      artist,
+      album,
+      status: err.status,
+      error: err.message,
+      stack: err.stack,
+      type: err.type,
+      cause: err.cause?.message,
+    });
+    observeExternalApiCall(
+      'claude',
+      'messages.create',
+      duration,
+      err.status || 400
+    );
+  }
+}
+
+/**
+ * Retry API call with exponential backoff
+ * Respects Retry-After headers for 429 responses
+ */
+async function retryWithBackoff(fn, maxRetries = 3, log) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+
+      // Don't retry client errors (except 429)
+      if (
+        err.status &&
+        err.status >= 400 &&
+        err.status < 500 &&
+        err.status !== 429
+      ) {
+        throw err;
+      }
+
+      // Last attempt - give up
+      if (attempt === maxRetries) {
+        break;
+      }
+
+      // Calculate backoff
+      let backoffMs;
+      if (err.status === 429 && err.headers?.['retry-after']) {
+        // Respect Retry-After header (seconds)
+        backoffMs = parseInt(err.headers['retry-after'], 10) * 1000;
+      } else {
+        // Exponential backoff: 1s, 2s, 4s
+        backoffMs = Math.pow(2, attempt - 1) * 1000;
+      }
+
+      log.info('Retrying Claude API call', {
+        attempt,
+        maxRetries,
+        backoffMs,
+        status: err.status,
+        isRateLimit: err.status === 429,
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
+
+  throw lastError;
+}
+
+/**
  * Create Claude summary service with injected dependencies
  * @param {Object} deps - Dependencies
  * @param {Object} deps.logger - Logger instance
  * @param {Object} deps.anthropicClient - Anthropic client instance (for testing)
- * @param {Object} deps.claudeClient - Shared claude-client instance (for testing)
  */
 function createClaudeSummaryService(deps = {}) {
   const log = deps.logger || logger;
 
-  // Create or use injected claude-client
-  const claudeClient =
-    deps.claudeClient ||
-    createClaudeClient({
-      logger: log,
-      anthropicClient: deps.anthropicClient || undefined,
-    });
+  // Lazy-initialized client - created on first use, not at module load time
+  // This ensures environment variables are available in Docker containers
+  let anthropicClient = deps.anthropicClient || null;
+
+  function getClient() {
+    if (anthropicClient) return anthropicClient;
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return null;
+    }
+
+    anthropicClient = new Anthropic({ apiKey });
+    return anthropicClient;
+  }
 
   /**
    * Fetch album summary from Claude API with web search
@@ -195,8 +349,8 @@ function createClaudeSummaryService(deps = {}) {
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
 
-    const client = claudeClient.getClient();
-    if (!client) {
+    const anthropic = getClient();
+    if (!anthropic) {
       log.error('Claude API client not available (missing API key)');
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
@@ -218,9 +372,9 @@ function createClaudeSummaryService(deps = {}) {
     const startTime = Date.now();
 
     try {
-      const message = await claudeClient.retryWithBackoff(
+      const message = await retryWithBackoff(
         async () => {
-          await claudeClient.waitForRateLimit();
+          await waitForRateLimit();
 
           const prompt = buildPrompt(
             artist,
@@ -235,7 +389,7 @@ function createClaudeSummaryService(deps = {}) {
             model,
           });
 
-          return await client.messages.create({
+          return await anthropic.messages.create({
             model,
             max_tokens: maxTokens,
             temperature: 0.43,
@@ -347,10 +501,7 @@ function createClaudeSummaryService(deps = {}) {
       }
     } catch (err) {
       const duration = Date.now() - startTime;
-      claudeClient.handleApiError(err, duration, log, model, {
-        artist,
-        album,
-      });
+      handleApiError(err, artist, album, duration, log, model);
       return { summary: null, source: SUMMARY_SOURCE, found: false };
     }
   }

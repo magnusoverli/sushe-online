@@ -25,10 +25,6 @@ services:
       - CLAUDE_MODEL=${CLAUDE_MODEL:-claude-sonnet-4-5}
       - CLAUDE_MAX_TOKENS=${CLAUDE_MAX_TOKENS:-1024}
       - CLAUDE_RATE_LIMIT_MS=${CLAUDE_RATE_LIMIT_MS:-1000}
-      - PERSONAL_RECS_ENABLED=${PERSONAL_RECS_ENABLED:-true}
-      - PERSONAL_RECS_MODEL=${PERSONAL_RECS_MODEL:-claude-sonnet-4-5}
-      - PERSONAL_RECS_POOL_MODEL=${PERSONAL_RECS_POOL_MODEL:-claude-sonnet-4-5}
-      - PERSONAL_RECS_COUNT=${PERSONAL_RECS_COUNT:-7}
       - DATABASE_URL=postgres://postgres:example@/sushe?host=/var/run/postgresql
     volumes:
       - sushe-data:/app/data

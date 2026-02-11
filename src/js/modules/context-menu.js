@@ -70,9 +70,6 @@ const MENU_IDS = [
   'recommendationContextMenu',
   'recommendationAddSubmenu',
   'recommendationAddListsSubmenu',
-  'personalRecContextMenu',
-  'personalRecAddSubmenu',
-  'personalRecAddListsSubmenu',
 ];
 
 // Option elements that receive highlights when their submenu is open
@@ -82,7 +79,6 @@ const OPTION_IDS = [
   'playAlbumOption',
   'downloadListOption',
   'addToListOption',
-  'addPersonalRecToListOption',
 ];
 
 /**

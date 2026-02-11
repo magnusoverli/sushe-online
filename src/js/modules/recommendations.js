@@ -7,14 +7,6 @@
  * @param {Object} deps - External dependencies injected from app.js
  * @returns {Object} Public API
  */
-
-import { renderAlbumList } from '../utils/album-list-renderer.js';
-import { openInMusicApp } from '../utils/playback-service.js';
-import { chooseService } from '../utils/music-service-chooser.js';
-import { showServicePicker } from './music-services.js';
-import { showToast as showToastDirect } from './toast.js';
-import { hideConfirmation } from './modals.js';
-
 export function createRecommendations(deps = {}) {
   const {
     apiCall,
@@ -56,29 +48,6 @@ export function createRecommendations(deps = {}) {
 
   /** Timeout for hiding recommendation add-to-list submenu */
   let recommendationAddListsHideTimeout = null;
-
-  /**
-   * Play a recommended album directly via the playback service.
-   * Unlike playAlbumSafe (which searches the current regular list),
-   * this uses artist+album to open in the user's music app.
-   * @param {Object} item - Recommendation item with artist and album fields
-   */
-  function playRecommendedAlbum(item) {
-    if (!item || !item.artist || !item.album) {
-      showToast('Cannot play - missing album info', 'error');
-      return;
-    }
-    chooseService(showServicePicker, showToastDirect).then((service) => {
-      hideConfirmation();
-      if (!service) return;
-      openInMusicApp(
-        service,
-        'album',
-        { artist: item.artist, album: item.album },
-        showToastDirect
-      );
-    });
-  }
 
   // ============ RECOMMEND ALBUM ============
 
@@ -184,6 +153,161 @@ export function createRecommendations(deps = {}) {
     }
   }
 
+  // ============ MOBILE CARD CREATION ============
+
+  /**
+   * Create a mobile recommendation card element.
+   * @param {Object} rec - Recommendation object
+   * @param {number} year - Year
+   * @param {boolean} locked - Whether recommendations are locked
+   * @param {number} index - Index in recommendations array
+   * @returns {HTMLElement} Card wrapper element
+   */
+  function createRecommendationCard(rec, year, locked, index) {
+    const cardWrapper = document.createElement('div');
+    cardWrapper.className = 'album-card-wrapper h-[150px]';
+
+    const card = document.createElement('div');
+    card.className = 'album-card album-row relative h-[150px] bg-gray-900';
+    card.dataset.albumId = rec.album_id;
+    card.dataset.recIndex = index;
+
+    const date = new Date(rec.created_at);
+    const formattedDate = date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+
+    const hasReasoning = rec.reasoning && rec.reasoning.trim().length > 0;
+
+    card.innerHTML = `
+      <div class="flex items-stretch h-full">
+        
+        <!-- COVER SECTION -->
+        <div class="shrink-0 w-[88px] flex flex-col items-center pt-2 pl-1">
+          <div class="mobile-album-cover relative w-20 h-20 flex items-center justify-center bg-gray-800 rounded-lg">
+            <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
+                 alt="${escapeHtml(rec.album)}"
+                 class="album-cover-blur w-[75px] h-[75px] rounded-lg object-cover"
+                 loading="lazy" decoding="async"
+                 onerror="this.parentElement.innerHTML='<div class=\\'w-[75px] h-[75px] rounded-lg bg-gray-800 flex items-center justify-center\\'><i class=\\'fas fa-compact-disc text-xl text-gray-600\\'></i></div>'">
+          </div>
+          <div class="flex-1 flex items-center mt-1">
+            <span class="text-xs whitespace-nowrap text-gray-500">
+              ${formattedDate}
+            </span>
+          </div>
+        </div>
+        
+        <!-- INFO SECTION -->
+        <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[142px]">
+          <div class="flex items-center">
+            <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
+              <i class="fas fa-compact-disc fa-xs mr-2"></i>${escapeHtml(rec.album)}
+            </h3>
+          </div>
+          <div class="flex items-center">
+            <p class="text-[13px] text-gray-500 truncate">
+              <i class="fas fa-user fa-xs mr-2"></i>
+              <span data-field="artist-mobile-text">${escapeHtml(rec.artist)}</span>
+            </p>
+          </div>
+          <div class="flex items-center">
+            <p class="text-[13px] text-gray-400 truncate">
+              <i class="fas fa-tag fa-xs mr-2"></i>
+              ${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}${!rec.genre_1 && !rec.genre_2 ? '<span class="text-gray-600 italic">No genre</span>' : ''}
+            </p>
+          </div>
+          <div class="flex items-center">
+            <span class="text-[13px] text-blue-400 truncate">
+              <i class="fas fa-thumbs-up fa-xs mr-2"></i>
+              ${escapeHtml(rec.recommended_by)}
+            </span>
+          </div>
+          ${
+            hasReasoning
+              ? `<div class="flex items-center">
+              <button class="view-reasoning-mobile-btn text-[13px] text-purple-400 hover:text-purple-300 active:opacity-70 flex items-center gap-1 no-drag">
+                <i class="fas fa-comment-alt fa-xs"></i>
+                <span>Reason for recommendation</span>
+              </button>
+            </div>`
+              : `<div class="flex items-center">
+              <span class="text-[13px] text-gray-600 italic">
+                <i class="fas fa-comment-alt fa-xs mr-1"></i>No reason provided
+              </span>
+            </div>`
+          }
+          <div class="flex-1"></div>
+        </div>
+        
+        <!-- MENU SECTION -->
+        <div class="shrink-0 w-[25px] border-l border-gray-800/50" style="display: flex; align-items: center; justify-content: center;">
+          <button data-rec-menu-btn class="no-drag text-gray-400 active:text-gray-200" style="display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; transform: translateX(7px);">
+            <i class="fas fa-ellipsis-v fa-fw"></i>
+          </button>
+        </div>
+        
+      </div>
+    `;
+
+    cardWrapper.appendChild(card);
+    attachRecommendationCardHandlers(card, rec, year, locked);
+    return cardWrapper;
+  }
+
+  /**
+   * Attach event handlers to mobile recommendation card.
+   */
+  function attachRecommendationCardHandlers(card, rec, year, locked) {
+    const viewReasoningBtn = card.querySelector('.view-reasoning-mobile-btn');
+    if (viewReasoningBtn) {
+      viewReasoningBtn.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+      viewReasoningBtn.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+      viewReasoningBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showViewReasoningModal(rec);
+      });
+    }
+
+    const menuBtn = card.querySelector('[data-rec-menu-btn]');
+    if (menuBtn) {
+      menuBtn.addEventListener(
+        'touchstart',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+      menuBtn.addEventListener(
+        'touchend',
+        (e) => {
+          e.stopPropagation();
+        },
+        { passive: true }
+      );
+      menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        showMobileRecommendationMenu(rec, year, locked);
+      });
+    }
+  }
+
   // ============ MOBILE MENU ============
 
   /**
@@ -274,7 +398,9 @@ export function createRecommendations(deps = {}) {
       playBtn.addEventListener('click', (e) => {
         e.preventDefault();
         close();
-        playRecommendedAlbum(rec);
+        if (window.playAlbumSafe) {
+          window.playAlbumSafe(rec.album_id);
+        }
       });
     }
 
@@ -511,11 +637,13 @@ export function createRecommendations(deps = {}) {
 
   /**
    * Display recommendations in the album container.
-   * Responsive: mobile cards or desktop table via shared renderer.
+   * Responsive: mobile cards or desktop table.
    */
   function displayRecommendations(recommendations, year, locked) {
     const container = document.getElementById('albumContainer');
     if (!container) return;
+
+    const isMobile = window.innerWidth < 1024;
 
     container.innerHTML = '';
 
@@ -530,29 +658,119 @@ export function createRecommendations(deps = {}) {
       container.appendChild(banner);
     }
 
-    renderAlbumList({
-      container,
-      items: recommendations,
-      columns: [
-        'cover',
-        'artist',
-        'albumName',
-        'genre',
-        'recommendedBy',
-        'dateAdded',
-      ],
-      escapeHtml,
-      emptyState: {
-        icon: 'fas fa-thumbs-up',
-        title: `No recommendations yet for ${year}`,
-        subtitle: 'Click the + button to recommend an album',
-      },
-      onContextMenu: (e, rec) => showRecommendationContextMenu(e, rec, year),
-      onMenuClick: (rec) => showMobileRecommendationMenu(rec, year, locked),
-      onReasoningClick: (rec) => showViewReasoningModal(rec),
-      showPosition: false,
-      mobileCardHeight: 150,
-    });
+    if (isMobile) {
+      const cardContainer = document.createElement('div');
+      cardContainer.className = 'mobile-album-list';
+
+      if (recommendations.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'text-center text-gray-500 mt-20 px-4';
+        emptyDiv.innerHTML = `
+          <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
+          <p class="text-xl mb-2">No recommendations yet for ${year}</p>
+          <p class="text-sm">Click the + button to recommend an album</p>
+        `;
+        container.appendChild(emptyDiv);
+      } else {
+        recommendations.forEach((rec, index) => {
+          const card = createRecommendationCard(rec, year, locked, index);
+          cardContainer.appendChild(card);
+        });
+        container.appendChild(cardContainer);
+      }
+    } else {
+      const table = document.createElement('table');
+      table.className = 'w-full album-table recommendations-table';
+      table.innerHTML = `
+        <thead>
+          <tr class="text-left text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700">
+            <th class="py-3 px-2 w-12"></th>
+            <th class="py-3 px-2">Artist</th>
+            <th class="py-3 px-2">Album</th>
+            <th class="py-3 px-2">Genre</th>
+            <th class="py-3 px-2">Recommended By</th>
+            <th class="py-3 px-2">Date Added</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+
+      const tbody = table.querySelector('tbody');
+
+      if (recommendations.length === 0) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.innerHTML = `
+          <td colspan="6" class="py-12 text-center text-gray-500">
+            <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
+            <p>No recommendations yet for ${year}</p>
+            <p class="text-sm mt-2">Click the + button to recommend an album</p>
+          </td>
+        `;
+        tbody.appendChild(emptyRow);
+      } else {
+        recommendations.forEach((rec) => {
+          const row = document.createElement('tr');
+          row.className =
+            'album-row hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
+          row.dataset.albumId = rec.album_id;
+
+          const date = new Date(rec.created_at);
+          const formattedDate = date.toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+
+          row.innerHTML = `
+            <td class="py-2 px-2">
+              <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden">
+                <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
+                     alt="${rec.album}" 
+                     class="w-full h-full object-cover"
+                     loading="lazy"
+                     onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc\\'></i></div>'">
+              </div>
+            </td>
+            <td class="py-2 px-2 text-white">${escapeHtml(rec.artist)}</td>
+            <td class="py-2 px-2 text-gray-300">${escapeHtml(rec.album)}</td>
+            <td class="py-2 px-2 text-gray-400 text-sm">${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}</td>
+            <td class="py-2 px-2 text-blue-400">
+              <span class="flex items-center gap-1">
+                ${escapeHtml(rec.recommended_by)}
+                <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors" 
+                        title="View reasoning"
+                        data-rec-index="${recommendations.indexOf(rec)}">
+                  <i class="fas fa-comment-alt text-xs"></i>
+                </button>
+              </span>
+            </td>
+            <td class="py-2 px-2 text-gray-500 text-sm">${formattedDate}</td>
+          `;
+
+          row.addEventListener('click', (e) => {
+            if (e.target.closest('.view-reasoning-btn')) return;
+          });
+
+          row.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            showRecommendationContextMenu(e, rec, year);
+          });
+
+          const viewReasoningBtn = row.querySelector('.view-reasoning-btn');
+          if (viewReasoningBtn) {
+            viewReasoningBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              showViewReasoningModal(rec);
+            });
+          }
+
+          tbody.appendChild(row);
+        });
+      }
+
+      container.appendChild(table);
+    }
   }
 
   // ============ DESKTOP CONTEXT MENU ============
@@ -609,7 +827,9 @@ export function createRecommendations(deps = {}) {
         if (!currentRecommendationContext) return;
         const { rec } = currentRecommendationContext;
 
-        playRecommendedAlbum(rec);
+        if (window.playAlbumSafe) {
+          window.playAlbumSafe(rec.album_id);
+        }
 
         contextMenu.classList.add('hidden');
         currentRecommendationContext = null;

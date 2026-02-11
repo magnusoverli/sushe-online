@@ -44,7 +44,6 @@ import {
 } from './utils/save-optimizer.js';
 import { createLinkPreview } from './modules/link-preview.js';
 import { createRecommendations } from './modules/recommendations.js';
-import { createPersonalRecommendations } from './modules/personal-recommendations.js';
 import { createTrackSelection } from './modules/track-selection.js';
 import { createListCrud } from './modules/list-crud.js';
 import { createPlayback } from './modules/playback.js';
@@ -90,10 +89,6 @@ import {
   initWindowGlobals,
   setRecommendationYears,
   yearHasRecommendations,
-  getPersonalRecLists,
-  setPersonalRecLists,
-  getCurrentPersonalRecListId,
-  setCurrentPersonalRecListId,
 } from './modules/app-state.js';
 
 // Early window global — needed by year-lock module before consolidated section
@@ -179,43 +174,6 @@ const getRecommendationsModule = createLazyModule(() =>
     refreshRecommendationYears,
   })
 );
-
-/**
- * Get or initialize the personal recommendations module
- */
-const getPersonalRecommendationsModule = createLazyModule(() =>
-  createPersonalRecommendations({
-    apiCall,
-    showToast,
-    showViewReasoningModal,
-    escapeHtml,
-    positionContextMenu,
-    createActionSheet,
-    groupListsByYear,
-    setupSubmenuHover,
-    getListData,
-    setListData,
-    getLists,
-    getCurrentListId,
-    setCurrentListId,
-    getCurrentPersonalRecListId,
-    setCurrentPersonalRecListId,
-    setPersonalRecLists,
-    getPersonalRecLists,
-    hideAllContextMenus,
-    clearPlaycountCache,
-    updateListNavActiveState,
-    updateHeaderTitle,
-    updateMobileHeader,
-    showLoadingSpinner,
-    setCurrentRecommendationsYear,
-  })
-);
-
-// Convenience wrappers
-function selectPersonalRecList(listId) {
-  return getPersonalRecommendationsModule().selectPersonalRecList(listId);
-}
 
 /**
  * Get or initialize the track selection module
@@ -668,9 +626,6 @@ const getListNavModule = createLazyModule(() =>
     showToast,
     refreshGroupsAndLists,
     yearHasRecommendations,
-    getPersonalRecLists,
-    selectPersonalRecList,
-    getCurrentPersonalRecListId,
   })
 );
 
@@ -681,13 +636,11 @@ function updateListNav() {
 
 function updateListNavActiveState(
   activeListId,
-  activeRecommendationsYear = null,
-  activePersonalRecId = null
+  activeRecommendationsYear = null
 ) {
   return getListNavModule().updateListNavActiveState(
     activeListId,
-    activeRecommendationsYear,
-    activePersonalRecId
+    activeRecommendationsYear
   );
 }
 
@@ -1154,21 +1107,16 @@ async function loadLists() {
     const recYearsPromise = apiCall('/api/recommendations/years').catch(() => ({
       years: [],
     })); // Non-critical
-    const personalRecsPromise = getPersonalRecommendationsModule()
-      .fetchPersonalRecLists()
-      .catch(() => []); // Non-critical
     const listDataPromise = targetListId
       ? apiCall(`/api/lists/${encodeURIComponent(targetListId)}`)
       : null;
 
-    // Wait for metadata, groups, rec years, and personal recs (fast - small payloads)
+    // Wait for metadata, groups, and rec years (fast - small payloads)
     const [fetchedLists, fetchedGroups, recYearsData] = await Promise.all([
       metadataPromise,
       groupsPromise,
       recYearsPromise,
     ]);
-    // Personal recs fetch is fire-and-forget; sidebar will update if it arrives later
-    await personalRecsPromise;
 
     // Store which years have recommendations (for sidebar visibility)
     setRecommendationYears(recYearsData.years || []);
@@ -1506,7 +1454,6 @@ async function selectList(listId) {
     setCurrentListId(listId);
     // Clear recommendations state when selecting a regular list
     setCurrentRecommendationsYear(null);
-    setCurrentPersonalRecListId(null);
 
     // Update realtime sync subscriptions
     const rtSync = getRealtimeSyncModuleInstance();
@@ -1624,7 +1571,6 @@ async function selectList(listId) {
 // Thin wrapper for backward compatibility (called via window.selectRecommendations)
 
 function selectRecommendations(year) {
-  setCurrentPersonalRecListId(null); // Clear personal recs when switching to community recs
   return getRecommendationsModule().selectRecommendations(year);
 }
 
@@ -1754,7 +1700,6 @@ window.findListByName = findListByName;
 window.isViewingRecommendations = isViewingRecommendations;
 window.getCurrentRecommendationsYear = getCurrentRecommendationsYear;
 window.selectRecommendations = selectRecommendations;
-window.selectPersonalRecList = selectPersonalRecList;
 window.clearSnapshotFromStorage = clearSnapshotFromStorage;
 
 // Mobile UI
@@ -1959,7 +1904,6 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeContextMenu();
       initializeAlbumContextMenu();
       getRecommendationsModule().initializeRecommendationContextMenu();
-      getPersonalRecommendationsModule().initializePersonalRecContextMenu();
       getListCrudModule().initializeCategoryContextMenu();
       hideSubmenuOnLeave();
       getListCrudModule().initializeCreateList();
