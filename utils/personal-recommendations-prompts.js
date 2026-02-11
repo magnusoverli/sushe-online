@@ -1,7 +1,7 @@
 // utils/personal-recommendations-prompts.js
 // Prompt templates and builder for personal album recommendations
 
-const DEFAULT_SYSTEM_PROMPT = `You are a music recommendation expert. Given a pool of newly released albums and a user's musical taste profile, select the albums that best match this user's preferences. Return ONLY valid JSON.`;
+const DEFAULT_SYSTEM_PROMPT = `You are a music recommendation expert. Given a pool of newly released albums and a user's musical taste profile, select the full-length albums that best match this user's preferences. Only recommend full-length albums (typically 8+ tracks). Never recommend singles, EPs, or compilations. Return ONLY valid JSON.`;
 
 const DEFAULT_USER_PROMPT_TEMPLATE = `From the following pool of albums released this week, select {count} albums that best match this user's musical taste.
 
@@ -81,6 +81,20 @@ function formatNewReleasesForPrompt(releases) {
       }
       if (r.country) parts.push(`Country: ${r.country}`);
       if (r.release_date) parts.push(`Released: ${r.release_date}`);
+      // Show track count so the model can also judge album vs single
+      if (r.tracks) {
+        let trackList = r.tracks;
+        if (typeof trackList === 'string') {
+          try {
+            trackList = JSON.parse(trackList);
+          } catch {
+            // ignore
+          }
+        }
+        if (Array.isArray(trackList)) {
+          parts.push(`Tracks: ${trackList.length}`);
+        }
+      }
       if (r.source) parts.push(`Source: ${r.source}`);
       if (r.verified) parts.push('(verified)');
       return parts.join(' | ');

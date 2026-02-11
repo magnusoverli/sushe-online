@@ -437,6 +437,45 @@ async function processAllUsers(ctx, weekStart, options) {
 }
 
 /**
+ * Minimum number of tracks for an album to not be considered a single/EP.
+ */
+const MIN_ALBUM_TRACKS = 4;
+
+/**
+ * Filter out probable singles/EPs from a release pool.
+ * If track data is available and has fewer than MIN_ALBUM_TRACKS tracks,
+ * the release is almost certainly a single, not a full-length album.
+ * Entries with no track data are kept (benefit of the doubt).
+ * @param {Array} rawPool - Raw release pool entries
+ * @param {Object} log - Logger instance
+ * @returns {Array} Filtered pool containing only likely full-length albums
+ */
+function filterSinglesFromPool(rawPool, log) {
+  const filtered = rawPool.filter((entry) => {
+    if (!entry.tracks) return true;
+    let trackList = entry.tracks;
+    if (typeof trackList === 'string') {
+      try {
+        trackList = JSON.parse(trackList);
+      } catch {
+        return true;
+      }
+    }
+    return !Array.isArray(trackList) || trackList.length >= MIN_ALBUM_TRACKS;
+  });
+
+  if (filtered.length < rawPool.length) {
+    log.info('Filtered probable singles from release pool', {
+      before: rawPool.length,
+      after: filtered.length,
+      removed: rawPool.length - filtered.length,
+    });
+  }
+
+  return filtered;
+}
+
+/**
  * Create the personal recommendations service
  * @param {Object} deps - Dependencies
  * @param {Object} deps.pool - PostgreSQL connection pool (required)
@@ -531,9 +570,10 @@ function createPersonalRecommendationsService(deps = {}) {
       userId,
       normalizeAlbumKey
     );
-    const releasePool = poolService
+    const rawPool = poolService
       ? await poolService.getPoolForWeek(weekStart, false)
       : [];
+    const releasePool = filterSinglesFromPool(rawPool, log);
 
     if (releasePool.length === 0) {
       log.warn('Empty release pool for user recommendation', {

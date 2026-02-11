@@ -399,6 +399,12 @@ test('generateForUser forwards pool metadata to upsertAlbumRecord', async () => 
         tracks: [
           { name: 'Track 1', length: 240000 },
           { name: 'Track 2', length: 180000 },
+          { name: 'Track 3', length: 200000 },
+          { name: 'Track 4', length: 220000 },
+          { name: 'Track 5', length: 210000 },
+          { name: 'Track 6', length: 190000 },
+          { name: 'Track 7', length: 230000 },
+          { name: 'Track 8', length: 250000 },
         ],
       },
     ]),
@@ -435,6 +441,12 @@ test('generateForUser forwards pool metadata to upsertAlbumRecord', async () => 
   assert.deepStrictEqual(upserted.tracks, [
     { name: 'Track 1', length: 240000 },
     { name: 'Track 2', length: 180000 },
+    { name: 'Track 3', length: 200000 },
+    { name: 'Track 4', length: 220000 },
+    { name: 'Track 5', length: 210000 },
+    { name: 'Track 6', length: 190000 },
+    { name: 'Track 7', length: 230000 },
+    { name: 'Track 8', length: 250000 },
   ]);
 
   // Verify the returned canonical album_id was used for the recommendation item
