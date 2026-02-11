@@ -212,6 +212,7 @@ const LIST_WITH_ITEMS_QUERY = `
         'genre_1', COALESCE(pri.genre_1, a.genre_1),
         'genre_2', COALESCE(pri.genre_2, a.genre_2),
         'country', COALESCE(pri.country, a.country),
+        'release_date', a.release_date,
         'cover_image', a.cover_image)
       ORDER BY pri.position
     ) FILTER (WHERE pri._id IS NOT NULL), '[]') as items

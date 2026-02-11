@@ -178,8 +178,9 @@ export function createPersonalRecommendations(deps = {}) {
       items,
       columns: [
         'cover',
-        'artist',
         'albumName',
+        'releaseDate',
+        'artist',
         'genre',
         'country',
         'reasoning',
@@ -333,6 +334,7 @@ export function createPersonalRecommendations(deps = {}) {
         album_id: item.album_id,
         artist: item.artist,
         album: item.album,
+        release_date: item.release_date || '',
         genre_1: item.genre_1 || '',
         genre_2: item.genre_2 || '',
         country: item.country || '',

@@ -114,6 +114,20 @@ const COLUMN_DEFS = {
     },
   },
 
+  releaseDate: {
+    header: 'Released',
+    gridSize: '0.4fr',
+    renderDesktop(data, escapeHtml) {
+      return `<span class="text-gray-400 text-sm truncate">${escapeHtml(data.releaseDate)}</span>`;
+    },
+    renderMobile(data, escapeHtml) {
+      if (!data.releaseDate) return null;
+      return `<p class="text-[13px] text-gray-500 truncate">
+        <i class="fas fa-calendar fa-xs mr-2"></i>${escapeHtml(data.releaseDate)}
+      </p>`;
+    },
+  },
+
   artist: {
     header: 'Artist',
     gridSize: '0.65fr',
