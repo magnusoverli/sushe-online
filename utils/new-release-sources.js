@@ -215,11 +215,12 @@ function createNewReleaseSources(deps = {}) {
 
         for (const album of data.albums.items) {
           const releaseDate = album.release_date;
-          // Filter by date range (only include albums within the window)
+          // Filter: only full albums within the date window (exclude singles/compilations)
           if (
             releaseDate &&
             releaseDate >= dateStart &&
-            releaseDate <= dateEnd
+            releaseDate <= dateEnd &&
+            album.album_type === 'album'
           ) {
             releases.push({
               artist: album.artists?.[0]?.name || 'Unknown',
@@ -379,7 +380,7 @@ function createNewReleaseSources(deps = {}) {
         messages: [
           {
             role: 'user',
-            content: `Search for notable album releases between ${dateStart} and ${dateEnd}. Include indie, underground, and non-Western releases that may not be on major platforms. Return ONLY a JSON array with objects containing these fields: "artist", "album", "genre_1" (primary genre), "genre_2" (secondary genre or empty string), "country" (country of origin), and "release_date". No other text.`,
+            content: `Search for notable full-length album releases (NOT singles or EPs) between ${dateStart} and ${dateEnd}. Include indie, underground, and non-Western releases that may not be on major platforms. Return ONLY a JSON array with objects containing these fields: "artist", "album", "genre_1" (primary genre), "genre_2" (secondary genre or empty string), "country" (country of origin), and "release_date". No other text.`,
           },
         ],
         metricsLabel: 'personal_recs_pool_search',

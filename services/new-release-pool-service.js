@@ -145,10 +145,17 @@ function createNewReleasePoolService(deps = {}) {
       return parseInt(existing.rows[0].count, 10);
     }
 
-    const { weekEnd } = getWeekBoundaries(weekStart);
+    // Search for releases from the PREVIOUS week (already out), not the
+    // current week which contains future dates when generation runs on Monday.
+    const prevMonday = new Date(weekStart);
+    prevMonday.setDate(prevMonday.getDate() - 7);
+    const searchStart = prevMonday.toISOString().split('T')[0];
+    const searchEnd = new Date(prevMonday.getTime() + 6 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
 
     // Gather from all sources
-    const releases = await gatherWeeklyNewReleases(weekStart, weekEnd, {
+    const releases = await gatherWeeklyNewReleases(searchStart, searchEnd, {
       callClaude,
       extractTextFromContent,
     });
