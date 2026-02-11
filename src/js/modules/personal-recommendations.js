@@ -8,6 +8,11 @@
  */
 
 import { renderAlbumList } from '../utils/album-list-renderer.js';
+import { openInMusicApp } from '../utils/playback-service.js';
+import { chooseService } from '../utils/music-service-chooser.js';
+import { showServicePicker } from './music-services.js';
+import { showToast as showToastDirect } from './toast.js';
+import { hideConfirmation } from './modals.js';
 
 /**
  * Create the personal recommendations module with injected dependencies.
@@ -47,6 +52,29 @@ export function createPersonalRecommendations(deps = {}) {
 
   /** Timeout for hiding the lists submenu */
   let personalRecAddListsHideTimeout = null;
+
+  /**
+   * Play a recommended album directly via the playback service.
+   * Unlike playAlbumSafe (which searches the current regular list),
+   * this uses artist+album to open in the user's music app.
+   * @param {Object} item - Recommendation item with artist and album fields
+   */
+  function playRecommendedAlbum(item) {
+    if (!item || !item.artist || !item.album) {
+      showToast('Cannot play - missing album info', 'error');
+      return;
+    }
+    chooseService(showServicePicker, showToastDirect).then((service) => {
+      hideConfirmation();
+      if (!service) return;
+      openInMusicApp(
+        service,
+        'album',
+        { artist: item.artist, album: item.album },
+        showToastDirect
+      );
+    });
+  }
 
   // ============ SELECT & DISPLAY ============
 
@@ -200,9 +228,7 @@ export function createPersonalRecommendations(deps = {}) {
         label: 'Play Album',
         icon: 'fas fa-play',
         handler: () => {
-          if (window.playAlbumSafe) {
-            window.playAlbumSafe(item.album_id);
-          }
+          playRecommendedAlbum(item);
         },
       },
       {
@@ -307,6 +333,9 @@ export function createPersonalRecommendations(deps = {}) {
         album_id: item.album_id,
         artist: item.artist,
         album: item.album,
+        genre_1: item.genre_1 || '',
+        genre_2: item.genre_2 || '',
+        country: item.country || '',
         cover_image: item.cover_image || '',
       };
 
@@ -347,8 +376,8 @@ export function createPersonalRecommendations(deps = {}) {
       playOption.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (currentContext?.item && window.playAlbumSafe) {
-          window.playAlbumSafe(currentContext.item.album_id);
+        if (currentContext?.item) {
+          playRecommendedAlbum(currentContext.item);
         }
         hideAllContextMenus();
         currentContext = null;

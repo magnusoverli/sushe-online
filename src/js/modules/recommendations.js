@@ -9,6 +9,11 @@
  */
 
 import { renderAlbumList } from '../utils/album-list-renderer.js';
+import { openInMusicApp } from '../utils/playback-service.js';
+import { chooseService } from '../utils/music-service-chooser.js';
+import { showServicePicker } from './music-services.js';
+import { showToast as showToastDirect } from './toast.js';
+import { hideConfirmation } from './modals.js';
 
 export function createRecommendations(deps = {}) {
   const {
@@ -51,6 +56,29 @@ export function createRecommendations(deps = {}) {
 
   /** Timeout for hiding recommendation add-to-list submenu */
   let recommendationAddListsHideTimeout = null;
+
+  /**
+   * Play a recommended album directly via the playback service.
+   * Unlike playAlbumSafe (which searches the current regular list),
+   * this uses artist+album to open in the user's music app.
+   * @param {Object} item - Recommendation item with artist and album fields
+   */
+  function playRecommendedAlbum(item) {
+    if (!item || !item.artist || !item.album) {
+      showToast('Cannot play - missing album info', 'error');
+      return;
+    }
+    chooseService(showServicePicker, showToastDirect).then((service) => {
+      hideConfirmation();
+      if (!service) return;
+      openInMusicApp(
+        service,
+        'album',
+        { artist: item.artist, album: item.album },
+        showToastDirect
+      );
+    });
+  }
 
   // ============ RECOMMEND ALBUM ============
 
@@ -246,9 +274,7 @@ export function createRecommendations(deps = {}) {
       playBtn.addEventListener('click', (e) => {
         e.preventDefault();
         close();
-        if (window.playAlbumSafe) {
-          window.playAlbumSafe(rec.album_id);
-        }
+        playRecommendedAlbum(rec);
       });
     }
 
@@ -583,9 +609,7 @@ export function createRecommendations(deps = {}) {
         if (!currentRecommendationContext) return;
         const { rec } = currentRecommendationContext;
 
-        if (window.playAlbumSafe) {
-          window.playAlbumSafe(rec.album_id);
-        }
+        playRecommendedAlbum(rec);
 
         contextMenu.classList.add('hidden');
         currentRecommendationContext = null;
