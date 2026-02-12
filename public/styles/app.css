@@ -47,6 +47,54 @@
   padding-right: 1rem; /* 16px - maintain edge spacing */
 }
 
+/* Define the recommendations grid class (7 columns - matches regular list structure) */
+.recommendations-grid {
+  display: grid;
+  grid-template-columns: 80px 0.75fr 0.65fr 0.6fr 0.6fr 0.75fr 0.6fr;
+  /* Cover(80px), Album, Artist, Genre 1, Genre 2, Recommended By, Date Added */
+  /* Column widths match regular list proportions where applicable */
+  align-items: center;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  gap: 1rem;
+}
+
+/* Recommendations grid cells - ensure proper flex behavior */
+.recommendations-grid > div {
+  min-width: 0; /* Prevent grid blowout */
+  display: flex;
+  align-items: center;
+}
+
+/* Emulate position column spacing (match regular lists) */
+.recommendations-grid > div:nth-child(1) {
+  margin-left: calc(
+    7px + 1.5rem
+  ); /* 31px - emulates position column (7px) + its margin (24px) */
+  margin-right: 0.5rem; /* 8px - matches regular list cover margin */
+  justify-content: flex-start; /* Left-align covers like regular lists */
+}
+
+/* Center-align "ALBUM" header text over cover column (matches regular lists) */
+.recommendations-header > div:nth-child(1) {
+  justify-content: center;
+}
+
+/* Album name column - vertical layout with left alignment (matches regular lists) */
+.recommendations-grid > div:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Add visual separator to Date Added column (last column) */
+.recommendations-grid > div:nth-child(7) {
+  border-left: 1px solid rgba(55, 65, 81, 1); /* gray-700 */
+  padding-left: 1rem; /* 16px - matches regular list comment cell */
+  align-self: stretch; /* Span full height like comment cell */
+}
+
 /* Fix alignment issues with flex items inside grid cells */
 .album-grid > div,
 .album-row > div,
@@ -285,6 +333,23 @@ body {
     border-bottom: none;
     box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.3);
     /* No hover effect - headers should be static */
+  }
+
+  /* Recommendations header - same styling as album header */
+  .recommendations-header {
+    padding-top: 0.375rem !important;
+    padding-bottom: 0.375rem !important;
+    position: sticky;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    background: linear-gradient(
+      90deg,
+      rgba(31, 41, 55, 1) 0%,
+      rgba(17, 24, 39, 1) 100%
+    );
+    border-bottom: none;
+    box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.3);
   }
 }
 

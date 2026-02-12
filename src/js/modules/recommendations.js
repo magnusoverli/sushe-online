@@ -165,10 +165,10 @@ export function createRecommendations(deps = {}) {
    */
   function createRecommendationCard(rec, year, locked, index) {
     const cardWrapper = document.createElement('div');
-    cardWrapper.className = 'album-card-wrapper h-[150px]';
+    cardWrapper.className = 'album-card-wrapper h-[130px]';
 
     const card = document.createElement('div');
-    card.className = 'album-card album-row relative h-[150px] bg-gray-900';
+    card.className = 'album-card album-row relative h-[130px] bg-gray-900';
     card.dataset.albumId = rec.album_id;
     card.dataset.recIndex = index;
 
@@ -201,7 +201,7 @@ export function createRecommendations(deps = {}) {
         </div>
         
         <!-- INFO SECTION -->
-        <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[142px]">
+        <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
           <div class="flex items-center">
             <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
               <i class="fas fa-compact-disc fa-xs mr-2"></i>${escapeHtml(rec.album)}
@@ -679,39 +679,39 @@ export function createRecommendations(deps = {}) {
         container.appendChild(cardContainer);
       }
     } else {
-      const table = document.createElement('table');
-      table.className = 'w-full album-table recommendations-table';
-      table.innerHTML = `
-        <thead>
-          <tr class="text-left text-gray-400 text-xs uppercase tracking-wider border-b border-gray-700">
-            <th class="py-3 px-2 w-12"></th>
-            <th class="py-3 px-2">Artist</th>
-            <th class="py-3 px-2">Album</th>
-            <th class="py-3 px-2">Genre</th>
-            <th class="py-3 px-2">Recommended By</th>
-            <th class="py-3 px-2">Date Added</th>
-          </tr>
-        </thead>
-        <tbody></tbody>
+      // Desktop: Grid layout with header (matching regular lists)
+      const header = document.createElement('div');
+      header.className =
+        'recommendations-header recommendations-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 bg-black z-10 shrink-0';
+      header.style.alignItems = 'center';
+      header.innerHTML = `
+        <div>Album</div>
+        <div></div>
+        <div>Artist</div>
+        <div>Genre 1</div>
+        <div>Genre 2</div>
+        <div>Recommended By</div>
+        <div>Date Added</div>
       `;
 
-      const tbody = table.querySelector('tbody');
+      const rowsContainer = document.createElement('div');
+      rowsContainer.className =
+        'recommendations-rows-container relative flex-1';
 
       if (recommendations.length === 0) {
-        const emptyRow = document.createElement('tr');
-        emptyRow.innerHTML = `
-          <td colspan="6" class="py-12 text-center text-gray-500">
-            <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
-            <p>No recommendations yet for ${year}</p>
-            <p class="text-sm mt-2">Click the + button to recommend an album</p>
-          </td>
+        const emptyDiv = document.createElement('div');
+        emptyDiv.className = 'py-12 text-center text-gray-500';
+        emptyDiv.innerHTML = `
+          <i class="fas fa-thumbs-up text-4xl mb-4 block opacity-50"></i>
+          <p>No recommendations yet for ${year}</p>
+          <p class="text-sm mt-2">Click the + button to recommend an album</p>
         `;
-        tbody.appendChild(emptyRow);
+        rowsContainer.appendChild(emptyDiv);
       } else {
         recommendations.forEach((rec) => {
-          const row = document.createElement('tr');
+          const row = document.createElement('div');
           row.className =
-            'album-row hover:bg-gray-800/50 border-b border-gray-800 cursor-pointer';
+            'album-row recommendations-grid gap-4 py-2 cursor-pointer';
           row.dataset.albumId = rec.album_id;
 
           const date = new Date(rec.created_at);
@@ -721,30 +721,62 @@ export function createRecommendations(deps = {}) {
             day: 'numeric',
           });
 
+          // Split genres into separate display values
+          const genre1Display = rec.genre_1
+            ? escapeHtml(rec.genre_1)
+            : '<span class="text-gray-600 italic">No genre</span>';
+          const genre2Display = rec.genre_2
+            ? escapeHtml(rec.genre_2)
+            : '<span class="text-gray-600 italic">No genre</span>';
+
+          // Format release date (matches regular list formatting)
+          const releaseDate = rec.release_date
+            ? new Date(rec.release_date).toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+              })
+            : '';
+
           row.innerHTML = `
-            <td class="py-2 px-2">
-              <div class="w-10 h-10 bg-gray-700 rounded overflow-hidden">
+            <div class="flex items-center justify-center">
+              <div class="album-cover-container">
                 <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
-                     alt="${rec.album}" 
-                     class="w-full h-full object-cover"
+                     alt="${escapeHtml(rec.album)}" 
+                     class="album-cover rounded-sm shadow-lg"
                      loading="lazy"
-                     onerror="this.parentElement.innerHTML='<div class=\\'flex items-center justify-center w-full h-full text-gray-500\\'><i class=\\'fas fa-compact-disc\\'></i></div>'">
+                     decoding="async"
+                     onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded-sm bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'">
               </div>
-            </td>
-            <td class="py-2 px-2 text-white">${escapeHtml(rec.artist)}</td>
-            <td class="py-2 px-2 text-gray-300">${escapeHtml(rec.album)}</td>
-            <td class="py-2 px-2 text-gray-400 text-sm">${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}</td>
-            <td class="py-2 px-2 text-blue-400">
-              <span class="flex items-center gap-1">
+            </div>
+            <div class="flex flex-col justify-center">
+              <div class="flex items-center gap-2">
+                <span class="album-name font-semibold text-gray-200 truncate">${escapeHtml(rec.album)}</span>
+              </div>
+              ${releaseDate ? `<div class="text-xs mt-0.5 release-date-display text-gray-400">${releaseDate}</div>` : ''}
+            </div>
+            <div class="flex items-center">
+              <span class="album-cell-text text-gray-300 truncate">${escapeHtml(rec.artist)}</span>
+            </div>
+            <div class="flex items-center">
+              <span class="album-cell-text text-gray-400 truncate">${genre1Display}</span>
+            </div>
+            <div class="flex items-center">
+              <span class="album-cell-text text-gray-400 truncate">${genre2Display}</span>
+            </div>
+            <div class="flex items-center">
+              <span class="flex items-center gap-1 text-blue-400 truncate">
                 ${escapeHtml(rec.recommended_by)}
-                <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors" 
+                <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors shrink-0" 
                         title="View reasoning"
                         data-rec-index="${recommendations.indexOf(rec)}">
                   <i class="fas fa-comment-alt text-xs"></i>
                 </button>
               </span>
-            </td>
-            <td class="py-2 px-2 text-gray-500 text-sm">${formattedDate}</td>
+            </div>
+            <div class="flex items-center">
+              <span class="album-cell-text text-gray-500 truncate">${formattedDate}</span>
+            </div>
           `;
 
           row.addEventListener('click', (e) => {
@@ -765,11 +797,12 @@ export function createRecommendations(deps = {}) {
             });
           }
 
-          tbody.appendChild(row);
+          rowsContainer.appendChild(row);
         });
       }
 
-      container.appendChild(table);
+      container.appendChild(header);
+      container.appendChild(rowsContainer);
     }
   }
 
