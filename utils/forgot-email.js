@@ -1,4 +1,4 @@
-// forgot_email.js
+// forgot-email.js
 
 const composeForgotPasswordEmail = (userEmail, resetUrl) => {
   // Email content with black metal theme

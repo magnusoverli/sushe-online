@@ -38,7 +38,7 @@ const { errorHandler, notFoundHandler } = require('./middleware/error-handler');
 const requestIdMiddleware = require('./middleware/request-id');
 const { metricsMiddleware } = require('./utils/metrics');
 const { setup: setupWebSocket, broadcast } = require('./utils/websocket');
-const { composeForgotPasswordEmail } = require('./utils/forgot_email');
+const { composeForgotPasswordEmail } = require('./utils/forgot-email');
 const {
   isValidEmail,
   isValidUsername,

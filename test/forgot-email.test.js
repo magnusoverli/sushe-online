@@ -1,11 +1,11 @@
 /**
- * Tests for utils/forgot_email.js
+ * Tests for utils/forgot-email.js
  * Tests the composeForgotPasswordEmail function
  */
 
 const { describe, it, afterEach } = require('node:test');
 const assert = require('node:assert');
-const { composeForgotPasswordEmail } = require('../utils/forgot_email.js');
+const { composeForgotPasswordEmail } = require('../utils/forgot-email.js');
 
 // =============================================================================
 // composeForgotPasswordEmail tests

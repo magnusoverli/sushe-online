@@ -687,7 +687,7 @@ describe('templates utilities', () => {
       const result = templates.spotifyTemplate(user);
 
       assert.ok(result.includes('/styles/output.css'));
-      assert.ok(result.includes('/styles/spotify-app.css'));
+      assert.ok(result.includes('/styles/app.css'));
     });
   });
 

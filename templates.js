@@ -1257,7 +1257,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
   <link href="${asset('/styles/output.css')}" rel="stylesheet">
-  <link href="${asset('/styles/spotify-app.css')}" rel="stylesheet">
+  <link href="${asset('/styles/app.css')}" rel="stylesheet">
   <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
   <style>
     /* CSS Custom Properties for theming */
