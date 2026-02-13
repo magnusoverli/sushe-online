@@ -11,12 +11,95 @@
  * Tests can inject a mock refreshAlbumPlaycount; production uses the default.
  */
 
+/** Staleness threshold: only refresh albums older than 2 hours */
+const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Build a lookup map of normalized artist+album keys to cached stats.
+ * When duplicate keys exist, keeps the row with the highest playcount
+ * (or most recent update as tiebreaker).
+ *
+ * @param {Array} statsRows - Rows from user_album_stats
+ * @param {Function} normalizeAlbumKey - Normalization function
+ * @returns {Map<string, Object>}
+ */
+function buildStatsMap(statsRows, normalizeAlbumKey) {
+  const statsMap = new Map();
+  for (const row of statsRows) {
+    const key =
+      row.normalized_key || normalizeAlbumKey(row.artist, row.album_name);
+    const existing = statsMap.get(key);
+    const rowCount = row.lastfm_playcount ?? 0;
+    const existingCount = existing?.lastfm_playcount ?? 0;
+    const rowNewer =
+      existing &&
+      row.lastfm_updated_at &&
+      existing.lastfm_updated_at &&
+      new Date(row.lastfm_updated_at) > new Date(existing.lastfm_updated_at);
+    if (
+      !existing ||
+      rowCount > existingCount ||
+      (rowCount === existingCount && rowNewer)
+    ) {
+      statsMap.set(key, row);
+    }
+  }
+  return statsMap;
+}
+
+/**
+ * Match list items to cached stats and determine which need refreshing.
+ *
+ * @param {Array} listItems - Rows with _id, album_id, artist, album
+ * @param {Map} statsMap - Normalized stats lookup
+ * @param {Function} normalizeAlbumKey - Normalization function
+ * @returns {{ playcounts: Object, albumsToRefresh: Array }}
+ */
+function matchAndFindStale(listItems, statsMap, normalizeAlbumKey) {
+  const playcounts = {};
+  const albumsToRefresh = [];
+  const staleThreshold = new Date(Date.now() - STALE_THRESHOLD_MS);
+
+  for (const item of listItems) {
+    if (!item.artist || !item.album) continue;
+
+    const key = normalizeAlbumKey(item.artist, item.album);
+    const cached = statsMap.get(key);
+
+    if (cached) {
+      playcounts[item._id] = {
+        playcount: cached.lastfm_playcount,
+        status: cached.lastfm_status || null,
+      };
+    } else {
+      playcounts[item._id] = null;
+    }
+
+    const needsRefresh =
+      !cached ||
+      !cached.lastfm_updated_at ||
+      cached.lastfm_status === 'error' ||
+      new Date(cached.lastfm_updated_at) < staleThreshold;
+
+    if (needsRefresh) {
+      albumsToRefresh.push({
+        itemId: item._id,
+        artist: item.artist,
+        album: item.album,
+        albumId: item.album_id,
+      });
+    }
+  }
+
+  return { playcounts, albumsToRefresh };
+}
+
 /**
  * Factory that creates playcount service with injectable dependencies.
  *
  * @param {Object} deps - Dependencies
  * @param {Function} deps.refreshAlbumPlaycount - Function to refresh a single album's playcount
- * @returns {{ refreshPlaycountsInBackground: Function }}
+ * @returns {{ refreshPlaycountsInBackground: Function, getListPlaycounts: Function }}
  */
 function createPlaycountService(deps = {}) {
   const refreshAlbumPlaycount =
@@ -104,10 +187,94 @@ function createPlaycountService(deps = {}) {
     return results;
   }
 
-  return { refreshPlaycountsInBackground };
+  /**
+   * Get playcounts for all albums in a list, returning cached data
+   * and triggering background refresh for stale entries.
+   *
+   * @param {Object} params
+   * @param {string} params.listId - List ID
+   * @param {string} params.userId - User ID
+   * @param {string} params.lastfmUsername - Last.fm username
+   * @param {Object} params.pool - Database pool
+   * @param {Object} params.logger - Logger instance
+   * @param {Function} params.normalizeAlbumKey - Normalization function
+   * @returns {Promise<{ playcounts: Object, refreshing: number } | { error: Object }>}
+   */
+  async function getListPlaycounts({
+    listId,
+    userId,
+    lastfmUsername,
+    pool,
+    logger,
+    normalizeAlbumKey,
+  }) {
+    // Verify list exists
+    const list = await pool.query(`SELECT _id FROM lists WHERE _id = $1`, [
+      listId,
+    ]);
+    if (list.rows.length === 0) {
+      return { error: { status: 404, message: 'List not found' } };
+    }
+
+    // Get all albums in the list
+    const listItemsResult = await pool.query(
+      `SELECT li._id, li.album_id, a.artist, a.album
+       FROM list_items li
+       LEFT JOIN albums a ON li.album_id = a.album_id
+       WHERE li.list_id = $1`,
+      [listId]
+    );
+    const listItems = listItemsResult.rows;
+
+    if (listItems.length === 0) {
+      return { playcounts: {}, refreshing: 0 };
+    }
+
+    // Get cached playcounts from user_album_stats
+    const statsResult = await pool.query(
+      `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at
+       FROM user_album_stats
+       WHERE user_id = $1`,
+      [userId]
+    );
+
+    const statsMap = buildStatsMap(statsResult.rows, normalizeAlbumKey);
+    const { playcounts, albumsToRefresh } = matchAndFindStale(
+      listItems,
+      statsMap,
+      normalizeAlbumKey
+    );
+
+    if (albumsToRefresh.length > 0) {
+      logger.debug('Triggering background playcount refresh for stale albums', {
+        staleCount: albumsToRefresh.length,
+        totalCount: listItems.length,
+        lastfmUsername,
+      });
+      refreshPlaycountsInBackground(
+        userId,
+        lastfmUsername,
+        albumsToRefresh,
+        pool,
+        logger
+      ).catch((err) => {
+        logger.error('Background playcount refresh failed:', err);
+      });
+    }
+
+    return { playcounts, refreshing: albumsToRefresh.length };
+  }
+
+  return { refreshPlaycountsInBackground, getListPlaycounts };
 }
 
 // Default instance for production use — callers import as before
 const defaultInstance = createPlaycountService();
 
-module.exports = { createPlaycountService, ...defaultInstance };
+module.exports = {
+  createPlaycountService,
+  buildStatsMap,
+  matchAndFindStale,
+  STALE_THRESHOLD_MS,
+  ...defaultInstance,
+};

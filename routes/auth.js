@@ -25,7 +25,6 @@ module.exports = (app, deps) => {
     validateExtensionToken,
     cleanupExpiredTokens,
   } = require('../utils/auth-utils');
-  const { EXTENSION_TOKEN_EXPIRY_MS } = require('../services/auth-service');
 
   const {
     htmlTemplate,
@@ -482,14 +481,12 @@ module.exports = (app, deps) => {
     '/api/auth/extension-token',
     ensureAuth,
     asyncHandler(async (req, res) => {
-      const token = generateExtensionToken();
-      const expiresAt = new Date(Date.now() + EXTENSION_TOKEN_EXPIRY_MS);
       const userAgent = req.get('User-Agent') || 'Unknown';
-
-      await pool.query(
-        `INSERT INTO extension_tokens (user_id, token, expires_at, user_agent)
-         VALUES ($1, $2, $3, $4)`,
-        [req.user._id, token, expiresAt, userAgent]
+      const result = await authService.createExtensionToken(
+        pool,
+        req.user._id,
+        userAgent,
+        generateExtensionToken
       );
 
       logger.info('Extension token generated', {
@@ -497,7 +494,7 @@ module.exports = (app, deps) => {
         email: req.user.email,
       });
 
-      res.json({ token, expiresAt: expiresAt.toISOString() });
+      res.json(result);
     }, 'generating extension token')
   );
 
@@ -537,14 +534,13 @@ module.exports = (app, deps) => {
         return res.status(400).json({ error: 'Token required' });
       }
 
-      const result = await pool.query(
-        `UPDATE extension_tokens
-         SET is_revoked = TRUE
-         WHERE token = $1 AND user_id = $2`,
-        [token, req.user._id]
+      const { revoked } = await authService.revokeExtensionToken(
+        pool,
+        token,
+        req.user._id
       );
 
-      if (result.rowCount === 0) {
+      if (!revoked) {
         return res.status(404).json({ error: 'Token not found' });
       }
 
@@ -562,15 +558,8 @@ module.exports = (app, deps) => {
     '/api/auth/extension-tokens',
     ensureAuth,
     asyncHandler(async (req, res) => {
-      const result = await pool.query(
-        `SELECT id, created_at, last_used_at, expires_at, user_agent, is_revoked
-         FROM extension_tokens
-         WHERE user_id = $1
-         ORDER BY created_at DESC`,
-        [req.user._id]
-      );
-
-      res.json({ tokens: result.rows });
+      const tokens = await authService.listExtensionTokens(pool, req.user._id);
+      res.json({ tokens });
     }, 'listing extension tokens')
   );
 

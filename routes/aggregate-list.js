@@ -220,13 +220,8 @@ module.exports = (app, deps) => {
     ensureAdmin,
     asyncHandler(
       async (req, res) => {
-        const result = await pool.query(`
-          SELECT DISTINCT year 
-          FROM lists 
-          WHERE is_main = TRUE AND year IS NOT NULL
-          ORDER BY year DESC
-        `);
-        res.json({ years: result.rows.map((r) => r.year) });
+        const years = await aggregateList.getYearsWithMainLists();
+        res.json({ years });
       },
       'fetching years with main lists',
       { errorMessage: 'Database error' }
@@ -523,18 +518,7 @@ module.exports = (app, deps) => {
     asyncHandler(
       async (req, res) => {
         const year = req.validatedYear;
-
-        // Create master_lists record if doesn't exist, or update existing
-        await pool.query(
-          `
-          INSERT INTO master_lists (year, locked, created_at, updated_at)
-          VALUES ($1, TRUE, NOW(), NOW())
-          ON CONFLICT (year) DO UPDATE SET
-            locked = TRUE,
-            updated_at = NOW()
-        `,
-          [year]
-        );
+        await aggregateList.lockYear(year);
 
         logger.info('Admin action', {
           action: 'lock_year',
@@ -563,14 +547,7 @@ module.exports = (app, deps) => {
     asyncHandler(
       async (req, res) => {
         const year = req.validatedYear;
-        await pool.query(
-          `
-          UPDATE master_lists 
-          SET locked = FALSE, updated_at = NOW()
-          WHERE year = $1
-        `,
-          [year]
-        );
+        await aggregateList.unlockYear(year);
 
         logger.info('Admin action', {
           action: 'unlock_year',
@@ -596,16 +573,8 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     asyncHandler(
       async (req, res) => {
-        const result = await pool.query(
-          `
-        SELECT year 
-        FROM master_lists 
-        WHERE locked = TRUE 
-        ORDER BY year DESC
-      `
-        );
-
-        res.json({ years: result.rows.map((r) => r.year) });
+        const years = await aggregateList.getLockedYears();
+        res.json({ years });
       },
       'fetching locked years',
       { errorMessage: 'Database error' }

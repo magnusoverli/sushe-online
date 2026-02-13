@@ -478,6 +478,50 @@ async function queryViewedYears(pool, userId) {
 // MAIN FACTORY
 // ============================================
 
+// ============================================
+// YEAR LOCKING OPERATIONS (extracted for function length compliance)
+// ============================================
+
+/** Lock a year to prevent list modifications */
+async function lockYearOp(pool, year) {
+  await pool.query(
+    `INSERT INTO master_lists (year, locked, created_at, updated_at)
+     VALUES ($1, TRUE, NOW(), NOW())
+     ON CONFLICT (year) DO UPDATE SET
+       locked = TRUE,
+       updated_at = NOW()`,
+    [year]
+  );
+}
+
+/** Unlock a year to allow list modifications */
+async function unlockYearOp(pool, year) {
+  await pool.query(
+    `UPDATE master_lists
+     SET locked = FALSE, updated_at = NOW()
+     WHERE year = $1`,
+    [year]
+  );
+}
+
+/** Get all locked years (descending order) */
+async function getLockedYearsOp(pool) {
+  const result = await pool.query(
+    `SELECT year FROM master_lists WHERE locked = TRUE ORDER BY year DESC`
+  );
+  return result.rows.map((r) => r.year);
+}
+
+/** Get years that have at least one main list (descending order) */
+async function getYearsWithMainListsOp(pool) {
+  const result = await pool.query(
+    `SELECT DISTINCT year FROM lists
+     WHERE is_main = TRUE AND year IS NOT NULL
+     ORDER BY year DESC`
+  );
+  return result.rows.map((r) => r.year);
+}
+
 /**
  * Create aggregate list utilities with injected dependencies
  * @param {Object} deps - Dependencies
@@ -709,6 +753,12 @@ function createAggregateList(deps = {}) {
   const resetSeen = (year, userId) => resetSeenStatus(pool, log, year, userId);
   const getViewedYears = (userId) => queryViewedYears(pool, userId);
 
+  // Year locking (delegates to extracted functions)
+  const lockYear = (year) => lockYearOp(pool, year);
+  const unlockYear = (year) => unlockYearOp(pool, year);
+  const getLockedYears = () => getLockedYearsOp(pool);
+  const getYearsWithMainLists = () => getYearsWithMainListsOp(pool);
+
   return {
     aggregateForYear,
     recompute,
@@ -730,6 +780,11 @@ function createAggregateList(deps = {}) {
     markSeen,
     resetSeen,
     getViewedYears,
+    // Year locking
+    lockYear,
+    unlockYear,
+    getLockedYears,
+    getYearsWithMainLists,
   };
 }
 

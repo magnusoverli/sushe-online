@@ -11,13 +11,11 @@
  * - MusicBrainz tracks
  */
 
-const { normalizeForExternalApi } = require('../../utils/normalization');
 const { createAsyncHandler } = require('../../middleware/async-handler');
+const { SUSHE_USER_AGENT } = require('../../utils/musicbrainz-helpers');
 const {
-  SUSHE_USER_AGENT,
-  selectBestRelease,
-  extractTracksFromMedia,
-} = require('../../utils/musicbrainz-helpers');
+  createTrackResolutionService,
+} = require('../../services/track-resolution-service');
 
 /**
  * Register proxy routes
@@ -37,6 +35,7 @@ module.exports = (app, deps) => {
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
+  const trackService = createTrackResolutionService({ fetch, mbFetch, logger });
 
   // Proxy for Deezer API to avoid CORS issues
   app.get(
@@ -382,213 +381,16 @@ module.exports = (app, deps) => {
     cacheConfigs.static,
     asyncHandler(async (req, res) => {
       const { id, artist, album } = req.query;
-      if (!id && (!artist || !album)) {
+
+      const result = await trackService.resolveTracks({ id, artist, album });
+
+      if (result.error) {
         return res
-          .status(400)
-          .json({ error: 'id or artist/album query required' });
+          .status(result.error.status)
+          .json({ error: result.error.message });
       }
 
-      const headers = { 'User-Agent': SUSHE_USER_AGENT };
-
-      let releaseGroupId = id;
-      let directReleaseId = null;
-
-      // Use centralized normalization for better external API matching
-      // Strips diacritics (e.g., "Exxul" -> "Exxul") and normalizes special chars
-      const sanitize = (str = '') =>
-        normalizeForExternalApi(str)
-          .replace(/[()[\]{}]/g, '')
-          .replace(/[.,!?]/g, '');
-
-      const artistClean = sanitize(artist);
-      const albumClean = sanitize(album);
-
-      const fetchItunesTracks = async () => {
-        try {
-          // artistClean and albumClean are already normalized
-          const term = `${artistClean} ${albumClean}`;
-          const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=album&limit=5`;
-          const resp = await fetch(searchUrl);
-          if (!resp.ok) return null;
-          const data = await resp.json();
-          if (!data.results || !data.results.length) return null;
-          const best = data.results[0];
-          if (!best.collectionId) return null;
-          const lookup = await fetch(
-            `https://itunes.apple.com/lookup?id=${best.collectionId}&entity=song`
-          );
-          if (!lookup.ok) return null;
-          const lookupData = await lookup.json();
-          const tracks = (lookupData.results || [])
-            .filter((r) => r.wrapperType === 'track')
-            .map((r) => ({
-              name: r.trackName,
-              length: r.trackTimeMillis || null,
-            }));
-          return tracks.length
-            ? { tracks, releaseId: `itunes:${best.collectionId}` }
-            : null;
-        } catch (err) {
-          logger.error('iTunes fallback error', { error: err.message });
-          return null;
-        }
-      };
-
-      const fetchDeezerTracks = async () => {
-        try {
-          // artistClean and albumClean are already normalized
-          const q = `${artistClean} ${albumClean}`;
-          const searchResp = await fetch(
-            `https://api.deezer.com/search/album?q=${encodeURIComponent(q)}&limit=5`
-          );
-          if (!searchResp.ok) return null;
-          const data = await searchResp.json();
-          const albumId = data.data && data.data[0] && data.data[0].id;
-          if (!albumId) return null;
-          const albumResp = await fetch(
-            `https://api.deezer.com/album/${albumId}`
-          );
-          if (!albumResp.ok) return null;
-          const albumData = await albumResp.json();
-          const tracks = (albumData.tracks?.data || []).map((t) => ({
-            name: t.title,
-            length: t.duration ? t.duration * 1000 : null,
-          }));
-          return tracks.length
-            ? { tracks, releaseId: `deezer:${albumId}` }
-            : null;
-        } catch (err) {
-          logger.error('Deezer fallback error', { error: err.message });
-          return null;
-        }
-      };
-
-      const runFallbacks = async () => {
-        // Race both services and return first successful result
-        try {
-          return await Promise.any([fetchItunesTracks(), fetchDeezerTracks()]);
-        } catch (_err) {
-          // All fallbacks failed
-          return null;
-        }
-      };
-
-      const looksLikeMBID = (val) =>
-        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
-          val || ''
-        );
-
-      if (!looksLikeMBID(releaseGroupId)) {
-        if (!artist || !album) {
-          return res
-            .status(400)
-            .json({ error: 'artist and album are required' });
-        }
-
-        const searchReleaseGroups = async (query) => {
-          const url =
-            `https://musicbrainz.org/ws/2/release-group/?query=${encodeURIComponent(query)}` +
-            `&type=album|ep&fmt=json&limit=10`;
-          const resp = await mbFetch(url, { headers });
-          if (!resp.ok) {
-            throw new Error(`MusicBrainz search responded ${resp.status}`);
-          }
-          const data = await resp.json();
-          return data['release-groups'] || [];
-        };
-
-        let groups = await searchReleaseGroups(
-          `release:${albumClean} AND artist:${artistClean}`
-        );
-        if (
-          !groups.length &&
-          (albumClean !== album || artistClean !== artist)
-        ) {
-          groups = await searchReleaseGroups(
-            `release:${album} AND artist:${artist}`
-          );
-        }
-
-        if (!groups.length) {
-          // Fallback: try release search instead of release-group
-          const relUrl =
-            `https://musicbrainz.org/ws/2/release/?query=${encodeURIComponent(`${albumClean} ${artistClean}`)}` +
-            `&fmt=json&limit=10`;
-          const relResp = await mbFetch(relUrl, { headers });
-          if (relResp.ok) {
-            const relData = await relResp.json();
-            const releases = relData.releases || [];
-            if (releases.length) {
-              releaseGroupId = releases[0]['release-group']?.id || null;
-              directReleaseId = releases[0].id;
-            }
-          }
-        } else {
-          // Prefer Album over Single/EP - Singles often have fewer tracks
-          // Priority: Album > EP > Single > other
-          const typeOrder = { Album: 0, EP: 1, Single: 2 };
-          const sortedGroups = [...groups].sort((a, b) => {
-            const aType = a['primary-type'] || 'Other';
-            const bType = b['primary-type'] || 'Other';
-            const aOrder = typeOrder[aType] ?? 3;
-            const bOrder = typeOrder[bType] ?? 3;
-            return aOrder - bOrder;
-          });
-          releaseGroupId = sortedGroups[0].id;
-        }
-
-        if (!releaseGroupId && !directReleaseId) {
-          const fb = await runFallbacks();
-          if (fb) return res.json(fb);
-          return res.status(404).json({ error: 'Release group not found' });
-        }
-      }
-
-      let releasesData;
-      if (directReleaseId) {
-        const mbUrl =
-          `https://musicbrainz.org/ws/2/release/${directReleaseId}` +
-          `?inc=recordings&fmt=json`;
-        const resp = await mbFetch(mbUrl, { headers });
-        if (!resp.ok) {
-          throw new Error(`MusicBrainz responded ${resp.status}`);
-        }
-        const data = await resp.json();
-        releasesData = [data];
-      } else {
-        const mbUrl =
-          `https://musicbrainz.org/ws/2/release?release-group=${releaseGroupId}` +
-          `&inc=recordings&fmt=json&limit=100`;
-        const resp = await mbFetch(mbUrl, { headers });
-        if (!resp.ok) {
-          throw new Error(`MusicBrainz responded ${resp.status}`);
-        }
-        const data = await resp.json();
-        if (!data.releases || !data.releases.length) {
-          const fb = await runFallbacks();
-          if (fb) return res.json(fb);
-          return res.status(404).json({ error: 'No releases found' });
-        }
-        releasesData = data.releases;
-      }
-
-      const best = selectBestRelease(releasesData);
-
-      if (!best || !best.media) {
-        const fb = await runFallbacks();
-        if (fb) return res.json(fb);
-        return res.status(404).json({ error: 'No suitable release found' });
-      }
-
-      const tracks = extractTracksFromMedia(best.media);
-
-      if (!tracks.length) {
-        const fb = await runFallbacks();
-        if (fb) return res.json(fb);
-        return res.status(404).json({ error: 'No tracks available' });
-      }
-
-      res.json({ tracks, releaseId: best.id });
+      res.json({ tracks: result.tracks, releaseId: result.releaseId });
     }, 'fetching MusicBrainz tracks')
   );
 };

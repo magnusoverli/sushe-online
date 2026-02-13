@@ -1,17 +1,14 @@
 /**
  * Tidal API Routes
  *
+ * Thin route layer — delegates business logic to tidalService.
  * Handles Tidal integration:
  * - Album search
  * - Track search
  */
 
 const { createAsyncHandler } = require('../../middleware/async-handler');
-const {
-  matchTrackByNumber,
-  extractTrackName,
-  matchTrackByName,
-} = require('../../utils/track-matching');
+const { createTidalService } = require('../../services/tidal-service');
 
 /**
  * Register Tidal routes
@@ -22,89 +19,40 @@ module.exports = (app, deps) => {
   const { ensureAuthAPI, usersAsync, logger, fetch, requireTidalAuth } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
+  const tidalService = createTidalService({ fetch, usersAsync, logger });
+
   // Search Tidal for an album and return the ID
   app.get(
     '/api/tidal/album',
     ensureAuthAPI,
     requireTidalAuth,
     asyncHandler(async (req, res) => {
-      const tidalAuth = req.tidalAuth;
       const { artist, album } = req.query;
       if (!artist || !album) {
         return res.status(400).json({ error: 'artist and album are required' });
       }
       logger.info('Tidal album search:', artist, '-', album);
 
-      // Get user's country code for region-specific results
-      let countryCode = req.user.tidalCountry || 'US';
-
-      // If no country stored, try to get it from user profile
-      if (!req.user.tidalCountry) {
-        try {
-          const profileResp = await fetch('https://openapi.tidal.com/v2/me', {
-            headers: {
-              Authorization: `Bearer ${tidalAuth.access_token}`,
-              Accept: 'application/vnd.api+json',
-            },
-          });
-          if (profileResp.ok) {
-            const profileData = await profileResp.json();
-            countryCode = profileData?.data?.attributes?.country || 'US';
-            // Save for future requests (fire-and-forget with error logging)
-            usersAsync
-              .update(
-                { _id: req.user._id },
-                { $set: { tidalCountry: countryCode, updatedAt: new Date() } }
-              )
-              .catch((err) =>
-                logger.error('Failed to save Tidal country', {
-                  error: err.message,
-                  userId: req.user._id,
-                })
-              );
-            req.user.tidalCountry = countryCode;
-          } else {
-            logger.warn('Tidal profile request failed:', profileResp.status);
-            countryCode = 'US';
-          }
-        } catch (profileErr) {
-          logger.error('Tidal profile fetch error:', profileErr);
-          countryCode = 'US';
-        }
-      }
-
-      const query = `${album} ${artist}`;
-      const searchPath = encodeURIComponent(query).replace(/'/g, '%27');
-      const params = new URLSearchParams({ countryCode });
-      const url =
-        `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?` +
-        params.toString();
-      logger.debug('Tidal search URL:', url);
-      logger.debug(
-        'Tidal client ID header:',
-        (process.env.TIDAL_CLIENT_ID || '').slice(0, 6) + '...'
+      const countryCode = await tidalService.resolveCountryCode(
+        req.user,
+        req.tidalAuth.access_token
       );
-      const resp = await fetch(url, {
-        headers: {
-          Authorization: `Bearer ${tidalAuth.access_token}`,
-          Accept: 'application/vnd.api+json',
-          'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
-        },
-      });
-      logger.debug('Tidal response status:', resp.status);
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => '<body read failed>');
-        logger.warn('Tidal API request failed:', resp.status, body);
-        throw new Error(`Tidal API error ${resp.status}`);
-      }
-      const data = await resp.json();
-      logger.debug('Tidal API response body:', JSON.stringify(data, null, 2));
-      const albumId = data?.data?.[0]?.id;
-      if (!albumId) {
+      // Update cached country on req.user for this request
+      req.user.tidalCountry = countryCode;
+
+      const result = await tidalService.searchAlbum(
+        artist,
+        album,
+        req.tidalAuth.access_token,
+        countryCode
+      );
+
+      if (!result) {
         return res.status(404).json({ error: 'Album not found' });
       }
-      logger.info('Tidal search result id:', albumId);
-      res.json({ id: albumId });
+
+      logger.info('Tidal search result id:', result.id);
+      res.json(result);
     }, 'searching Tidal album')
   );
 
@@ -114,7 +62,6 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     requireTidalAuth,
     asyncHandler(async (req, res) => {
-      const tidalAuth = req.tidalAuth;
       const { artist, album, track } = req.query;
       if (!artist || !album || !track) {
         return res
@@ -123,99 +70,21 @@ module.exports = (app, deps) => {
       }
       logger.info('Tidal track search:', artist, '-', album, '-', track);
 
-      const headers = {
-        Authorization: `Bearer ${tidalAuth.access_token}`,
-        Accept: 'application/vnd.api+json',
-        'X-Tidal-Token': process.env.TIDAL_CLIENT_ID || '',
-      };
-
       const countryCode = req.user.tidalCountry || 'US';
 
-      // First, find the album
-      const albumQuery = `${album} ${artist}`;
-      const searchPath = encodeURIComponent(albumQuery).replace(/'/g, '%27');
-      const albumResp = await fetch(
-        `https://openapi.tidal.com/v2/searchResults/${searchPath}/relationships/albums?countryCode=${countryCode}`,
-        { headers }
+      const result = await tidalService.searchTrack(
+        artist,
+        album,
+        track,
+        req.tidalAuth.access_token,
+        countryCode
       );
-      if (!albumResp.ok) {
-        throw new Error(`Tidal API error ${albumResp.status}`);
-      }
-      const albumData = await albumResp.json();
-      const tidalAlbumId = albumData?.data?.[0]?.id;
-      if (!tidalAlbumId) {
-        return res.status(404).json({ error: 'Album not found' });
+
+      if (!result) {
+        return res.status(404).json({ error: 'Track not found' });
       }
 
-      // Get album tracks
-      const tracksResp = await fetch(
-        `https://openapi.tidal.com/v2/albums/${tidalAlbumId}/relationships/items?countryCode=${countryCode}`,
-        { headers }
-      );
-      if (!tracksResp.ok) {
-        throw new Error(`Tidal API error ${tracksResp.status}`);
-      }
-      const tracksData = await tracksResp.json();
-      const tracks = tracksData.data || [];
-
-      // Try to match by track number first
-      const numberMatch = matchTrackByNumber(tracks, track);
-      if (numberMatch) {
-        logger.info('Tidal track matched by number', {
-          trackId: numberMatch.id,
-        });
-        return res.json({ id: numberMatch.id });
-      }
-
-      // Extract track name from format like "3. Track Name"
-      const searchName = extractTrackName(track);
-
-      // For name matching, we need track details - fetch them
-      const trackDetailsPromises = tracks.slice(0, 20).map(async (t) => {
-        try {
-          const detailResp = await fetch(
-            `https://openapi.tidal.com/v2/tracks/${t.id}?countryCode=${countryCode}`,
-            { headers }
-          );
-          if (detailResp.ok) {
-            const detail = await detailResp.json();
-            return { id: t.id, name: detail.data?.attributes?.title || '' };
-          }
-        } catch {
-          // Ignore individual track fetch errors
-        }
-        return { id: t.id, name: '' };
-      });
-
-      const trackDetails = await Promise.all(trackDetailsPromises);
-      const matchingTrack = matchTrackByName(trackDetails, searchName);
-      if (matchingTrack) {
-        logger.info('Tidal track matched by name', {
-          trackId: matchingTrack.id,
-        });
-        return res.json({ id: matchingTrack.id });
-      }
-
-      // Fallback: direct track search
-      const trackSearchPath = encodeURIComponent(
-        `${searchName} ${artist}`
-      ).replace(/'/g, '%27');
-      const fallbackResp = await fetch(
-        `https://openapi.tidal.com/v2/searchResults/${trackSearchPath}/relationships/tracks?countryCode=${countryCode}&limit=1`,
-        { headers }
-      );
-      if (fallbackResp.ok) {
-        const fallbackData = await fallbackResp.json();
-        if (fallbackData.data && fallbackData.data.length > 0) {
-          logger.info(
-            'Tidal track matched by fallback search:',
-            fallbackData.data[0].id
-          );
-          return res.json({ id: fallbackData.data[0].id });
-        }
-      }
-
-      return res.status(404).json({ error: 'Track not found' });
+      res.json(result);
     }, 'searching Tidal track')
   );
 };
