@@ -6,6 +6,7 @@
  */
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
+import { apiCall } from './utils.js';
 import { createModal } from './modal-factory.js';
 import { markAlbumsDistinct } from '../utils/album-api.js';
 
@@ -27,23 +28,20 @@ let resolveCallback = null;
 export async function checkAndPromptSimilar(newAlbum) {
   try {
     // Call API to check for similar albums
-    const response = await fetch('/api/albums/check-similar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        artist: newAlbum.artist,
-        album: newAlbum.album,
-        album_id: newAlbum.album_id || null,
-      }),
-    });
-
-    if (!response.ok) {
+    let data;
+    try {
+      data = await apiCall('/api/albums/check-similar', {
+        method: 'POST',
+        body: JSON.stringify({
+          artist: newAlbum.artist,
+          album: newAlbum.album,
+          album_id: newAlbum.album_id || null,
+        }),
+      });
+    } catch (_err) {
       console.warn('Failed to check for similar albums');
       return { action: 'add_new' };
     }
-
-    const data = await response.json();
 
     if (!data.hasSimilar || data.matches.length === 0) {
       return { action: 'add_new' };

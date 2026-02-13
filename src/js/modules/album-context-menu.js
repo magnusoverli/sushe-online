@@ -20,6 +20,7 @@ import {
 } from '../utils/submenu-behavior.js';
 import { groupListsByYear } from '../utils/list-grouping.js';
 import { hideAllContextMenus as hideAllMenusBase } from './context-menu.js';
+import { apiCall } from './utils.js';
 
 /**
  * Create the album context menu module
@@ -388,10 +389,8 @@ export function createAlbumContextMenu(deps = {}) {
         '<i class="fas fa-spinner fa-spin mr-2"></i>Applying...';
 
       try {
-        const response = await fetch('/api/admin/album/reidentify', {
+        const data = await apiCall('/api/admin/album/reidentify', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({
             artist: album.artist,
             album: album.album,
@@ -399,12 +398,6 @@ export function createAlbumContextMenu(deps = {}) {
             newAlbumId: selectedReleaseId,
           }),
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Re-identification failed');
-        }
 
         modal.classList.add('hidden');
         if (cleanup) cleanup();
@@ -439,22 +432,14 @@ export function createAlbumContextMenu(deps = {}) {
 
     // Fetch candidates
     try {
-      const response = await fetch('/api/admin/album/reidentify/search', {
+      const data = await apiCall('/api/admin/album/reidentify/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
         body: JSON.stringify({
           artist: album.artist,
           album: album.album,
           currentAlbumId: album.album_id,
         }),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Search failed');
-      }
 
       loading.classList.add('hidden');
 

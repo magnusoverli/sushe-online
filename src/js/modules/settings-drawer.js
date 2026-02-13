@@ -2785,16 +2785,9 @@ export function createSettingsDrawer(deps = {}) {
       statusDiv.innerHTML =
         '<i class="fas fa-spinner fa-spin mr-2"></i>Scanning manual albums...';
 
-      const response = await fetch(
-        `/api/admin/audit/manual-albums?threshold=${threshold}`,
-        { credentials: 'same-origin' }
+      const data = await apiCall(
+        `/api/admin/audit/manual-albums?threshold=${threshold}`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch manual albums');
-      }
-
-      const data = await response.json();
 
       const hasIntegrityIssues =
         data.integrityIssues && data.integrityIssues.length > 0;
@@ -4387,23 +4380,10 @@ export function createSettingsDrawer(deps = {}) {
 
       progressText.textContent = 'Uploading backup...';
 
-      const response = await fetch('/admin/restore', {
+      const result = await apiCall('/admin/restore', {
         method: 'POST',
         body: formData,
-        credentials: 'same-origin',
-        headers: {
-          'X-CSRF-Token': window.csrfToken || '',
-        },
       });
-
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ error: 'Restore failed' }));
-        throw new Error(errorData.error || 'Restore failed');
-      }
-
-      const result = await response.json();
 
       progressText.textContent =
         result.message || 'Restore completed. Server restarting...';

@@ -5,7 +5,7 @@
  * in the database, allowing merge or mark-as-distinct actions.
  */
 
-import { showToast } from './utils.js';
+import { showToast, apiCall } from './utils.js';
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
 import { createModal } from './modal-factory.js';
 import { markAlbumsDistinct } from '../utils/album-api.js';
@@ -56,18 +56,9 @@ export async function openManualAlbumAudit(
       currentData = prefetchedData;
     } else {
       // Fetch manual albums with threshold
-      const response = await fetch(
-        `/api/admin/audit/manual-albums?threshold=${thresholdValue}`,
-        {
-          credentials: 'same-origin',
-        }
+      currentData = await apiCall(
+        `/api/admin/audit/manual-albums?threshold=${thresholdValue}`
       );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch manual albums');
-      }
-
-      currentData = await response.json();
     }
     currentIndex = 0;
 
@@ -424,21 +415,13 @@ window.deleteOrphanedReferences = async function (albumId, issueIndex) {
   }
 
   try {
-    const response = await fetch(
+    const result = await apiCall(
       '/api/admin/audit/delete-orphaned-references',
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
         body: JSON.stringify({ albumId }),
       }
     );
-
-    if (!response.ok) {
-      throw new Error('Failed to delete orphaned references');
-    }
-
-    const result = await response.json();
     showToast(
       `Deleted ${result.deletedListItems} orphaned reference${result.deletedListItems !== 1 ? 's' : ''}`,
       'success'
@@ -602,23 +585,14 @@ async function handleMerge() {
   try {
     setButtonsLoading(true);
 
-    const response = await fetch('/api/admin/audit/merge-album', {
+    const result = await apiCall('/api/admin/audit/merge-album', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
       body: JSON.stringify({
         manualAlbumId: manualId,
         canonicalAlbumId: canonicalId,
         syncMetadata: true,
       }),
     });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Merge failed');
-    }
-
-    const result = await response.json();
 
     showToast(
       `Merged! Updated ${result.updatedListItems} list items. Recomputed ${result.affectedYears?.length || 0} aggregate lists.`,

@@ -6,7 +6,7 @@
  */
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
-import { showToast } from './utils.js';
+import { showToast, apiCall } from './utils.js';
 import { createModal } from './modal-factory.js';
 import { markAlbumsDistinct } from '../utils/album-api.js';
 
@@ -444,15 +444,10 @@ async function handleMerge(direction) {
   setButtonsLoading(true);
 
   try {
-    const response = await fetch('/admin/api/merge-albums', {
+    const data = await apiCall('/admin/api/merge-albums', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
       body: JSON.stringify({ keepAlbumId: keepId, deleteAlbumId: deleteId }),
     });
-
-    const data = await response.json();
-    if (data.error) throw new Error(data.error);
 
     const metadataMsg = data.metadataMerged ? ' (metadata merged)' : '';
     showToast(

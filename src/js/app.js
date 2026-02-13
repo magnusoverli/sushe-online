@@ -1001,8 +1001,12 @@ export async function apiCall(url, options = {}) {
   try {
     // Get socket ID to exclude self from real-time broadcasts
     const socketId = getRealtimeSyncModuleInstance()?.getSocket()?.id;
+
+    // Skip Content-Type for FormData (browser sets multipart boundary automatically)
+    const isFormData =
+      typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers = {
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     };
     if (socketId) {
@@ -1083,7 +1087,10 @@ export async function apiCall(url, options = {}) {
 
     return await response.json();
   } catch (error) {
-    console.error('API call failed:', error);
+    // Don't log AbortError — these are intentional cancellations
+    if (error.name !== 'AbortError') {
+      console.error('API call failed:', error);
+    }
     throw error;
   }
 }

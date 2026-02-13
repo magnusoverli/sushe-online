@@ -8,6 +8,7 @@
  */
 
 import { escapeHtml } from './html-utils.js';
+import { apiCall } from './utils.js';
 
 // Lazy-loaded to avoid pulling in the 508KB musicbrainz chunk at startup.
 // searchArtistImageRacing is only needed when viewing similar artists.
@@ -213,16 +214,9 @@ async function fetchSimilarArtists(artistName) {
   similarArtistsAbortController = new AbortController();
 
   try {
-    const response = await fetch(
-      `/api/lastfm/similar-artists?artist=${encodeURIComponent(artistName)}&limit=20`,
-      { credentials: 'include' }
+    const data = await apiCall(
+      `/api/lastfm/similar-artists?artist=${encodeURIComponent(artistName)}&limit=20`
     );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch similar artists');
-    }
-
-    const data = await response.json();
 
     if (!data.artists || data.artists.length === 0) {
       content.innerHTML = renderEmptyState(

@@ -1902,46 +1902,34 @@ export function createMobileUI(deps = {}) {
           try {
             if (isPrimary) {
               // Deselect primary
-              const response = await fetch(`/api/track-picks/${listItemId}`, {
+              const result = await apiCall(`/api/track-picks/${listItemId}`, {
                 method: 'DELETE',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({ trackIdentifier: trackName }),
               });
-              if (!response.ok) throw new Error('Failed to remove track');
-              const result = await response.json();
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
               showToast('Primary track removed');
             } else if (isSecondary) {
               // Promote to primary
-              const response = await fetch(`/api/track-picks/${listItemId}`, {
+              const result = await apiCall(`/api/track-picks/${listItemId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({
                   trackIdentifier: trackName,
                   priority: 1,
                 }),
               });
-              if (!response.ok) throw new Error('Failed to promote track');
-              const result = await response.json();
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
               showToast(`★ Primary: ${trackName.substring(0, 30)}...`);
             } else {
               // New selection as secondary
-              const response = await fetch(`/api/track-picks/${listItemId}`, {
+              const result = await apiCall(`/api/track-picks/${listItemId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
                 body: JSON.stringify({
                   trackIdentifier: trackName,
                   priority: 2,
                 }),
               });
-              if (!response.ok) throw new Error('Failed to set track');
-              const result = await response.json();
               currentPrimaryTrack = result.primary_track || '';
               currentSecondaryTrack = result.secondary_track || '';
               showToast(`☆ Secondary: ${trackName.substring(0, 30)}...`);

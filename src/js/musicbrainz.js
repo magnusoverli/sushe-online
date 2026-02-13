@@ -19,10 +19,8 @@ const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
  */
 async function mergeMetadataToCanonical(album) {
   try {
-    await fetch('/api/albums/merge-metadata', {
+    await window.apiCall('/api/albums/merge-metadata', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
       body: JSON.stringify({
         album_id: album.album_id,
         artist: album.artist,
@@ -2163,27 +2161,10 @@ async function addAlbumToRecommendations(album) {
   }
 
   try {
-    const response = await fetch(`/api/recommendations/${year}`, {
+    await window.apiCall(`/api/recommendations/${year}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
       body: JSON.stringify({ album, reasoning }),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 409) {
-        // Album already recommended
-        showToast(data.error || 'This album was already recommended', 'info');
-        return;
-      }
-      if (response.status === 403 && data.locked) {
-        showToast('Recommendations are locked for this year', 'error');
-        return;
-      }
-      throw new Error(data.error || 'Failed to add recommendation');
-    }
 
     showToast(`Recommended "${album.album}" by ${album.artist}`, 'success');
 
@@ -2192,6 +2173,14 @@ async function addAlbumToRecommendations(album) {
       window.selectRecommendations(year);
     }
   } catch (error) {
+    if (error.status === 409) {
+      showToast(error.message || 'This album was already recommended', 'info');
+      return;
+    }
+    if (error.status === 403 && error.locked) {
+      showToast('Recommendations are locked for this year', 'error');
+      return;
+    }
     console.error('Error adding recommendation:', error);
     showToast('Error adding recommendation', 'error');
   }

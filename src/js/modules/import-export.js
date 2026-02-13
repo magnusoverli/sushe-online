@@ -7,7 +7,7 @@
  * @module import-export
  */
 
-import { showToast, getAlbumKey } from './utils.js';
+import { showToast, getAlbumKey, apiCall } from './utils.js';
 import { jsPDF } from 'jspdf';
 
 /**
@@ -37,21 +37,9 @@ export async function downloadListAsJSON(listId) {
     // Fetch list with embedded base64 images from server
     showToast('Preparing export with images...', 'info', 2000);
 
-    const response = await fetch(
-      `/api/lists/${encodeURIComponent(listId)}?export=true`,
-      { credentials: 'include' }
+    const exportData = await apiCall(
+      `/api/lists/${encodeURIComponent(listId)}?export=true`
     );
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        showToast('List not found', 'error');
-        return;
-      }
-      throw new Error(`Failed to fetch list: ${response.status}`);
-    }
-
-    // Server returns data with rank, points, and cover_image already included
-    const exportData = await response.json();
 
     // Get list name from metadata for filename
     const listName = exportData._metadata?.list_name || listId;
@@ -80,7 +68,10 @@ export async function downloadListAsJSON(listId) {
     showToast('List exported successfully!', 'success');
   } catch (error) {
     console.error('Export error:', error);
-    showToast('Error exporting list', 'error');
+    showToast(
+      error.status === 404 ? 'List not found' : 'Error exporting list',
+      'error'
+    );
   }
 }
 
@@ -93,23 +84,11 @@ export async function downloadListAsPDF(listId) {
     // Fetch list with embedded base64 images from server
     showToast('Preparing PDF export...', 'info', 2000);
 
-    const response = await fetch(
-      `/api/lists/${encodeURIComponent(listId)}?export=true`,
-      { credentials: 'include' }
+    const exportData = await apiCall(
+      `/api/lists/${encodeURIComponent(listId)}?export=true`
     );
 
-    if (!response.ok) {
-      if (response.status === 404) {
-        showToast('List not found', 'error');
-        return;
-      }
-      throw new Error(`Failed to fetch list: ${response.status}`);
-    }
-
-    // Server returns data with rank, points, and cover_image already included
-    const exportData = await response.json();
-
-    // Get list name from metadata for filename and header
+    // Get list name from metadata for filename
     const listName = exportData._metadata?.list_name || listId;
 
     // Filter out comments and points as specified
@@ -261,7 +240,10 @@ export async function downloadListAsPDF(listId) {
     showToast('PDF exported successfully!', 'success');
   } catch (error) {
     console.error('PDF export error:', error);
-    showToast('Error exporting PDF', 'error');
+    showToast(
+      error.status === 404 ? 'List not found' : 'Error exporting PDF',
+      'error'
+    );
   }
 }
 
@@ -294,21 +276,9 @@ export async function downloadListAsCSV(listId) {
     // Fetch list with embedded base64 images from server
     showToast('Preparing CSV export...', 'info', 2000);
 
-    const response = await fetch(
-      `/api/lists/${encodeURIComponent(listId)}?export=true`,
-      { credentials: 'include' }
+    const exportData = await apiCall(
+      `/api/lists/${encodeURIComponent(listId)}?export=true`
     );
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        showToast('List not found', 'error');
-        return;
-      }
-      throw new Error(`Failed to fetch list: ${response.status}`);
-    }
-
-    // Server returns data with rank, points, and cover_image already included
-    const exportData = await response.json();
 
     // Get list name from metadata for filename
     const listName = exportData._metadata?.list_name || listId;
@@ -376,7 +346,10 @@ export async function downloadListAsCSV(listId) {
     showToast('CSV exported successfully!', 'success');
   } catch (error) {
     console.error('CSV export error:', error);
-    showToast('Error exporting CSV', 'error');
+    showToast(
+      error.status === 404 ? 'List not found' : 'Error exporting CSV',
+      'error'
+    );
   }
 }
 
@@ -476,10 +449,8 @@ export function createImportConflictHandler(deps = {}) {
         });
 
         // Replace list items using PUT
-        await fetch(`/api/lists/${encodeURIComponent(listId)}`, {
+        await apiCall(`/api/lists/${encodeURIComponent(listId)}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({ data: cleanedAlbums }),
         });
 
@@ -564,15 +535,12 @@ export function createImportConflictHandler(deps = {}) {
         await saveList(listId, mergedList);
 
         // Fetch the saved list to get list item IDs (needed for track picks API)
-        const savedListResponse = await fetch(
-          `/api/lists/${encodeURIComponent(listId)}`,
-          {
-            credentials: 'include',
-          }
-        );
-        const savedList = savedListResponse.ok
-          ? await savedListResponse.json()
-          : [];
+        let savedList = [];
+        try {
+          savedList = await apiCall(`/api/lists/${encodeURIComponent(listId)}`);
+        } catch (_fetchErr) {
+          // Non-critical: track picks won't be imported but merge still succeeds
+        }
 
         // Build a map from album_id to list_item_id for track picks
         const albumToListItemMap = new Map();
@@ -592,10 +560,8 @@ export function createImportConflictHandler(deps = {}) {
           if (listItemId && (album.primary_track || album.secondary_track)) {
             try {
               if (album.primary_track) {
-                await fetch(`/api/track-picks/${listItemId}`, {
+                await apiCall(`/api/track-picks/${listItemId}`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
                   body: JSON.stringify({
                     trackIdentifier: album.primary_track,
                     priority: 1,
@@ -603,10 +569,8 @@ export function createImportConflictHandler(deps = {}) {
                 });
               }
               if (album.secondary_track) {
-                await fetch(`/api/track-picks/${listItemId}`, {
+                await apiCall(`/api/track-picks/${listItemId}`, {
                   method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
                   body: JSON.stringify({
                     trackIdentifier: album.secondary_track,
                     priority: 2,
@@ -625,10 +589,8 @@ export function createImportConflictHandler(deps = {}) {
           // Import summary (still uses album_id)
           if (album.summary || album.summary_source) {
             try {
-              await fetch(`/api/albums/${albumId}/summary`, {
+              await apiCall(`/api/albums/${albumId}/summary`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
                 body: JSON.stringify({
                   summary: album.summary || '',
                   summary_source: album.summary_source || '',
