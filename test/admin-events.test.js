@@ -1,14 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createAdminEventService } = require('../services/admin-events.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
+const { createMockLogger } = require('./helpers');
 
 // Mock pool that simulates PostgreSQL behavior
 const createMockPool = (mockData = {}) => {

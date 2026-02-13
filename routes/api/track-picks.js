@@ -16,7 +16,11 @@ const { createAsyncHandler } = require('../../middleware/async-handler');
  * @param {Object} deps - Dependencies
  */
 module.exports = (app, deps) => {
-  const { ensureAuthAPI, logger, responseCache } = deps;
+  const {
+    ensureAuthAPI,
+    logger,
+    helpers: { invalidateListCaches },
+  } = deps;
   const asyncHandler = createAsyncHandler(logger);
 
   /**
@@ -62,9 +66,7 @@ module.exports = (app, deps) => {
       );
 
       // Invalidate cache for this list so refreshes show updated track picks
-      responseCache.invalidate(`GET:/api/lists/${list._id}:${req.user._id}`);
-      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
-      responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
+      invalidateListCaches(req.user._id, list._id);
 
       logger.debug('Track pick updated', {
         userId: req.user._id,
@@ -118,9 +120,7 @@ module.exports = (app, deps) => {
       );
 
       // Invalidate cache for this list so refreshes show updated track picks
-      responseCache.invalidate(`GET:/api/lists/${list._id}:${req.user._id}`);
-      responseCache.invalidate(`GET:/api/lists:${req.user._id}`);
-      responseCache.invalidate(`GET:/api/lists?full=true:${req.user._id}`);
+      invalidateListCaches(req.user._id, list._id);
 
       logger.debug('Track pick removed', {
         userId: req.user._id,

@@ -16,20 +16,7 @@ const MOCK_IMAGE_BASE64 =
   '/9j/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAKAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAABgj/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwCdABykX//Z';
 const MOCK_IMAGE_BUFFER = Buffer.from(MOCK_IMAGE_BASE64, 'base64');
 
-const createMockLogger = () => ({
-  error: mock.fn(),
-  warn: mock.fn(),
-  info: mock.fn(),
-  debug: mock.fn(),
-});
-
-const createMockPool = (overrides = {}) => ({
-  query: mock.fn(async () => ({
-    rows: [],
-    rowCount: 0,
-  })),
-  ...overrides,
-});
+const { createMockLogger, createMockPool } = require('./helpers');
 
 // =============================================================================
 // createImageRefetchService - factory tests
@@ -176,7 +163,7 @@ describe('getStats', () => {
   });
 
   it('should return album image statistics', async () => {
-    const pool = createMockPool({
+    const pool = createMockPool([], {
       query: mock.fn(async () => ({
         rows: [
           {
@@ -206,7 +193,7 @@ describe('getStats', () => {
   });
 
   it('should handle null numeric values in stats', async () => {
-    const pool = createMockPool({
+    const pool = createMockPool([], {
       query: mock.fn(async () => ({
         rows: [
           {
@@ -247,7 +234,7 @@ describe('getStats', () => {
         },
       ],
     }));
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
 
     const service = createImageRefetchService({
       pool,
@@ -310,7 +297,7 @@ describe('refetchAllImages', () => {
       return { rows: [], rowCount: 0 };
     });
 
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
       pool,
       logger: createMockLogger(),
@@ -339,7 +326,7 @@ describe('refetchAllImages', () => {
       return { rows: [], rowCount: 0 };
     });
 
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
       pool,
       logger: createMockLogger(),
@@ -368,7 +355,7 @@ describe('refetchAllImages', () => {
       return { rows: [], rowCount: 0 };
     });
 
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
       pool,
       logger: createMockLogger(),
@@ -386,7 +373,7 @@ describe('refetchAllImages', () => {
     const queryFn = mock.fn(async () => ({
       rows: [{ total: '0' }],
     }));
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
       pool,
       logger: createMockLogger(),
@@ -404,7 +391,7 @@ describe('refetchAllImages', () => {
     const queryFn = mock.fn(async () => {
       throw new Error('Database exploded');
     });
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
       pool,
       logger: createMockLogger(),
@@ -456,7 +443,7 @@ describe('refetchAllImages', () => {
       return { rows: [], rowCount: 0 };
     });
 
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const service = createImageRefetchService({
       pool,
       logger: createMockLogger(),
@@ -504,7 +491,7 @@ describe('refetchAllImages', () => {
       return { rows: [], rowCount: 0 };
     });
 
-    const pool = createMockPool({ query: queryFn });
+    const pool = createMockPool([], { query: queryFn });
     const logger = createMockLogger();
     const service = createImageRefetchService({ pool, logger });
 

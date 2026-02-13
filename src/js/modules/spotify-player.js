@@ -6,6 +6,7 @@
 
 import { showToast } from './utils.js';
 import { isAlbumMatchingPlayback } from './playback-utils.js';
+import { getDeviceIcon } from '../utils/device-icons.js';
 import { formatTime } from './time-utils.js';
 
 // ============ MODULE STATE ============
@@ -95,22 +96,7 @@ function isCurrentTrackInCurrentList(playbackState) {
   );
 }
 
-/**
- * Get device icon based on type
- */
-function getDeviceIcon(type) {
-  const icons = {
-    Computer: 'fa-desktop',
-    Smartphone: 'fa-mobile-alt',
-    Speaker: 'fa-volume-up',
-    TV: 'fa-tv',
-    CastVideo: 'fa-chromecast',
-    CastAudio: 'fa-podcast',
-    Automobile: 'fa-car',
-    Unknown: 'fa-question-circle',
-  };
-  return icons[type] || icons.Unknown;
-}
+// getDeviceIcon is imported from utils/device-icons.js (shared module)
 
 /**
  * Calculate backoff time based on consecutive errors
@@ -152,94 +138,112 @@ const LASTFM_MIN_SCROBBLE_TIME = 4 * 60 * 1000; // 4 minutes in ms
 const LASTFM_SCROBBLE_PERCENT = 0.5; // 50%
 
 /**
- * Send "now playing" update to Last.fm
+ * Derive a stable identifier for a track (used for dedup and comparisons).
+ * @param {Object} track - Spotify track object
+ * @returns {string|null} Track identifier or null if track is invalid
  */
-async function sendLastfmNowPlaying(track) {
-  if (!track?.name || !track?.artists?.[0]?.name) return;
+function getTrackId(track) {
+  if (!track?.name || !track?.artists?.[0]?.name) return null;
+  return track.id || `${track.name}-${track.artists[0].name}`;
+}
 
-  const trackId = track.id || `${track.name}-${track.artists[0].name}`;
+/**
+ * Handle a Last.fm scrobble/now-playing failure by incrementing the
+ * consecutive-failure counter and warning the user after the threshold.
+ * @param {string} context - Human-readable context for the console.warn
+ * @param {Error} [err] - Optional error object to log
+ */
+function handleScrobbleFailure(context, err) {
+  scrobbleConsecutiveFailures++;
+  if (err) {
+    console.warn(`Last.fm ${context} failed:`, err);
+  }
+  if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
+    showToast('Last.fm connection may have issues', 'warning');
+    scrobbleConsecutiveFailures = 0; // Reset to avoid spam
+  }
+}
 
-  // Don't send duplicate now-playing updates
-  if (lastfmNowPlayingSent === trackId) return;
-
+/**
+ * Generic Last.fm API call with dedup, failure tracking, and success logging.
+ * @param {string} endpoint - API path (e.g., '/api/lastfm/now-playing')
+ * @param {Object} body - JSON body to POST
+ * @param {string} trackId - Track identifier for dedup/logging
+ * @param {Function} onSuccess - Called on 2xx response with the trackId
+ * @param {string} logLabel - Label for console.log on success (e.g., 'now playing')
+ */
+async function lastfmApiCall(endpoint, body, trackId, onSuccess, logLabel) {
   try {
-    const response = await fetch('/api/lastfm/now-playing', {
+    const response = await fetch(endpoint, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        artist: track.artists[0].name,
-        track: track.name,
-        album: track.album?.name || '',
-        duration: Math.floor((track.duration_ms || 0) / 1000),
-      }),
+      body: JSON.stringify(body),
     });
 
     if (response.ok) {
-      lastfmNowPlayingSent = trackId;
-      scrobbleConsecutiveFailures = 0; // Reset on success
-      console.log('Last.fm now playing:', track.name);
+      onSuccess(trackId);
+      scrobbleConsecutiveFailures = 0;
+      console.log(`Last.fm ${logLabel}:`, body.track);
     } else {
-      scrobbleConsecutiveFailures++;
-      if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
-        showToast('Last.fm connection may have issues', 'warning');
-        scrobbleConsecutiveFailures = 0; // Reset to avoid spam
-      }
+      handleScrobbleFailure(logLabel);
     }
   } catch (err) {
-    scrobbleConsecutiveFailures++;
-    console.warn('Last.fm now-playing failed:', err);
-    if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
-      showToast('Last.fm connection may have issues', 'warning');
-      scrobbleConsecutiveFailures = 0; // Reset to avoid spam
-    }
+    handleScrobbleFailure(logLabel, err);
   }
+}
+
+/**
+ * Build the common Last.fm body fields from a Spotify track.
+ * @param {Object} track - Spotify track object
+ * @returns {Object} { artist, track, album, duration }
+ */
+function buildLastfmBody(track) {
+  return {
+    artist: track.artists[0].name,
+    track: track.name,
+    album: track.album?.name || '',
+    duration: Math.floor((track.duration_ms || 0) / 1000),
+  };
+}
+
+/**
+ * Send "now playing" update to Last.fm
+ */
+async function sendLastfmNowPlaying(track) {
+  const trackId = getTrackId(track);
+  if (!trackId || lastfmNowPlayingSent === trackId) return;
+
+  await lastfmApiCall(
+    '/api/lastfm/now-playing',
+    buildLastfmBody(track),
+    trackId,
+    (id) => {
+      lastfmNowPlayingSent = id;
+    },
+    'now playing'
+  );
 }
 
 /**
  * Submit a scrobble to Last.fm
  */
 async function submitLastfmScrobble(track, timestamp) {
-  if (!track?.name || !track?.artists?.[0]?.name) return;
+  const trackId = getTrackId(track);
+  if (!trackId || lastfmScrobbledTrack === trackId) return;
 
-  const trackId = track.id || `${track.name}-${track.artists[0].name}`;
-
-  // Don't double-scrobble the same track
-  if (lastfmScrobbledTrack === trackId) return;
-
-  try {
-    const response = await fetch('/api/lastfm/scrobble', {
-      method: 'POST',
-      credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        artist: track.artists[0].name,
-        track: track.name,
-        album: track.album?.name || '',
-        timestamp: Math.floor(timestamp / 1000), // Unix timestamp in seconds
-        duration: Math.floor((track.duration_ms || 0) / 1000),
-      }),
-    });
-
-    if (response.ok) {
-      lastfmScrobbledTrack = trackId;
-      scrobbleConsecutiveFailures = 0; // Reset on success
-      console.log('Last.fm scrobbled:', track.name);
-    } else {
-      scrobbleConsecutiveFailures++;
-      if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
-        showToast('Last.fm connection may have issues', 'warning');
-        scrobbleConsecutiveFailures = 0; // Reset to avoid spam
-      }
-    }
-  } catch (err) {
-    scrobbleConsecutiveFailures++;
-    console.warn('Last.fm scrobble failed:', err);
-    if (scrobbleConsecutiveFailures >= SCROBBLE_FAILURE_THRESHOLD) {
-      showToast('Last.fm connection may have issues', 'warning');
-      scrobbleConsecutiveFailures = 0; // Reset to avoid spam
-    }
-  }
+  await lastfmApiCall(
+    '/api/lastfm/scrobble',
+    {
+      ...buildLastfmBody(track),
+      timestamp: Math.floor(timestamp / 1000), // Unix timestamp in seconds
+    },
+    trackId,
+    (id) => {
+      lastfmScrobbledTrack = id;
+    },
+    'scrobbled'
+  );
 }
 
 /**
@@ -250,13 +254,9 @@ function checkAndScrobble(state, previousState) {
   if (!state?.item || !state.is_playing) return;
 
   const track = state.item;
-  const trackId = track.id || `${track.name}-${track.artists?.[0]?.name}`;
+  const trackId = getTrackId(track);
   const previousTrack = previousState?.item;
-  const previousTrackIdVal =
-    previousTrack?.id ||
-    (previousTrack
-      ? `${previousTrack.name}-${previousTrack.artists?.[0]?.name}`
-      : null);
+  const previousTrackIdVal = getTrackId(previousTrack);
 
   const duration = track.duration_ms || 0;
   const position = state.progress_ms || 0;
@@ -586,7 +586,7 @@ function updateMobileBar(state) {
       // Update device icon
       const deviceIcon = mobileElements.device.querySelector('i');
       if (deviceIcon) {
-        deviceIcon.className = `fas ${getDeviceIcon(state.device.type)}`;
+        deviceIcon.className = getDeviceIcon(state.device.type);
       }
     }
 
@@ -885,7 +885,7 @@ function renderDeviceList(devices) {
         data-device-id="${device.id}"
         data-device-name="${device.name}"
       >
-        <i class="fas ${getDeviceIcon(device.type)} text-sm ${device.is_active ? 'text-green-500' : 'text-gray-400'}"></i>
+        <i class="${getDeviceIcon(device.type)} text-sm ${device.is_active ? 'text-green-500' : 'text-gray-400'}"></i>
         <div class="flex-1 text-left">
           <p class="text-sm text-white truncate">${device.name}</p>
           <p class="text-[10px] text-gray-500">${device.type}${device.volume_percent !== undefined ? ` • ${device.volume_percent}%` : ''}</p>

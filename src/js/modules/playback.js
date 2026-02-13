@@ -13,6 +13,7 @@ import { chooseService } from '../utils/music-service-chooser.js';
 import {
   openInMusicApp,
   playOnSpotifyDevice,
+  fetchSpotifyDevices,
 } from '../utils/playback-service.js';
 import { showToast } from './toast.js';
 import { hideConfirmation } from './modals.js';
@@ -112,37 +113,27 @@ export function createPlayback(deps = {}) {
       positionPlaySubmenu();
       submenu.classList.remove('hidden');
 
-      try {
-        const response = await fetch('/api/spotify/devices', {
-          credentials: 'include',
-        });
-        const data = await response.json();
+      const devices = await fetchSpotifyDevices();
 
-        if (response.ok && data.devices && data.devices.length > 0) {
-          const deviceItems = data.devices.map((device) => {
-            const icon = getDeviceIcon(device.type);
-            const activeClass = device.is_active ? 'text-green-500' : '';
-            const activeBadge = device.is_active
-              ? '<span class="ml-2 text-xs text-green-500">(active)</span>'
-              : '';
-            return `
+      if (devices.length > 0) {
+        const deviceItems = devices.map((device) => {
+          const icon = getDeviceIcon(device.type);
+          const activeClass = device.is_active ? 'text-green-500' : '';
+          const activeBadge = device.is_active
+            ? '<span class="ml-2 text-xs text-green-500">(active)</span>'
+            : '';
+          return `
             <button class="w-full block text-left px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white transition-colors whitespace-nowrap" data-play-action="spotify-device" data-device-id="${device.id}">
               <i class="${icon} mr-2 w-4 text-center ${activeClass}"></i>${device.name}${activeBadge}
             </button>
           `;
-          });
-          menuItems = menuItems.concat(deviceItems);
-        } else {
-          menuItems.push(`
+        });
+        menuItems = menuItems.concat(deviceItems);
+      } else {
+        menuItems.push(`
           <div class="px-4 py-2 text-sm text-gray-500">No devices available</div>
           <div class="px-4 py-1 text-xs text-gray-600">Open Spotify on a device</div>
         `);
-        }
-      } catch (err) {
-        console.error('Failed to fetch Spotify devices:', err);
-        menuItems.push(`
-        <div class="px-4 py-2 text-sm text-red-400">Failed to load devices</div>
-      `);
       }
     }
 

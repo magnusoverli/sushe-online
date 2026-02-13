@@ -1,15 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { mock } = require('node:test');
 const { createWebSocketService } = require('../utils/websocket.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: mock.fn(),
-  warn: mock.fn(),
-  info: mock.fn(),
-  debug: mock.fn(),
-});
+const { createMockLogger } = require('./helpers');
 
 // =============================================================================
 // WebSocket Service Creation Tests

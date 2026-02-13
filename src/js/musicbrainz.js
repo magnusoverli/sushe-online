@@ -9,6 +9,123 @@ import {
 const MUSICBRAINZ_PROXY = '/api/proxy/musicbrainz'; // Using our proxy
 const WIKIDATA_PROXY = '/api/proxy/wikidata'; // Using our proxy
 
+// ============================================================================
+// SHARED HELPERS
+// ============================================================================
+
+/**
+ * Merge album metadata to the canonical albums table (fire-and-forget).
+ * @param {Object} album - Album with album_id, artist, album, cover_image, cover_image_format, tracks
+ */
+async function mergeMetadataToCanonical(album) {
+  try {
+    await fetch('/api/albums/merge-metadata', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        album_id: album.album_id,
+        artist: album.artist,
+        album: album.album,
+        cover_image: album.cover_image,
+        cover_image_format: album.cover_image_format,
+        tracks: album.tracks,
+      }),
+    });
+  } catch (err) {
+    console.warn('Failed to merge album metadata:', err);
+  }
+}
+
+/**
+ * Resolve an album against similar/canonical records and deduplicate.
+ *
+ * Returns `{ resolved, cancelled, alreadyInList }` where `resolved` is the
+ * album object to add (with remapped IDs if user chose "use existing"),
+ * `cancelled` is true when the user dismisses the modal, and
+ * `alreadyInList` is true when the canonical album is already present
+ * (metadata merge is done automatically in that case).
+ *
+ * @param {Object} album - Raw album to add
+ * @param {Array} currentListData - Current list albums
+ * @returns {Promise<{resolved: Object|null, cancelled: boolean, alreadyInList: boolean, usedExisting: boolean}>}
+ */
+async function resolveAndDedup(album, currentListData) {
+  // Exact duplicate check
+  if (isAlbumInList(album, currentListData)) {
+    return {
+      resolved: null,
+      cancelled: false,
+      alreadyInList: true,
+      usedExisting: false,
+    };
+  }
+
+  // Fuzzy similar-album check
+  const similarCheck = await checkAndPromptSimilar(album);
+
+  if (similarCheck.action === 'cancelled') {
+    return {
+      resolved: null,
+      cancelled: true,
+      alreadyInList: false,
+      usedExisting: false,
+    };
+  }
+
+  let resolved = album;
+  let usedExisting = false;
+
+  if (similarCheck.action === 'use_existing' && similarCheck.album) {
+    // Remap to canonical album identity
+    resolved = {
+      ...album,
+      album_id: similarCheck.album.album_id,
+      artist: similarCheck.album.artist,
+      album: similarCheck.album.album,
+    };
+    usedExisting = true;
+
+    // Canonical album may already be in list — merge metadata and bail
+    if (isAlbumInList(resolved, currentListData)) {
+      await mergeMetadataToCanonical({
+        ...resolved,
+        cover_image: album.cover_image,
+        cover_image_format: album.cover_image_format,
+        tracks: album.tracks,
+      });
+      return {
+        resolved: null,
+        cancelled: false,
+        alreadyInList: true,
+        usedExisting: true,
+      };
+    }
+  }
+
+  return { resolved, cancelled: false, alreadyInList: false, usedExisting };
+}
+
+/**
+ * Normalise a MusicBrainz partial date to a full YYYY-MM-DD string that can
+ * be compared lexicographically. Year-only dates map to Dec-31, year-month
+ * dates map to the last day of that month, and full dates pass through.
+ *
+ * @param {string} dateStr - A date in "YYYY", "YYYY-MM", or "YYYY-MM-DD" format
+ * @returns {string} A full "YYYY-MM-DD" string
+ */
+function toComparableDate(dateStr) {
+  if (dateStr.length === 4) {
+    return `${dateStr}-12-31`;
+  }
+  if (dateStr.length === 7) {
+    const [year, month] = dateStr.split('-');
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
+    return `${dateStr}-${lastDay.toString().padStart(2, '0')}`;
+  }
+  return dateStr;
+}
+
 // Rate limiting is now handled on the backend, but we'll keep a small delay for the UI
 let lastRequestTime = 0;
 const MIN_REQUEST_INTERVAL = 100; // Small delay for UI responsiveness
@@ -531,20 +648,7 @@ const albumProviders = [
 
         if (!releaseDate) return false;
 
-        let comparableDate = releaseDate;
-        if (releaseDate.length === 4) {
-          comparableDate = `${releaseDate}-12-31`;
-        } else if (releaseDate.length === 7) {
-          const [year, month] = releaseDate.split('-');
-          const lastDay = new Date(
-            parseInt(year),
-            parseInt(month),
-            0
-          ).getDate();
-          comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
-        }
-
-        return isValidType && comparableDate <= todayStr;
+        return isValidType && toComparableDate(releaseDate) <= todayStr;
       });
 
       if (releaseGroups.length === 0) return null;
@@ -1390,115 +1494,56 @@ async function handleManualSubmit(e) {
 
 async function finishManualAdd(album) {
   try {
-    // Get current list data
     const currentListData = window.getListData(window.currentList);
     if (!currentListData) {
       showToast('No list selected', 'error');
       return;
     }
 
-    // Check for duplicate before adding
-    if (isAlbumInList(album, currentListData)) {
+    const { resolved, cancelled, alreadyInList, usedExisting } =
+      await resolveAndDedup(album, currentListData);
+
+    if (cancelled) return; // User dismissed modal — let them continue editing
+
+    if (alreadyInList) {
       closeAddAlbumModal();
-      showToast(`"${album.album}" is already in this list`, 'error');
+      const label = usedExisting ? ' (metadata updated)' : '';
+      showToast(
+        `"${album.album}" is already in this list${label}`,
+        usedExisting ? 'info' : 'error'
+      );
+      if (usedExisting) window.selectList(window.currentList);
       return;
-    }
-
-    // Check for similar existing albums before adding
-    const similarCheck = await checkAndPromptSimilar(album);
-
-    if (similarCheck.action === 'cancelled') {
-      // User cancelled - don't close modal, let them continue editing
-      return;
-    }
-
-    let albumToAdd = album;
-
-    if (similarCheck.action === 'use_existing' && similarCheck.album) {
-      // User wants to use the existing canonical album
-      // Use the canonical album_id but keep the user's cover art if they uploaded one
-      albumToAdd = {
-        ...album,
-        album_id: similarCheck.album.album_id,
-        artist: similarCheck.album.artist,
-        album: similarCheck.album.album,
-      };
-      // If the manual album had no cover but canonical has one, the server will use canonical's cover
-
-      // Check if this canonical album is already in the list
-      if (isAlbumInList(albumToAdd, currentListData)) {
-        // Album already in list, but still merge the better metadata to canonical
-        try {
-          await fetch('/api/albums/merge-metadata', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-              album_id: albumToAdd.album_id,
-              artist: album.artist,
-              album: album.album,
-              cover_image: album.cover_image,
-              cover_image_format: album.cover_image_format,
-              tracks: album.tracks,
-            }),
-          });
-        } catch (err) {
-          console.warn('Failed to merge album metadata:', err);
-        }
-
-        closeAddAlbumModal();
-        showToast(
-          `"${albumToAdd.album}" is already in this list (metadata updated)`,
-          'info'
-        );
-
-        // Refresh list to show updated cover
-        window.selectList(window.currentList);
-        return;
-      }
     }
 
     // Add to current list
-    currentListData.push(albumToAdd);
+    currentListData.push(resolved);
     window.setListData(window.currentList, currentListData);
 
-    if (!Array.isArray(albumToAdd.tracks) || albumToAdd.tracks.length === 0) {
+    if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(albumToAdd);
+        await window.fetchTracksForAlbum(resolved);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
     }
 
-    // Save to server
     await window.saveList(window.currentList, currentListData);
 
-    // Force refresh from server to get merged album data (e.g., genres from canonical albums table)
-    // Clear the local cache so selectList will refetch
+    // Force refresh from server to get merged album data
     const listMetadata = window.lists[window.currentList];
     if (listMetadata) {
       listMetadata._data = null;
     }
 
-    // Refresh the list view
     window.selectList(window.currentList);
-
-    // Close modal
     closeAddAlbumModal();
 
-    if (similarCheck.action === 'use_existing') {
-      showToast(
-        `Added "${albumToAdd.album}" by ${albumToAdd.artist} (using existing album)`
-      );
-    } else {
-      showToast(
-        `Added "${albumToAdd.album}" by ${albumToAdd.artist} to the list`
-      );
-    }
+    const suffix = usedExisting ? ' (using existing album)' : ' to the list';
+    showToast(`Added "${resolved.album}" by ${resolved.artist}${suffix}`);
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 
-    // Remove from list on error
     const currentListData = window.getListData(window.currentList);
     if (currentListData) {
       currentListData.pop();
@@ -1824,16 +1869,7 @@ async function searchAlbums(query) {
 
     if (!releaseDate) return false;
 
-    let comparableDate = releaseDate;
-    if (releaseDate.length === 4) {
-      comparableDate = `${releaseDate}-12-31`;
-    } else if (releaseDate.length === 7) {
-      const [year, month] = releaseDate.split('-');
-      const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate();
-      comparableDate = `${releaseDate}-${lastDay.toString().padStart(2, '0')}`;
-    }
-
-    return isValidType && comparableDate <= todayStr;
+    return isValidType && toComparableDate(releaseDate) <= todayStr;
   });
 
   // Sort by relevance (MusicBrainz already does this) and then by date
@@ -2049,75 +2085,34 @@ async function addAlbumToCurrentList(album) {
   }
 
   try {
-    // Get current list data
     const currentListData = window.getListData(window.currentList);
     if (!currentListData) {
       showToast('No list selected', 'error');
       return;
     }
 
-    // Check for duplicate before adding
-    if (isAlbumInList(album, currentListData)) {
+    const { resolved, cancelled, alreadyInList, usedExisting } =
+      await resolveAndDedup(album, currentListData);
+
+    if (cancelled) return;
+
+    if (alreadyInList) {
       closeAddAlbumModal();
-      showToast(`"${album.album}" is already in this list`, 'error');
+      const label = usedExisting ? ' (metadata updated)' : '';
+      showToast(
+        `"${album.album}" is already in this list${label}`,
+        usedExisting ? 'info' : 'error'
+      );
+      if (usedExisting) window.selectList(window.currentList);
       return;
     }
 
-    // Check for similar albums in the database (fuzzy duplicate detection)
-    const similarCheck = await checkAndPromptSimilar(album);
-
-    if (similarCheck.action === 'cancelled') {
-      // User cancelled - don't add anything
-      return;
-    }
-
-    if (similarCheck.action === 'use_existing' && similarCheck.album) {
-      // User confirmed this is the same album - use the existing album's ID
-      // but keep the new metadata that might be better (cover, etc.)
-      album.album_id = similarCheck.album.album_id;
-      album.artist = similarCheck.album.artist;
-      album.album = similarCheck.album.album;
-
-      // Check if this canonical album is already in the list
-      if (isAlbumInList(album, currentListData)) {
-        // Album already in list, but still merge the better metadata to canonical
-        try {
-          await fetch('/api/albums/merge-metadata', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({
-              album_id: album.album_id,
-              artist: album.artist,
-              album: album.album,
-              cover_image: album.cover_image,
-              cover_image_format: album.cover_image_format,
-              tracks: album.tracks,
-            }),
-          });
-        } catch (err) {
-          console.warn('Failed to merge album metadata:', err);
-        }
-
-        closeAddAlbumModal();
-        showToast(
-          `"${album.album}" is already in this list (metadata updated)`,
-          'info'
-        );
-
-        // Refresh list to show updated cover
-        window.selectList(window.currentList);
-        return;
-      }
-    }
-    // If action === 'add_new', proceed with the new album as-is
-
-    currentListData.push(album);
+    currentListData.push(resolved);
     window.setListData(window.currentList, currentListData);
 
-    if (!Array.isArray(album.tracks) || album.tracks.length === 0) {
+    if (!Array.isArray(resolved.tracks) || resolved.tracks.length === 0) {
       try {
-        await window.fetchTracksForAlbum(album);
+        await window.fetchTracksForAlbum(resolved);
       } catch (_err) {
         // Auto track fetch failed - not critical
       }
@@ -2125,18 +2120,16 @@ async function addAlbumToCurrentList(album) {
 
     await window.saveList(window.currentList, currentListData);
 
-    // Force refresh from server to get merged album data (e.g., genres from canonical albums table)
-    // Clear the local cache so selectList will refetch
+    // Force refresh from server to get merged album data
     const listMetadata = window.lists[window.currentList];
     if (listMetadata) {
       listMetadata._data = null;
     }
 
     window.selectList(window.currentList);
-
     closeAddAlbumModal();
 
-    showToast(`Added "${album.album}" by ${album.artist} to the list`);
+    showToast(`Added "${resolved.album}" by ${resolved.artist} to the list`);
   } catch (_error) {
     showToast('Error adding album to list', 'error');
 

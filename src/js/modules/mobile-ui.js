@@ -11,6 +11,7 @@ import { normalizeDateForInput, formatDateForStorage } from './date-utils.js';
 import { escapeHtmlAttr as escapeHtml } from './html-utils.js';
 import { createActionSheet } from './ui-factories.js';
 import { createTransferHelpers } from './album-transfer.js';
+import { fetchSpotifyDevices } from '../utils/playback-service.js';
 
 /**
  * Factory function to create the mobile UI module with injected dependencies
@@ -356,23 +357,19 @@ export function createMobileUI(deps = {}) {
 
     // Load Spotify devices for mobile
     const loadMobileDevices = async () => {
-      try {
-        const response = await fetch('/api/spotify/devices', {
-          credentials: 'include',
-        });
-        const data = await response.json();
+      const devices = await fetchSpotifyDevices();
 
-        if (response.ok && data.devices && data.devices.length > 0) {
-          const deviceItems = data.devices
-            .map((device) => {
-              const icon = getDeviceIcon(device.type);
-              const activeClass = device.is_active
-                ? 'text-green-500'
-                : 'text-gray-400';
-              const activeBadge = device.is_active
-                ? '<span class="ml-auto text-xs text-green-500">(active)</span>'
-                : '';
-              return `
+      if (devices.length > 0) {
+        const deviceItems = devices
+          .map((device) => {
+            const icon = getDeviceIcon(device.type);
+            const activeClass = device.is_active
+              ? 'text-green-500'
+              : 'text-gray-400';
+            const activeBadge = device.is_active
+              ? '<span class="ml-auto text-xs text-green-500">(active)</span>'
+              : '';
+            return `
                 <button data-action="play-device" data-device-id="${device.id}"
                         class="w-full text-left py-2.5 px-3 hover:bg-gray-800 rounded-sm flex items-center">
                   <i class="${icon} mr-3 ${activeClass} text-sm"></i>
@@ -380,39 +377,32 @@ export function createMobileUI(deps = {}) {
                   ${activeBadge}
                 </button>
               `;
-            })
-            .join('');
-          deviceList.innerHTML = deviceItems;
+          })
+          .join('');
+        deviceList.innerHTML = deviceItems;
 
-          // Attach device click handlers
-          deviceList
-            .querySelectorAll('[data-action="play-device"]')
-            .forEach((btn) => {
-              btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const deviceId = btn.dataset.deviceId;
-                close();
-                playAlbumOnDeviceMobile(albumId, deviceId);
-              });
+        // Attach device click handlers
+        deviceList
+          .querySelectorAll('[data-action="play-device"]')
+          .forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const deviceId = btn.dataset.deviceId;
+              close();
+              playAlbumOnDeviceMobile(albumId, deviceId);
             });
+          });
 
-          playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
-        } else {
-          deviceList.innerHTML = `
+        playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
+      } else {
+        deviceList.innerHTML = `
             <div class="px-3 py-2 text-sm text-gray-500">No devices found</div>
             <div class="px-3 py-1 text-xs text-gray-600">Open Spotify on a device</div>
           `;
-          playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
-        }
-        devicesLoaded = true;
-      } catch (err) {
-        console.error('Failed to load devices:', err);
-        deviceList.innerHTML = `
-          <div class="px-3 py-2 text-sm text-red-400">Failed to load devices</div>
-        `;
         playOptions.style.maxHeight = playOptions.scrollHeight + 'px';
       }
+      devicesLoaded = true;
     };
 
     editBtn.addEventListener('click', (e) => {

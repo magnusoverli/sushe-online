@@ -4,14 +4,7 @@ const {
   createLastfmAuth,
   normalizeForLastfm,
 } = require('../utils/lastfm-auth.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
+const { createMockLogger } = require('./helpers');
 
 // Mock crypto with real MD5 for signature tests
 const createMockCrypto = () => require('crypto');

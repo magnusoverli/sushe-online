@@ -11,18 +11,7 @@
  * @module album-transfer
  */
 
-/**
- * Check if an album already exists in a list (case-insensitive by artist::album key)
- * @param {Object} album - Album to check
- * @param {Array} list - List to check against
- * @returns {boolean} True if album exists in list
- */
-function isAlbumInList(album, list) {
-  const key = `${album.artist}::${album.album}`.toLowerCase();
-  return list.some(
-    (item) => `${item.artist}::${item.album}`.toLowerCase() === key
-  );
-}
+import { isAlbumInList } from '../utils/album-list-utils.js';
 
 /**
  * Transfer (move or copy) an album from the current list to a target list.

@@ -5,30 +5,7 @@ const {
   POSITION_POINTS,
   getPositionPoints,
 } = require('../services/aggregate-list.js');
-
-// =============================================================================
-// Helper functions
-// =============================================================================
-
-function createMockLogger() {
-  return {
-    info: mock.fn(),
-    warn: mock.fn(),
-    error: mock.fn(),
-    debug: mock.fn(),
-  };
-}
-
-function createMockPool(queryResults = []) {
-  let callIndex = 0;
-  return {
-    query: mock.fn(async () => {
-      const result = queryResults[callIndex] || { rows: [] };
-      callIndex++;
-      return result;
-    }),
-  };
-}
+const { createMockLogger, createMockPool } = require('./helpers');
 
 // =============================================================================
 // Tests

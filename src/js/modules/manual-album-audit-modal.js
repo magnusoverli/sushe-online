@@ -8,6 +8,7 @@
 import { showToast } from './utils.js';
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
 import { createModal } from './modal-factory.js';
+import { markAlbumsDistinct } from '../utils/album-api.js';
 
 let modalElement = null;
 let modalController = null;
@@ -650,19 +651,9 @@ async function handleMarkDistinct() {
   try {
     setButtonsLoading(true);
 
-    const response = await fetch('/api/albums/mark-distinct', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify({
-        album_id_1: manualId,
-        album_id_2: canonicalId,
-      }),
-    });
-
-    if (!response.ok) {
-      const data = await response.json();
-      throw new Error(data.error || 'Failed to mark as distinct');
+    const result = await markAlbumsDistinct(manualId, canonicalId);
+    if (!result.ok) {
+      throw new Error(result.error);
     }
 
     showToast('Marked as different albums', 'success');

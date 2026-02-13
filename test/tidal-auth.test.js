@@ -1,14 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createTidalAuth } = require('../utils/tidal-auth.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
+const { createMockLogger } = require('./helpers');
 
 // =============================================================================
 // tidalTokenNeedsRefresh tests

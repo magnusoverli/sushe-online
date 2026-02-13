@@ -7,6 +7,7 @@
 
 import { escapeHtml, getPlaceholderSvg } from './html-utils.js';
 import { createModal } from './modal-factory.js';
+import { markAlbumsDistinct } from '../utils/album-api.js';
 
 let modalElement = null;
 let modalController = null;
@@ -277,19 +278,7 @@ async function closeModal(action) {
     existingAlbumId
   ) {
     // Mark these two albums as distinct so we don't ask again
-    try {
-      await fetch('/api/albums/mark-distinct', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          album_id_1: newAlbumId,
-          album_id_2: existingAlbumId,
-        }),
-      });
-    } catch (err) {
-      console.warn('Failed to mark albums as distinct:', err);
-    }
+    await markAlbumsDistinct(newAlbumId, existingAlbumId);
     result.action = 'add_new';
   } else if (action === 'add_new_mark_distinct') {
     // No album IDs to mark, just proceed with add

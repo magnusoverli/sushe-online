@@ -6,34 +6,7 @@ const {
   normalizeAlbumKey,
   basicNormalizeAlbumKey,
 } = require('../services/aggregate-audit.js');
-
-// =============================================================================
-// Helper functions
-// =============================================================================
-
-function createMockLogger() {
-  return {
-    info: mock.fn(),
-    warn: mock.fn(),
-    error: mock.fn(),
-    debug: mock.fn(),
-  };
-}
-
-function createMockPool(queryResults = []) {
-  let callIndex = 0;
-  return {
-    query: mock.fn(async () => {
-      const result = queryResults[callIndex] || { rows: [] };
-      callIndex++;
-      return result;
-    }),
-    connect: mock.fn(async () => ({
-      query: mock.fn(async () => ({ rowCount: 1 })),
-      release: mock.fn(),
-    })),
-  };
-}
+const { createMockLogger, createMockPool } = require('./helpers');
 
 // =============================================================================
 // Tests

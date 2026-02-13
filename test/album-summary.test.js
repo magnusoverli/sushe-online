@@ -108,18 +108,7 @@ test('generateNameVariations should deduplicate', () => {
 // createAlbumSummaryService tests
 // =============================================================================
 
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
-
-// Mock pool
-const createMockPool = (rows = []) => ({
-  query: async () => ({ rows }),
-});
+const { createMockLogger, createMockPool } = require('./helpers');
 
 test('createAlbumSummaryService should throw without pool', () => {
   assert.throws(() => {

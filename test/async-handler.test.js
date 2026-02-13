@@ -2,39 +2,7 @@ const { describe, it, mock } = require('node:test');
 const assert = require('node:assert');
 const { createAsyncHandler } = require('../middleware/async-handler.js');
 const { TransactionAbort } = require('../db/transaction.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: mock.fn(),
-  warn: mock.fn(),
-  info: mock.fn(),
-  debug: mock.fn(),
-});
-
-// Mock request
-const createMockReq = (overrides = {}) => ({
-  params: {},
-  user: { _id: 'user123' },
-  ...overrides,
-});
-
-// Mock response
-const createMockRes = () => {
-  const res = {
-    statusCode: null,
-    body: null,
-    headersSent: false,
-    status: function (code) {
-      this.statusCode = code;
-      return this;
-    },
-    json: function (data) {
-      this.body = data;
-      return this;
-    },
-  };
-  return res;
-};
+const { createMockLogger, createMockReq, createMockRes } = require('./helpers');
 
 describe('createAsyncHandler', () => {
   it('should return a function', () => {

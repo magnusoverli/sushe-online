@@ -7,6 +7,7 @@ const {
   ALLOWED_MUSIC_SERVICES,
   HEX_COLOR_REGEX,
 } = require('../services/user-service.js');
+const { createMockLogger } = require('./helpers');
 
 // =============================================================================
 // Helpers
@@ -23,15 +24,6 @@ function createMockUsersAsync() {
   return {
     findOne: mock.fn(() => Promise.resolve(null)),
     update: mock.fn(() => Promise.resolve(1)),
-  };
-}
-
-function createMockLogger() {
-  return {
-    info: mock.fn(),
-    warn: mock.fn(),
-    error: mock.fn(),
-    debug: mock.fn(),
   };
 }
 

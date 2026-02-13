@@ -8,6 +8,7 @@ const {
   EXTENSION_TOKEN_EXPIRY_MS,
   USER_DEFAULTS,
 } = require('../services/auth-service.js');
+const { createMockLogger } = require('./helpers');
 
 // =============================================================================
 // Helpers
@@ -25,15 +26,6 @@ function createMockBcrypt() {
   return {
     hash: mock.fn(() => Promise.resolve('hashed_password')),
     compare: mock.fn(() => Promise.resolve(true)),
-  };
-}
-
-function createMockLogger() {
-  return {
-    info: mock.fn(),
-    warn: mock.fn(),
-    error: mock.fn(),
-    debug: mock.fn(),
   };
 }
 

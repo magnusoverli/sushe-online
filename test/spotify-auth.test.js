@@ -1,14 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createSpotifyAuth } = require('../utils/spotify-auth.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
+const { createMockLogger } = require('./helpers');
 
 // =============================================================================
 // spotifyTokenNeedsRefresh tests

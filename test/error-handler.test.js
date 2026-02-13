@@ -7,52 +7,7 @@ const {
   createErrorHandler,
   notFoundHandler,
 } = require('../middleware/error-handler.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
-
-// Mock request
-const createMockReq = (overrides = {}) => ({
-  originalUrl: '/test',
-  method: 'GET',
-  ip: '127.0.0.1',
-  get: () => 'Test User Agent',
-  user: null,
-  accepts: () => true, // Default to JSON
-  flash: null,
-  ...overrides,
-});
-
-// Mock response
-const createMockRes = () => {
-  const res = {
-    statusCode: null,
-    body: null,
-    redirectUrl: null,
-    status: function (code) {
-      this.statusCode = code;
-      return this;
-    },
-    json: function (data) {
-      this.body = data;
-      return this;
-    },
-    send: function (data) {
-      this.body = data;
-      return this;
-    },
-    redirect: function (url) {
-      this.redirectUrl = url;
-      return this;
-    },
-  };
-  return res;
-};
+const { createMockLogger, createMockReq, createMockRes } = require('./helpers');
 
 // =============================================================================
 // AppError class tests

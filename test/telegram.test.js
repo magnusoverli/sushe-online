@@ -1,14 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createTelegramNotifier } = require('../services/telegram.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
+const { createMockLogger } = require('./helpers');
 
 // Mock fetch that returns successful Telegram API responses
 const createMockFetch = (responses = {}) => {

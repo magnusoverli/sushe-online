@@ -1,6 +1,7 @@
 /**
  * Music playback service utilities.
- * Handles opening albums/tracks in music apps and playing on Spotify Connect devices.
+ * Handles opening albums/tracks in music apps, fetching Spotify Connect
+ * devices, and playing on a specific device.
  */
 
 /**
@@ -56,6 +57,27 @@ export async function openInMusicApp(service, type, params, showToast) {
   } catch (err) {
     console.error(`Play ${type} error:`, err);
     showToast(err.message || `Failed to open ${type}`, 'error');
+  }
+}
+
+/**
+ * Fetch the list of available Spotify Connect devices.
+ *
+ * @returns {Promise<Array>} Array of device objects, or empty array on error.
+ */
+export async function fetchSpotifyDevices() {
+  try {
+    const response = await fetch('/api/spotify/devices', {
+      credentials: 'include',
+    });
+    const data = await response.json();
+    if (response.ok && data.devices && data.devices.length > 0) {
+      return data.devices;
+    }
+    return [];
+  } catch (err) {
+    console.error('Failed to fetch Spotify devices:', err);
+    return [];
   }
 }
 

@@ -1,14 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createOAuthTokenManager } = require('../utils/oauth-token-manager.js');
-
-// Mock logger
-const createMockLogger = () => ({
-  error: () => {},
-  warn: () => {},
-  info: () => {},
-  debug: () => {},
-});
+const { createMockLogger } = require('./helpers');
 
 // Helper to create a manager with standard test config
 function createTestManager(overrides = {}, deps = {}) {

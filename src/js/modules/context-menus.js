@@ -12,6 +12,7 @@ import {
   positionContextMenu,
   hideAllContextMenus as hideAllMenusBase,
 } from './context-menu.js';
+import { getDeviceIcon } from '../utils/device-icons.js';
 
 /**
  * Factory function to create the context menus module with injected dependencies
@@ -103,28 +104,7 @@ export function createContextMenus(deps = {}) {
     }
   }
 
-  /**
-   * Get device icon for Spotify device type
-   * @param {string} type - Device type
-   * @returns {string} Font Awesome icon class
-   */
-  function getDeviceIcon(type) {
-    const icons = {
-      computer: 'fas fa-laptop',
-      smartphone: 'fas fa-mobile-alt',
-      speaker: 'fas fa-volume-up',
-      tv: 'fas fa-tv',
-      avr: 'fas fa-broadcast-tower',
-      stb: 'fas fa-satellite-dish',
-      audiodongle: 'fas fa-headphones',
-      gameconsole: 'fas fa-gamepad',
-      castvideo: 'fas fa-chromecast',
-      castaudio: 'fas fa-podcast',
-      automobile: 'fas fa-car',
-      tablet: 'fas fa-tablet-alt',
-    };
-    return icons[type?.toLowerCase()] || 'fas fa-music';
-  }
+  // getDeviceIcon is imported from utils/device-icons.js (shared module)
 
   /**
    * Get configuration for list context menu
