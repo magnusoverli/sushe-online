@@ -1,15 +1,29 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const { createMockLogger } = require('./helpers');
+const { createYearLock } = require('../utils/year-lock.js');
+const { TransactionAbort } = require('../db/transaction.js');
 
 /**
  * Unit tests for year-lock utilities
  *
  * These tests verify the locking logic without requiring a database.
- * The new locking behavior:
+ * Uses createYearLock(deps) factory to inject a mock logger.
+ *
+ * The locking behavior:
  * - Main lists are locked when their year is locked
  * - Non-main lists are never locked (even in locked years)
  * - Main status changes are blocked in locked years
  */
+
+// Create instance with mock logger for all tests
+const mockLogger = createMockLogger();
+const {
+  isYearLocked,
+  validateYearNotLocked,
+  isMainListLocked,
+  validateMainListNotLocked,
+} = createYearLock({ logger: mockLogger, TransactionAbort });
 
 // Mock pool that simulates database responses
 function createMockPool(locked = false) {
@@ -30,7 +44,6 @@ function createMockPool(locked = false) {
 // =============================================================================
 
 test('isYearLocked should return false for null year', async () => {
-  const { isYearLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   const result = await isYearLocked(pool, null);
@@ -38,7 +51,6 @@ test('isYearLocked should return false for null year', async () => {
 });
 
 test('isYearLocked should return false for undefined year', async () => {
-  const { isYearLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   const result = await isYearLocked(pool, undefined);
@@ -46,7 +58,6 @@ test('isYearLocked should return false for undefined year', async () => {
 });
 
 test('isYearLocked should return true for locked year', async () => {
-  const { isYearLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   const result = await isYearLocked(pool, 2024);
@@ -54,7 +65,6 @@ test('isYearLocked should return true for locked year', async () => {
 });
 
 test('isYearLocked should return false for unlocked year', async () => {
-  const { isYearLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(false);
 
   const result = await isYearLocked(pool, 2024);
@@ -66,7 +76,6 @@ test('isYearLocked should return false for unlocked year', async () => {
 // =============================================================================
 
 test('isMainListLocked should return false for null year', async () => {
-  const { isMainListLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   const result = await isMainListLocked(pool, null, true);
@@ -74,7 +83,6 @@ test('isMainListLocked should return false for null year', async () => {
 });
 
 test('isMainListLocked should return false for non-main list', async () => {
-  const { isMainListLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   // Even if year is locked, non-main lists should not be locked
@@ -83,7 +91,6 @@ test('isMainListLocked should return false for non-main list', async () => {
 });
 
 test('isMainListLocked should return true for main list in locked year', async () => {
-  const { isMainListLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   const result = await isMainListLocked(pool, 2024, true);
@@ -91,7 +98,6 @@ test('isMainListLocked should return true for main list in locked year', async (
 });
 
 test('isMainListLocked should return false for main list in unlocked year', async () => {
-  const { isMainListLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(false);
 
   const result = await isMainListLocked(pool, 2024, true);
@@ -99,7 +105,6 @@ test('isMainListLocked should return false for main list in unlocked year', asyn
 });
 
 test('isMainListLocked should return false for undefined isMain', async () => {
-  const { isMainListLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   const result = await isMainListLocked(pool, 2024, undefined);
@@ -111,7 +116,6 @@ test('isMainListLocked should return false for undefined isMain', async () => {
 // =============================================================================
 
 test('validateYearNotLocked should not throw for null year', async () => {
-  const { validateYearNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   // Should not throw
@@ -119,8 +123,6 @@ test('validateYearNotLocked should not throw for null year', async () => {
 });
 
 test('validateYearNotLocked should throw TransactionAbort for locked year', async () => {
-  const { validateYearNotLocked } = require('../utils/year-lock.js');
-  const { TransactionAbort } = require('../db/transaction.js');
   const pool = createMockPool(true);
 
   await assert.rejects(
@@ -138,7 +140,6 @@ test('validateYearNotLocked should throw TransactionAbort for locked year', asyn
 });
 
 test('validateYearNotLocked should not throw for unlocked year', async () => {
-  const { validateYearNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(false);
 
   // Should not throw
@@ -150,7 +151,6 @@ test('validateYearNotLocked should not throw for unlocked year', async () => {
 // =============================================================================
 
 test('validateMainListNotLocked should not throw for null year', async () => {
-  const { validateMainListNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   // Should not throw even if isMain is true
@@ -158,7 +158,6 @@ test('validateMainListNotLocked should not throw for null year', async () => {
 });
 
 test('validateMainListNotLocked should not throw for non-main list', async () => {
-  const { validateMainListNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   // Should not throw even if year is locked
@@ -166,8 +165,6 @@ test('validateMainListNotLocked should not throw for non-main list', async () =>
 });
 
 test('validateMainListNotLocked should throw TransactionAbort for main list in locked year', async () => {
-  const { validateMainListNotLocked } = require('../utils/year-lock.js');
-  const { TransactionAbort } = require('../db/transaction.js');
   const pool = createMockPool(true);
 
   await assert.rejects(
@@ -185,7 +182,6 @@ test('validateMainListNotLocked should throw TransactionAbort for main list in l
 });
 
 test('validateMainListNotLocked should not throw for main list in unlocked year', async () => {
-  const { validateMainListNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(false);
 
   // Should not throw
@@ -197,7 +193,6 @@ test('validateMainListNotLocked should not throw for main list in unlocked year'
 // =============================================================================
 
 test('validateMainListNotLocked should not throw for undefined isMain', async () => {
-  const { validateMainListNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   // Should not throw for undefined isMain (treated as non-main)
@@ -205,9 +200,34 @@ test('validateMainListNotLocked should not throw for undefined isMain', async ()
 });
 
 test('validateMainListNotLocked should not throw for isMain=0', async () => {
-  const { validateMainListNotLocked } = require('../utils/year-lock.js');
   const pool = createMockPool(true);
 
   // Should not throw for falsy isMain
   await validateMainListNotLocked(pool, 2024, 0, 'test operation');
+});
+
+// =============================================================================
+// Logger injection tests (verify DI pattern works)
+// =============================================================================
+
+test('isYearLocked should log error on database failure and return false', async () => {
+  const logger = createMockLogger();
+  const { isYearLocked: checkLocked } = createYearLock({
+    logger,
+    TransactionAbort,
+  });
+  const failPool = {
+    query: async () => {
+      throw new Error('Connection timeout');
+    },
+  };
+
+  const result = await checkLocked(failPool, 2024);
+
+  assert.strictEqual(result, false); // Fail-safe: assume not locked
+  assert.strictEqual(logger.error.mock.calls.length, 1);
+  const logArgs = logger.error.mock.calls[0].arguments;
+  assert.strictEqual(logArgs[0], 'Error checking year lock status');
+  assert.strictEqual(logArgs[1].error, 'Connection timeout');
+  assert.strictEqual(logArgs[1].year, 2024);
 });

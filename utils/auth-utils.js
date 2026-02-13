@@ -1,117 +1,142 @@
-// auth-utils.js
-// Helper to validate OAuth tokens and extension tokens
+/**
+ * Auth Utilities
+ *
+ * Helpers to validate OAuth tokens and extension tokens.
+ *
+ * Uses dependency injection via createAuthUtils(deps) factory.
+ * Tests can inject a mock logger; production uses the default instance.
+ */
 
 const crypto = require('crypto');
-const logger = require('./logger');
-
-function isTokenValid(token) {
-  if (!token || !token.access_token) return false;
-  if (token.expires_at && token.expires_at <= Date.now()) return false;
-  return true;
-}
 
 /**
- * Check if a token can be refreshed (has a refresh token)
- * Used for UI display - even if access token is expired, we can recover
+ * Factory that creates auth utility functions with injectable dependencies.
+ *
+ * @param {Object} deps - Dependencies
+ * @param {Object} deps.logger - Logger with error() method
+ * @returns {Object} Auth utility functions
  */
-function canTokenBeRefreshed(token) {
-  if (!token) return false;
-  return !!token.refresh_token;
-}
+function createAuthUtils(deps = {}) {
+  const logger = deps.logger || require('./logger');
 
-/**
- * Check if token is usable (valid or can be refreshed)
- * This is for UI purposes - shows "Connected" if we can auto-refresh
- */
-function isTokenUsable(token) {
-  if (!token) return false;
-  // Token is valid if not expired
-  if (isTokenValid(token)) return true;
-  // Token is usable if it can be refreshed
-  return canTokenBeRefreshed(token);
-}
-
-// Generate a cryptographically secure random token
-function generateExtensionToken() {
-  // 32 bytes = 256 bits of entropy, base64url encoded
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-// Validate extension token format
-function isValidExtensionToken(token) {
-  if (!token || typeof token !== 'string') return false;
-  // Should be 43 characters for 32-byte base64url encoded string
-  if (token.length !== 43) return false;
-  // Should only contain base64url characters
-  if (!/^[A-Za-z0-9_-]+$/.test(token)) return false;
-  return true;
-}
-
-// Find and validate extension token from database
-async function validateExtensionToken(token, pool) {
-  if (!isValidExtensionToken(token)) {
-    return null;
+  function isTokenValid(token) {
+    if (!token || !token.access_token) return false;
+    if (token.expires_at && token.expires_at <= Date.now()) return false;
+    return true;
   }
 
-  try {
-    const result = await pool.query(
-      `SELECT user_id, expires_at, is_revoked 
-       FROM extension_tokens 
-       WHERE token = $1`,
-      [token]
-    );
+  /**
+   * Check if a token can be refreshed (has a refresh token)
+   * Used for UI display - even if access token is expired, we can recover
+   */
+  function canTokenBeRefreshed(token) {
+    if (!token) return false;
+    return !!token.refresh_token;
+  }
 
-    if (result.rows.length === 0) {
-      return null; // Token not found
-    }
+  /**
+   * Check if token is usable (valid or can be refreshed)
+   * This is for UI purposes - shows "Connected" if we can auto-refresh
+   */
+  function isTokenUsable(token) {
+    if (!token) return false;
+    // Token is valid if not expired
+    if (isTokenValid(token)) return true;
+    // Token is usable if it can be refreshed
+    return canTokenBeRefreshed(token);
+  }
 
-    const tokenData = result.rows[0];
+  // Generate a cryptographically secure random token
+  function generateExtensionToken() {
+    // 32 bytes = 256 bits of entropy, base64url encoded
+    return crypto.randomBytes(32).toString('base64url');
+  }
 
-    // Check if token is revoked
-    if (tokenData.is_revoked) {
+  // Validate extension token format
+  function isValidExtensionToken(token) {
+    if (!token || typeof token !== 'string') return false;
+    // Should be 43 characters for 32-byte base64url encoded string
+    if (token.length !== 43) return false;
+    // Should only contain base64url characters
+    if (!/^[A-Za-z0-9_-]+$/.test(token)) return false;
+    return true;
+  }
+
+  // Find and validate extension token from database
+  async function validateExtensionToken(token, pool) {
+    if (!isValidExtensionToken(token)) {
       return null;
     }
 
-    // Check if token is expired
-    if (new Date(tokenData.expires_at) < new Date()) {
+    try {
+      const result = await pool.query(
+        `SELECT user_id, expires_at, is_revoked 
+         FROM extension_tokens 
+         WHERE token = $1`,
+        [token]
+      );
+
+      if (result.rows.length === 0) {
+        return null; // Token not found
+      }
+
+      const tokenData = result.rows[0];
+
+      // Check if token is revoked
+      if (tokenData.is_revoked) {
+        return null;
+      }
+
+      // Check if token is expired
+      if (new Date(tokenData.expires_at) < new Date()) {
+        return null;
+      }
+
+      // Update last_used_at timestamp
+      await pool.query(
+        `UPDATE extension_tokens 
+         SET last_used_at = NOW() 
+         WHERE token = $1`,
+        [token]
+      );
+
+      return tokenData.user_id;
+    } catch (error) {
+      logger.error('Error validating extension token', {
+        error: error.message,
+      });
       return null;
     }
-
-    // Update last_used_at timestamp
-    await pool.query(
-      `UPDATE extension_tokens 
-       SET last_used_at = NOW() 
-       WHERE token = $1`,
-      [token]
-    );
-
-    return tokenData.user_id;
-  } catch (error) {
-    logger.error('Error validating extension token', { error: error.message });
-    return null;
   }
+
+  // Clean up expired tokens (can be called periodically)
+  async function cleanupExpiredTokens(pool) {
+    try {
+      const result = await pool.query(
+        `DELETE FROM extension_tokens 
+         WHERE expires_at < NOW() 
+         OR is_revoked = TRUE`
+      );
+      return result.rowCount;
+    } catch (error) {
+      logger.error('Error cleaning up expired tokens', {
+        error: error.message,
+      });
+      return 0;
+    }
+  }
+
+  return {
+    isTokenValid,
+    isTokenUsable,
+    canTokenBeRefreshed,
+    generateExtensionToken,
+    validateExtensionToken,
+    cleanupExpiredTokens,
+  };
 }
 
-// Clean up expired tokens (can be called periodically)
-async function cleanupExpiredTokens(pool) {
-  try {
-    const result = await pool.query(
-      `DELETE FROM extension_tokens 
-       WHERE expires_at < NOW() 
-       OR is_revoked = TRUE`
-    );
-    return result.rowCount;
-  } catch (error) {
-    logger.error('Error cleaning up expired tokens', { error: error.message });
-    return 0;
-  }
-}
+// Default instance for production use — callers import as before
+const defaultInstance = createAuthUtils();
 
-module.exports = {
-  isTokenValid,
-  isTokenUsable,
-  canTokenBeRefreshed,
-  generateExtensionToken,
-  validateExtensionToken,
-  cleanupExpiredTokens,
-};
+module.exports = { createAuthUtils, ...defaultInstance };

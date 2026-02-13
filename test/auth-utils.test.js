@@ -1,5 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
+const { createMockLogger } = require('./helpers');
+const { createAuthUtils } = require('../utils/auth-utils.js');
+
+// Create instance with mock logger for all tests
+const mockLogger = createMockLogger();
 const {
   isTokenValid,
   isTokenUsable,
@@ -7,7 +12,7 @@ const {
   generateExtensionToken,
   validateExtensionToken,
   cleanupExpiredTokens,
-} = require('../utils/auth-utils.js');
+} = createAuthUtils({ logger: mockLogger });
 
 // =============================================================================
 // isTokenValid tests
@@ -290,4 +295,43 @@ test('cleanupExpiredTokens should return 0 on database error', async () => {
 
   const result = await cleanupExpiredTokens(mockPool);
   assert.strictEqual(result, 0);
+});
+
+// =============================================================================
+// Logger injection tests (verify DI pattern works)
+// =============================================================================
+
+test('validateExtensionToken should log error on database failure', async () => {
+  const logger = createMockLogger();
+  const { validateExtensionToken: validate } = createAuthUtils({ logger });
+  const mockPool = {
+    query: async () => {
+      throw new Error('Connection refused');
+    },
+  };
+
+  const validToken = generateExtensionToken();
+  await validate(validToken, mockPool);
+
+  assert.strictEqual(logger.error.mock.calls.length, 1);
+  const logArgs = logger.error.mock.calls[0].arguments;
+  assert.strictEqual(logArgs[0], 'Error validating extension token');
+  assert.strictEqual(logArgs[1].error, 'Connection refused');
+});
+
+test('cleanupExpiredTokens should log error on database failure', async () => {
+  const logger = createMockLogger();
+  const { cleanupExpiredTokens: cleanup } = createAuthUtils({ logger });
+  const mockPool = {
+    query: async () => {
+      throw new Error('Timeout');
+    },
+  };
+
+  await cleanup(mockPool);
+
+  assert.strictEqual(logger.error.mock.calls.length, 1);
+  const logArgs = logger.error.mock.calls[0].arguments;
+  assert.strictEqual(logArgs[0], 'Error cleaning up expired tokens');
+  assert.strictEqual(logArgs[1].error, 'Timeout');
 });
