@@ -228,7 +228,13 @@ Return a JSON array of objects with "date", "category", "description", and "hash
     ],
   });
 
-  const text = response.content[0].text.trim();
+  let text = response.content[0].text.trim();
+
+  // Strip markdown code fences if Claude wraps the response (e.g. ```json ... ```)
+  const fenceMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+  if (fenceMatch) {
+    text = fenceMatch[1].trim();
+  }
 
   try {
     const parsed = JSON.parse(text);

@@ -151,7 +151,7 @@ jobs:
     needs: [test, e2e]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
@@ -173,6 +173,18 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: node scripts/ci-changelog.js
+
+      - name: Commit changelog updates
+        run: |
+          if git diff --quiet src/data/changelog.json 2>/dev/null; then
+            echo "No changelog changes to commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add src/data/changelog.json
+            git commit -m "Update changelog [skip ci]"
+            git push
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
