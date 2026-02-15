@@ -361,54 +361,39 @@ export function createTrackSelection(deps = {}) {
           };
         }
 
-        // Update local state for immediate UI feedback
-        if (trackName === selectedPrimary) {
-          selectedPrimary = selectedSecondary;
-          selectedSecondary = null;
-        } else if (trackName === selectedSecondary) {
-          selectedSecondary = selectedPrimary;
-          selectedPrimary = trackName;
-        } else {
-          selectedSecondary = selectedPrimary ? trackName : null;
-          if (!selectedPrimary) {
-            selectedPrimary = trackName;
-            selectedSecondary = null;
-          }
-        }
-
-        const newPicks = {
-          primary: selectedPrimary
-            ? sortedTracks.find((t) => getTrackName(t) === selectedPrimary) ||
-              selectedPrimary
-            : null,
-          secondary: selectedSecondary
-            ? sortedTracks.find((t) => getTrackName(t) === selectedSecondary) ||
-              selectedSecondary
-            : null,
-        };
-
-        // Update local data
-        currentAlbum.track_pick = newPicks.primary;
-        currentAlbum.track_picks = newPicks;
-
-        updateMenuUI();
-        updateTrackCellDisplayDual(albumIndex, newPicks, album.tracks);
-
-        // Persist - single API call, backend handles swap logic internally
+        // Persist via API - backend is the source of truth
         try {
           const result = await apiCall(
             `/api/track-picks/${currentAlbum._id}`,
             apiAction
           );
 
-          // Sync local state with backend response (authoritative)
           if (result) {
+            // Sync local state with backend response (authoritative)
             selectedPrimary = result.primary_track || null;
             selectedSecondary = result.secondary_track || null;
+
+            const newPicks = {
+              primary: selectedPrimary
+                ? sortedTracks.find(
+                    (t) => getTrackName(t) === selectedPrimary
+                  ) || selectedPrimary
+                : null,
+              secondary: selectedSecondary
+                ? sortedTracks.find(
+                    (t) => getTrackName(t) === selectedSecondary
+                  ) || selectedSecondary
+                : null,
+            };
+
+            // Update album data
             currentAlbum.primary_track = selectedPrimary;
             currentAlbum.secondary_track = selectedSecondary;
             currentAlbum.track_pick = selectedPrimary;
+            currentAlbum.track_picks = newPicks;
+
             updateMenuUI();
+            updateTrackCellDisplayDual(albumIndex, newPicks, album.tracks);
           }
         } catch (err) {
           console.error('Error saving track picks:', err);
