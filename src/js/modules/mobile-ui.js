@@ -1642,6 +1642,17 @@ export function createMobileUI(deps = {}) {
             >${album.comments || album.comment || ''}</textarea>
           </div>
 
+          <!-- Comments 2 -->
+          <div class="w-full">
+            <label class="block text-gray-400 text-sm mb-2">Comments 2</label>
+            <textarea
+              id="editComments2"
+              rows="3"
+              class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-hidden focus:border-gray-500 transition duration-200 resize-none"
+              placeholder="Add your notes..."
+            >${album.comments_2 || ''}</textarea>
+          </div>
+
           <!-- Track Selection (Dual: Primary + Secondary) -->
           <div class="w-full" id="trackPickWrapper">
             <div class="flex items-center justify-between">
@@ -2061,6 +2072,7 @@ export function createMobileUI(deps = {}) {
           })(),
         comments: document.getElementById('editComments').value.trim(),
         comment: document.getElementById('editComments').value.trim(),
+        comments_2: document.getElementById('editComments2').value.trim(),
       };
 
       // Apply pending cover image if user selected a new one

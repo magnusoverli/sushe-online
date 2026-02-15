@@ -12,9 +12,10 @@
 
 /* Album grid column configuration with responsive behavior */
 :root {
-  /* Default grid for desktop screens - Track column at the end */
+  /* Default grid for desktop screens - 10 columns */
   /* Position column is fixed at 7px, album image at 80px, rest are flexible */
-  --album-grid-columns: 7px 80px 0.75fr 0.65fr 0.55fr 0.6fr 0.6fr 0.7fr 1.1fr;
+  --album-grid-columns: 7px 80px 0.65fr 0.55fr 0.45fr 0.55fr 0.55fr 0.7fr 0.75fr
+    0.75fr;
   --cover-art-size: 80px;
 }
 
@@ -189,8 +190,9 @@
     align-items: flex-start; /* Override blanket align-items:center to left-align content in column layout */
   }
 
-  /* Comment cell border spans full height */
-  .album-row .comment-cell {
+  /* Comment cells border spans full height */
+  .album-row .comment-cell,
+  .album-row .comment-2-cell {
     align-self: stretch;
     min-height: 2.5rem; /* Match track cell height */
   }
@@ -559,11 +561,13 @@ input[list]::-webkit-list-button {
 }
 
 /* Comment editing styles */
-.comment-cell {
+.comment-cell,
+.comment-2-cell {
   position: relative;
 }
 
-.comment-cell textarea {
+.comment-cell textarea,
+.comment-2-cell textarea {
   font-family: inherit;
   border-radius: 4px;
 }

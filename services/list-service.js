@@ -169,14 +169,15 @@ function createListService(deps = {}) {
       const itemId = crypto.randomBytes(12).toString('hex');
       await client.query(
         `INSERT INTO list_items (
-          _id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [
           itemId,
           listId,
           albumId,
           i + 1,
           album.comments || null,
+          album.comments_2 || null,
           album.primary_track || null,
           album.secondary_track || null,
           timestamp,
@@ -317,6 +318,7 @@ function createListService(deps = {}) {
           album_id: upsertResult.albumId,
           position,
           comments: item.comments || null,
+          comments_2: item.comments_2 || null,
           primary_track: item.primary_track || null,
           secondary_track: item.secondary_track || null,
         });
@@ -335,6 +337,7 @@ function createListService(deps = {}) {
       const albumIdsToInsert = itemsToInsert.map((i) => i.album_id);
       const positions = itemsToInsert.map((i) => i.position);
       const comments = itemsToInsert.map((i) => i.comments);
+      const comments2 = itemsToInsert.map((i) => i.comments_2);
       const primaryTracks = itemsToInsert.map((i) => i.primary_track);
       const secondaryTracks = itemsToInsert.map((i) => i.secondary_track);
       const createdAts = itemsToInsert.map(() => timestamp);
@@ -342,19 +345,20 @@ function createListService(deps = {}) {
 
       await client.query(
         `INSERT INTO list_items (
-          _id, list_id, album_id, position, comments, primary_track, secondary_track, 
+          _id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, 
           created_at, updated_at
         )
         SELECT * FROM UNNEST(
-          $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], 
-          $6::text[], $7::text[], $8::timestamptz[], $9::timestamptz[]
-        ) AS t(_id, list_id, album_id, position, comments, primary_track, secondary_track, created_at, updated_at)`,
+          $1::text[], $2::text[], $3::text[], $4::int[], $5::text[], $6::text[],
+          $7::text[], $8::text[], $9::timestamptz[], $10::timestamptz[]
+        ) AS t(_id, list_id, album_id, position, comments, comments_2, primary_track, secondary_track, created_at, updated_at)`,
         [
           itemIds,
           listIds,
           albumIdsToInsert,
           positions,
           comments,
+          comments2,
           primaryTracks,
           secondaryTracks,
           createdAts,
@@ -474,6 +478,7 @@ function createListService(deps = {}) {
       primary_track: row.primary_track || null,
       secondary_track: row.secondary_track || null,
       comments: row.comments || '',
+      comments_2: row.comments_2 || '',
       tracks: row.tracks || null,
       cover_image: row.cover_image || '',
       cover_image_format: row.cover_image_format || '',
@@ -635,6 +640,7 @@ function createListService(deps = {}) {
         primary_track: item.primaryTrack || null,
         secondary_track: item.secondaryTrack || null,
         comments: item.comments,
+        comments_2: item.comments2 || '',
         tracks: item.tracks,
         cover_image_format: item.coverImageFormat,
         summary: item.summary || '',
@@ -1191,6 +1197,42 @@ function createListService(deps = {}) {
   }
 
   /**
+   * Update a single album's comment 2.
+   * @param {string} listId - List ID
+   * @param {string} userId - User ID
+   * @param {string} identifier - Album ID or item ID
+   * @param {string|null} comment - New comment 2
+   * @returns {Promise<void>}
+   */
+  async function updateItemComment2(listId, userId, identifier, comment) {
+    const list = await findListByIdOrThrow(listId, userId, 'update comment 2');
+
+    const trimmedComment = comment ? comment.trim() : null;
+
+    await withTransaction(pool, async (client) => {
+      let updateResult = await client.query(
+        'UPDATE list_items SET comments_2 = $1, updated_at = $2 WHERE list_id = $3 AND album_id = $4 RETURNING _id',
+        [trimmedComment, new Date(), list._id, identifier]
+      );
+
+      if (updateResult.rowCount === 0) {
+        updateResult = await client.query(
+          'UPDATE list_items SET comments_2 = $1, updated_at = $2 WHERE _id = $3 AND list_id = $4 RETURNING _id',
+          [trimmedComment, new Date(), identifier, list._id]
+        );
+      }
+
+      if (updateResult.rowCount === 0) {
+        throw new TransactionAbort(404, {
+          error: 'Album not found in list',
+        });
+      }
+    });
+
+    log.info('Comment 2 updated', { userId, listId, identifier });
+  }
+
+  /**
    * Incremental list update (add/remove/update items without full rebuild).
    * @param {string} listId - List ID
    * @param {string} userId - User ID
@@ -1389,6 +1431,7 @@ function createListService(deps = {}) {
     replaceListItems,
     reorderItems,
     updateItemComment,
+    updateItemComment2,
     incrementalUpdate,
     toggleMainStatus,
     deleteList,

@@ -843,11 +843,150 @@ export function createEditableFields(deps = {}) {
     });
   }
 
+  /**
+   * Make comment 2 field editable with textarea
+   * @param {HTMLElement} commentDiv - Comment 2 container element
+   * @param {number} albumIndex - Album index in list
+   */
+  function makeComment2Editable(commentDiv, albumIndex) {
+    const currentList = getCurrentList();
+    const albumsForComment = getListData(currentList);
+    if (!albumsForComment || !albumsForComment[albumIndex]) return;
+
+    const currentComment = albumsForComment[albumIndex].comments_2 || '';
+
+    // Create textarea
+    const textarea = document.createElement('textarea');
+    textarea.className =
+      'w-full bg-gray-800 text-gray-300 text-sm p-2 rounded-sm border border-gray-700 focus:outline-hidden focus:border-gray-500 resize-none';
+    textarea.value = currentComment;
+    textarea.rows = 2;
+
+    // Replace div content with textarea
+    commentDiv.innerHTML = '';
+    commentDiv.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    // Save on blur or enter
+    const saveComment = async () => {
+      const albumsToUpdate = getListData(currentList);
+      if (!albumsToUpdate || !albumsToUpdate[albumIndex]) return;
+
+      const newComment = textarea.value.trim();
+      const album = albumsToUpdate[albumIndex];
+
+      // Get identifier (prefer album_id, fallback to _id for legacy albums)
+      const identifier = album.album_id || album.albumId || album._id;
+
+      if (!identifier) {
+        showToast('Cannot update - album not identified', 'error');
+        return;
+      }
+
+      try {
+        // Use lightweight endpoint to update comment 2
+        await apiCall(
+          `/api/lists/${encodeURIComponent(currentList)}/items/${encodeURIComponent(identifier)}/comment2`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ comment: newComment || null }),
+          }
+        );
+
+        // Update local state
+        albumsToUpdate[albumIndex].comments_2 = newComment;
+
+        // Update display without re-rendering everything
+        let displayComment = newComment;
+        let displayClass = 'text-gray-300';
+
+        // If comment is empty, show placeholder with almost invisible styling
+        if (!displayComment) {
+          displayComment = 'Comment 2';
+          displayClass = 'text-gray-800 italic';
+        }
+
+        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${displayComment}</span>`;
+
+        // Re-add click handler
+        commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
+
+        // Add tooltip only if comment is truncated
+        const commentTextEl = commentDiv.querySelector('.comment-2-text');
+        if (commentTextEl && newComment) {
+          setTimeout(() => {
+            if (isTextTruncated(commentTextEl)) {
+              commentTextEl.setAttribute('data-comment', newComment);
+            }
+          }, 0);
+        }
+
+        if (newComment !== currentComment) {
+          showToast('Comment 2 updated');
+        }
+      } catch (_error) {
+        showToast('Error saving comment', 'error');
+        // Revert on error
+        let revertDisplay = currentComment;
+        let revertClass = 'text-gray-300';
+        if (!revertDisplay) {
+          revertDisplay = 'Comment 2';
+          revertClass = 'text-gray-500';
+        }
+        commentDiv.innerHTML = `<span class="text-sm ${revertClass} italic line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${revertDisplay}</span>`;
+        commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
+
+        // Add tooltip only if comment is truncated
+        const revertTextEl = commentDiv.querySelector('.comment-2-text');
+        if (revertTextEl && currentComment) {
+          setTimeout(() => {
+            if (isTextTruncated(revertTextEl)) {
+              revertTextEl.setAttribute('data-comment', currentComment);
+            }
+          }, 0);
+        }
+      }
+    };
+
+    textarea.addEventListener('blur', saveComment);
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        textarea.blur();
+      }
+      if (e.key === 'Escape') {
+        // Cancel editing
+        let displayComment = currentComment;
+        let displayClass = 'text-gray-300';
+
+        if (!displayComment) {
+          displayComment = 'Comment 2';
+          displayClass = 'text-gray-500';
+        }
+
+        commentDiv.innerHTML = `<span class="text-sm ${displayClass} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${displayComment}</span>`;
+        commentDiv.onclick = () => makeComment2Editable(commentDiv, albumIndex);
+
+        // Add tooltip only if comment is truncated
+        const cancelTextEl = commentDiv.querySelector('.comment-2-text');
+        if (cancelTextEl && currentComment) {
+          setTimeout(() => {
+            if (isTextTruncated(cancelTextEl)) {
+              cancelTextEl.setAttribute('data-comment', currentComment);
+            }
+          }, 0);
+        }
+      }
+    });
+  }
+
   // Return public API
   return {
     makeCountryEditable,
     makeGenreEditable,
     makeCommentEditable,
+    makeComment2Editable,
     // Batch update utilities
     flushBatchUpdates,
     flushPendingForAlbum,

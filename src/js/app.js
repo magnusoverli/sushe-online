@@ -344,6 +344,7 @@ const getAlbumDisplayModule = createLazyModule(() =>
     makeCountryEditable,
     makeGenreEditable,
     makeCommentEditable,
+    makeComment2Editable,
     attachLinkPreview: (...args) =>
       getLinkPreviewModule().attachLinkPreview(...args),
     showTrackSelectionMenu,
@@ -675,6 +676,10 @@ function makeGenreEditable(genreDiv, albumIndex, genreField) {
 
 function makeCommentEditable(commentDiv, albumIndex) {
   return getEditableFieldsModule().makeCommentEditable(commentDiv, albumIndex);
+}
+
+function makeComment2Editable(commentDiv, albumIndex) {
+  return getEditableFieldsModule().makeComment2Editable(commentDiv, albumIndex);
 }
 
 /**

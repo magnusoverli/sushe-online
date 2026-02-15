@@ -106,6 +106,7 @@ function cacheDesktopRowElements(row) {
     genre1Cell: row.querySelector('.genre-1-cell'),
     genre2Cell: row.querySelector('.genre-2-cell'),
     commentCell: row.querySelector('.comment-cell'),
+    comment2Cell: row.querySelector('.comment-2-cell'),
     trackCell: row.querySelector('.track-cell'),
   };
 
@@ -121,6 +122,9 @@ function cacheDesktopRowElements(row) {
   }
   if (cache.commentCell) {
     cache.commentSpan = cache.commentCell.querySelector('span');
+  }
+  if (cache.comment2Cell) {
+    cache.comment2Span = cache.comment2Cell.querySelector('span');
   }
   if (cache.trackCell) {
     cache.trackSpan = cache.trackCell.querySelector('span');
@@ -184,7 +188,7 @@ function generateAlbumFingerprint(albums) {
   const fingerprint = albums
     .map(
       (a) =>
-        `${a._id || ''}|${a.track_pick || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}`
+        `${a._id || ''}|${a.track_pick || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}`
     )
     .join('::');
 
@@ -216,7 +220,7 @@ function extractMutableFingerprints(albums) {
   if (!albums || albums.length === 0) return null;
   return albums.map(
     (a) =>
-      `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.track_pick || ''}`
+      `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}|${a.track_pick || ''}`
   );
 }
 
@@ -242,6 +246,7 @@ const pollingControllers = new Map(); // listId -> AbortController
  * @param {Function} deps.makeCountryEditable - Make country cell editable
  * @param {Function} deps.makeGenreEditable - Make genre cell editable
  * @param {Function} deps.makeCommentEditable - Make comment cell editable
+ * @param {Function} deps.makeComment2Editable - Make comment 2 cell editable
  * @param {Function} deps.attachLinkPreview - Attach link preview to element
  * @param {Function} deps.showTrackSelectionMenu - Show track selection menu
  * @param {Function} deps.showMobileEditForm - Show mobile edit form
@@ -266,6 +271,7 @@ export function createAlbumDisplay(deps = {}) {
     makeCountryEditable,
     makeGenreEditable,
     makeCommentEditable,
+    makeComment2Editable,
     attachLinkPreview,
     showTrackSelectionMenu,
     showMobileEditForm,
@@ -324,6 +330,9 @@ export function createAlbumDisplay(deps = {}) {
 
     let comment = album.comments || album.comment || '';
     if (comment === 'Comment') comment = '';
+
+    let comment2 = album.comments_2 || '';
+    if (comment2 === 'Comment 2') comment2 = '';
 
     // Support both URL-based images (new) and base64 (fallback/legacy)
     const coverImageUrl = album.cover_image_url || '';
@@ -434,6 +443,7 @@ export function createAlbumDisplay(deps = {}) {
       genre2Display,
       genre2Class,
       comment,
+      comment2,
       coverImageUrl,
       coverImage,
       imageFormat,
@@ -537,6 +547,8 @@ export function createAlbumDisplay(deps = {}) {
     if (genre2 === 'Genre 2' || genre2 === '-') genre2 = '';
     let comment = album.comments || album.comment || '';
     if (comment === 'Comment') comment = '';
+    let comment2 = album.comments_2 || '';
+    if (comment2 === 'Comment 2') comment2 = '';
 
     const primaryTrack = album.primary_track || album.track_pick || '';
     const trackPick = primaryTrack;
@@ -590,6 +602,7 @@ export function createAlbumDisplay(deps = {}) {
       genre2Display: genre2 || 'Genre 2',
       genre2Class: genre2 ? 'text-gray-300' : 'text-gray-800 italic',
       comment,
+      comment2,
       trackPick,
       trackPickDisplay,
       trackPickClass,
@@ -755,6 +768,9 @@ export function createAlbumDisplay(deps = {}) {
       <div class="flex items-center comment-cell relative border-l border-gray-700 pl-4 self-stretch">
         <span class="album-cell-text ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
       </div>
+      <div class="flex items-center comment-2-cell relative border-l border-gray-700 pl-4 self-stretch">
+        <span class="album-cell-text ${data.comment2 ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${data.comment2 || 'Comment 2'}</span>
+      </div>
     `;
 
     // Add shared event handlers
@@ -831,11 +847,21 @@ export function createAlbumDisplay(deps = {}) {
       makeCommentEditable(commentCell, currentIndex);
     };
 
+    // Add click handler to comment 2 cell
+    const comment2Cell = row.querySelector('.comment-2-cell');
+    comment2Cell.onclick = () => {
+      const currentIndex = parseInt(row.dataset.index);
+      makeComment2Editable(comment2Cell, currentIndex);
+    };
+
     // Attach link preview
     const albumsForPreview = getListData(currentList);
     const album = albumsForPreview && albumsForPreview[index];
     const comment = album ? album.comments || album.comment || '' : '';
     attachLinkPreview(commentCell, comment);
+
+    const comment2 = album ? album.comments_2 || '' : '';
+    attachLinkPreview(comment2Cell, comment2);
 
     // Add tooltip only if comment is truncated
     const commentTextEl = commentCell.querySelector('.comment-text');
@@ -847,6 +873,16 @@ export function createAlbumDisplay(deps = {}) {
       }, 0);
     }
 
+    // Add tooltip only if comment 2 is truncated
+    const comment2TextEl = comment2Cell.querySelector('.comment-2-text');
+    if (comment2TextEl && comment2) {
+      setTimeout(() => {
+        if (isTextTruncated(comment2TextEl)) {
+          comment2TextEl.setAttribute('data-comment', comment2);
+        }
+      }, 0);
+    }
+
     // Double-click handler for opening edit modal on the entire row
     row.addEventListener('dblclick', (e) => {
       const isInteractiveCell =
@@ -854,6 +890,7 @@ export function createAlbumDisplay(deps = {}) {
         e.target.closest('.genre-1-cell') ||
         e.target.closest('.genre-2-cell') ||
         e.target.closest('.comment-cell') ||
+        e.target.closest('.comment-2-cell') ||
         e.target.closest('.track-cell');
 
       if (isInteractiveCell) {
@@ -1475,7 +1512,7 @@ export function createAlbumDisplay(deps = {}) {
         // Build new fingerprint inline and compare as string -- cheaper than
         // comparing 8+ object properties individually, and avoids allocating objects.
         const newAlbum = newAlbums[i];
-        const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.track_pick || ''}`;
+        const newFp = `${newAlbum._id || ''}|${newAlbum.artist || ''}|${newAlbum.album || ''}|${newAlbum.release_date || ''}|${newAlbum.country || ''}|${newAlbum.genre_1 || ''}|${newAlbum.genre_2 || ''}|${newAlbum.comments || ''}|${newAlbum.comments_2 || ''}|${newAlbum.track_pick || ''}`;
         if (oldFingerprints[i] !== newFp) {
           fieldChanges++;
         }
@@ -1699,6 +1736,18 @@ export function createAlbumDisplay(deps = {}) {
               cache.commentSpan.setAttribute('data-comment', data.comment);
             } else {
               cache.commentSpan.removeAttribute('data-comment');
+            }
+          }
+
+          // Update comment 2 using cached span
+          if (cache.comment2Span) {
+            cache.comment2Span.textContent = data.comment2 || 'Comment 2';
+            cache.comment2Span.className = `text-sm ${data.comment2 ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text`;
+
+            if (data.comment2) {
+              cache.comment2Span.setAttribute('data-comment', data.comment2);
+            } else {
+              cache.comment2Span.removeAttribute('data-comment');
             }
           }
 
@@ -2612,6 +2661,7 @@ export function createAlbumDisplay(deps = {}) {
         <div>Genre 2</div>
         <div>Track</div>
         <div>Comment</div>
+        <div>Comment 2</div>
       `;
 
       // Create rows container

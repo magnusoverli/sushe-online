@@ -415,13 +415,14 @@ class PgDatastore {
     // Use prepared statement with consistent naming
     // V6: Track picks now stored directly on list_items (no JOIN needed)
     // userId parameter kept for API compatibility but no longer used for track picks
-    const queryName = 'findListItemsWithAlbumsV6';
+    const queryName = 'findListItemsWithAlbumsV7';
     const queryText = `
       SELECT 
         li._id,
         li.list_id,
         li.position,
         li.comments,
+        li.comments_2,
         li.album_id,
         li.primary_track,
         li.secondary_track,
@@ -461,6 +462,7 @@ class PgDatastore {
       primaryTrack: row.primary_track || null,
       secondaryTrack: row.secondary_track || null,
       comments: row.comments || '',
+      comments2: row.comments_2 || '',
       tracks: row.tracks || null,
       coverImage: row.cover_image || '',
       coverImageFormat: row.cover_image_format || '',
@@ -483,7 +485,7 @@ class PgDatastore {
     }
 
     // V6: Track picks now stored directly on list_items (no JOIN needed)
-    const queryName = 'findAllUserListsWithItemsV6';
+    const queryName = 'findAllUserListsWithItemsV7';
     const queryText = `
       SELECT 
         l._id as list_id,
@@ -494,6 +496,7 @@ class PgDatastore {
         li.position,
         li.album_id,
         li.comments,
+        li.comments_2,
         li.primary_track,
         li.secondary_track,
         -- All album metadata from canonical albums table

@@ -14,7 +14,7 @@ export function createTrackSelection(deps = {}) {
     getListData,
     getCurrentListId,
     formatTrackTime,
-    saveList,
+    saveList: _saveList,
   } = deps;
 
   // ============ PURE HELPERS ============
@@ -109,36 +109,60 @@ export function createTrackSelection(deps = {}) {
     const secondary = processTrack(trackPicks?.secondary);
 
     let cellHtml;
-    if (primary && secondary) {
-      cellHtml = `
-        <div class="flex flex-col gap-0.5">
+    if (isMobile) {
+      // Mobile: compact format for card layout
+      if (primary && secondary) {
+        cellHtml = `
+          <div class="flex flex-col gap-0.5">
+            <div class="flex items-center gap-1 ${primary.trackClass}">
+              <span class="text-yellow-400 text-[10px]" title="Primary pick">\u2605</span>
+              <span class="truncate">${primary.displayName}</span>
+              ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
+            </div>
+            <div class="flex items-center gap-1 text-gray-500 text-xs">
+              <span class="text-gray-600 text-[10px]" title="Secondary pick">\u2606</span>
+              <span class="truncate">${secondary.displayName}</span>
+              ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
+            </div>
+          </div>`;
+      } else if (primary) {
+        cellHtml = `
           <div class="flex items-center gap-1 ${primary.trackClass}">
             <span class="text-yellow-400 text-[10px]" title="Primary pick">\u2605</span>
             <span class="truncate">${primary.displayName}</span>
             ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
-          </div>
+          </div>`;
+      } else if (secondary) {
+        cellHtml = `
           <div class="flex items-center gap-1 text-gray-500 text-xs">
             <span class="text-gray-600 text-[10px]" title="Secondary pick">\u2606</span>
             <span class="truncate">${secondary.displayName}</span>
             ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
-          </div>
-        </div>`;
-    } else if (primary) {
-      cellHtml = `
-        <div class="flex items-center gap-1 ${primary.trackClass}">
-          <span class="text-yellow-400 text-[10px]" title="Primary pick">\u2605</span>
-          <span class="truncate">${primary.displayName}</span>
-          ${primary.formatted ? `<span class="text-gray-500 text-xs ml-auto shrink-0">${primary.formatted}</span>` : ''}
-        </div>`;
-    } else if (secondary) {
-      cellHtml = `
-        <div class="flex items-center gap-1 text-gray-500 text-xs">
-          <span class="text-gray-600 text-[10px]" title="Secondary pick">\u2606</span>
-          <span class="truncate">${secondary.displayName}</span>
-          ${secondary.formatted ? `<span class="text-gray-600 text-xs ml-auto shrink-0">${secondary.formatted}</span>` : ''}
-        </div>`;
+          </div>`;
+      } else {
+        cellHtml = '<span class="text-gray-600 italic text-xs">No track</span>';
+      }
     } else {
-      cellHtml = '<span class="text-gray-600 italic text-xs">No track</span>';
+      // Desktop: match createDesktopAlbumRow() HTML structure exactly
+      const primaryHtml = primary
+        ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
+            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Primary track">\u2605</span>
+            <span class="album-cell-text ${primary.trackClass} truncate hover:text-gray-100 flex-1 min-w-0" title="${primary.name}">${primary.displayName}</span>
+            ${primary.formatted ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${primary.formatted}</span>` : ''}
+          </div>`
+        : `<div class="flex items-center min-w-0">
+            <span class="album-cell-text text-gray-800 italic hover:text-gray-100">Select Track</span>
+          </div>`;
+
+      const secondaryHtml = secondary
+        ? `<div class="flex items-center min-w-0 mt-1 overflow-hidden w-full">
+            <span class="text-yellow-400 mr-1.5 text-base shrink-0" title="Secondary track">\u2606</span>
+            <span class="album-cell-text ${secondary.trackClass} truncate hover:text-gray-100 text-sm flex-1 min-w-0" title="${secondary.name}">${secondary.displayName}</span>
+            ${secondary.formatted ? `<span class="text-xs text-gray-500 shrink-0 ml-2 tabular-nums">${secondary.formatted}</span>` : ''}
+          </div>`
+        : '';
+
+      cellHtml = primaryHtml + secondaryHtml;
     }
 
     if (isMobile) {
@@ -168,11 +192,11 @@ export function createTrackSelection(deps = {}) {
         };
       }
     } else {
-      const rows = document.querySelectorAll('.album-table tbody tr');
+      const rows = document.querySelectorAll('.album-row');
       const row = rows[albumIndex];
       if (!row) return;
 
-      const trackCell = row.querySelector('.track-pick-cell');
+      const trackCell = row.querySelector('.track-cell');
       if (trackCell) {
         trackCell.innerHTML = cellHtml;
         trackCell.style.cursor = 'pointer';
@@ -266,6 +290,8 @@ export function createTrackSelection(deps = {}) {
         });
 
         currentAlbum.track_pick = null;
+        currentAlbum.primary_track = null;
+        currentAlbum.secondary_track = null;
         currentAlbum.track_picks = { primary: null, secondary: null };
         selectedPrimary = null;
         selectedSecondary = null;
@@ -275,7 +301,6 @@ export function createTrackSelection(deps = {}) {
           currentAlbum.track_picks,
           album.tracks
         );
-        await saveList(getCurrentListId(), listData);
       } catch (err) {
         console.error('Error clearing track picks:', err);
         showToast('Error clearing track picks', 'error');
@@ -313,16 +338,37 @@ export function createTrackSelection(deps = {}) {
         const currentAlbum = listData[albumIndex];
         if (!currentAlbum?._id) return;
 
+        // Determine the API action BEFORE updating local state
+        // The backend handles swap logic internally, so send one call per click
+        let apiAction;
         if (trackName === selectedPrimary) {
-          // Clicking primary = deselect it, secondary stays
+          // Clicking primary = deselect it
+          apiAction = {
+            method: 'DELETE',
+            body: JSON.stringify({ trackIdentifier: trackName }),
+          };
+        } else if (trackName === selectedSecondary) {
+          // Clicking secondary = promote to primary
+          apiAction = {
+            method: 'POST',
+            body: JSON.stringify({ trackIdentifier: trackName, priority: 1 }),
+          };
+        } else {
+          // New track = add as secondary (backend handles demotion)
+          apiAction = {
+            method: 'POST',
+            body: JSON.stringify({ trackIdentifier: trackName, priority: 2 }),
+          };
+        }
+
+        // Update local state for immediate UI feedback
+        if (trackName === selectedPrimary) {
           selectedPrimary = selectedSecondary;
           selectedSecondary = null;
         } else if (trackName === selectedSecondary) {
-          // Clicking secondary = promote to primary
           selectedSecondary = selectedPrimary;
           selectedPrimary = trackName;
         } else {
-          // New track: becomes secondary (push current secondary out)
           selectedSecondary = selectedPrimary ? trackName : null;
           if (!selectedPrimary) {
             selectedPrimary = trackName;
@@ -348,16 +394,22 @@ export function createTrackSelection(deps = {}) {
         updateMenuUI();
         updateTrackCellDisplayDual(albumIndex, newPicks, album.tracks);
 
-        // Persist
+        // Persist - single API call, backend handles swap logic internally
         try {
-          await apiCall(`/api/track-picks/${currentAlbum._id}`, {
-            method: 'POST',
-            body: JSON.stringify({
-              primary: selectedPrimary,
-              secondary: selectedSecondary,
-            }),
-          });
-          await saveList(getCurrentListId(), listData);
+          const result = await apiCall(
+            `/api/track-picks/${currentAlbum._id}`,
+            apiAction
+          );
+
+          // Sync local state with backend response (authoritative)
+          if (result) {
+            selectedPrimary = result.primary_track || null;
+            selectedSecondary = result.secondary_track || null;
+            currentAlbum.primary_track = selectedPrimary;
+            currentAlbum.secondary_track = selectedSecondary;
+            currentAlbum.track_pick = selectedPrimary;
+            updateMenuUI();
+          }
         } catch (err) {
           console.error('Error saving track picks:', err);
           showToast('Error saving track pick', 'error');

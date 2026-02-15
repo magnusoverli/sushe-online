@@ -299,6 +299,35 @@ module.exports = (app, deps) => {
     }, 'updating comment')
   );
 
+  // Update single album's comment 2
+  app.patch(
+    '/api/lists/:id/items/:identifier/comment2',
+    ensureAuthAPI,
+    asyncHandler(async (req, res) => {
+      const { id, identifier } = req.params;
+      const { comment } = req.body;
+
+      if (
+        comment !== null &&
+        comment !== undefined &&
+        typeof comment !== 'string'
+      ) {
+        return res.status(400).json({ error: 'Invalid comment value' });
+      }
+
+      await listService.updateItemComment2(
+        id,
+        req.user._id,
+        identifier,
+        comment
+      );
+
+      invalidateListCaches(req.user._id, id, { full: false });
+
+      res.json({ success: true });
+    }, 'updating comment 2')
+  );
+
   // Incremental list update (add/remove/update items without full rebuild)
   app.patch(
     '/api/lists/:id/items',

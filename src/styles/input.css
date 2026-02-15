@@ -860,7 +860,8 @@ body.now-playing-bar-visible #addAlbumFAB {
 }
 
 /* Custom tooltip for comment cells - overlays on the comment itself */
-.comment-text[data-comment]:not([data-comment=''])::after {
+.comment-text[data-comment]:not([data-comment=''])::after,
+.comment-2-text[data-comment]:not([data-comment=''])::after {
   content: attr(data-comment);
   position: absolute;
   top: -0.25rem;
@@ -881,7 +882,8 @@ body.now-playing-bar-visible #addAlbumFAB {
   transition: opacity 0.2s ease;
 }
 
-.comment-text[data-comment]:not([data-comment='']):hover::after {
+.comment-text[data-comment]:not([data-comment='']):hover::after,
+.comment-2-text[data-comment]:not([data-comment='']):hover::after {
   opacity: 1;
 }
 

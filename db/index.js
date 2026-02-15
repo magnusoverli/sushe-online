@@ -232,6 +232,7 @@ if (process.env.DATABASE_URL) {
     position: 'position',
     albumId: 'album_id',
     comments: 'comments',
+    comments2: 'comments_2',
     primaryTrack: 'primary_track',
     secondaryTrack: 'secondary_track',
     createdAt: 'created_at',
