@@ -370,9 +370,9 @@ describe('album-display module', () => {
 
     // Helper: build a fingerprint string from an album object, matching the
     // format used by extractMutableFingerprints in album-display.js.
-    // Format: "_id|artist|album|release_date|country|genre_1|genre_2|comments|track_pick"
+    // Format: "_id|artist|album|release_date|country|genre_1|genre_2|comments|comments_2|track_pick"
     function fp(a) {
-      return `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.track_pick || ''}`;
+      return `${a._id || ''}|${a.artist || ''}|${a.album || ''}|${a.release_date || ''}|${a.country || ''}|${a.genre_1 || ''}|${a.genre_2 || ''}|${a.comments || ''}|${a.comments_2 || ''}|${a.track_pick || ''}`;
     }
 
     it('should return SINGLE_ADD when one album is added', () => {

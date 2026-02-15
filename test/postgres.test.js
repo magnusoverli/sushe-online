@@ -725,7 +725,7 @@ describe('PgDatastore', () => {
     });
 
     it('should join list_items with albums table', async () => {
-      // V6: Track picks now stored directly on list_items
+      // V7: Added comments_2 column
       const mockRows = [
         {
           _id: 'item1',
@@ -734,6 +734,7 @@ describe('PgDatastore', () => {
           primary_track: 'Track 1',
           secondary_track: 'Track 2',
           comments: 'Great album',
+          comments_2: 'Second comment',
           album_id: 'abc',
           artist: 'Artist Name',
           album: 'Album Title',
@@ -759,19 +760,19 @@ describe('PgDatastore', () => {
       assert.strictEqual(result[0].listId, 'list123');
       assert.strictEqual(result[0].artist, 'Artist Name');
       assert.strictEqual(result[0].album, 'Album Title');
-      // V6: Now uses primaryTrack/secondaryTrack instead of trackPick
+      // V7: Uses primaryTrack/secondaryTrack and comments2
       assert.strictEqual(result[0].primaryTrack, 'Track 1');
       assert.strictEqual(result[0].secondaryTrack, 'Track 2');
+      assert.strictEqual(result[0].comments2, 'Second comment');
       assert.strictEqual(
         result[0].summary,
         'A great rock album from the 2020s.'
       );
 
-      // Check that prepared query was used (V6 query)
+      // Check that prepared query was used (V7 query)
       const queryCall = mockPool.query.mock.calls[0].arguments[0];
-      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV6');
+      assert.strictEqual(queryCall.name, 'findListItemsWithAlbumsV7');
       assert.ok(queryCall.text.includes('LEFT JOIN albums'));
-      // V6: No longer uses COALESCE - reads directly from albums table
     });
 
     it('should throw error if not list_items table', async () => {
