@@ -179,7 +179,7 @@
   /* Extra space before Track column (8th column) */
   .album-row .track-cell,
   .album-header > div:nth-child(8) {
-    margin-left: 1.5rem;
+    margin-left: 0.75rem;
   }
 
   /* Track cell can show two stacked tracks */
