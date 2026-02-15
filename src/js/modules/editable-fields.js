@@ -782,10 +782,6 @@ export function createEditableFields(deps = {}) {
             }
           }, 0);
         }
-
-        if (newComment !== currentComment) {
-          showToast('Comment updated');
-        }
       } catch (_error) {
         showToast('Error saving comment', 'error');
         // Revert on error - also handle placeholder for empty comments
@@ -920,10 +916,6 @@ export function createEditableFields(deps = {}) {
               commentTextEl.setAttribute('data-comment', newComment);
             }
           }, 0);
-        }
-
-        if (newComment !== currentComment) {
-          showToast('Comment 2 updated');
         }
       } catch (_error) {
         showToast('Error saving comment', 'error');
