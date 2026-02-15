@@ -186,6 +186,7 @@
     min-height: 2.5rem; /* Allow space for stacked tracks */
     padding-top: 0.25rem;
     padding-bottom: 0.25rem;
+    align-items: flex-start; /* Override blanket align-items:center to left-align content in column layout */
   }
 
   /* Comment cell border spans full height */
