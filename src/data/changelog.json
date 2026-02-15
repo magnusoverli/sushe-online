@@ -1,5 +1,159 @@
 [
   {
+    "date": "2026-02-15",
+    "category": "ui",
+    "description": "More space for typing album comments",
+    "hash": "e15f9b5e53faab0df40e8237bd9f27e2c64d6bcc",
+    "commitMessage": "Increase available text space in comment cells\n\nReduce comment cell left padding from pl-4 (16px) to pl-2 (8px) and\ntrack cell left margin from 1.5rem to 0.75rem, freeing ~20px for\ncomment text display."
+  },
+  {
+    "date": "2026-02-15",
+    "category": "ui",
+    "description": "Removed save notifications when editing comments",
+    "hash": "6b1e40d3fecc81e0b8dca8392a212e0b3081dfe1",
+    "commitMessage": "Remove success toast notifications when saving comments"
+  },
+  {
+    "date": "2026-02-15",
+    "category": "fix",
+    "description": "Fixed track selection display issues",
+    "hash": "326a4efdc6dce5c712c1c5ec831c90ae276a7b9a",
+    "commitMessage": "Fix track selection state mismatch between menu and album list cell\n\nRemove optimistic local state update that diverged from backend. The old code\nupdated selectedPrimary/selectedSecondary with its own logic (which incorrectly\nset first click as primary) then rendered the cell, but the API response sync\nonly updated the menu without re-rendering the cell. Now both menu and cell\nupdate together from the authoritative backend response."
+  },
+  {
+    "date": "2026-02-15",
+    "category": "feature",
+    "description": "Added second comment column for albums",
+    "hash": "62d93adba9477d58f971a758e0da43603b28e76a",
+    "commitMessage": "Add Comment 2 column + fix track selection bugs\n\nComment 2 column (full-stack):\n- Database: migration 053 adds comments_2 TEXT to list_items\n- Backend: db field mapping, postgres queries (V7), list-service insert/update/getListById\n- API: PATCH /api/lists/:id/items/:identifier/comment2 endpoint\n- Desktop: 10-column grid layout, comment-2-cell with tooltip styles\n- Mobile: Comments 2 textarea in edit form with save handler\n- Import/export: comments_2 in CSV headers and data\n- Incremental updates: fingerprint, field update, DOM cache all include comment2\n\nTrack selection bug fixes (3 pre-existing issues):\n- Fix API payload: send trackIdentifier/priority instead of primary/secondary, one call per action\n- Remove saveList() after track-picks API (was destroying item _ids via replaceListItems, causing 404s)\n- Fix desktop DOM selectors: .album-row/.track-cell instead of stale .album-table tbody tr/.track-pick-cell\n- Fix updateTrackCellDisplayDual() desktop HTML to match createDesktopAlbumRow() structure (star sizes, classes, spacing, empty state text)"
+  },
+  {
+    "date": "2026-02-15",
+    "category": "ui",
+    "description": "Fixed track column text alignment",
+    "hash": "6d31dd181a85c63969c437ce3c94d9f0a67e57fa",
+    "commitMessage": "Fix track column alignment - left-align content to match header\n\nOverride blanket align-items:center on .album-row .track-cell with flex-start,\nso placeholder text and selected tracks align with the Track column header\ninstead of being horizontally centered in the column flex layout."
+  },
+  {
+    "date": "2026-02-11",
+    "category": "fix",
+    "description": "Weekly picks now show only full albums",
+    "hash": "7e9e2008c035c919d1caa45eda91a7ccca904ea8",
+    "commitMessage": "Filter singles/EPs from recommendations at runtime and in AI prompt - Add filterSinglesFromPool() to remove releases with ≤3 tracks before sending to Claude - Add track count info to formatNewReleasesForPrompt() so the AI can see it too - Update system prompt to explicitly instruct full-length albums only (8+ tracks) - Fixes issue where already-built pools containing singles still produced single recommendations"
+  },
+  {
+    "date": "2026-02-11",
+    "category": "fix",
+    "description": "Fixed genre and country info in weekly picks",
+    "hash": "42e74fb890ffa836d96ddb8f7ef05c24dd5cac33",
+    "commitMessage": "Fix genre/country/release_date display in weekly picks\n\n- Use LATERAL join with artist+album name fallback so genre, country,\n  and release_date are found even when the recommendation's album_id\n  doesn't match the canonical albums table entry\n- Show full release date (e.g. 'Jan 15, 2025') instead of year only\n- Fix resolveAlbumId to prefer existing canonical album_id over pool\n  album_id, preventing duplicate album entries in future generations"
+  },
+  {
+    "date": "2026-02-11",
+    "category": "feature",
+    "description": "Added release date column to weekly picks",
+    "hash": "c967779e98d42741f0a8cdc0f9b7d35edce08042",
+    "commitMessage": "Add release date column to weekly picks view\n\n- Add release_date to personal recommendations SQL query\n- Add releaseDate column definition in shared album list renderer\n- Include release_date in albumToAdd payload when adding rec to a list"
+  },
+  {
+    "date": "2026-02-11",
+    "category": "fix",
+    "description": "Fixed play button and adding recommendations to lists",
+    "hash": "1c115de32c3999d59f6e3a2742fc365aad6e8f7c",
+    "commitMessage": "Fix play album in recommendations and pass genre/country when adding recs to lists\n\n- Fix 'Play album' context menu in personal and community recommendations\n  showing 'Album not found' because playAlbumSafe searches the current\n  regular list (empty when viewing recommendations). Now uses playback\n  service directly with artist+album name.\n- Include genre_1, genre_2, country in the payload when adding a personal\n  recommendation album to a user's list (previously silently dropped)."
+  },
+  {
+    "date": "2026-02-10",
+    "category": "fix",
+    "description": "Fixed adding personal recommendations to year lists",
+    "hash": "e28b0eb487d29f0922dc8dab655c9d84ea7b7603",
+    "commitMessage": "Fix personal rec add-to-list submenu not showing lists for years\n\ngroupListsByYear was called without { includeNames: true }, so listsByYear\nentries were plain ID strings instead of { id, name } objects. The lists\nsubmenu tried to access .id and .name on strings, getting undefined for both."
+  },
+  {
+    "date": "2026-02-10",
+    "category": "fix",
+    "description": "Fixed genre display in recommendation views",
+    "hash": "d1664b13f870ed23eec2fd06b6f99dcaec9b8652",
+    "commitMessage": "Fix genre/country visibility and artist alignment in recommendation views\n\nThe shared renderer was using album-grid and album-row CSS classes which have\nnth-child rules designed for the 9-column user list layout. With only 6 columns,\nthese positional rules misaligned content - centering the cover column, right-\naligning the artist, and applying column-flex to albumName instead of their\nintended targets.\n\n- Add readonly-album-grid CSS class with just grid basics (no nth-child overrides)\n- Use readonly-album-grid instead of album-grid/album-row on renderer rows/header\n- Use inline style for mobile card height instead of dynamic Tailwind classes"
+  },
+  {
+    "date": "2026-02-10",
+    "category": "ui",
+    "description": "Added progress bar when generating recommendations",
+    "hash": "a41d979ff32ca87e8583106dfa3ac2fe6b64d4d8",
+    "commitMessage": "Replace admin generate console with progress bar\n\nSwap the SSE streaming console (monospace log viewer with Stop button)\nfor a simple progress indicator: purple bar filling per-user, status text\nshowing the current phase, elapsed time, and spinner that becomes a\ncheckmark or warning icon on completion. Same SSE backend, cleaner UI."
+  },
+  {
+    "date": "2026-02-10",
+    "category": "fix",
+    "description": "Fixed recommendation context menu actions",
+    "hash": "31488dc9e550b8a098f7ce4e55db93ff08faf404",
+    "commitMessage": "Fix personal recommendations context menu (9 bugs)\n\n- Fix setupSubmenuHover called with wrong signature (positional args vs options object), causing Add to List to crash on hover\n- Rewrite Add to List submenu flow to match community recommendations pattern: proper positioning, year highlight tracking, mouseenter/mouseleave coordination between year and lists submenus\n- Add addPersonalRecToListOption to OPTION_IDS so highlight is cleaned up on menu hide\n- Remove misleading chevron from Play Album button (no submenu exists)\n- Add e.preventDefault/stopPropagation to Play and View Reasoning handlers\n- Clear currentContext after menu actions to prevent stale state"
+  },
+  {
+    "date": "2026-02-10",
+    "category": "feature",
+    "description": "Added genre and country columns to recommendations",
+    "hash": "7490a80709436f0214a7ebb722f8ab10ea6e4d18",
+    "commitMessage": "Add genre and country columns to personal recommendations frontend\n\n- Desktop table: add Genre and Country columns between Album and AI Reasoning\n- Mobile cards: add genre/country metadata line with tag and globe icons\n- Genre displays as comma-separated genre_1, genre_2 (matching community recs pattern)\n- Country shown with middot separator on mobile, own column on desktop\n- Bumped mobile card height from 150px to 170px to fit the extra metadata line"
+  },
+  {
+    "date": "2026-02-09",
+    "category": "fix",
+    "description": "Personal recommendation lists now appear in sidebar",
+    "hash": "84cd46269912c9d3e1f83eeff5a27116d915fbda",
+    "commitMessage": "Fix personal recommendation lists not appearing in sidebar\n\nPersonal rec buttons were only rendered inside the current year's group section,\nbut the year-group was skipped entirely if it had zero regular lists. Also, the\nyear was hardcoded to new Date().getFullYear() instead of using the lists'\nweek_start year.\n\n- Derive target year from most recent rec list's week_start instead of hardcoding\n- Render year-groups that have personal rec lists even if they have 0 regular lists\n- Create a synthetic year-group section if no server-side group exists for that year"
+  },
+  {
+    "date": "2026-02-09",
+    "category": "fix",
+    "description": "Fixed personal recommendations not loading properly",
+    "hash": "4a9c43bcd06c53f59814088bc308f0410ec7e066",
+    "commitMessage": "Fix Claude rate limiting and Spotify 404 in personal recommendations\n\n- Switch default model from claude-sonnet-4-5 to claude-haiku-4-5 for both\n  recommendation engine and pool build Claude search (12x cheaper, higher rate limits)\n- Increase 429 retry backoff from 1s/2s/4s to 15s/30s/60s (per-minute token\n  limits need longer waits between retries)\n- Replace deprecated Spotify /v1/browse/new-releases endpoint (404) with\n  /v1/search?q=tag:new+year:YYYY search API\n- Models still configurable via PERSONAL_RECS_MODEL and PERSONAL_RECS_POOL_MODEL env vars"
+  },
+  {
+    "date": "2026-02-09",
+    "category": "ui",
+    "description": "Improved personal recommendations settings interface",
+    "hash": "5b7f27eb3e94c9af7fa895ce7757310120446843",
+    "commitMessage": "Improve personal recommendations: midnight schedule, admin console, UI fix\n\n- Scheduler now runs at midnight Sunday->Monday (was 6 AM) so users wake up to new picks\n- Fix preferences UI: custom prompt textarea no longer overlaps explanatory text\n  (moved out of settings-row flex into its own block with border separator)\n- Add SSE streaming endpoint (GET /api/admin/.../generate/stream) for real-time progress\n- Admin section now has a live terminal-style console showing generation progress per user,\n  with elapsed time, color-coded status (green/red/gray), and a Stop button\n- Extract processAllUsers() outside factory to stay within max-lines-per-function limit\n- Update tests to match new query pattern (email/username in user SELECT)"
+  },
+  {
+    "date": "2026-02-09",
+    "category": "feature",
+    "description": "Added weekly personalized new release recommendations",
+    "hash": "d0f2c5f8c136131b9910ef0b5e394a8d48a5fb04",
+    "commitMessage": "Add personal weekly new release recommendations feature\n\n- Gather weekly new releases from Spotify, MusicBrainz, and Claude web search\n- Claude AI selects 5-10 albums per user based on their taste profile (genre/artist/country affinity)\n- Users can enable/disable, set custom prompt preferences, and view AI reasoning\n- Admin dashboard shows stats, pool breakdown, and manual generation trigger\n- Automatic Monday scheduler (disabled by default in dev, use admin button instead)\n- Refactored claude-summary.js to use shared claude-client.js for rate limiting and retry\n- Added getClientCredentialsToken() to spotify-auth.js for app-level API access\n\nBackend: 8 new files (services, utils, routes, migration)\nFrontend: sidebar buttons, context menus, settings drawer sections\nTests: 154 passing (140 unit + 14 integration across 8 test files)"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "ui",
+    "description": "Added changelog viewer with app update history",
+    "hash": "5c6045fac92c20db7c619e484d60c1e407b48ea6",
+    "commitMessage": "Add changelog feature with info button, curated history, and CI automation\n\n- Info icon in header opens What's New modal with scrollable changelog\n- Hand-curated 6 months of user-facing changes from git history (108 entries)\n- CI step uses Claude to auto-classify and write new changelog entries on each push\n- update-changelog.js dual-writes to CHANGELOG.md and changelog.json\n- Font Awesome icons fixed to use free-tier only (fa-plus, fa-wrench, etc.)\n- Test loader updated to handle JSON imports in Node.js ESM"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "ui",
+    "description": "Made badges more visible with improved opacity",
+    "hash": "cbac5ba477ac8f1c1c3cc47de5d7fe2c1c4a37c0",
+    "commitMessage": "Increase badge opacity - 85% default, 100% on hover/active"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "ui",
+    "description": "Sidebar now only shows years with available recommendations",
+    "hash": "874b2ccf8a449aad1ef1b21676644de41657b9c6",
+    "commitMessage": "Only show recommendations in sidebar for years that have them\n\n- Fetch recommendation years on app init (parallel with metadata/groups)\n- Store in centralized app-state as a Set for O(1) lookups\n- Sidebar conditionally renders recommendations button only when year has data\n- Refresh recommendation years after add/remove to keep sidebar in sync\n- Simplified /api/recommendations/years to only query actual recommendations"
+  },
+  {
+    "date": "2026-02-08",
+    "category": "feature",
+    "description": "Added recommendation badges to album lists",
+    "hash": "98727672497b6c160f646ffea7f1ffc6e3ae9983",
+    "commitMessage": "Add recommendation badge to album lists\n\n- Cross-reference list items with recommendations for the list's year\n- Show a blue thumbs-up badge on album covers (top-left, mirroring AI summary badge top-right)\n- Desktop: styled tooltip on hover showing who recommended and when\n- Mobile: modal sheet on tap with same info\n- Backend: reusable fetchRecommendationMaps() helper, extracted mapRowToListItem() to reduce complexity\n- Both getListById and buildFullListData paths enriched with recommended_by/recommended_at"
+  },
+  {
     "date": "2026-02-08",
     "category": "feature",
     "description": "Added changelog feature with curated update history",
@@ -40,6 +194,13 @@
     "description": "Recommendation indicator shown on albums in your lists",
     "hash": "98727672497b6c160f646ffea7f1ffc6e3ae9983",
     "commitMessage": "Add recommendation badge to album lists\n\n- Cross-reference list items with recommendations for the list's year\n- Show a blue thumbs-up badge on album covers (top-left, mirroring AI summary badge top-right)\n- Desktop: styled tooltip on hover showing who recommended and when\n- Mobile: modal sheet on tap with same info\n- Backend: reusable fetchRecommendationMaps() helper, extracted mapRowToListItem() to reduce complexity\n- Both getListById and buildFullListData paths enriched with recommended_by/recommended_at"
+  },
+  {
+    "date": "2026-02-07",
+    "category": "feature",
+    "description": "Added copy albums to other lists feature",
+    "hash": "e8dfc313092424758ba6c6231b607e47f18189d0",
+    "commitMessage": "Add 'Copy to List' feature for albums (desktop + mobile)\n\n- Extract shared transferAlbumToList() into album-transfer.js (DRY refactor of duplicated move logic from context-menus.js and mobile-ui.js)\n- Add 'Copy to List' option in desktop context menu with submenu\n- Add 'Copy to List' option in mobile action sheet with year-accordion picker\n- Copy keeps album in source list, only saves target list\n- Confirmation dialog with copy-specific messaging\n- Extract showMobileListSelectionSheet() shared helper for move/copy accordion UI\n- 12 new tests for album-transfer.js, 2 new tests in context-menus.test.js"
   },
   {
     "date": "2026-02-07",
