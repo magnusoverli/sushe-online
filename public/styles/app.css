@@ -340,7 +340,7 @@ body {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
-    background: linear-gradient(270deg, #2b3147 10%, #101329 90%);
+    background: linear-gradient(270deg, #2b3147 10%, #101329 150%);
     /* Soft shadow edge instead of hard border */
     border-bottom: none;
     box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.3);
