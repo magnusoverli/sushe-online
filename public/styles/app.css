@@ -347,6 +347,42 @@ body {
     /* No hover effect - headers should be static */
   }
 
+  /* Blur the boundary between page header and column header */
+  .album-header::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 16px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(0, 0, 0, 0.1) 10%,
+      rgba(0, 0, 0, 0.4) 20%,
+      black 35%,
+      black 65%,
+      rgba(0, 0, 0, 0.4) 80%,
+      rgba(0, 0, 0, 0.1) 90%,
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      rgba(0, 0, 0, 0.1) 10%,
+      rgba(0, 0, 0, 0.4) 20%,
+      black 35%,
+      black 65%,
+      rgba(0, 0, 0, 0.4) 80%,
+      rgba(0, 0, 0, 0.1) 90%,
+      transparent
+    );
+    z-index: 1;
+    pointer-events: none;
+  }
+
   /* Recommendations header - same styling as album header */
   .recommendations-header {
     padding-top: 0.375rem !important;
