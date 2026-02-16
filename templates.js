@@ -147,7 +147,7 @@ const headerComponent = (user, activeSection = 'home') => `
   <header class="z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
     <div class="relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button -->
-      <div class="flex items-center gap-2 lg:w-72 lg:justify-center lg:gap-0">
+      <div class="flex items-center gap-2 lg:w-[14.5rem] lg:justify-center lg:gap-0">
         ${
           activeSection === 'home'
             ? `
@@ -1442,7 +1442,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       
       <nav class="flex-1 overflow-y-auto p-2 flex flex-col min-h-0">
         <div class="flex-1 overflow-y-auto">
-          <ul id="listNav" class="space-y-0.5">
+          <ul id="listNav" class="space-y-0.5 pr-2">
             <!-- Lists will be populated here -->
           </ul>
         </div>
