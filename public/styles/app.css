@@ -632,29 +632,12 @@ input[list]::-webkit-list-button {
   flex-shrink: 0;
 }
 
-.sidebar .sidebar-title {
-  opacity: 1;
-  visibility: visible;
-  width: auto;
-  transition:
-    opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    visibility 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
 /* Sidebar action buttons base transition */
 .sidebar .sidebar-action-btn {
   transition:
     opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     visibility 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     width 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-    padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Toggle button container transition */
-.sidebar > div:first-child {
-  transition:
-    justify-content 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -669,13 +652,6 @@ input[list]::-webkit-list-button {
   visibility: hidden;
 }
 
-/* Hide the title when collapsed */
-.sidebar.collapsed .sidebar-title {
-  opacity: 0;
-  visibility: hidden;
-  width: 0;
-}
-
 /* Hide sidebar action buttons when collapsed */
 .sidebar.collapsed .sidebar-action-btn {
   opacity: 0;
@@ -684,20 +660,9 @@ input[list]::-webkit-list-button {
   padding: 0;
 }
 
-/* Center the toggle button when collapsed */
-.sidebar.collapsed #sidebarToggle {
-  margin: 0 auto;
-}
-
 /* Rotate toggle arrow */
 .sidebar.collapsed #sidebarToggle i {
   transform: rotate(180deg);
-}
-
-/* Adjust the toggle button container when collapsed */
-.sidebar.collapsed > div:first-child {
-  justify-content: center;
-  padding: 0.75rem;
 }
 
 /* Adjust main content grid when sidebar is collapsed */

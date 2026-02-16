@@ -1396,6 +1396,23 @@ const spotifyTemplate = (user, csrfToken = '') => `
       }
     }
   </style>
+  <script>
+    // Apply sidebar collapsed state before first paint to prevent flash of expanded sidebar.
+    // This runs synchronously in <head>, before the browser renders <body>.
+    try {
+      if (localStorage.getItem('sidebarCollapsed') === 'true') {
+        document.documentElement.classList.add('sidebar-is-collapsed');
+      }
+    } catch (e) {}
+  </script>
+  <style>
+    /* When collapsed state is known before paint, apply immediately without transitions */
+    .sidebar-is-collapsed .sidebar { width: 3rem !important; }
+    .sidebar-is-collapsed .main-content { grid-template-columns: 3rem 1fr !important; }
+    .sidebar-is-collapsed .sidebar nav { opacity: 0; visibility: hidden; }
+    .sidebar-is-collapsed .sidebar .sidebar-action-btn { opacity: 0; visibility: hidden; width: 0; padding: 0; }
+    .sidebar-is-collapsed .sidebar #sidebarToggle i { transform: rotate(180deg); }
+  </style>
 </head>
 <body class="bg-gray-900 text-gray-200">
   <div class="app-layout">
@@ -1406,10 +1423,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     <!-- Sidebar (responsive) -->
     <aside id="sidebar" class="sidebar border-r border-gray-800 flex flex-col transition-all duration-300" style="background: linear-gradient(to bottom, #2B3147 10%, #090D17 70%)">
       <!-- Sidebar Toggle Button -->
-      <div class="flex items-center justify-between p-4">
-        <div class="flex items-center gap-2">
-          <h2 class="sidebar-title text-lg font-bold text-white transition-opacity duration-300">Lists</h2>
-        </div>
+      <div class="flex items-center px-2" style="padding-top: 2px">
         <button 
           id="sidebarToggle" 
           class="p-2 hover:bg-gray-800 rounded-sm transition-colors"

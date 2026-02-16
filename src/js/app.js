@@ -1823,11 +1823,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check localStorage for saved state
     const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
 
-    // Apply initial state
+    // Apply initial state (the inline <head> script already handled the visual state
+    // via .sidebar-is-collapsed on <html> to prevent flash — now apply the proper classes
+    // and remove the pre-paint override so transitions work normally going forward)
     if (isCollapsed) {
       sidebar.classList.add('collapsed');
       mainContent.classList.add('sidebar-collapsed');
     }
+    document.documentElement.classList.remove('sidebar-is-collapsed');
 
     // Toggle handler
     sidebarToggle.addEventListener('click', () => {
