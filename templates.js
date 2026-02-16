@@ -1259,6 +1259,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
   <link href="${asset('/styles/output.css')}" rel="stylesheet">
   <link href="${asset('/styles/app.css')}" rel="stylesheet">
   <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
@@ -1449,15 +1450,15 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </nav>
       
       <!-- Sidebar action buttons -->
-      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-2 flex justify-around" style="background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)">
-        <button id="createListBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(34, 197, 94, 0.1)" title="Create List">
-          <i class="fas fa-plus fa-lg"></i>
+      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-1 flex justify-around" style="background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.01) 100%)">
+        <button id="createListBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create List">
+          <span class="material-symbols-outlined" style="font-size: 25px">playlist_add</span>
         </button>
-        <button id="createCollectionBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(34, 197, 94, 0.1)" title="Create Collection">
-          <i class="fas fa-folder-plus fa-lg"></i>
+        <button id="createCollectionBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create Collection">
+          <span class="material-symbols-outlined" style="font-size: 25px">create_new_folder</span>
         </button>
-        <button id="importBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(34, 197, 94, 0.1)" title="Import List">
-          <i class="fas fa-file-import fa-lg"></i>
+        <button id="importBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Import List">
+          <span class="material-symbols-outlined" style="font-size: 25px">file_open</span>
         </button>
         <input type="file" id="fileInput" accept=".json" style="display: none;">
       </div>
@@ -1838,6 +1839,7 @@ const aggregateListTemplate = (user, year) => `
   <link rel="icon" type="image/png" href="/og-image.png">
   <link rel="apple-touch-icon" href="/og-image.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
   <link href="${asset('/styles/output.css')}" rel="stylesheet">
   <style>
     :root {

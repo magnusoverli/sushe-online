@@ -655,7 +655,7 @@ input[list]::-webkit-list-button {
 }
 
 .sidebar .sidebar-action-btn:hover {
-  background-color: rgba(34, 197, 94, 0.25) !important;
+  background-color: rgba(32, 227, 104, 0.35) !important;
 }
 
 /* Sidebar action buttons container transition */
