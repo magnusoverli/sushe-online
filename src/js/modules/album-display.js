@@ -2649,7 +2649,7 @@ export function createAlbumDisplay(deps = {}) {
       // Create header as direct child of scrolling container
       const header = document.createElement('div');
       header.className =
-        'album-header album-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 bg-black z-10 shrink-0';
+        'album-header album-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 z-10 shrink-0';
       header.style.alignItems = 'center';
       header.innerHTML = `
         <div class="text-center"></div>

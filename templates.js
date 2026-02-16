@@ -144,7 +144,7 @@ const loginSnippetFn = ejs.compile(
 
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
-  <header class="bg-gray-900 z-50 border-b border-gray-700/50">
+  <header class="z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
     <div class="relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button -->
       <div class="flex items-center gap-2 lg:w-72 lg:justify-center lg:gap-0">
@@ -1404,7 +1404,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     <!-- Main Content Area -->
     <div class="main-content">
     <!-- Sidebar (responsive) -->
-    <aside id="sidebar" class="sidebar bg-gray-900 border-r border-gray-800 flex flex-col transition-all duration-300">
+    <aside id="sidebar" class="sidebar border-r border-gray-800 flex flex-col transition-all duration-300" style="background: linear-gradient(to bottom, #2B3147 10%, #090D17 70%)">
       <!-- Sidebar Toggle Button -->
       <div class="flex items-center justify-between p-4">
         <div class="flex items-center gap-2">
@@ -1426,19 +1426,21 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </ul>
         </div>
         
-        <div class="mt-4 pt-4 border-t border-gray-800 shrink-0 flex justify-around">
-          <button id="createListBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create List">
-            <i class="fas fa-plus"></i>
-          </button>
-          <button id="createCollectionBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create Collection">
-            <i class="fas fa-folder-plus"></i>
-          </button>
-          <button id="importBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Import List">
-            <i class="fas fa-file-import"></i>
-          </button>
-          <input type="file" id="fileInput" accept=".json" style="display: none;">
-        </div>
       </nav>
+      
+      <!-- Sidebar action buttons -->
+      <div class="shrink-0 border-t border-gray-800 py-3 flex justify-around">
+        <button id="createListBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create List">
+          <i class="fas fa-plus"></i>
+        </button>
+        <button id="createCollectionBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create Collection">
+          <i class="fas fa-folder-plus"></i>
+        </button>
+        <button id="importBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Import List">
+          <i class="fas fa-file-import"></i>
+        </button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+      </div>
       
       <!-- Spotify Miniplayer (Desktop only) -->
       <div id="spotifyMiniplayer" class="spotify-miniplayer shrink-0 border-t border-gray-800 p-3 hidden">

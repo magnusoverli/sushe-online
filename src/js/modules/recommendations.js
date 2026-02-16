@@ -682,7 +682,7 @@ export function createRecommendations(deps = {}) {
       // Desktop: Grid layout with header (matching regular lists)
       const header = document.createElement('div');
       header.className =
-        'recommendations-header recommendations-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 bg-black z-10 shrink-0';
+        'recommendations-header recommendations-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 z-10 shrink-0';
       header.style.alignItems = 'center';
       header.innerHTML = `
         <div>Album</div>

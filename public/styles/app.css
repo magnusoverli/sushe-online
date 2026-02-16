@@ -327,11 +327,7 @@ body {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
-    background: linear-gradient(
-      90deg,
-      rgba(31, 41, 55, 1) 0%,
-      rgba(17, 24, 39, 1) 100%
-    );
+    background: linear-gradient(270deg, #2b3147 20%, #090d17 100%);
     /* Soft shadow edge instead of hard border */
     border-bottom: none;
     box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.3);
@@ -346,11 +342,7 @@ body {
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;
-    background: linear-gradient(
-      90deg,
-      rgba(31, 41, 55, 1) 0%,
-      rgba(17, 24, 39, 1) 100%
-    );
+    background: linear-gradient(270deg, #2b3147 20%, #090d17 100%);
     border-bottom: none;
     box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 0.3);
   }
