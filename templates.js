@@ -1411,7 +1411,10 @@ const spotifyTemplate = (user, csrfToken = '') => `
     .sidebar-is-collapsed .main-content { grid-template-columns: 3rem 1fr !important; }
     .sidebar-is-collapsed .sidebar nav { opacity: 0; visibility: hidden; }
     .sidebar-is-collapsed .sidebar .sidebar-action-btn { opacity: 0; visibility: hidden; width: 0; padding: 0; }
+    .sidebar-is-collapsed .sidebar .sidebar-actions-container { padding: 0; border-color: transparent; }
     .sidebar-is-collapsed .sidebar #sidebarToggle i { transform: rotate(180deg); }
+    .sidebar-is-collapsed .sidebar .spotify-miniplayer { opacity: 0; max-height: 0; padding: 0; border-color: transparent; }
+    .sidebar-is-collapsed .sidebar .tidal-widget { opacity: 0; max-height: 0; padding: 0; border-color: transparent; }
   </style>
 </head>
 <body class="bg-gray-900 text-gray-200">
@@ -1443,7 +1446,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </nav>
       
       <!-- Sidebar action buttons -->
-      <div class="shrink-0 border-t border-gray-800 py-3 flex justify-around">
+      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-3 flex justify-around">
         <button id="createListBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create List">
           <i class="fas fa-plus"></i>
         </button>

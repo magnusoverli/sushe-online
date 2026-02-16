@@ -1254,9 +1254,24 @@ body.now-playing-bar-visible #addAlbumFAB {
   }
 }
 
-/* Collapsed sidebar - hide miniplayer content */
+/* Smooth collapse transition for miniplayer */
+.spotify-miniplayer {
+  max-height: 300px;
+  overflow: hidden;
+  transition:
+    opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed sidebar - smoothly hide miniplayer */
 #sidebar.collapsed .spotify-miniplayer {
-  display: none;
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-color: transparent;
 }
 
 /* ============================================
@@ -1285,9 +1300,24 @@ body.now-playing-bar-visible #addAlbumFAB {
   }
 }
 
-/* Collapsed sidebar - hide tidal widget */
+/* Smooth collapse transition for tidal widget */
+.tidal-widget {
+  max-height: 200px;
+  overflow: hidden;
+  transition:
+    opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    max-height 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Collapsed sidebar - smoothly hide tidal widget */
 #sidebar.collapsed .tidal-widget {
-  display: none;
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-color: transparent;
 }
 
 /* Loading spinner */

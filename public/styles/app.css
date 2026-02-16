@@ -641,6 +641,19 @@ input[list]::-webkit-list-button {
     padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Sidebar action buttons container transition */
+.sidebar .sidebar-actions-container {
+  transition:
+    padding 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar.collapsed .sidebar-actions-container {
+  padding-top: 0;
+  padding-bottom: 0;
+  border-color: transparent;
+}
+
 /* Toggle button icon transition */
 #sidebarToggle i {
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
