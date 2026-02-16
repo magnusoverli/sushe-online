@@ -1436,9 +1436,9 @@ const spotifyTemplate = (user, csrfToken = '') => `
         </button>
       </div>
       
-      <nav class="flex-1 overflow-y-auto p-4 flex flex-col min-h-0">
+      <nav class="flex-1 overflow-y-auto p-2 flex flex-col min-h-0">
         <div class="flex-1 overflow-y-auto">
-          <ul id="listNav" class="space-y-1">
+          <ul id="listNav" class="space-y-0.5">
             <!-- Lists will be populated here -->
           </ul>
         </div>

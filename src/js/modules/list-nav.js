@@ -610,7 +610,7 @@ export function createListNav(deps = {}) {
     const isExpanded = expandState[stateKey] !== false; // Default to expanded
 
     const section = document.createElement('div');
-    section.className = `group-section mb-1 ${isYearGroup ? 'year-group' : 'collection-group'}`;
+    section.className = `group-section ${isYearGroup ? 'year-group' : 'collection-group'}`;
     section.setAttribute('data-group-section', stateKey);
     section.setAttribute('data-group-id', _id || '');
     if (year) {
@@ -674,7 +674,7 @@ export function createListNav(deps = {}) {
 
     // Lists container
     const listsContainer = document.createElement('ul');
-    listsContainer.className = `group-lists pl-4 ${isExpanded ? '' : 'collapsed'}`;
+    listsContainer.className = `group-lists pl-3 ${isExpanded ? '' : 'collapsed'}`;
     // Add legacy class for CSS compatibility
     if (isYearGroup) {
       listsContainer.classList.add('year-lists');
