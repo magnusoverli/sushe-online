@@ -1285,7 +1285,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     
     @media (min-width: 1024px) {
       .main-content {
-        grid-template-columns: 18rem 1fr; /* Desktop: 288px sidebar */
+        grid-template-columns: 15rem 1fr; /* Desktop: 240px sidebar */
       }
     }
     
@@ -1309,7 +1309,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     
     @media (min-width: 1024px) {
       .sidebar {
-        width: 18rem;
+        width: 15rem;
         overflow: visible;
         border-right: 1px solid #1f2937; /* Restore border on desktop */
       }

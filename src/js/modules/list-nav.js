@@ -92,6 +92,69 @@ export function createListNav(deps = {}) {
   }
 
   /**
+   * Initialize default expand state when no user preference exists yet.
+   * Only the group containing the active list is expanded; all others are collapsed.
+   * If the user already has saved expand state (from previous toggles), this is a no-op —
+   * their preferences are fully respected across page refreshes.
+   * @param {Array} groups - Array of group objects with lists
+   * @param {Array} orphaned - Array of orphaned list objects
+   */
+  function initializeExpandStateForActiveList(groups, orphaned) {
+    // Respect existing user preferences — only set defaults on first-ever visit
+    try {
+      if (
+        localStorage.getItem('groupExpandState') ||
+        localStorage.getItem('yearExpandState')
+      ) {
+        return;
+      }
+    } catch (_e) {
+      return;
+    }
+
+    // Determine which list will be active on load.
+    // getCurrentList() may not be set yet during initial render, so fall back
+    // to the same sources that loadLists() uses to pick the target list.
+    const activeListId =
+      getCurrentList() ||
+      localStorage.getItem('lastSelectedList') ||
+      window.lastSelectedList;
+
+    if (!activeListId) return; // No active list known, keep default (all expanded)
+
+    // Find which group contains the active list
+    let activeGroupKey = null;
+
+    for (const group of groups) {
+      const stateKey = group._id || group.name;
+      if (group.lists.some((l) => l._id === activeListId)) {
+        activeGroupKey = stateKey;
+        break;
+      }
+    }
+
+    // Check orphaned lists
+    if (!activeGroupKey && orphaned.length > 0) {
+      if (orphaned.some((l) => l._id === activeListId)) {
+        activeGroupKey = 'orphaned';
+      }
+    }
+
+    // Build state: only active group expanded, all others collapsed.
+    // Setting all groups explicitly ensures toggleGroupSection updates work correctly.
+    const state = {};
+    groups.forEach((group) => {
+      const stateKey = group._id || group.name;
+      state[stateKey] = stateKey === activeGroupKey;
+    });
+    if (orphaned.length > 0) {
+      state['orphaned'] = activeGroupKey === 'orphaned';
+    }
+
+    saveGroupExpandState(state);
+  }
+
+  /**
    * Toggle group section expand/collapse
    * @param {string} groupId - Group ID or group name for legacy support
    * @param {HTMLElement} container - Container element
@@ -773,6 +836,9 @@ export function createListNav(deps = {}) {
     // Use new group-based rendering if groups are available
     if (getGroups && getSortedGroups) {
       const { groups: groupsWithLists, orphaned } = groupListsByGroup();
+
+      // On first render of page load, collapse all groups except the active list's group
+      initializeExpandStateForActiveList(groupsWithLists, orphaned);
 
       // Render each group section
       // Show all collections (even empty), but only show year-groups with lists

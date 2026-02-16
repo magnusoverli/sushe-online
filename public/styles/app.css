@@ -610,7 +610,7 @@ input[list]::-webkit-list-button {
 
 /* Sidebar collapse functionality */
 .sidebar {
-  width: 16rem; /* 256px */
+  width: 15rem; /* 240px */
   overflow: hidden; /* Clip content during width transition */
   transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   /* Soft shadow edge instead of hard border */
@@ -628,7 +628,7 @@ input[list]::-webkit-list-button {
 .sidebar nav {
   opacity: 1;
   visibility: visible;
-  min-width: 14rem; /* Prevent content reflow during collapse - keeps layout stable */
+  min-width: 13rem; /* Prevent content reflow during collapse - keeps layout stable */
   transition:
     opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
     visibility 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -712,7 +712,7 @@ input[list]::-webkit-list-button {
 /* Adjust main content grid when sidebar is collapsed */
 @media (min-width: 1024px) {
   .main-content {
-    grid-template-columns: 16rem 1fr; /* Default */
+    grid-template-columns: 15rem 1fr; /* Default */
     transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
