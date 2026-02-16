@@ -13,10 +13,10 @@
 /* Album grid column configuration with responsive behavior */
 :root {
   /* Default grid for desktop screens - 10 columns */
-  /* Position column is fixed at 7px, album image at 80px, rest are flexible */
-  --album-grid-columns: 7px 80px 0.65fr 0.55fr 0.45fr 0.55fr 0.55fr 0.7fr 0.75fr
+  /* Position column is fixed at 7px, album image at 75px, rest are flexible */
+  --album-grid-columns: 7px 75px 0.65fr 0.55fr 0.45fr 0.55fr 0.55fr 0.7fr 0.75fr
     0.75fr;
-  --cover-art-size: 80px;
+  --cover-art-size: 75px;
 }
 
 /* Prevent overscroll on mobile */
@@ -51,8 +51,8 @@
 /* Define the recommendations grid class (7 columns - matches regular list structure) */
 .recommendations-grid {
   display: grid;
-  grid-template-columns: 80px 0.75fr 0.65fr 0.6fr 0.6fr 0.75fr 0.6fr;
-  /* Cover(80px), Album, Artist, Genre 1, Genre 2, Recommended By, Date Added */
+  grid-template-columns: 75px 0.75fr 0.65fr 0.6fr 0.6fr 0.75fr 0.6fr;
+  /* Cover(75px), Album, Artist, Genre 1, Genre 2, Recommended By, Date Added */
   /* Column widths match regular list proportions where applicable */
   align-items: center;
   padding-left: 1rem;
@@ -87,6 +87,12 @@
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
+}
+
+/* Muted text for Genre 1 and Genre 2 columns in recommendations */
+.recommendations-grid > div:nth-child(4),
+.recommendations-grid > div:nth-child(5) {
+  opacity: 0.7;
 }
 
 /* Add visual separator to Date Added column (last column) */
@@ -174,6 +180,13 @@
 
   .album-row .album-cell-text {
     font-size: 0.9rem;
+  }
+
+  /* Muted text for Country, Genre 1, and Genre 2 columns */
+  .album-row > div:nth-child(5),
+  .album-row > div:nth-child(6),
+  .album-row > div:nth-child(7) {
+    opacity: 0.7;
   }
 
   /* Extra space before Track column (8th column) */

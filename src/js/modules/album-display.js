@@ -732,7 +732,7 @@ export function createAlbumDisplay(deps = {}) {
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
       </div>
       <div class="flex items-center">
-        <span class="album-cell-text ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
+        <span class="album-cell-text ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
       </div>
       <div class="flex items-center country-cell">
         <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
@@ -1675,7 +1675,7 @@ export function createAlbumDisplay(deps = {}) {
         if (!isMobile) {
           if (cache.artist) {
             cache.artist.textContent = data.artist;
-            cache.artist.className = `text-sm ${data.artist ? 'text-gray-300' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
+            cache.artist.className = `text-sm ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100`;
           }
         } else {
           if (cache.artistText) {
