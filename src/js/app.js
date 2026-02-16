@@ -1585,6 +1585,8 @@ async function selectList(listId) {
 // Thin wrapper for backward compatibility (called via window.selectRecommendations)
 
 function selectRecommendations(year) {
+  // Clear any stale lock indicator from a previously viewed locked main list
+  clearYearLockUI();
   return getRecommendationsModule().selectRecommendations(year);
 }
 
