@@ -153,6 +153,65 @@ export async function isRecommendationsLocked(year) {
   return lockedYears.includes(year);
 }
 
+// ============ YEAR LOCK UI HELPERS ============
+
+/**
+ * Show year-locked UI: header indicator on desktop, banner in album container on mobile
+ * @param {HTMLElement} container - The #albumContainer element
+ * @param {number} year - The locked year
+ */
+export function showYearLockUI(container, year) {
+  const isMobile = window.innerWidth < 1024;
+
+  // Desktop: populate header lock indicator
+  const headerIndicator = document.getElementById('headerLockIndicator');
+  if (headerIndicator && !isMobile) {
+    headerIndicator.innerHTML = `
+      <div class="flex items-center gap-2 bg-yellow-900/20 border border-yellow-700/50 rounded px-3 py-1">
+        <i class="fas fa-lock text-yellow-500 text-xs"></i>
+        <span class="text-yellow-300 text-xs">Year ${year} is locked</span>
+      </div>
+    `;
+  }
+
+  // Mobile: show banner in album container
+  if (isMobile && container) {
+    const existingBanner = container.querySelector('.year-locked-banner');
+    if (!existingBanner) {
+      const banner = document.createElement('div');
+      banner.className =
+        'year-locked-banner bg-yellow-900 bg-opacity-20 border border-yellow-700 rounded-lg p-3 mb-4 flex items-center gap-3 text-yellow-200';
+      banner.innerHTML = `
+        <i class="fas fa-lock text-yellow-500"></i>
+        <span class="text-sm">
+          Year ${year} is locked. You cannot reorder, add, or edit albums in this list.
+        </span>
+      `;
+      container.insertBefore(banner, container.firstChild);
+    }
+  }
+}
+
+/**
+ * Clear year-locked UI: header indicator and album container banner
+ * @param {HTMLElement} [container] - The #albumContainer element (optional)
+ */
+export function clearYearLockUI(container) {
+  // Clear header lock indicator
+  const headerIndicator = document.getElementById('headerLockIndicator');
+  if (headerIndicator) {
+    headerIndicator.innerHTML = '';
+  }
+
+  // Remove album container banner if present
+  if (container) {
+    const banner = container.querySelector('.year-locked-banner');
+    if (banner) {
+      banner.remove();
+    }
+  }
+}
+
 /**
  * Check recommendation status for a year (makes API call for detailed info)
  * @param {number} year - Year to check

@@ -57,10 +57,10 @@ function setupConfirmationModal({
     });
   }
 
-  // Handle confirm button
+  // Handle confirm button - resolve before close so onClose's resolve(false) is a no-op
   modalController.addListener(confirmBtn, 'click', () => {
-    modalController.close();
     onConfirm();
+    modalController.close();
   });
 
   modalController.open();
@@ -221,7 +221,7 @@ export function showReasoningModal(
       charCountEl.textContent = textareaEl.value.length.toString();
     });
 
-    // Handle submit
+    // Handle submit - resolve before close so onClose's resolve(null) is a no-op
     modalController.addListener(submitBtn, 'click', () => {
       const reasoning = textareaEl.value.trim();
       if (!reasoning) {
@@ -229,8 +229,8 @@ export function showReasoningModal(
         textareaEl.focus();
         return;
       }
-      modalController.close();
       resolve(reasoning);
+      modalController.close();
     });
 
     modalController.open();

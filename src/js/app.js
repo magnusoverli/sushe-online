@@ -28,6 +28,8 @@ import {
   invalidateLockedYearsCache,
   invalidateLockedRecommendationYearsCache,
   isListLocked,
+  showYearLockUI,
+  clearYearLockUI,
 } from './modules/year-lock.js';
 import { formatTrackTime } from './modules/time-utils.js';
 import { parseStaticList } from './utils/static-data.js';
@@ -1614,33 +1616,14 @@ window.refreshLockedYearStatus = async function (year) {
     if (!sorting) return;
 
     if (isLocked) {
-      // Main list is now locked - disable sorting and show banner
+      // Main list is now locked - disable sorting and show lock UI
       sorting.destroySorting(container);
-
-      // Add lock banner if not already present
-      const existingBanner = container.querySelector('.year-locked-banner');
-      if (!existingBanner) {
-        const banner = document.createElement('div');
-        banner.className =
-          'year-locked-banner bg-yellow-900 bg-opacity-20 border border-yellow-700 rounded-lg p-3 mb-4 flex items-center gap-3 text-yellow-200';
-        banner.innerHTML = `
-          <i class="fas fa-lock text-yellow-500"></i>
-          <span class="text-sm">
-            Year ${currentYear} is locked. You cannot reorder, add, or edit albums in this main list.
-          </span>
-        `;
-        container.insertBefore(banner, container.firstChild);
-      }
+      showYearLockUI(container, currentYear);
     } else {
-      // Main list is now unlocked - enable sorting and remove banner
+      // Main list is now unlocked - enable sorting and clear lock UI
       const isMobile = window.innerWidth < 1024;
       sorting.initializeUnifiedSorting(container, isMobile);
-
-      // Remove lock banner if present
-      const banner = container.querySelector('.year-locked-banner');
-      if (banner) {
-        banner.remove();
-      }
+      clearYearLockUI(container);
     }
   }
 };

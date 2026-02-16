@@ -5202,8 +5202,6 @@ export function createSettingsDrawer(deps = {}) {
       });
 
       if (response.success) {
-        showToast(`Year ${year} has been ${action}ed successfully`, 'success');
-
         // Partial update: Update just this year's status without collapsing
         await updateSingleYearLockStatus(year, !isCurrentlyLocked);
 

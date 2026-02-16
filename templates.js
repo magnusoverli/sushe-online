@@ -167,6 +167,9 @@ const headerComponent = (user, activeSection = 'home') => `
       <!-- Current list name (mobile only) -->
       <span id="mobileCurrentListName" class="lg:hidden absolute left-1/2 -translate-x-1/2 text-base text-gray-300 font-medium truncate max-w-[60%] hidden"></span>
       
+      <!-- Year lock indicator (desktop only, populated by JS) -->
+      <div id="headerLockIndicator" class="hidden lg:flex items-center gap-2 text-yellow-400 text-sm flex-1 justify-center"></div>
+      
       <!-- User menu -->
       <div class="flex items-center pr-0.5 lg:pr-3">
         <button onclick="window.openAboutModal && window.openAboutModal()" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="About" id="aboutButton">

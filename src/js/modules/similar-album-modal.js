@@ -251,16 +251,6 @@ async function closeModal(action) {
   const existingAlbum = modalElement.dataset.existingAlbum;
   const newAlbumId = modalElement.dataset.newAlbumId;
 
-  // Use controller to handle hide + cleanup if available, otherwise manual
-  if (modalController && modalController.isOpen()) {
-    // Temporarily clear onClose to avoid recursive call
-    modalController.close();
-    modalController = null;
-  } else {
-    modalElement.classList.add('hidden');
-    document.body.style.overflow = '';
-  }
-
   const result = { action };
 
   if (action === 'use_existing') {
@@ -283,9 +273,21 @@ async function closeModal(action) {
     result.action = 'add_new';
   }
 
+  // Resolve before close so the recursive onClose -> closeModal('cancelled') finds
+  // resolveCallback already null and becomes a no-op
   if (resolveCallback) {
     resolveCallback(result);
     resolveCallback = null;
+  }
+
+  // Now close/cleanup - onClose will call closeModal('cancelled') but resolveCallback
+  // is already null so it won't override our result
+  if (modalController && modalController.isOpen()) {
+    modalController.close();
+    modalController = null;
+  } else {
+    modalElement.classList.add('hidden');
+    document.body.style.overflow = '';
   }
 }
 
