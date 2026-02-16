@@ -1426,15 +1426,15 @@ const spotifyTemplate = (user, csrfToken = '') => `
           </ul>
         </div>
         
-        <div class="mt-4 pt-4 border-t border-gray-800 shrink-0">
-          <button id="createListBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
-            <i class="fas fa-plus mr-2"></i><span>Create List</span>
+        <div class="mt-4 pt-4 border-t border-gray-800 shrink-0 flex justify-around">
+          <button id="createListBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create List">
+            <i class="fas fa-plus"></i>
           </button>
-          <button id="createCollectionBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 mt-2 flex items-center">
-            <i class="fas fa-folder-plus mr-2"></i><span>Create Collection</span>
+          <button id="createCollectionBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create Collection">
+            <i class="fas fa-folder-plus"></i>
           </button>
-          <button id="importBtn" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 mt-2 flex items-center">
-            <i class="fas fa-file-import mr-2"></i><span>Import List</span>
+          <button id="importBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Import List">
+            <i class="fas fa-file-import"></i>
           </button>
           <input type="file" id="fileInput" accept=".json" style="display: none;">
         </div>

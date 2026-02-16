@@ -634,11 +634,10 @@ input[list]::-webkit-list-button {
     visibility 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Prevent button text from wrapping during sidebar collapse */
+/* Sidebar action buttons are icon-only squares — prevent shrinking during collapse */
 .sidebar #createListBtn,
 .sidebar #importBtn {
-  white-space: nowrap;
-  overflow: hidden;
+  flex-shrink: 0;
 }
 
 .sidebar .sidebar-title {
