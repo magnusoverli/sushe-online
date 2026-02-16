@@ -168,7 +168,7 @@ const headerComponent = (user, activeSection = 'home') => `
       <span id="mobileCurrentListName" class="lg:hidden absolute left-1/2 -translate-x-1/2 text-base text-gray-300 font-medium truncate max-w-[60%] hidden"></span>
       
       <!-- User menu -->
-      <div class="flex items-center pr-0.5 lg:pr-1">
+      <div class="flex items-center pr-0.5 lg:pr-3">
         <button onclick="window.openAboutModal && window.openAboutModal()" class="p-2 -m-2 flex items-center justify-center text-gray-400 hover:text-white transition duration-200 touch-target" title="About" id="aboutButton">
           <i class="fas fa-info-circle text-lg"></i>
         </button>

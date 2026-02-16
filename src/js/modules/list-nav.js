@@ -173,7 +173,28 @@ export function createListNav(deps = {}) {
       const listsContainer = section.querySelector('.group-lists');
       const chevron = section.querySelector('.group-chevron');
       if (listsContainer) {
-        listsContainer.classList.toggle('hidden', isExpanded);
+        if (isExpanded) {
+          // Collapsing: set max-height to current height first, then collapse
+          listsContainer.style.maxHeight = listsContainer.scrollHeight + 'px';
+          // Force reflow so the browser registers the explicit max-height
+          listsContainer.offsetHeight; // eslint-disable-line no-unused-expressions
+          listsContainer.classList.add('collapsed');
+          listsContainer.style.maxHeight = '';
+        } else {
+          // Expanding: pin at 0, remove class, then animate to full height
+          listsContainer.style.maxHeight = '0px';
+          listsContainer.style.opacity = '0';
+          listsContainer.classList.remove('collapsed');
+          // Force reflow so the browser sees the 0 starting point
+          listsContainer.offsetHeight; // eslint-disable-line no-unused-expressions
+          listsContainer.style.maxHeight = listsContainer.scrollHeight + 'px';
+          listsContainer.style.opacity = '';
+          const onEnd = () => {
+            listsContainer.style.maxHeight = '';
+            listsContainer.removeEventListener('transitionend', onEnd);
+          };
+          listsContainer.addEventListener('transitionend', onEnd);
+        }
       }
       if (chevron) {
         chevron.classList.toggle('fa-chevron-right', isExpanded);
@@ -351,7 +372,7 @@ export function createListNav(deps = {}) {
 
     return `
       <div class="flex items-center flex-1 min-w-0">
-        <i class="fas ${chevronClass} mr-2 text-xs group-chevron shrink-0"></i>
+        <i class="fas ${chevronClass} fa-fw mr-2 text-xs group-chevron shrink-0"></i>
         <i class="fas ${iconClass} mr-2 text-xs text-gray-500 shrink-0"></i>
         <span class="truncate">${name}</span>
       </div>
@@ -653,7 +674,7 @@ export function createListNav(deps = {}) {
 
     // Lists container
     const listsContainer = document.createElement('ul');
-    listsContainer.className = `group-lists pl-4 ${isExpanded ? '' : 'hidden'}`;
+    listsContainer.className = `group-lists pl-4 ${isExpanded ? '' : 'collapsed'}`;
     // Add legacy class for CSS compatibility
     if (isYearGroup) {
       listsContainer.classList.add('year-lists');
