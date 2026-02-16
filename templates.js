@@ -1450,7 +1450,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </nav>
       
       <!-- Sidebar action buttons -->
-      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-1 flex justify-around" style="background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.01) 100%)">
+      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-1 pr-2 flex justify-evenly" style="background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.01) 100%)">
         <button id="createListBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create List">
           <span class="material-symbols-outlined" style="font-size: 25px">playlist_add</span>
         </button>
@@ -1460,8 +1460,8 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <button id="importBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Import List">
           <span class="material-symbols-outlined" style="font-size: 25px">file_open</span>
         </button>
-        <input type="file" id="fileInput" accept=".json" style="display: none;">
       </div>
+      <input type="file" id="fileInput" accept=".json" style="display: none;">
       
       <!-- Spotify Miniplayer (Desktop only) -->
       <div id="spotifyMiniplayer" class="spotify-miniplayer shrink-0 border-t border-gray-800 p-3 hidden">
