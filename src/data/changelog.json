@@ -1,6 +1,90 @@
 [
   {
     "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved Spotify miniplayer layout with cleaner styling",
+    "hash": "0c37fe0247fa1a4591e20f37148a48345789db23",
+    "commitMessage": "Refine Spotify miniplayer layout and hide album list scrollbar - Make volume slider width dynamic with full sidebar coverage - Fix play/pause button to be perfectly round (w-9 h-9) - Tighten spacing: cover art, progress bar, controls, volume, device indicator - Compensate for scrollbar gutter on progress bar and controls - Reduce cover art to 76x76px with tighter left gap - Hide album list scrollbar while preserving scroll functionality"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Enhanced visual boundaries between header sections",
+    "hash": "6ea5b35d84593cc884fcbc3e0863c6f6a601561b",
+    "commitMessage": "Refine header/row boundaries, sidebar spacing, and logo alignment - Add subtle backdrop blur on bottom edge of column header row - Remove top inset shadow from first album row for smoother transition - Add right padding to sidebar list nav to match left spacing - Center SuShe logo over sidebar by matching container width to 14.5rem"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Added blur effects for smoother visual transitions",
+    "hash": "268326ee7aa651c6f63a7bc9a3f36533975299f6",
+    "commitMessage": "Add backdrop blur to soften boundary between page header and column header row - Use ::before pseudo-element with backdrop-filter blur - Apply gradient mask for smooth S-curve fade in/out"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Updated sidebar with new Material Design icons",
+    "hash": "2b4d81243a85c0f894da055196316a2e9901c717",
+    "commitMessage": "Switch sidebar action buttons to Material Symbols Outlined icons - Add Material Symbols Outlined font import - Replace Font Awesome solid icons with outlined: playlist_add, create_new_folder, file_open - Update button colors to #20E368, 15% default / 35% hover - Tighten button container padding and refine background gradient"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "fix",
+    "description": "Fixed lock indicator not clearing when switching views",
+    "hash": "b430cd81c530987fa984d3631d9371005c43e71c",
+    "commitMessage": "Fix stale lock indicator persisting when switching to recommendations view\n\n- Clear header lock indicator in selectRecommendations wrapper before loading recommendations\n- Fixes bug where lock banner from a previously viewed locked main list remained visible"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved album list typography and cover art sizing",
+    "hash": "0a0969b97c4c9d72b99b2a14b21ca5df95a2af7e",
+    "commitMessage": "Reduce cover art to 75px, mute metadata columns, match artist color to album title\n\n- Reduce cover art from 80px to 75px for slightly shorter album rows\n- Update album grid and recommendations grid column widths to match\n- Add opacity 0.7 to Country, Genre 1, Genre 2 columns to visually de-emphasize metadata\n- Change artist text from text-gray-300 to text-gray-200 to match album title brightness"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Moved year lock banner to header area",
+    "hash": "37a6892905296e72e300905974e1d869eedb897e",
+    "commitMessage": "Fix modal-factory resolve-before-close bugs, move year lock banner to header, remove toast\n\nModal fixes (regression from DRY refactor):\n- Fix showConfirmation promise mode always resolving false (25 call sites broken)\n- Fix showReasoningModal always resolving null (3 call sites broken)\n- Fix showSimilarAlbumModal always resolving cancelled due to recursive onClose\n- Root cause: modalController.close() fires onClose before caller can resolve\n\nYear lock UI improvements:\n- Move lock banner from album container to header bar on desktop (compact pill style)\n- Keep mobile banner in album container unchanged\n- Extract shared showYearLockUI/clearYearLockUI functions in year-lock.js (DRY)\n- Remove duplicated banner creation code from album-display.js and app.js\n- Fix race condition where lock indicator persisted when switching to non-main list\n- Remove success toast when locking/unlocking a year"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Added smooth animations for sidebar collapse and expansion",
+    "hash": "55520fb7d55e571db33ccf4063afac356ce41b26",
+    "commitMessage": "Smooth sidebar collapse transitions for miniplayer, tidal widget, and action buttons - Replace display:none with animatable opacity/max-height/padding for Spotify miniplayer and Tidal widget - Add border-color and padding transitions to action buttons container - Update pre-paint CSS to cover all collapsible elements on page load"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Redesigned sidebar with cleaner layout and toggle button",
+    "hash": "709aadd243bf3d21216cf9aac2142c4b28b6f867",
+    "commitMessage": "Remove sidebar 'Lists' title, reposition toggle button, fix collapse flash on page load - Remove 'Lists' heading and clean up associated CSS (title show/hide, container transitions) - Move toggle arrow to top-left with minimal padding, stays in place during collapse/expand - Add inline <head> script to apply collapsed state before first paint, preventing flash of expanded sidebar on refresh"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Applied new gradient theme across sidebar and headers",
+    "hash": "6af42a8641e2bb38c01481acb27e68395a04e363",
+    "commitMessage": "Apply gradient theme across sidebar, main header, and list header rows - Sidebar: vertical gradient from #2B3147 (top) to #090D17 (bottom), action buttons moved outside nav for full-width border - Main header: dual-layer gradient (vertical + horizontal) blending into sidebar and content area - Album/recommendations header rows: right-to-left gradient (#2b3147 to #090d17), remove redundant bg-black from JS"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Redesigned action buttons as compact horizontal icon squares",
+    "hash": "d588b57c18e7393a510c99944dc51b6c13f4769f",
+    "commitMessage": "Redesign sidebar action buttons as icon-only squares laid out horizontally - Replace full-width stacked buttons with compact square icon buttons (w-9 h-9) - Distribute buttons evenly across sidebar width with flex justify-around - Move button text to title attributes for tooltip on hover"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Made sidebar narrower and improved group organization",
+    "hash": "5f18b78e8a0cfbeb6d6e72fd3956c18a483f716b",
+    "commitMessage": "Narrow sidebar to 15rem, remove Comment 2 left border, collapse sidebar groups on first visit - Reduce desktop sidebar width from 18rem (288px) to 15rem (240px) across all CSS sources - Remove left border from Comment 2 column (keep only Comment 1 border as separator) - On first visit, only expand the sidebar group containing the active list (user toggles persist across refreshes)"
+  },
+  {
+    "date": "2026-02-16",
     "category": "fix",
     "description": "Fixed lock indicator staying visible when switching views",
     "hash": "b430cd81c530987fa984d3631d9371005c43e71c",
