@@ -1288,7 +1288,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
     
     @media (min-width: 1024px) {
       .main-content {
-        grid-template-columns: 15rem 1fr; /* Desktop: 240px sidebar */
+        grid-template-columns: 14.5rem 1fr; /* Desktop: 232px sidebar */
       }
     }
     
@@ -1449,15 +1449,15 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </nav>
       
       <!-- Sidebar action buttons -->
-      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-2 flex justify-around" style="background: linear-gradient(90deg, transparent 0%, rgba(45,53,82,0.3) 50%, transparent 100%)">
-        <button id="createListBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create List">
-          <i class="fas fa-plus"></i>
+      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-2 flex justify-around" style="background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)">
+        <button id="createListBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(34, 197, 94, 0.1)" title="Create List">
+          <i class="fas fa-plus fa-lg"></i>
         </button>
-        <button id="createCollectionBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create Collection">
-          <i class="fas fa-folder-plus"></i>
+        <button id="createCollectionBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(34, 197, 94, 0.1)" title="Create Collection">
+          <i class="fas fa-folder-plus fa-lg"></i>
         </button>
-        <button id="importBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Import List">
-          <i class="fas fa-file-import"></i>
+        <button id="importBtn" class="sidebar-action-btn w-8 h-8 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(34, 197, 94, 0.1)" title="Import List">
+          <i class="fas fa-file-import fa-lg"></i>
         </button>
         <input type="file" id="fileInput" accept=".json" style="display: none;">
       </div>

@@ -654,6 +654,10 @@ input[list]::-webkit-list-button {
     padding 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.sidebar .sidebar-action-btn:hover {
+  background-color: rgba(34, 197, 94, 0.25) !important;
+}
+
 /* Sidebar action buttons container transition */
 .sidebar .sidebar-actions-container {
   transition:
@@ -694,7 +698,7 @@ input[list]::-webkit-list-button {
 /* Adjust main content grid when sidebar is collapsed */
 @media (min-width: 1024px) {
   .main-content {
-    grid-template-columns: 15rem 1fr; /* Default */
+    grid-template-columns: 14.5rem 1fr; /* Default */
     transition: grid-template-columns 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   }
 

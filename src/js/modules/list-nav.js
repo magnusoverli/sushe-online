@@ -100,17 +100,11 @@ export function createListNav(deps = {}) {
    * @param {Array} orphaned - Array of orphaned list objects
    */
   function initializeExpandStateForActiveList(groups, orphaned) {
-    // Respect existing user preferences — only set defaults on first-ever visit
-    try {
-      if (
-        localStorage.getItem('groupExpandState') ||
-        localStorage.getItem('yearExpandState')
-      ) {
-        return;
-      }
-    } catch (_e) {
-      return;
-    }
+    // On every page load, collapse all groups except the one containing the
+    // active list.  User manual toggles during the session are saved by
+    // toggleGroupSection and take effect immediately, but on the next page
+    // load the state is recalculated so the active list's group is always
+    // visible.
 
     // Determine which list will be active on load.
     // getCurrentList() may not be set yet during initial render, so fall back
@@ -674,7 +668,7 @@ export function createListNav(deps = {}) {
 
     // Lists container
     const listsContainer = document.createElement('ul');
-    listsContainer.className = `group-lists pl-[25px] ${isExpanded ? '' : 'collapsed'}`;
+    listsContainer.className = `group-lists pl-[19px] ${isExpanded ? '' : 'collapsed'}`;
     // Add legacy class for CSS compatibility
     if (isYearGroup) {
       listsContainer.classList.add('year-lists');
