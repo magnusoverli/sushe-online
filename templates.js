@@ -1449,7 +1449,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       </nav>
       
       <!-- Sidebar action buttons -->
-      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-3 flex justify-around">
+      <div class="sidebar-actions-container shrink-0 border-t border-gray-800 py-2 flex justify-around" style="background: linear-gradient(90deg, transparent 0%, rgba(45,53,82,0.3) 50%, transparent 100%)">
         <button id="createListBtn" class="sidebar-action-btn w-9 h-9 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" title="Create List">
           <i class="fas fa-plus"></i>
         </button>
