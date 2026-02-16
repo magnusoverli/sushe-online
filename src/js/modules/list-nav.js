@@ -373,7 +373,7 @@ export function createListNav(deps = {}) {
     return `
       <div class="flex items-center flex-1 min-w-0">
         <i class="fas ${chevronClass} fa-fw mr-2 text-xs group-chevron shrink-0"></i>
-        <i class="fas ${iconClass} mr-2 text-xs text-gray-500 shrink-0"></i>
+        <i class="fas ${iconClass} mr-2 text-xs text-gray-300 shrink-0"></i>
         <span class="truncate">${name}</span>
       </div>
       ${rightSide}
@@ -674,7 +674,7 @@ export function createListNav(deps = {}) {
 
     // Lists container
     const listsContainer = document.createElement('ul');
-    listsContainer.className = `group-lists pl-3 ${isExpanded ? '' : 'collapsed'}`;
+    listsContainer.className = `group-lists pl-[25px] ${isExpanded ? '' : 'collapsed'}`;
     // Add legacy class for CSS compatibility
     if (isYearGroup) {
       listsContainer.classList.add('year-lists');
