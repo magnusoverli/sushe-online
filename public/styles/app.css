@@ -295,6 +295,15 @@ body {
   background: #4b5563;
 }
 
+/* Hide album list scrollbar while keeping scroll functionality */
+#albumContainer {
+  scrollbar-width: none; /* Firefox */
+}
+
+#albumContainer::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Edge */
+}
+
 /* Enhanced album row styles */
 #albumContainer {
   position: relative;
