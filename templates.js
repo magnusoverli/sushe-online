@@ -1730,6 +1730,11 @@ const spotifyTemplate = (user, csrfToken = '') => `
     window.addEventListener('resize', updateViewportHeight);
     window.addEventListener('orientationchange', updateViewportHeight);
     
+    // Prevent background scroll when touching the sidebar backdrop on mobile
+    function preventBackdropScroll(e) {
+      e.preventDefault();
+    }
+
     // Mobile menu toggle
     function toggleMobileMenu() {
       const menu = document.getElementById('mobileMenu');
@@ -1746,7 +1751,11 @@ const spotifyTemplate = (user, csrfToken = '') => `
         backdrop.style.opacity = '0';
         drawer.style.transform = 'translateX(-100%)';
         document.body.style.overflow = '';
-        if (albumContainer) albumContainer.style.overflow = '';
+        if (albumContainer) {
+          albumContainer.style.overflow = '';
+          albumContainer.style.touchAction = '';
+        }
+        backdrop.removeEventListener('touchmove', preventBackdropScroll);
         if (fab) {
           fab.style.opacity = '1';
           fab.style.pointerEvents = 'auto';
@@ -1768,7 +1777,12 @@ const spotifyTemplate = (user, csrfToken = '') => `
         menu.style.visibility = 'visible';
         menu.classList.remove('pointer-events-none');
         document.body.style.overflow = 'hidden';
-        if (albumContainer) albumContainer.style.overflow = 'hidden';
+        if (albumContainer) {
+          albumContainer.style.overflow = 'hidden';
+          albumContainer.style.touchAction = 'none';
+        }
+        // Block touch-scroll on the backdrop so album list behind can't scroll
+        backdrop.addEventListener('touchmove', preventBackdropScroll, { passive: false });
         // Collapse all groups except the active list's group
         if (window.collapseGroupsForActiveList) window.collapseGroupsForActiveList();
         // Trigger reflow to ensure transition runs
