@@ -637,6 +637,10 @@ function updateListNav() {
   return getListNavModule().updateListNav();
 }
 
+function collapseGroupsForActiveList() {
+  return getListNavModule().collapseGroupsForActiveList();
+}
+
 function updateListNavActiveState(
   activeListId,
   activeRecommendationsYear = null
@@ -1683,6 +1687,7 @@ window.saveList = saveList;
 window.loadLists = loadLists;
 window.selectList = selectList;
 window.updateListNav = updateListNav;
+window.collapseGroupsForActiveList = collapseGroupsForActiveList;
 window.updatePlaylist = updatePlaylist;
 window.toggleMainStatus = toggleMainStatus;
 window.displayAlbums = displayAlbums;

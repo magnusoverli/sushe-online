@@ -54,6 +54,7 @@ export function createListNav(deps = {}) {
   const listSortables = new Map();
 
   // ============ EXPAND STATE MANAGEMENT ============
+  let hasInitializedExpandState = false;
 
   /**
    * Get expand/collapse state from localStorage
@@ -114,7 +115,7 @@ export function createListNav(deps = {}) {
       localStorage.getItem('lastSelectedList') ||
       window.lastSelectedList;
 
-    if (!activeListId) return; // No active list known, keep default (all expanded)
+    if (!activeListId) return false; // No active list known, keep default (all expanded)
 
     // Find which group contains the active list
     let activeGroupKey = null;
@@ -146,6 +147,7 @@ export function createListNav(deps = {}) {
     }
 
     saveGroupExpandState(state);
+    return true;
   }
 
   /**
@@ -852,7 +854,11 @@ export function createListNav(deps = {}) {
       const { groups: groupsWithLists, orphaned } = groupListsByGroup();
 
       // On first render of page load, collapse all groups except the active list's group
-      initializeExpandStateForActiveList(groupsWithLists, orphaned);
+      if (!hasInitializedExpandState) {
+        hasInitializedExpandState =
+          initializeExpandStateForActiveList(groupsWithLists, orphaned) ===
+          true;
+      }
 
       // Render each group section
       // Show all collections (even empty), but only show year-groups with lists
@@ -1277,10 +1283,31 @@ export function createListNav(deps = {}) {
     updateActiveState(mobileNav);
   }
 
+  /**
+   * Collapse all groups except the one containing the active list,
+   * then re-render the mobile nav. Called when the mobile drawer opens.
+   */
+  function collapseGroupsForActiveList() {
+    if (!getGroups || !getSortedGroups) return;
+    const { groups: groupsWithLists, orphaned } = groupListsByGroup();
+    initializeExpandStateForActiveList(groupsWithLists, orphaned);
+
+    const mobileNav = document.getElementById('mobileListNav');
+    if (mobileNav) {
+      // Clean up existing mobile sortables before re-rendering
+      destroySortables();
+      renderListItems(mobileNav, true);
+      if (apiCall) {
+        initializeDragAndDrop(mobileNav, true);
+      }
+    }
+  }
+
   // Return public API
   return {
     updateListNav,
     updateListNavActiveState,
+    collapseGroupsForActiveList,
     getYearExpandState,
     saveYearExpandState,
     toggleYearSection,

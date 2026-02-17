@@ -1639,16 +1639,19 @@ const spotifyTemplate = (user, csrfToken = '') => `
         <!-- Footer Actions -->
         <div class="py-2 px-3 border-t border-gray-800 flex justify-evenly" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.01) 100%)">
           <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
-                  class="mobile-action-btn w-11 h-11 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create List">
-            <span class="material-symbols-outlined" style="font-size: 26px">playlist_add</span>
+                  class="mobile-action-btn w-14 h-11 text-gray-300 rounded-sm transition duration-200 flex flex-col items-center justify-center gap-0.5" style="background-color: rgba(32, 227, 104, 0.15)" title="Create List">
+            <span class="material-symbols-outlined" style="font-size: 24px">playlist_add</span>
+            <span class="text-[10px] text-gray-400 leading-tight">List</span>
           </button>
           <button onclick="document.getElementById('createCollectionBtn').click(); toggleMobileMenu();" 
-                  class="mobile-action-btn w-11 h-11 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create Collection">
-            <span class="material-symbols-outlined" style="font-size: 26px">create_new_folder</span>
+                  class="mobile-action-btn w-14 h-11 text-gray-300 rounded-sm transition duration-200 flex flex-col items-center justify-center gap-0.5" style="background-color: rgba(32, 227, 104, 0.15)" title="Create Collection">
+            <span class="material-symbols-outlined" style="font-size: 24px">create_new_folder</span>
+            <span class="text-[10px] text-gray-400 leading-tight">Collection</span>
           </button>
           <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
-                  class="mobile-action-btn w-11 h-11 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Import List">
-            <span class="material-symbols-outlined" style="font-size: 26px">file_open</span>
+                  class="mobile-action-btn w-14 h-11 text-gray-300 rounded-sm transition duration-200 flex flex-col items-center justify-center gap-0.5" style="background-color: rgba(32, 227, 104, 0.15)" title="Import List">
+            <span class="material-symbols-outlined" style="font-size: 24px">file_open</span>
+            <span class="text-[10px] text-gray-400 leading-tight">Import</span>
           </button>
         </div>
       </div>
@@ -1734,6 +1737,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
       const drawer = document.getElementById('mobileMenuDrawer');
       const fab = document.getElementById('addAlbumFAB');
       const nowPlaying = document.getElementById('mobileNowPlaying');
+      const albumContainer = document.getElementById('albumContainer');
       const isOpen = menu.dataset.open === 'true';
       
       if (isOpen) {
@@ -1742,6 +1746,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         backdrop.style.opacity = '0';
         drawer.style.transform = 'translateX(-100%)';
         document.body.style.overflow = '';
+        if (albumContainer) albumContainer.style.overflow = '';
         if (fab) {
           fab.style.opacity = '1';
           fab.style.pointerEvents = 'auto';
@@ -1763,6 +1768,9 @@ const spotifyTemplate = (user, csrfToken = '') => `
         menu.style.visibility = 'visible';
         menu.classList.remove('pointer-events-none');
         document.body.style.overflow = 'hidden';
+        if (albumContainer) albumContainer.style.overflow = 'hidden';
+        // Collapse all groups except the active list's group
+        if (window.collapseGroupsForActiveList) window.collapseGroupsForActiveList();
         // Trigger reflow to ensure transition runs
         void drawer.offsetWidth;
         backdrop.style.opacity = '0.5';

@@ -922,25 +922,61 @@ body.now-playing-bar-visible #addAlbumFAB {
   opacity: 0;
 }
 
-/* Hover effects using category background colors */
-.group-section.year-group .group-header-btn:hover {
-  background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
+/* Hover effects using category background colors - only on devices with a real pointer */
+@media (hover: hover) {
+  .group-section.year-group .group-header-btn:hover {
+    background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
+  }
+
+  .group-section.collection-group .group-header-btn:hover {
+    background-color: rgba(168, 85, 247, 0.15); /* purple-500 at 15% opacity */
+  }
+
+  .group-section.year-group .sidebar-list-btn:hover::before {
+    background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
+  }
+
+  .group-section.collection-group .sidebar-list-btn:hover::before {
+    background-color: rgba(168, 85, 247, 0.15); /* purple-500 at 15% opacity */
+  }
+
+  .group-section.year-group .recommendations-btn:hover::before {
+    background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
+  }
 }
 
-.group-section.collection-group .group-header-btn:hover {
-  background-color: rgba(168, 85, 247, 0.15); /* purple-500 at 15% opacity */
+/* Active/tap feedback for all devices (touch + mouse) */
+/* Slow fade-out (300ms) ensures tap highlight is visible even on quick taps */
+.group-section .group-header-btn,
+.group-section .sidebar-list-btn::before,
+.group-section .recommendations-btn::before {
+  transition: background-color 300ms ease-out;
 }
 
-.group-section.year-group .sidebar-list-btn:hover::before {
-  background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
+/* Instant activation on press */
+.group-section.year-group .group-header-btn:active {
+  background-color: rgba(34, 197, 94, 0.15);
+  transition: background-color 0ms;
 }
 
-.group-section.collection-group .sidebar-list-btn:hover::before {
-  background-color: rgba(168, 85, 247, 0.15); /* purple-500 at 15% opacity */
+.group-section.collection-group .group-header-btn:active {
+  background-color: rgba(168, 85, 247, 0.15);
+  transition: background-color 0ms;
 }
 
-.group-section.year-group .recommendations-btn:hover::before {
-  background-color: rgba(34, 197, 94, 0.15); /* green-500 at 15% opacity */
+.group-section.year-group .sidebar-list-btn:active::before {
+  background-color: rgba(34, 197, 94, 0.15);
+  transition: background-color 0ms;
+}
+
+.group-section.collection-group .sidebar-list-btn:active::before {
+  background-color: rgba(168, 85, 247, 0.15);
+  transition: background-color 0ms;
+}
+
+.group-section.year-group .recommendations-btn:active::before {
+  background-color: rgba(34, 197, 94, 0.15);
+  transition: background-color 0ms;
 }
 
 /* Sidebar scrollbar - hidden by default, visible on hover */
