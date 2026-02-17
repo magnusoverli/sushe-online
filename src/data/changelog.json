@@ -2,6 +2,41 @@
   {
     "date": "2026-02-17",
     "category": "ui",
+    "description": "Improved mobile sidebar button spacing and drag interactions",
+    "hash": "47b758193c5d69ffa2c85ea5e2ed5a16f1f290fd",
+    "commitMessage": "Fix mobile sidebar: equal button padding and disable swipe during drag"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
+    "description": "Enhanced mobile drawer experience and sidebar interactions",
+    "hash": "520a9dae7d1c2bb1bfa96d53da5e258260bb5032",
+    "commitMessage": "Improve mobile drawer UX and fix sidebar interaction issues\n\n- Redesign drawer footer buttons from icon-only to icon+label tab bar style\n  (List, Collection, Import) with fixed w-14 h-11 sizing\n- Wrap sidebar hover effects in @media (hover: hover) to prevent sticky\n  hover on iOS; add :active tap feedback with instant-in/300ms-fade-out\n  transitions for visual response on all devices\n- Fix group expand state resetting on drag-and-drop reorder by adding\n  hasInitializedExpandState flag so it only runs on first render\n- Add collapseGroupsForActiveList() to collapse all groups except the\n  active list's group when the mobile drawer opens, with full re-render\n  of sortable drag-and-drop"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed background scrolling when mobile sidebar is open",
+    "hash": "eece923770d848fbbac4e11ca124f1a2642a3c3d",
+    "commitMessage": "Fix background scroll bleed-through when mobile sidebar drawer is open\n\n- Lock body scroll (overflow: hidden) when drawer opens\n- Restore body scroll when drawer closes\n- Drawer's own list container still scrolls independently"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed header display issues on iOS devices",
+    "hash": "42b0cd1a80938442abbe9b54340e9b5b7c511a6b",
+    "commitMessage": "Fix iOS safe area implementation - extend header gradient into notch/status bar region\n\n- Add viewport-fit=cover to layout.ejs (was missing, making env() inerts resolve to 0px)\n- Add fixed-position safe area fill element in header to paint gradient behind iOS status bar\n- Add consistent 0px fallbacks to all env(safe-area-inset-*) calls in templates.js\n- Remove legacy constant(safe-area-inset-top) fallback for iOS 11.0-11.2\n- Remove dead detectStandaloneMode() JS and unused standalone-mode CSS class"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
+    "description": "Redesigned mobile sidebar with new icons and swipe gestures",
+    "hash": "7654da46f7fab7fe1836e18ba4c9eafa1f059a44",
+    "commitMessage": "Align mobile sidebar drawer with desktop UI overhaul - Apply gradient background (matching desktop sidebar) to mobile drawer - Replace full-width text action buttons with icon-only Material Symbols buttons (playlist_add, create_new_folder, file_open) with green-tinted backgrounds - Add subtle center gradient bar behind action buttons (matching desktop) - Remove 'Lists' heading, replace with minimal close button (matching desktop) - Narrow drawer width from w-80 to w-72, max-width from 85vw to 80vw - Tighten spacing: list items py-3->py-2.5, headers py-2->py-1.5, list container p-4->p-2, gap space-y-1->space-y-0.5 - Reduce 3-dot menu button padding from p-2 to p-1.5 - Add swipe-to-close gesture with 80px threshold, proportional backdrop fade - Add mobile-action-btn active state CSS (scale + green highlight)"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
     "description": "Improved mobile sidebar drawer design and interactions",
     "hash": "520a9dae7d1c2bb1bfa96d53da5e258260bb5032",
     "commitMessage": "Improve mobile drawer UX and fix sidebar interaction issues\n\n- Redesign drawer footer buttons from icon-only to icon+label tab bar style\n  (List, Collection, Import) with fixed w-14 h-11 sizing\n- Wrap sidebar hover effects in @media (hover: hover) to prevent sticky\n  hover on iOS; add :active tap feedback with instant-in/300ms-fade-out\n  transitions for visual response on all devices\n- Fix group expand state resetting on drag-and-drop reorder by adding\n  hasInitializedExpandState flag so it only runs on first render\n- Add collapseGroupsForActiveList() to collapse all groups except the\n  active list's group when the mobile drawer opens, with full re-render\n  of sortable drag-and-drop"
@@ -61,6 +96,97 @@
     "description": "Redesigned mobile menu with new icons and swipe gestures",
     "hash": "7654da46f7fab7fe1836e18ba4c9eafa1f059a44",
     "commitMessage": "Align mobile sidebar drawer with desktop UI overhaul - Apply gradient background (matching desktop sidebar) to mobile drawer - Replace full-width text action buttons with icon-only Material Symbols buttons (playlist_add, create_new_folder, file_open) with green-tinted backgrounds - Add subtle center gradient bar behind action buttons (matching desktop) - Remove 'Lists' heading, replace with minimal close button (matching desktop) - Narrow drawer width from w-80 to w-72, max-width from 85vw to 80vw - Tighten spacing: list items py-3->py-2.5, headers py-2->py-1.5, list container p-4->p-2, gap space-y-1->space-y-0.5 - Reduce 3-dot menu button padding from p-2 to p-1.5 - Add swipe-to-close gesture with 80px threshold, proportional backdrop fade - Add mobile-action-btn active state CSS (scale + green highlight)"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved Spotify player layout and cleaner album scrolling",
+    "hash": "0c37fe0247fa1a4591e20f37148a48345789db23",
+    "commitMessage": "Refine Spotify miniplayer layout and hide album list scrollbar - Make volume slider width dynamic with full sidebar coverage - Fix play/pause button to be perfectly round (w-9 h-9) - Tighten spacing: cover art, progress bar, controls, volume, device indicator - Compensate for scrollbar gutter on progress bar and controls - Reduce cover art to 76x76px with tighter left gap - Hide album list scrollbar while preserving scroll functionality"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Refined header boundaries and sidebar spacing",
+    "hash": "6ea5b35d84593cc884fcbc3e0863c6f6a601561b",
+    "commitMessage": "Refine header/row boundaries, sidebar spacing, and logo alignment - Add subtle backdrop blur on bottom edge of column header row - Remove top inset shadow from first album row for smoother transition - Add right padding to sidebar list nav to match left spacing - Center SuShe logo over sidebar by matching container width to 14.5rem"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Added blur effect between page and column headers",
+    "hash": "268326ee7aa651c6f63a7bc9a3f36533975299f6",
+    "commitMessage": "Add backdrop blur to soften boundary between page header and column header row - Use ::before pseudo-element with backdrop-filter blur - Apply gradient mask for smooth S-curve fade in/out"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Softened album header gradient transition",
+    "hash": "1f78128ab6f695c9213d8b97e885b864e041a0d3",
+    "commitMessage": "Extend album header gradient past left edge to 150% for softer visual transition"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved sidebar button alignment and styling",
+    "hash": "ae55011773a3414e83c3e98d1a1df60b3a71fdb3",
+    "commitMessage": "Fix sidebar action button alignment and tweak gradient - Add pr-2 to offset scrollbar gutter visual asymmetry - Move file input outside flex container - Switch to justify-evenly for equal spacing - Reduce gradient center opacity to 10%"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Updated sidebar icons to outlined style",
+    "hash": "2b4d81243a85c0f894da055196316a2e9901c717",
+    "commitMessage": "Switch sidebar action buttons to Material Symbols Outlined icons - Add Material Symbols Outlined font import - Replace Font Awesome solid icons with outlined: playlist_add, create_new_folder, file_open - Update button colors to #20E368, 15% default / 35% hover - Tighten button container padding and refine background gradient"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Refined sidebar width and button styling",
+    "hash": "b574c0fa80baf1840af2a79852a26f5f94c39a27",
+    "commitMessage": "Fix sidebar group expansion and refine sidebar styling - Fix group expand/collapse: remove single-use guard so active list's group is always expanded on page load - Reduce sidebar width from 15rem to 14.5rem (232px) - Move group headers and list items 6px closer to group border - Restyle sidebar action buttons: green-tinted backgrounds, larger icons, white gradient"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "fix",
+    "description": "Fixed lock indicator when switching to recommendations view",
+    "hash": "b430cd81c530987fa984d3631d9371005c43e71c",
+    "commitMessage": "Fix stale lock indicator persisting when switching to recommendations view\n\n- Clear header lock indicator in selectRecommendations wrapper before loading recommendations\n- Fixes bug where lock banner from a previously viewed locked main list remained visible"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Adjusted sidebar group spacing and icon brightness",
+    "hash": "7533d47c436d58edfcd747dd0c13b0896bc7d50e",
+    "commitMessage": "Adjust sidebar group list indent to 25px and brighten group header icons\n\n- Set group list items indent to pl-[25px] for precise spacing from group border\n- Change group header icons (calendar/folder) from text-gray-500 to text-gray-300"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Enhanced sidebar action area with gradient background",
+    "hash": "66eb8b8ec8e470cc762bd3d6083284a8513142bd",
+    "commitMessage": "Tighten sidebar action buttons area and add subtle center gradient\n\n- Reduce action buttons container padding from py-3 to py-2\n- Add horizontal gradient background with rgba(45,53,82,0.3) center glow"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Smaller cover art and refined column text styling",
+    "hash": "0a0969b97c4c9d72b99b2a14b21ca5df95a2af7e",
+    "commitMessage": "Reduce cover art to 75px, mute metadata columns, match artist color to album title\n\n- Reduce cover art from 80px to 75px for slightly shorter album rows\n- Update album grid and recommendations grid column widths to match\n- Add opacity 0.7 to Country, Genre 1, Genre 2 columns to visually de-emphasize metadata\n- Change artist text from text-gray-300 to text-gray-200 to match album title brightness"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Moved album title to cover column with softer typography",
+    "hash": "a485e87915da5162255983d010fa275f9cd986f8",
+    "commitMessage": "Refine list header row: move Album title to cover column, soften typography\n\n- Move Album column header from column 2 to column 3 to align with album name data\n- Add pl-2 inset to Album, Comment, and Comment 2 headers for better alignment\n- Change header font from uppercase/semibold/text-base to title case/medium/13px for subtler appearance"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Moved year lock banner to header area",
+    "hash": "37a6892905296e72e300905974e1d869eedb897e",
+    "commitMessage": "Fix modal-factory resolve-before-close bugs, move year lock banner to header, remove toast\n\nModal fixes (regression from DRY refactor):\n- Fix showConfirmation promise mode always resolving false (25 call sites broken)\n- Fix showReasoningModal always resolving null (3 call sites broken)\n- Fix showSimilarAlbumModal always resolving cancelled due to recursive onClose\n- Root cause: modalController.close() fires onClose before caller can resolve\n\nYear lock UI improvements:\n- Move lock banner from album container to header bar on desktop (compact pill style)\n- Keep mobile banner in album container unchanged\n- Extract shared showYearLockUI/clearYearLockUI functions in year-lock.js (DRY)\n- Remove duplicated banner creation code from album-display.js and app.js\n- Fix race condition where lock indicator persisted when switching to non-main list\n- Remove success toast when locking/unlocking a year"
   },
   {
     "date": "2026-02-16",
