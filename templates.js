@@ -1741,6 +1741,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         menu.dataset.open = 'false';
         backdrop.style.opacity = '0';
         drawer.style.transform = 'translateX(-100%)';
+        document.body.style.overflow = '';
         if (fab) {
           fab.style.opacity = '1';
           fab.style.pointerEvents = 'auto';
@@ -1761,6 +1762,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         menu.dataset.open = 'true';
         menu.style.visibility = 'visible';
         menu.classList.remove('pointer-events-none');
+        document.body.style.overflow = 'hidden';
         // Trigger reflow to ensure transition runs
         void drawer.offsetWidth;
         backdrop.style.opacity = '0.5';
