@@ -1637,7 +1637,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         </div>
         
         <!-- Footer Actions -->
-        <div class="py-2 px-3 border-t border-gray-800 flex justify-evenly" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.01) 100%)">
+        <div class="py-2 px-3 border-t border-gray-800 flex justify-evenly" style="padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px)); background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.01) 100%)">
           <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
                   class="mobile-action-btn w-14 h-11 text-gray-300 rounded-sm transition duration-200 flex flex-col items-center justify-center gap-0.5" style="background-color: rgba(32, 227, 104, 0.15)" title="Create List">
             <span class="material-symbols-outlined" style="font-size: 24px">playlist_add</span>
@@ -1805,6 +1805,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
 
       drawer.addEventListener('touchstart', function(e) {
         if (menu.dataset.open !== 'true') return;
+        if (window._sidebarDragActive) return;
         startX = e.touches[0].clientX;
         currentX = startX;
         isDragging = true;

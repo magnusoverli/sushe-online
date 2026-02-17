@@ -1050,9 +1050,12 @@ export function createListNav(deps = {}) {
           navigator.vibrate(50);
         }
         evt.item.classList.add('sidebar-dragging');
+        // Signal to swipe-to-close gesture that a drag is active
+        window._sidebarDragActive = true;
       },
       onEnd: async (evt) => {
         evt.item.classList.remove('sidebar-dragging');
+        window._sidebarDragActive = false;
 
         if (evt.oldIndex === evt.newIndex) return;
 
@@ -1122,9 +1125,11 @@ export function createListNav(deps = {}) {
           navigator.vibrate(50);
         }
         evt.item.classList.add('sidebar-list-dragging');
+        window._sidebarDragActive = true;
       },
       onEnd: async (evt) => {
         evt.item.classList.remove('sidebar-list-dragging');
+        window._sidebarDragActive = false;
 
         const listId = evt.item
           .querySelector('[data-list-id]')
