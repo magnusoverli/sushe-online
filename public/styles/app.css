@@ -744,6 +744,12 @@ input[list]::-webkit-list-button {
   background-color: rgba(32, 227, 104, 0.35) !important;
 }
 
+/* Mobile drawer action buttons */
+.mobile-action-btn:active {
+  background-color: rgba(32, 227, 104, 0.35) !important;
+  transform: scale(0.92);
+}
+
 /* Sidebar action buttons container transition */
 .sidebar .sidebar-actions-container {
   transition:

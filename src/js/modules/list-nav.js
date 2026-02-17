@@ -399,7 +399,7 @@ export function createListNav(deps = {}) {
    * @returns {string} HTML string
    */
   function createRecommendationsButtonHTML(year, isActive, isMobile) {
-    const paddingClass = isMobile ? 'py-3' : 'py-2';
+    const paddingClass = isMobile ? 'py-2.5' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
 
@@ -421,7 +421,7 @@ export function createListNav(deps = {}) {
    * @returns {string} HTML string
    */
   function createListButtonHTML(listId, listName, isActive, isMain, isMobile) {
-    const paddingClass = isMobile ? 'py-3' : 'py-2';
+    const paddingClass = isMobile ? 'py-2.5' : 'py-2';
     const widthClass = isMobile ? 'flex-1' : 'w-full';
     const activeClass = isActive ? 'active' : '';
     const mainBadge = isMain
@@ -440,7 +440,7 @@ export function createListNav(deps = {}) {
     if (isMobile) {
       return `
         ${buttonHTML}
-        <button data-list-menu-btn="${listId}" data-list-menu-name="${listName}" class="p-2 text-gray-400 active:text-gray-200 no-drag shrink-0" aria-label="List options">
+        <button data-list-menu-btn="${listId}" data-list-menu-name="${listName}" class="p-1.5 text-gray-400 active:text-gray-200 no-drag shrink-0" aria-label="List options">
           <i class="fas fa-ellipsis-v"></i>
         </button>
       `;
@@ -616,8 +616,7 @@ export function createListNav(deps = {}) {
     headerWrapper.className = 'group-header-wrapper flex items-center';
 
     const header = document.createElement('button');
-    const paddingClass = isMobile ? 'py-2' : 'py-1.5';
-    header.className = `group-header-btn flex-1 text-left px-3 ${paddingClass} rounded-sm text-sm transition duration-200 text-white flex items-center justify-between font-bold`;
+    header.className = `group-header-btn flex-1 text-left px-3 py-1.5 rounded-sm text-sm transition duration-200 text-white flex items-center justify-between font-bold`;
     header.innerHTML = createGroupHeaderHTML(
       name,
       isExpanded,

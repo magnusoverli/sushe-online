@@ -1620,37 +1620,34 @@ const spotifyTemplate = (user, csrfToken = '') => `
       <div id="mobileMenuBackdrop" class="absolute inset-0 bg-black opacity-0 transition-opacity" style="transition-duration: var(--sidebar-transition-duration);" onclick="toggleMobileMenu()"></div>
       
       <!-- Drawer -->
-      <div id="mobileMenuDrawer" class="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-gray-900 border-r border-gray-800 overflow-hidden flex flex-col transition-transform" style="transition-duration: var(--sidebar-transition-duration); transform: translateX(-100%);">
-        <!-- Header -->
-        <div class="p-4 border-b border-gray-800" style="padding-top: calc(1rem + env(safe-area-inset-top, 0px))">
-          <div class="flex justify-between items-center">
-            <h2 class="text-xl font-bold text-white">Lists</h2>
-            <button onclick="toggleMobileMenu()" class="p-2 -m-2 text-gray-400 hover:text-white">
-              <i class="fas fa-times text-xl"></i>
-            </button>
-          </div>
+      <div id="mobileMenuDrawer" class="absolute left-0 top-0 bottom-0 w-72 max-w-[80vw] border-r border-gray-800 overflow-hidden flex flex-col transition-transform" style="background: linear-gradient(to bottom, #2B3147 10%, #090D17 70%); transition-duration: var(--sidebar-transition-duration); transform: translateX(-100%);">
+        <!-- Header (close button only, no title — matches desktop which removed "Lists" heading) -->
+        <div class="px-3 py-1.5 border-b border-gray-800 flex justify-end" style="padding-top: calc(0.375rem + env(safe-area-inset-top, 0px))">
+          <button onclick="toggleMobileMenu()" class="p-2 -m-2 text-gray-400 active:text-white touch-target">
+            <i class="fas fa-times text-lg"></i>
+          </button>
         </div>
         
         <!-- Lists -->
-        <div class="flex-1 overflow-y-auto p-4">
-          <ul id="mobileListNav" class="space-y-1">
+        <div class="flex-1 overflow-y-auto p-2">
+          <ul id="mobileListNav" class="space-y-0.5">
             <!-- Mobile list items will be populated here -->
           </ul>
         </div>
         
         <!-- Footer Actions -->
-        <div class="p-4 border-t border-gray-800 space-y-2" style="padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));">
+        <div class="py-2 px-3 border-t border-gray-800 flex justify-evenly" style="padding-bottom: calc(0.75rem + env(safe-area-inset-bottom, 0px)); background: linear-gradient(90deg, rgba(255,255,255,0.01) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.01) 100%)">
           <button onclick="document.getElementById('createListBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
-            <i class="fas fa-plus mr-2"></i>Create List
+                  class="mobile-action-btn w-11 h-11 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create List">
+            <span class="material-symbols-outlined" style="font-size: 26px">playlist_add</span>
           </button>
           <button onclick="document.getElementById('createCollectionBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
-            <i class="fas fa-folder-plus mr-2"></i>Create Collection
+                  class="mobile-action-btn w-11 h-11 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Create Collection">
+            <span class="material-symbols-outlined" style="font-size: 26px">create_new_folder</span>
           </button>
           <button onclick="document.getElementById('importBtn').click(); toggleMobileMenu();" 
-                  class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 py-2 px-4 rounded-sm text-sm transition duration-200 flex items-center">
-            <i class="fas fa-file-import mr-2"></i>Import List
+                  class="mobile-action-btn w-11 h-11 text-gray-300 rounded-sm text-sm transition duration-200 flex items-center justify-center" style="background-color: rgba(32, 227, 104, 0.15)" title="Import List">
+            <span class="material-symbols-outlined" style="font-size: 26px">file_open</span>
           </button>
         </div>
       </div>
@@ -1782,6 +1779,60 @@ const spotifyTemplate = (user, csrfToken = '') => `
     function toggleMobileLists() {
       toggleMobileMenu();
     }
+
+    // Swipe-to-close gesture for mobile drawer
+    (function initMobileDrawerSwipe() {
+      const drawer = document.getElementById('mobileMenuDrawer');
+      const backdrop = document.getElementById('mobileMenuBackdrop');
+      const menu = document.getElementById('mobileMenu');
+      if (!drawer) return;
+
+      let startX = 0;
+      let currentX = 0;
+      let isDragging = false;
+      const CLOSE_THRESHOLD = 80; // px to swipe before closing
+
+      drawer.addEventListener('touchstart', function(e) {
+        if (menu.dataset.open !== 'true') return;
+        startX = e.touches[0].clientX;
+        currentX = startX;
+        isDragging = true;
+        drawer.style.transitionDuration = '0ms';
+        if (backdrop) backdrop.style.transitionDuration = '0ms';
+      }, { passive: true });
+
+      drawer.addEventListener('touchmove', function(e) {
+        if (!isDragging) return;
+        currentX = e.touches[0].clientX;
+        const deltaX = currentX - startX;
+        // Only allow swiping left (closing direction)
+        if (deltaX < 0) {
+          drawer.style.transform = 'translateX(' + deltaX + 'px)';
+          // Fade backdrop proportionally
+          const drawerWidth = drawer.offsetWidth;
+          const progress = Math.min(Math.abs(deltaX) / drawerWidth, 1);
+          if (backdrop) backdrop.style.opacity = String(0.5 * (1 - progress));
+        }
+      }, { passive: true });
+
+      drawer.addEventListener('touchend', function() {
+        if (!isDragging) return;
+        isDragging = false;
+        const deltaX = currentX - startX;
+        // Restore transition duration
+        drawer.style.transitionDuration = '';
+        if (backdrop) backdrop.style.transitionDuration = '';
+
+        if (deltaX < -CLOSE_THRESHOLD) {
+          // Swipe far enough — close the drawer
+          toggleMobileMenu();
+        } else {
+          // Snap back open
+          drawer.style.transform = 'translateX(0)';
+          if (backdrop) backdrop.style.opacity = '0.5';
+        }
+      }, { passive: true });
+    })();
     
     // Initialize the app
     document.addEventListener('DOMContentLoaded', () => {
