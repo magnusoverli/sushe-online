@@ -1,6 +1,48 @@
 [
   {
     "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed mobile sidebar scrolling issues on touch devices",
+    "hash": "cd851ae4cf969f42b8fdf295f447a79180350e70",
+    "commitMessage": "Fix mobile sidebar scroll bleed-through on touch devices\n\n- Add touch-action: none on albumContainer when sidebar is open\n- Add non-passive touchmove preventDefault on backdrop overlay\n- overflow: hidden alone is insufficient on iOS Safari where native\n  touch scroll engine can reach through overlay elements"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Improved mobile sidebar button spacing and drag interactions",
+    "hash": "47b758193c5d69ffa2c85ea5e2ed5a16f1f290fd",
+    "commitMessage": "Fix mobile sidebar: equal button padding and disable swipe during drag"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
+    "description": "Enhanced mobile drawer experience and sidebar interactions",
+    "hash": "520a9dae7d1c2bb1bfa96d53da5e258260bb5032",
+    "commitMessage": "Improve mobile drawer UX and fix sidebar interaction issues\n\n- Redesign drawer footer buttons from icon-only to icon+label tab bar style\n  (List, Collection, Import) with fixed w-14 h-11 sizing\n- Wrap sidebar hover effects in @media (hover: hover) to prevent sticky\n  hover on iOS; add :active tap feedback with instant-in/300ms-fade-out\n  transitions for visual response on all devices\n- Fix group expand state resetting on drag-and-drop reorder by adding\n  hasInitializedExpandState flag so it only runs on first render\n- Add collapseGroupsForActiveList() to collapse all groups except the\n  active list's group when the mobile drawer opens, with full re-render\n  of sortable drag-and-drop"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed background scrolling when mobile sidebar is open",
+    "hash": "eece923770d848fbbac4e11ca124f1a2642a3c3d",
+    "commitMessage": "Fix background scroll bleed-through when mobile sidebar drawer is open\n\n- Lock body scroll (overflow: hidden) when drawer opens\n- Restore body scroll when drawer closes\n- Drawer's own list container still scrolls independently"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed header display on iPhone notch and status bar",
+    "hash": "42b0cd1a80938442abbe9b54340e9b5b7c511a6b",
+    "commitMessage": "Fix iOS safe area implementation - extend header gradient into notch/status bar region\n\n- Add viewport-fit=cover to layout.ejs (was missing, making env() inerts resolve to 0px)\n- Add fixed-position safe area fill element in header to paint gradient behind iOS status bar\n- Add consistent 0px fallbacks to all env(safe-area-inset-*) calls in templates.js\n- Remove legacy constant(safe-area-inset-top) fallback for iOS 11.0-11.2\n- Remove dead detectStandaloneMode() JS and unused standalone-mode CSS class"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
+    "description": "Updated mobile sidebar with new design and swipe gestures",
+    "hash": "7654da46f7fab7fe1836e18ba4c9eafa1f059a44",
+    "commitMessage": "Align mobile sidebar drawer with desktop UI overhaul - Apply gradient background (matching desktop sidebar) to mobile drawer - Replace full-width text action buttons with icon-only Material Symbols buttons (playlist_add, create_new_folder, file_open) with green-tinted backgrounds - Add subtle center gradient bar behind action buttons (matching desktop) - Remove 'Lists' heading, replace with minimal close button (matching desktop) - Narrow drawer width from w-80 to w-72, max-width from 85vw to 80vw - Tighten spacing: list items py-3->py-2.5, headers py-2->py-1.5, list container p-4->p-2, gap space-y-1->space-y-0.5 - Reduce 3-dot menu button padding from p-2 to p-1.5 - Add swipe-to-close gesture with 80px threshold, proportional backdrop fade - Add mobile-action-btn active state CSS (scale + green highlight)"
+  },
+  {
+    "date": "2026-02-17",
     "category": "ui",
     "description": "Improved mobile sidebar button spacing and drag interactions",
     "hash": "47b758193c5d69ffa2c85ea5e2ed5a16f1f290fd",
@@ -96,6 +138,20 @@
     "description": "Redesigned mobile menu with new icons and swipe gestures",
     "hash": "7654da46f7fab7fe1836e18ba4c9eafa1f059a44",
     "commitMessage": "Align mobile sidebar drawer with desktop UI overhaul - Apply gradient background (matching desktop sidebar) to mobile drawer - Replace full-width text action buttons with icon-only Material Symbols buttons (playlist_add, create_new_folder, file_open) with green-tinted backgrounds - Add subtle center gradient bar behind action buttons (matching desktop) - Remove 'Lists' heading, replace with minimal close button (matching desktop) - Narrow drawer width from w-80 to w-72, max-width from 85vw to 80vw - Tighten spacing: list items py-3->py-2.5, headers py-2->py-1.5, list container p-4->p-2, gap space-y-1->space-y-0.5 - Reduce 3-dot menu button padding from p-2 to p-1.5 - Add swipe-to-close gesture with 80px threshold, proportional backdrop fade - Add mobile-action-btn active state CSS (scale + green highlight)"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved Spotify player layout and hidden album list scrollbar",
+    "hash": "0c37fe0247fa1a4591e20f37148a48345789db23",
+    "commitMessage": "Refine Spotify miniplayer layout and hide album list scrollbar - Make volume slider width dynamic with full sidebar coverage - Fix play/pause button to be perfectly round (w-9 h-9) - Tighten spacing: cover art, progress bar, controls, volume, device indicator - Compensate for scrollbar gutter on progress bar and controls - Reduce cover art to 76x76px with tighter left gap - Hide album list scrollbar while preserving scroll functionality"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Refined header design and sidebar spacing throughout app",
+    "hash": "6ea5b35d84593cc884fcbc3e0863c6f6a601561b",
+    "commitMessage": "Refine header/row boundaries, sidebar spacing, and logo alignment - Add subtle backdrop blur on bottom edge of column header row - Remove top inset shadow from first album row for smoother transition - Add right padding to sidebar list nav to match left spacing - Center SuShe logo over sidebar by matching container width to 14.5rem"
   },
   {
     "date": "2026-02-16",
