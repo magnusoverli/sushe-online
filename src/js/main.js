@@ -7,35 +7,6 @@ import { initTidalWidget } from './modules/tidal-widget.js';
 import { initDiscovery } from './modules/discovery.js';
 
 /**
- * Detect if app is running in standalone/PWA mode
- * (opened from home screen shortcut, not browser)
- */
-function detectStandaloneMode() {
-  // iOS Safari standalone mode
-  if (window.navigator.standalone === true) {
-    return true;
-  }
-
-  // Standard PWA standalone mode (Chrome, Edge, etc.)
-  if (
-    window.matchMedia &&
-    window.matchMedia('(display-mode: standalone)').matches
-  ) {
-    return true;
-  }
-
-  // Fallback: check if running in fullscreen mode
-  if (
-    window.matchMedia &&
-    window.matchMedia('(display-mode: fullscreen)').matches
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
  * Determine which sidebar widget to show based on user's music service preference
  * and which services they have connected.
  *
@@ -107,14 +78,6 @@ function initSidebarWidget(isMobile) {
 
 // Initialize music service widgets when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  // Detect standalone mode and add class to body for CSS targeting
-  const isStandalone = detectStandaloneMode();
-  if (isStandalone) {
-    document.body.classList.add('standalone-mode');
-    document.documentElement.classList.add('standalone-mode');
-    console.log('Detected standalone/PWA mode - adjusting safe area handling');
-  }
-
   const isMobile = window.innerWidth < 1024;
 
   // Initialize the appropriate sidebar widget based on user preference

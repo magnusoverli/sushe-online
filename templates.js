@@ -145,6 +145,8 @@ const loginSnippetFn = ejs.compile(
 // Shared header component
 const headerComponent = (user, activeSection = 'home') => `
   <header class="z-50 border-b border-gray-700/50" style="background: linear-gradient(to top, rgba(43,49,71,0.5) 0%, rgba(9,13,23,0.5) 100%), linear-gradient(90deg, #2b3147 20%, #090d17 100%)">
+    <!-- Safe area fill: extends header gradient behind iOS status bar/notch -->
+    <div class="fixed top-0 left-0 right-0 z-50" style="height: env(safe-area-inset-top, 0px); background: linear-gradient(90deg, #2b3147 20%, #090d17 100%)"></div>
     <div class="relative flex items-center justify-between h-12 lg:h-14 px-3 lg:px-0">
       <!-- Mobile menu button -->
       <div class="flex items-center gap-2 lg:w-[14.5rem] lg:justify-center lg:gap-0">
@@ -756,7 +758,7 @@ const renameListModalComponent = () => `
 // Component: Add Album Modal - Consolidated Version
 const addAlbumModalComponent = () => `
   <div id="addAlbumModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center lg:p-4">
-    <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+    <div class="bg-gray-900 border border-gray-800 lg:rounded-lg shadow-2xl w-full h-full lg:h-auto lg:max-w-4xl lg:max-h-[90vh] flex flex-col pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
       <!-- Unified Header -->
       <div class="flex items-center justify-between p-4 lg:p-6 border-b border-gray-800">
         <button id="closeModalBtn" class="lg:hidden p-2 -m-2 text-gray-400 hover:text-white">
@@ -1339,18 +1341,18 @@ const spotifyTemplate = (user, csrfToken = '') => `
     
     /* Album container responsive padding */
     #albumContainer {
-      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
     }
 
     @media (max-width: 1023px) {
       #albumContainer {
-        padding-bottom: calc(6rem + env(safe-area-inset-bottom)); /* Space for FAB + safe area on mobile */
+        padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px)); /* Space for FAB + safe area on mobile */
       }
     }
     
     /* Safe areas for iOS */
     .safe-area-bottom {
-      padding-bottom: env(safe-area-inset-bottom);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     
     /* Additional iPhone-specific fixes */
@@ -1366,8 +1368,7 @@ const spotifyTemplate = (user, csrfToken = '') => `
         height: 100vh;
         height: 100dvh;
         min-height: 100vh;
-        padding-top: constant(safe-area-inset-top); /* iOS 11.0-11.2 */
-        padding-top: env(safe-area-inset-top, 0px); /* iOS 11.2+ */
+        padding-top: env(safe-area-inset-top, 0px);
       }
     }
     
