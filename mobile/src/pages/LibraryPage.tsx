@@ -379,9 +379,8 @@ export function LibraryPage() {
   const dragOrderedIds = useDragStore((s) => s.orderedIds);
   const dragIndex = useDragStore((s) => s.dragIndex);
   const dropIndex = useDragStore((s) => s.dropIndex);
-  const ghostX = useDragStore((s) => s.ghostX);
-  const ghostY = useDragStore((s) => s.ghostY);
-  const ghostWidth = useDragStore((s) => s.ghostWidth);
+  // ghostX/ghostY/ghostWidth are subscribed inside GhostCard directly,
+  // so LibraryPage doesn't re-render on every pixel of ghost movement.
 
   // Derive the displayed album order: during drag, use drag store order
   const displayAlbums = useMemo(() => {
@@ -1372,6 +1371,7 @@ export function LibraryPage() {
                         title={album.album}
                         artist={album.artist}
                         showRank={sortKey === 'custom'}
+                        rankVisible={activeList?.isMain ?? false}
                         tags={tags}
                         playcount={playcounts[album._id]}
                         cardState={cardState}
@@ -1384,11 +1384,6 @@ export function LibraryPage() {
                                 : undefined)
                             }
                             alt={`${album.album} by ${album.artist}`}
-                            rank={rank}
-                            showRank={
-                              sortKey === 'custom' &&
-                              (activeList?.isMain ?? false)
-                            }
                             hasSummary={!!album.summary}
                             hasRecommendation={!!album.recommended_by}
                             isNowPlaying={albumIsNowPlaying}
@@ -1825,12 +1820,7 @@ export function LibraryPage() {
       />
 
       {/* Ghost card for drag-and-drop */}
-      <GhostCard
-        visible={isDragging && draggedAlbum !== null}
-        x={ghostX}
-        y={ghostY}
-        width={ghostWidth}
-      >
+      <GhostCard visible={isDragging && draggedAlbum !== null}>
         {draggedAlbum && (
           <AlbumCard
             title={draggedAlbum.album}

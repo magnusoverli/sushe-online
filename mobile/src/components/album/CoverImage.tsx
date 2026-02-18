@@ -5,7 +5,6 @@
  * - Lazy loading with 200px rootMargin (loads before entering viewport)
  * - Placeholder gradient while loading
  * - Fade-in on load
- * - Position badge overlay (rank with gold/silver/bronze for top 3)
  * - AI summary badge
  * - Recommendation badge
  * - Play button overlay (design spec p10-11: translucent bg, SVG triangle)
@@ -18,10 +17,6 @@ import { Bot, ThumbsUp } from 'lucide-react';
 interface CoverImageProps {
   src: string | undefined;
   alt: string;
-  /** Album rank (1-based) - shown as position badge */
-  rank?: number;
-  /** Whether to show rank badge (only for main lists) */
-  showRank?: boolean;
   /** Whether album has an AI summary */
   hasSummary?: boolean;
   /** Whether album was recommended by someone */
@@ -38,30 +33,9 @@ interface CoverImageProps {
   size?: number;
 }
 
-/** Badge colors for top 3 positions */
-function getRankBadgeColor(rank: number): string {
-  switch (rank) {
-    case 1:
-      return '#E8C87A'; // gold
-    case 2:
-      return '#C0C0C0'; // silver
-    case 3:
-      return '#CD7F32'; // bronze
-    default:
-      return 'rgba(255,255,255,0.6)';
-  }
-}
-
-function getRankBadgeBg(rank: number): string {
-  if (rank <= 3) return 'rgba(0,0,0,0.7)';
-  return 'rgba(0,0,0,0.5)';
-}
-
 export const CoverImage = memo(function CoverImage({
   src,
   alt,
-  rank,
-  showRank = false,
   hasSummary = false,
   hasRecommendation = false,
   onSummaryClick,
@@ -208,39 +182,6 @@ export const CoverImage = memo(function CoverImage({
               <polygon points="3,1 13,7 3,13" fill="white" />
             </svg>
           </button>
-        )}
-
-        {/* Position badge */}
-        {showRank && rank != null && (
-          <div
-            style={{
-              position: 'absolute',
-              top: 2,
-              left: 2,
-              minWidth: 16,
-              height: 16,
-              borderRadius: 4,
-              background: getRankBadgeBg(rank),
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '0 3px',
-              zIndex: 1,
-            }}
-            data-testid="cover-rank-badge"
-          >
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '8px',
-                fontWeight: 500,
-                color: getRankBadgeColor(rank),
-                lineHeight: 1,
-              }}
-            >
-              {rank}
-            </span>
-          </div>
         )}
 
         {/* AI Summary badge */}

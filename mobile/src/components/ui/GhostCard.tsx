@@ -14,13 +14,20 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useDragStore } from '@/stores/drag-store';
 
 interface GhostCardProps {
   visible: boolean;
-  x: number;
-  y: number;
-  width: number;
   children: ReactNode;
+  /**
+   * Override ghost position/size. When omitted the component reads directly
+   * from the drag store so LibraryPage doesn't re-render on every pixel.
+   * These overrides are useful in unit tests where wiring the store is
+   * unnecessary overhead.
+   */
+  x?: number;
+  y?: number;
+  width?: number;
 }
 
 const ghostStyle: CSSProperties = {
@@ -34,20 +41,43 @@ const ghostStyle: CSSProperties = {
   touchAction: 'none',
 };
 
-export function GhostCard({ visible, x, y, width, children }: GhostCardProps) {
+/**
+ * Ghost card that floats over the list during drag.
+ *
+ * Subscribes to ghostX/ghostY/ghostWidth directly from the drag store so that
+ * LibraryPage (and all its children) don't re-render on every pixel of
+ * movement — only this component does.
+ */
+export function GhostCard({
+  visible,
+  children,
+  x: xProp,
+  y: yProp,
+  width: widthProp,
+}: GhostCardProps) {
+  // These update on every touchmove — keep them isolated here so the parent
+  // page doesn't re-render for every pixel of movement.
+  const storeX = useDragStore((s) => s.ghostX);
+  const storeY = useDragStore((s) => s.ghostY);
+  const storeWidth = useDragStore((s) => s.ghostWidth);
+
+  const ghostX = xProp ?? storeX;
+  const ghostY = yProp ?? storeY;
+  const ghostWidth = widthProp ?? storeWidth;
+
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
           style={{
             ...ghostStyle,
-            left: x,
-            top: y,
-            width,
+            left: ghostX,
+            top: ghostY,
+            width: ghostWidth,
           }}
-          initial={{ scale: 1, rotate: 0, opacity: 0 }}
-          animate={{ scale: 1.05, rotate: -1.5, opacity: 1 }}
-          exit={{ scale: 1, rotate: 0, opacity: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
           data-testid="ghost-card"
         >

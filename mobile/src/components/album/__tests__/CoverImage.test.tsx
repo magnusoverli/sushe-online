@@ -70,17 +70,6 @@ describe('CoverImage', () => {
     expect(screen.queryByTestId('cover-img')).not.toBeInTheDocument();
   });
 
-  it('shows rank badge when showRank is true', () => {
-    render(<CoverImage src="/test.jpg" alt="Test" rank={1} showRank />);
-    const badge = screen.getByTestId('cover-rank-badge');
-    expect(badge).toHaveTextContent('1');
-  });
-
-  it('hides rank badge when showRank is false', () => {
-    render(<CoverImage src="/test.jpg" alt="Test" rank={1} showRank={false} />);
-    expect(screen.queryByTestId('cover-rank-badge')).not.toBeInTheDocument();
-  });
-
   it('shows AI summary badge when hasSummary', () => {
     render(<CoverImage src="/test.jpg" alt="Test" hasSummary />);
     expect(screen.getByTestId('cover-summary-badge')).toBeInTheDocument();

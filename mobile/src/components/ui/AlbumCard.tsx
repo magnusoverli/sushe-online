@@ -11,7 +11,7 @@
  * - Artist: DM Mono 11px, rgba(255,255,255,0.4), +0.02em, mt 2px, truncate
  * - Tags: flex row, gap 6px, mt 6px
  * - Active indicator: 3x32px, radius 2px, gold gradient, opacity 0/1
- * - Three-dot button: 28x28px on right edge
+ * - Three-dot button: 28x28px on right edge (always in layout; visibility:hidden when no handler)
  *
  * Card: flex center, gap 12px, padding 10px 12px, radius 16px, border 1px transparent (list has no horizontal margin - cards are full-bleed)
  * Transitions: background 150ms, opacity 200ms, transform 200ms, border-color 150ms
@@ -46,6 +46,9 @@ export interface AlbumCardProps {
   onMenuClick?: (e: React.MouseEvent | React.TouchEvent) => void;
   onClick?: () => void;
   showRank?: boolean;
+  /** Whether to actually display the rank number. When false the column space
+   *  is still reserved so cover art stays aligned across all cards. */
+  rankVisible?: boolean;
   /** Last.fm scrobble count. If provided and > 0, shown next to artist name. */
   playcount?: number;
   className?: string;
@@ -77,16 +80,16 @@ function getCardBorder(state: CardState): string {
 function getCardOpacity(state: CardState): number {
   switch (state) {
     case 'dragging':
-      return 0.2;
+      return 0;
     case 'dimmed':
-      return 0.55;
+      return 1;
     default:
       return 1;
   }
 }
 
-function getCardTransform(state: CardState): string {
-  return state === 'dragging' ? 'scale(0.97)' : 'none';
+function getCardTransform(_state: CardState): string {
+  return 'none';
 }
 
 // ── Component ──
@@ -102,6 +105,7 @@ export function AlbumCard({
   onMenuClick,
   onClick,
   showRank = true,
+  rankVisible = true,
   playcount,
   className,
   style,
@@ -138,7 +142,7 @@ export function AlbumCard({
     cursor: onClick ? 'pointer' : 'default',
     userSelect: 'none',
     WebkitUserSelect: 'none',
-    touchAction: 'none',
+    touchAction: 'pan-y',
     position: 'relative',
     ...style,
   };
@@ -165,6 +169,7 @@ export function AlbumCard({
             width: '18px',
             textAlign: 'right',
             flexShrink: 0,
+            visibility: rankVisible ? 'visible' : 'hidden',
           }}
           data-testid="album-rank"
         >
@@ -279,33 +284,37 @@ export function AlbumCard({
         )}
       </div>
 
-      {/* Three-dot menu button */}
-      {onMenuClick && (
-        <button
-          type="button"
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '7px',
-            border: '1px solid transparent',
-            background: 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-            padding: 0,
-            color: 'rgba(255,255,255,0.55)',
-            transition: 'background 150ms ease, border-color 150ms ease',
-          }}
-          onClick={handleMenuClick}
-          onTouchEnd={handleMenuClick}
-          aria-label={`Menu for ${title}`}
-          data-testid="album-menu-button"
-        >
-          <MoreVertical size={14} />
-        </button>
-      )}
+      {/* Three-dot menu button — always rendered to preserve layout width.
+          When onMenuClick is absent (e.g. during drag) the button is hidden
+          via visibility so the 28px column stays in the flow and card height
+          remains stable. */}
+      <button
+        type="button"
+        style={{
+          width: '28px',
+          height: '28px',
+          borderRadius: '7px',
+          border: '1px solid transparent',
+          background: 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: onMenuClick ? 'pointer' : 'default',
+          flexShrink: 0,
+          padding: 0,
+          color: 'rgba(255,255,255,0.55)',
+          transition: 'background 150ms ease, border-color 150ms ease',
+          visibility: onMenuClick ? 'visible' : 'hidden',
+          pointerEvents: onMenuClick ? 'auto' : 'none',
+        }}
+        onClick={onMenuClick ? handleMenuClick : undefined}
+        onTouchEnd={onMenuClick ? handleMenuClick : undefined}
+        aria-label={onMenuClick ? `Menu for ${title}` : undefined}
+        aria-hidden={!onMenuClick}
+        data-testid="album-menu-button"
+      >
+        <MoreVertical size={14} />
+      </button>
 
       {/* Active indicator bar */}
       <div
