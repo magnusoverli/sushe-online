@@ -9,7 +9,7 @@
  * - Padding: 28px horizontal, 24px top, 16px bottom
  */
 
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, Settings } from 'lucide-react';
 
 interface ListHeaderProps {
   /** Eyebrow text (e.g. group name or "COLLECTION") */
@@ -24,6 +24,8 @@ interface ListHeaderProps {
   onMenuClick?: () => void;
   /** List options (ellipsis) click handler */
   onOptionsClick?: () => void;
+  /** Settings gear click handler */
+  onSettingsClick?: () => void;
 }
 
 export function ListHeader({
@@ -33,6 +35,7 @@ export function ListHeader({
   year,
   onMenuClick,
   onOptionsClick,
+  onSettingsClick,
 }: ListHeaderProps) {
   const metaParts: string[] = [];
   if (albumCount != null) {
@@ -76,6 +79,26 @@ export function ListHeader({
           <span />
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+          {onSettingsClick && (
+            <button
+              type="button"
+              onClick={onSettingsClick}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: '6px',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              aria-label="Settings"
+              data-testid="list-header-settings"
+            >
+              <Settings size={16} />
+            </button>
+          )}
           {onOptionsClick && (
             <button
               type="button"

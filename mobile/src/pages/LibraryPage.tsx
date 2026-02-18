@@ -70,6 +70,8 @@ import { ListSelectionSheet } from '@/components/album/ListSelectionSheet';
 import { SummarySheet } from '@/components/album/SummarySheet';
 import { RecommendationInfoSheet } from '@/components/album/RecommendationInfoSheet';
 import { SimilarArtistsSheet } from '@/components/album/SimilarArtistsSheet';
+import { RecommendAlbumSheet } from '@/components/album/RecommendAlbumSheet';
+import { SettingsDrawer } from '@/features/settings';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/components/ui/Toast';
 import {
@@ -222,6 +224,9 @@ export function LibraryPage() {
   const [similarArtistTarget, setSimilarArtistTarget] = useState<string | null>(
     null
   );
+  const [recommendAlbumTarget, setRecommendAlbumTarget] =
+    useState<Album | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
@@ -790,6 +795,7 @@ export function LibraryPage() {
           onOptionsClick={
             activeListId ? () => setListActionTarget(activeListId) : undefined
           }
+          onSettingsClick={() => setSettingsOpen(true)}
         />
 
         {/* Sort bar */}
@@ -1216,8 +1222,7 @@ export function LibraryPage() {
           setRemoveAlbumTarget(albumActionTarget);
         }}
         onRecommend={() => {
-          // TODO: Phase 9 — recommendation flow
-          showToast('Recommendation feature coming soon', 'info');
+          setRecommendAlbumTarget(albumActionTarget);
         }}
         onSimilarArtists={() => {
           if (albumActionTarget) {
@@ -1300,6 +1305,20 @@ export function LibraryPage() {
         open={similarArtistTarget !== null}
         onClose={() => setSimilarArtistTarget(null)}
         artistName={similarArtistTarget ?? ''}
+      />
+
+      {/* Recommend album sheet */}
+      <RecommendAlbumSheet
+        open={recommendAlbumTarget !== null}
+        onClose={() => setRecommendAlbumTarget(null)}
+        album={recommendAlbumTarget}
+        year={activeList?.year ?? null}
+      />
+
+      {/* Settings drawer */}
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
       />
 
       {/* Ghost card for drag-and-drop */}

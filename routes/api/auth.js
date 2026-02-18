@@ -48,6 +48,11 @@ module.exports = (app, deps) => {
           tidalConnected: !!req.user.tidalAccessToken,
           lastfmConnected: !!req.user.lastfmSessionKey,
           accentColor: req.user.accentColor || null,
+          timeFormat: req.user.timeFormat || '24h',
+          dateFormat: req.user.dateFormat || 'MM/DD/YYYY',
+          musicService: req.user.musicService || null,
+          lastfmUsername: req.user.lastfmUsername || null,
+          createdAt: req.user.createdAt || null,
         },
         csrfToken: req.csrfToken(),
       });
@@ -134,6 +139,11 @@ module.exports = (app, deps) => {
             tidalConnected: !!user.tidalAccessToken,
             lastfmConnected: !!user.lastfmSessionKey,
             accentColor: user.accentColor || null,
+            timeFormat: user.timeFormat || '24h',
+            dateFormat: user.dateFormat || 'MM/DD/YYYY',
+            musicService: user.musicService || null,
+            lastfmUsername: user.lastfmUsername || null,
+            createdAt: user.createdAt || null,
           },
           csrfToken: req.csrfToken(),
         });
