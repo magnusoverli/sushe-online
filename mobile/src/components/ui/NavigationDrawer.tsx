@@ -75,7 +75,7 @@ export function NavigationDrawer({
 
   return (
     <>
-      <Scrim visible={open} onDismiss={onClose} />
+      <Scrim visible={open} onDismiss={onClose} zIndex={199} />
       <AnimatePresence>
         {open && (
           <motion.div
@@ -101,7 +101,7 @@ export function NavigationDrawer({
             {header && (
               <div
                 style={{
-                  padding: '0 18px 14px',
+                  padding: '14px 18px 14px',
                   borderBottom: '1px solid var(--color-divider)',
                 }}
               >
@@ -112,7 +112,12 @@ export function NavigationDrawer({
             {/* Content */}
             <div
               className="hide-scrollbar"
-              style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                padding: '8px 8px',
+                minHeight: 0,
+              }}
             >
               {children}
             </div>

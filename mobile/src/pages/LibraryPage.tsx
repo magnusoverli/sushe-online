@@ -1,8 +1,5 @@
 /**
- * LibraryPage - Main album list view.
- *
- * Fetches lists metadata, selects an active list, fetches its albums,
- * and renders them using AlbumCard + CoverImage within an AppShell.
+ * LibraryPage - Main album list view with navigation drawer.
  *
  * Features:
  * - Auto-selects the main list (or first available) on load
@@ -11,22 +8,47 @@
  * - Year mismatch indicator (red release date)
  * - AI summary and recommendation badges on covers
  * - End-of-list footer
- * - Hamburger menu to open navigation drawer (Phase 5)
+ * - Navigation drawer with grouped lists, list switching
+ * - List action sheet (download, edit, toggle main, delete, etc.)
+ * - Group action sheet (rename, delete collection)
+ * - Create list / collection sheets
+ * - Import from JSON file
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
 import { useListsMetadata, useListAlbums, useGroups } from '@/hooks/useLists';
 import { getAlbumCoverUrl } from '@/services/albums';
+import { readImportFile, importList } from '@/services/import';
 import { AppShell } from '@/components/layout/AppShell';
 import { ListHeader } from '@/components/list/ListHeader';
 import { ListFooter } from '@/components/list/ListFooter';
 import { AlbumCard } from '@/components/ui/AlbumCard';
 import { CoverImage } from '@/components/album/CoverImage';
 import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
-import { ChevronDown } from 'lucide-react';
+import {
+  NavigationDrawer,
+  DrawerNavItem,
+} from '@/components/ui/NavigationDrawer';
+import { GroupAccordion } from '@/components/list/GroupAccordion';
+import { ListActionSheet } from '@/components/list/ListActionSheet';
+import { GroupActionSheet } from '@/components/list/GroupActionSheet';
+import { CollectionPickerSheet } from '@/components/list/CollectionPickerSheet';
+import { CreateListSheet } from '@/components/list/CreateListSheet';
+import { CreateCollectionSheet } from '@/components/list/CreateCollectionSheet';
+import { EditListSheet } from '@/components/list/EditListSheet';
+import { showToast } from '@/components/ui/Toast';
+import {
+  ChevronDown,
+  ListPlus,
+  FolderPlus,
+  FileUp,
+  List as ListIcon,
+  Star,
+} from 'lucide-react';
 import { isYearMismatch, buildAlbumTags, sortAlbums } from '@/lib/utils';
-import type { AlbumSortKey, ListMetadata } from '@/lib/types';
+import type { AlbumSortKey, ListMetadata, Group } from '@/lib/types';
 
 const SORT_OPTIONS: DropdownItem[] = [
   { id: 'custom', label: 'Custom Order' },
@@ -47,14 +69,96 @@ function pickDefaultList(lists: Record<string, ListMetadata>): string | null {
   return entries[0]?._id ?? null;
 }
 
+/**
+ * Group lists by their group, sorted by group sortOrder.
+ * Lists without a group go into an "Uncategorized" virtual group.
+ */
+function groupListsByGroup(
+  listsMap: Record<string, ListMetadata>,
+  groups: Group[]
+): { group: Group | null; lists: ListMetadata[] }[] {
+  const sortedGroups = [...groups].sort((a, b) => a.sortOrder - b.sortOrder);
+  const assignedListIds = new Set<string>();
+
+  const sections: { group: Group | null; lists: ListMetadata[] }[] = [];
+
+  for (const group of sortedGroups) {
+    const groupLists = Object.values(listsMap)
+      .filter((l) => l.groupId === group._id)
+      .sort((a, b) => a.sortOrder - b.sortOrder);
+
+    // Skip empty year groups (they auto-delete, but filter just in case)
+    if (group.isYearGroup && groupLists.length === 0) continue;
+
+    sections.push({ group, lists: groupLists });
+    groupLists.forEach((l) => assignedListIds.add(l._id));
+  }
+
+  // Orphaned / uncategorized lists
+  const orphaned = Object.values(listsMap)
+    .filter((l) => !assignedListIds.has(l._id))
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  if (orphaned.length > 0) {
+    sections.push({ group: null, lists: orphaned });
+  }
+
+  return sections;
+}
+
+/** Determine if a list is inside a non-year (collection) group or orphaned. */
+function isListInCollection(
+  list: ListMetadata | null,
+  groups: Group[]
+): boolean {
+  if (!list) return false;
+  if (!list.groupId) return true; // orphaned = can move to collection
+  const group = groups.find((g) => g._id === list.groupId);
+  if (!group) return true; // group not found = treat as orphaned
+  return !group.isYearGroup;
+}
+
+// ── Footer bar button style ──
+const footerBtnStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+  background: 'transparent',
+  border: 'none',
+  cursor: 'pointer',
+  padding: '8px 4px',
+  fontFamily: 'var(--font-mono)',
+  fontSize: '8px',
+  letterSpacing: '0.04em',
+  color: 'rgba(255,255,255,0.35)',
+};
+
 export function LibraryPage() {
   const activeListId = useAppStore((s) => s.activeListId);
   const setActiveListId = useAppStore((s) => s.setActiveListId);
   const setListsMetadata = useAppStore((s) => s.setListsMetadata);
+  const isDrawerOpen = useAppStore((s) => s.isDrawerOpen);
   const setDrawerOpen = useAppStore((s) => s.setDrawerOpen);
+  const user = useAppStore((s) => s.user);
+
+  const queryClient = useQueryClient();
 
   const [sortKey, setSortKey] = useState<AlbumSortKey>('custom');
   const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
+
+  // Sheet states
+  const [listActionTarget, setListActionTarget] = useState<string | null>(null);
+  const [groupActionTarget, setGroupActionTarget] = useState<Group | null>(
+    null
+  );
+  const [collectionPickerTarget, setCollectionPickerTarget] = useState<
+    string | null
+  >(null);
+  const [showCreateList, setShowCreateList] = useState(false);
+  const [showCreateCollection, setShowCreateCollection] = useState(false);
+  const [editListTarget, setEditListTarget] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch lists metadata
   const {
@@ -63,7 +167,7 @@ export function LibraryPage() {
     error: listsError,
   } = useListsMetadata();
 
-  // Fetch groups for eyebrow text
+  // Fetch groups
   const { data: groups } = useGroups();
 
   // Sync lists metadata to store
@@ -114,6 +218,106 @@ export function LibraryPage() {
   const handleMenuClick = useCallback(() => {
     setDrawerOpen(true);
   }, [setDrawerOpen]);
+
+  // ── List switching ──
+  const handleSelectList = useCallback(
+    (listId: string) => {
+      setActiveListId(listId);
+      setDrawerOpen(false);
+      setSortKey('custom'); // Reset sort on list switch
+    },
+    [setActiveListId, setDrawerOpen]
+  );
+
+  // ── Invalidate queries helper ──
+  const refreshData = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['groups'] });
+  }, [queryClient]);
+
+  // ── List action handlers ──
+  const handleListDeleted = useCallback(
+    (deletedId: string) => {
+      refreshData();
+      if (activeListId === deletedId) {
+        // Select next available list
+        if (listsMap) {
+          const remaining = Object.values(listsMap).filter(
+            (l) => l._id !== deletedId
+          );
+          if (remaining.length > 0) {
+            remaining.sort((a, b) => a.sortOrder - b.sortOrder);
+            setActiveListId(remaining[0]!._id);
+          } else {
+            setActiveListId(null);
+          }
+        }
+      }
+    },
+    [activeListId, listsMap, refreshData, setActiveListId]
+  );
+
+  const handleListCreated = useCallback(
+    (listId: string) => {
+      refreshData();
+      setActiveListId(listId);
+    },
+    [refreshData, setActiveListId]
+  );
+
+  // ── Import handler ──
+  const handleImportClick = useCallback(() => {
+    setDrawerOpen(false);
+    fileInputRef.current?.click();
+  }, [setDrawerOpen]);
+
+  const handleFileSelected = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      // Reset the input so the same file can be selected again
+      e.target.value = '';
+
+      try {
+        showToast('Importing...', 'info', 2000);
+        const {
+          name,
+          albums: importAlbums,
+          metadata,
+        } = await readImportFile(file);
+        const result = await importList(name, importAlbums, metadata);
+        showToast(
+          `Imported "${result.listName}" (${result.albumCount} albums)`,
+          'success'
+        );
+        refreshData();
+        setActiveListId(result.listId);
+      } catch (err) {
+        const msg =
+          err instanceof SyntaxError
+            ? 'Invalid JSON file'
+            : 'Error importing list';
+        showToast(msg, 'error');
+      }
+    },
+    [refreshData, setActiveListId]
+  );
+
+  // ── Build grouped sections for drawer ──
+  const drawerSections = useMemo(() => {
+    if (!listsMap || !groups) return [];
+    return groupListsByGroup(listsMap, groups);
+  }, [listsMap, groups]);
+
+  // ── Action sheet targets ──
+  const listActionList =
+    listActionTarget && listsMap ? (listsMap[listActionTarget] ?? null) : null;
+  const editList =
+    editListTarget && listsMap ? (listsMap[editListTarget] ?? null) : null;
+  const collectionPickerList =
+    collectionPickerTarget && listsMap
+      ? (listsMap[collectionPickerTarget] ?? null)
+      : null;
 
   // Loading state
   if (listsLoading) {
@@ -178,6 +382,15 @@ export function LibraryPage() {
             Create a list to get started.
           </span>
         </div>
+
+        {/* Hidden file input for import */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={handleFileSelected}
+        />
       </AppShell>
     );
   }
@@ -191,6 +404,9 @@ export function LibraryPage() {
         albumCount={activeList?.count}
         year={activeList?.year}
         onMenuClick={handleMenuClick}
+        onOptionsClick={
+          activeListId ? () => setListActionTarget(activeListId) : undefined
+        }
       />
 
       {/* Sort bar */}
@@ -336,6 +552,218 @@ export function LibraryPage() {
       {sortedAlbums.length > 0 && (
         <ListFooter albumCount={sortedAlbums.length} />
       )}
+
+      {/* ── Navigation Drawer ── */}
+      <NavigationDrawer
+        open={isDrawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        header={
+          <div style={{ paddingTop: '16px' }}>
+            <div
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '7px',
+                letterSpacing: '0.2em',
+                textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.25)',
+                marginBottom: '4px',
+              }}
+            >
+              LIBRARY
+            </div>
+            <div
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '15px',
+                letterSpacing: '-0.02em',
+                color: 'var(--color-text-primary)',
+              }}
+            >
+              My Lists
+            </div>
+          </div>
+        }
+      >
+        {/* Grouped list items */}
+        {drawerSections.map((section) => {
+          const group = section.group;
+
+          if (!group) {
+            // Uncategorized lists (no group header)
+            return section.lists.map((list) => (
+              <DrawerNavItem
+                key={list._id}
+                label={list.name}
+                count={list.count}
+                icon={
+                  list.isMain ? (
+                    <Star size={12} style={{ color: 'var(--color-gold)' }} />
+                  ) : (
+                    <ListIcon size={12} />
+                  )
+                }
+                isActive={list._id === activeListId}
+                onClick={() => handleSelectList(list._id)}
+              />
+            ));
+          }
+
+          return (
+            <GroupAccordion
+              key={group._id}
+              name={group.name}
+              isYearGroup={group.isYearGroup}
+              defaultExpanded={section.lists.some(
+                (l) => l._id === activeListId
+              )}
+              onContextMenu={
+                !group.isYearGroup
+                  ? () => {
+                      setDrawerOpen(false);
+                      setGroupActionTarget(group);
+                    }
+                  : undefined
+              }
+            >
+              {section.lists.map((list) => (
+                <DrawerNavItem
+                  key={list._id}
+                  label={list.name}
+                  count={list.count}
+                  icon={
+                    list.isMain ? (
+                      <Star size={12} style={{ color: 'var(--color-gold)' }} />
+                    ) : (
+                      <ListIcon size={12} />
+                    )
+                  }
+                  isActive={list._id === activeListId}
+                  onClick={() => handleSelectList(list._id)}
+                />
+              ))}
+            </GroupAccordion>
+          );
+        })}
+
+        {/* Spacer to push footer to bottom */}
+        <div style={{ flex: 1, minHeight: '16px' }} />
+
+        {/* ── Sidebar Footer Actions ── */}
+        <div
+          style={{
+            borderTop: '1px solid var(--color-divider)',
+            padding: '8px 4px',
+            display: 'flex',
+            justifyContent: 'space-around',
+          }}
+          data-testid="drawer-footer"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setDrawerOpen(false);
+              setShowCreateList(true);
+            }}
+            style={footerBtnStyle}
+            data-testid="drawer-create-list"
+          >
+            <ListPlus size={14} />
+            List
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setDrawerOpen(false);
+              setShowCreateCollection(true);
+            }}
+            style={footerBtnStyle}
+            data-testid="drawer-create-collection"
+          >
+            <FolderPlus size={14} />
+            Collection
+          </button>
+          <button
+            type="button"
+            onClick={handleImportClick}
+            style={footerBtnStyle}
+            data-testid="drawer-import"
+          >
+            <FileUp size={14} />
+            Import
+          </button>
+        </div>
+      </NavigationDrawer>
+
+      {/* Hidden file input for import */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json"
+        style={{ display: 'none' }}
+        onChange={handleFileSelected}
+        data-testid="import-file-input"
+      />
+
+      {/* ── Action Sheets ── */}
+
+      {/* List action sheet */}
+      <ListActionSheet
+        open={listActionTarget !== null}
+        onClose={() => setListActionTarget(null)}
+        list={listActionList}
+        user={user}
+        isInCollection={isListInCollection(listActionList, groups ?? [])}
+        onDeleted={handleListDeleted}
+        onMainToggled={refreshData}
+        onEditDetails={(id) => setEditListTarget(id)}
+        onMoveToCollection={(id) => setCollectionPickerTarget(id)}
+        onSendToService={() => {
+          // TODO: Phase 8 — music service integration
+          showToast('Music service integration coming soon', 'info');
+        }}
+      />
+
+      {/* Group action sheet */}
+      <GroupActionSheet
+        open={groupActionTarget !== null}
+        onClose={() => setGroupActionTarget(null)}
+        group={groupActionTarget}
+        onUpdated={refreshData}
+      />
+
+      {/* Collection picker sheet */}
+      <CollectionPickerSheet
+        open={collectionPickerTarget !== null}
+        onClose={() => setCollectionPickerTarget(null)}
+        listId={collectionPickerTarget}
+        listName={collectionPickerList?.name ?? ''}
+        currentGroupId={collectionPickerList?.groupId ?? null}
+        groups={groups ?? []}
+        onMoved={refreshData}
+      />
+
+      {/* Create list sheet */}
+      <CreateListSheet
+        open={showCreateList}
+        onClose={() => setShowCreateList(false)}
+        groups={groups ?? []}
+        onCreated={handleListCreated}
+      />
+
+      {/* Create collection sheet */}
+      <CreateCollectionSheet
+        open={showCreateCollection}
+        onClose={() => setShowCreateCollection(false)}
+        onCreated={refreshData}
+      />
+
+      {/* Edit list sheet */}
+      <EditListSheet
+        open={editListTarget !== null}
+        onClose={() => setEditListTarget(null)}
+        list={editList}
+        onUpdated={refreshData}
+      />
     </AppShell>
   );
 }

@@ -5,10 +5,16 @@
 
 import { Outlet } from '@tanstack/react-router';
 import { useViewport } from './hooks/useViewport';
+import { ToastContainer } from './components/ui/Toast';
 
 export function App() {
   // Set dynamic --vh for mobile browser chrome
   useViewport();
 
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <ToastContainer />
+    </>
+  );
 }
