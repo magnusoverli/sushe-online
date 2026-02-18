@@ -13,11 +13,11 @@ export interface Album {
   genre_1: string;
   genre_2: string;
   track_pick: string;
-  primary_track: string;
-  secondary_track: string;
+  primary_track: string | null;
+  secondary_track: string | null;
   comments: string;
   comments_2: string;
-  tracks: Track[];
+  tracks: Track[] | null;
   cover_image_url?: string;
   cover_image?: string;
   cover_image_format: string;
@@ -49,8 +49,11 @@ export interface Group {
   _id: string;
   name: string;
   sortOrder: number;
-  isYear: boolean;
-  year?: number;
+  year: number | null;
+  isYearGroup: boolean;
+  listCount: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface User {
@@ -86,3 +89,12 @@ export interface ListSummaryItem {
   name: string;
   year: number | null;
 }
+
+/** Sort options for the album list */
+export type AlbumSortKey =
+  | 'custom'
+  | 'artist'
+  | 'title'
+  | 'year'
+  | 'genre'
+  | 'country';

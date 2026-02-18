@@ -50,3 +50,55 @@ export function debounce<T extends (...args: unknown[]) => void>(
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
+
+/**
+ * Build tag pills array from album fields for display in AlbumCard.
+ */
+export function buildAlbumTags(album: {
+  genre_1?: string;
+  genre_2?: string;
+  release_date?: string;
+  country?: string;
+}): string[] {
+  const tags: string[] = [];
+  if (album.genre_1) tags.push(album.genre_1);
+  if (album.genre_2) tags.push(album.genre_2);
+  return tags;
+}
+
+/**
+ * Sort albums by the given key. Returns a new array.
+ */
+export function sortAlbums<
+  T extends {
+    artist: string;
+    album: string;
+    release_date: string;
+    genre_1: string;
+    country: string;
+  },
+>(albums: T[], sortKey: string): T[] {
+  if (sortKey === 'custom') return albums;
+
+  const sorted = [...albums];
+  const collator = new Intl.Collator('en', { sensitivity: 'base' });
+
+  sorted.sort((a, b) => {
+    switch (sortKey) {
+      case 'artist':
+        return collator.compare(a.artist, b.artist);
+      case 'title':
+        return collator.compare(a.album, b.album);
+      case 'year':
+        return (a.release_date || '').localeCompare(b.release_date || '');
+      case 'genre':
+        return collator.compare(a.genre_1, b.genre_1);
+      case 'country':
+        return collator.compare(a.country, b.country);
+      default:
+        return 0;
+    }
+  });
+
+  return sorted;
+}
