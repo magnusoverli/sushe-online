@@ -77,10 +77,13 @@ export function ListActionSheet({
     if (!user) return null;
     const hasSpotify = user.spotifyConnected;
     const hasTidal = user.tidalConnected;
+    if (!hasSpotify && !hasTidal) return null;
     if (hasSpotify && !hasTidal) return 'Send to Spotify';
     if (hasTidal && !hasSpotify) return 'Send to Tidal';
-    if (hasSpotify && hasTidal) return 'Send to Spotify';
-    return null;
+    // Both connected — use preference or default label
+    if (user.musicService === 'tidal') return 'Send to Tidal';
+    if (user.musicService === 'spotify') return 'Send to Spotify';
+    return 'Send to Music Service';
   }, [user]);
 
   const musicServiceLabel = getMusicServiceLabel();

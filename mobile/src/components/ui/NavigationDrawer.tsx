@@ -135,7 +135,12 @@ export interface DrawerNavItemProps {
   count?: number;
   icon?: ReactNode;
   isActive?: boolean;
+  isLocked?: boolean;
   onClick?: () => void;
+  /** Visual state during drag operations. */
+  dragState?: 'default' | 'dragging' | 'drop-target';
+  /** Show a drag handle (grip icon). */
+  showDragHandle?: boolean;
 }
 
 export function DrawerNavItem({
@@ -143,12 +148,18 @@ export function DrawerNavItem({
   count,
   icon,
   isActive = false,
+  isLocked = false,
   onClick,
+  dragState = 'default',
+  showDragHandle = false,
 }: DrawerNavItemProps) {
   const color = isActive ? 'var(--color-gold)' : 'rgba(255,255,255,0.45)';
   const countColor = isActive
     ? 'rgba(232,200,122,0.50)'
     : 'rgba(255,255,255,0.20)';
+
+  const isDragging = dragState === 'dragging';
+  const isDropTarget = dragState === 'drop-target';
 
   return (
     <button
@@ -160,17 +171,47 @@ export function DrawerNavItem({
         width: '100%',
         padding: '9px 10px',
         borderRadius: '10px',
-        background: isActive ? 'rgba(232,200,122,0.08)' : 'transparent',
+        background: isDragging
+          ? 'rgba(232,200,122,0.15)'
+          : isDropTarget
+            ? 'rgba(232,200,122,0.06)'
+            : isActive
+              ? 'rgba(232,200,122,0.08)'
+              : 'transparent',
         borderLeft: isActive
           ? '2px solid var(--color-gold)'
           : '2px solid transparent',
         border: 'none',
         cursor: 'pointer',
-        transition: 'background 150ms ease',
+        transition: 'background 150ms ease, opacity 150ms ease',
+        opacity: isDragging ? 0.6 : 1,
+        borderTop: isDropTarget
+          ? '2px solid rgba(232,200,122,0.4)'
+          : '2px solid transparent',
       }}
       onClick={onClick}
       data-testid="drawer-nav-item"
     >
+      {showDragHandle && (
+        <span
+          style={{
+            display: 'flex',
+            flexShrink: 0,
+            color: 'rgba(255,255,255,0.15)',
+            touchAction: 'none',
+          }}
+          data-testid="drawer-drag-handle"
+        >
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="9" cy="6" r="1.5" />
+            <circle cx="15" cy="6" r="1.5" />
+            <circle cx="9" cy="12" r="1.5" />
+            <circle cx="15" cy="12" r="1.5" />
+            <circle cx="9" cy="18" r="1.5" />
+            <circle cx="15" cy="18" r="1.5" />
+          </svg>
+        </span>
+      )}
       {icon && (
         <span style={{ color, display: 'flex', flexShrink: 0 }}>{icon}</span>
       )}
@@ -197,6 +238,30 @@ export function DrawerNavItem({
           }}
         >
           {count}
+        </span>
+      )}
+      {isLocked && (
+        <span
+          style={{
+            display: 'flex',
+            flexShrink: 0,
+            color: 'rgba(255,255,255,0.20)',
+          }}
+          data-testid="drawer-nav-lock"
+        >
+          <svg
+            width="10"
+            height="10"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
         </span>
       )}
     </button>

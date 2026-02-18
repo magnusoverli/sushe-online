@@ -48,3 +48,16 @@ export async function reorderGroups(
 ): Promise<{ success: boolean }> {
   return api.post<{ success: boolean }>('/api/groups/reorder', { order });
 }
+
+/**
+ * Reorder lists within a group.
+ */
+export async function reorderListsInGroup(
+  groupId: string,
+  order: string[]
+): Promise<{ success: boolean }> {
+  return api.post<{ success: boolean }>('/api/lists/reorder', {
+    groupId,
+    order,
+  });
+}

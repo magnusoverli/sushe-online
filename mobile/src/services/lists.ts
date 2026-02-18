@@ -3,7 +3,7 @@
  */
 
 import { api } from './api-client';
-import type { Album, ListMetadata } from '@/lib/types';
+import type { Album, ListMetadata, SetupStatus } from '@/lib/types';
 
 /**
  * Get all lists metadata (without album data).
@@ -133,4 +133,40 @@ export async function moveList(
   data: { groupId?: string; year?: number }
 ): Promise<{ success: boolean }> {
   return api.post<{ success: boolean }>(`/api/lists/${listId}/move`, data);
+}
+
+/**
+ * Get setup status (lists without years, years needing a main list).
+ */
+export async function getSetupStatus(): Promise<SetupStatus> {
+  return api.get<SetupStatus>('/api/lists/setup-status');
+}
+
+export interface BulkUpdateItem {
+  listId: string;
+  year?: number;
+  isMain?: boolean;
+}
+
+/**
+ * Bulk update lists (year assignment and main list designation).
+ */
+export async function bulkUpdateLists(
+  updates: BulkUpdateItem[]
+): Promise<{
+  success: boolean;
+  results: unknown[];
+  recomputingYears: number[];
+}> {
+  return api.post('/api/lists/bulk-update', { updates });
+}
+
+/**
+ * Dismiss the setup wizard (server-side snooze).
+ */
+export async function dismissSetupWizard(): Promise<{
+  success: boolean;
+  dismissedUntil: string;
+}> {
+  return api.post('/api/lists/setup-dismiss');
 }

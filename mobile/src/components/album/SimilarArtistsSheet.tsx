@@ -1,17 +1,135 @@
 /**
  * SimilarArtistsSheet - Bottom sheet showing Last.fm similar artists.
  *
- * Fetches similar artists on open. Shows name, match percentage, and link.
+ * Fetches similar artists on open. Shows artist image (from Deezer),
+ * name, match percentage, and a RateYourMusic link.
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { getSimilarArtists, type SimilarArtist } from '@/services/lastfm';
+import { useArtistImage } from '@/hooks/useArtistImage';
+import { getRymArtistUrl } from '@/lib/utils';
 
 interface SimilarArtistsSheetProps {
   open: boolean;
   onClose: () => void;
   artistName: string;
+}
+
+/** Individual artist row — isolates the useArtistImage hook per artist. */
+function ArtistRow({ artist }: { artist: SimilarArtist }) {
+  const matchPercent = Math.round(parseFloat(artist.match) * 100);
+  const rymUrl = getRymArtistUrl(artist.name);
+
+  // Prefer image already provided by Last.fm; fall back to Deezer lookup.
+  const hasFmImage = !!artist.image;
+  const { imageUrl: deezerUrl } = useArtistImage(hasFmImage ? '' : artist.name);
+  const imageUrl = artist.image || deezerUrl;
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 10,
+        padding: '10px 4px',
+        borderBottom: '1px solid var(--color-divider)',
+      }}
+      data-testid="similar-artist-item"
+    >
+      {/* Artist image */}
+      {imageUrl ? (
+        <img
+          src={imageUrl}
+          alt={artist.name}
+          loading="lazy"
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            objectFit: 'cover',
+            flexShrink: 0,
+            background: 'rgba(255,255,255,0.04)',
+          }}
+          data-testid="artist-image"
+        />
+      ) : (
+        <div
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            flexShrink: 0,
+            background: 'rgba(255,255,255,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontFamily: 'var(--font-display)',
+            fontSize: 16,
+            color: 'var(--color-text-secondary)',
+          }}
+          data-testid="artist-image-placeholder"
+        >
+          {artist.name.charAt(0)}
+        </div>
+      )}
+
+      {/* Artist info */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <a
+          href={artist.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 13,
+            letterSpacing: '-0.01em',
+            color: 'var(--color-text-primary)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            display: 'block',
+            textDecoration: 'none',
+          }}
+        >
+          {artist.name}
+        </a>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 9,
+            letterSpacing: '0.04em',
+            color: 'var(--color-text-secondary)',
+            marginTop: 2,
+          }}
+        >
+          {matchPercent}% match
+        </div>
+      </div>
+
+      {/* RYM link */}
+      <a
+        href={rymUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        data-testid="rym-link"
+        style={{
+          flexShrink: 0,
+          fontFamily: 'var(--font-mono)',
+          fontSize: 9,
+          letterSpacing: '0.04em',
+          color: 'var(--color-text-secondary)',
+          textDecoration: 'none',
+          padding: '4px 8px',
+          border: '1px solid var(--color-divider)',
+          borderRadius: 4,
+        }}
+      >
+        RYM
+      </a>
+    </div>
+  );
 }
 
 export function SimilarArtistsSheet({
@@ -98,91 +216,9 @@ export function SimilarArtistsSheet({
         )}
 
         {!loading &&
-          artists.map((artist) => {
-            const matchPercent = Math.round(parseFloat(artist.match) * 100);
-            return (
-              <a
-                key={artist.name}
-                href={artist.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '10px 4px',
-                  borderBottom: '1px solid var(--color-divider)',
-                  textDecoration: 'none',
-                  color: 'inherit',
-                }}
-                data-testid="similar-artist-item"
-              >
-                {/* Artist image */}
-                {artist.image ? (
-                  <img
-                    src={artist.image}
-                    alt={artist.name}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      objectFit: 'cover',
-                      flexShrink: 0,
-                      background: 'rgba(255,255,255,0.04)',
-                    }}
-                  />
-                ) : (
-                  <div
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
-                      flexShrink: 0,
-                      background: 'rgba(255,255,255,0.06)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 14,
-                      color: 'var(--color-text-secondary)',
-                    }}
-                  >
-                    {artist.name.charAt(0)}
-                  </div>
-                )}
-
-                {/* Artist info */}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: 13,
-                      letterSpacing: '-0.01em',
-                      color: 'var(--color-text-primary)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {artist.name}
-                  </div>
-                </div>
-
-                {/* Match percentage */}
-                <div
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 9,
-                    letterSpacing: '0.04em',
-                    color: 'var(--color-text-secondary)',
-                    flexShrink: 0,
-                  }}
-                >
-                  {matchPercent}%
-                </div>
-              </a>
-            );
-          })}
+          artists.map((artist) => (
+            <ArtistRow key={artist.name} artist={artist} />
+          ))}
       </div>
     </BottomSheet>
   );

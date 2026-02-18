@@ -8,6 +8,7 @@
 import type { ApiErrorResponse } from '@/lib/types';
 
 let csrfToken: string | null = null;
+let socketId: string | null = null;
 
 /**
  * Set the CSRF token (obtained from session check or login response).
@@ -21,6 +22,20 @@ export function setCsrfToken(token: string): void {
  */
 export function getCsrfToken(): string | null {
   return csrfToken;
+}
+
+/**
+ * Set the Socket.IO socket ID (used to skip echo on mutations).
+ */
+export function setSocketId(id: string | null): void {
+  socketId = id;
+}
+
+/**
+ * Get the current Socket.IO socket ID.
+ */
+export function getSocketId(): string | null {
+  return socketId;
 }
 
 /**
@@ -54,14 +69,19 @@ export async function apiFetch<T>(
   };
 
   // Add CSRF token for mutating requests
-  if (
-    csrfToken &&
-    (method === 'POST' ||
-      method === 'PUT' ||
-      method === 'DELETE' ||
-      method === 'PATCH')
-  ) {
+  const isMutation =
+    method === 'POST' ||
+    method === 'PUT' ||
+    method === 'DELETE' ||
+    method === 'PATCH';
+
+  if (csrfToken && isMutation) {
     headers['X-CSRF-Token'] = csrfToken;
+  }
+
+  // Add Socket ID so the server can skip echoing updates back to us
+  if (socketId && isMutation) {
+    headers['X-Socket-ID'] = socketId;
   }
 
   // Default to JSON content type for requests with body

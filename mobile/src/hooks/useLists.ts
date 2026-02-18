@@ -3,9 +3,9 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { getLists, getList } from '@/services/lists';
+import { getLists, getList, getSetupStatus } from '@/services/lists';
 import { getGroups } from '@/services/groups';
-import type { ListMetadata, Album, Group } from '@/lib/types';
+import type { ListMetadata, Album, Group, SetupStatus } from '@/lib/types';
 
 /** Fetch all list metadata (lightweight, keyed by list ID). */
 export function useListsMetadata() {
@@ -31,6 +31,16 @@ export function useGroups() {
   return useQuery<Group[]>({
     queryKey: ['groups'],
     queryFn: getGroups,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Fetch list setup status (enabled only when list metadata is loaded). */
+export function useSetupStatus(enabled: boolean) {
+  return useQuery<SetupStatus>({
+    queryKey: ['lists', 'setup-status'],
+    queryFn: getSetupStatus,
+    enabled,
     staleTime: 5 * 60 * 1000,
   });
 }

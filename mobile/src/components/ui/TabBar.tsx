@@ -7,7 +7,7 @@
  * - Background: #0E0E12
  * - Top border: 1px solid rgba(255,255,255,0.06)
  * - Z-index: 100
- * - 3 tabs: Library, Search, Queue
+ * - 3 tabs: Library, Search, Settings
  * - Icons: outline SVG, 20x20px, stroke-width 1.5
  * - Labels: DM Mono 7.5px, +0.06em
  * - Active: stroke #E8C87A, label #E8C87A weight 500, 4px gold dot below label
@@ -16,15 +16,16 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Library, Search, ListOrdered } from 'lucide-react';
+import { Library, Search, Settings } from 'lucide-react';
 
-export type TabId = 'library' | 'search' | 'queue';
+export type TabId = 'library' | 'search' | 'settings';
 
 interface TabDef {
   id: TabId;
   label: string;
   icon: ReactNode;
-  path: string;
+  /** Route path — omitted for tabs that fire a callback instead of navigating. */
+  path?: string;
 }
 
 const TABS: TabDef[] = [
@@ -41,15 +42,17 @@ const TABS: TabDef[] = [
     path: '/search',
   },
   {
-    id: 'queue',
-    label: 'Queue',
-    icon: <ListOrdered size={20} strokeWidth={1.5} />,
-    path: '/queue',
+    id: 'settings',
+    label: 'Settings',
+    icon: <Settings size={20} strokeWidth={1.5} />,
+    // No path — handled via onSettingsClick callback
   },
 ];
 
 interface TabBarProps {
   activeTab: TabId;
+  /** Called when the Settings tab is tapped. */
+  onSettingsClick?: () => void;
 }
 
 const barStyle: CSSProperties = {
@@ -93,7 +96,7 @@ const dotStyle: CSSProperties = {
   bottom: '6px',
 };
 
-export function TabBar({ activeTab }: TabBarProps) {
+export function TabBar({ activeTab, onSettingsClick }: TabBarProps) {
   const navigate = useNavigate();
 
   return (
@@ -110,7 +113,13 @@ export function TabBar({ activeTab }: TabBarProps) {
             aria-selected={isActive}
             aria-label={tab.label}
             style={{ ...tabItemStyle, color }}
-            onClick={() => navigate({ to: tab.path })}
+            onClick={() => {
+              if (tab.id === 'settings') {
+                onSettingsClick?.();
+              } else if (tab.path) {
+                navigate({ to: tab.path });
+              }
+            }}
             data-testid={`tab-${tab.id}`}
           >
             {tab.icon}

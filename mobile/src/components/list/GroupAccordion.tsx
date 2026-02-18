@@ -5,7 +5,7 @@
  * and a collapsible list of DrawerNavItem children.
  */
 
-import { type ReactNode, useState, useCallback } from 'react';
+import { type ReactNode, useState, useCallback, useEffect } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -13,6 +13,32 @@ import {
   Folder,
   MoreHorizontal,
 } from 'lucide-react';
+
+const STORAGE_KEY = 'sushe-mobile-accordion-state';
+
+function readPersistedState(): Set<string> {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function persistState(expanded: boolean, name: string): void {
+  try {
+    const ids = readPersistedState();
+    if (expanded) {
+      ids.add(name);
+    } else {
+      ids.delete(name);
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
+  } catch {
+    // localStorage unavailable
+  }
+}
 
 interface GroupAccordionProps {
   /** Group display name */
@@ -27,6 +53,10 @@ interface GroupAccordionProps {
   onContextMenu?: () => void;
   /** Children (DrawerNavItem elements) */
   children: ReactNode;
+  /** Visual state during group drag operations. */
+  dragState?: 'default' | 'dragging' | 'drop-target';
+  /** Show a drag handle on the group header. */
+  showDragHandle?: boolean;
 }
 
 export function GroupAccordion({
@@ -35,8 +65,18 @@ export function GroupAccordion({
   defaultExpanded = false,
   onContextMenu,
   children,
+  dragState = 'default',
+  showDragHandle = false,
 }: GroupAccordionProps) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
+  const [expanded, setExpanded] = useState(() => {
+    const persisted = readPersistedState();
+    return persisted.has(name) || defaultExpanded;
+  });
+
+  // Persist changes to localStorage
+  useEffect(() => {
+    persistState(expanded, name);
+  }, [expanded, name]);
 
   const toggle = useCallback(() => setExpanded((e) => !e), []);
 
@@ -51,6 +91,9 @@ export function GroupAccordion({
   const Icon = isYearGroup ? Calendar : Folder;
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
+  const isDragging = dragState === 'dragging';
+  const isDropTarget = dragState === 'drop-target';
+
   return (
     <div data-testid="group-accordion">
       {/* Group header */}
@@ -60,8 +103,40 @@ export function GroupAccordion({
           alignItems: 'center',
           gap: '4px',
           padding: '6px 4px',
+          opacity: isDragging ? 0.5 : 1,
+          background: isDragging
+            ? 'rgba(232,200,122,0.12)'
+            : isDropTarget
+              ? 'rgba(232,200,122,0.06)'
+              : 'transparent',
+          borderTop: isDropTarget
+            ? '2px solid rgba(232,200,122,0.4)'
+            : '2px solid transparent',
+          borderRadius: '6px',
+          transition:
+            'background 150ms ease, opacity 150ms ease, border-color 150ms ease',
         }}
       >
+        {showDragHandle && (
+          <span
+            style={{
+              display: 'flex',
+              flexShrink: 0,
+              color: 'rgba(255,255,255,0.15)',
+              touchAction: 'none',
+            }}
+            data-testid="group-drag-handle"
+          >
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="9" cy="6" r="1.5" />
+              <circle cx="15" cy="6" r="1.5" />
+              <circle cx="9" cy="12" r="1.5" />
+              <circle cx="15" cy="12" r="1.5" />
+              <circle cx="9" cy="18" r="1.5" />
+              <circle cx="15" cy="18" r="1.5" />
+            </svg>
+          </span>
+        )}
         <button
           type="button"
           onClick={toggle}

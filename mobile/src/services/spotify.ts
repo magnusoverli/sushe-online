@@ -117,3 +117,16 @@ export async function nextTrack(): Promise<{ success: boolean }> {
 export async function previousTrack(): Promise<{ success: boolean }> {
   return api.post<{ success: boolean }>('/api/spotify/previous', {});
 }
+
+/**
+ * Create or update a Spotify playlist from a list.
+ * Uses the unified playlist endpoint POST /api/playlists/:listId with service=spotify.
+ */
+export async function syncPlaylistToSpotify(
+  listId: string
+): Promise<{ success: boolean; playlistName?: string }> {
+  return api.post<{ success: boolean; playlistName?: string }>(
+    `/api/playlists/${listId}`,
+    { service: 'spotify' }
+  );
+}

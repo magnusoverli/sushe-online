@@ -9,6 +9,7 @@ export { ActionItem, type ActionItemProps } from './ActionItem';
 export { TabBar, type TabId } from './TabBar';
 export { AlbumCard, type AlbumCardProps, type CardState } from './AlbumCard';
 export { BottomSheet } from './BottomSheet';
+export { AboutSheet } from './AboutSheet';
 export {
   NavigationDrawer,
   DrawerNavItem,

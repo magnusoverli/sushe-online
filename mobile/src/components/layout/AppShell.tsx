@@ -25,6 +25,8 @@ interface AppShellProps {
   scrollRef?: Ref<HTMLElement | null>;
   /** Whether the NowPlayingBar should be visible. */
   showNowPlaying?: boolean;
+  /** Called when the Settings tab is tapped in the TabBar. */
+  onSettingsClick?: () => void;
 }
 
 export function AppShell({
@@ -32,6 +34,7 @@ export function AppShell({
   children,
   scrollRef,
   showNowPlaying = false,
+  onSettingsClick,
 }: AppShellProps) {
   return (
     <div
@@ -59,7 +62,7 @@ export function AppShell({
         {children}
       </main>
       <NowPlayingBar visible={showNowPlaying} />
-      <TabBar activeTab={activeTab} />
+      <TabBar activeTab={activeTab} onSettingsClick={onSettingsClick} />
     </div>
   );
 }

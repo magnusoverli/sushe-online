@@ -13,7 +13,6 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { LibraryPage } from './pages/LibraryPage';
 import { SearchPage } from './pages/SearchPage';
-import { QueuePage } from './pages/QueuePage';
 import { checkSession } from './services/auth';
 
 interface RouterContext {
@@ -72,17 +71,9 @@ const searchRoute = createRoute({
   beforeLoad: requireAuth,
 });
 
-const queueRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/queue',
-  component: QueuePage,
-  beforeLoad: requireAuth,
-});
-
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   registerRoute,
   libraryRoute,
   searchRoute,
-  queueRoute,
 ]);

@@ -90,6 +90,7 @@ describe('SettingsDrawer', () => {
     expect(screen.getByTestId('settings-tab-account')).toBeInTheDocument();
     expect(screen.getByTestId('settings-tab-integrations')).toBeInTheDocument();
     expect(screen.getByTestId('settings-tab-visual')).toBeInTheDocument();
+    expect(screen.getByTestId('settings-tab-preferences')).toBeInTheDocument();
     expect(screen.getByTestId('settings-tab-stats')).toBeInTheDocument();
     expect(screen.queryByTestId('settings-tab-admin')).not.toBeInTheDocument();
   });

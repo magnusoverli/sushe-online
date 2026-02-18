@@ -6,14 +6,14 @@
  *
  * Anatomy:
  * - Rank: 11px DM Mono w300, rgba(255,255,255,0.15), width 18px, text-align right
- * - Cover: 52x52px, radius 10px, gradient + shadow, position relative (play btn child)
+ * - Cover: 60x60px, radius 10px, gradient + shadow, position relative (play btn child)
  * - Title: DM Serif Display 15px, #F0ECE4, -0.01em, lh 1.3, truncate
  * - Artist: DM Mono 11px, rgba(255,255,255,0.4), +0.02em, mt 2px, truncate
  * - Tags: flex row, gap 6px, mt 6px
  * - Active indicator: 3x32px, radius 2px, gold gradient, opacity 0/1
  * - Three-dot button: 28x28px on right edge
  *
- * Card: flex center, gap 12px, padding 10px 12px, radius 16px, border 1px transparent
+ * Card: flex center, gap 12px, padding 10px 12px, radius 16px, border 1px transparent (list has no horizontal margin - cards are full-bleed)
  * Transitions: background 150ms, opacity 200ms, transform 200ms, border-color 150ms
  */
 
@@ -23,8 +23,9 @@ import {
   useCallback,
   useState,
 } from 'react';
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, Headphones } from 'lucide-react';
 import { TagPill } from './TagPill';
+import { formatPlaycount } from '@/lib/utils';
 
 export type CardState =
   | 'default'
@@ -45,6 +46,8 @@ export interface AlbumCardProps {
   onMenuClick?: (e: React.MouseEvent | React.TouchEvent) => void;
   onClick?: () => void;
   showRank?: boolean;
+  /** Last.fm scrobble count. If provided and > 0, shown next to artist name. */
+  playcount?: number;
   className?: string;
   style?: CSSProperties;
 }
@@ -99,6 +102,7 @@ export function AlbumCard({
   onMenuClick,
   onClick,
   showRank = true,
+  playcount,
   className,
   style,
 }: AlbumCardProps) {
@@ -171,8 +175,8 @@ export function AlbumCard({
       {/* Cover art */}
       <div
         style={{
-          width: '52px',
-          height: '52px',
+          width: '60px',
+          height: '60px',
           borderRadius: 'var(--radius-cover)',
           overflow: 'hidden',
           flexShrink: 0,
@@ -210,22 +214,54 @@ export function AlbumCard({
           {title}
         </span>
 
-        <span
+        <div
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
-            fontWeight: 400,
-            letterSpacing: '0.02em',
-            color: 'var(--color-text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
             marginTop: '2px',
             overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
           }}
-          data-testid="album-artist"
         >
-          {artist}
-        </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '11px',
+              fontWeight: 400,
+              letterSpacing: '0.02em',
+              color: 'var(--color-text-secondary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              minWidth: 0,
+            }}
+            data-testid="album-artist"
+          >
+            {artist}
+          </span>
+
+          {playcount != null && playcount > 0 && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '9px',
+                fontWeight: 400,
+                letterSpacing: '0.02em',
+                color: 'rgba(255,255,255,0.25)',
+                flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}
+              data-testid="album-playcount"
+              title={`${playcount.toLocaleString()} plays on Last.fm`}
+            >
+              <Headphones size={9} />
+              {formatPlaycount(playcount)}
+            </span>
+          )}
+        </div>
 
         {tags && tags.length > 0 && (
           <div

@@ -25,6 +25,7 @@ import { COUNTRIES } from '@/lib/countries';
 import { MAX_COVER_SIZE, COVER_RESIZE_PX } from '@/lib/constants';
 import { getAlbumCoverUrl } from '@/services/albums';
 import { showToast } from '@/components/ui/Toast';
+import { LinkifiedText } from '@/lib/linkify';
 import type { Album, Track } from '@/lib/types';
 
 interface AlbumEditFormProps {
@@ -528,6 +529,27 @@ export function AlbumEditForm({
                   }}
                   data-testid="edit-comments"
                 />
+                {/https?:\/\//.test(comments) && (
+                  <div
+                    style={{
+                      marginTop: '6px',
+                      padding: '8px 12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <LinkifiedText
+                      text={comments}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '11px',
+                        lineHeight: '1.6',
+                        color: 'rgba(255,255,255,0.60)',
+                        wordBreak: 'break-all',
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Comments 2 */}
@@ -545,6 +567,27 @@ export function AlbumEditForm({
                   }}
                   data-testid="edit-comments2"
                 />
+                {/https?:\/\//.test(comments2) && (
+                  <div
+                    style={{
+                      marginTop: '6px',
+                      padding: '8px 12px',
+                      background: 'rgba(255,255,255,0.03)',
+                      borderRadius: '8px',
+                    }}
+                  >
+                    <LinkifiedText
+                      text={comments2}
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '11px',
+                        lineHeight: '1.6',
+                        color: 'rgba(255,255,255,0.60)',
+                        wordBreak: 'break-all',
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Track Selection */}

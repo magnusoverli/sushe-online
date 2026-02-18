@@ -87,10 +87,12 @@ const mockGroups: Group[] = [
 const mockGetLists = vi.fn();
 const mockGetList = vi.fn();
 const mockGetGroups = vi.fn();
+const mockGetSetupStatus = vi.fn();
 
 vi.mock('@/services/lists', () => ({
   getLists: () => mockGetLists(),
   getList: (id: string) => mockGetList(id),
+  getSetupStatus: () => mockGetSetupStatus(),
 }));
 
 vi.mock('@/services/groups', () => ({
@@ -99,6 +101,15 @@ vi.mock('@/services/groups', () => ({
 
 vi.mock('@/services/albums', () => ({
   getAlbumCoverUrl: (id: string) => `/api/albums/${id}/cover`,
+}));
+
+// Mock year-lock service
+const mockCheckYearLock = vi.fn();
+const mockGetLockedYears = vi.fn();
+
+vi.mock('@/services/year-lock', () => ({
+  checkYearLock: (...args: unknown[]) => mockCheckYearLock(...args),
+  getLockedYears: () => mockGetLockedYears(),
 }));
 
 // Mock IntersectionObserver for CoverImage
@@ -110,6 +121,17 @@ beforeEach(() => {
     unobserve: vi.fn(),
     disconnect: vi.fn(),
   }));
+  // Default: no years locked
+  mockCheckYearLock.mockResolvedValue(false);
+  mockGetLockedYears.mockResolvedValue(new Set());
+  // Default: no setup needed
+  mockGetSetupStatus.mockResolvedValue({
+    needsSetup: false,
+    listsWithoutYear: [],
+    yearsNeedingMain: [],
+    yearsSummary: [],
+    dismissedUntil: null,
+  });
 });
 
 function renderWithProviders() {
@@ -269,6 +291,56 @@ describe('LibraryPage', () => {
 
     await waitFor(() => {
       expect(screen.getByText('This list is empty.')).toBeInTheDocument();
+    });
+  });
+
+  describe('year lock', () => {
+    it('shows lock indicator in header when main list year is locked', async () => {
+      mockCheckYearLock.mockResolvedValue(true);
+      mockGetLockedYears.mockResolvedValue(new Set([2024]));
+      mockGetLists.mockResolvedValue(mockListsMetadata);
+      mockGetList.mockResolvedValue(mockAlbums);
+      mockGetGroups.mockResolvedValue(mockGroups);
+      renderWithProviders();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('list-header-lock')).toBeInTheDocument();
+      });
+      expect(screen.getByText('LOCKED')).toBeInTheDocument();
+    });
+
+    it('does not show lock indicator when year is not locked', async () => {
+      mockCheckYearLock.mockResolvedValue(false);
+      mockGetLockedYears.mockResolvedValue(new Set());
+      mockGetLists.mockResolvedValue(mockListsMetadata);
+      mockGetList.mockResolvedValue(mockAlbums);
+      mockGetGroups.mockResolvedValue(mockGroups);
+      renderWithProviders();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('list-header-title')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('list-header-lock')).not.toBeInTheDocument();
+    });
+
+    it('does not show lock indicator for non-main list even if year is locked', async () => {
+      const nonMainList: Record<string, ListMetadata> = {
+        list1: {
+          ...mockListsMetadata.list1!,
+          isMain: false,
+        },
+      };
+      mockCheckYearLock.mockResolvedValue(true);
+      mockGetLockedYears.mockResolvedValue(new Set([2024]));
+      mockGetLists.mockResolvedValue(nonMainList);
+      mockGetList.mockResolvedValue(mockAlbums);
+      mockGetGroups.mockResolvedValue(mockGroups);
+      renderWithProviders();
+
+      await waitFor(() => {
+        expect(screen.getByTestId('list-header-title')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('list-header-lock')).not.toBeInTheDocument();
     });
   });
 });

@@ -28,13 +28,20 @@ export const useToastStore = create<ToastState>()((set) => ({
   clear: () => set({ message: null }),
 }));
 
+/** Compute auto-duration based on message length: 50ms per char, clamped to [2000, 10000]. */
+function autoDuration(message: string): number {
+  return Math.min(10000, Math.max(2000, message.length * 50));
+}
+
 /** Convenience function — call from anywhere without hooks. */
 export function showToast(
   message: string,
   type: ToastType = 'info',
-  duration = 3000
+  duration?: number
 ) {
-  useToastStore.getState().show(message, type, duration);
+  useToastStore
+    .getState()
+    .show(message, type, duration ?? autoDuration(message));
 }
 
 const typeColors: Record<ToastType, string> = {

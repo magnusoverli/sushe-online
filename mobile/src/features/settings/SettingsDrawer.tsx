@@ -15,14 +15,17 @@ import {
   useRef,
   useEffect,
 } from 'react';
+import { Info } from 'lucide-react';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { Scrim } from '@/components/ui/Scrim';
+import { AboutSheet } from '@/components/ui/AboutSheet';
 import { useAppStore } from '@/stores/app-store';
 import type { SettingsCategory } from '@/lib/types';
 import { AccountTab } from './settings-tabs/AccountTab';
 import { IntegrationsTab } from './settings-tabs/IntegrationsTab';
 import { VisualTab } from './settings-tabs/VisualTab';
 import { StatsTab } from './settings-tabs/StatsTab';
+import { PreferencesTab } from './settings-tabs/PreferencesTab';
 import { AdminTab } from './settings-tabs/AdminTab';
 
 interface SettingsDrawerProps {
@@ -51,6 +54,7 @@ const TABS: { key: SettingsCategory; label: string; adminOnly?: boolean }[] = [
   { key: 'account', label: 'Account' },
   { key: 'integrations', label: 'Integrations' },
   { key: 'visual', label: 'Visual' },
+  { key: 'preferences', label: 'Preferences' },
   { key: 'stats', label: 'Stats' },
   { key: 'admin', label: 'Admin', adminOnly: true },
 ];
@@ -59,6 +63,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const user = useAppStore((s) => s.user);
   const isAdmin = user?.role === 'admin';
   const [activeTab, setActiveTab] = useState<SettingsCategory>('account');
+  const [showAbout, setShowAbout] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
 
   // Reset to account tab when opening
@@ -85,6 +90,8 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         return <IntegrationsTab />;
       case 'visual':
         return <VisualTab />;
+      case 'preferences':
+        return <PreferencesTab />;
       case 'stats':
         return <StatsTab />;
       case 'admin':
@@ -97,6 +104,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   return (
     <>
       <Scrim visible={open} onDismiss={onClose} zIndex={199} />
+      <AboutSheet open={showAbout} onClose={() => setShowAbout(false)} />
       <AnimatePresence>
         {open && (
           <motion.div
@@ -144,22 +152,43 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 >
                   Settings
                 </div>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'rgba(255,255,255,0.45)',
-                    cursor: 'pointer',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '9px',
-                    padding: '4px 8px',
-                  }}
-                  data-testid="settings-close"
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
                 >
-                  Done
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAbout(true)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.30)',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    aria-label="About"
+                    data-testid="settings-about"
+                  >
+                    <Info size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'rgba(255,255,255,0.45)',
+                      cursor: 'pointer',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '9px',
+                      padding: '4px 8px',
+                    }}
+                    data-testid="settings-close"
+                  >
+                    Done
+                  </button>
+                </div>
               </div>
 
               {/* Tab bar */}

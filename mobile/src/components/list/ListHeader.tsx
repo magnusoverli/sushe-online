@@ -9,7 +9,7 @@
  * - Padding: 28px horizontal, 24px top, 16px bottom
  */
 
-import { MoreVertical, Settings } from 'lucide-react';
+import { MoreVertical, Lock } from 'lucide-react';
 
 interface ListHeaderProps {
   /** Eyebrow text (e.g. group name or "COLLECTION") */
@@ -20,12 +20,12 @@ interface ListHeaderProps {
   albumCount?: number;
   /** List year */
   year?: number | null;
+  /** Whether this list is locked (year locked + main list) */
+  isLocked?: boolean;
   /** Hamburger menu click handler */
   onMenuClick?: () => void;
   /** List options (ellipsis) click handler */
   onOptionsClick?: () => void;
-  /** Settings gear click handler */
-  onSettingsClick?: () => void;
 }
 
 export function ListHeader({
@@ -33,9 +33,9 @@ export function ListHeader({
   title,
   albumCount,
   year,
+  isLocked = false,
   onMenuClick,
   onOptionsClick,
-  onSettingsClick,
 }: ListHeaderProps) {
   const metaParts: string[] = [];
   if (albumCount != null) {
@@ -79,26 +79,6 @@ export function ListHeader({
           <span />
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-          {onSettingsClick && (
-            <button
-              type="button"
-              onClick={onSettingsClick}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                padding: '6px',
-                cursor: 'pointer',
-                color: 'var(--color-text-secondary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-              aria-label="Settings"
-              data-testid="list-header-settings"
-            >
-              <Settings size={16} />
-            </button>
-          )}
           {onOptionsClick && (
             <button
               type="button"
@@ -171,7 +151,7 @@ export function ListHeader({
       </h1>
 
       {/* Metadata row */}
-      {metaParts.length > 0 && (
+      {(metaParts.length > 0 || isLocked) && (
         <span
           style={{
             fontFamily: 'var(--font-mono)',
@@ -180,11 +160,29 @@ export function ListHeader({
             letterSpacing: '0.02em',
             color: 'var(--color-text-muted)',
             marginTop: '6px',
-            display: 'block',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}
           data-testid="list-header-meta"
         >
           {metaParts.join(' · ')}
+          {isLocked && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+                opacity: 0.6,
+              }}
+              data-testid="list-header-lock"
+            >
+              <Lock size={10} />
+              <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
+                LOCKED
+              </span>
+            </span>
+          )}
         </span>
       )}
 

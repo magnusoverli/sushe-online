@@ -7,7 +7,7 @@
 import { createList, type CreateListRequest } from './lists';
 import type { Album } from '@/lib/types';
 
-interface ImportMetadata {
+export interface ImportMetadata {
   list_name?: string;
   year?: number;
   group_id?: string;
@@ -62,6 +62,22 @@ export async function readImportFile(file: File): Promise<{
   const metadata = parsed._metadata || null;
 
   return { name, albums, metadata };
+}
+
+/**
+ * Find the next available name by appending a number suffix.
+ * E.g. "My List" -> "My List (2)", "My List (2)" -> "My List (3)"
+ */
+export function generateUniqueName(
+  baseName: string,
+  existingNames: Set<string>
+): string {
+  if (!existingNames.has(baseName)) return baseName;
+  let n = 2;
+  while (existingNames.has(`${baseName} (${n})`)) {
+    n++;
+  }
+  return `${baseName} (${n})`;
 }
 
 /**

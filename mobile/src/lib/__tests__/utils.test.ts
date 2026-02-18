@@ -6,6 +6,9 @@ import {
   clamp,
   buildAlbumTags,
   sortAlbums,
+  slugifyForRym,
+  getRymArtistUrl,
+  formatPlaycount,
 } from '../utils';
 
 describe('utils', () => {
@@ -90,6 +93,84 @@ describe('utils', () => {
 
     it('handles missing fields', () => {
       expect(buildAlbumTags({})).toEqual([]);
+    });
+  });
+
+  describe('slugifyForRym', () => {
+    it('lowercases and replaces spaces with hyphens', () => {
+      expect(slugifyForRym('Boards of Canada')).toBe('boards-of-canada');
+    });
+
+    it('removes apostrophes (straight and curly)', () => {
+      expect(slugifyForRym("Guns N' Roses")).toBe('guns-n-roses');
+      expect(slugifyForRym('Guns N\u2019 Roses')).toBe('guns-n-roses');
+    });
+
+    it('replaces & with "and"', () => {
+      expect(slugifyForRym('Simon & Garfunkel')).toBe('simon-and-garfunkel');
+    });
+
+    it('strips special characters', () => {
+      expect(slugifyForRym('Sigur Rós')).toBe('sigur-rs');
+    });
+
+    it('collapses multiple hyphens', () => {
+      expect(slugifyForRym('A  -  B')).toBe('a-b');
+    });
+
+    it('trims leading/trailing hyphens', () => {
+      expect(slugifyForRym('-foo-')).toBe('foo');
+    });
+
+    it('handles empty string', () => {
+      expect(slugifyForRym('')).toBe('');
+    });
+  });
+
+  describe('getRymArtistUrl', () => {
+    it('returns a valid RYM artist URL', () => {
+      expect(getRymArtistUrl('Radiohead')).toBe(
+        'https://rateyourmusic.com/artist/radiohead'
+      );
+    });
+
+    it('slugifies complex artist names', () => {
+      expect(getRymArtistUrl("Guns N' Roses")).toBe(
+        'https://rateyourmusic.com/artist/guns-n-roses'
+      );
+    });
+  });
+
+  describe('formatPlaycount', () => {
+    it('returns empty string for null', () => {
+      expect(formatPlaycount(null)).toBe('');
+    });
+
+    it('returns empty string for undefined', () => {
+      expect(formatPlaycount(undefined)).toBe('');
+    });
+
+    it('returns "0" for zero', () => {
+      expect(formatPlaycount(0)).toBe('0');
+    });
+
+    it('returns raw number for counts under 1000', () => {
+      expect(formatPlaycount(1)).toBe('1');
+      expect(formatPlaycount(42)).toBe('42');
+      expect(formatPlaycount(999)).toBe('999');
+    });
+
+    it('formats thousands with K suffix', () => {
+      expect(formatPlaycount(1000)).toBe('1.0K');
+      expect(formatPlaycount(1500)).toBe('1.5K');
+      expect(formatPlaycount(23400)).toBe('23.4K');
+      expect(formatPlaycount(999999)).toBe('1000.0K');
+    });
+
+    it('formats millions with M suffix', () => {
+      expect(formatPlaycount(1000000)).toBe('1.0M');
+      expect(formatPlaycount(2300000)).toBe('2.3M');
+      expect(formatPlaycount(15700000)).toBe('15.7M');
     });
   });
 

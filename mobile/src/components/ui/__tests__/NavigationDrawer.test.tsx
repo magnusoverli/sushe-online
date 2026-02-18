@@ -83,4 +83,27 @@ describe('DrawerNavItem', () => {
     const item = screen.getByTestId('drawer-nav-item');
     expect(item.style.background).toBe('rgba(232, 200, 122, 0.08)');
   });
+
+  it('renders drag handle when showDragHandle is true', () => {
+    render(<DrawerNavItem label="Draggable" showDragHandle />);
+    expect(screen.getByTestId('drawer-drag-handle')).toBeInTheDocument();
+  });
+
+  it('does not render drag handle by default', () => {
+    render(<DrawerNavItem label="Static" />);
+    expect(screen.queryByTestId('drawer-drag-handle')).not.toBeInTheDocument();
+  });
+
+  it('applies dragging style when dragState is dragging', () => {
+    render(<DrawerNavItem label="Dragging" dragState="dragging" />);
+    const item = screen.getByTestId('drawer-nav-item');
+    expect(item.style.opacity).toBe('0.6');
+    expect(item.style.background).toBe('rgba(232, 200, 122, 0.15)');
+  });
+
+  it('applies drop-target style when dragState is drop-target', () => {
+    render(<DrawerNavItem label="Target" dragState="drop-target" />);
+    const item = screen.getByTestId('drawer-nav-item');
+    expect(item.style.background).toBe('rgba(232, 200, 122, 0.06)');
+  });
 });

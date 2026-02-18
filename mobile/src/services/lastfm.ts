@@ -51,3 +51,27 @@ export async function getSimilarArtists(
     `/api/lastfm/similar-artists?artist=${encodeURIComponent(artist)}&limit=${limit}`
   );
 }
+
+// ── Playcount types ──
+
+export interface PlaycountData {
+  playcount: number;
+  status: 'success' | 'not_found' | 'error';
+}
+
+export interface ListPlaycountsResponse {
+  playcounts: Record<string, PlaycountData | null>;
+  refreshing: number;
+}
+
+/**
+ * Get playcounts for all albums in a list.
+ * Returns a map of list-item _id to { playcount, status }.
+ */
+export async function getListPlaycounts(
+  listId: string
+): Promise<ListPlaycountsResponse> {
+  return api.get<ListPlaycountsResponse>(
+    `/api/lastfm/list-playcounts/${listId}`
+  );
+}

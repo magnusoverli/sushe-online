@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { AppShell } from '../AppShell';
 
 vi.mock('@tanstack/react-router', () => ({
@@ -40,5 +40,17 @@ describe('AppShell', () => {
 
     const content = screen.getByTestId('app-shell-content');
     expect(content.tagName).toBe('MAIN');
+  });
+
+  it('passes onSettingsClick to TabBar', () => {
+    const onSettingsClick = vi.fn();
+    render(
+      <AppShell activeTab="library" onSettingsClick={onSettingsClick}>
+        <div>Content</div>
+      </AppShell>
+    );
+
+    fireEvent.click(screen.getByTestId('tab-settings'));
+    expect(onSettingsClick).toHaveBeenCalledTimes(1);
   });
 });

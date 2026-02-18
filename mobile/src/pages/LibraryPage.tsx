@@ -23,7 +23,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
 import { useDragStore } from '@/stores/drag-store';
 import { usePlaybackStore } from '@/stores/playback-store';
-import { useListsMetadata, useListAlbums, useGroups } from '@/hooks/useLists';
+import {
+  useListsMetadata,
+  useListAlbums,
+  useGroups,
+  useSetupStatus,
+} from '@/hooks/useLists';
+import { useYearLock, useLockedYears } from '@/hooks/useYearLock';
 import {
   getAlbumCoverUrl,
   updateAlbumCountry,
@@ -37,7 +43,12 @@ import {
   replaceListItems,
   reorderList,
 } from '@/services/lists';
-import { readImportFile, importList } from '@/services/import';
+import {
+  readImportFile,
+  importList,
+  generateUniqueName,
+  type ImportMetadata,
+} from '@/services/import';
 import { useDragAndDrop } from '@/features/drag-drop';
 import {
   usePlaybackPolling,
@@ -51,11 +62,8 @@ import { SkeletonList } from '@/components/ui/SkeletonCard';
 import { CoverImage } from '@/components/album/CoverImage';
 import { GhostCard } from '@/components/ui/GhostCard';
 import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
-import {
-  NavigationDrawer,
-  DrawerNavItem,
-} from '@/components/ui/NavigationDrawer';
-import { GroupAccordion } from '@/components/list/GroupAccordion';
+import { NavigationDrawer } from '@/components/ui/NavigationDrawer';
+import { DrawerContent } from '@/components/list/DrawerContent';
 import { ListActionSheet } from '@/components/list/ListActionSheet';
 import { GroupActionSheet } from '@/components/list/GroupActionSheet';
 import { CollectionPickerSheet } from '@/components/list/CollectionPickerSheet';
@@ -72,6 +80,13 @@ import { SummarySheet } from '@/components/album/SummarySheet';
 import { RecommendationInfoSheet } from '@/components/album/RecommendationInfoSheet';
 import { SimilarArtistsSheet } from '@/components/album/SimilarArtistsSheet';
 import { RecommendAlbumSheet } from '@/components/album/RecommendAlbumSheet';
+import { RecommendationCard } from '@/components/album/RecommendationCard';
+import { RecommendationActionSheet } from '@/components/album/RecommendationActionSheet';
+import {
+  ServiceChooserSheet,
+  type MusicServiceChoice,
+} from '@/components/album/ServiceChooserSheet';
+import { SetupWizardSheet } from '@/components/list/SetupWizardSheet';
 import { SettingsDrawer } from '@/features/settings';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/components/ui/Toast';
@@ -80,8 +95,7 @@ import {
   ListPlus,
   FolderPlus,
   FileUp,
-  List as ListIcon,
-  Star,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   isYearMismatch,
@@ -90,7 +104,18 @@ import {
   debounce,
 } from '@/lib/utils';
 import { REORDER_DEBOUNCE_MS } from '@/lib/constants';
-import type { Album, AlbumSortKey, ListMetadata, Group } from '@/lib/types';
+import { useRecommendationsForYear } from '@/hooks/useRecommendations';
+import { useListPlaycounts } from '@/hooks/useListPlaycounts';
+import { syncPlaylistToSpotify } from '@/services/spotify';
+import { syncPlaylistToTidal } from '@/services/tidal';
+import { updateListItems as addToListItems } from '@/services/lists';
+import type {
+  Album,
+  AlbumSortKey,
+  ListMetadata,
+  Group,
+  Recommendation,
+} from '@/lib/types';
 
 const SORT_OPTIONS: DropdownItem[] = [
   { id: 'custom', label: 'Custom Order' },
@@ -229,6 +254,39 @@ export function LibraryPage() {
     useState<Album | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
+  // ── Import conflict resolution state ──
+  const [importConflict, setImportConflict] = useState<{
+    name: string;
+    albums: Partial<Album>[];
+    metadata: ImportMetadata | null;
+  } | null>(null);
+
+  // ── Playlist sync (Send to Service) state ──
+  const [playlistSyncListId, setPlaylistSyncListId] = useState<string | null>(
+    null
+  );
+  const [showPlaylistServiceChooser, setShowPlaylistServiceChooser] =
+    useState(false);
+
+  // ── Recommendation browsing state ──
+  const recommendationYear = useAppStore((s) => s.recommendationYear);
+  const setRecommendationYear = useAppStore((s) => s.setRecommendationYear);
+  const viewingRecommendations = recommendationYear !== null;
+
+  const { data: recsData, isLoading: recsLoading } =
+    useRecommendationsForYear(recommendationYear);
+
+  // Recommendation action sheet state
+  const [recActionTarget, setRecActionTarget] = useState<Recommendation | null>(
+    null
+  );
+  // Recommendation "add to list" target
+  const [recAddToListTarget, setRecAddToListTarget] =
+    useState<Recommendation | null>(null);
+  // Recommendation "view reasoning" target (reuses RecommendationInfoSheet)
+  const [recReasoningTarget, setRecReasoningTarget] =
+    useState<Recommendation | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
 
@@ -237,6 +295,12 @@ export function LibraryPage() {
     spotifyConnected: !!user?.spotifyConnected,
     lastfmConnected: !!user?.lastfmConnected,
   });
+
+  // ── Last.fm playcounts ──
+  const { playcounts } = useListPlaycounts(
+    activeListId,
+    !!user?.lastfmConnected
+  );
 
   // Playback state for now-playing matching
   const playbackAlbumName = usePlaybackStore((s) => s.albumName);
@@ -252,6 +316,14 @@ export function LibraryPage() {
 
   // Fetch groups
   const { data: groups } = useGroups();
+
+  // Setup wizard
+  const setupWizardSnoozed = useAppStore((s) => s.setupWizardSnoozed);
+  const setSetupWizardSnoozed = useAppStore((s) => s.setSetupWizardSnoozed);
+  const { data: setupStatus } = useSetupStatus(
+    !!listsMap && !setupWizardSnoozed
+  );
+  const showSetupWizard = !!setupStatus?.needsSetup && !setupWizardSnoozed;
 
   // Sync lists metadata to store
   useEffect(() => {
@@ -272,6 +344,13 @@ export function LibraryPage() {
 
   // Get active list metadata
   const activeList = activeListId && listsMap ? listsMap[activeListId] : null;
+
+  // Year lock: check if the active list's year is locked
+  const { isLocked: isYearLocked } = useYearLock(activeList?.year ?? null);
+  const isListLocked = isYearLocked && activeList?.isMain === true;
+
+  // All locked years (for drawer lock icons)
+  const { lockedYears } = useLockedYears();
 
   // Fetch albums for the active list
   const {
@@ -378,7 +457,7 @@ export function LibraryPage() {
   const { handlers: dragHandlers, registerCard } = useDragAndDrop({
     itemIds: useMemo(() => sortedAlbums.map((a) => a._id), [sortedAlbums]),
     onReorder: handleReorderWithAlbumIds,
-    enabled: sortKey === 'custom',
+    enabled: sortKey === 'custom' && !isListLocked,
     scrollContainerRef,
   });
 
@@ -433,11 +512,62 @@ export function LibraryPage() {
   // ── List switching ──
   const handleSelectList = useCallback(
     (listId: string) => {
+      setRecommendationYear(null); // Exit recommendation mode
       setActiveListId(listId);
       setDrawerOpen(false);
       setSortKey('custom'); // Reset sort on list switch
     },
-    [setActiveListId, setDrawerOpen]
+    [setActiveListId, setDrawerOpen, setRecommendationYear]
+  );
+
+  // ── Recommendation year selection ──
+  const handleSelectRecommendationYear = useCallback(
+    (year: number) => {
+      setRecommendationYear(year);
+      setDrawerOpen(false);
+    },
+    [setRecommendationYear, setDrawerOpen]
+  );
+
+  const handleExitRecommendations = useCallback(() => {
+    setRecommendationYear(null);
+  }, [setRecommendationYear]);
+
+  // ── Recommendation "Add to List" handler ──
+  const handleRecAddToList = useCallback(
+    async (targetListId: string) => {
+      if (!recAddToListTarget) return;
+      const rec = recAddToListTarget;
+      try {
+        const result = await addToListItems(targetListId, {
+          added: [
+            {
+              album_id: rec.album_id,
+              artist: rec.artist,
+              album: rec.album,
+              release_date: rec.release_date || null,
+              country: rec.country || null,
+              genre_1: rec.genre_1 || null,
+              genre_2: rec.genre_2 || null,
+            } as Partial<Album>,
+          ],
+        });
+        if (result.duplicates && result.duplicates.length > 0) {
+          showToast('Album already exists in target list', 'info');
+        } else {
+          showToast(`Added "${rec.album}" to list`, 'success');
+        }
+        queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
+        queryClient.invalidateQueries({
+          queryKey: ['lists', targetListId, 'albums'],
+        });
+      } catch {
+        showToast('Failed to add album to list', 'error');
+      } finally {
+        setRecAddToListTarget(null);
+      }
+    },
+    [recAddToListTarget, queryClient]
   );
 
   // ── Invalidate queries helper ──
@@ -490,12 +620,23 @@ export function LibraryPage() {
       e.target.value = '';
 
       try {
-        showToast('Importing...', 'info', 2000);
         const {
           name,
           albums: importAlbums,
           metadata,
         } = await readImportFile(file);
+
+        // Check for naming conflict
+        const existingNames = new Set(
+          Object.values(listsMap ?? {}).map((l) => l.name)
+        );
+        if (existingNames.has(name)) {
+          // Show conflict dialog
+          setImportConflict({ name, albums: importAlbums, metadata });
+          return;
+        }
+
+        showToast('Importing...', 'info', 2000);
         const result = await importList(name, importAlbums, metadata);
         showToast(
           `Imported "${result.listName}" (${result.albumCount} albums)`,
@@ -511,7 +652,128 @@ export function LibraryPage() {
         showToast(msg, 'error');
       }
     },
-    [refreshData, setActiveListId]
+    [refreshData, setActiveListId, listsMap]
+  );
+
+  const handleImportConflict = useCallback(
+    async (resolution: 'overwrite' | 'rename' | 'cancel') => {
+      if (!importConflict) return;
+      setImportConflict(null);
+
+      if (resolution === 'cancel') return;
+
+      try {
+        let finalName = importConflict.name;
+
+        if (resolution === 'rename') {
+          const existingNames = new Set(
+            Object.values(listsMap ?? {}).map((l) => l.name)
+          );
+          finalName = generateUniqueName(importConflict.name, existingNames);
+        } else if (resolution === 'overwrite') {
+          // Find and replace the existing list's items
+          const existing = Object.values(listsMap ?? {}).find(
+            (l) => l.name === importConflict.name
+          );
+          if (existing) {
+            showToast('Overwriting...', 'info', 2000);
+            await replaceListItems(
+              existing._id,
+              importConflict.albums as Album[]
+            );
+            showToast(
+              `Overwrote "${existing.name}" (${importConflict.albums.length} albums)`,
+              'success'
+            );
+            refreshData();
+            setActiveListId(existing._id);
+            return;
+          }
+        }
+
+        showToast('Importing...', 'info', 2000);
+        const result = await importList(
+          finalName,
+          importConflict.albums,
+          importConflict.metadata
+        );
+        showToast(
+          `Imported "${result.listName}" (${result.albumCount} albums)`,
+          'success'
+        );
+        refreshData();
+        setActiveListId(result.listId);
+      } catch {
+        showToast('Error importing list', 'error');
+      }
+    },
+    [importConflict, listsMap, refreshData, setActiveListId]
+  );
+
+  // ── Send to Service handler ──
+  const handleSendToService = useCallback(
+    async (listId: string, service?: MusicServiceChoice) => {
+      const hasSpotify = user?.spotifyConnected;
+      const hasTidal = user?.tidalConnected;
+
+      if (!hasSpotify && !hasTidal) {
+        showToast('No music service connected', 'error');
+        return;
+      }
+
+      // Determine target service
+      let target: MusicServiceChoice | undefined = service;
+
+      if (!target) {
+        if (hasSpotify && !hasTidal) {
+          target = 'spotify';
+        } else if (hasTidal && !hasSpotify) {
+          target = 'tidal';
+        } else if (user?.musicService === 'spotify') {
+          target = 'spotify';
+        } else if (user?.musicService === 'tidal') {
+          target = 'tidal';
+        } else {
+          // Both connected, no preference — show chooser
+          setPlaylistSyncListId(listId);
+          setShowPlaylistServiceChooser(true);
+          return;
+        }
+      }
+
+      showToast('Creating playlist...', 'info', 3000);
+
+      try {
+        const result =
+          target === 'spotify'
+            ? await syncPlaylistToSpotify(listId)
+            : await syncPlaylistToTidal(listId);
+
+        const serviceName = target === 'spotify' ? 'Spotify' : 'Tidal';
+        showToast(
+          result.playlistName
+            ? `Sent "${result.playlistName}" to ${serviceName}`
+            : `Playlist sent to ${serviceName}`,
+          'success'
+        );
+      } catch (err) {
+        const msg =
+          err instanceof Error ? err.message : 'Failed to create playlist';
+        showToast(msg, 'error');
+      }
+    },
+    [user]
+  );
+
+  const handlePlaylistServiceChosen = useCallback(
+    (service: MusicServiceChoice) => {
+      setShowPlaylistServiceChooser(false);
+      if (playlistSyncListId) {
+        handleSendToService(playlistSyncListId, service);
+      }
+      setPlaylistSyncListId(null);
+    },
+    [playlistSyncListId, handleSendToService]
   );
 
   // ── Album action handlers ──
@@ -785,199 +1047,398 @@ export function LibraryPage() {
         activeTab="library"
         scrollRef={scrollContainerRef}
         showNowPlaying={showNowPlaying}
+        onSettingsClick={() => setSettingsOpen(true)}
       >
-        {/* Header */}
-        <ListHeader
-          eyebrow={groupName}
-          title={activeList?.name ?? 'Library'}
-          albumCount={activeList?.count}
-          year={activeList?.year}
-          onMenuClick={handleMenuClick}
-          onOptionsClick={
-            activeListId ? () => setListActionTarget(activeListId) : undefined
-          }
-          onSettingsClick={() => setSettingsOpen(true)}
-        />
-
-        {/* Sort bar */}
-        <div
-          style={{
-            padding: '0 var(--space-list-x) 8px',
-            display: 'flex',
-            justifyContent: 'flex-end',
-            position: 'relative',
-          }}
-        >
-          <button
-            ref={sortTriggerRef}
-            type="button"
-            onClick={() => setSortDropdownOpen((o) => !o)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
-              letterSpacing: '0.04em',
-              color: 'var(--color-text-secondary)',
-            }}
-            data-testid="sort-trigger"
-          >
-            {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? 'Sort'}
-            <ChevronDown size={12} />
-          </button>
-          <Dropdown
-            open={sortDropdownOpen}
-            onClose={() => setSortDropdownOpen(false)}
-            items={SORT_OPTIONS}
-            selectedId={sortKey}
-            onSelect={handleSortSelect}
-            sectionLabel="Sort by"
-            anchorRef={sortTriggerRef}
-          />
-        </div>
-
-        {/* Album list */}
-        {albumsLoading ? (
-          <div style={{ padding: '0 var(--space-list-x)' }}>
-            <SkeletonList count={8} />
-          </div>
-        ) : albumsError ? (
-          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <span
+        {viewingRecommendations ? (
+          /* ── Recommendation browsing view ── */
+          <>
+            {/* Recommendation header */}
+            <header
               style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                color: 'var(--color-destructive)',
+                padding: '24px var(--space-header-x) 16px',
               }}
+              data-testid="rec-view-header"
             >
-              Failed to load albums.
-            </span>
-          </div>
-        ) : displayAlbums.length === 0 ? (
-          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              This list is empty.
-            </span>
-          </div>
-        ) : (
-          <div
-            role="list"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 'var(--space-card-gap-outer)',
-              padding: `0 var(--space-list-x)`,
-            }}
-            data-testid="album-list"
-            onTouchMove={dragHandlers.onTouchMove}
-            onTouchEnd={dragHandlers.onTouchEnd}
-          >
-            {displayAlbums.map((album, index) => {
-              const rank = sortKey === 'custom' ? index + 1 : undefined;
-              const tags = buildAlbumTags(album);
-              const yearMismatch = isYearMismatch(
-                album.release_date,
-                activeList?.year ?? null
-              );
-
-              // Add year mismatch tag if applicable
-              if (yearMismatch && album.release_date) {
-                const year = album.release_date.substring(0, 4);
-                tags.push(year);
-              }
-
-              const cardState = getCardState(index);
-              const albumIsNowPlaying = checkNowPlaying(album);
-
-              return (
-                <div
-                  key={album._id}
-                  ref={(el) => registerCard(index, el)}
-                  onTouchStart={(e) => dragHandlers.onTouchStart(index, e)}
+              {/* Top row: back button + menu */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={handleExitRecommendations}
                   style={{
-                    transition: isDragging
-                      ? 'transform 200ms ease, opacity 200ms ease'
-                      : undefined,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '4px 0',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '9px',
+                    letterSpacing: '0.04em',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                  data-testid="rec-back-button"
+                >
+                  <ArrowLeft size={14} />
+                  Back to lists
+                </button>
+                <button
+                  type="button"
+                  onClick={handleMenuClick}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    padding: '6px',
+                    cursor: 'pointer',
+                    color: 'var(--color-text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  aria-label="Open navigation"
+                >
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  >
+                    <line x1="3" y1="5" x2="17" y2="5" />
+                    <line x1="3" y1="10" x2="17" y2="10" />
+                    <line x1="3" y1="15" x2="17" y2="15" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Title */}
+              <h1
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '32px',
+                  fontWeight: 400,
+                  letterSpacing: '-0.01em',
+                  lineHeight: 1.15,
+                  color: 'var(--color-text-primary)',
+                  margin: 0,
+                }}
+                data-testid="rec-view-title"
+              >
+                {recommendationYear} Recommendations
+              </h1>
+
+              {/* Metadata */}
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '10px',
+                  fontWeight: 400,
+                  letterSpacing: '0.02em',
+                  color: 'var(--color-text-muted)',
+                  marginTop: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {recsData
+                  ? `${recsData.recommendations.length} recommendation${recsData.recommendations.length !== 1 ? 's' : ''}`
+                  : ''}
+                {recsData?.locked && (
+                  <span
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      opacity: 0.6,
+                    }}
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                    </svg>
+                    <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
+                      LOCKED
+                    </span>
+                  </span>
+                )}
+              </span>
+
+              {/* Divider */}
+              <div
+                style={{
+                  height: '1px',
+                  background: 'var(--color-divider)',
+                  marginTop: '16px',
+                }}
+              />
+            </header>
+
+            {/* Recommendation list */}
+            {recsLoading ? (
+              <div style={{ padding: '0 var(--space-list-x)' }}>
+                <SkeletonList count={6} />
+              </div>
+            ) : !recsData || recsData.recommendations.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '11px',
+                    color: 'var(--color-text-secondary)',
                   }}
                 >
-                  <AlbumCard
-                    rank={rank}
-                    title={album.album}
-                    artist={album.artist}
-                    showRank={sortKey === 'custom'}
-                    tags={tags}
-                    cardState={cardState}
-                    coverElement={
-                      <CoverImage
-                        src={
-                          album.cover_image_url ||
-                          (album.album_id
-                            ? getAlbumCoverUrl(album.album_id)
-                            : undefined)
-                        }
-                        alt={`${album.album} by ${album.artist}`}
+                  No recommendations yet for {recommendationYear}.
+                </span>
+              </div>
+            ) : (
+              <div
+                role="list"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-card-gap-outer)',
+                  padding: '0 var(--space-list-x)',
+                }}
+                data-testid="recommendation-list"
+              >
+                {recsData.recommendations.map((rec) => (
+                  <RecommendationCard
+                    key={rec._id}
+                    recommendation={rec}
+                    onMenuClick={(r) => setRecActionTarget(r)}
+                    onReasoningClick={(r) => setRecReasoningTarget(r)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Footer */}
+            {recsData && recsData.recommendations.length > 0 && (
+              <ListFooter albumCount={recsData.recommendations.length} />
+            )}
+          </>
+        ) : (
+          /* ── Normal album list view ── */
+          <>
+            {/* Header */}
+            <ListHeader
+              eyebrow={groupName}
+              title={activeList?.name ?? 'Library'}
+              albumCount={activeList?.count}
+              year={activeList?.year}
+              isLocked={isListLocked}
+              onMenuClick={handleMenuClick}
+              onOptionsClick={
+                activeListId
+                  ? () => setListActionTarget(activeListId)
+                  : undefined
+              }
+            />
+
+            {/* Sort bar */}
+            <div
+              style={{
+                padding: '0 var(--space-list-x) 8px',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                position: 'relative',
+              }}
+            >
+              <button
+                ref={sortTriggerRef}
+                type="button"
+                onClick={() => setSortDropdownOpen((o) => !o)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  borderRadius: '6px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '9px',
+                  letterSpacing: '0.04em',
+                  color: 'var(--color-text-secondary)',
+                }}
+                data-testid="sort-trigger"
+              >
+                {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? 'Sort'}
+                <ChevronDown size={12} />
+              </button>
+              <Dropdown
+                open={sortDropdownOpen}
+                onClose={() => setSortDropdownOpen(false)}
+                items={SORT_OPTIONS}
+                selectedId={sortKey}
+                onSelect={handleSortSelect}
+                sectionLabel="Sort by"
+                anchorRef={sortTriggerRef}
+              />
+            </div>
+
+            {/* Album list */}
+            {albumsLoading ? (
+              <div style={{ padding: '0 var(--space-list-x)' }}>
+                <SkeletonList count={8} />
+              </div>
+            ) : albumsError ? (
+              <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '11px',
+                    color: 'var(--color-destructive)',
+                  }}
+                >
+                  Failed to load albums.
+                </span>
+              </div>
+            ) : displayAlbums.length === 0 ? (
+              <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '11px',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  This list is empty.
+                </span>
+              </div>
+            ) : (
+              <div
+                role="list"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-card-gap-outer)',
+                  padding: `0 var(--space-list-x)`,
+                }}
+                data-testid="album-list"
+                onTouchMove={dragHandlers.onTouchMove}
+                onTouchEnd={dragHandlers.onTouchEnd}
+              >
+                {displayAlbums.map((album, index) => {
+                  const rank = sortKey === 'custom' ? index + 1 : undefined;
+                  const tags = buildAlbumTags(album);
+                  const yearMismatch = isYearMismatch(
+                    album.release_date,
+                    activeList?.year ?? null
+                  );
+
+                  // Add year mismatch tag if applicable
+                  if (yearMismatch && album.release_date) {
+                    const year = album.release_date.substring(0, 4);
+                    tags.push(year);
+                  }
+
+                  const cardState = getCardState(index);
+                  const albumIsNowPlaying = checkNowPlaying(album);
+
+                  return (
+                    <div
+                      key={album._id}
+                      ref={(el) => registerCard(index, el)}
+                      onTouchStart={(e) => dragHandlers.onTouchStart(index, e)}
+                      style={{
+                        transition: isDragging
+                          ? 'transform 200ms ease, opacity 200ms ease'
+                          : undefined,
+                      }}
+                    >
+                      <AlbumCard
                         rank={rank}
-                        showRank={
-                          sortKey === 'custom' && (activeList?.isMain ?? false)
+                        title={album.album}
+                        artist={album.artist}
+                        showRank={sortKey === 'custom'}
+                        tags={tags}
+                        playcount={playcounts[album._id]}
+                        cardState={cardState}
+                        coverElement={
+                          <CoverImage
+                            src={
+                              album.cover_image_url ||
+                              (album.album_id
+                                ? getAlbumCoverUrl(album.album_id)
+                                : undefined)
+                            }
+                            alt={`${album.album} by ${album.artist}`}
+                            rank={rank}
+                            showRank={
+                              sortKey === 'custom' &&
+                              (activeList?.isMain ?? false)
+                            }
+                            hasSummary={!!album.summary}
+                            hasRecommendation={!!album.recommended_by}
+                            isNowPlaying={albumIsNowPlaying}
+                            onPlay={
+                              user?.spotifyConnected
+                                ? () => handleAlbumMenuClick(album)
+                                : undefined
+                            }
+                            onSummaryClick={() =>
+                              setSummaryTarget({
+                                albumId: album.album_id,
+                                albumName: album.album,
+                                artistName: album.artist,
+                              })
+                            }
+                            onRecommendationClick={() =>
+                              setRecommendationTarget({
+                                albumName: album.album,
+                                artistName: album.artist,
+                                recommendedBy: album.recommended_by,
+                                recommendedAt: album.recommended_at,
+                              })
+                            }
+                          />
                         }
-                        hasSummary={!!album.summary}
-                        hasRecommendation={!!album.recommended_by}
-                        isNowPlaying={albumIsNowPlaying}
-                        onPlay={
-                          user?.spotifyConnected
-                            ? () => handleAlbumMenuClick(album)
-                            : undefined
+                        onMenuClick={
+                          isDragging
+                            ? undefined
+                            : () => handleAlbumMenuClick(album)
                         }
-                        onSummaryClick={() =>
-                          setSummaryTarget({
-                            albumId: album.album_id,
-                            albumName: album.album,
-                            artistName: album.artist,
-                          })
-                        }
-                        onRecommendationClick={() =>
-                          setRecommendationTarget({
-                            albumName: album.album,
-                            artistName: album.artist,
-                            recommendedBy: album.recommended_by,
-                            recommendedAt: album.recommended_at,
-                          })
+                        onClick={
+                          isDragging || isListLocked
+                            ? undefined
+                            : () => {
+                                // Tap on album card opens edit form
+                                setAlbumEditTarget(album);
+                              }
                         }
                       />
-                    }
-                    onMenuClick={
-                      isDragging ? undefined : () => handleAlbumMenuClick(album)
-                    }
-                    onClick={
-                      isDragging
-                        ? undefined
-                        : () => {
-                            // Tap on album card opens edit form
-                            setAlbumEditTarget(album);
-                          }
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-        {/* Footer */}
-        {displayAlbums.length > 0 && (
-          <ListFooter albumCount={displayAlbums.length} />
+            {/* Footer */}
+            {displayAlbums.length > 0 && (
+              <ListFooter albumCount={displayAlbums.length} />
+            )}
+          </>
         )}
       </AppShell>
 
@@ -1012,66 +1473,17 @@ export function LibraryPage() {
           </div>
         }
       >
-        {/* Grouped list items */}
-        {drawerSections.map((section) => {
-          const group = section.group;
-
-          if (!group) {
-            // Uncategorized lists (no group header)
-            return section.lists.map((list) => (
-              <DrawerNavItem
-                key={list._id}
-                label={list.name}
-                count={list.count}
-                icon={
-                  list.isMain ? (
-                    <Star size={12} style={{ color: 'var(--color-gold)' }} />
-                  ) : (
-                    <ListIcon size={12} />
-                  )
-                }
-                isActive={list._id === activeListId}
-                onClick={() => handleSelectList(list._id)}
-              />
-            ));
-          }
-
-          return (
-            <GroupAccordion
-              key={group._id}
-              name={group.name}
-              isYearGroup={group.isYearGroup}
-              defaultExpanded={section.lists.some(
-                (l) => l._id === activeListId
-              )}
-              onContextMenu={
-                !group.isYearGroup
-                  ? () => {
-                      setDrawerOpen(false);
-                      setGroupActionTarget(group);
-                    }
-                  : undefined
-              }
-            >
-              {section.lists.map((list) => (
-                <DrawerNavItem
-                  key={list._id}
-                  label={list.name}
-                  count={list.count}
-                  icon={
-                    list.isMain ? (
-                      <Star size={12} style={{ color: 'var(--color-gold)' }} />
-                    ) : (
-                      <ListIcon size={12} />
-                    )
-                  }
-                  isActive={list._id === activeListId}
-                  onClick={() => handleSelectList(list._id)}
-                />
-              ))}
-            </GroupAccordion>
-          );
-        })}
+        {/* Grouped list items with drag-and-drop reordering */}
+        <DrawerContent
+          sections={drawerSections}
+          activeListId={viewingRecommendations ? null : activeListId}
+          lockedYears={lockedYears}
+          onSelectList={handleSelectList}
+          onGroupContextMenu={(group) => setGroupActionTarget(group)}
+          onCloseDrawer={() => setDrawerOpen(false)}
+          activeRecommendationYear={recommendationYear}
+          onSelectRecommendationYear={handleSelectRecommendationYear}
+        />
 
         {/* Spacer to push footer to bottom */}
         <div style={{ flex: 1, minHeight: '16px' }} />
@@ -1145,10 +1557,7 @@ export function LibraryPage() {
         onMainToggled={refreshData}
         onEditDetails={(id) => setEditListTarget(id)}
         onMoveToCollection={(id) => setCollectionPickerTarget(id)}
-        onSendToService={() => {
-          // TODO: Phase 8 — music service integration
-          showToast('Music service integration coming soon', 'info');
-        }}
+        onSendToService={(listId) => handleSendToService(listId)}
       />
 
       {/* Group action sheet */}
@@ -1202,6 +1611,7 @@ export function LibraryPage() {
         album={albumActionTarget}
         listYear={activeList?.year ?? null}
         user={user}
+        isListLocked={isListLocked}
         onEditDetails={() => {
           setAlbumEditTarget(albumActionTarget);
         }}
@@ -1274,6 +1684,37 @@ export function LibraryPage() {
         destructive
       />
 
+      {/* Import conflict resolution */}
+      <ConfirmDialog
+        open={importConflict !== null}
+        onCancel={() => handleImportConflict('cancel')}
+        onConfirm={() => handleImportConflict('overwrite')}
+        title="List Already Exists"
+        message={`A list named "${importConflict?.name ?? ''}" already exists. What would you like to do?`}
+        confirmLabel="Overwrite"
+        destructive
+      >
+        <button
+          type="button"
+          onClick={() => handleImportConflict('rename')}
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '9px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.10)',
+            background: 'rgba(255,255,255,0.05)',
+            color: 'var(--color-text-primary)',
+            cursor: 'pointer',
+            width: '100%',
+            textAlign: 'center',
+            marginBottom: '4px',
+          }}
+        >
+          Import as New (Rename)
+        </button>
+      </ConfirmDialog>
+
       {/* AI Summary sheet */}
       <SummarySheet
         open={summaryTarget !== null}
@@ -1306,6 +1747,75 @@ export function LibraryPage() {
         onClose={() => setRecommendAlbumTarget(null)}
         album={recommendAlbumTarget}
         year={activeList?.year ?? null}
+      />
+
+      {/* ── Recommendation Browsing Sheets ── */}
+
+      {/* Recommendation action sheet (three-dot menu on rec cards) */}
+      <RecommendationActionSheet
+        open={recActionTarget !== null}
+        onClose={() => setRecActionTarget(null)}
+        recommendation={recActionTarget}
+        year={recommendationYear ?? 0}
+        locked={recsData?.locked ?? false}
+        user={user}
+        onAddToList={(rec) => {
+          setRecActionTarget(null);
+          setRecAddToListTarget(rec);
+        }}
+        onViewReasoning={(rec) => {
+          setRecActionTarget(null);
+          setRecReasoningTarget(rec);
+        }}
+      />
+
+      {/* Add recommendation to list picker */}
+      <ListSelectionSheet
+        open={recAddToListTarget !== null}
+        onClose={() => setRecAddToListTarget(null)}
+        title="Add to List"
+        albumName={recAddToListTarget?.album ?? ''}
+        artistName={recAddToListTarget?.artist ?? ''}
+        currentListId={null}
+        lists={listsMap ?? {}}
+        groups={groups ?? []}
+        onSelect={handleRecAddToList}
+      />
+
+      {/* Recommendation reasoning sheet (from rec card tap or action sheet) */}
+      {recReasoningTarget && (
+        <RecommendationInfoSheet
+          open={recReasoningTarget !== null}
+          onClose={() => setRecReasoningTarget(null)}
+          albumName={recReasoningTarget.album}
+          artistName={recReasoningTarget.artist}
+          recommendedBy={recReasoningTarget.recommended_by}
+          recommendedAt={recReasoningTarget.created_at}
+        />
+      )}
+
+      {/* Setup wizard */}
+      {setupStatus && (
+        <SetupWizardSheet
+          open={showSetupWizard}
+          onClose={() => setSetupWizardSnoozed(true)}
+          setupStatus={setupStatus}
+          onSaved={() => {
+            setSetupWizardSnoozed(true);
+            refreshData();
+          }}
+          onSnoozed={() => setSetupWizardSnoozed(true)}
+        />
+      )}
+
+      {/* Playlist sync service chooser */}
+      <ServiceChooserSheet
+        open={showPlaylistServiceChooser}
+        onClose={() => {
+          setShowPlaylistServiceChooser(false);
+          setPlaylistSyncListId(null);
+        }}
+        onSelect={handlePlaylistServiceChosen}
       />
 
       {/* Settings drawer */}

@@ -1,30 +1,48 @@
 /**
  * SearchPage - Stub for future feature.
+ * Wrapped in AppShell so the TabBar (including Settings) is available.
  */
 
+import { useState } from 'react';
+import { AppShell } from '@/components/layout/AppShell';
+import { SettingsDrawer } from '@/features/settings';
+
 export function SearchPage() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--color-frame)',
-        padding: '24px',
-      }}
-    >
-      <div style={{ textAlign: 'center' }}>
-        <h1 className="text-screen-title" style={{ marginBottom: '16px' }}>
-          Search
-        </h1>
-        <p
-          className="text-artist"
-          style={{ color: 'var(--color-text-secondary)' }}
+    <>
+      <AppShell
+        activeTab="search"
+        onSettingsClick={() => setSettingsOpen(true)}
+      >
+        <div
+          style={{
+            flex: 1,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
         >
-          Coming soon
-        </p>
-      </div>
-    </div>
+          <div style={{ textAlign: 'center' }}>
+            <h1 className="text-screen-title" style={{ marginBottom: '16px' }}>
+              Search
+            </h1>
+            <p
+              className="text-artist"
+              style={{ color: 'var(--color-text-secondary)' }}
+            >
+              Coming soon
+            </p>
+          </div>
+        </div>
+      </AppShell>
+
+      <SettingsDrawer
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
+    </>
   );
 }

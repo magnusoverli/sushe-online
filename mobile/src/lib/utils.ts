@@ -68,6 +68,43 @@ export function buildAlbumTags(album: {
 }
 
 /**
+ * Slugify an artist name for RateYourMusic URLs.
+ *
+ * Matches the slug logic in the web app's discovery module:
+ * lowercase, apostrophes removed, "&" → "and", special chars stripped,
+ * spaces → hyphens, collapsed/trimmed.
+ */
+export function slugifyForRym(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/['']/g, '') // Remove apostrophes
+    .replace(/&/g, 'and') // Replace & with "and"
+    .replace(/[^\w\s-]/g, '') // Remove special chars except spaces/hyphens
+    .replace(/\s+/g, '-') // Spaces → hyphens
+    .replace(/-+/g, '-') // Collapse multiple hyphens
+    .replace(/^-|-$/g, ''); // Trim leading/trailing hyphens
+}
+
+/**
+ * Build a RateYourMusic artist URL from an artist name.
+ */
+export function getRymArtistUrl(artistName: string): string {
+  return `https://rateyourmusic.com/artist/${slugifyForRym(artistName)}`;
+}
+
+/**
+ * Format a playcount number for compact display.
+ * e.g. 0 → "0", 999 → "999", 1500 → "1.5K", 2300000 → "2.3M"
+ */
+export function formatPlaycount(count: number | null | undefined): string {
+  if (count === null || count === undefined) return '';
+  if (count === 0) return '0';
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+  return count.toString();
+}
+
+/**
  * Sort albums by the given key. Returns a new array.
  */
 export function sortAlbums<

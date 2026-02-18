@@ -68,7 +68,7 @@ export const CoverImage = memo(function CoverImage({
   onRecommendationClick,
   onPlay,
   isNowPlaying = false,
-  size = 52,
+  size = 60,
 }: CoverImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);

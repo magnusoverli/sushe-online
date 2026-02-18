@@ -45,6 +45,14 @@ interface AppState {
   isDrawerOpen: boolean;
   setDrawerOpen: (open: boolean) => void;
   toggleDrawer: () => void;
+
+  // Setup wizard snooze (session-only, resets on reload)
+  setupWizardSnoozed: boolean;
+  setSetupWizardSnoozed: (snoozed: boolean) => void;
+
+  // Recommendation browsing mode
+  recommendationYear: number | null;
+  setRecommendationYear: (year: number | null) => void;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -68,4 +76,12 @@ export const useAppStore = create<AppState>((set) => ({
   isDrawerOpen: false,
   setDrawerOpen: (open) => set({ isDrawerOpen: open }),
   toggleDrawer: () => set((state) => ({ isDrawerOpen: !state.isDrawerOpen })),
+
+  // Setup wizard snooze
+  setupWizardSnoozed: false,
+  setSetupWizardSnoozed: (snoozed) => set({ setupWizardSnoozed: snoozed }),
+
+  // Recommendation browsing mode
+  recommendationYear: null,
+  setRecommendationYear: (year) => set({ recommendationYear: year }),
 }));

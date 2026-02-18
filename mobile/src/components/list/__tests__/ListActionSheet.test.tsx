@@ -109,6 +109,79 @@ describe('ListActionSheet', () => {
     expect(screen.getByText('Send to Spotify')).toBeInTheDocument();
   });
 
+  it('shows Send to Tidal for Tidal-only users', () => {
+    const tidalUser: User = {
+      ...mockUser,
+      spotifyConnected: false,
+      tidalConnected: true,
+    };
+    render(
+      <ListActionSheet
+        open
+        onClose={vi.fn()}
+        list={mockList}
+        user={tidalUser}
+      />
+    );
+    expect(screen.getByText('Send to Tidal')).toBeInTheDocument();
+  });
+
+  it('shows Send to Tidal when both connected with tidal preference', () => {
+    const bothUser: User = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: 'tidal',
+    };
+    render(
+      <ListActionSheet open onClose={vi.fn()} list={mockList} user={bothUser} />
+    );
+    expect(screen.getByText('Send to Tidal')).toBeInTheDocument();
+  });
+
+  it('shows Send to Spotify when both connected with spotify preference', () => {
+    const bothUser: User = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: 'spotify',
+    };
+    render(
+      <ListActionSheet open onClose={vi.fn()} list={mockList} user={bothUser} />
+    );
+    expect(screen.getByText('Send to Spotify')).toBeInTheDocument();
+  });
+
+  it('shows generic label when both connected with no preference', () => {
+    const bothUser: User = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: null,
+    };
+    render(
+      <ListActionSheet open onClose={vi.fn()} list={mockList} user={bothUser} />
+    );
+    expect(screen.getByText('Send to Music Service')).toBeInTheDocument();
+  });
+
+  it('hides Send to Service when no service connected', () => {
+    const noServiceUser: User = {
+      ...mockUser,
+      spotifyConnected: false,
+      tidalConnected: false,
+    };
+    render(
+      <ListActionSheet
+        open
+        onClose={vi.fn()}
+        list={mockList}
+        user={noServiceUser}
+      />
+    );
+    expect(screen.queryByText(/Send to/)).not.toBeInTheDocument();
+  });
+
   it('shows Move to Collection for collection lists', () => {
     render(
       <ListActionSheet

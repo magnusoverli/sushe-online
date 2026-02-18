@@ -1,7 +1,37 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { AlbumActionSheet } from '../AlbumActionSheet';
 import type { Album, User } from '@/lib/types';
+
+// Mock spotify service
+vi.mock('@/services/spotify', () => ({
+  getDevices: vi.fn(() =>
+    Promise.resolve({
+      devices: [
+        { id: 'd1', name: 'Speaker', type: 'Speaker', is_active: true },
+      ],
+    })
+  ),
+  searchAlbum: vi.fn(() => Promise.resolve({ id: 'sp-id' })),
+  playAlbum: vi.fn(() => Promise.resolve({ success: true })),
+}));
+
+// Mock tidal service
+vi.mock('@/services/tidal', () => ({
+  openInTidal: vi.fn(),
+}));
+
+// Mock playback features
+vi.mock('@/features/playback', () => ({
+  getDeviceIcon: vi.fn(() => '🔊'),
+}));
+
+// Mock toast
+vi.mock('@/components/ui/Toast', () => ({
+  showToast: vi.fn(),
+}));
+
+import { openInTidal } from '@/services/tidal';
 
 const mockAlbum: Album = {
   _id: 'item-1',
@@ -107,5 +137,89 @@ describe('AlbumActionSheet', () => {
     vi.advanceTimersByTime(300);
     expect(defaultProps.onEditDetails).toHaveBeenCalled();
     vi.useRealTimers();
+  });
+
+  it('shows disabled Play Album when no service connected', () => {
+    render(<AlbumActionSheet {...defaultProps} />);
+    expect(screen.getByText('Play Album')).toBeInTheDocument();
+    // The disabled ActionItem version is rendered
+    const playButton = screen.getByText('Play Album').closest('button');
+    expect(playButton).toBeDisabled();
+  });
+
+  it('shows Play Album button when only Spotify is connected', () => {
+    const user = { ...mockUser, spotifyConnected: true };
+    render(<AlbumActionSheet {...defaultProps} user={user} />);
+    expect(screen.getByTestId('play-album-action')).toBeInTheDocument();
+  });
+
+  it('shows "Open in Tidal" when only Tidal is connected', () => {
+    const user = { ...mockUser, tidalConnected: true };
+    render(<AlbumActionSheet {...defaultProps} user={user} />);
+    expect(screen.getByText('Open in Tidal')).toBeInTheDocument();
+  });
+
+  it('opens Tidal when clicking play with only Tidal connected', () => {
+    const user = { ...mockUser, tidalConnected: true };
+    const onClose = vi.fn();
+    render(
+      <AlbumActionSheet {...defaultProps} user={user} onClose={onClose} />
+    );
+    fireEvent.click(screen.getByTestId('play-album-action'));
+    expect(openInTidal).toHaveBeenCalledWith('Opeth', 'Blackwater Park');
+  });
+
+  it('shows service chooser when both connected with no preference', async () => {
+    const user = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: null,
+    };
+    render(<AlbumActionSheet {...defaultProps} user={user} />);
+    fireEvent.click(screen.getByTestId('play-album-action'));
+    await waitFor(() => {
+      expect(screen.getByText('Play with...')).toBeInTheDocument();
+    });
+  });
+
+  it('expands Spotify devices when both connected with spotify preference', async () => {
+    const user = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: 'spotify',
+    };
+    render(<AlbumActionSheet {...defaultProps} user={user} />);
+    fireEvent.click(screen.getByTestId('play-album-action'));
+    await waitFor(() => {
+      expect(screen.getByTestId('device-picker')).toBeInTheDocument();
+    });
+  });
+
+  it('opens Tidal when both connected with tidal preference', () => {
+    const user = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: 'tidal',
+    };
+    render(<AlbumActionSheet {...defaultProps} user={user} />);
+    fireEvent.click(screen.getByTestId('play-album-action'));
+    expect(openInTidal).toHaveBeenCalledWith('Opeth', 'Blackwater Park');
+  });
+
+  it('shows "Open in Tidal" link when Spotify devices are expanded and Tidal is connected', async () => {
+    const user = {
+      ...mockUser,
+      spotifyConnected: true,
+      tidalConnected: true,
+      musicService: 'spotify',
+    };
+    render(<AlbumActionSheet {...defaultProps} user={user} />);
+    fireEvent.click(screen.getByTestId('play-album-action'));
+    await waitFor(() => {
+      expect(screen.getByTestId('open-in-tidal')).toBeInTheDocument();
+    });
   });
 });

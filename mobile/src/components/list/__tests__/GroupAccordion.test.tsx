@@ -94,4 +94,44 @@ describe('GroupAccordion', () => {
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
   });
+
+  it('renders drag handle when showDragHandle is true', () => {
+    render(
+      <GroupAccordion name="Favorites" isYearGroup={false} showDragHandle>
+        <div>item</div>
+      </GroupAccordion>
+    );
+    expect(screen.getByTestId('group-drag-handle')).toBeInTheDocument();
+  });
+
+  it('does not render drag handle by default', () => {
+    render(
+      <GroupAccordion name="Favorites" isYearGroup={false}>
+        <div>item</div>
+      </GroupAccordion>
+    );
+    expect(screen.queryByTestId('group-drag-handle')).not.toBeInTheDocument();
+  });
+
+  it('applies dragging visual state', () => {
+    render(
+      <GroupAccordion name="Dragging" isYearGroup={false} dragState="dragging">
+        <div>item</div>
+      </GroupAccordion>
+    );
+    const accordion = screen.getByTestId('group-accordion');
+    const header = accordion.firstElementChild as HTMLElement;
+    expect(header.style.opacity).toBe('0.5');
+  });
+
+  it('applies drop-target visual state', () => {
+    render(
+      <GroupAccordion name="Target" isYearGroup={false} dragState="drop-target">
+        <div>item</div>
+      </GroupAccordion>
+    );
+    const accordion = screen.getByTestId('group-accordion');
+    const header = accordion.firstElementChild as HTMLElement;
+    expect(header.style.background).toContain('rgba(232, 200, 122, 0.06)');
+  });
 });

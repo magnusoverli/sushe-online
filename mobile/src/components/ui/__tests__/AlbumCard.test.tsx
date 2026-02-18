@@ -101,4 +101,28 @@ describe('AlbumCard', () => {
     );
     expect(screen.getByTestId('cover')).toBeInTheDocument();
   });
+
+  it('renders playcount when provided and > 0', () => {
+    render(<AlbumCard {...defaultProps} playcount={1500} />);
+    const el = screen.getByTestId('album-playcount');
+    expect(el).toBeInTheDocument();
+    expect(el).toHaveTextContent('1.5K');
+    expect(el.title).toBe('1,500 plays on Last.fm');
+  });
+
+  it('does not render playcount when not provided', () => {
+    render(<AlbumCard {...defaultProps} />);
+    expect(screen.queryByTestId('album-playcount')).not.toBeInTheDocument();
+  });
+
+  it('does not render playcount when zero', () => {
+    render(<AlbumCard {...defaultProps} playcount={0} />);
+    expect(screen.queryByTestId('album-playcount')).not.toBeInTheDocument();
+  });
+
+  it('renders raw playcount for small numbers', () => {
+    render(<AlbumCard {...defaultProps} playcount={42} />);
+    const el = screen.getByTestId('album-playcount');
+    expect(el).toHaveTextContent('42');
+  });
 });
