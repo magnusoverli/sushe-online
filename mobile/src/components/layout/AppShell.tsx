@@ -1,5 +1,6 @@
 /**
- * AppShell - Top-level layout with scrollable content area and sticky TabBar.
+ * AppShell - Top-level layout with scrollable content area, optional
+ * NowPlayingBar, and sticky TabBar.
  *
  * Structure:
  * ┌──────────────────────┐
@@ -7,21 +8,31 @@
  * │                       │
  * │                       │
  * ├──────────────────────┤
+ * │  NowPlayingBar        │ ← conditional, 64px
+ * ├──────────────────────┤
  * │  TabBar (sticky)      │ ← 64px + safe area
  * └──────────────────────┘
  */
 
 import type { ReactNode, Ref } from 'react';
 import { TabBar, type TabId } from '@/components/ui/TabBar';
+import { NowPlayingBar } from '@/components/player/NowPlayingBar';
 
 interface AppShellProps {
   activeTab: TabId;
   children: ReactNode;
   /** Ref to the scrollable content area (for auto-scroll during drag). */
   scrollRef?: Ref<HTMLElement | null>;
+  /** Whether the NowPlayingBar should be visible. */
+  showNowPlaying?: boolean;
 }
 
-export function AppShell({ activeTab, children, scrollRef }: AppShellProps) {
+export function AppShell({
+  activeTab,
+  children,
+  scrollRef,
+  showNowPlaying = false,
+}: AppShellProps) {
   return (
     <div
       style={{
@@ -46,6 +57,7 @@ export function AppShell({ activeTab, children, scrollRef }: AppShellProps) {
       >
         {children}
       </main>
+      <NowPlayingBar visible={showNowPlaying} />
       <TabBar activeTab={activeTab} />
     </div>
   );

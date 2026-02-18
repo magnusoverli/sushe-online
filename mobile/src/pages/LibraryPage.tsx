@@ -22,6 +22,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
 import { useDragStore } from '@/stores/drag-store';
+import { usePlaybackStore } from '@/stores/playback-store';
 import { useListsMetadata, useListAlbums, useGroups } from '@/hooks/useLists';
 import {
   getAlbumCoverUrl,
@@ -38,6 +39,10 @@ import {
 } from '@/services/lists';
 import { readImportFile, importList } from '@/services/import';
 import { useDragAndDrop } from '@/features/drag-drop';
+import {
+  usePlaybackPolling,
+  isAlbumMatchingPlayback,
+} from '@/features/playback';
 import { AppShell } from '@/components/layout/AppShell';
 import { ListHeader } from '@/components/list/ListHeader';
 import { ListFooter } from '@/components/list/ListFooter';
@@ -64,6 +69,7 @@ import {
 import { ListSelectionSheet } from '@/components/album/ListSelectionSheet';
 import { SummarySheet } from '@/components/album/SummarySheet';
 import { RecommendationInfoSheet } from '@/components/album/RecommendationInfoSheet';
+import { SimilarArtistsSheet } from '@/components/album/SimilarArtistsSheet';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/components/ui/Toast';
 import {
@@ -213,8 +219,23 @@ export function LibraryPage() {
     recommendedAt: string | null;
   } | null>(null);
 
+  const [similarArtistTarget, setSimilarArtistTarget] = useState<string | null>(
+    null
+  );
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollContainerRef = useRef<HTMLElement>(null);
+
+  // ── Spotify playback polling ──
+  usePlaybackPolling({
+    spotifyConnected: !!user?.spotifyConnected,
+    lastfmConnected: !!user?.lastfmConnected,
+  });
+
+  // Playback state for now-playing matching
+  const playbackAlbumName = usePlaybackStore((s) => s.albumName);
+  const playbackArtistName = usePlaybackStore((s) => s.artistName);
+  const playbackIsPlaying = usePlaybackStore((s) => s.isPlaying);
 
   // Fetch lists metadata
   const {
@@ -336,6 +357,28 @@ export function LibraryPage() {
     },
     [isDragging, dragIndex, dropIndex, sortedAlbums, displayAlbums]
   );
+
+  /** Check if a given album matches the currently playing track. */
+  const checkNowPlaying = useCallback(
+    (album: Album): boolean => {
+      if (!playbackIsPlaying || !playbackAlbumName || !playbackArtistName) {
+        return false;
+      }
+      return isAlbumMatchingPlayback(
+        album.album,
+        album.artist,
+        playbackAlbumName,
+        playbackArtistName
+      );
+    },
+    [playbackIsPlaying, playbackAlbumName, playbackArtistName]
+  );
+
+  /** Whether ANY album in the current list matches the now-playing track. */
+  const showNowPlaying = useMemo(() => {
+    if (!playbackIsPlaying || !displayAlbums.length) return false;
+    return displayAlbums.some(checkNowPlaying);
+  }, [playbackIsPlaying, displayAlbums, checkNowPlaying]);
 
   const handleSortSelect = useCallback((id: string) => {
     setSortKey(id as AlbumSortKey);
@@ -697,7 +740,11 @@ export function LibraryPage() {
 
   return (
     <>
-      <AppShell activeTab="library" scrollRef={scrollContainerRef}>
+      <AppShell
+        activeTab="library"
+        scrollRef={scrollContainerRef}
+        showNowPlaying={showNowPlaying}
+      >
         {/* Header */}
         <ListHeader
           eyebrow={groupName}
@@ -818,6 +865,7 @@ export function LibraryPage() {
               }
 
               const cardState = getCardState(index);
+              const albumIsNowPlaying = checkNowPlaying(album);
 
               return (
                 <div
@@ -852,6 +900,12 @@ export function LibraryPage() {
                         }
                         hasSummary={!!album.summary}
                         hasRecommendation={!!album.recommended_by}
+                        isNowPlaying={albumIsNowPlaying}
+                        onPlay={
+                          user?.spotifyConnected
+                            ? () => handleAlbumMenuClick(album)
+                            : undefined
+                        }
                         onSummaryClick={() =>
                           setSummaryTarget({
                             albumId: album.album_id,
@@ -1126,17 +1180,14 @@ export function LibraryPage() {
         onRemove={() => {
           setRemoveAlbumTarget(albumActionTarget);
         }}
-        onPlayAlbum={() => {
-          // TODO: Phase 8 — music integration
-          showToast('Music playback coming soon', 'info');
-        }}
         onRecommend={() => {
           // TODO: Phase 9 — recommendation flow
           showToast('Recommendation feature coming soon', 'info');
         }}
         onSimilarArtists={() => {
-          // TODO: Phase 8 — Last.fm integration
-          showToast('Similar artists coming soon', 'info');
+          if (albumActionTarget) {
+            setSimilarArtistTarget(albumActionTarget.artist);
+          }
         }}
       />
 
@@ -1207,6 +1258,13 @@ export function LibraryPage() {
         artistName={recommendationTarget?.artistName ?? ''}
         recommendedBy={recommendationTarget?.recommendedBy ?? null}
         recommendedAt={recommendationTarget?.recommendedAt ?? null}
+      />
+
+      {/* Similar artists sheet */}
+      <SimilarArtistsSheet
+        open={similarArtistTarget !== null}
+        onClose={() => setSimilarArtistTarget(null)}
+        artistName={similarArtistTarget ?? ''}
       />
 
       {/* Ghost card for drag-and-drop */}

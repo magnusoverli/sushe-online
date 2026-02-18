@@ -70,7 +70,7 @@ describe('startAutoScroll', () => {
 
   it('scrolls the container by the speed on each tick', () => {
     const container = { scrollTop: 100 } as HTMLElement;
-    let tickFn: FrameRequestCallback | null = null;
+    let tickFn: FrameRequestCallback | undefined;
 
     vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
       if (!tickFn) tickFn = cb;
@@ -83,7 +83,7 @@ describe('startAutoScroll', () => {
     const stop = startAutoScroll(container, () => 3);
 
     // Simulate one animation frame
-    if (tickFn) tickFn(0);
+    tickFn!(0);
     expect(container.scrollTop).toBe(103);
 
     stop();

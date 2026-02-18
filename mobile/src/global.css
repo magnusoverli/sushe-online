@@ -223,3 +223,49 @@ a {
   color: inherit;
   text-decoration: none;
 }
+
+/* ── Now-Playing Animated Border ── */
+@property --now-playing-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes now-playing-rotate {
+  to {
+    --now-playing-angle: 360deg;
+  }
+}
+
+.cover-now-playing {
+  position: relative;
+  isolation: isolate;
+  overflow: visible !important;
+}
+
+.cover-now-playing::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 11px; /* cover radius (10px) + 1px inset */
+  background: conic-gradient(
+    from var(--now-playing-angle),
+    #1ed760 0%,
+    #1ed760 25%,
+    rgba(30, 215, 96, 0.6) 35%,
+    transparent 45%,
+    transparent 55%,
+    rgba(30, 215, 96, 0.6) 65%,
+    #1ed760 75%,
+    #1ed760 100%
+  );
+  z-index: -1;
+  animation: now-playing-rotate 3.5s linear infinite;
+}
+
+/* ── Spinner ── */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
