@@ -47,6 +47,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ListHeader } from '@/components/list/ListHeader';
 import { ListFooter } from '@/components/list/ListFooter';
 import { AlbumCard, type CardState } from '@/components/ui/AlbumCard';
+import { SkeletonList } from '@/components/ui/SkeletonCard';
 import { CoverImage } from '@/components/album/CoverImage';
 import { GhostCard } from '@/components/ui/GhostCard';
 import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
@@ -843,16 +844,8 @@ export function LibraryPage() {
 
         {/* Album list */}
         {albumsLoading ? (
-          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-            <span
-              style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
-                color: 'var(--color-text-secondary)',
-              }}
-            >
-              Loading albums...
-            </span>
+          <div style={{ padding: '0 var(--space-list-x)' }}>
+            <SkeletonList count={8} />
           </div>
         ) : albumsError ? (
           <div style={{ padding: '32px 24px', textAlign: 'center' }}>

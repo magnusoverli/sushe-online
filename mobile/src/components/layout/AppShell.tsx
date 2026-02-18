@@ -52,6 +52,7 @@ export function AppShell({
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
+          paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
         data-testid="app-shell-content"
       >

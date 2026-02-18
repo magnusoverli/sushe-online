@@ -141,7 +141,7 @@ export function AlbumCard({
 
   return (
     <div
-      className={className}
+      className={`${onClick ? 'touch-feedback' : ''} ${className || ''}`}
       style={cardStyle}
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}

@@ -224,6 +224,63 @@ a {
   text-decoration: none;
 }
 
+/* ── Touch Feedback ── */
+/* Active (pressed) state for interactive cards and items */
+.touch-feedback {
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease;
+}
+
+.touch-feedback:active {
+  opacity: 0.7;
+  transform: scale(0.98);
+}
+
+/* ── Skeleton Loader ── */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.08) 37%,
+    rgba(255, 255, 255, 0.04) 63%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.skeleton-cover {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-cover, 10px);
+}
+
+.skeleton-text {
+  height: 12px;
+  border-radius: 4px;
+}
+
+.skeleton-text-sm {
+  height: 9px;
+  border-radius: 3px;
+}
+
+.skeleton-tag {
+  width: 48px;
+  height: 18px;
+  border-radius: 12px;
+}
+
 /* ── Now-Playing Animated Border ── */
 @property --now-playing-angle {
   syntax: '<angle>';

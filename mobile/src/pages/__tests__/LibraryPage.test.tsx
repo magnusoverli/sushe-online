@@ -257,7 +257,7 @@ describe('LibraryPage', () => {
     renderWithProviders();
 
     await waitFor(() => {
-      expect(screen.getByText('Loading albums...')).toBeInTheDocument();
+      expect(screen.getByTestId('skeleton-list')).toBeInTheDocument();
     });
   });
 
