@@ -1,0 +1,208 @@
+/*
+ * Global Styles - SuShe Mobile
+ * Reset, base styles, and global utilities.
+ */
+
+@import './design-tokens.css';
+
+/* ── Reset ── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Touch Interaction Defaults ── */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Base ── */
+html {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--color-shell);
+  color: var(--color-text-primary);
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+  min-height: calc(var(--vh, 1vh) * 100);
+}
+
+/* ── Scrollbar Hiding ── */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Typography Utilities ── */
+.font-display {
+  font-family: var(--font-display);
+}
+
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+/* Screen heading: DM Serif Display 32px, -0.02em, lh 1.1 */
+.text-screen-title {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--color-text-primary);
+}
+
+/* Album title: DM Serif Display 15px, -0.01em, lh 1.3 */
+.text-album-title {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--color-text-primary);
+}
+
+/* Artist name: DM Mono 11px, +0.02em */
+.text-artist {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+}
+
+/* Section eyebrow: DM Mono 10px, +0.2em, uppercase */
+.text-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-text-label);
+}
+
+/* Header meta: DM Mono 11px, +0.05em */
+.text-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+  color: var(--color-text-label);
+}
+
+/* Tag pill text: DM Mono 9px, +0.1em, uppercase */
+.text-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+/* Rank number: DM Mono 11px, weight 300 */
+.text-rank {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 300;
+  letter-spacing: 0;
+  color: var(--color-text-rank);
+}
+
+/* Footer hint: DM Mono 10px, +0.1em, uppercase */
+.text-footer {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.12);
+}
+
+/* ── Truncation ── */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Safe Area ── */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Selection ── */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── Transitions ── */
+.transition-bg {
+  transition: background 150ms ease;
+}
+
+.transition-opacity {
+  transition: opacity 200ms ease;
+}
+
+.transition-transform {
+  transition: transform 200ms ease;
+}
+
+.transition-border {
+  transition: border-color 150ms ease;
+}
+
+.transition-color {
+  transition: color 200ms ease;
+}
+
+/* ── Focus Visible ── */
+:focus-visible {
+  outline: 2px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+/* ── Form base ── */
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  background: none;
+  border: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}

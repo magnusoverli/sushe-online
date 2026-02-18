@@ -49,6 +49,7 @@ export default [
       'playwright-report/**',
       'coverage/**',
       'test-results/**',
+      'mobile/**',
     ],
   },
   {
