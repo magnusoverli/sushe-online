@@ -102,6 +102,18 @@ export async function updateListItems(
 }
 
 /**
+ * Full replacement of list items (PUT).
+ */
+export async function replaceListItems(
+  listId: string,
+  data: Album[]
+): Promise<{ success: boolean; count: number }> {
+  return api.put<{ success: boolean; count: number }>(`/api/lists/${listId}`, {
+    data,
+  });
+}
+
+/**
  * Toggle main list status.
  */
 export async function setMainList(

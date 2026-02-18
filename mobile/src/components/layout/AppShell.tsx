@@ -34,6 +34,7 @@ export function AppShell({ activeTab, children }: AppShellProps) {
       <main
         style={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',

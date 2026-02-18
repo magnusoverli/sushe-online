@@ -19,9 +19,14 @@ export interface ActionItemProps {
   label: string;
   subtitle?: string;
   destructive?: boolean;
+  /** Alias for destructive - "destructive" variant sets destructive=true */
+  variant?: 'standard' | 'destructive';
   showChevron?: boolean;
+  /** Alias for showChevron */
+  hasChevron?: boolean;
   onClick?: () => void;
   disabled?: boolean;
+  style?: CSSProperties;
 }
 
 const itemStyle: CSSProperties = {
@@ -68,17 +73,22 @@ export function ActionItem({
   label,
   subtitle,
   destructive = false,
+  variant,
   showChevron = false,
+  hasChevron,
   onClick,
   disabled = false,
+  style,
 }: ActionItemProps) {
-  const iconColor = destructive
+  const isDestructive = destructive || variant === 'destructive';
+  const isChevron = showChevron || hasChevron;
+  const iconColor = isDestructive
     ? 'var(--color-destructive)'
     : 'rgba(255,255,255,0.50)';
-  const textColor = destructive
+  const textColor = isDestructive
     ? 'var(--color-destructive)'
     : 'rgba(255,255,255,0.75)';
-  const iconBg = destructive
+  const iconBg = isDestructive
     ? 'var(--color-destructive-bg)'
     : 'rgba(255,255,255,0.05)';
 
@@ -89,6 +99,7 @@ export function ActionItem({
         ...itemStyle,
         opacity: disabled ? 0.4 : 1,
         cursor: disabled ? 'default' : 'pointer',
+        ...style,
       }}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
@@ -108,7 +119,7 @@ export function ActionItem({
       </div>
 
       {/* Chevron (not shown on destructive items) */}
-      {showChevron && !destructive && (
+      {isChevron && !isDestructive && (
         <ChevronRight
           size={12}
           style={{ color: 'rgba(255,255,255,0.20)', flexShrink: 0 }}

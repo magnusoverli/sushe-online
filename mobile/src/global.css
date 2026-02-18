@@ -196,6 +196,23 @@ select {
   color: inherit;
 }
 
+/*
+ * Prevent iOS Safari auto-zoom on focus.
+ * Safari zooms in when input font-size < 16px and does not zoom back out.
+ * Force text inputs and selects to 16px to avoid this.
+ */
+input[type='text'],
+input[type='number'],
+input[type='email'],
+input[type='password'],
+input[type='search'],
+input[type='tel'],
+input[type='url'],
+textarea,
+select {
+  font-size: 16px !important;
+}
+
 button {
   cursor: pointer;
   background: none;

@@ -13,13 +13,23 @@
  * - Group action sheet (rename, delete collection)
  * - Create list / collection sheets
  * - Import from JSON file
+ * - Album action sheet (edit, move, copy, remove)
+ * - Full-screen album editor (cover, genres, tracks, comments)
+ * - AI summary and recommendation info sheets
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
 import { useListsMetadata, useListAlbums, useGroups } from '@/hooks/useLists';
-import { getAlbumCoverUrl } from '@/services/albums';
+import {
+  getAlbumCoverUrl,
+  updateAlbumCountry,
+  updateAlbumGenres,
+  updateAlbumComment,
+  updateAlbumComment2,
+} from '@/services/albums';
+import { updateListItems, getList, replaceListItems } from '@/services/lists';
 import { readImportFile, importList } from '@/services/import';
 import { AppShell } from '@/components/layout/AppShell';
 import { ListHeader } from '@/components/list/ListHeader';
@@ -38,6 +48,15 @@ import { CollectionPickerSheet } from '@/components/list/CollectionPickerSheet';
 import { CreateListSheet } from '@/components/list/CreateListSheet';
 import { CreateCollectionSheet } from '@/components/list/CreateCollectionSheet';
 import { EditListSheet } from '@/components/list/EditListSheet';
+import { AlbumActionSheet } from '@/components/album/AlbumActionSheet';
+import {
+  AlbumEditForm,
+  type AlbumEditUpdates,
+} from '@/components/album/AlbumEditForm';
+import { ListSelectionSheet } from '@/components/album/ListSelectionSheet';
+import { SummarySheet } from '@/components/album/SummarySheet';
+import { RecommendationInfoSheet } from '@/components/album/RecommendationInfoSheet';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/components/ui/Toast';
 import {
   ChevronDown,
@@ -48,7 +67,7 @@ import {
   Star,
 } from 'lucide-react';
 import { isYearMismatch, buildAlbumTags, sortAlbums } from '@/lib/utils';
-import type { AlbumSortKey, ListMetadata, Group } from '@/lib/types';
+import type { Album, AlbumSortKey, ListMetadata, Group } from '@/lib/types';
 
 const SORT_OPTIONS: DropdownItem[] = [
   { id: 'custom', label: 'Custom Order' },
@@ -157,6 +176,28 @@ export function LibraryPage() {
   const [showCreateList, setShowCreateList] = useState(false);
   const [showCreateCollection, setShowCreateCollection] = useState(false);
   const [editListTarget, setEditListTarget] = useState<string | null>(null);
+
+  // Album action states
+  const [albumActionTarget, setAlbumActionTarget] = useState<Album | null>(
+    null
+  );
+  const [albumEditTarget, setAlbumEditTarget] = useState<Album | null>(null);
+  const [moveAlbumTarget, setMoveAlbumTarget] = useState<Album | null>(null);
+  const [copyAlbumTarget, setCopyAlbumTarget] = useState<Album | null>(null);
+  const [removeAlbumTarget, setRemoveAlbumTarget] = useState<Album | null>(
+    null
+  );
+  const [summaryTarget, setSummaryTarget] = useState<{
+    albumId: string;
+    albumName: string;
+    artistName: string;
+  } | null>(null);
+  const [recommendationTarget, setRecommendationTarget] = useState<{
+    albumName: string;
+    artistName: string;
+    recommendedBy: string | null;
+    recommendedAt: string | null;
+  } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -303,6 +344,179 @@ export function LibraryPage() {
     [refreshData, setActiveListId]
   );
 
+  // ── Album action handlers ──
+
+  const handleAlbumMenuClick = useCallback((album: Album) => {
+    setAlbumActionTarget(album);
+  }, []);
+
+  const handleAlbumEdit = useCallback(
+    async (updates: AlbumEditUpdates) => {
+      if (!albumEditTarget || !activeListId) return;
+
+      try {
+        const album = albumEditTarget;
+
+        // Save canonical fields (country, genres) via album API
+        const promises: Promise<unknown>[] = [];
+
+        if (updates.country !== album.country) {
+          promises.push(updateAlbumCountry(album.album_id, updates.country));
+        }
+        if (
+          updates.genre_1 !== album.genre_1 ||
+          updates.genre_2 !== album.genre_2
+        ) {
+          promises.push(
+            updateAlbumGenres(album.album_id, {
+              genre_1: updates.genre_1,
+              genre_2: updates.genre_2,
+            })
+          );
+        }
+
+        // Save per-list-item fields (comments) via list API
+        // Use album_id (canonical identifier) — stable across PUT replacements
+        // which regenerate all _id values
+        if (updates.comments !== album.comments) {
+          promises.push(
+            updateAlbumComment(
+              activeListId,
+              album.album_id,
+              updates.comments || null
+            )
+          );
+        }
+        if (updates.comments_2 !== album.comments_2) {
+          promises.push(
+            updateAlbumComment2(
+              activeListId,
+              album.album_id,
+              updates.comments_2 || null
+            )
+          );
+        }
+
+        // Save list-level changes (artist, album, release_date, cover) via full replacement
+        const albumData: Partial<Album> = {
+          _id: album._id,
+          album_id: album.album_id,
+          artist: updates.artist,
+          album: updates.album,
+          release_date: updates.release_date,
+        };
+        if (updates.cover_image) {
+          albumData.cover_image = updates.cover_image;
+          albumData.cover_image_format = updates.cover_image_format;
+        }
+
+        // Run comment/genre/country updates first (they use album_id, which is stable),
+        // then do the full list replacement (PUT regenerates all _id values)
+        await Promise.all(promises);
+
+        const currentAlbums = await getList(activeListId);
+        const idx = currentAlbums.findIndex((a) => a._id === album._id);
+        if (idx >= 0) {
+          currentAlbums[idx] = { ...currentAlbums[idx]!, ...albumData };
+          await replaceListItems(activeListId, currentAlbums);
+        }
+
+        // Refresh data
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({
+          queryKey: ['list-albums', activeListId],
+        });
+        showToast('Album updated', 'success');
+      } catch {
+        showToast('Failed to update album', 'error');
+      }
+    },
+    [albumEditTarget, activeListId, queryClient]
+  );
+
+  const handleMoveAlbum = useCallback(
+    async (targetListId: string) => {
+      if (!moveAlbumTarget || !activeListId) return;
+
+      try {
+        // Add to target list first (strip list-specific _id)
+        // This order ensures the album isn't lost if the second operation fails
+        const { _id, ...rest } = moveAlbumTarget;
+        await updateListItems(targetListId, { added: [rest] });
+
+        // Then remove from source list using album_id (canonical identifier)
+        // The API's removed array expects album_id, not list-item _id
+        await updateListItems(activeListId, {
+          removed: [moveAlbumTarget.album_id],
+        });
+
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({
+          queryKey: ['list-albums', activeListId],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['list-albums', targetListId],
+        });
+
+        showToast('Album moved', 'success');
+      } catch {
+        showToast('Failed to move album', 'error');
+      } finally {
+        setMoveAlbumTarget(null);
+      }
+    },
+    [moveAlbumTarget, activeListId, queryClient]
+  );
+
+  const handleCopyAlbum = useCallback(
+    async (targetListId: string) => {
+      if (!copyAlbumTarget) return;
+
+      try {
+        const { _id, ...rest } = copyAlbumTarget;
+        const result = await updateListItems(targetListId, { added: [rest] });
+
+        if (result.duplicates && result.duplicates.length > 0) {
+          showToast('Album already exists in target list', 'info');
+        } else {
+          showToast('Album copied', 'success');
+        }
+
+        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({
+          queryKey: ['list-albums', targetListId],
+        });
+      } catch {
+        showToast('Failed to copy album', 'error');
+      } finally {
+        setCopyAlbumTarget(null);
+      }
+    },
+    [copyAlbumTarget, queryClient]
+  );
+
+  const handleRemoveAlbum = useCallback(async () => {
+    if (!removeAlbumTarget || !activeListId) return;
+
+    try {
+      // The API's removed array expects album_id (canonical), not list-item _id
+      await updateListItems(activeListId, {
+        removed: [removeAlbumTarget.album_id],
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({
+        queryKey: ['list-albums', activeListId],
+      });
+
+      showToast('Album removed', 'success');
+    } catch {
+      showToast('Failed to remove album', 'error');
+    } finally {
+      setRemoveAlbumTarget(null);
+    }
+  }, [removeAlbumTarget, activeListId, queryClient]);
+
   // ── Build grouped sections for drawer ──
   const drawerSections = useMemo(() => {
     if (!listsMap || !groups) return [];
@@ -396,162 +610,181 @@ export function LibraryPage() {
   }
 
   return (
-    <AppShell activeTab="library">
-      {/* Header */}
-      <ListHeader
-        eyebrow={groupName}
-        title={activeList?.name ?? 'Library'}
-        albumCount={activeList?.count}
-        year={activeList?.year}
-        onMenuClick={handleMenuClick}
-        onOptionsClick={
-          activeListId ? () => setListActionTarget(activeListId) : undefined
-        }
-      />
-
-      {/* Sort bar */}
-      <div
-        style={{
-          padding: '0 var(--space-list-x) 8px',
-          display: 'flex',
-          justifyContent: 'flex-end',
-          position: 'relative',
-        }}
-      >
-        <button
-          ref={sortTriggerRef}
-          type="button"
-          onClick={() => setSortDropdownOpen((o) => !o)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '4px 8px',
-            borderRadius: '6px',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
-            letterSpacing: '0.04em',
-            color: 'var(--color-text-secondary)',
-          }}
-          data-testid="sort-trigger"
-        >
-          {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? 'Sort'}
-          <ChevronDown size={12} />
-        </button>
-        <Dropdown
-          open={sortDropdownOpen}
-          onClose={() => setSortDropdownOpen(false)}
-          items={SORT_OPTIONS}
-          selectedId={sortKey}
-          onSelect={handleSortSelect}
-          sectionLabel="Sort by"
-          anchorRef={sortTriggerRef}
+    <>
+      <AppShell activeTab="library">
+        {/* Header */}
+        <ListHeader
+          eyebrow={groupName}
+          title={activeList?.name ?? 'Library'}
+          albumCount={activeList?.count}
+          year={activeList?.year}
+          onMenuClick={handleMenuClick}
+          onOptionsClick={
+            activeListId ? () => setListActionTarget(activeListId) : undefined
+          }
         />
-      </div>
 
-      {/* Album list */}
-      {albumsLoading ? (
-        <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            Loading albums...
-          </span>
-        </div>
-      ) : albumsError ? (
-        <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              color: 'var(--color-destructive)',
-            }}
-          >
-            Failed to load albums.
-          </span>
-        </div>
-      ) : sortedAlbums.length === 0 ? (
-        <div style={{ padding: '32px 24px', textAlign: 'center' }}>
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              color: 'var(--color-text-secondary)',
-            }}
-          >
-            This list is empty.
-          </span>
-        </div>
-      ) : (
+        {/* Sort bar */}
         <div
-          role="list"
           style={{
+            padding: '0 var(--space-list-x) 8px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: 'var(--space-card-gap-outer)',
-            padding: `0 var(--space-list-x)`,
+            justifyContent: 'flex-end',
+            position: 'relative',
           }}
-          data-testid="album-list"
         >
-          {sortedAlbums.map((album, index) => {
-            const rank = sortKey === 'custom' ? index + 1 : undefined;
-            const tags = buildAlbumTags(album);
-            const yearMismatch = isYearMismatch(
-              album.release_date,
-              activeList?.year ?? null
-            );
-
-            // Add year mismatch tag if applicable
-            if (yearMismatch && album.release_date) {
-              const year = album.release_date.substring(0, 4);
-              tags.push(year);
-            }
-
-            return (
-              <AlbumCard
-                key={album._id}
-                rank={rank}
-                title={album.album}
-                artist={album.artist}
-                showRank={sortKey === 'custom'}
-                tags={tags}
-                coverElement={
-                  <CoverImage
-                    src={
-                      album.cover_image_url ||
-                      (album.album_id
-                        ? getAlbumCoverUrl(album.album_id)
-                        : undefined)
-                    }
-                    alt={`${album.album} by ${album.artist}`}
-                    rank={rank}
-                    showRank={
-                      sortKey === 'custom' && (activeList?.isMain ?? false)
-                    }
-                    hasSummary={!!album.summary}
-                    hasRecommendation={!!album.recommended_by}
-                  />
-                }
-                onMenuClick={() => {
-                  // Phase 6: open album action sheet
-                }}
-              />
-            );
-          })}
+          <button
+            ref={sortTriggerRef}
+            type="button"
+            onClick={() => setSortDropdownOpen((o) => !o)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '9px',
+              letterSpacing: '0.04em',
+              color: 'var(--color-text-secondary)',
+            }}
+            data-testid="sort-trigger"
+          >
+            {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? 'Sort'}
+            <ChevronDown size={12} />
+          </button>
+          <Dropdown
+            open={sortDropdownOpen}
+            onClose={() => setSortDropdownOpen(false)}
+            items={SORT_OPTIONS}
+            selectedId={sortKey}
+            onSelect={handleSortSelect}
+            sectionLabel="Sort by"
+            anchorRef={sortTriggerRef}
+          />
         </div>
-      )}
 
-      {/* Footer */}
-      {sortedAlbums.length > 0 && (
-        <ListFooter albumCount={sortedAlbums.length} />
-      )}
+        {/* Album list */}
+        {albumsLoading ? (
+          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              Loading albums...
+            </span>
+          </div>
+        ) : albumsError ? (
+          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--color-destructive)',
+              }}
+            >
+              Failed to load albums.
+            </span>
+          </div>
+        ) : sortedAlbums.length === 0 ? (
+          <div style={{ padding: '32px 24px', textAlign: 'center' }}>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                color: 'var(--color-text-secondary)',
+              }}
+            >
+              This list is empty.
+            </span>
+          </div>
+        ) : (
+          <div
+            role="list"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-card-gap-outer)',
+              padding: `0 var(--space-list-x)`,
+            }}
+            data-testid="album-list"
+          >
+            {sortedAlbums.map((album, index) => {
+              const rank = sortKey === 'custom' ? index + 1 : undefined;
+              const tags = buildAlbumTags(album);
+              const yearMismatch = isYearMismatch(
+                album.release_date,
+                activeList?.year ?? null
+              );
+
+              // Add year mismatch tag if applicable
+              if (yearMismatch && album.release_date) {
+                const year = album.release_date.substring(0, 4);
+                tags.push(year);
+              }
+
+              return (
+                <AlbumCard
+                  key={album._id}
+                  rank={rank}
+                  title={album.album}
+                  artist={album.artist}
+                  showRank={sortKey === 'custom'}
+                  tags={tags}
+                  coverElement={
+                    <CoverImage
+                      src={
+                        album.cover_image_url ||
+                        (album.album_id
+                          ? getAlbumCoverUrl(album.album_id)
+                          : undefined)
+                      }
+                      alt={`${album.album} by ${album.artist}`}
+                      rank={rank}
+                      showRank={
+                        sortKey === 'custom' && (activeList?.isMain ?? false)
+                      }
+                      hasSummary={!!album.summary}
+                      hasRecommendation={!!album.recommended_by}
+                      onSummaryClick={() =>
+                        setSummaryTarget({
+                          albumId: album.album_id,
+                          albumName: album.album,
+                          artistName: album.artist,
+                        })
+                      }
+                      onRecommendationClick={() =>
+                        setRecommendationTarget({
+                          albumName: album.album,
+                          artistName: album.artist,
+                          recommendedBy: album.recommended_by,
+                          recommendedAt: album.recommended_at,
+                        })
+                      }
+                    />
+                  }
+                  onMenuClick={() => handleAlbumMenuClick(album)}
+                  onClick={() => {
+                    // Tap on album card opens edit form
+                    setAlbumEditTarget(album);
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
+
+        {/* Footer */}
+        {sortedAlbums.length > 0 && (
+          <ListFooter albumCount={sortedAlbums.length} />
+        )}
+      </AppShell>
 
       {/* ── Navigation Drawer ── */}
       <NavigationDrawer
@@ -764,6 +997,110 @@ export function LibraryPage() {
         list={editList}
         onUpdated={refreshData}
       />
-    </AppShell>
+
+      {/* ── Album Action Sheets ── */}
+
+      {/* Album action sheet (three-dot menu) */}
+      <AlbumActionSheet
+        open={albumActionTarget !== null}
+        onClose={() => setAlbumActionTarget(null)}
+        album={albumActionTarget}
+        listYear={activeList?.year ?? null}
+        user={user}
+        onEditDetails={() => {
+          setAlbumEditTarget(albumActionTarget);
+        }}
+        onMoveToList={() => {
+          setMoveAlbumTarget(albumActionTarget);
+        }}
+        onCopyToList={() => {
+          setCopyAlbumTarget(albumActionTarget);
+        }}
+        onRemove={() => {
+          setRemoveAlbumTarget(albumActionTarget);
+        }}
+        onPlayAlbum={() => {
+          // TODO: Phase 8 — music integration
+          showToast('Music playback coming soon', 'info');
+        }}
+        onRecommend={() => {
+          // TODO: Phase 9 — recommendation flow
+          showToast('Recommendation feature coming soon', 'info');
+        }}
+        onSimilarArtists={() => {
+          // TODO: Phase 8 — Last.fm integration
+          showToast('Similar artists coming soon', 'info');
+        }}
+      />
+
+      {/* Album edit form (full-screen) */}
+      <AlbumEditForm
+        open={albumEditTarget !== null}
+        onClose={() => setAlbumEditTarget(null)}
+        album={albumEditTarget}
+        listId={activeListId ?? ''}
+        onSave={handleAlbumEdit}
+      />
+
+      {/* Move to list picker */}
+      <ListSelectionSheet
+        open={moveAlbumTarget !== null}
+        onClose={() => setMoveAlbumTarget(null)}
+        title="Move to List"
+        albumName={moveAlbumTarget?.album ?? ''}
+        artistName={moveAlbumTarget?.artist ?? ''}
+        currentListId={activeListId}
+        lists={listsMap ?? {}}
+        groups={groups ?? []}
+        onSelect={handleMoveAlbum}
+      />
+
+      {/* Copy to list picker */}
+      <ListSelectionSheet
+        open={copyAlbumTarget !== null}
+        onClose={() => setCopyAlbumTarget(null)}
+        title="Copy to List"
+        albumName={copyAlbumTarget?.album ?? ''}
+        artistName={copyAlbumTarget?.artist ?? ''}
+        currentListId={activeListId}
+        lists={listsMap ?? {}}
+        groups={groups ?? []}
+        onSelect={handleCopyAlbum}
+      />
+
+      {/* Remove confirmation */}
+      <ConfirmDialog
+        open={removeAlbumTarget !== null}
+        onCancel={() => setRemoveAlbumTarget(null)}
+        onConfirm={handleRemoveAlbum}
+        title="Remove Album"
+        message={
+          removeAlbumTarget
+            ? `Remove "${removeAlbumTarget.album}" by ${removeAlbumTarget.artist} from this list?`
+            : ''
+        }
+        confirmLabel="Remove"
+        destructive
+      />
+
+      {/* AI Summary sheet */}
+      <SummarySheet
+        open={summaryTarget !== null}
+        onClose={() => setSummaryTarget(null)}
+        albumId={summaryTarget?.albumId ?? null}
+        albumName={summaryTarget?.albumName ?? ''}
+        artistName={summaryTarget?.artistName ?? ''}
+      />
+
+      {/* Recommendation info sheet */}
+      <RecommendationInfoSheet
+        open={recommendationTarget !== null}
+        onClose={() => setRecommendationTarget(null)}
+        albumName={recommendationTarget?.albumName ?? ''}
+        artistName={recommendationTarget?.artistName ?? ''}
+        recommendedBy={recommendationTarget?.recommendedBy ?? null}
+        recommendedAt={recommendationTarget?.recommendedAt ?? null}
+      />
+    </>
   );
 }

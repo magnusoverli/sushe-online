@@ -23,6 +23,7 @@ interface BottomSheetProps {
   open: boolean;
   onClose: () => void;
   title?: string;
+  subtitle?: string;
   children: ReactNode;
 }
 
@@ -67,6 +68,7 @@ export function BottomSheet({
   open,
   onClose,
   title,
+  subtitle,
   children,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -109,10 +111,36 @@ export function BottomSheet({
             <div style={handleStyle} data-testid="sheet-handle" />
 
             {/* Title */}
-            {title && <div style={titleStyle}>{title}</div>}
+            {title && (
+              <div style={titleStyle}>
+                {title}
+                {subtitle && (
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '10px',
+                      color: 'var(--color-text-secondary)',
+                      marginTop: '2px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {subtitle}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Content */}
-            <div style={{ padding: '8px 8px 16px' }}>{children}</div>
+            <div
+              style={{
+                padding:
+                  '8px 8px calc(16px + var(--tabbar-height, 64px) + env(safe-area-inset-bottom, 0px))',
+              }}
+            >
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
