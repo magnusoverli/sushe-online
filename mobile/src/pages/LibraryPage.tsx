@@ -254,9 +254,11 @@ export function LibraryPage() {
     }
   }, [listsMap, setListsMetadata]);
 
-  // Auto-select default list
+  // Auto-select default list (or validate persisted selection still exists)
   useEffect(() => {
-    if (listsMap && !activeListId) {
+    if (!listsMap) return;
+    // If no active list, or the persisted list no longer exists, pick a default
+    if (!activeListId || !listsMap[activeListId]) {
       const defaultId = pickDefaultList(listsMap);
       if (defaultId) setActiveListId(defaultId);
     }
@@ -319,24 +321,57 @@ export function LibraryPage() {
     () =>
       debounce((listId: string, order: string[]) => {
         reorderList(listId, order).then(() => {
-          queryClient.invalidateQueries({ queryKey: ['list-albums', listId] });
-          queryClient.invalidateQueries({ queryKey: ['lists'] });
+          queryClient.invalidateQueries({
+            queryKey: ['lists', listId, 'albums'],
+          });
+          queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
         });
       }, REORDER_DEBOUNCE_MS),
     [queryClient]
   );
 
-  const handleReorder = useCallback(
+  // Build a lookup from _id to album_id for the reorder API.
+  // The drag-and-drop system tracks items by _id (for React keys and DOM refs),
+  // but the reorder API expects album_id (canonical identifier) in its order array.
+  const idToAlbumId = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of sortedAlbums) {
+      map.set(a._id, a.album_id);
+    }
+    return map;
+  }, [sortedAlbums]);
+
+  const handleReorderWithAlbumIds = useCallback(
     (newOrder: string[]) => {
-      if (!activeListId) return;
-      debouncedReorder(activeListId, newOrder);
+      // newOrder contains _id values from the drag system.
+      // Convert to album_id values for the API, keep _id order for cache update.
+      const albumIdOrder = newOrder
+        .map((id) => idToAlbumId.get(id))
+        .filter((aid): aid is string => aid !== undefined);
+
+      if (!activeListId || albumIdOrder.length === 0) return;
+
+      // Optimistically update the query cache so the list doesn't snap back
+      // to the old order when isDragging flips to false.
+      queryClient.setQueryData<Album[]>(
+        ['lists', activeListId, 'albums'],
+        (oldAlbums) => {
+          if (!oldAlbums) return oldAlbums;
+          const albumMap = new Map(oldAlbums.map((a) => [a._id, a]));
+          return newOrder
+            .map((id) => albumMap.get(id))
+            .filter((a): a is Album => a !== undefined);
+        }
+      );
+
+      debouncedReorder(activeListId, albumIdOrder);
     },
-    [activeListId, debouncedReorder]
+    [activeListId, debouncedReorder, queryClient, idToAlbumId]
   );
 
   const { handlers: dragHandlers, registerCard } = useDragAndDrop({
     itemIds: useMemo(() => sortedAlbums.map((a) => a._id), [sortedAlbums]),
-    onReorder: handleReorder,
+    onReorder: handleReorderWithAlbumIds,
     enabled: sortKey === 'custom',
     scrollContainerRef,
   });
@@ -401,7 +436,7 @@ export function LibraryPage() {
 
   // ── Invalidate queries helper ──
   const refreshData = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['lists'] });
+    queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
     queryClient.invalidateQueries({ queryKey: ['groups'] });
   }, [queryClient]);
 
@@ -551,9 +586,9 @@ export function LibraryPage() {
         }
 
         // Refresh data
-        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
         queryClient.invalidateQueries({
-          queryKey: ['list-albums', activeListId],
+          queryKey: ['lists', activeListId, 'albums'],
         });
         showToast('Album updated', 'success');
       } catch {
@@ -579,12 +614,12 @@ export function LibraryPage() {
           removed: [moveAlbumTarget.album_id],
         });
 
-        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
         queryClient.invalidateQueries({
-          queryKey: ['list-albums', activeListId],
+          queryKey: ['lists', activeListId, 'albums'],
         });
         queryClient.invalidateQueries({
-          queryKey: ['list-albums', targetListId],
+          queryKey: ['lists', targetListId, 'albums'],
         });
 
         showToast('Album moved', 'success');
@@ -611,9 +646,9 @@ export function LibraryPage() {
           showToast('Album copied', 'success');
         }
 
-        queryClient.invalidateQueries({ queryKey: ['lists'] });
+        queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
         queryClient.invalidateQueries({
-          queryKey: ['list-albums', targetListId],
+          queryKey: ['lists', targetListId, 'albums'],
         });
       } catch {
         showToast('Failed to copy album', 'error');
@@ -633,9 +668,9 @@ export function LibraryPage() {
         removed: [removeAlbumTarget.album_id],
       });
 
-      queryClient.invalidateQueries({ queryKey: ['lists'] });
+      queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
       queryClient.invalidateQueries({
-        queryKey: ['list-albums', activeListId],
+        queryKey: ['lists', activeListId, 'albums'],
       });
 
       showToast('Album removed', 'success');

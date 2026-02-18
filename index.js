@@ -138,11 +138,19 @@ app.use(createCorsMiddleware());
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
 // Mobile SPA static assets (from mobile/dist/)
+// Hashed assets (JS/CSS in /assets/) get long-lived immutable caching.
+// index.html must not be cached so the browser always gets the latest
+// asset references after a build.
 app.use(
   '/mobile',
   express.static(path.join(__dirname, 'mobile', 'dist'), {
-    maxAge: '1y',
-    immutable: true,
+    setHeaders(res, filePath) {
+      if (filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
   })
 );
 

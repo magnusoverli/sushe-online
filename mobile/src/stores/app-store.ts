@@ -5,6 +5,28 @@
 import { create } from 'zustand';
 import type { User, ListMetadata } from '@/lib/types';
 
+const ACTIVE_LIST_KEY = 'sushe-mobile-active-list';
+
+function readPersistedListId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_LIST_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function persistListId(id: string | null): void {
+  try {
+    if (id) {
+      localStorage.setItem(ACTIVE_LIST_KEY, id);
+    } else {
+      localStorage.removeItem(ACTIVE_LIST_KEY);
+    }
+  } catch {
+    // localStorage unavailable (private browsing, etc.)
+  }
+}
+
 interface AppState {
   // Auth
   user: User | null;
@@ -31,9 +53,12 @@ export const useAppStore = create<AppState>((set) => ({
   isAuthenticated: false,
   setUser: (user) => set({ user, isAuthenticated: user !== null }),
 
-  // Active list
-  activeListId: null,
-  setActiveListId: (id) => set({ activeListId: id }),
+  // Active list — restored from localStorage on init
+  activeListId: readPersistedListId(),
+  setActiveListId: (id) => {
+    persistListId(id);
+    set({ activeListId: id });
+  },
 
   // Lists metadata
   listsMetadata: {},
