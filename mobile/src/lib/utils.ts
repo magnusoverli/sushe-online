@@ -33,7 +33,8 @@ export function formatRank(position: number): string {
 /**
  * Debounce a function call.
  */
-export function debounce<T extends (...args: unknown[]) => void>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function debounce<T extends (...args: any[]) => void>(
   fn: T,
   delay: number
 ): (...args: Parameters<T>) => void {

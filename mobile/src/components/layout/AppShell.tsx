@@ -11,15 +11,17 @@
  * └──────────────────────┘
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { TabBar, type TabId } from '@/components/ui/TabBar';
 
 interface AppShellProps {
   activeTab: TabId;
   children: ReactNode;
+  /** Ref to the scrollable content area (for auto-scroll during drag). */
+  scrollRef?: Ref<HTMLElement | null>;
 }
 
-export function AppShell({ activeTab, children }: AppShellProps) {
+export function AppShell({ activeTab, children, scrollRef }: AppShellProps) {
   return (
     <div
       style={{
@@ -32,6 +34,7 @@ export function AppShell({ activeTab, children }: AppShellProps) {
       data-testid="app-shell"
     >
       <main
+        ref={scrollRef}
         style={{
           flex: 1,
           minHeight: 0,

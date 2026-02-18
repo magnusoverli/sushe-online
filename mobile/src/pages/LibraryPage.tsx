@@ -21,6 +21,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
+import { useDragStore } from '@/stores/drag-store';
 import { useListsMetadata, useListAlbums, useGroups } from '@/hooks/useLists';
 import {
   getAlbumCoverUrl,
@@ -29,13 +30,20 @@ import {
   updateAlbumComment,
   updateAlbumComment2,
 } from '@/services/albums';
-import { updateListItems, getList, replaceListItems } from '@/services/lists';
+import {
+  updateListItems,
+  getList,
+  replaceListItems,
+  reorderList,
+} from '@/services/lists';
 import { readImportFile, importList } from '@/services/import';
+import { useDragAndDrop } from '@/features/drag-drop';
 import { AppShell } from '@/components/layout/AppShell';
 import { ListHeader } from '@/components/list/ListHeader';
 import { ListFooter } from '@/components/list/ListFooter';
-import { AlbumCard } from '@/components/ui/AlbumCard';
+import { AlbumCard, type CardState } from '@/components/ui/AlbumCard';
 import { CoverImage } from '@/components/album/CoverImage';
+import { GhostCard } from '@/components/ui/GhostCard';
 import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
 import {
   NavigationDrawer,
@@ -66,7 +74,13 @@ import {
   List as ListIcon,
   Star,
 } from 'lucide-react';
-import { isYearMismatch, buildAlbumTags, sortAlbums } from '@/lib/utils';
+import {
+  isYearMismatch,
+  buildAlbumTags,
+  sortAlbums,
+  debounce,
+} from '@/lib/utils';
+import { REORDER_DEBOUNCE_MS } from '@/lib/constants';
 import type { Album, AlbumSortKey, ListMetadata, Group } from '@/lib/types';
 
 const SORT_OPTIONS: DropdownItem[] = [
@@ -200,6 +214,7 @@ export function LibraryPage() {
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollContainerRef = useRef<HTMLElement>(null);
 
   // Fetch lists metadata
   const {
@@ -250,6 +265,77 @@ export function LibraryPage() {
   }, [albums, sortKey]);
 
   const sortTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // ── Drag-and-drop reordering ──
+  const isDragging = useDragStore((s) => s.isDragging);
+  const dragOrderedIds = useDragStore((s) => s.orderedIds);
+  const dragIndex = useDragStore((s) => s.dragIndex);
+  const dropIndex = useDragStore((s) => s.dropIndex);
+  const ghostX = useDragStore((s) => s.ghostX);
+  const ghostY = useDragStore((s) => s.ghostY);
+  const ghostWidth = useDragStore((s) => s.ghostWidth);
+
+  // Derive the displayed album order: during drag, use drag store order
+  const displayAlbums = useMemo(() => {
+    if (!isDragging || sortKey !== 'custom' || dragOrderedIds.length === 0) {
+      return sortedAlbums;
+    }
+    // Reorder sortedAlbums based on dragOrderedIds
+    const albumMap = new Map(sortedAlbums.map((a) => [a._id, a]));
+    return dragOrderedIds
+      .map((id) => albumMap.get(id))
+      .filter((a): a is Album => a !== undefined);
+  }, [isDragging, sortKey, dragOrderedIds, sortedAlbums]);
+
+  // The album being dragged (for ghost card content)
+  const draggedAlbum = useMemo(() => {
+    if (dragIndex === null || !sortedAlbums[dragIndex]) return null;
+    return sortedAlbums[dragIndex];
+  }, [dragIndex, sortedAlbums]);
+
+  // Debounced reorder save
+  const debouncedReorder = useMemo(
+    () =>
+      debounce((listId: string, order: string[]) => {
+        reorderList(listId, order).then(() => {
+          queryClient.invalidateQueries({ queryKey: ['list-albums', listId] });
+          queryClient.invalidateQueries({ queryKey: ['lists'] });
+        });
+      }, REORDER_DEBOUNCE_MS),
+    [queryClient]
+  );
+
+  const handleReorder = useCallback(
+    (newOrder: string[]) => {
+      if (!activeListId) return;
+      debouncedReorder(activeListId, newOrder);
+    },
+    [activeListId, debouncedReorder]
+  );
+
+  const { handlers: dragHandlers, registerCard } = useDragAndDrop({
+    itemIds: useMemo(() => sortedAlbums.map((a) => a._id), [sortedAlbums]),
+    onReorder: handleReorder,
+    enabled: sortKey === 'custom',
+    scrollContainerRef,
+  });
+
+  /** Get the card visual state for a given index during drag. */
+  const getCardState = useCallback(
+    (index: number): CardState => {
+      if (!isDragging) return 'default';
+
+      // Find the original dragged item's current index in the display order
+      const draggedId =
+        dragIndex !== null ? sortedAlbums[dragIndex]?._id : null;
+      const currentId = displayAlbums[index]?._id;
+
+      if (currentId === draggedId) return 'dragging';
+      if (index === dropIndex) return 'drop-target';
+      return 'dimmed';
+    },
+    [isDragging, dragIndex, dropIndex, sortedAlbums, displayAlbums]
+  );
 
   const handleSortSelect = useCallback((id: string) => {
     setSortKey(id as AlbumSortKey);
@@ -611,7 +697,7 @@ export function LibraryPage() {
 
   return (
     <>
-      <AppShell activeTab="library">
+      <AppShell activeTab="library" scrollRef={scrollContainerRef}>
         {/* Header */}
         <ListHeader
           eyebrow={groupName}
@@ -692,7 +778,7 @@ export function LibraryPage() {
               Failed to load albums.
             </span>
           </div>
-        ) : sortedAlbums.length === 0 ? (
+        ) : displayAlbums.length === 0 ? (
           <div style={{ padding: '32px 24px', textAlign: 'center' }}>
             <span
               style={{
@@ -714,8 +800,10 @@ export function LibraryPage() {
               padding: `0 var(--space-list-x)`,
             }}
             data-testid="album-list"
+            onTouchMove={dragHandlers.onTouchMove}
+            onTouchEnd={dragHandlers.onTouchEnd}
           >
-            {sortedAlbums.map((album, index) => {
+            {displayAlbums.map((album, index) => {
               const rank = sortKey === 'custom' ? index + 1 : undefined;
               const tags = buildAlbumTags(album);
               const yearMismatch = isYearMismatch(
@@ -729,60 +817,79 @@ export function LibraryPage() {
                 tags.push(year);
               }
 
+              const cardState = getCardState(index);
+
               return (
-                <AlbumCard
+                <div
                   key={album._id}
-                  rank={rank}
-                  title={album.album}
-                  artist={album.artist}
-                  showRank={sortKey === 'custom'}
-                  tags={tags}
-                  coverElement={
-                    <CoverImage
-                      src={
-                        album.cover_image_url ||
-                        (album.album_id
-                          ? getAlbumCoverUrl(album.album_id)
-                          : undefined)
-                      }
-                      alt={`${album.album} by ${album.artist}`}
-                      rank={rank}
-                      showRank={
-                        sortKey === 'custom' && (activeList?.isMain ?? false)
-                      }
-                      hasSummary={!!album.summary}
-                      hasRecommendation={!!album.recommended_by}
-                      onSummaryClick={() =>
-                        setSummaryTarget({
-                          albumId: album.album_id,
-                          albumName: album.album,
-                          artistName: album.artist,
-                        })
-                      }
-                      onRecommendationClick={() =>
-                        setRecommendationTarget({
-                          albumName: album.album,
-                          artistName: album.artist,
-                          recommendedBy: album.recommended_by,
-                          recommendedAt: album.recommended_at,
-                        })
-                      }
-                    />
-                  }
-                  onMenuClick={() => handleAlbumMenuClick(album)}
-                  onClick={() => {
-                    // Tap on album card opens edit form
-                    setAlbumEditTarget(album);
+                  ref={(el) => registerCard(index, el)}
+                  onTouchStart={(e) => dragHandlers.onTouchStart(index, e)}
+                  style={{
+                    transition: isDragging
+                      ? 'transform 200ms ease, opacity 200ms ease'
+                      : undefined,
                   }}
-                />
+                >
+                  <AlbumCard
+                    rank={rank}
+                    title={album.album}
+                    artist={album.artist}
+                    showRank={sortKey === 'custom'}
+                    tags={tags}
+                    cardState={cardState}
+                    coverElement={
+                      <CoverImage
+                        src={
+                          album.cover_image_url ||
+                          (album.album_id
+                            ? getAlbumCoverUrl(album.album_id)
+                            : undefined)
+                        }
+                        alt={`${album.album} by ${album.artist}`}
+                        rank={rank}
+                        showRank={
+                          sortKey === 'custom' && (activeList?.isMain ?? false)
+                        }
+                        hasSummary={!!album.summary}
+                        hasRecommendation={!!album.recommended_by}
+                        onSummaryClick={() =>
+                          setSummaryTarget({
+                            albumId: album.album_id,
+                            albumName: album.album,
+                            artistName: album.artist,
+                          })
+                        }
+                        onRecommendationClick={() =>
+                          setRecommendationTarget({
+                            albumName: album.album,
+                            artistName: album.artist,
+                            recommendedBy: album.recommended_by,
+                            recommendedAt: album.recommended_at,
+                          })
+                        }
+                      />
+                    }
+                    onMenuClick={
+                      isDragging ? undefined : () => handleAlbumMenuClick(album)
+                    }
+                    onClick={
+                      isDragging
+                        ? undefined
+                        : () => {
+                            // Tap on album card opens edit form
+                            setAlbumEditTarget(album);
+                          }
+                    }
+                  />
+                </div>
               );
             })}
           </div>
         )}
 
         {/* Footer */}
-        {sortedAlbums.length > 0 && (
-          <ListFooter albumCount={sortedAlbums.length} />
+        {displayAlbums.length > 0 && (
+          <ListFooter albumCount={displayAlbums.length} />
         )}
       </AppShell>
 
@@ -1101,6 +1208,34 @@ export function LibraryPage() {
         recommendedBy={recommendationTarget?.recommendedBy ?? null}
         recommendedAt={recommendationTarget?.recommendedAt ?? null}
       />
+
+      {/* Ghost card for drag-and-drop */}
+      <GhostCard
+        visible={isDragging && draggedAlbum !== null}
+        x={ghostX}
+        y={ghostY}
+        width={ghostWidth}
+      >
+        {draggedAlbum && (
+          <AlbumCard
+            title={draggedAlbum.album}
+            artist={draggedAlbum.artist}
+            showRank={false}
+            tags={buildAlbumTags(draggedAlbum)}
+            coverElement={
+              <CoverImage
+                src={
+                  draggedAlbum.cover_image_url ||
+                  (draggedAlbum.album_id
+                    ? getAlbumCoverUrl(draggedAlbum.album_id)
+                    : undefined)
+                }
+                alt={`${draggedAlbum.album} by ${draggedAlbum.artist}`}
+              />
+            }
+          />
+        )}
+      </GhostCard>
     </>
   );
 }
