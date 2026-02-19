@@ -15,7 +15,14 @@
  * - Dismiss: tap scrim, swipe down, or cancel button
  */
 
-import { type ReactNode, type CSSProperties, useCallback, useRef } from 'react';
+import {
+  type ReactNode,
+  type CSSProperties,
+  useCallback,
+  useRef,
+  useState,
+  useEffect,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   motion,
@@ -30,7 +37,11 @@ interface BottomSheetProps {
   onClose: () => void;
   title?: string;
   subtitle?: string;
+  /** Optional element rendered inline before the title (e.g. a thumbnail) */
+  titleIcon?: ReactNode;
   children: ReactNode;
+  /** Override z-index for stacking above other sheets (default: --z-sheet / 400) */
+  zIndex?: number;
 }
 
 const SWIPE_THRESHOLD = 80;
@@ -63,7 +74,7 @@ const handleStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   fontFamily: 'var(--font-display)',
-  fontSize: '15px',
+  fontSize: '17px',
   fontWeight: 400,
   letterSpacing: '-0.01em',
   color: 'var(--color-text-primary)',
@@ -76,10 +87,32 @@ export function BottomSheet({
   onClose,
   title,
   subtitle,
+  titleIcon,
   children,
+  zIndex,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
+  const [lockedHeight, setLockedHeight] = useState<number | null>(null);
+
+  // Lock the sheet height after the enter animation completes.
+  // This prevents the sheet from growing upward when content expands
+  // (e.g. inline list picker opens) — new content scrolls internally instead.
+  useEffect(() => {
+    if (!open) {
+      setLockedHeight(null);
+      return;
+    }
+
+    // Wait for the enter animation (280ms) + one extra frame
+    const timer = setTimeout(() => {
+      if (sheetRef.current) {
+        setLockedHeight(sheetRef.current.getBoundingClientRect().height);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [open]);
 
   const handleDragEnd = useCallback(
     (_: unknown, info: PanInfo) => {
@@ -99,12 +132,20 @@ export function BottomSheet({
 
   return createPortal(
     <>
-      <Scrim visible={open} onDismiss={onClose} />
+      <Scrim
+        visible={open}
+        onDismiss={onClose}
+        {...(zIndex != null ? { zIndex: zIndex - 10 } : {})}
+      />
       <AnimatePresence>
         {open && (
           <motion.div
             ref={sheetRef}
-            style={sheetStyle}
+            style={{
+              ...sheetStyle,
+              ...(lockedHeight != null ? { height: lockedHeight } : {}),
+              ...(zIndex != null ? { zIndex } : {}),
+            }}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -133,23 +174,45 @@ export function BottomSheet({
 
               {/* Title */}
               {title && (
-                <div style={titleStyle}>
-                  {title}
-                  {subtitle && (
-                    <div
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '11px',
-                        color: 'var(--color-text-primary)',
-                        marginTop: '2px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {subtitle}
-                    </div>
-                  )}
+                <div
+                  style={{
+                    ...titleStyle,
+                    ...(titleIcon
+                      ? {
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                        }
+                      : {}),
+                  }}
+                >
+                  {titleIcon}
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {title}
+                    {subtitle && (
+                      <div
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '12px',
+                          color: 'var(--color-text-primary)',
+                          marginTop: '2px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {subtitle}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

@@ -151,9 +151,7 @@ export interface BulkUpdateItem {
 /**
  * Bulk update lists (year assignment and main list designation).
  */
-export async function bulkUpdateLists(
-  updates: BulkUpdateItem[]
-): Promise<{
+export async function bulkUpdateLists(updates: BulkUpdateItem[]): Promise<{
   success: boolean;
   results: unknown[];
   recomputingYears: number[];

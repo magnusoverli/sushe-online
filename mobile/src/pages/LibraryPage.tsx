@@ -1612,6 +1612,14 @@ export function LibraryPage() {
             setSimilarArtistTarget(albumActionTarget.artist);
           }
         }}
+        onReidentified={() => {
+          queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
+          if (activeListId) {
+            queryClient.invalidateQueries({
+              queryKey: ['lists', activeListId, 'albums'],
+            });
+          }
+        }}
       />
 
       {/* Album edit form (full-screen) */}

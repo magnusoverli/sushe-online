@@ -58,7 +58,7 @@ const iconContainerBase: CSSProperties = {
 
 const labelStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '12px',
+  fontSize: '14px',
   fontWeight: 400,
   color: 'rgba(255,255,255,0.75)',
   flex: 1,
@@ -67,7 +67,7 @@ const labelStyle: CSSProperties = {
 
 const subtitleStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
+  fontSize: '11px',
   fontWeight: 400,
   color: 'rgba(255,255,255,0.30)',
   marginTop: '1px',

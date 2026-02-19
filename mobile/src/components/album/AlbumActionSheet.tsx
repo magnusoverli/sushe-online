@@ -44,12 +44,14 @@ import {
   type SpotifyDevice,
 } from '@/services/spotify';
 import { openInTidal } from '@/services/tidal';
+import { getAlbumCoverUrl } from '@/services/albums';
 import { getDeviceIcon } from '@/features/playback';
 import { showToast } from '@/components/ui/Toast';
 import {
   ServiceChooserSheet,
   type MusicServiceChoice,
 } from './ServiceChooserSheet';
+import { ReidentifySheet } from './ReidentifySheet';
 import type { Album, User, ListMetadata, Group } from '@/lib/types';
 
 // ── List grouping (shared with ListSelectionSheet) ──
@@ -126,7 +128,8 @@ interface AlbumActionSheetProps {
   onRemove: () => void;
   onRecommend?: () => void;
   onSimilarArtists?: () => void;
-  onReidentify?: () => void;
+  /** Called after successful re-identification so the parent can refresh data */
+  onReidentified?: () => void;
 }
 
 export function AlbumActionSheet({
@@ -145,7 +148,7 @@ export function AlbumActionSheet({
   onRemove,
   onRecommend,
   onSimilarArtists,
-  onReidentify,
+  onReidentified,
 }: AlbumActionSheetProps) {
   const hasSpotify = !!user?.spotifyConnected;
   const hasTidal = !!user?.tidalConnected;
@@ -163,6 +166,9 @@ export function AlbumActionSheet({
 
   // Service chooser state
   const [showChooser, setShowChooser] = useState(false);
+
+  // Re-identify sheet state
+  const [showReidentify, setShowReidentify] = useState(false);
 
   // Inline list picker state (move/copy)
   const [expandedPicker, setExpandedPicker] = useState<'move' | 'copy' | null>(
@@ -189,6 +195,7 @@ export function AlbumActionSheet({
       setDevicesLoading(false);
       setPlayLoading(false);
       setShowChooser(false);
+      setShowReidentify(false);
       setExpandedPicker(null);
       setExpandedYear(null);
     }
@@ -333,7 +340,26 @@ export function AlbumActionSheet({
 
   return (
     <>
-      <BottomSheet open={open} onClose={onClose} title={sheetTitle}>
+      <BottomSheet
+        open={open}
+        onClose={onClose}
+        title={sheetTitle}
+        titleIcon={
+          album ? (
+            <img
+              src={album.cover_image_url || getAlbumCoverUrl(album.album_id)}
+              alt=""
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                objectFit: 'cover',
+                flexShrink: 0,
+              }}
+            />
+          ) : undefined
+        }
+      >
         <div style={{ padding: '0 4px 8px' }}>
           {/* Lock banner */}
           {isListLocked && (
@@ -347,14 +373,14 @@ export function AlbumActionSheet({
                 borderRadius: '8px',
                 background: 'rgba(255,255,255,0.04)',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '12px',
                 letterSpacing: '0.04em',
                 color: 'rgba(255,255,255,0.35)',
                 ...dimStyle,
               }}
               data-testid="album-action-lock-banner"
             >
-              <Lock size={10} style={{ flexShrink: 0 }} />
+              <Lock size={12} style={{ flexShrink: 0 }} />
               This list is locked
             </div>
           )}
@@ -364,7 +390,7 @@ export function AlbumActionSheet({
             <ActionItem
               icon={<Edit3 size={16} />}
               label="Edit Details"
-              onClick={() => handleAction(onEditDetails)}
+              onClick={() => onEditDetails()}
               disabled={isListLocked}
             />
           </div>
@@ -416,7 +442,7 @@ export function AlbumActionSheet({
                     flex: 1,
                     minWidth: 0,
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '10px',
+                    fontSize: '14px',
                     fontWeight: 400,
                     color: 'rgba(255,255,255,0.75)',
                     textAlign: 'left',
@@ -469,7 +495,7 @@ export function AlbumActionSheet({
                       gap: 8,
                       padding: '12px 4px',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
+                      fontSize: 12,
                       color: 'var(--color-text-secondary)',
                     }}
                   >
@@ -488,7 +514,7 @@ export function AlbumActionSheet({
                     style={{
                       padding: '12px 4px',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
+                      fontSize: 12,
                       color: 'var(--color-text-secondary)',
                     }}
                   >
@@ -527,7 +553,7 @@ export function AlbumActionSheet({
                         <div
                           style={{
                             fontFamily: 'var(--font-mono)',
-                            fontSize: 12,
+                            fontSize: 14,
                             color: device.is_active
                               ? '#1ed760'
                               : 'var(--color-text-primary)',
@@ -541,7 +567,7 @@ export function AlbumActionSheet({
                         <div
                           style={{
                             fontFamily: 'var(--font-mono)',
-                            fontSize: 10,
+                            fontSize: 11,
                             color: 'var(--color-text-secondary)',
                             textTransform: 'capitalize',
                           }}
@@ -582,7 +608,7 @@ export function AlbumActionSheet({
                   <div
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: 11,
+                      fontSize: 12,
                       color: '#00FFFF',
                     }}
                   >
@@ -638,7 +664,7 @@ export function AlbumActionSheet({
                 flex: 1,
                 minWidth: 0,
                 fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
+                fontSize: '14px',
                 fontWeight: 400,
                 color: 'rgba(255,255,255,0.75)',
               }}
@@ -718,7 +744,7 @@ export function AlbumActionSheet({
                 flex: 1,
                 minWidth: 0,
                 fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
+                fontSize: '14px',
                 fontWeight: 400,
                 color: 'rgba(255,255,255,0.75)',
               }}
@@ -781,21 +807,7 @@ export function AlbumActionSheet({
               <ActionItem
                 icon={<Search size={16} style={{ color: '#f59e0b' }} />}
                 label="Re-identify Album"
-                onClick={() => {
-                  if (onReidentify) {
-                    handleAction(onReidentify);
-                  } else if (album) {
-                    // Fallback: open MusicBrainz search
-                    const q = encodeURIComponent(
-                      `${album.artist} ${album.album}`
-                    );
-                    window.open(
-                      `https://musicbrainz.org/search?query=${q}&type=release_group`,
-                      '_blank'
-                    );
-                    onClose();
-                  }
-                }}
+                onClick={() => setShowReidentify(true)}
               />
             )}
 
@@ -825,6 +837,16 @@ export function AlbumActionSheet({
         open={showChooser}
         onClose={() => setShowChooser(false)}
         onSelect={handleServiceChosen}
+      />
+
+      {/* Re-identify album (admin only) */}
+      <ReidentifySheet
+        open={showReidentify}
+        onClose={() => setShowReidentify(false)}
+        album={album}
+        onApplied={() => {
+          if (onReidentified) onReidentified();
+        }}
       />
     </>
   );
@@ -864,7 +886,7 @@ function InlineListPicker({
           style={{
             padding: '12px 4px',
             fontFamily: 'var(--font-mono)',
-            fontSize: 11,
+            fontSize: 12,
             color: 'var(--color-text-secondary)',
           }}
         >
@@ -892,7 +914,7 @@ function InlineListPicker({
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '11px',
+                  fontSize: '13px',
                   fontWeight: 500,
                   letterSpacing: '0.04em',
                   color: 'var(--color-text-primary)',
@@ -923,69 +945,72 @@ function InlineListPicker({
             {/* List items */}
             <div
               style={{
-                maxHeight: expandedYear === section.label ? '500px' : '0',
-                overflow: 'hidden',
-                transition: 'max-height 200ms ease-out',
+                display: 'grid',
+                gridTemplateRows:
+                  expandedYear === section.label ? '1fr' : '0fr',
+                transition: 'grid-template-rows 200ms ease-out',
               }}
             >
-              {section.lists.map((list) => (
-                <button
-                  key={list._id}
-                  type="button"
-                  onClick={() => onSelect(list._id)}
-                  style={{
-                    width: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '8px 4px 8px 16px',
-                    background: 'transparent',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    borderBottom: '1px solid var(--color-divider)',
-                  }}
-                  data-testid={`inline-list-option-${list._id}`}
-                >
-                  {list.isMain ? (
-                    <Star
-                      size={12}
-                      style={{ color: 'var(--color-gold)', flexShrink: 0 }}
-                    />
-                  ) : (
-                    <ListIcon
-                      size={12}
+              <div style={{ overflow: 'hidden' }}>
+                {section.lists.map((list) => (
+                  <button
+                    key={list._id}
+                    type="button"
+                    onClick={() => onSelect(list._id)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 4px 8px 16px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      borderBottom: '1px solid var(--color-divider)',
+                    }}
+                    data-testid={`inline-list-option-${list._id}`}
+                  >
+                    {list.isMain ? (
+                      <Star
+                        size={12}
+                        style={{ color: 'var(--color-gold)', flexShrink: 0 }}
+                      />
+                    ) : (
+                      <ListIcon
+                        size={12}
+                        style={{
+                          color: 'var(--color-text-secondary)',
+                          flexShrink: 0,
+                        }}
+                      />
+                    )}
+                    <span
                       style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '13px',
+                        color: 'var(--color-text-primary)',
+                        flex: 1,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {list.name}
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '11px',
                         color: 'var(--color-text-secondary)',
                         flexShrink: 0,
                       }}
-                    />
-                  )}
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
-                      color: 'var(--color-text-primary)',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {list.name}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '10px',
-                      color: 'var(--color-text-secondary)',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {list.count}
-                  </span>
-                </button>
-              ))}
+                    >
+                      {list.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ))

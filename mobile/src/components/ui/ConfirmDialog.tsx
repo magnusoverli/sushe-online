@@ -57,16 +57,19 @@ export function ConfirmDialog({
             transition={{ duration: 0.2, ease: dialogEasing }}
             style={{
               position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              margin: 'auto',
               zIndex: 460,
               width: 'calc(100% - 48px)',
               maxWidth: '320px',
+              height: 'fit-content',
               background: 'var(--color-sheet-bg)',
               borderRadius: '16px',
               border: '1px solid rgba(255,255,255,0.08)',
-              padding: '20px',
+              padding: '24px',
               boxShadow: '0 16px 48px rgba(0,0,0,0.4)',
             }}
             data-testid="confirm-dialog"
@@ -78,7 +81,7 @@ export function ConfirmDialog({
             <div
               style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: '15px',
+                fontSize: '17px',
                 color: 'var(--color-text-primary)',
                 marginBottom: '8px',
               }}
@@ -90,10 +93,10 @@ export function ConfirmDialog({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
-                lineHeight: '1.5',
+                fontSize: '12px',
+                lineHeight: '1.6',
                 color: 'var(--color-text-secondary)',
-                marginBottom: warning || children ? '8px' : '20px',
+                marginBottom: warning || children ? '8px' : '24px',
               }}
             >
               {message}
@@ -104,9 +107,9 @@ export function ConfirmDialog({
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '8px',
+                  fontSize: '11px',
                   color: 'var(--color-destructive)',
-                  marginBottom: children ? '8px' : '20px',
+                  marginBottom: children ? '8px' : '24px',
                 }}
                 data-testid="confirm-warning"
               >
@@ -115,13 +118,13 @@ export function ConfirmDialog({
             )}
 
             {/* Extra content (checkbox, etc.) */}
-            {children && <div style={{ marginBottom: '20px' }}>{children}</div>}
+            {children && <div style={{ marginBottom: '24px' }}>{children}</div>}
 
             {/* Buttons */}
             <div
               style={{
                 display: 'flex',
-                gap: '8px',
+                gap: '12px',
                 justifyContent: 'flex-end',
               }}
             >
@@ -130,8 +133,8 @@ export function ConfirmDialog({
                 onClick={onCancel}
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
-                  padding: '8px 16px',
+                  fontSize: '12px',
+                  padding: '12px 24px',
                   borderRadius: '8px',
                   border: '1px solid rgba(255,255,255,0.10)',
                   background: 'transparent',
@@ -148,9 +151,9 @@ export function ConfirmDialog({
                 disabled={confirmDisabled}
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
+                  fontSize: '12px',
                   fontWeight: 500,
-                  padding: '8px 16px',
+                  padding: '12px 24px',
                   borderRadius: '8px',
                   border: 'none',
                   background: destructive
