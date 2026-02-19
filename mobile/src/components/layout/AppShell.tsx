@@ -1,9 +1,11 @@
 /**
- * AppShell - Top-level layout with scrollable content area, optional
- * NowPlayingBar, and sticky TabBar.
+ * AppShell - Top-level layout with optional fixed header, scrollable
+ * content area, optional NowPlayingBar, and sticky TabBar.
  *
  * Structure:
  * ┌──────────────────────┐
+ * │  header (fixed)       │ ← optional, never scrolls
+ * ├──────────────────────┤
  * │  scrollable content   │ ← flex: 1, overflow-y auto
  * │                       │
  * │                       │
@@ -21,6 +23,8 @@ import { NowPlayingBar } from '@/components/player/NowPlayingBar';
 interface AppShellProps {
   activeTab: TabId;
   children: ReactNode;
+  /** Fixed header rendered above the scrollable area (like TabBar at bottom). */
+  header?: ReactNode;
   /** Ref to the scrollable content area (for auto-scroll during drag). */
   scrollRef?: Ref<HTMLElement | null>;
   /** Whether the NowPlayingBar should be visible. */
@@ -32,6 +36,7 @@ interface AppShellProps {
 export function AppShell({
   activeTab,
   children,
+  header,
   scrollRef,
   showNowPlaying = false,
   onSettingsClick,
@@ -48,6 +53,17 @@ export function AppShell({
       }}
       data-testid="app-shell"
     >
+      {header && (
+        <div
+          style={{
+            flexShrink: 0,
+            paddingTop: 'env(safe-area-inset-top, 0px)',
+          }}
+          data-testid="app-shell-header"
+        >
+          {header}
+        </div>
+      )}
       <main
         ref={scrollRef}
         className="hide-scrollbar"
@@ -58,7 +74,7 @@ export function AppShell({
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
-          paddingTop: 'env(safe-area-inset-top, 0px)',
+          ...(!header ? { paddingTop: 'env(safe-area-inset-top, 0px)' } : {}),
         }}
         data-testid="app-shell-content"
       >

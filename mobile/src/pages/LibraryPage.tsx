@@ -1035,11 +1035,8 @@ export function LibraryPage() {
         scrollRef={scrollContainerRef}
         showNowPlaying={showNowPlaying}
         onSettingsClick={() => setSettingsOpen(true)}
-      >
-        {viewingRecommendations ? (
-          /* ── Recommendation browsing view ── */
-          <>
-            {/* Recommendation header */}
+        header={
+          viewingRecommendations ? (
             <header
               style={{
                 padding: '24px var(--space-header-x) 16px',
@@ -1178,55 +1175,7 @@ export function LibraryPage() {
                 }}
               />
             </header>
-
-            {/* Recommendation list */}
-            {recsLoading ? (
-              <div style={{ padding: '0 var(--space-list-x)' }}>
-                <SkeletonList count={6} />
-              </div>
-            ) : !recsData || recsData.recommendations.length === 0 ? (
-              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '11px',
-                    color: 'var(--color-text-secondary)',
-                  }}
-                >
-                  No recommendations yet for {recommendationYear}.
-                </span>
-              </div>
-            ) : (
-              <div
-                role="list"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 'var(--space-card-gap-outer)',
-                  padding: '0 var(--space-list-x)',
-                }}
-                data-testid="recommendation-list"
-              >
-                {recsData.recommendations.map((rec) => (
-                  <RecommendationCard
-                    key={rec._id}
-                    recommendation={rec}
-                    onMenuClick={(r) => setRecActionTarget(r)}
-                    onReasoningClick={(r) => setRecReasoningTarget(r)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Footer */}
-            {recsData && recsData.recommendations.length > 0 && (
-              <ListFooter albumCount={recsData.recommendations.length} />
-            )}
-          </>
-        ) : (
-          /* ── Normal album list view ── */
-          <>
-            {/* Header */}
+          ) : (
             <ListHeader
               title={activeList?.name ?? 'Library'}
               albumCount={activeList?.count}
@@ -1276,7 +1225,59 @@ export function LibraryPage() {
                 </>
               }
             />
+          )
+        }
+      >
+        {viewingRecommendations ? (
+          /* ── Recommendation browsing view ── */
+          <>
+            {/* Recommendation list */}
+            {recsLoading ? (
+              <div style={{ padding: '0 var(--space-list-x)' }}>
+                <SkeletonList count={6} />
+              </div>
+            ) : !recsData || recsData.recommendations.length === 0 ? (
+              <div style={{ padding: '48px 24px', textAlign: 'center' }}>
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '11px',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  No recommendations yet for {recommendationYear}.
+                </span>
+              </div>
+            ) : (
+              <div
+                role="list"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'var(--space-card-gap-outer)',
+                  padding: '0 var(--space-list-x)',
+                }}
+                data-testid="recommendation-list"
+              >
+                {recsData.recommendations.map((rec) => (
+                  <RecommendationCard
+                    key={rec._id}
+                    recommendation={rec}
+                    onMenuClick={(r) => setRecActionTarget(r)}
+                    onReasoningClick={(r) => setRecReasoningTarget(r)}
+                  />
+                ))}
+              </div>
+            )}
 
+            {/* Footer */}
+            {recsData && recsData.recommendations.length > 0 && (
+              <ListFooter albumCount={recsData.recommendations.length} />
+            )}
+          </>
+        ) : (
+          /* ── Normal album list view ── */
+          <>
             {/* Album list */}
             {albumsLoading ? (
               <div style={{ padding: '0 var(--space-list-x)' }}>

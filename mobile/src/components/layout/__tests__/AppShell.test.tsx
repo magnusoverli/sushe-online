@@ -42,6 +42,38 @@ describe('AppShell', () => {
     expect(content.tagName).toBe('MAIN');
   });
 
+  it('renders header slot above main when provided', () => {
+    render(
+      <AppShell
+        activeTab="library"
+        header={<div data-testid="custom-header">Header</div>}
+      >
+        <div data-testid="child-content">Body</div>
+      </AppShell>
+    );
+
+    const headerWrapper = screen.getByTestId('app-shell-header');
+    expect(headerWrapper).toBeInTheDocument();
+    expect(screen.getByTestId('custom-header')).toBeInTheDocument();
+
+    // Header should come before main in DOM order
+    const shell = screen.getByTestId('app-shell');
+    const children = Array.from(shell.children);
+    const headerIdx = children.indexOf(headerWrapper);
+    const mainIdx = children.indexOf(screen.getByTestId('app-shell-content'));
+    expect(headerIdx).toBeLessThan(mainIdx);
+  });
+
+  it('does not render header wrapper when header is not provided', () => {
+    render(
+      <AppShell activeTab="library">
+        <div>Content</div>
+      </AppShell>
+    );
+
+    expect(screen.queryByTestId('app-shell-header')).not.toBeInTheDocument();
+  });
+
   it('passes onSettingsClick to TabBar', () => {
     const onSettingsClick = vi.fn();
     render(
