@@ -75,7 +75,6 @@ export function LoginPage() {
       <div className="auth-card">
         {/* Header */}
         <div className="auth-header">
-          <span className="auth-header__eyebrow">Welcome back</span>
           <h1 className="auth-header__title">Sign In</h1>
           <p className="auth-header__subtitle">
             Enter your credentials to continue
