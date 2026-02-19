@@ -1200,10 +1200,9 @@ export function LibraryPage() {
                       background: 'transparent',
                       border: 'none',
                       cursor: 'pointer',
-                      padding: '4px 8px',
-                      borderRadius: '6px',
+                      padding: 0,
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '10px',
+                      fontSize: '12px',
                       letterSpacing: '0.04em',
                       color: 'var(--color-text-secondary)',
                     }}

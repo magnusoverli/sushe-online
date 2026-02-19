@@ -48,7 +48,7 @@ export function ListHeader({
   return (
     <header
       style={{
-        padding: '6px var(--space-header-x) 16px',
+        padding: '6px var(--space-header-x) 0px',
       }}
       data-testid="list-header"
     >
@@ -150,19 +150,20 @@ export function ListHeader({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            padding: '4px 0',
           }}
         >
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '10px',
+              fontSize: '12px',
               fontWeight: 400,
               letterSpacing: '0.02em',
+              lineHeight: 1,
               color: 'var(--color-text-secondary)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '4px 0',
             }}
             data-testid="list-header-meta"
           >
@@ -195,7 +196,9 @@ export function ListHeader({
         style={{
           height: '1px',
           background: 'var(--color-divider)',
-          marginTop: '16px',
+          marginTop: '4px',
+          marginLeft: 'calc(-1 * var(--space-header-x) + 4px)',
+          marginRight: 'calc(-1 * var(--space-header-x) + 4px)',
         }}
       />
     </header>
