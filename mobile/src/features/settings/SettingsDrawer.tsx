@@ -71,6 +71,24 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     if (open) setActiveTab('account');
   }, [open]);
 
+  // Lock background scroll when drawer is open (including iOS rubber-band bounce)
+  useEffect(() => {
+    if (!open) return;
+    const scrollContainer = document.querySelector(
+      '[data-testid="app-shell-content"]'
+    ) as HTMLElement | null;
+    if (scrollContainer) {
+      scrollContainer.style.overflow = 'hidden';
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.style.overflow = '';
+      }
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
   const handleDragEnd = useCallback(
     (_: unknown, info: PanInfo) => {
       if (info.offset.x > SWIPE_CLOSE_THRESHOLD) {
@@ -129,7 +147,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             {/* Header */}
             <div
               style={{
-                padding: '14px 18px 0',
+                padding: 'calc(14px + env(safe-area-inset-top, 0px)) 18px 0',
                 borderBottom: '1px solid var(--color-divider)',
               }}
             >
@@ -243,6 +261,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 flex: 1,
                 overflowY: 'auto',
                 minHeight: 0,
+                paddingBottom: 'env(safe-area-inset-bottom, 0px)',
               }}
             >
               {renderTab()}

@@ -26,7 +26,13 @@
  * - Item gap: 2px
  */
 
-import { type ReactNode, type CSSProperties, useCallback, useRef } from 'react';
+import {
+  type ReactNode,
+  type CSSProperties,
+  useCallback,
+  useRef,
+  useEffect,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { Scrim } from './Scrim';
@@ -65,6 +71,24 @@ export function NavigationDrawer({
 }: NavigationDrawerProps) {
   const drawerRef = useRef<HTMLDivElement>(null);
 
+  // Lock background scroll when drawer is open (including iOS rubber-band bounce)
+  useEffect(() => {
+    if (!open) return;
+    const scrollContainer = document.querySelector(
+      '[data-testid="app-shell-content"]'
+    ) as HTMLElement | null;
+    if (scrollContainer) {
+      scrollContainer.style.overflow = 'hidden';
+    }
+    document.body.style.overflow = 'hidden';
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.style.overflow = '';
+      }
+      document.body.style.overflow = '';
+    };
+  }, [open]);
+
   const handleDragEnd = useCallback(
     (_: unknown, info: PanInfo) => {
       if (info.offset.x < SWIPE_CLOSE_THRESHOLD) {
@@ -102,7 +126,8 @@ export function NavigationDrawer({
             {header && (
               <div
                 style={{
-                  padding: '14px 18px 14px',
+                  padding:
+                    'calc(14px + env(safe-area-inset-top, 0px)) 18px 14px',
                   borderBottom: '1px solid var(--color-divider)',
                 }}
               >
@@ -117,6 +142,7 @@ export function NavigationDrawer({
                 flex: 1,
                 overflowY: 'auto',
                 padding: '8px 8px',
+                paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
                 minHeight: 0,
               }}
             >

@@ -44,6 +44,7 @@ export function AppShell({
         height: 'calc(var(--vh, 1vh) * 100)',
         background: 'var(--color-frame)',
         overflow: 'hidden',
+        overscrollBehavior: 'none',
       }}
       data-testid="app-shell"
     >
@@ -56,6 +57,7 @@ export function AppShell({
           overflowY: 'auto',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
+          overscrollBehavior: 'contain',
           paddingTop: 'env(safe-area-inset-top, 0px)',
         }}
         data-testid="app-shell-content"

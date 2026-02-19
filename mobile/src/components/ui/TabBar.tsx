@@ -60,10 +60,11 @@ const barStyle: CSSProperties = {
   bottom: 0,
   zIndex: 'var(--z-tabbar)' as unknown as number,
   display: 'flex',
-  height: 'var(--tabbar-height)',
+  minHeight: 'var(--tabbar-height)',
   background: 'var(--tabbar-bg)',
   borderTop: '1px solid var(--tabbar-border)',
   paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+  touchAction: 'none',
 };
 
 const tabItemStyle: CSSProperties = {
@@ -93,7 +94,7 @@ const dotStyle: CSSProperties = {
   height: '4px',
   borderRadius: '50%',
   position: 'absolute',
-  bottom: '6px',
+  bottom: '0px',
 };
 
 export function TabBar({ activeTab, onSettingsClick }: TabBarProps) {
