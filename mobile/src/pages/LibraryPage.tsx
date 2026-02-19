@@ -1326,7 +1326,7 @@ export function LibraryPage() {
                 data-testid="album-list"
               >
                 {displayAlbums.map((album, index) => {
-                  const rank = sortKey === 'custom' ? index + 1 : undefined;
+                  const rank = index + 1;
                   const tags = buildAlbumTags(album);
                   const yearMismatch = isYearMismatch(
                     album.release_date,

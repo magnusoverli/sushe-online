@@ -164,8 +164,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
         data-testid="album-card"
         role="listitem"
       >
-        {/* Rank */}
-        {showRank && rank != null && (
+        {/* Rank — always rendered to reserve space; visibility controls display */}
+        {rank != null && (
           <span
             style={{
               fontFamily: 'var(--font-mono)',
@@ -173,10 +173,11 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
               fontWeight: 300,
               letterSpacing: 0,
               color: 'var(--color-text-rank)',
-              width: '15px',
+              width: '5px',
               textAlign: 'right',
               flexShrink: 0,
-              visibility: rankVisible ? 'visible' : 'hidden',
+              marginRight: '2px',
+              visibility: showRank && rankVisible ? 'visible' : 'hidden',
             }}
             data-testid="album-rank"
           >
@@ -240,7 +241,7 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '11px',
+                fontSize: '9px',
                 fontWeight: 400,
                 letterSpacing: '0.02em',
                 color: 'var(--color-text-secondary)',
