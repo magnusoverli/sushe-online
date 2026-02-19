@@ -17,6 +17,7 @@ import {
   useEffect,
   type ChangeEvent,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GenreSelect } from './GenreSelect';
@@ -272,7 +273,7 @@ export function AlbumEditForm({
     setTracks(newTracks);
   }, []);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && album && (
         <motion.div
@@ -607,6 +608,7 @@ export function AlbumEditForm({
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

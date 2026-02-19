@@ -13,6 +13,7 @@
  */
 
 import type { CSSProperties, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDragStore } from '@/stores/drag-store';
 
@@ -65,7 +66,7 @@ export function GhostCard({
   const ghostY = yProp ?? storeY;
   const ghostWidth = widthProp ?? storeWidth;
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {visible && (
         <motion.div
@@ -84,6 +85,7 @@ export function GhostCard({
           {children}
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

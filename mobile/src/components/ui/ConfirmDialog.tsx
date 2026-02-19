@@ -6,6 +6,7 @@
  */
 
 import { type ReactNode, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Scrim } from './Scrim';
 
@@ -44,7 +45,7 @@ export function ConfirmDialog({
     if (!confirmDisabled) onConfirm();
   }, [onConfirm, confirmDisabled]);
 
-  return (
+  return createPortal(
     <>
       <Scrim visible={open} onDismiss={onCancel} zIndex={450} />
       <AnimatePresence>
@@ -167,6 +168,7 @@ export function ConfirmDialog({
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </>,
+    document.body
   );
 }

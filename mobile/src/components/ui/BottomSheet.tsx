@@ -16,6 +16,7 @@
  */
 
 import { type ReactNode, type CSSProperties, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { Scrim } from './Scrim';
 
@@ -82,7 +83,7 @@ export function BottomSheet({
     [onClose]
   );
 
-  return (
+  return createPortal(
     <>
       <Scrim visible={open} onDismiss={onClose} />
       <AnimatePresence>
@@ -144,6 +145,7 @@ export function BottomSheet({
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </>,
+    document.body
   );
 }

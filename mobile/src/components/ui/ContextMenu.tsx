@@ -23,6 +23,7 @@ import {
   useEffect,
   useRef,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface ContextMenuHeader {
@@ -132,7 +133,7 @@ export function ContextMenu({
     return { top: `${top}px`, right: `${right}px` };
   };
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -268,6 +269,7 @@ export function ContextMenu({
           ))}
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

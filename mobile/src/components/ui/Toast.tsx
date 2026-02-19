@@ -6,6 +6,7 @@
  */
 
 import { useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { create } from 'zustand';
 
@@ -69,7 +70,7 @@ export function ToastContainer() {
     };
   }, [message, startTimer]);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {message && (
         <motion.div
@@ -107,6 +108,7 @@ export function ToastContainer() {
           </div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }
