@@ -358,13 +358,6 @@ export function LibraryPage() {
     error: albumsError,
   } = useListAlbums(activeListId);
 
-  // Resolve group name for eyebrow
-  const groupName = useMemo(() => {
-    if (!activeList?.groupId || !groups) return undefined;
-    const group = groups.find((g) => g._id === activeList.groupId);
-    return group?.name;
-  }, [activeList, groups]);
-
   // Sort albums
   const sortedAlbums = useMemo(() => {
     if (!albums) return [];
@@ -1235,7 +1228,6 @@ export function LibraryPage() {
           <>
             {/* Header */}
             <ListHeader
-              eyebrow={groupName}
               title={activeList?.name ?? 'Library'}
               albumCount={activeList?.count}
               year={activeList?.year}

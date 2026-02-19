@@ -10,16 +10,6 @@ describe('ListHeader', () => {
     );
   });
 
-  it('renders eyebrow text', () => {
-    render(<ListHeader title="Main" eyebrow="2024" />);
-    expect(screen.getByTestId('list-header-eyebrow')).toHaveTextContent('2024');
-  });
-
-  it('hides eyebrow when not provided', () => {
-    render(<ListHeader title="Main" />);
-    expect(screen.queryByTestId('list-header-eyebrow')).not.toBeInTheDocument();
-  });
-
   it('shows album count in metadata', () => {
     render(<ListHeader title="Main" albumCount={42} />);
     expect(screen.getByTestId('list-header-meta')).toHaveTextContent(

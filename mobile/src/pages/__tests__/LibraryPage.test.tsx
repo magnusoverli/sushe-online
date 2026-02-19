@@ -188,9 +188,6 @@ describe('LibraryPage', () => {
         'Best of 2024'
       );
     });
-
-    // Eyebrow should show group name
-    expect(screen.getByTestId('list-header-eyebrow')).toHaveTextContent('2024');
   });
 
   it('renders album cards for the active list', async () => {

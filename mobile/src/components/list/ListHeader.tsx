@@ -2,7 +2,6 @@
  * ListHeader - Section header for the album list view.
  *
  * Design spec:
- * - Eyebrow: DM Mono 9px caps, rgba(255,255,255,0.25), letter-spacing +0.08em
  * - Title: DM Serif Display 32px, #F0ECE4, letter-spacing -0.01em
  * - Metadata: DM Mono 10px, rgba(255,255,255,0.20)
  * - Divider: 1px solid rgba(255,255,255,0.05)
@@ -12,8 +11,6 @@
 import { MoreVertical, Lock } from 'lucide-react';
 
 interface ListHeaderProps {
-  /** Eyebrow text (e.g. group name or "COLLECTION") */
-  eyebrow?: string;
   /** List name */
   title: string;
   /** Album count */
@@ -29,7 +26,6 @@ interface ListHeaderProps {
 }
 
 export function ListHeader({
-  eyebrow,
   title,
   albumCount,
   year,
@@ -48,37 +44,45 @@ export function ListHeader({
   return (
     <header
       style={{
-        padding: '24px var(--space-header-x) 16px',
+        padding: '6px var(--space-header-x) 16px',
       }}
       data-testid="list-header"
     >
-      {/* Top row: eyebrow + actions */}
+      {/* Title row: title + actions */}
       <div
         style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: '8px',
+          gap: '8px',
         }}
       >
-        {eyebrow ? (
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
-              fontWeight: 400,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
-              color: 'var(--color-text-label)',
-            }}
-            data-testid="list-header-eyebrow"
-          >
-            {eyebrow}
-          </span>
-        ) : (
-          <span />
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: '32px',
+            fontWeight: 400,
+            letterSpacing: '-0.01em',
+            lineHeight: 1.15,
+            color: 'var(--color-text-primary)',
+            margin: 0,
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+          data-testid="list-header-title"
+        >
+          {title}
+        </h1>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            flexShrink: 0,
+          }}
+        >
           {onOptionsClick && (
             <button
               type="button"
@@ -133,22 +137,6 @@ export function ListHeader({
           )}
         </div>
       </div>
-
-      {/* Title */}
-      <h1
-        style={{
-          fontFamily: 'var(--font-display)',
-          fontSize: '32px',
-          fontWeight: 400,
-          letterSpacing: '-0.01em',
-          lineHeight: 1.15,
-          color: 'var(--color-text-primary)',
-          margin: 0,
-        }}
-        data-testid="list-header-title"
-      >
-        {title}
-      </h1>
 
       {/* Metadata row */}
       {(metaParts.length > 0 || isLocked) && (
