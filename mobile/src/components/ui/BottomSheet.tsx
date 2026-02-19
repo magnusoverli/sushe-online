@@ -57,7 +57,7 @@ const handleStyle: CSSProperties = {
 
 const titleStyle: CSSProperties = {
   fontFamily: 'var(--font-display)',
-  fontSize: '13px',
+  fontSize: '15px',
   fontWeight: 400,
   letterSpacing: '-0.01em',
   color: 'var(--color-text-primary)',
@@ -119,8 +119,8 @@ export function BottomSheet({
                   <div
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '10px',
-                      color: 'var(--color-text-secondary)',
+                      fontSize: '11px',
+                      color: 'var(--color-text-primary)',
                       marginTop: '2px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',

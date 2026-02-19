@@ -39,6 +39,11 @@ const itemStyle: CSSProperties = {
   transition: 'background 150ms ease',
   userSelect: 'none',
   WebkitUserSelect: 'none',
+  width: '100%',
+  border: 'none',
+  background: 'transparent',
+  color: 'inherit',
+  textAlign: 'left',
 };
 
 const iconContainerBase: CSSProperties = {
@@ -53,7 +58,7 @@ const iconContainerBase: CSSProperties = {
 
 const labelStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
+  fontSize: '12px',
   fontWeight: 400,
   color: 'rgba(255,255,255,0.75)',
   flex: 1,
@@ -62,7 +67,7 @@ const labelStyle: CSSProperties = {
 
 const subtitleStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
+  fontSize: '8px',
   fontWeight: 400,
   color: 'rgba(255,255,255,0.30)',
   marginTop: '1px',

@@ -224,7 +224,7 @@ export function AlbumActionSheet({
 
   if (!album) return null;
 
-  const subtitle = `${album.artist} \u2014 ${album.album}`;
+  const sheetTitle = `${album.artist} \u2014 ${album.album}`;
 
   // Determine the play button label
   const getPlayLabel = (): string => {
@@ -240,12 +240,7 @@ export function AlbumActionSheet({
 
   return (
     <>
-      <BottomSheet
-        open={open}
-        onClose={onClose}
-        title="Album"
-        subtitle={subtitle}
-      >
+      <BottomSheet open={open} onClose={onClose} title={sheetTitle}>
         <div style={{ padding: '0 4px 8px' }}>
           {/* Lock banner */}
           {isListLocked && (
@@ -259,7 +254,7 @@ export function AlbumActionSheet({
                 borderRadius: '8px',
                 background: 'rgba(255,255,255,0.04)',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8px',
+                fontSize: '9px',
                 letterSpacing: '0.04em',
                 color: 'rgba(255,255,255,0.35)',
               }}
@@ -274,11 +269,6 @@ export function AlbumActionSheet({
           <ActionItem
             icon={<Edit3 size={16} />}
             label="Edit Details"
-            subtitle={
-              isListLocked
-                ? 'Year is locked'
-                : 'Cover, genres, comments, tracks'
-            }
             onClick={() => handleAction(onEditDetails)}
             disabled={isListLocked}
           />
@@ -329,7 +319,7 @@ export function AlbumActionSheet({
                   flex: 1,
                   minWidth: 0,
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '8.5px',
+                  fontSize: '10px',
                   fontWeight: 400,
                   color: 'rgba(255,255,255,0.75)',
                   textAlign: 'left',
@@ -382,7 +372,7 @@ export function AlbumActionSheet({
                     gap: 8,
                     padding: '12px 4px',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
+                    fontSize: 11,
                     color: 'var(--color-text-secondary)',
                   }}
                 >
@@ -401,7 +391,7 @@ export function AlbumActionSheet({
                   style={{
                     padding: '12px 4px',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
+                    fontSize: 11,
                     color: 'var(--color-text-secondary)',
                   }}
                 >
@@ -440,7 +430,7 @@ export function AlbumActionSheet({
                       <div
                         style={{
                           fontFamily: 'var(--font-mono)',
-                          fontSize: 11,
+                          fontSize: 12,
                           color: device.is_active
                             ? '#1ed760'
                             : 'var(--color-text-primary)',
@@ -454,7 +444,7 @@ export function AlbumActionSheet({
                       <div
                         style={{
                           fontFamily: 'var(--font-mono)',
-                          fontSize: 9,
+                          fontSize: 10,
                           color: 'var(--color-text-secondary)',
                           textTransform: 'capitalize',
                         }}
@@ -495,7 +485,7 @@ export function AlbumActionSheet({
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 10,
+                    fontSize: 11,
                     color: '#00FFFF',
                   }}
                 >
