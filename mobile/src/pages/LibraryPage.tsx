@@ -1333,12 +1333,6 @@ export function LibraryPage() {
                     activeList?.year ?? null
                   );
 
-                  // Add year mismatch tag if applicable
-                  if (yearMismatch && album.release_date) {
-                    const year = album.release_date.substring(0, 4);
-                    tags.push(year);
-                  }
-
                   const cardState = getCardState(index);
                   const albumIsNowPlaying = checkNowPlaying(album);
 
@@ -1361,6 +1355,9 @@ export function LibraryPage() {
                         showRank={sortKey === 'custom'}
                         rankVisible={activeList?.isMain ?? false}
                         tags={tags}
+                        releaseDate={album.release_date}
+                        country={album.country}
+                        yearMismatch={yearMismatch}
                         playcount={playcounts[album._id]}
                         cardState={cardState}
                         coverElement={

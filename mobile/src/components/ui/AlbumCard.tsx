@@ -42,6 +42,12 @@ export interface AlbumCardProps {
   artist: string;
   coverElement?: ReactNode;
   tags?: string[];
+  /** Release date string (e.g. "1997-06-16"). Year is extracted for display. */
+  releaseDate?: string | null;
+  /** Country of origin (e.g. "United Kingdom"). */
+  country?: string | null;
+  /** Whether the release date mismatches the list year (renders date in red). */
+  yearMismatch?: boolean;
   isActive?: boolean;
   cardState?: CardState;
   onMenuClick?: (e: React.MouseEvent | React.TouchEvent) => void;
@@ -103,6 +109,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
       artist,
       coverElement,
       tags,
+      releaseDate,
+      country,
+      yearMismatch = false,
       isActive = false,
       cardState = 'default',
       onMenuClick,
@@ -188,8 +197,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
         {/* Cover art */}
         <div
           style={{
-            width: '80px',
-            height: '80px',
+            width: '88px',
+            height: '88px',
             borderRadius: 'var(--radius-cover)',
             overflow: 'hidden',
             flexShrink: 0,
@@ -278,12 +287,46 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
             )}
           </div>
 
+          {/* Release date + country metadata line */}
+          {(releaseDate || country) && (
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '9px',
+                fontWeight: 400,
+                letterSpacing: '0.02em',
+                color: 'var(--color-text-secondary)',
+                marginTop: '2px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              data-testid="album-metadata"
+            >
+              {releaseDate && (
+                <span
+                  style={
+                    yearMismatch
+                      ? { color: 'var(--color-destructive)' }
+                      : undefined
+                  }
+                  data-testid="album-release-date"
+                >
+                  {releaseDate.substring(0, 4)}
+                </span>
+              )}
+              {releaseDate && country ? ' · ' : ''}
+              {country && <span data-testid="album-country">{country}</span>}
+            </span>
+          )}
+
           {tags && tags.length > 0 && (
             <div
               style={{
                 display: 'flex',
-                flexWrap: 'wrap',
-                gap: '6px',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: '4px',
                 marginTop: '6px',
               }}
             >
