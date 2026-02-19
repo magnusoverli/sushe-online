@@ -1,54 +1,88 @@
 /**
  * ListHeader - Section header for the album list view.
  *
+ * Split into two parts:
+ * - ListHeader: Title row + divider — rendered in the fixed AppShell header slot
+ * - ListHeaderMeta: Metadata + sort control — rendered inside the scroll area
+ *   so it naturally scrolls away as the user scrolls the album list
+ *
  * Design spec:
  * - Title: DM Serif Display 32px, #F0ECE4, letter-spacing -0.01em
- * - Metadata: DM Mono 10px, rgba(255,255,255,0.20)
- * - Divider: 1px solid rgba(255,255,255,0.05)
- * - Padding: 28px horizontal, 24px top, 16px bottom
+ * - Metadata: DM Mono 12px, secondary color
+ * - Divider: 1px solid rgba(255,255,255,0.05), 4px from edges
+ * - Padding: 28px horizontal, 6px top, 0px bottom
  */
 
-import type { ReactNode } from 'react';
+import { useRef, useEffect, type ReactNode, type RefObject } from 'react';
 import { MoreVertical, Lock } from 'lucide-react';
+
+/** Title font size range */
+const FONT_SIZE_START = 32;
+const FONT_SIZE_END = 18;
+
+/** Header top padding range */
+const PADDING_TOP_START = 6;
+const PADDING_TOP_END = 0;
+
+/** Divider margin-top range */
+const DIVIDER_MT_START = 4;
+const DIVIDER_MT_END = 2;
+
+/** Scroll distance (px) over which the title shrinks */
+const SHRINK_DISTANCE = 120;
 
 interface ListHeaderProps {
   /** List name */
   title: string;
-  /** Album count */
-  albumCount?: number;
-  /** List year */
-  year?: number | null;
-  /** Whether this list is locked (year locked + main list) */
-  isLocked?: boolean;
   /** Hamburger menu click handler */
   onMenuClick?: () => void;
   /** List options (ellipsis) click handler */
   onOptionsClick?: () => void;
-  /** Optional sort control rendered right-aligned on the metadata row */
-  sortControl?: ReactNode;
+  /** Ref to the scroll container — drives title shrink via direct DOM updates */
+  scrollRef?: RefObject<HTMLElement | null>;
 }
 
 export function ListHeader({
   title,
-  albumCount,
-  year,
-  isLocked = false,
   onMenuClick,
   onOptionsClick,
-  sortControl,
+  scrollRef,
 }: ListHeaderProps) {
-  const metaParts: string[] = [];
-  if (albumCount != null) {
-    metaParts.push(`${albumCount} album${albumCount !== 1 ? 's' : ''}`);
-  }
-  if (year) {
-    metaParts.push(String(year));
-  }
+  const headerRef = useRef<HTMLElement>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const dividerRef = useRef<HTMLDivElement>(null);
+
+  // Attach scroll listener and animate title size via direct DOM updates
+  useEffect(() => {
+    const scrollEl = scrollRef?.current;
+    const headerEl = headerRef.current;
+    const titleEl = titleRef.current;
+    const dividerEl = dividerRef.current;
+    if (!scrollEl || !headerEl || !titleEl || !dividerEl) return;
+
+    const lerp = (start: number, end: number, t: number) =>
+      start + (end - start) * t;
+
+    const onScroll = () => {
+      const progress = Math.min(
+        1,
+        Math.max(0, scrollEl.scrollTop / SHRINK_DISTANCE)
+      );
+      titleEl.style.fontSize = `${lerp(FONT_SIZE_START, FONT_SIZE_END, progress)}px`;
+      headerEl.style.paddingTop = `${lerp(PADDING_TOP_START, PADDING_TOP_END, progress)}px`;
+      dividerEl.style.marginTop = `${lerp(DIVIDER_MT_START, DIVIDER_MT_END, progress)}px`;
+    };
+
+    onScroll();
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    return () => scrollEl.removeEventListener('scroll', onScroll);
+  });
 
   return (
     <header
+      ref={headerRef}
       style={{
-        padding: '6px var(--space-header-x) 0px',
+        padding: `${PADDING_TOP_START}px var(--space-header-x) 0px`,
       }}
       data-testid="list-header"
     >
@@ -61,9 +95,10 @@ export function ListHeader({
         }}
       >
         <h1
+          ref={titleRef}
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: '32px',
+            fontSize: `${FONT_SIZE_START}px`,
             fontWeight: 400,
             letterSpacing: '-0.01em',
             lineHeight: 1.15,
@@ -142,65 +177,92 @@ export function ListHeader({
         </div>
       </div>
 
-      {/* Metadata + sort row */}
-      {(metaParts.length > 0 || isLocked || sortControl) && (
-        <div
-          style={{
-            marginTop: '6px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '4px 0',
-          }}
-        >
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
-              fontWeight: 400,
-              letterSpacing: '0.02em',
-              lineHeight: 1,
-              color: 'var(--color-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            data-testid="list-header-meta"
-          >
-            {metaParts.join(' · ')}
-            {isLocked && (
-              <span
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '3px',
-                  opacity: 0.6,
-                }}
-                data-testid="list-header-lock"
-              >
-                <Lock size={10} />
-                <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
-                  LOCKED
-                </span>
-              </span>
-            )}
-          </span>
-          {sortControl && (
-            <div style={{ position: 'relative' }}>{sortControl}</div>
-          )}
-        </div>
-      )}
-
       {/* Divider */}
       <div
+        ref={dividerRef}
         style={{
           height: '1px',
           background: 'var(--color-divider)',
-          marginTop: '4px',
+          marginTop: `${DIVIDER_MT_START}px`,
           marginLeft: 'calc(-1 * var(--space-header-x) + 4px)',
           marginRight: 'calc(-1 * var(--space-header-x) + 4px)',
         }}
       />
     </header>
+  );
+}
+
+interface ListHeaderMetaProps {
+  /** Album count */
+  albumCount?: number;
+  /** List year */
+  year?: number | null;
+  /** Whether this list is locked (year locked + main list) */
+  isLocked?: boolean;
+  /** Optional sort control rendered right-aligned */
+  sortControl?: ReactNode;
+}
+
+export function ListHeaderMeta({
+  albumCount,
+  year,
+  isLocked = false,
+  sortControl,
+}: ListHeaderMetaProps) {
+  const metaParts: string[] = [];
+  if (albumCount != null) {
+    metaParts.push(`${albumCount} album${albumCount !== 1 ? 's' : ''}`);
+  }
+  if (year) {
+    metaParts.push(String(year));
+  }
+
+  const hasContent = metaParts.length > 0 || isLocked || sortControl;
+  if (!hasContent) return null;
+
+  return (
+    <div
+      style={{
+        padding: '4px var(--space-header-x)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}
+      data-testid="list-header-meta-row"
+    >
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: '12px',
+          fontWeight: 400,
+          letterSpacing: '0.02em',
+          lineHeight: 1,
+          color: 'var(--color-text-secondary)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+        }}
+        data-testid="list-header-meta"
+      >
+        {metaParts.join(' · ')}
+        {isLocked && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '3px',
+              opacity: 0.6,
+            }}
+            data-testid="list-header-lock"
+          >
+            <Lock size={10} />
+            <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
+              LOCKED
+            </span>
+          </span>
+        )}
+      </span>
+      {sortControl && <div style={{ position: 'relative' }}>{sortControl}</div>}
+    </div>
   );
 }

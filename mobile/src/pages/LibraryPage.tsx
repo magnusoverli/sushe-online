@@ -56,7 +56,7 @@ import {
   isAlbumMatchingPlayback,
 } from '@/features/playback';
 import { AppShell } from '@/components/layout/AppShell';
-import { ListHeader } from '@/components/list/ListHeader';
+import { ListHeader, ListHeaderMeta } from '@/components/list/ListHeader';
 import { ListFooter } from '@/components/list/ListFooter';
 import { AlbumCard, type CardState } from '@/components/ui/AlbumCard';
 import { SkeletonList } from '@/components/ui/SkeletonCard';
@@ -1178,50 +1178,12 @@ export function LibraryPage() {
           ) : (
             <ListHeader
               title={activeList?.name ?? 'Library'}
-              albumCount={activeList?.count}
-              year={activeList?.year}
-              isLocked={isListLocked}
+              scrollRef={scrollContainerRef}
               onMenuClick={handleMenuClick}
               onOptionsClick={
                 activeListId
                   ? () => setListActionTarget(activeListId)
                   : undefined
-              }
-              sortControl={
-                <>
-                  <button
-                    ref={sortTriggerRef}
-                    type="button"
-                    onClick={() => setSortDropdownOpen((o) => !o)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '12px',
-                      letterSpacing: '0.04em',
-                      color: 'var(--color-text-secondary)',
-                    }}
-                    data-testid="sort-trigger"
-                  >
-                    {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ??
-                      'Sort'}
-                    <ChevronDown size={12} />
-                  </button>
-                  <Dropdown
-                    open={sortDropdownOpen}
-                    onClose={() => setSortDropdownOpen(false)}
-                    items={SORT_OPTIONS}
-                    selectedId={sortKey}
-                    onSelect={handleSortSelect}
-                    sectionLabel="Sort by"
-                    anchorRef={sortTriggerRef}
-                  />
-                </>
               }
             />
           )
@@ -1277,6 +1239,49 @@ export function LibraryPage() {
         ) : (
           /* ── Normal album list view ── */
           <>
+            {/* Metadata row — scrolls with content */}
+            <ListHeaderMeta
+              albumCount={activeList?.count}
+              year={activeList?.year}
+              isLocked={isListLocked}
+              sortControl={
+                <>
+                  <button
+                    ref={sortTriggerRef}
+                    type="button"
+                    onClick={() => setSortDropdownOpen((o) => !o)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: 0,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '12px',
+                      letterSpacing: '0.04em',
+                      color: 'var(--color-text-secondary)',
+                    }}
+                    data-testid="sort-trigger"
+                  >
+                    {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ??
+                      'Sort'}
+                    <ChevronDown size={12} />
+                  </button>
+                  <Dropdown
+                    open={sortDropdownOpen}
+                    onClose={() => setSortDropdownOpen(false)}
+                    items={SORT_OPTIONS}
+                    selectedId={sortKey}
+                    onSelect={handleSortSelect}
+                    sectionLabel="Sort by"
+                    anchorRef={sortTriggerRef}
+                  />
+                </>
+              }
+            />
+
             {/* Album list */}
             {albumsLoading ? (
               <div style={{ padding: '0 var(--space-list-x)' }}>
