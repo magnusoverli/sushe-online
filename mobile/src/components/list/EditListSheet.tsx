@@ -22,7 +22,7 @@ const inputStyle: React.CSSProperties = {
   borderRadius: '8px',
   padding: '10px 12px',
   fontFamily: 'var(--font-mono)',
-  fontSize: '10px',
+  fontSize: '12px',
   color: 'var(--color-text-primary)',
   outline: 'none',
   boxSizing: 'border-box',
@@ -30,7 +30,7 @@ const inputStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
+  fontSize: '11px',
   fontWeight: 500,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -144,7 +144,7 @@ export function EditListSheet({
           disabled={isSaving}
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
+            fontSize: '12px',
             fontWeight: 500,
             padding: '12px',
             borderRadius: '10px',

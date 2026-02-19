@@ -142,7 +142,7 @@ export function ListSelectionSheet({
               padding: '24px 16px',
               textAlign: 'center',
               fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
+              fontSize: '12px',
               color: 'var(--color-text-secondary)',
             }}
           >
@@ -170,7 +170,7 @@ export function ListSelectionSheet({
                 <span
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '11px',
+                    fontSize: '13px',
                     fontWeight: 500,
                     letterSpacing: '0.04em',
                     color: 'var(--color-text-primary)',
@@ -203,70 +203,72 @@ export function ListSelectionSheet({
               {/* Section items */}
               <div
                 style={{
-                  maxHeight:
-                    effectiveExpanded === section.label ? '500px' : '0',
-                  overflow: 'hidden',
-                  transition: 'max-height 200ms ease-out',
+                  display: 'grid',
+                  gridTemplateRows:
+                    effectiveExpanded === section.label ? '1fr' : '0fr',
+                  transition: 'grid-template-rows 200ms ease-out',
                 }}
               >
-                {section.lists.map((list) => (
-                  <button
-                    key={list._id}
-                    type="button"
-                    onClick={() => handleSelect(list._id)}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px',
-                      padding: '10px 16px 10px 28px',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      borderBottom: '1px solid var(--color-divider)',
-                    }}
-                    data-testid={`list-option-${list._id}`}
-                  >
-                    {list.isMain ? (
-                      <Star
-                        size={12}
-                        style={{ color: 'var(--color-gold)', flexShrink: 0 }}
-                      />
-                    ) : (
-                      <ListIcon
-                        size={12}
+                <div style={{ overflow: 'hidden' }}>
+                  {section.lists.map((list) => (
+                    <button
+                      key={list._id}
+                      type="button"
+                      onClick={() => handleSelect(list._id)}
+                      style={{
+                        width: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '10px 16px 10px 28px',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid var(--color-divider)',
+                      }}
+                      data-testid={`list-option-${list._id}`}
+                    >
+                      {list.isMain ? (
+                        <Star
+                          size={12}
+                          style={{ color: 'var(--color-gold)', flexShrink: 0 }}
+                        />
+                      ) : (
+                        <ListIcon
+                          size={12}
+                          style={{
+                            color: 'var(--color-text-secondary)',
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <span
                         style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '13px',
+                          color: 'var(--color-text-primary)',
+                          flex: 1,
+                          textAlign: 'left',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {list.name}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: '11px',
                           color: 'var(--color-text-secondary)',
                           flexShrink: 0,
                         }}
-                      />
-                    )}
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '12px',
-                        color: 'var(--color-text-primary)',
-                        flex: 1,
-                        textAlign: 'left',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {list.name}
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '10px',
-                        color: 'var(--color-text-secondary)',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {list.count}
-                    </span>
-                  </button>
-                ))}
+                      >
+                        {list.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           ))

@@ -17,6 +17,7 @@ import {
   useEditReasoning,
   useRemoveRecommendation,
 } from '@/hooks/useRecommendations';
+import { getAlbumCoverUrl } from '@/services/albums';
 import type { Recommendation, User } from '@/lib/types';
 
 interface RecommendationActionSheetProps {
@@ -131,6 +132,21 @@ export function RecommendationActionSheet({
         onClose={onClose}
         title="Recommendation"
         subtitle={subtitle}
+        titleIcon={
+          rec?.album_id ? (
+            <img
+              src={getAlbumCoverUrl(rec.album_id)}
+              alt=""
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                objectFit: 'cover',
+                flexShrink: 0,
+              }}
+            />
+          ) : undefined
+        }
       >
         <div style={{ padding: '0 4px 8px' }}>
           {/* Lock banner */}
@@ -145,13 +161,13 @@ export function RecommendationActionSheet({
                 borderRadius: '8px',
                 background: 'rgba(255,255,255,0.04)',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8px',
+                fontSize: '12px',
                 letterSpacing: '0.04em',
                 color: 'rgba(255,255,255,0.35)',
               }}
               data-testid="rec-action-lock-banner"
             >
-              <Lock size={10} style={{ flexShrink: 0 }} />
+              <Lock size={12} style={{ flexShrink: 0 }} />
               Recommendations for {year} are locked
             </div>
           )}
@@ -162,7 +178,7 @@ export function RecommendationActionSheet({
               <label
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '7px',
+                  fontSize: '11px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.2em',
                   color: 'rgba(255,255,255,0.25)',
@@ -199,7 +215,7 @@ export function RecommendationActionSheet({
                 style={{
                   textAlign: 'right',
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '7px',
+                  fontSize: '11px',
                   color: isOverLimit
                     ? 'var(--color-destructive)'
                     : 'rgba(255,255,255,0.25)',
@@ -225,7 +241,7 @@ export function RecommendationActionSheet({
                     background: 'transparent',
                     color: 'rgba(255,255,255,0.50)',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '9px',
+                    fontSize: '12px',
                     fontWeight: 500,
                     cursor: 'pointer',
                   }}
@@ -247,7 +263,7 @@ export function RecommendationActionSheet({
                       : 'rgba(96,165,250,0.20)',
                     color: isOverLimit ? 'rgba(255,255,255,0.25)' : '#60a5fa',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '9px',
+                    fontSize: '12px',
                     fontWeight: 500,
                     cursor: isOverLimit ? 'default' : 'pointer',
                     display: 'flex',

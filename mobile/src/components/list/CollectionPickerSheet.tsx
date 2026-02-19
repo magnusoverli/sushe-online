@@ -62,7 +62,7 @@ export function CollectionPickerSheet({
           style={{
             padding: '16px',
             fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
+            fontSize: '12px',
             color: 'var(--color-text-secondary)',
             textAlign: 'center',
           }}

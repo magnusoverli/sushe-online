@@ -40,7 +40,7 @@ const YEAR_OPTIONS = generateYearOptions();
 
 const sectionTitleStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
+  fontSize: '11px',
   fontWeight: 500,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -61,7 +61,7 @@ const rowStyle: React.CSSProperties = {
 const nameStyle: React.CSSProperties = {
   flex: 1,
   fontFamily: 'var(--font-mono)',
-  fontSize: '10px',
+  fontSize: '13px',
   color: 'var(--color-text-primary)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -74,14 +74,14 @@ const selectStyle: React.CSSProperties = {
   borderRadius: '6px',
   padding: '6px 8px',
   fontFamily: 'var(--font-mono)',
-  fontSize: '10px',
+  fontSize: '12px',
   color: 'var(--color-text-primary)',
   outline: 'none',
 };
 
 const yearLabelStyle: React.CSSProperties = {
   fontFamily: 'var(--font-display)',
-  fontSize: '12px',
+  fontSize: '13px',
   color: 'var(--color-gold)',
   marginBottom: '4px',
 };
@@ -94,13 +94,13 @@ const radioLabelStyle: React.CSSProperties = {
   borderRadius: '6px',
   cursor: 'pointer',
   fontFamily: 'var(--font-mono)',
-  fontSize: '10px',
+  fontSize: '13px',
   color: 'var(--color-text-primary)',
 };
 
 const btnBaseStyle: React.CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '10px',
+  fontSize: '12px',
   fontWeight: 500,
   padding: '12px',
   borderRadius: '10px',
@@ -283,7 +283,7 @@ export function SetupWizardSheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '12px',
                 color: 'var(--color-text-secondary)',
                 marginBottom: '8px',
               }}

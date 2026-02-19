@@ -111,7 +111,7 @@ export function SummarySheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
+                fontSize: '12px',
                 color: 'var(--color-text-secondary)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',

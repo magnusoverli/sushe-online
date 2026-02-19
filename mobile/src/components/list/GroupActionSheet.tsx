@@ -94,7 +94,7 @@ export function GroupActionSheet({
             style={{
               padding: '12px 10px',
               fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
+              fontSize: '12px',
               color: 'var(--color-text-secondary)',
               lineHeight: '1.5',
             }}
@@ -121,7 +121,7 @@ export function GroupActionSheet({
                 borderRadius: '8px',
                 padding: '10px 12px',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
+                fontSize: '12px',
                 color: 'var(--color-text-primary)',
                 outline: 'none',
               }}
@@ -140,7 +140,7 @@ export function GroupActionSheet({
                 onClick={() => setIsRenaming(false)}
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
+                  fontSize: '12px',
                   padding: '6px 12px',
                   borderRadius: '6px',
                   border: '1px solid rgba(255,255,255,0.10)',
@@ -156,7 +156,7 @@ export function GroupActionSheet({
                 onClick={handleRenameSubmit}
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
+                  fontSize: '12px',
                   fontWeight: 500,
                   padding: '6px 12px',
                   borderRadius: '6px',
@@ -215,7 +215,7 @@ export function GroupActionSheet({
               alignItems: 'center',
               gap: '8px',
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
+              fontSize: '11px',
               color: 'var(--color-text-secondary)',
               cursor: 'pointer',
             }}

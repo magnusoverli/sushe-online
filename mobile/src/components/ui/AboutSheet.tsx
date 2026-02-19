@@ -89,7 +89,7 @@ function groupByDate(entries: ChangelogEntry[]): DateGroup[] {
 
 const badgeStyle = (color: string, bg: string): CSSProperties => ({
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
+  fontSize: '11px',
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
   color,
@@ -108,7 +108,7 @@ const entryRowStyle: CSSProperties = {
 
 const descriptionStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '10px',
+  fontSize: '12px',
   lineHeight: '1.5',
   color: 'rgba(255,255,255,0.75)',
   flex: 1,
@@ -117,7 +117,7 @@ const descriptionStyle: CSSProperties = {
 
 const dateHeaderStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
+  fontSize: '11px',
   color: 'rgba(255,255,255,0.35)',
   textDecoration: 'underline',
   textUnderlineOffset: '3px',
@@ -130,7 +130,7 @@ const showMoreStyle: CSSProperties = {
   width: '100%',
   padding: '10px',
   fontFamily: 'var(--font-mono)',
-  fontSize: '9px',
+  fontSize: '12px',
   color: 'rgba(255,255,255,0.40)',
   background: 'transparent',
   border: '1px solid rgba(255,255,255,0.08)',
@@ -182,7 +182,7 @@ export function AboutSheet({ open, onClose }: AboutSheetProps) {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
+              fontSize: '11px',
               color: 'rgba(255,255,255,0.40)',
               marginTop: '4px',
             }}
@@ -196,7 +196,7 @@ export function AboutSheet({ open, onClose }: AboutSheetProps) {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '7px',
+              fontSize: '11px',
               textTransform: 'uppercase',
               letterSpacing: '0.2em',
               color: 'rgba(255,255,255,0.25)',
@@ -211,7 +211,7 @@ export function AboutSheet({ open, onClose }: AboutSheetProps) {
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '10px',
+                fontSize: '12px',
                 color: 'rgba(255,255,255,0.35)',
                 textAlign: 'center',
                 padding: '20px 0',

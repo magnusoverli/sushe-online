@@ -9,6 +9,7 @@ import { useState, useCallback } from 'react';
 import { ThumbsUp, Loader } from 'lucide-react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useAddRecommendation } from '@/hooks/useRecommendations';
+import { getAlbumCoverUrl } from '@/services/albums';
 import type { Album } from '@/lib/types';
 
 interface RecommendAlbumSheetProps {
@@ -69,6 +70,21 @@ export function RecommendAlbumSheet({
       onClose={handleClose}
       title="Recommend Album"
       subtitle={subtitle}
+      titleIcon={
+        album ? (
+          <img
+            src={album.cover_image_url || getAlbumCoverUrl(album.album_id)}
+            alt=""
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '6px',
+              objectFit: 'cover',
+              flexShrink: 0,
+            }}
+          />
+        ) : undefined
+      }
     >
       <div style={{ padding: '4px 10px 8px' }}>
         {/* Album info */}
@@ -87,7 +103,7 @@ export function RecommendAlbumSheet({
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
+              fontSize: '12px',
               color: 'rgba(255,255,255,0.50)',
               lineHeight: 1.4,
             }}
@@ -101,7 +117,7 @@ export function RecommendAlbumSheet({
           <label
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '7px',
+              fontSize: '11px',
               textTransform: 'uppercase',
               letterSpacing: '0.2em',
               color: 'rgba(255,255,255,0.25)',
@@ -140,7 +156,7 @@ export function RecommendAlbumSheet({
           style={{
             textAlign: 'right',
             fontFamily: 'var(--font-mono)',
-            fontSize: '7px',
+            fontSize: '11px',
             color: isOverLimit
               ? 'var(--color-destructive)'
               : 'rgba(255,255,255,0.25)',
@@ -171,7 +187,7 @@ export function RecommendAlbumSheet({
                 ? 'rgba(255,255,255,0.25)'
                 : '#60a5fa',
             fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
+            fontSize: '12px',
             fontWeight: 500,
             cursor: !reasoning.trim() || isOverLimit ? 'default' : 'pointer',
             display: 'flex',

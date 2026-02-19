@@ -83,7 +83,7 @@ function ArtistRow({ artist }: { artist: SimilarArtist }) {
           rel="noopener noreferrer"
           style={{
             fontFamily: 'var(--font-display)',
-            fontSize: 13,
+            fontSize: 14,
             letterSpacing: '-0.01em',
             color: 'var(--color-text-primary)',
             overflow: 'hidden',
@@ -98,7 +98,7 @@ function ArtistRow({ artist }: { artist: SimilarArtist }) {
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: 9,
+            fontSize: 11,
             letterSpacing: '0.04em',
             color: 'var(--color-text-secondary)',
             marginTop: 2,
@@ -117,7 +117,7 @@ function ArtistRow({ artist }: { artist: SimilarArtist }) {
         style={{
           flexShrink: 0,
           fontFamily: 'var(--font-mono)',
-          fontSize: 9,
+          fontSize: 11,
           letterSpacing: '0.04em',
           color: 'var(--color-text-secondary)',
           textDecoration: 'none',
@@ -179,7 +179,7 @@ export function SimilarArtistsSheet({
               textAlign: 'center',
               padding: '24px 0',
               fontFamily: 'var(--font-mono)',
-              fontSize: 11,
+              fontSize: 12,
               color: 'var(--color-text-secondary)',
             }}
           >
@@ -193,7 +193,7 @@ export function SimilarArtistsSheet({
               textAlign: 'center',
               padding: '24px 0',
               fontFamily: 'var(--font-mono)',
-              fontSize: 11,
+              fontSize: 12,
               color: 'var(--color-destructive)',
             }}
           >
@@ -207,7 +207,7 @@ export function SimilarArtistsSheet({
               textAlign: 'center',
               padding: '24px 0',
               fontFamily: 'var(--font-mono)',
-              fontSize: 11,
+              fontSize: 12,
               color: 'var(--color-text-secondary)',
             }}
           >

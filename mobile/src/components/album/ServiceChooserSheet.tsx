@@ -73,7 +73,7 @@ export function ServiceChooserSheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: 500,
                 color: SPOTIFY_COLOR,
               }}
@@ -83,7 +83,7 @@ export function ServiceChooserSheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 8.5,
+                fontSize: 11,
                 color: 'var(--color-text-secondary)',
                 marginTop: 2,
               }}
@@ -133,7 +133,7 @@ export function ServiceChooserSheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 11,
+                fontSize: 14,
                 fontWeight: 500,
                 color: TIDAL_COLOR,
               }}
@@ -143,7 +143,7 @@ export function ServiceChooserSheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: 8.5,
+                fontSize: 11,
                 color: 'var(--color-text-secondary)',
                 marginTop: 2,
               }}

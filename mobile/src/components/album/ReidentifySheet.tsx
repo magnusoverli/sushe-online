@@ -171,7 +171,7 @@ export function ReidentifySheet({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '11px',
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
                 color: 'var(--color-text-secondary)',
@@ -353,7 +353,7 @@ function CandidateCard({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '12px',
+              fontSize: '13px',
               color: 'var(--color-text-primary)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -368,7 +368,7 @@ function CandidateCard({
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8px',
+                fontSize: '11px',
                 fontWeight: 500,
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
@@ -386,7 +386,7 @@ function CandidateCard({
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
+            fontSize: '11px',
             color: 'var(--color-text-secondary)',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -402,7 +402,7 @@ function CandidateCard({
             alignItems: 'center',
             gap: '8px',
             fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
+            fontSize: '11px',
             color: 'var(--color-text-muted)',
           }}
         >
