@@ -8,6 +8,7 @@
  * - Padding: 28px horizontal, 24px top, 16px bottom
  */
 
+import type { ReactNode } from 'react';
 import { MoreVertical, Lock } from 'lucide-react';
 
 interface ListHeaderProps {
@@ -23,6 +24,8 @@ interface ListHeaderProps {
   onMenuClick?: () => void;
   /** List options (ellipsis) click handler */
   onOptionsClick?: () => void;
+  /** Optional sort control rendered right-aligned on the metadata row */
+  sortControl?: ReactNode;
 }
 
 export function ListHeader({
@@ -32,6 +35,7 @@ export function ListHeader({
   isLocked = false,
   onMenuClick,
   onOptionsClick,
+  sortControl,
 }: ListHeaderProps) {
   const metaParts: string[] = [];
   if (albumCount != null) {
@@ -138,40 +142,52 @@ export function ListHeader({
         </div>
       </div>
 
-      {/* Metadata row */}
-      {(metaParts.length > 0 || isLocked) && (
-        <span
+      {/* Metadata + sort row */}
+      {(metaParts.length > 0 || isLocked || sortControl) && (
+        <div
           style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            fontWeight: 400,
-            letterSpacing: '0.02em',
-            color: 'var(--color-text-muted)',
             marginTop: '6px',
             display: 'flex',
             alignItems: 'center',
-            gap: '6px',
+            justifyContent: 'space-between',
           }}
-          data-testid="list-header-meta"
         >
-          {metaParts.join(' · ')}
-          {isLocked && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                opacity: 0.6,
-              }}
-              data-testid="list-header-lock"
-            >
-              <Lock size={10} />
-              <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
-                LOCKED
+          <span
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '10px',
+              fontWeight: 400,
+              letterSpacing: '0.02em',
+              color: 'var(--color-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 0',
+            }}
+            data-testid="list-header-meta"
+          >
+            {metaParts.join(' · ')}
+            {isLocked && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  opacity: 0.6,
+                }}
+                data-testid="list-header-lock"
+              >
+                <Lock size={10} />
+                <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
+                  LOCKED
+                </span>
               </span>
-            </span>
+            )}
+          </span>
+          {sortControl && (
+            <div style={{ position: 'relative' }}>{sortControl}</div>
           )}
-        </span>
+        </div>
       )}
 
       {/* Divider */}

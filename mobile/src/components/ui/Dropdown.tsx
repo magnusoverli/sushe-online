@@ -50,7 +50,7 @@ const menuStyle: CSSProperties = {
 
 const sectionLabelStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '6.5px',
+  fontSize: '10px',
   fontWeight: 400,
   letterSpacing: '0.15em',
   textTransform: 'uppercase',
@@ -164,7 +164,7 @@ export function Dropdown({
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '8.5px',
+                      fontSize: '10px',
                       fontWeight: 400,
                       color: isSelected
                         ? 'var(--color-gold)'

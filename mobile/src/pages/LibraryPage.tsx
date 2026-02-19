@@ -1238,50 +1238,44 @@ export function LibraryPage() {
                   ? () => setListActionTarget(activeListId)
                   : undefined
               }
+              sortControl={
+                <>
+                  <button
+                    ref={sortTriggerRef}
+                    type="button"
+                    onClick={() => setSortDropdownOpen((o) => !o)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      background: 'transparent',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '10px',
+                      letterSpacing: '0.04em',
+                      color: 'var(--color-text-secondary)',
+                    }}
+                    data-testid="sort-trigger"
+                  >
+                    {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ??
+                      'Sort'}
+                    <ChevronDown size={12} />
+                  </button>
+                  <Dropdown
+                    open={sortDropdownOpen}
+                    onClose={() => setSortDropdownOpen(false)}
+                    items={SORT_OPTIONS}
+                    selectedId={sortKey}
+                    onSelect={handleSortSelect}
+                    sectionLabel="Sort by"
+                    anchorRef={sortTriggerRef}
+                  />
+                </>
+              }
             />
-
-            {/* Sort bar */}
-            <div
-              style={{
-                padding: '0 var(--space-list-x) 8px',
-                display: 'flex',
-                justifyContent: 'flex-end',
-                position: 'relative',
-              }}
-            >
-              <button
-                ref={sortTriggerRef}
-                type="button"
-                onClick={() => setSortDropdownOpen((o) => !o)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
-                  letterSpacing: '0.04em',
-                  color: 'var(--color-text-secondary)',
-                }}
-                data-testid="sort-trigger"
-              >
-                {SORT_OPTIONS.find((o) => o.id === sortKey)?.label ?? 'Sort'}
-                <ChevronDown size={12} />
-              </button>
-              <Dropdown
-                open={sortDropdownOpen}
-                onClose={() => setSortDropdownOpen(false)}
-                items={SORT_OPTIONS}
-                selectedId={sortKey}
-                onSelect={handleSortSelect}
-                sectionLabel="Sort by"
-                anchorRef={sortTriggerRef}
-              />
-            </div>
 
             {/* Album list */}
             {albumsLoading ? (
