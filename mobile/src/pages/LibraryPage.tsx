@@ -1035,6 +1035,7 @@ export function LibraryPage() {
         scrollRef={scrollContainerRef}
         showNowPlaying={showNowPlaying}
         onSettingsClick={() => setSettingsOpen(true)}
+        skipSafeArea={!viewingRecommendations}
         header={
           viewingRecommendations ? (
             <header
@@ -1175,18 +1176,7 @@ export function LibraryPage() {
                 }}
               />
             </header>
-          ) : (
-            <ListHeader
-              title={activeList?.name ?? 'Library'}
-              scrollRef={scrollContainerRef}
-              onMenuClick={handleMenuClick}
-              onOptionsClick={
-                activeListId
-                  ? () => setListActionTarget(activeListId)
-                  : undefined
-              }
-            />
-          )
+          ) : undefined
         }
       >
         {viewingRecommendations ? (
@@ -1239,6 +1229,17 @@ export function LibraryPage() {
         ) : (
           /* ── Normal album list view ── */
           <>
+            {/* Sticky title header — stays pinned at scroll top */}
+            <ListHeader
+              title={activeList?.name ?? 'Library'}
+              onMenuClick={handleMenuClick}
+              onOptionsClick={
+                activeListId
+                  ? () => setListActionTarget(activeListId)
+                  : undefined
+              }
+            />
+
             {/* Metadata row — scrolls with content */}
             <ListHeaderMeta
               albumCount={activeList?.count}
@@ -1319,6 +1320,8 @@ export function LibraryPage() {
                   flexDirection: 'column',
                   gap: 'var(--space-card-gap-outer)',
                   padding: `0 var(--space-list-x)`,
+                  position: 'relative',
+                  zIndex: 0,
                 }}
                 data-testid="album-list"
               >

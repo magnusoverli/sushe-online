@@ -31,6 +31,8 @@ interface AppShellProps {
   showNowPlaying?: boolean;
   /** Called when the Settings tab is tapped in the TabBar. */
   onSettingsClick?: () => void;
+  /** Skip auto safe-area-inset-top on main (when a sticky child handles it). */
+  skipSafeArea?: boolean;
 }
 
 export function AppShell({
@@ -40,6 +42,7 @@ export function AppShell({
   scrollRef,
   showNowPlaying = false,
   onSettingsClick,
+  skipSafeArea = false,
 }: AppShellProps) {
   return (
     <div
@@ -74,7 +77,9 @@ export function AppShell({
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
-          ...(!header ? { paddingTop: 'env(safe-area-inset-top, 0px)' } : {}),
+          ...(!header && !skipSafeArea
+            ? { paddingTop: 'env(safe-area-inset-top, 0px)' }
+            : {}),
         }}
         data-testid="app-shell-content"
       >
