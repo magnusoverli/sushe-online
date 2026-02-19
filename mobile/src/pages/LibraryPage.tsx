@@ -231,8 +231,6 @@ export function LibraryPage() {
     null
   );
   const [albumEditTarget, setAlbumEditTarget] = useState<Album | null>(null);
-  const [moveAlbumTarget, setMoveAlbumTarget] = useState<Album | null>(null);
-  const [copyAlbumTarget, setCopyAlbumTarget] = useState<Album | null>(null);
   const [removeAlbumTarget, setRemoveAlbumTarget] = useState<Album | null>(
     null
   );
@@ -868,18 +866,18 @@ export function LibraryPage() {
 
   const handleMoveAlbum = useCallback(
     async (targetListId: string) => {
-      if (!moveAlbumTarget || !activeListId) return;
+      if (!albumActionTarget || !activeListId) return;
 
       try {
         // Add to target list first (strip list-specific _id)
         // This order ensures the album isn't lost if the second operation fails
-        const { _id, ...rest } = moveAlbumTarget;
+        const { _id, ...rest } = albumActionTarget;
         await updateListItems(targetListId, { added: [rest] });
 
         // Then remove from source list using album_id (canonical identifier)
         // The API's removed array expects album_id, not list-item _id
         await updateListItems(activeListId, {
-          removed: [moveAlbumTarget.album_id],
+          removed: [albumActionTarget.album_id],
         });
 
         queryClient.invalidateQueries({ queryKey: ['lists', 'metadata'] });
@@ -893,19 +891,17 @@ export function LibraryPage() {
         showToast('Album moved', 'success');
       } catch {
         showToast('Failed to move album', 'error');
-      } finally {
-        setMoveAlbumTarget(null);
       }
     },
-    [moveAlbumTarget, activeListId, queryClient]
+    [albumActionTarget, activeListId, queryClient]
   );
 
   const handleCopyAlbum = useCallback(
     async (targetListId: string) => {
-      if (!copyAlbumTarget) return;
+      if (!albumActionTarget) return;
 
       try {
-        const { _id, ...rest } = copyAlbumTarget;
+        const { _id, ...rest } = albumActionTarget;
         const result = await updateListItems(targetListId, { added: [rest] });
 
         if (result.duplicates && result.duplicates.length > 0) {
@@ -920,11 +916,9 @@ export function LibraryPage() {
         });
       } catch {
         showToast('Failed to copy album', 'error');
-      } finally {
-        setCopyAlbumTarget(null);
       }
     },
-    [copyAlbumTarget, queryClient]
+    [albumActionTarget, queryClient]
   );
 
   const handleRemoveAlbum = useCallback(async () => {
@@ -1602,12 +1596,11 @@ export function LibraryPage() {
         onEditDetails={() => {
           setAlbumEditTarget(albumActionTarget);
         }}
-        onMoveToList={() => {
-          setMoveAlbumTarget(albumActionTarget);
-        }}
-        onCopyToList={() => {
-          setCopyAlbumTarget(albumActionTarget);
-        }}
+        lists={listsMap ?? {}}
+        groups={groups ?? []}
+        currentListId={activeListId}
+        onMoveToList={handleMoveAlbum}
+        onCopyToList={handleCopyAlbum}
         onRemove={() => {
           setRemoveAlbumTarget(albumActionTarget);
         }}
@@ -1628,32 +1621,6 @@ export function LibraryPage() {
         album={albumEditTarget}
         listId={activeListId ?? ''}
         onSave={handleAlbumEdit}
-      />
-
-      {/* Move to list picker */}
-      <ListSelectionSheet
-        open={moveAlbumTarget !== null}
-        onClose={() => setMoveAlbumTarget(null)}
-        title="Move to List"
-        albumName={moveAlbumTarget?.album ?? ''}
-        artistName={moveAlbumTarget?.artist ?? ''}
-        currentListId={activeListId}
-        lists={listsMap ?? {}}
-        groups={groups ?? []}
-        onSelect={handleMoveAlbum}
-      />
-
-      {/* Copy to list picker */}
-      <ListSelectionSheet
-        open={copyAlbumTarget !== null}
-        onClose={() => setCopyAlbumTarget(null)}
-        title="Copy to List"
-        albumName={copyAlbumTarget?.album ?? ''}
-        artistName={copyAlbumTarget?.artist ?? ''}
-        currentListId={activeListId}
-        lists={listsMap ?? {}}
-        groups={groups ?? []}
-        onSelect={handleCopyAlbum}
       />
 
       {/* Remove confirmation */}

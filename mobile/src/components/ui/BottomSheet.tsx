@@ -17,7 +17,12 @@
 
 import { type ReactNode, type CSSProperties, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
+import {
+  motion,
+  AnimatePresence,
+  useDragControls,
+  type PanInfo,
+} from 'framer-motion';
 import { Scrim } from './Scrim';
 
 interface BottomSheetProps {
@@ -43,8 +48,9 @@ const sheetStyle: CSSProperties = {
   borderTop: '1px solid var(--color-border-sheet)',
   zIndex: 'var(--z-sheet)' as unknown as number,
   maxHeight: '85vh',
-  overflowY: 'auto',
-  touchAction: 'none',
+  display: 'flex',
+  flexDirection: 'column',
+  overflow: 'hidden',
 };
 
 const handleStyle: CSSProperties = {
@@ -73,6 +79,7 @@ export function BottomSheet({
   children,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
 
   const handleDragEnd = useCallback(
     (_: unknown, info: PanInfo) => {
@@ -81,6 +88,13 @@ export function BottomSheet({
       }
     },
     [onClose]
+  );
+
+  const startDrag = useCallback(
+    (e: React.PointerEvent) => {
+      dragControls.start(e);
+    },
+    [dragControls]
   );
 
   return createPortal(
@@ -100,6 +114,8 @@ export function BottomSheet({
               ease: sheetEasing,
             }}
             drag="y"
+            dragControls={dragControls}
+            dragListener={false}
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.3}
             onDragEnd={handleDragEnd}
@@ -108,37 +124,47 @@ export function BottomSheet({
             aria-modal="true"
             aria-label={title || 'Action sheet'}
           >
-            {/* Drag handle */}
-            <div style={handleStyle} data-testid="sheet-handle" />
+            {/* Drag handle region (swipe-to-dismiss, non-scrollable) */}
+            <div
+              style={{ touchAction: 'none', flexShrink: 0, cursor: 'grab' }}
+              onPointerDown={startDrag}
+            >
+              <div style={handleStyle} data-testid="sheet-handle" />
 
-            {/* Title */}
-            {title && (
-              <div style={titleStyle}>
-                {title}
-                {subtitle && (
-                  <div
-                    style={{
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '11px',
-                      color: 'var(--color-text-primary)',
-                      marginTop: '2px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {subtitle}
-                  </div>
-                )}
-              </div>
-            )}
+              {/* Title */}
+              {title && (
+                <div style={titleStyle}>
+                  {title}
+                  {subtitle && (
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '11px',
+                        color: 'var(--color-text-primary)',
+                        marginTop: '2px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {subtitle}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-            {/* Content */}
+            {/* Scrollable content */}
             <div
               style={{
+                flex: 1,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                overscrollBehavior: 'contain',
                 padding:
                   '8px 8px calc(16px + var(--tabbar-height, 64px) + env(safe-area-inset-bottom, 0px))',
               }}
+              className="hide-scrollbar"
             >
               {children}
             </div>

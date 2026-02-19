@@ -17,7 +17,7 @@
  * - Both connected + no preference → show ServiceChooserSheet
  */
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   Edit3,
   ArrowRight,
@@ -32,6 +32,8 @@ import {
   ExternalLink,
   Lock,
   Search,
+  Star,
+  List as ListIcon,
 } from 'lucide-react';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { ActionItem } from '@/components/ui/ActionItem';
@@ -48,7 +50,61 @@ import {
   ServiceChooserSheet,
   type MusicServiceChoice,
 } from './ServiceChooserSheet';
-import type { Album, User } from '@/lib/types';
+import type { Album, User, ListMetadata, Group } from '@/lib/types';
+
+// ── List grouping (shared with ListSelectionSheet) ──
+
+interface YearSection {
+  label: string;
+  year: number | null;
+  lists: ListMetadata[];
+}
+
+function groupListsByYear(
+  lists: Record<string, ListMetadata>,
+  currentListId: string | null,
+  groups: Group[]
+): YearSection[] {
+  const yearMap = new Map<number | null, ListMetadata[]>();
+
+  for (const list of Object.values(lists)) {
+    if (list._id === currentListId) continue;
+    let year = list.year;
+    if (year == null && list.groupId) {
+      const group = groups.find((g) => g._id === list.groupId);
+      if (group?.isYearGroup && group.year != null) {
+        year = group.year;
+      }
+    }
+    const existing = yearMap.get(year) ?? [];
+    existing.push(list);
+    yearMap.set(year, existing);
+  }
+
+  for (const arr of yearMap.values()) {
+    arr.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+
+  const sections: YearSection[] = [];
+  const years = [...yearMap.keys()]
+    .filter((y): y is number => y != null)
+    .sort((a, b) => b - a);
+
+  for (const year of years) {
+    sections.push({
+      label: String(year),
+      year,
+      lists: yearMap.get(year) ?? [],
+    });
+  }
+
+  const other = yearMap.get(null);
+  if (other && other.length > 0) {
+    sections.push({ label: 'Other', year: null, lists: other });
+  }
+
+  return sections;
+}
 
 interface AlbumActionSheetProps {
   open: boolean;
@@ -58,9 +114,15 @@ interface AlbumActionSheetProps {
   user: User | null;
   /** When true, edit and remove actions are disabled */
   isListLocked?: boolean;
+  /** All lists for move/copy picker */
+  lists: Record<string, ListMetadata>;
+  /** Groups for year-based list grouping */
+  groups: Group[];
+  /** Current list ID (excluded from move/copy picker) */
+  currentListId: string | null;
   onEditDetails: () => void;
-  onMoveToList: () => void;
-  onCopyToList: () => void;
+  onMoveToList: (listId: string) => void;
+  onCopyToList: (listId: string) => void;
   onRemove: () => void;
   onRecommend?: () => void;
   onSimilarArtists?: () => void;
@@ -74,6 +136,9 @@ export function AlbumActionSheet({
   listYear,
   user,
   isListLocked = false,
+  lists,
+  groups,
+  currentListId,
   onEditDetails,
   onMoveToList,
   onCopyToList,
@@ -99,6 +164,23 @@ export function AlbumActionSheet({
   // Service chooser state
   const [showChooser, setShowChooser] = useState(false);
 
+  // Inline list picker state (move/copy)
+  const [expandedPicker, setExpandedPicker] = useState<'move' | 'copy' | null>(
+    null
+  );
+  const [expandedYear, setExpandedYear] = useState<string | null>(null);
+
+  const listSections = useMemo(
+    () => groupListsByYear(lists, currentListId, groups),
+    [lists, currentListId, groups]
+  );
+
+  // Auto-expand first year section
+  const effectiveExpandedYear = useMemo(() => {
+    if (expandedYear !== null) return expandedYear;
+    return listSections[0]?.label ?? null;
+  }, [expandedYear, listSections]);
+
   // Reset state when sheet closes
   useEffect(() => {
     if (!open) {
@@ -107,6 +189,8 @@ export function AlbumActionSheet({
       setDevicesLoading(false);
       setPlayLoading(false);
       setShowChooser(false);
+      setExpandedPicker(null);
+      setExpandedYear(null);
     }
   }, [open]);
 
@@ -238,6 +322,15 @@ export function AlbumActionSheet({
   const showPlayChevron =
     hasSpotify && (!hasTidal || musicService === 'spotify');
 
+  // Dim non-active actions when a list picker is expanded
+  const dimStyle = expandedPicker
+    ? {
+        opacity: 0.35,
+        pointerEvents: 'none' as const,
+        transition: 'opacity 200ms ease',
+      }
+    : { opacity: 1, transition: 'opacity 200ms ease' };
+
   return (
     <>
       <BottomSheet open={open} onClose={onClose} title={sheetTitle}>
@@ -257,6 +350,7 @@ export function AlbumActionSheet({
                 fontSize: '9px',
                 letterSpacing: '0.04em',
                 color: 'rgba(255,255,255,0.35)',
+                ...dimStyle,
               }}
               data-testid="album-action-lock-banner"
             >
@@ -266,313 +360,463 @@ export function AlbumActionSheet({
           )}
 
           {/* Edit Details */}
-          <ActionItem
-            icon={<Edit3 size={16} />}
-            label="Edit Details"
-            onClick={() => handleAction(onEditDetails)}
-            disabled={isListLocked}
-          />
+          <div style={dimStyle}>
+            <ActionItem
+              icon={<Edit3 size={16} />}
+              label="Edit Details"
+              onClick={() => handleAction(onEditDetails)}
+              disabled={isListLocked}
+            />
+          </div>
 
           {/* Play Album */}
-          {hasAnyService ? (
-            <button
-              type="button"
-              onClick={handlePlayToggle}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: 10,
-                borderRadius: 10,
-                cursor: 'pointer',
-                transition: 'background 150ms ease',
-                userSelect: 'none',
-                WebkitUserSelect: 'none',
-                width: '100%',
-                border: 'none',
-                background: 'transparent',
-                color: 'inherit',
-              }}
-              data-testid="play-album-action"
-            >
-              <div
+          <div style={dimStyle}>
+            {hasAnyService ? (
+              <button
+                type="button"
+                onClick={handlePlayToggle}
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 8,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'rgba(255,255,255,0.50)',
+                  gap: 10,
+                  padding: 10,
+                  borderRadius: 10,
+                  cursor: 'pointer',
+                  transition: 'background 150ms ease',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  width: '100%',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'inherit',
                 }}
+                data-testid="play-album-action"
               >
-                {hasTidal && !hasSpotify ? (
-                  <ExternalLink size={16} />
-                ) : (
-                  <Play size={16} />
-                )}
-              </div>
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '10px',
-                  fontWeight: 400,
-                  color: 'rgba(255,255,255,0.75)',
-                  textAlign: 'left',
-                }}
-              >
-                {getPlayLabel()}
-              </div>
-              {showPlayChevron &&
-                (showDevices ? (
-                  <ChevronUp
-                    size={14}
-                    style={{
-                      color: 'rgba(255,255,255,0.30)',
-                      flexShrink: 0,
-                    }}
-                  />
-                ) : (
-                  <ChevronDown
-                    size={14}
-                    style={{
-                      color: 'rgba(255,255,255,0.30)',
-                      flexShrink: 0,
-                    }}
-                  />
-                ))}
-            </button>
-          ) : (
-            <ActionItem
-              icon={<Play size={16} />}
-              label="Play Album"
-              onClick={() => {}}
-              style={{ opacity: 0.4 }}
-              disabled
-            />
-          )}
-
-          {/* Device picker (expandable, Spotify only) */}
-          {showDevices && (
-            <div
-              style={{
-                padding: '0 12px 8px',
-              }}
-              data-testid="device-picker"
-            >
-              {devicesLoading && (
                 <div
                   style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
-                    padding: '12px 4px',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: 'var(--color-text-secondary)',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    background: 'rgba(255,255,255,0.05)',
+                    color: 'rgba(255,255,255,0.50)',
                   }}
                 >
-                  <Loader
-                    size={12}
-                    style={{
-                      animation: 'spin 1s linear infinite',
-                    }}
-                  />
-                  Loading devices...
+                  {hasTidal && !hasSpotify ? (
+                    <ExternalLink size={16} />
+                  ) : (
+                    <Play size={16} />
+                  )}
                 </div>
-              )}
-
-              {!devicesLoading && devices.length === 0 && (
                 <div
                   style={{
-                    padding: '12px 4px',
+                    flex: 1,
+                    minWidth: 0,
                     fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: 'var(--color-text-secondary)',
+                    fontSize: '10px',
+                    fontWeight: 400,
+                    color: 'rgba(255,255,255,0.75)',
+                    textAlign: 'left',
                   }}
                 >
-                  No devices found. Open Spotify on a device.
+                  {getPlayLabel()}
                 </div>
-              )}
+                {showPlayChevron &&
+                  (showDevices ? (
+                    <ChevronUp
+                      size={14}
+                      style={{
+                        color: 'rgba(255,255,255,0.30)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ) : (
+                    <ChevronDown
+                      size={14}
+                      style={{
+                        color: 'rgba(255,255,255,0.30)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ))}
+              </button>
+            ) : (
+              <ActionItem
+                icon={<Play size={16} />}
+                label="Play Album"
+                onClick={() => {}}
+                style={{ opacity: 0.4 }}
+                disabled
+              />
+            )}
 
-              {!devicesLoading &&
-                devices.map((device) => (
-                  <button
-                    key={device.id}
-                    type="button"
-                    onClick={() => handlePlayOnDevice(device.id, device.name)}
-                    disabled={playLoading}
+            {/* Device picker (expandable, Spotify only) */}
+            {showDevices && (
+              <div
+                style={{
+                  padding: '0 12px 8px',
+                }}
+                data-testid="device-picker"
+              >
+                {devicesLoading && (
+                  <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
                       gap: 8,
-                      width: '100%',
-                      padding: '10px 8px',
-                      background: device.is_active
-                        ? 'rgba(30,215,96,0.08)'
-                        : 'transparent',
-                      border: 'none',
-                      borderRadius: 8,
-                      cursor: playLoading ? 'wait' : 'pointer',
-                      textAlign: 'left',
-                      opacity: playLoading ? 0.5 : 1,
+                      padding: '12px 4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: 'var(--color-text-secondary)',
                     }}
-                    data-testid="device-item"
                   >
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>
-                      {getDeviceIcon(device.type)}
-                    </span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 12,
-                          color: device.is_active
-                            ? '#1ed760'
-                            : 'var(--color-text-primary)',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {device.name}
-                      </div>
-                      <div
-                        style={{
-                          fontFamily: 'var(--font-mono)',
-                          fontSize: 10,
-                          color: 'var(--color-text-secondary)',
-                          textTransform: 'capitalize',
-                        }}
-                      >
-                        {device.type.toLowerCase()}
-                        {device.is_active ? ' \u2022 Active' : ''}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-            </div>
-          )}
+                    <Loader
+                      size={12}
+                      style={{
+                        animation: 'spin 1s linear infinite',
+                      }}
+                    />
+                    Loading devices...
+                  </div>
+                )}
 
-          {/* Open in Tidal (shown when Spotify devices are expanded and Tidal is also connected) */}
-          {showDevices && hasTidal && (
-            <div style={{ padding: '0 12px 4px' }}>
-              <button
-                type="button"
-                onClick={handleOpenTidal}
-                data-testid="open-in-tidal"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  padding: '10px 8px',
-                  background: 'rgba(0,255,255,0.05)',
-                  border: 'none',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-              >
-                <ExternalLink
-                  size={14}
-                  style={{ color: '#00FFFF', flexShrink: 0 }}
-                />
-                <div
+                {!devicesLoading && devices.length === 0 && (
+                  <div
+                    style={{
+                      padding: '12px 4px',
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: 'var(--color-text-secondary)',
+                    }}
+                  >
+                    No devices found. Open Spotify on a device.
+                  </div>
+                )}
+
+                {!devicesLoading &&
+                  devices.map((device) => (
+                    <button
+                      key={device.id}
+                      type="button"
+                      onClick={() => handlePlayOnDevice(device.id, device.name)}
+                      disabled={playLoading}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        width: '100%',
+                        padding: '10px 8px',
+                        background: device.is_active
+                          ? 'rgba(30,215,96,0.08)'
+                          : 'transparent',
+                        border: 'none',
+                        borderRadius: 8,
+                        cursor: playLoading ? 'wait' : 'pointer',
+                        textAlign: 'left',
+                        opacity: playLoading ? 0.5 : 1,
+                      }}
+                      data-testid="device-item"
+                    >
+                      <span style={{ fontSize: 16, flexShrink: 0 }}>
+                        {getDeviceIcon(device.type)}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 12,
+                            color: device.is_active
+                              ? '#1ed760'
+                              : 'var(--color-text-primary)',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {device.name}
+                        </div>
+                        <div
+                          style={{
+                            fontFamily: 'var(--font-mono)',
+                            fontSize: 10,
+                            color: 'var(--color-text-secondary)',
+                            textTransform: 'capitalize',
+                          }}
+                        >
+                          {device.type.toLowerCase()}
+                          {device.is_active ? ' \u2022 Active' : ''}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            {/* Open in Tidal (shown when Spotify devices are expanded and Tidal is also connected) */}
+            {showDevices && hasTidal && (
+              <div style={{ padding: '0 12px 4px' }}>
+                <button
+                  type="button"
+                  onClick={handleOpenTidal}
+                  data-testid="open-in-tidal"
                   style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: 11,
-                    color: '#00FFFF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    width: '100%',
+                    padding: '10px 8px',
+                    background: 'rgba(0,255,255,0.05)',
+                    border: 'none',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    textAlign: 'left',
                   }}
                 >
-                  Open in Tidal
-                </div>
-              </button>
-            </div>
-          )}
+                  <ExternalLink
+                    size={14}
+                    style={{ color: '#00FFFF', flexShrink: 0 }}
+                  />
+                  <div
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 11,
+                      color: '#00FFFF',
+                    }}
+                  >
+                    Open in Tidal
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
 
-          {/* Move to List */}
-          <ActionItem
-            icon={<ArrowRight size={16} />}
-            label="Move to List..."
-            onClick={() => handleAction(onMoveToList)}
-            hasChevron
-          />
-
-          {/* Copy to List */}
-          <ActionItem
-            icon={<Copy size={16} />}
-            label="Copy to List..."
-            onClick={() => handleAction(onCopyToList)}
-            hasChevron
-          />
-
-          {/* Recommend (conditional) */}
-          {canRecommend && (
-            <ActionItem
-              icon={<ThumbsUp size={16} style={{ color: '#60a5fa' }} />}
-              label="Recommend"
-              onClick={() => {
-                if (onRecommend) handleAction(onRecommend);
-              }}
-            />
-          )}
-
-          {/* Similar Artists (conditional) */}
-          {hasLastfm && (
-            <ActionItem
-              icon={<Users size={16} style={{ color: '#a78bfa' }} />}
-              label="Similar Artists"
-              onClick={() => {
-                if (onSimilarArtists) handleAction(onSimilarArtists);
-              }}
-            />
-          )}
-
-          {/* Re-identify Album (admin only) */}
-          {isAdmin && (
-            <ActionItem
-              icon={<Search size={16} style={{ color: '#f59e0b' }} />}
-              label="Re-identify Album"
-              onClick={() => {
-                if (onReidentify) {
-                  handleAction(onReidentify);
-                } else if (album) {
-                  // Fallback: open MusicBrainz search
-                  const q = encodeURIComponent(
-                    `${album.artist} ${album.album}`
-                  );
-                  window.open(
-                    `https://musicbrainz.org/search?query=${q}&type=release_group`,
-                    '_blank'
-                  );
-                  onClose();
-                }
-              }}
-            />
-          )}
-
-          {/* Divider */}
-          <div
-            style={{
-              height: '1px',
-              background: 'var(--color-divider)',
-              margin: '4px 16px',
+          {/* Move to List (inline expand) */}
+          <button
+            type="button"
+            onClick={() => {
+              setExpandedPicker(expandedPicker === 'move' ? null : 'move');
+              setExpandedYear(null);
             }}
-          />
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: 10,
+              borderRadius: 10,
+              cursor: 'pointer',
+              transition: 'background 150ms ease',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              width: '100%',
+              border: 'none',
+              background: 'transparent',
+              color: 'inherit',
+              textAlign: 'left',
+            }}
+            data-testid="move-to-list-action"
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                background: 'rgba(255,255,255,0.05)',
+                color: 'rgba(255,255,255,0.50)',
+              }}
+            >
+              <ArrowRight size={16} />
+            </div>
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: 400,
+                color: 'rgba(255,255,255,0.75)',
+              }}
+            >
+              Move to List
+            </div>
+            {expandedPicker === 'move' ? (
+              <ChevronUp
+                size={14}
+                style={{ color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}
+              />
+            ) : (
+              <ChevronDown
+                size={14}
+                style={{ color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}
+              />
+            )}
+          </button>
 
-          {/* Remove from List (destructive) */}
-          <ActionItem
-            icon={<Trash2 size={16} />}
-            label="Remove from List"
-            variant="destructive"
-            onClick={() => handleAction(onRemove)}
-            disabled={isListLocked}
-          />
+          {/* Move list picker (expanded inline) */}
+          {expandedPicker === 'move' && (
+            <InlineListPicker
+              sections={listSections}
+              expandedYear={effectiveExpandedYear}
+              onToggleYear={(label) =>
+                setExpandedYear((prev) => (prev === label ? null : label))
+              }
+              onSelect={(listId) => {
+                onClose();
+                onMoveToList(listId);
+              }}
+            />
+          )}
+
+          {/* Copy to List (inline expand) */}
+          <button
+            type="button"
+            onClick={() => {
+              setExpandedPicker(expandedPicker === 'copy' ? null : 'copy');
+              setExpandedYear(null);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              padding: 10,
+              borderRadius: 10,
+              cursor: 'pointer',
+              transition: 'background 150ms ease',
+              userSelect: 'none',
+              WebkitUserSelect: 'none',
+              width: '100%',
+              border: 'none',
+              background: 'transparent',
+              color: 'inherit',
+              textAlign: 'left',
+            }}
+            data-testid="copy-to-list-action"
+          >
+            <div
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                background: 'rgba(255,255,255,0.05)',
+                color: 'rgba(255,255,255,0.50)',
+              }}
+            >
+              <Copy size={16} />
+            </div>
+            <div
+              style={{
+                flex: 1,
+                minWidth: 0,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: 400,
+                color: 'rgba(255,255,255,0.75)',
+              }}
+            >
+              Copy to List
+            </div>
+            {expandedPicker === 'copy' ? (
+              <ChevronUp
+                size={14}
+                style={{ color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}
+              />
+            ) : (
+              <ChevronDown
+                size={14}
+                style={{ color: 'rgba(255,255,255,0.30)', flexShrink: 0 }}
+              />
+            )}
+          </button>
+
+          {/* Copy list picker (expanded inline) */}
+          {expandedPicker === 'copy' && (
+            <InlineListPicker
+              sections={listSections}
+              expandedYear={effectiveExpandedYear}
+              onToggleYear={(label) =>
+                setExpandedYear((prev) => (prev === label ? null : label))
+              }
+              onSelect={(listId) => {
+                onClose();
+                onCopyToList(listId);
+              }}
+            />
+          )}
+
+          <div style={dimStyle}>
+            {/* Recommend (conditional) */}
+            {canRecommend && (
+              <ActionItem
+                icon={<ThumbsUp size={16} style={{ color: '#60a5fa' }} />}
+                label="Recommend"
+                onClick={() => {
+                  if (onRecommend) handleAction(onRecommend);
+                }}
+              />
+            )}
+
+            {/* Similar Artists (conditional) */}
+            {hasLastfm && (
+              <ActionItem
+                icon={<Users size={16} style={{ color: '#a78bfa' }} />}
+                label="Similar Artists"
+                onClick={() => {
+                  if (onSimilarArtists) handleAction(onSimilarArtists);
+                }}
+              />
+            )}
+
+            {/* Re-identify Album (admin only) */}
+            {isAdmin && (
+              <ActionItem
+                icon={<Search size={16} style={{ color: '#f59e0b' }} />}
+                label="Re-identify Album"
+                onClick={() => {
+                  if (onReidentify) {
+                    handleAction(onReidentify);
+                  } else if (album) {
+                    // Fallback: open MusicBrainz search
+                    const q = encodeURIComponent(
+                      `${album.artist} ${album.album}`
+                    );
+                    window.open(
+                      `https://musicbrainz.org/search?query=${q}&type=release_group`,
+                      '_blank'
+                    );
+                    onClose();
+                  }
+                }}
+              />
+            )}
+
+            {/* Divider */}
+            <div
+              style={{
+                height: '1px',
+                background: 'var(--color-divider)',
+                margin: '4px 16px',
+              }}
+            />
+
+            {/* Remove from List (destructive) */}
+            <ActionItem
+              icon={<Trash2 size={16} />}
+              label="Remove from List"
+              variant="destructive"
+              onClick={() => handleAction(onRemove)}
+              disabled={isListLocked}
+            />
+          </div>
         </div>
       </BottomSheet>
 
@@ -583,5 +827,169 @@ export function AlbumActionSheet({
         onSelect={handleServiceChosen}
       />
     </>
+  );
+}
+
+// ── Inline list picker (reused for move & copy) ──
+
+function InlineListPicker({
+  sections,
+  expandedYear,
+  onToggleYear,
+  onSelect,
+}: {
+  sections: YearSection[];
+  expandedYear: string | null;
+  onToggleYear: (label: string) => void;
+  onSelect: (listId: string) => void;
+}) {
+  const noLists =
+    sections.length === 0 || sections.every((s) => s.lists.length === 0);
+
+  return (
+    <div
+      style={{
+        padding: '4px 12px 8px',
+        maxHeight: '40vh',
+        overflowY: 'auto',
+        background: 'rgba(255,255,255,0.02)',
+        borderRadius: '8px',
+        margin: '0 4px 4px',
+      }}
+      className="hide-scrollbar"
+      data-testid="inline-list-picker"
+    >
+      {noLists ? (
+        <div
+          style={{
+            padding: '12px 4px',
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--color-text-secondary)',
+          }}
+        >
+          No other lists available.
+        </div>
+      ) : (
+        sections.map((section) => (
+          <div key={section.label}>
+            {/* Year section header */}
+            <button
+              type="button"
+              onClick={() => onToggleYear(section.label)}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 4px',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--color-divider)',
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  letterSpacing: '0.04em',
+                  color: 'var(--color-text-primary)',
+                }}
+              >
+                {section.label}
+                <span
+                  style={{
+                    marginLeft: '8px',
+                    color: 'var(--color-text-secondary)',
+                    fontWeight: 400,
+                  }}
+                >
+                  ({section.lists.length})
+                </span>
+              </span>
+              <ChevronDown
+                size={12}
+                style={{
+                  color: 'var(--color-text-secondary)',
+                  transform:
+                    expandedYear === section.label ? 'rotate(180deg)' : 'none',
+                  transition: 'transform 200ms ease',
+                }}
+              />
+            </button>
+
+            {/* List items */}
+            <div
+              style={{
+                maxHeight: expandedYear === section.label ? '500px' : '0',
+                overflow: 'hidden',
+                transition: 'max-height 200ms ease-out',
+              }}
+            >
+              {section.lists.map((list) => (
+                <button
+                  key={list._id}
+                  type="button"
+                  onClick={() => onSelect(list._id)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    padding: '8px 4px 8px 16px',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    borderBottom: '1px solid var(--color-divider)',
+                  }}
+                  data-testid={`inline-list-option-${list._id}`}
+                >
+                  {list.isMain ? (
+                    <Star
+                      size={12}
+                      style={{ color: 'var(--color-gold)', flexShrink: 0 }}
+                    />
+                  ) : (
+                    <ListIcon
+                      size={12}
+                      style={{
+                        color: 'var(--color-text-secondary)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '11px',
+                      color: 'var(--color-text-primary)',
+                      flex: 1,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {list.name}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '10px',
+                      color: 'var(--color-text-secondary)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {list.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
   );
 }
