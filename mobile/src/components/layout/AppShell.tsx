@@ -49,6 +49,7 @@ export function AppShell({
     >
       <main
         ref={scrollRef}
+        className="hide-scrollbar"
         style={{
           flex: 1,
           minHeight: 0,

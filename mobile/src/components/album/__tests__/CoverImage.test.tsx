@@ -29,12 +29,12 @@ function simulateIntersection(isIntersecting: boolean) {
 }
 
 describe('CoverImage', () => {
-  it('renders container with correct size', () => {
-    render(<CoverImage src="/test.jpg" alt="Test" size={52} />);
+  it('renders container filling its parent', () => {
+    render(<CoverImage src="/test.jpg" alt="Test" />);
     const container = screen.getByTestId('cover-image');
     expect(container).toBeInTheDocument();
-    expect(container.style.width).toBe('52px');
-    expect(container.style.height).toBe('52px');
+    expect(container.style.width).toBe('100%');
+    expect(container.style.height).toBe('100%');
   });
 
   it('does not render image until in viewport', () => {

@@ -1414,14 +1414,6 @@ export function LibraryPage() {
                             ? undefined
                             : () => handleAlbumMenuClick(album)
                         }
-                        onClick={
-                          isDragging || isListLocked
-                            ? undefined
-                            : () => {
-                                // Tap on album card opens edit form
-                                setAlbumEditTarget(album);
-                              }
-                        }
                       />
                     </motion.div>
                   );

@@ -82,9 +82,10 @@
   --radius-indicator: 2px;
 
   /* ── Spacing ── */
-  --space-card-x: 8px;
-  --space-card-y: 10px;
-  --space-card-gap-inner: 12px;
+  --space-card-x: 5px;
+  --space-card-y: 5px;
+  --space-card-gap-inner: 10px;
+  --space-card-gap-cover-info: 5px;
   --space-card-gap-outer: 2px;
   --space-list-x: 0px;
   --space-header-x: 28px;

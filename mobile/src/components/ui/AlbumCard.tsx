@@ -5,7 +5,7 @@
  * States: default, hover, active (selected), drop-target, dragging, dimmed
  *
  * Anatomy:
- * - Rank: 11px DM Mono w300, rgba(255,255,255,0.15), width 18px, text-align right
+ * - Rank: 11px DM Mono w300, rgba(255,255,255,0.15), width 15px, text-align right
  * - Cover: 60x60px, radius 10px, gradient + shadow, position relative (play btn child)
  * - Title: DM Serif Display 15px, #F0ECE4, -0.01em, lh 1.3, truncate
  * - Artist: DM Mono 11px, rgba(255,255,255,0.4), +0.02em, mt 2px, truncate
@@ -13,7 +13,7 @@
  * - Active indicator: 3x32px, radius 2px, gold gradient, opacity 0/1
  * - Three-dot button: 28x28px on right edge (always in layout; visibility:hidden when no handler)
  *
- * Card: flex center, gap 12px, padding 10px 12px, radius 16px, border 1px transparent (list has no horizontal margin - cards are full-bleed)
+ * Card: flex center, gap 10px, padding 5px, radius 16px, border 1px transparent (list has no horizontal margin - cards are full-bleed)
  * Transitions: background 150ms, opacity 200ms, transform 200ms, border-color 150ms
  */
 
@@ -158,8 +158,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
         className={`${onClick ? 'touch-feedback' : ''} ${className || ''}`}
         style={cardStyle}
         onClick={onClick}
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
+        onTouchStart={() => setIsHovered(true)}
+        onTouchEnd={() => setIsHovered(false)}
+        onTouchCancel={() => setIsHovered(false)}
         data-testid="album-card"
         role="listitem"
       >
@@ -172,7 +173,7 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
               fontWeight: 300,
               letterSpacing: 0,
               color: 'var(--color-text-rank)',
-              width: '18px',
+              width: '15px',
               textAlign: 'right',
               flexShrink: 0,
               visibility: rankVisible ? 'visible' : 'hidden',
@@ -186,8 +187,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
         {/* Cover art */}
         <div
           style={{
-            width: '60px',
-            height: '60px',
+            width: '80px',
+            height: '80px',
             borderRadius: 'var(--radius-cover)',
             overflow: 'hidden',
             flexShrink: 0,
@@ -205,6 +206,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
             minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
+            marginLeft:
+              'calc(var(--space-card-gap-cover-info) - var(--space-card-gap-inner))',
           }}
         >
           <span

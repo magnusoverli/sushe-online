@@ -29,8 +29,6 @@ interface CoverImageProps {
   onPlay?: () => void;
   /** Whether this album is currently playing (shows animated border) */
   isNowPlaying?: boolean;
-  /** Size in pixels (default 52) */
-  size?: number;
 }
 
 export const CoverImage = memo(function CoverImage({
@@ -42,7 +40,6 @@ export const CoverImage = memo(function CoverImage({
   onRecommendationClick,
   onPlay,
   isNowPlaying = false,
-  size = 60,
 }: CoverImageProps) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isInView, setIsInView] = useState(false);
@@ -109,8 +106,8 @@ export const CoverImage = memo(function CoverImage({
       ref={containerRef}
       className={isNowPlaying ? 'cover-now-playing' : undefined}
       style={{
-        width: size,
-        height: size,
+        width: '100%',
+        height: '100%',
         borderRadius: 'var(--radius-cover)',
         overflow: isNowPlaying ? 'visible' : 'hidden',
         position: 'relative',
