@@ -54,11 +54,7 @@ function TestList({
 
   return (
     <div ref={scrollRef} data-testid="scroll-container">
-      <div
-        onTouchMove={handlers.onTouchMove}
-        onTouchEnd={handlers.onTouchEnd}
-        data-testid="list"
-      >
+      <div data-testid="list">
         {itemIds.map((id, index) => (
           <div
             key={id}
@@ -235,7 +231,6 @@ describe('useDragAndDrop', () => {
     render(<TestList itemIds={['a', 'b', 'c']} onReorder={vi.fn()} />);
 
     const item = screen.getByTestId('item-a');
-    const list = screen.getByTestId('list');
     vi.spyOn(item, 'getBoundingClientRect').mockReturnValue({
       top: 40,
       left: 10,
@@ -258,9 +253,9 @@ describe('useDragAndDrop', () => {
 
     expect(useDragStore.getState().isDragging).toBe(true);
 
-    // End drag
+    // End drag — touchend listener is now on document
     act(() => {
-      fireEvent.touchEnd(list);
+      fireEvent.touchEnd(document);
     });
 
     expect(useDragStore.getState().isDragging).toBe(false);
@@ -272,7 +267,6 @@ describe('useDragAndDrop', () => {
     render(<TestList itemIds={['a', 'b', 'c']} onReorder={onReorder} />);
 
     const item = screen.getByTestId('item-a');
-    const list = screen.getByTestId('list');
     vi.spyOn(item, 'getBoundingClientRect').mockReturnValue({
       top: 40,
       left: 10,
@@ -298,9 +292,9 @@ describe('useDragAndDrop', () => {
       useDragStore.getState().updateDrop(2, ['b', 'c', 'a']);
     });
 
-    // End drag
+    // End drag — touchend listener is now on document
     act(() => {
-      fireEvent.touchEnd(list);
+      fireEvent.touchEnd(document);
     });
 
     expect(onReorder).toHaveBeenCalledWith(['b', 'c', 'a']);
@@ -311,7 +305,6 @@ describe('useDragAndDrop', () => {
     render(<TestList itemIds={['a', 'b', 'c']} onReorder={onReorder} />);
 
     const item = screen.getByTestId('item-a');
-    const list = screen.getByTestId('list');
     vi.spyOn(item, 'getBoundingClientRect').mockReturnValue({
       top: 40,
       left: 10,
@@ -332,9 +325,9 @@ describe('useDragAndDrop', () => {
       vi.advanceTimersByTime(500);
     });
 
-    // Drop without changing order
+    // Drop without changing order — touchend listener is now on document
     act(() => {
-      fireEvent.touchEnd(list);
+      fireEvent.touchEnd(document);
     });
 
     expect(onReorder).not.toHaveBeenCalled();

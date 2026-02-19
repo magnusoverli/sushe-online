@@ -32,3 +32,10 @@ export const SCROBBLE_THRESHOLD_MS = 4 * 60 * 1000;
 
 /** Haptic vibration duration for drag start */
 export const HAPTIC_DURATION_MS = 50;
+
+/**
+ * How far into a neighbor card (0–1) the ghost center must reach to trigger
+ * a swap.  0.5 = neighbor's midpoint (industry-standard default).
+ * Lower values make swaps trigger earlier; higher values require more overlap.
+ */
+export const DRAG_SWAP_THRESHOLD = 0.25;

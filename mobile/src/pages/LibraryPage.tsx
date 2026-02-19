@@ -19,6 +19,7 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
 import { useDragStore } from '@/stores/drag-store';
@@ -1335,8 +1336,6 @@ export function LibraryPage() {
                   padding: `0 var(--space-list-x)`,
                 }}
                 data-testid="album-list"
-                onTouchMove={dragHandlers.onTouchMove}
-                onTouchEnd={dragHandlers.onTouchEnd}
               >
                 {displayAlbums.map((album, index) => {
                   const rank = sortKey === 'custom' ? index + 1 : undefined;
@@ -1356,17 +1355,18 @@ export function LibraryPage() {
                   const albumIsNowPlaying = checkNowPlaying(album);
 
                   return (
-                    <div
+                    <motion.div
                       key={album._id}
-                      ref={(el) => registerCard(index, el)}
                       onTouchStart={(e) => dragHandlers.onTouchStart(index, e)}
-                      style={{
-                        transition: isDragging
-                          ? 'transform 200ms ease, opacity 200ms ease'
-                          : undefined,
+                      layout
+                      transition={{
+                        layout: isDragging
+                          ? { type: 'spring', stiffness: 600, damping: 50 }
+                          : { duration: 0 },
                       }}
                     >
                       <AlbumCard
+                        ref={(el) => registerCard(index, el)}
                         rank={rank}
                         title={album.album}
                         artist={album.artist}
@@ -1423,7 +1423,7 @@ export function LibraryPage() {
                               }
                         }
                       />
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>

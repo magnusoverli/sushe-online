@@ -17,7 +17,11 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { useDragStore } from '@/stores/drag-store';
 import { calcScrollSpeed, startAutoScroll } from './auto-scroll';
-import { DRAG_LONG_PRESS_MS, HAPTIC_DURATION_MS } from '@/lib/constants';
+import {
+  DRAG_LONG_PRESS_MS,
+  DRAG_SWAP_THRESHOLD,
+  HAPTIC_DURATION_MS,
+} from '@/lib/constants';
 
 /** Movement threshold (px) to cancel long-press. */
 const MOVE_CANCEL_THRESHOLD = 10;
@@ -35,8 +39,6 @@ interface UseDragAndDropOptions {
 
 interface DragHandlers {
   onTouchStart: (index: number, e: React.TouchEvent) => void;
-  onTouchMove: (e: React.TouchEvent) => void;
-  onTouchEnd: () => void;
 }
 
 /**
@@ -47,8 +49,8 @@ interface DragHandlers {
  * Scanning all cards causes oscillation: after a swap the relocated card's
  * midpoint lands right at the ghost center, so the very next frame swaps
  * back, creating rapid flickering. With neighbor-only checking:
- * - Moving down: ghost center must cross the NEXT card's midpoint.
- * - Moving up:   ghost center must cross the PREVIOUS card's midpoint.
+ * - Moving down: ghost center must cross the NEXT card's threshold.
+ * - Moving up:   ghost center must cross the PREVIOUS card's threshold.
  * After a swap the relocated card is now a full card-height away, making an
  * immediate reverse-swap impossible. Hysteresis is free.
  *
@@ -65,23 +67,23 @@ function findDropIndex(
 
   const n = cardElements.length;
 
-  // Move down: ghost center past the next card's midpoint
+  // Move down: swap when ghost center crosses the threshold of the next card
   if (currentDropIndex < n - 1) {
     const nextEl = cardElements[currentDropIndex + 1];
     if (nextEl) {
       const rect = nextEl.getBoundingClientRect();
-      if (ghostCenterY > rect.top + rect.height / 2) {
+      if (ghostCenterY > rect.top + rect.height * DRAG_SWAP_THRESHOLD) {
         return currentDropIndex + 1;
       }
     }
   }
 
-  // Move up: ghost center above the previous card's midpoint
+  // Move up: swap when ghost center crosses the threshold of the previous card
   if (currentDropIndex > 0) {
     const prevEl = cardElements[currentDropIndex - 1];
     if (prevEl) {
       const rect = prevEl.getBoundingClientRect();
-      if (ghostCenterY < rect.top + rect.height / 2) {
+      if (ghostCenterY < rect.bottom - rect.height * DRAG_SWAP_THRESHOLD) {
         return currentDropIndex - 1;
       }
     }
@@ -120,9 +122,19 @@ export function useDragAndDrop({
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const dragOriginIndex = useRef<number | null>(null);
   const currentOrderRef = useRef<string[]>([]);
-  // Native non-passive touchmove handler ref (attached on drag start to
-  // reliably call preventDefault regardless of React's event passivity)
-  const nativePreventScroll = useRef<((e: TouchEvent) => void) | null>(null);
+
+  // Refs to avoid stale closures in native document-level listeners.
+  // Updated every render so the native handlers always read the latest values.
+  const itemIdsRef = useRef(itemIds);
+  itemIdsRef.current = itemIds;
+  const onReorderRef = useRef(onReorder);
+  onReorderRef.current = onReorder;
+
+  // Native document-level listener refs.
+  // Attached on touchstart (to track pre-drag movement), kept through drag,
+  // and cleaned up on touchend/touchcancel or unmount.
+  const nativeMoveRef = useRef<((e: TouchEvent) => void) | null>(null);
+  const nativeEndRef = useRef<((e: TouchEvent) => void) | null>(null);
 
   // Store actions (avoid subscribing to state in the hook itself)
   const startDrag = useDragStore((s) => s.startDrag);
@@ -135,21 +147,31 @@ export function useDragAndDrop({
     cardRefs.current[index] = el;
   }, []);
 
+  /** Remove all native document-level touch listeners. */
+  const cleanupNativeListeners = useCallback(() => {
+    if (nativeMoveRef.current) {
+      document.removeEventListener('touchmove', nativeMoveRef.current);
+      nativeMoveRef.current = null;
+    }
+    if (nativeEndRef.current) {
+      document.removeEventListener('touchend', nativeEndRef.current);
+      document.removeEventListener('touchcancel', nativeEndRef.current);
+      nativeEndRef.current = null;
+    }
+  }, []);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (longPressTimer.current) clearTimeout(longPressTimer.current);
       if (stopAutoScroll.current) stopAutoScroll.current();
-      if (nativePreventScroll.current) {
-        document.removeEventListener('touchmove', nativePreventScroll.current);
-        nativePreventScroll.current = null;
-      }
+      cleanupNativeListeners();
       if (scrollContainerRef.current) {
         scrollContainerRef.current.style.touchAction = '';
       }
       document.body.style.overflow = '';
     };
-  }, [scrollContainerRef]);
+  }, [scrollContainerRef, cleanupNativeListeners]);
 
   const cancelLongPress = useCallback(() => {
     if (longPressTimer.current) {
@@ -165,7 +187,7 @@ export function useDragAndDrop({
 
       const rect = cardEl.getBoundingClientRect();
 
-      // Capture card height for ghost-center computation in onTouchMove
+      // Capture card height for ghost-center computation
       dragCardHeight.current = rect.height;
 
       // Calculate offset from touch point to card top-left
@@ -178,23 +200,10 @@ export function useDragAndDrop({
       const ghostY = touch.clientY - touchOffset.current.y;
 
       dragOriginIndex.current = index;
-      currentOrderRef.current = [...itemIds];
-
-      // Attach a native non-passive touchmove listener on document so we can
-      // reliably call preventDefault() during drag. React's synthetic
-      // onTouchMove may be passive in some environments (silently ignoring
-      // preventDefault), and directly setting overflow: hidden on the scroll
-      // container breaks iOS Safari's -webkit-overflow-scrolling: touch,
-      // causing scroll to stop working after the drag ends.
-      const preventScroll = (e: TouchEvent) => {
-        if (e.cancelable) e.preventDefault();
-      };
-      nativePreventScroll.current = preventScroll;
-      document.addEventListener('touchmove', preventScroll, { passive: false });
+      currentOrderRef.current = [...itemIdsRef.current];
 
       // Lock touchAction on the container so the browser doesn't commit to a
-      // new pan gesture mid-drag. We intentionally do NOT touch overflow here
-      // to avoid the -webkit-overflow-scrolling: touch Safari bug.
+      // new pan gesture mid-drag.
       if (scrollContainerRef.current) {
         scrollContainerRef.current.style.touchAction = 'none';
       }
@@ -210,7 +219,7 @@ export function useDragAndDrop({
         ghostX,
         ghostY,
         ghostWidth: rect.width,
-        orderedIds: [...itemIds],
+        orderedIds: [...itemIdsRef.current],
       });
 
       // Start auto-scroll
@@ -222,7 +231,7 @@ export function useDragAndDrop({
         );
       }
     },
-    [itemIds, startDrag, scrollContainerRef]
+    [startDrag, scrollContainerRef]
   );
 
   const onTouchStart = useCallback(
@@ -238,127 +247,142 @@ export function useDragAndDrop({
       longPressTimer.current = setTimeout(() => {
         activateDrag(index, touch);
       }, DRAG_LONG_PRESS_MS);
-    },
-    [enabled, activateDrag]
-  );
 
-  const onTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      const touch = e.touches[0];
-      if (!touch) return;
+      // Clean up any lingering listeners from a previous gesture
+      cleanupNativeListeners();
 
-      const isDragging = useDragStore.getState().isDragging;
+      // --- Document-level touchmove handler ---
+      // Handles both pre-drag (cancel long-press on movement) and active drag
+      // (ghost tracking, auto-scroll, swap detection). Attached with
+      // { passive: false } so preventDefault reliably blocks scrolling during
+      // drag, working around React's potentially passive synthetic events and
+      // iOS Safari's -webkit-overflow-scrolling: touch quirks.
+      const handleMove = (ev: TouchEvent) => {
+        const t = ev.touches[0];
+        if (!t) return;
 
-      // If not yet dragging, check if we should cancel the long-press
-      if (!isDragging) {
-        if (touchStart.current) {
-          const dx = touch.clientX - touchStart.current.x;
-          const dy = touch.clientY - touchStart.current.y;
-          if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_THRESHOLD) {
-            cancelLongPress();
+        const dragging = useDragStore.getState().isDragging;
+
+        if (!dragging) {
+          // Pre-drag: cancel long-press if finger moved too far
+          if (touchStart.current) {
+            const dx = t.clientX - touchStart.current.x;
+            const dy = t.clientY - touchStart.current.y;
+            if (Math.sqrt(dx * dx + dy * dy) > MOVE_CANCEL_THRESHOLD) {
+              cancelLongPress();
+              cleanupNativeListeners();
+            }
           }
+          return;
         }
-        return;
-      }
 
-      // Prevent default via React synthetic event (may be passive — the
-      // native document listener above is the reliable fallback)
-      if (e.cancelable) e.preventDefault();
+        // Active drag — prevent browser scroll
+        if (ev.cancelable) ev.preventDefault();
 
-      // Update ghost position
-      const ghostX = touch.clientX - touchOffset.current.x;
-      const ghostY = touch.clientY - touchOffset.current.y;
-      updateGhost(ghostX, ghostY);
+        // Update ghost position
+        const gx = t.clientX - touchOffset.current.x;
+        const gy = t.clientY - touchOffset.current.y;
+        updateGhost(gx, gy);
 
-      // Calculate auto-scroll speed
-      const container = scrollContainerRef.current;
-      if (container) {
-        const containerRect = container.getBoundingClientRect();
-        currentSpeed.current = calcScrollSpeed(
-          touch.clientY,
-          containerRect.top,
-          containerRect.bottom
+        // Calculate auto-scroll speed
+        const container = scrollContainerRef.current;
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          currentSpeed.current = calcScrollSpeed(
+            t.clientY,
+            containerRect.top,
+            containerRect.bottom
+          );
+        }
+
+        // Compute the ghost card's center Y in viewport space.
+        // Using the center (rather than raw touch.clientY) makes swap
+        // thresholds symmetric and gives natural hysteresis after each swap.
+        const ghostCenterY =
+          t.clientY - touchOffset.current.y + dragCardHeight.current / 2;
+
+        const state = useDragStore.getState();
+
+        // Check only the immediate neighbors of the current drop slot.
+        // Returns currentDropIndex unchanged if no swap threshold is crossed.
+        const newDropIndex = findDropIndex(
+          ghostCenterY,
+          cardRefs.current,
+          state.dropIndex,
+          scrollContainerRef.current
         );
-      }
 
-      // Compute the ghost card's center Y in viewport space.
-      // Using the center (rather than raw touch.clientY) makes swap thresholds
-      // symmetric and gives natural hysteresis after each swap.
-      const ghostCenterY =
-        touch.clientY - touchOffset.current.y + dragCardHeight.current / 2;
+        if (
+          newDropIndex !== null &&
+          newDropIndex !== state.dropIndex &&
+          dragOriginIndex.current !== null
+        ) {
+          const ids = itemIdsRef.current;
+          const newOrder = moveItem(
+            currentOrderRef.current,
+            currentOrderRef.current.indexOf(ids[dragOriginIndex.current]!),
+            newDropIndex
+          );
+          updateDrop(newDropIndex, newOrder);
+        }
+      };
 
-      const state = useDragStore.getState();
+      // --- Document-level touchend/touchcancel handler ---
+      const handleEnd = () => {
+        cancelLongPress();
+        cleanupNativeListeners();
 
-      // Check only the immediate neighbors of the current drop slot.
-      // Returns currentDropIndex unchanged if no swap threshold is crossed.
-      const newDropIndex = findDropIndex(
-        ghostCenterY,
-        cardRefs.current,
-        state.dropIndex,
-        scrollContainerRef.current
-      );
+        const state = useDragStore.getState();
+        if (!state.isDragging) return;
 
-      if (
-        newDropIndex !== null &&
-        newDropIndex !== state.dropIndex &&
-        dragOriginIndex.current !== null
-      ) {
-        // Re-derive order from the original list order by moving the dragged
-        // item from its origin to the new drop position.
-        const newOrder = moveItem(
-          currentOrderRef.current,
-          currentOrderRef.current.indexOf(itemIds[dragOriginIndex.current]!),
-          newDropIndex
-        );
-        updateDrop(newDropIndex, newOrder);
-      }
+        // Stop auto-scroll
+        if (stopAutoScroll.current) {
+          stopAutoScroll.current();
+          stopAutoScroll.current = null;
+        }
+        currentSpeed.current = 0;
+
+        // Restore touch behavior
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.style.touchAction = '';
+        }
+        document.body.style.overflow = '';
+
+        // Notify parent of new order
+        const finalOrder = state.orderedIds;
+        endDragAction();
+
+        if (
+          finalOrder.length > 0 &&
+          !finalOrder.every((id, i) => id === itemIdsRef.current[i])
+        ) {
+          onReorderRef.current(finalOrder);
+        }
+
+        dragOriginIndex.current = null;
+        touchStart.current = null;
+      };
+
+      nativeMoveRef.current = handleMove;
+      nativeEndRef.current = handleEnd;
+      document.addEventListener('touchmove', handleMove, { passive: false });
+      document.addEventListener('touchend', handleEnd);
+      document.addEventListener('touchcancel', handleEnd);
     },
-    [cancelLongPress, updateGhost, updateDrop, scrollContainerRef, itemIds]
+    [
+      enabled,
+      activateDrag,
+      cancelLongPress,
+      cleanupNativeListeners,
+      updateGhost,
+      updateDrop,
+      endDragAction,
+      scrollContainerRef,
+    ]
   );
-
-  const onTouchEnd = useCallback(() => {
-    cancelLongPress();
-
-    const state = useDragStore.getState();
-    if (!state.isDragging) return;
-
-    // Stop auto-scroll
-    if (stopAutoScroll.current) {
-      stopAutoScroll.current();
-      stopAutoScroll.current = null;
-    }
-    currentSpeed.current = 0;
-
-    // Remove native scroll-prevention listener
-    if (nativePreventScroll.current) {
-      document.removeEventListener('touchmove', nativePreventScroll.current);
-      nativePreventScroll.current = null;
-    }
-
-    // Restore touchAction on scroll container and body
-    if (scrollContainerRef.current) {
-      scrollContainerRef.current.style.touchAction = '';
-    }
-    document.body.style.overflow = '';
-
-    // Notify parent of new order
-    const finalOrder = state.orderedIds;
-    endDragAction();
-
-    // Only call onReorder if the order actually changed
-    if (
-      finalOrder.length > 0 &&
-      !finalOrder.every((id, i) => id === itemIds[i])
-    ) {
-      onReorder(finalOrder);
-    }
-
-    dragOriginIndex.current = null;
-    touchStart.current = null;
-  }, [cancelLongPress, endDragAction, onReorder, itemIds]);
 
   return {
-    handlers: { onTouchStart, onTouchMove, onTouchEnd },
+    handlers: { onTouchStart },
     registerCard,
   };
 }

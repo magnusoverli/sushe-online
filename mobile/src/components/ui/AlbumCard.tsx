@@ -20,6 +20,7 @@
 import {
   type CSSProperties,
   type ReactNode,
+  forwardRef,
   useCallback,
   useState,
 } from 'react';
@@ -94,242 +95,248 @@ function getCardTransform(_state: CardState): string {
 
 // ── Component ──
 
-export function AlbumCard({
-  rank,
-  title,
-  artist,
-  coverElement,
-  tags,
-  isActive = false,
-  cardState = 'default',
-  onMenuClick,
-  onClick,
-  showRank = true,
-  rankVisible = true,
-  playcount,
-  className,
-  style,
-}: AlbumCardProps) {
-  const [isHovered, setIsHovered] = useState(false);
-
-  const effectiveState =
-    cardState === 'default' && isHovered ? 'hover' : cardState;
-
-  const handleMenuClick = useCallback(
-    (e: React.MouseEvent | React.TouchEvent) => {
-      e.stopPropagation();
-      onMenuClick?.(e);
+export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
+  function AlbumCard(
+    {
+      rank,
+      title,
+      artist,
+      coverElement,
+      tags,
+      isActive = false,
+      cardState = 'default',
+      onMenuClick,
+      onClick,
+      showRank = true,
+      rankVisible = true,
+      playcount,
+      className,
+      style,
     },
-    [onMenuClick]
-  );
+    ref
+  ) {
+    const [isHovered, setIsHovered] = useState(false);
 
-  const titleColor = isActive
-    ? 'var(--color-gold)'
-    : 'var(--color-text-primary)';
+    const effectiveState =
+      cardState === 'default' && isHovered ? 'hover' : cardState;
 
-  const cardStyle: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 'var(--space-card-gap-inner)',
-    padding: 'var(--space-card-y) var(--space-card-x)',
-    borderRadius: 'var(--radius-card)',
-    background: getCardBg(effectiveState),
-    border: getCardBorder(effectiveState),
-    opacity: getCardOpacity(effectiveState),
-    transform: getCardTransform(effectiveState),
-    transition:
-      'background 150ms ease, opacity 200ms ease, transform 200ms ease, border-color 150ms ease',
-    cursor: onClick ? 'pointer' : 'default',
-    userSelect: 'none',
-    WebkitUserSelect: 'none',
-    touchAction: 'pan-y',
-    position: 'relative',
-    ...style,
-  };
+    const handleMenuClick = useCallback(
+      (e: React.MouseEvent | React.TouchEvent) => {
+        e.stopPropagation();
+        onMenuClick?.(e);
+      },
+      [onMenuClick]
+    );
 
-  return (
-    <div
-      className={`${onClick ? 'touch-feedback' : ''} ${className || ''}`}
-      style={cardStyle}
-      onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      data-testid="album-card"
-      role="listitem"
-    >
-      {/* Rank */}
-      {showRank && rank != null && (
-        <span
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
-            fontWeight: 300,
-            letterSpacing: 0,
-            color: 'var(--color-text-rank)',
-            width: '18px',
-            textAlign: 'right',
-            flexShrink: 0,
-            visibility: rankVisible ? 'visible' : 'hidden',
-          }}
-          data-testid="album-rank"
-        >
-          {rank}
-        </span>
-      )}
+    const titleColor = isActive
+      ? 'var(--color-gold)'
+      : 'var(--color-text-primary)';
 
-      {/* Cover art */}
+    const cardStyle: CSSProperties = {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 'var(--space-card-gap-inner)',
+      padding: 'var(--space-card-y) var(--space-card-x)',
+      borderRadius: 'var(--radius-card)',
+      background: getCardBg(effectiveState),
+      border: getCardBorder(effectiveState),
+      opacity: getCardOpacity(effectiveState),
+      transform: getCardTransform(effectiveState),
+      transition:
+        'background 150ms ease, opacity 200ms ease, transform 200ms ease, border-color 150ms ease',
+      cursor: onClick ? 'pointer' : 'default',
+      userSelect: 'none',
+      WebkitUserSelect: 'none',
+      touchAction: 'pan-y',
+      position: 'relative',
+      ...style,
+    };
+
+    return (
       <div
-        style={{
-          width: '60px',
-          height: '60px',
-          borderRadius: 'var(--radius-cover)',
-          overflow: 'hidden',
-          flexShrink: 0,
-          position: 'relative',
-        }}
-        data-testid="album-cover"
+        ref={ref}
+        className={`${onClick ? 'touch-feedback' : ''} ${className || ''}`}
+        style={cardStyle}
+        onClick={onClick}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        data-testid="album-card"
+        role="listitem"
       >
-        {coverElement}
-      </div>
-
-      {/* Info: title, artist, tags */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        <span
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '15px',
-            fontWeight: 400,
-            letterSpacing: '-0.01em',
-            lineHeight: 1.3,
-            color: titleColor,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            transition: 'color 200ms ease',
-          }}
-          data-testid="album-title"
-        >
-          {title}
-        </span>
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            marginTop: '2px',
-            overflow: 'hidden',
-          }}
-        >
+        {/* Rank */}
+        {showRank && rank != null && (
           <span
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: '11px',
+              fontWeight: 300,
+              letterSpacing: 0,
+              color: 'var(--color-text-rank)',
+              width: '18px',
+              textAlign: 'right',
+              flexShrink: 0,
+              visibility: rankVisible ? 'visible' : 'hidden',
+            }}
+            data-testid="album-rank"
+          >
+            {rank}
+          </span>
+        )}
+
+        {/* Cover art */}
+        <div
+          style={{
+            width: '60px',
+            height: '60px',
+            borderRadius: 'var(--radius-cover)',
+            overflow: 'hidden',
+            flexShrink: 0,
+            position: 'relative',
+          }}
+          data-testid="album-cover"
+        >
+          {coverElement}
+        </div>
+
+        {/* Info: title, artist, tags */}
+        <div
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: '15px',
               fontWeight: 400,
-              letterSpacing: '0.02em',
-              color: 'var(--color-text-secondary)',
+              letterSpacing: '-0.01em',
+              lineHeight: 1.3,
+              color: titleColor,
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
-              minWidth: 0,
+              transition: 'color 200ms ease',
             }}
-            data-testid="album-artist"
+            data-testid="album-title"
           >
-            {artist}
+            {title}
           </span>
 
-          {playcount != null && playcount > 0 && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '3px',
-                fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
-                fontWeight: 400,
-                letterSpacing: '0.02em',
-                color: 'rgba(255,255,255,0.25)',
-                flexShrink: 0,
-                whiteSpace: 'nowrap',
-              }}
-              data-testid="album-playcount"
-              title={`${playcount.toLocaleString()} plays on Last.fm`}
-            >
-              <Headphones size={9} />
-              {formatPlaycount(playcount)}
-            </span>
-          )}
-        </div>
-
-        {tags && tags.length > 0 && (
           <div
             style={{
               display: 'flex',
-              flexWrap: 'wrap',
+              alignItems: 'center',
               gap: '6px',
-              marginTop: '6px',
+              marginTop: '2px',
+              overflow: 'hidden',
             }}
           >
-            {tags.map((tag) => (
-              <TagPill key={tag}>{tag}</TagPill>
-            ))}
-          </div>
-        )}
-      </div>
+            <span
+              style={{
+                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                fontWeight: 400,
+                letterSpacing: '0.02em',
+                color: 'var(--color-text-secondary)',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+              data-testid="album-artist"
+            >
+              {artist}
+            </span>
 
-      {/* Three-dot menu button — always rendered to preserve layout width.
+            {playcount != null && playcount > 0 && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '9px',
+                  fontWeight: 400,
+                  letterSpacing: '0.02em',
+                  color: 'rgba(255,255,255,0.25)',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}
+                data-testid="album-playcount"
+                title={`${playcount.toLocaleString()} plays on Last.fm`}
+              >
+                <Headphones size={9} />
+                {formatPlaycount(playcount)}
+              </span>
+            )}
+          </div>
+
+          {tags && tags.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '6px',
+                marginTop: '6px',
+              }}
+            >
+              {tags.map((tag) => (
+                <TagPill key={tag}>{tag}</TagPill>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Three-dot menu button — always rendered to preserve layout width.
           When onMenuClick is absent (e.g. during drag) the button is hidden
           via visibility so the 28px column stays in the flow and card height
           remains stable. */}
-      <button
-        type="button"
-        style={{
-          width: '28px',
-          height: '28px',
-          borderRadius: '7px',
-          border: '1px solid transparent',
-          background: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: onMenuClick ? 'pointer' : 'default',
-          flexShrink: 0,
-          padding: 0,
-          color: 'rgba(255,255,255,0.55)',
-          transition: 'background 150ms ease, border-color 150ms ease',
-          visibility: onMenuClick ? 'visible' : 'hidden',
-          pointerEvents: onMenuClick ? 'auto' : 'none',
-        }}
-        onClick={onMenuClick ? handleMenuClick : undefined}
-        onTouchEnd={onMenuClick ? handleMenuClick : undefined}
-        aria-label={onMenuClick ? `Menu for ${title}` : undefined}
-        aria-hidden={!onMenuClick}
-        data-testid="album-menu-button"
-      >
-        <MoreVertical size={14} />
-      </button>
+        <button
+          type="button"
+          style={{
+            width: '28px',
+            height: '28px',
+            borderRadius: '7px',
+            border: '1px solid transparent',
+            background: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: onMenuClick ? 'pointer' : 'default',
+            flexShrink: 0,
+            padding: 0,
+            color: 'rgba(255,255,255,0.55)',
+            transition: 'background 150ms ease, border-color 150ms ease',
+            visibility: onMenuClick ? 'visible' : 'hidden',
+            pointerEvents: onMenuClick ? 'auto' : 'none',
+          }}
+          onClick={onMenuClick ? handleMenuClick : undefined}
+          onTouchEnd={onMenuClick ? handleMenuClick : undefined}
+          aria-label={onMenuClick ? `Menu for ${title}` : undefined}
+          aria-hidden={!onMenuClick}
+          data-testid="album-menu-button"
+        >
+          <MoreVertical size={14} />
+        </button>
 
-      {/* Active indicator bar */}
-      <div
-        style={{
-          width: '3px',
-          height: '32px',
-          borderRadius: 'var(--radius-indicator)',
-          background:
-            'linear-gradient(180deg, var(--color-gold) 0%, var(--color-gold-dark) 100%)',
-          opacity: isActive ? 1 : 0,
-          flexShrink: 0,
-          transition: 'opacity 200ms ease',
-        }}
-        data-testid="active-indicator"
-      />
-    </div>
-  );
-}
+        {/* Active indicator bar */}
+        <div
+          style={{
+            width: '3px',
+            height: '32px',
+            borderRadius: 'var(--radius-indicator)',
+            background:
+              'linear-gradient(180deg, var(--color-gold) 0%, var(--color-gold-dark) 100%)',
+            opacity: isActive ? 1 : 0,
+            flexShrink: 0,
+            transition: 'opacity 200ms ease',
+          }}
+          data-testid="active-indicator"
+        />
+      </div>
+    );
+  }
+);
