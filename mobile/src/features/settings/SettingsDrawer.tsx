@@ -78,12 +78,12 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       '[data-testid="app-shell-content"]'
     ) as HTMLElement | null;
     if (scrollContainer) {
-      scrollContainer.style.overflow = 'hidden';
+      scrollContainer.style.overflowY = 'hidden';
     }
     document.body.style.overflow = 'hidden';
     return () => {
       if (scrollContainer) {
-        scrollContainer.style.overflow = '';
+        scrollContainer.style.overflowY = 'auto';
       }
       document.body.style.overflow = '';
     };
