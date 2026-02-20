@@ -2,6 +2,111 @@
   {
     "date": "2026-02-20",
     "category": "fix",
+    "description": "Fixed Android menu ghost clicks and Tidal linking",
+    "hash": "a1df0b01bdcd412fe6baf5dec5c32090c9f25e30",
+    "commitMessage": "Fix Android three-dot menu ghost click and Tidal deep linking in SPA\n\n- Prevent ghost click on Android Chromium: add e.preventDefault() in\n  onTouchEnd for menu buttons in AlbumCard and RecommendationCard to\n  stop the synthesized click from dismissing the sheet via the scrim\n- Fix Tidal opening web page instead of app: rewrite openInTidal to\n  resolve album ID via server API then use tidal:// deep link scheme,\n  matching the legacy UI behaviour\n- Update callers (LibraryPage, AlbumActionSheet) for async openInTidal\n  with error handling\n- Update tidal service tests for new deep link flow"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed Telegram notification images and formatting",
+    "hash": "ba87701190a96a5e02f39a248f80adbe71fa9e75",
+    "commitMessage": "Fix Telegram recommendation notifications: cover image and markdown escaping\n\n- Fix cover image race condition: getCoverForNotification now retries up\n  to 5 times with 2s delay, giving the background cover fetch queue time\n  to complete before sending the notification\n- Fix escapeMarkdown to only escape Markdown v1 characters (_*`[) instead\n  of the MarkdownV2 set which caused pipe | and other characters to appear\n  in the rendered text"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Mobile users auto-redirected to app with opt-out option",
+    "hash": "8da6e0b3e656c00847215e1ae390ea3403e494f0",
+    "commitMessage": "Auto-redirect mobile users to SPA with opt-out preference\n\n- Add preferred_ui column (migration 054) and DB field mapping\n- UA detection redirects phone users to /mobile on login and GET /\n- Excludes tablets/iPads (only matches iPhone, Android Mobile, etc.)\n- User preference overrides UA: 'desktop' opts out, null = auto\n- Both UIs expose a toggle: SPA has 'Switch to classic' button,\n  legacy shows 'Switch to new UI' button (mobile devices only)\n- preferredUi exposed in sanitizeUser, /api/auth/session, login response"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed missing covers on newly added albums",
+    "hash": "e2534701ae8b2e7ddefeb7e2570587d9eb7fa340",
+    "commitMessage": "Fix missing cover image on just-added albums\n\nAlbums added via AddAlbumSheet now show covers instantly by checking\nthe in-memory racing cache (Deezer/iTunes CDN URLs) before falling\nback to the server endpoint, which 404s until the background fetch\ncompletes."
+  },
+  {
+    "date": "2026-02-20",
+    "category": "perf",
+    "description": "Faster album cover loading with improved racing system",
+    "hash": "d1f63deade132350f6cbaed403c69d8f688cbc48",
+    "commitMessage": "Add album cover art racing system with preconnect hints\n\n- Race 3 cover art providers (Deezer, iTunes, CAA proxy) for each album\n- Skip image verification for Deezer/iTunes (reliable CDNs), keep for Wikidata\n- Add CDN preconnect hints when AddAlbumSheet opens (~100-200ms savings per CDN)\n- Concurrency-limit CAA proxy calls (max 4) to avoid thundering herd\n- Extract shared raceProviders() utility and normalizeForApi() helper\n- useCoverArt hook lazy-loads covers with abort-on-unmount\n- Show first-letter monogram as placeholder while covers load"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Add-album button moved to header, auto-scroll to new albums",
+    "hash": "82d65e17c6955c9c3ee78eeebf7d016115942629",
+    "commitMessage": "Move add-album button to sticky header, close sheet on add and scroll to new album\n\n- Move + button from metadata row to title header (brighter color, scales with title)\n- Close AddAlbumSheet on successful add, notify parent via onAlbumAdded callback\n- Scroll to bottom of list after add so the new album is visible\n- Clean up: remove onAddAlbum from ListHeaderMeta, add to ListHeader with isLocked guard"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Added album search with music database integration",
+    "hash": "8638895652dd18875509633460e08e36837e233b",
+    "commitMessage": "Add album search feature with MusicBrainz integration\n\n- AddAlbumSheet: bottom sheet with artist/album search via MusicBrainz proxy\n- Artist image racing system: Deezer, iTunes, Wikidata providers (first wins)\n- ListHeaderMeta: + button to open add album sheet (hidden when locked)\n- BottomSheet: tall prop for full-height sheets, dvh units for keyboard compat\n- Keyboard dismisses on search submit, artist-credits included in discography query"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS zoom on form inputs",
+    "hash": "78873aca0830eea40fcf6e5973d81be77a500455",
+    "commitMessage": "Fix iOS zoom on form inputs and add pinned footer to BottomSheet\n\n- Set fontSize to 16px on inputs/selects in CreateListSheet, CreateCollectionSheet,\n  EditListSheet, GroupActionSheet, and SetupWizardSheet to prevent iOS Safari auto-zoom\n- Add optional footer prop to BottomSheet for non-scrollable pinned buttons\n- Move action buttons to pinned footer in ReidentifySheet and SetupWizardSheet"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Streamlined About section, renamed to What's New",
+    "hash": "55b25729beb59bccb39cad67fc45ca5d24425d93",
+    "commitMessage": "Streamline About sheet: remove app info header, rename to What's New"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Cleaner tab bar design with tighter spacing",
+    "hash": "aea987d54a58a4d47aef52fddbd5eec485c4ca3f",
+    "commitMessage": "Slim down TabBar: remove active dot, tighten padding, push content to bottom edge"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Quick-play now opens Spotify app directly",
+    "hash": "bf2628f61e7f4b73c7f1aae58095c08d02b1425d",
+    "commitMessage": "Open Spotify app via deep link when no active device found on quick-play"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Tap album cover to play instead of menu",
+    "hash": "9b785989f690b23217d06a35bd4e7f6d456ad28a",
+    "commitMessage": "Play album directly from cover image tap instead of opening action sheet\n\n- Spotify: searches album then plays on active device (no device picker)\n- Tidal: opens album in Tidal browser/app immediately\n- Both services connected with preference: uses preferred service\n- Both connected without preference: shows ServiceChooserSheet to pick\n- Play overlay now appears for Tidal-only users (was Spotify-only)\n- Shows helpful toast on error (no active device, album not found)\n- Full action sheet with device picker still available via three-dot menu"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Tab bar stays visible when settings drawer open",
+    "hash": "05d6da8da09d076306ecd75ce3159a1c31efd893",
+    "commitMessage": "Keep TabBar visible and interactive when settings drawer is open\n\n- Drawer uses paddingBottom to clear TabBar instead of bottom offset\n- Raise TabBar z-index above drawer so it paints on top (no sub-pixel gaps)\n- Add onSettingsClose callback through AppShell and TabBar\n- Highlight Settings tab icon when drawer is open, revert on close\n- Clicking Library/Search while settings is open closes the drawer and navigates\n- Add optional bottom prop to Scrim for future use"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Polished settings drawer with better touch targets",
+    "hash": "e232ae7a49e83537de8c9e4a9e225d70231bee7b",
+    "commitMessage": "Polish settings drawer: card sections, touch targets, and tab chevrons\n\nSettings sections:\n- Convert flat divider layout to card-style containers (subtle bg + border + radius)\n- Reduce wrapper padding to compensate for card internal padding\n- Flatten AdminTab inner cardStyle to avoid cards-inside-cards\n\nTouch-friendliness (Plan B):\n- Bump field row, button, input, toggle, and select padding for ~36-40px tap targets\n- Enlarge Done button, Info icon, tab bar buttons, and inline save/cancel\n- Bump AdminTab action button and smallButton padding\n\nTypography:\n- Standardize all settings tab font sizes to established scale (11-17px)\n- Align all uppercase headers to 0.05em letter-spacing\n- Replace inline rgba colors with design token variables\n- Set select elements to 16px to prevent iOS zoom\n\nTab navigation:\n- Add chevron scroll indicators with fade-in/out based on scroll position\n- Increase tab gap and padding for easier touch targeting"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Recommendation lists organized by year in navigation",
+    "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
+    "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
     "description": "Fixed Telegram recommendation notifications showing proper cover images",
     "hash": "ba87701190a96a5e02f39a248f80adbe71fa9e75",
     "commitMessage": "Fix Telegram recommendation notifications: cover image and markdown escaping\n\n- Fix cover image race condition: getCoverForNotification now retries up\n  to 5 times with 2s delay, giving the background cover fetch queue time\n  to complete before sending the notification\n- Fix escapeMarkdown to only escape Markdown v1 characters (_*`[) instead\n  of the MarkdownV2 set which caused pipe | and other characters to appear\n  in the rendered text"
@@ -971,6 +1076,20 @@
     "description": "Organized recommendations by year in navigation menu",
     "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
     "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Removed welcome text from login page",
+    "hash": "8a8e5e7287684dac335e2a63ee04b939f0da8f52",
+    "commitMessage": "Remove 'Welcome back' eyebrow text from login page"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "feature",
+    "description": "Added release date and country to album cards",
+    "hash": "732f22cce4075ff51bc5c66eda2db04de6ce72f8",
+    "commitMessage": "Add release date and country to album cards, enlarge cover art to 88px\n\n- Add releaseDate, country, yearMismatch props to AlbumCard\n- New metadata line between artist and tags showing year · country\n- Year renders in red when it mismatches the list year\n- Remove old year-mismatch tag push from LibraryPage\n- Bump cover art from 80x80 to 88x88px for more visual weight\n- Increase card vertical padding from 5px to 8px for breathing room\n- Tags stack vertically (column) instead of wrapping\n- Tighten tag pills: letter-spacing 0.1em→0.04em, padding 5px→3px"
   },
   {
     "date": "2026-02-19",
