@@ -26,7 +26,7 @@
  */
 
 import { useRef, useEffect, type ReactNode } from 'react';
-import { MoreVertical, Lock } from 'lucide-react';
+import { MoreVertical, Lock, Plus } from 'lucide-react';
 
 /** Title uses transform: scale() — fontSize stays constant at 32px */
 const FONT_SIZE = 32;
@@ -262,6 +262,8 @@ interface ListHeaderMetaProps {
   isLocked?: boolean;
   /** Optional sort control rendered right-aligned */
   sortControl?: ReactNode;
+  /** Callback to open the Add Album sheet (hidden when list is locked) */
+  onAddAlbum?: () => void;
 }
 
 export function ListHeaderMeta({
@@ -269,6 +271,7 @@ export function ListHeaderMeta({
   year,
   isLocked = false,
   sortControl,
+  onAddAlbum,
 }: ListHeaderMetaProps) {
   const metaParts: string[] = [];
   if (albumCount != null) {
@@ -323,7 +326,31 @@ export function ListHeaderMeta({
           </span>
         )}
       </span>
-      {sortControl && <div style={{ position: 'relative' }}>{sortControl}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+        {onAddAlbum && !isLocked && (
+          <button
+            type="button"
+            onClick={onAddAlbum}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              padding: '4px',
+              cursor: 'pointer',
+              color: 'var(--color-text-secondary)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+            aria-label="Add album"
+            data-testid="list-header-add-album"
+          >
+            <Plus size={16} />
+          </button>
+        )}
+        {sortControl && (
+          <div style={{ position: 'relative' }}>{sortControl}</div>
+        )}
+      </div>
     </div>
   );
 }

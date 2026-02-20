@@ -44,6 +44,8 @@ interface BottomSheetProps {
   footer?: ReactNode;
   /** Override z-index for stacking above other sheets (default: --z-sheet / 400) */
   zIndex?: number;
+  /** If true, the sheet always opens at full maxHeight (85vh) instead of content-sized */
+  tall?: boolean;
 }
 
 const SWIPE_THRESHOLD = 80;
@@ -60,7 +62,7 @@ const sheetStyle: CSSProperties = {
   borderTopRightRadius: 'var(--sheet-radius-top)',
   borderTop: '1px solid var(--color-border-sheet)',
   zIndex: 'var(--z-sheet)' as unknown as number,
-  maxHeight: '85vh',
+  maxHeight: '85dvh',
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
@@ -93,6 +95,7 @@ export function BottomSheet({
   children,
   footer,
   zIndex,
+  tall = false,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
@@ -146,7 +149,10 @@ export function BottomSheet({
             ref={sheetRef}
             style={{
               ...sheetStyle,
-              ...(lockedHeight != null ? { height: lockedHeight } : {}),
+              ...(tall ? { height: '85dvh' } : {}),
+              ...(lockedHeight != null && !tall
+                ? { height: lockedHeight }
+                : {}),
               ...(zIndex != null ? { zIndex } : {}),
             }}
             initial={{ y: '100%' }}

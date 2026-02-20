@@ -252,6 +252,31 @@ export type AlbumSortKey =
   | 'genre'
   | 'country';
 
+// ── MusicBrainz Search types ──
+
+/** Artist result from MusicBrainz artist search */
+export interface MBArtistResult {
+  id: string;
+  name: string;
+  disambiguation?: string;
+  country?: string;
+  type?: string;
+  score: number;
+}
+
+/** Album (release-group) result from MusicBrainz */
+export interface MBAlbumResult {
+  id: string;
+  title: string;
+  artist: string;
+  artistId?: string;
+  releaseDate: string | null;
+  type: string;
+  secondaryTypes: string[];
+  country?: string;
+  coverUrl?: string | null;
+}
+
 // ── Admin: Duplicate Scanner types ──
 
 /** A single album in a duplicate pair from the scan endpoint */

@@ -88,6 +88,7 @@ import {
   type MusicServiceChoice,
 } from '@/components/album/ServiceChooserSheet';
 import { SetupWizardSheet } from '@/components/list/SetupWizardSheet';
+import { AddAlbumSheet } from '@/components/album/AddAlbumSheet';
 import { SettingsDrawer } from '@/features/settings';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { showToast } from '@/components/ui/Toast';
@@ -234,6 +235,7 @@ export function LibraryPage() {
   >(null);
   const [showCreateList, setShowCreateList] = useState(false);
   const [showCreateCollection, setShowCreateCollection] = useState(false);
+  const [showAddAlbum, setShowAddAlbum] = useState(false);
   const [editListTarget, setEditListTarget] = useState<string | null>(null);
 
   // Album action states
@@ -1337,6 +1339,7 @@ export function LibraryPage() {
               albumCount={activeList?.count}
               year={activeList?.year}
               isLocked={isListLocked}
+              onAddAlbum={() => setShowAddAlbum(true)}
               sortControl={
                 <>
                   <button
@@ -1653,6 +1656,14 @@ export function LibraryPage() {
         onClose={() => setEditListTarget(null)}
         list={editList}
         onUpdated={refreshData}
+      />
+
+      {/* Add album sheet */}
+      <AddAlbumSheet
+        open={showAddAlbum}
+        onClose={() => setShowAddAlbum(false)}
+        listId={activeListId ?? ''}
+        listName={activeList?.name ?? ''}
       />
 
       {/* ── Album Action Sheets ── */}
