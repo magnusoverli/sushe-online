@@ -800,18 +800,25 @@ export function LibraryPage() {
           showToast('Album not found on Spotify', 'error');
           return;
         }
-        await playAlbum(result.id);
-        showToast('Playing on active device', 'success');
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Failed to play album';
-        if (msg.includes('No active device') || msg.includes('NO_DEVICE')) {
-          showToast(
-            'No active Spotify device found. Open Spotify first.',
-            'error'
-          );
-        } else {
-          showToast(msg, 'error');
+        try {
+          await playAlbum(result.id);
+          showToast('Playing on active device', 'success');
+        } catch (playErr) {
+          const msg =
+            playErr instanceof Error ? playErr.message : 'Failed to play album';
+          if (msg.includes('No active device') || msg.includes('NO_DEVICE')) {
+            // No active device — open album in Spotify app via deep link
+            window.open(
+              `https://open.spotify.com/album/${result.id}`,
+              '_blank'
+            );
+          } else {
+            showToast(msg, 'error');
+          }
         }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to search';
+        showToast(msg, 'error');
       }
     },
     []
