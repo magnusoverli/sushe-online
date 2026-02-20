@@ -3,7 +3,7 @@
   "short_name": "SuShe",
   "description": "Album list management",
   "start_url": "/mobile/",
-  "scope": "/mobile/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0C0C0F",
   "theme_color": "#0C0C0F",

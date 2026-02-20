@@ -24,6 +24,12 @@ export function useAuth() {
   useEffect(() => {
     if (session?.authenticated && session.user) {
       setUser(session.user);
+
+      // Respect user's preference to use the classic UI
+      if (session.user.preferredUi === 'desktop') {
+        window.location.href = '/';
+        return;
+      }
     } else if (session && !session.authenticated) {
       setUser(null);
     }
