@@ -24,8 +24,9 @@ import {
   useAlbumSearch,
   useArtistAlbums,
   useArtistImage,
+  useCoverArt,
 } from '@/hooks/useAlbumSearch';
-import { getCoverArtUrl } from '@/services/search';
+import { warmupImageConnections } from '@/services/search';
 import { updateListItems } from '@/services/lists';
 import { showToast } from '@/components/ui/Toast';
 import type { MBArtistResult, MBAlbumResult } from '@/lib/types';
@@ -214,8 +215,7 @@ function AlbumResultCard({
   adding: boolean;
   added: boolean;
 }) {
-  const [imgError, setImgError] = useState(false);
-  const coverUrl = getCoverArtUrl(album.id);
+  const { coverUrl } = useCoverArt(album.id, album.artist, album.title);
   const year = album.releaseDate?.substring(0, 4);
   const currentYear = new Date().getFullYear().toString();
   const isNew = year === currentYear;
@@ -244,13 +244,11 @@ function AlbumResultCard({
           background: 'rgba(255,255,255,0.05)',
         }}
       >
-        {!imgError ? (
+        {coverUrl ? (
           <img
             src={coverUrl}
             alt=""
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={() => setImgError(true)}
-            loading="lazy"
           />
         ) : (
           <div
@@ -265,7 +263,7 @@ function AlbumResultCard({
               color: 'rgba(255,255,255,0.15)',
             }}
           >
-            No art
+            {album.title.charAt(0).toUpperCase()}
           </div>
         )}
       </div>
@@ -398,6 +396,7 @@ export function AddAlbumSheet({
   // Reset state when sheet opens/closes
   useEffect(() => {
     if (open) {
+      warmupImageConnections();
       setQuery('');
       setMode('artist');
       setSelectedArtist(null);

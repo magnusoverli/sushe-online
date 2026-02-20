@@ -16,6 +16,7 @@ import {
   searchAlbums,
   getArtistAlbums,
   searchArtistImage,
+  searchCoverArt,
 } from '@/services/search';
 
 /**
@@ -95,4 +96,43 @@ export function useArtistImage(
   }, [artistName, artistId]);
 
   return { imageUrl, loading };
+}
+
+/**
+ * Lazy-load album cover art via the racing provider system.
+ * Returns { coverUrl } — null until resolved, stays null on failure.
+ * Aborts in-flight requests on unmount or when album changes.
+ */
+export function useCoverArt(
+  releaseGroupId: string | undefined,
+  artist: string | undefined,
+  album: string | undefined
+): { coverUrl: string | null } {
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!releaseGroupId || !artist || !album) {
+      setCoverUrl(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setCoverUrl(null);
+
+    searchCoverArt(releaseGroupId, artist, album, controller.signal)
+      .then((url) => {
+        if (!controller.signal.aborted) {
+          setCoverUrl(url);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) {
+          setCoverUrl(null);
+        }
+      });
+
+    return () => controller.abort();
+  }, [releaseGroupId, artist, album]);
+
+  return { coverUrl };
 }

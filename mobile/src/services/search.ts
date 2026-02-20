@@ -77,24 +77,52 @@ export async function getArtistAlbums(
 
 /**
  * Build a Cover Art Archive thumbnail URL for a release group.
- * Returns null if unavailable (caller should handle fallback).
  */
 export function getCoverArtUrl(releaseGroupId: string): string {
   return `https://coverartarchive.org/release-group/${releaseGroupId}/front-250`;
 }
 
-// ── Artist Image Racing System ──
-// Fires 3 providers in parallel (Deezer, iTunes, Wikidata).
-// First verified image wins; losers are aborted.
-
-/** In-memory cache: artistId|name → URL | null */
-const artistImageCache = new Map<string, string | null>();
+// =============================================================================
+// SHARED UTILITIES
+// =============================================================================
 
 const ITUNES_IMAGE_SIZE = 600;
 
+/** CDN hosts used for image loading — preconnect to these for faster TLS. */
+const IMAGE_CDN_HOSTS = [
+  'https://coverartarchive.org',
+  'https://archive.org',
+  'https://e-cdns-images.dzcdn.net',
+  'https://is1-ssl.mzstatic.com',
+  'https://commons.wikimedia.org',
+];
+
+let preconnected = false;
+
+/**
+ * Inject <link rel="preconnect"> tags for all image CDNs.
+ * Called once when the AddAlbumSheet opens. Saves ~100-200ms per CDN.
+ */
+export function warmupImageConnections(): void {
+  if (preconnected) return;
+  preconnected = true;
+
+  for (const href of IMAGE_CDN_HOSTS) {
+    const existing = document.querySelector(
+      `link[rel="preconnect"][href="${href}"]`
+    );
+    if (!existing) {
+      const link = document.createElement('link');
+      link.rel = 'preconnect';
+      link.href = href;
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
+  }
+}
+
 /**
  * Simple bigram-based string similarity (0..1).
- * Good enough for fuzzy artist name matching.
  */
 function stringSimilarity(a: string, b: string): number {
   const lower1 = a.toLowerCase();
@@ -130,7 +158,7 @@ function normalizeForApi(s: string): string {
 
 /**
  * Verify an image URL actually loads (not a placeholder / broken).
- * Returns the URL on success, rejects on failure.
+ * Only used for Wikidata where placeholder images are common.
  */
 function verifyImageLoads(url: string, signal?: AbortSignal): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -160,7 +188,42 @@ function verifyImageLoads(url: string, signal?: AbortSignal): Promise<string> {
   });
 }
 
-// ── Provider: Deezer ──
+/**
+ * Race multiple promises — first to resolve with a truthy value wins.
+ * Rejects only when ALL promises have settled without a winner.
+ */
+function raceProviders<T>(promises: Promise<T | null>[]): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = 0;
+    const total = promises.length;
+
+    for (const p of promises) {
+      p.then((result) => {
+        if (result) {
+          resolve(result);
+        } else {
+          settled++;
+          if (settled >= total) reject(new Error('All providers failed'));
+        }
+      }).catch(() => {
+        settled++;
+        if (settled >= total) reject(new Error('All providers failed'));
+      });
+    }
+  });
+}
+
+// =============================================================================
+// ARTIST IMAGE RACING SYSTEM
+// Fires 3 providers in parallel (Deezer, iTunes, Wikidata).
+// Deezer and iTunes skip image verification (reliable URLs).
+// Wikidata keeps verification (can return placeholders).
+// =============================================================================
+
+/** In-memory cache: artistId|name → URL | null */
+const artistImageCache = new Map<string, string | null>();
+
+// ── Provider: Deezer (artist) ──
 
 interface DeezerArtist {
   name: string;
@@ -169,7 +232,7 @@ interface DeezerArtist {
   picture_medium?: string;
 }
 
-async function searchDeezer(
+async function searchDeezerArtist(
   artistName: string,
   signal: AbortSignal
 ): Promise<string | null> {
@@ -200,22 +263,18 @@ async function searchDeezer(
     if (bestScore < 0.7) return null;
   }
 
-  const imageUrl =
-    best?.picture_xl ?? best?.picture_big ?? best?.picture_medium;
-  if (!imageUrl) return null;
-
-  await verifyImageLoads(imageUrl, signal);
-  return imageUrl;
+  // Skip verifyImageLoads — Deezer reliably returns valid URLs
+  return best?.picture_xl ?? best?.picture_big ?? best?.picture_medium ?? null;
 }
 
-// ── Provider: iTunes ──
+// ── Provider: iTunes (artist image via album art) ──
 
 interface ITunesAlbum {
   artistName?: string;
   artworkUrl100?: string;
 }
 
-async function searchItunes(
+async function searchItunesArtist(
   artistName: string,
   signal: AbortSignal
 ): Promise<string | null> {
@@ -243,16 +302,14 @@ async function searchItunes(
 
   if (!bestAlbum || bestScore < 0.7 || !bestAlbum.artworkUrl100) return null;
 
-  const imageUrl = bestAlbum.artworkUrl100.replace(
+  // Skip verifyImageLoads — iTunes reliably returns valid URLs
+  return bestAlbum.artworkUrl100.replace(
     /\/\d+x\d+bb\./,
     `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
   );
-
-  await verifyImageLoads(imageUrl, signal);
-  return imageUrl;
 }
 
-// ── Provider: Wikidata via MusicBrainz ──
+// ── Provider: Wikidata via MusicBrainz (keeps verification) ──
 
 interface MBRelation {
   type: string;
@@ -273,7 +330,6 @@ async function searchWikidata(
 ): Promise<string | null> {
   if (!artistId) return null;
 
-  // Step 1: Get Wikidata ID from MusicBrainz relations
   const mbEndpoint = `artist/${artistId}?inc=url-rels&fmt=json`;
   const mbRes = await fetch(
     `/api/proxy/musicbrainz?endpoint=${encodeURIComponent(mbEndpoint)}&priority=low`,
@@ -292,7 +348,6 @@ async function searchWikidata(
 
   const wikidataId = wikidataRel.url.resource.split('/').pop();
 
-  // Step 2: Get image filename from Wikidata P18 property
   const wdRes = await fetch(
     `/api/proxy/wikidata?entity=${encodeURIComponent(wikidataId!)}&property=P18`,
     { signal, credentials: 'same-origin' }
@@ -303,20 +358,19 @@ async function searchWikidata(
   const filename = wdData.claims?.P18?.[0]?.mainsnak?.datavalue?.value;
   if (!filename) return null;
 
-  // Step 3: Build Wikimedia Commons URL
   const encoded = encodeURIComponent(filename.replace(/ /g, '_'));
   const imageUrl = `https://commons.wikimedia.org/wiki/Special:FilePath/${encoded}?width=500`;
 
+  // Keep verification for Wikidata — can return placeholders
   await verifyImageLoads(imageUrl, signal);
   return imageUrl;
 }
 
-// ── Public: Race all providers ──
+// ── Public: Race artist image providers ──
 
 /**
  * Search for an artist image by racing Deezer, iTunes, and Wikidata.
- * Returns the first verified image URL, or null if none found.
- * Results are cached in memory.
+ * Returns the first image URL, or null. Results are cached in memory.
  */
 export async function searchArtistImage(
   artistName: string,
@@ -335,41 +389,212 @@ export async function searchArtistImage(
     signal.addEventListener('abort', () => controller.abort(), { once: true });
   }
 
-  const providers = [
-    searchDeezer(artistName, controller.signal),
-    searchItunes(artistName, controller.signal),
-    searchWikidata(artistId, controller.signal),
-  ];
-
   try {
-    // Race: first provider to resolve with a URL wins.
-    // Wrap each so failures become never-resolving (until all settle).
-    const url = await new Promise<string>((resolve, reject) => {
-      let settled = 0;
-      const total = providers.length;
+    const url = await raceProviders([
+      searchDeezerArtist(artistName, controller.signal),
+      searchItunesArtist(artistName, controller.signal),
+      searchWikidata(artistId, controller.signal),
+    ]);
 
-      for (const p of providers) {
-        p.then((result) => {
-          if (result) {
-            resolve(result);
-          } else {
-            settled++;
-            if (settled >= total) reject(new Error('All failed'));
-          }
-        }).catch(() => {
-          settled++;
-          if (settled >= total) reject(new Error('All failed'));
-        });
-      }
-    });
-
-    controller.abort(); // Cancel remaining providers
+    controller.abort();
     artistImageCache.set(cacheKey, url);
     return url;
   } catch {
-    // All providers failed (or aborted)
     if (!signal?.aborted) {
       artistImageCache.set(cacheKey, null);
+    }
+    return null;
+  }
+}
+
+// =============================================================================
+// ALBUM COVER ART RACING SYSTEM
+// Races Cover Art Archive, server-side image proxy, Deezer, and iTunes.
+// Concurrency-limited to avoid thundering herd on external APIs.
+// =============================================================================
+
+/** In-memory cache: releaseGroupId → URL | null */
+const coverArtCache = new Map<string, string | null>();
+
+/**
+ * Concurrency limiter for the heavy CAA image proxy only.
+ * Deezer/iTunes are lightweight API calls and don't need limiting.
+ */
+const CAA_PROXY_CONCURRENCY = 4;
+let caaInFlight = 0;
+const caaQueue: Array<() => void> = [];
+
+function runWithCaaConcurrency<T>(fn: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const execute = () => {
+      caaInFlight++;
+      fn()
+        .then(resolve)
+        .catch(reject)
+        .finally(() => {
+          caaInFlight--;
+          if (caaQueue.length > 0) {
+            const next = caaQueue.shift()!;
+            next();
+          }
+        });
+    };
+
+    if (caaInFlight < CAA_PROXY_CONCURRENCY) {
+      execute();
+    } else {
+      caaQueue.push(execute);
+    }
+  });
+}
+
+// ── Cover provider: Server-side image proxy (handles CAA redirects) ──
+
+async function searchCoverProxy(
+  releaseGroupId: string,
+  signal: AbortSignal
+): Promise<string | null> {
+  // Concurrency-limit CAA proxy calls (heavy: redirects + sharp resize)
+  return runWithCaaConcurrency(async () => {
+    const caaUrl = `https://coverartarchive.org/release-group/${releaseGroupId}/front-250`;
+    const proxyUrl = `/api/proxy/image?url=${encodeURIComponent(caaUrl)}`;
+    const res = await fetch(proxyUrl, { signal, credentials: 'same-origin' });
+    if (!res.ok) return null;
+
+    // Proxy returns JSON { data: base64, contentType: "image/jpeg" }
+    const json = (await res.json()) as { data?: string; contentType?: string };
+    if (!json.data) return null;
+
+    return `data:${json.contentType ?? 'image/jpeg'};base64,${json.data}`;
+  });
+}
+
+// ── Cover provider: Deezer album search ──
+
+interface DeezerAlbumResult {
+  title: string;
+  artist?: { name?: string };
+  cover_xl?: string;
+  cover_big?: string;
+  cover_medium?: string;
+}
+
+async function searchCoverDeezer(
+  artist: string,
+  album: string,
+  signal: AbortSignal
+): Promise<string | null> {
+  const q = normalizeForApi(`${artist} ${album}`);
+  const res = await fetch(`/api/proxy/deezer?q=${encodeURIComponent(q)}`, {
+    signal,
+    credentials: 'same-origin',
+  });
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as { data?: DeezerAlbumResult[] };
+  if (!data.data?.length) return null;
+
+  // Find best match by album title similarity
+  let best: DeezerAlbumResult | null = null;
+  let bestScore = 0;
+
+  for (const d of data.data) {
+    const titleScore = stringSimilarity(album, d.title);
+    const artistScore = d.artist?.name
+      ? stringSimilarity(artist, d.artist.name)
+      : 0;
+    const combined = titleScore * 0.6 + artistScore * 0.4;
+    if (combined > bestScore) {
+      bestScore = combined;
+      best = d;
+    }
+  }
+
+  if (!best || bestScore < 0.5) return null;
+  return best.cover_xl ?? best.cover_big ?? best.cover_medium ?? null;
+}
+
+// ── Cover provider: iTunes album search ──
+
+async function searchCoverItunes(
+  artist: string,
+  album: string,
+  signal: AbortSignal
+): Promise<string | null> {
+  const term = normalizeForApi(`${artist} ${album}`);
+  const res = await fetch(
+    `/api/proxy/itunes?term=${encodeURIComponent(term)}&limit=5`,
+    { signal, credentials: 'same-origin' }
+  );
+  if (!res.ok) return null;
+
+  const data = (await res.json()) as {
+    results?: Array<{
+      collectionName?: string;
+      artistName?: string;
+      artworkUrl100?: string;
+    }>;
+  };
+  if (!data.results?.length) return null;
+
+  let best: (typeof data.results)[0] | null = null;
+  let bestScore = 0;
+
+  for (const r of data.results) {
+    if (!r.artworkUrl100) continue;
+    const titleScore = stringSimilarity(album, r.collectionName ?? '');
+    const artistScore = stringSimilarity(artist, r.artistName ?? '');
+    const combined = titleScore * 0.6 + artistScore * 0.4;
+    if (combined > bestScore) {
+      bestScore = combined;
+      best = r;
+    }
+  }
+
+  if (!best || bestScore < 0.5 || !best.artworkUrl100) return null;
+  return best.artworkUrl100.replace(
+    /\/\d+x\d+bb\./,
+    `/${ITUNES_IMAGE_SIZE}x${ITUNES_IMAGE_SIZE}bb.`
+  );
+}
+
+// ── Public: Race cover art providers ──
+
+/**
+ * Search for album cover art by racing Deezer, iTunes, and CAA proxy.
+ * Deezer/iTunes fire freely (lightweight). CAA proxy is concurrency-limited.
+ * Results are cached in memory.
+ */
+export async function searchCoverArt(
+  releaseGroupId: string,
+  artist: string,
+  album: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  if (signal?.aborted) return null;
+
+  if (coverArtCache.has(releaseGroupId)) {
+    return coverArtCache.get(releaseGroupId)!;
+  }
+
+  const controller = new AbortController();
+  if (signal) {
+    signal.addEventListener('abort', () => controller.abort(), { once: true });
+  }
+
+  try {
+    const url = await raceProviders([
+      searchCoverDeezer(artist, album, controller.signal),
+      searchCoverItunes(artist, album, controller.signal),
+      searchCoverProxy(releaseGroupId, controller.signal),
+    ]);
+
+    controller.abort();
+    coverArtCache.set(releaseGroupId, url);
+    return url;
+  } catch {
+    if (!signal?.aborted) {
+      coverArtCache.set(releaseGroupId, null);
     }
     return null;
   }
