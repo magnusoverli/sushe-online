@@ -107,8 +107,12 @@ import {
 import { REORDER_DEBOUNCE_MS } from '@/lib/constants';
 import { useRecommendationsForYear } from '@/hooks/useRecommendations';
 import { useListPlaycounts } from '@/hooks/useListPlaycounts';
-import { syncPlaylistToSpotify } from '@/services/spotify';
-import { syncPlaylistToTidal } from '@/services/tidal';
+import {
+  syncPlaylistToSpotify,
+  searchAlbum,
+  playAlbum,
+} from '@/services/spotify';
+import { syncPlaylistToTidal, openInTidal } from '@/services/tidal';
 import { updateListItems as addToListItems } from '@/services/lists';
 import type {
   Album,
@@ -271,6 +275,14 @@ export function LibraryPage() {
     null
   );
   const [showPlaylistServiceChooser, setShowPlaylistServiceChooser] =
+    useState(false);
+
+  // ── Quick-play state (cover image tap) ──
+  const [quickPlayAlbum, setQuickPlayAlbum] = useState<{
+    artist: string;
+    album: string;
+  } | null>(null);
+  const [showQuickPlayServiceChooser, setShowQuickPlayServiceChooser] =
     useState(false);
 
   // ── Recommendation browsing state ──
@@ -771,6 +783,75 @@ export function LibraryPage() {
       setPlaylistSyncListId(null);
     },
     [playlistSyncListId, handleSendToService]
+  );
+
+  // ── Quick play (cover image tap) ──
+
+  const executeQuickPlay = useCallback(
+    async (artist: string, albumName: string, service: 'spotify' | 'tidal') => {
+      if (service === 'tidal') {
+        openInTidal(artist, albumName);
+        return;
+      }
+      // Spotify: search then play on active device (no device picker)
+      try {
+        const result = await searchAlbum(artist, albumName);
+        if (!result?.id) {
+          showToast('Album not found on Spotify', 'error');
+          return;
+        }
+        await playAlbum(result.id);
+        showToast('Playing on active device', 'success');
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to play album';
+        if (msg.includes('No active device') || msg.includes('NO_DEVICE')) {
+          showToast(
+            'No active Spotify device found. Open Spotify first.',
+            'error'
+          );
+        } else {
+          showToast(msg, 'error');
+        }
+      }
+    },
+    []
+  );
+
+  const handleQuickPlay = useCallback(
+    (album: Album) => {
+      const hasSpotify = user?.spotifyConnected;
+      const hasTidal = user?.tidalConnected;
+
+      if (!hasSpotify && !hasTidal) return;
+
+      if (hasSpotify && hasTidal) {
+        if (user?.musicService === 'spotify') {
+          executeQuickPlay(album.artist, album.album, 'spotify');
+        } else if (user?.musicService === 'tidal') {
+          executeQuickPlay(album.artist, album.album, 'tidal');
+        } else {
+          // No preference — ask
+          setQuickPlayAlbum({ artist: album.artist, album: album.album });
+          setShowQuickPlayServiceChooser(true);
+        }
+      } else if (hasSpotify) {
+        executeQuickPlay(album.artist, album.album, 'spotify');
+      } else {
+        executeQuickPlay(album.artist, album.album, 'tidal');
+      }
+    },
+    [user, executeQuickPlay]
+  );
+
+  const handleQuickPlayServiceChosen = useCallback(
+    (service: MusicServiceChoice) => {
+      setShowQuickPlayServiceChooser(false);
+      if (quickPlayAlbum) {
+        executeQuickPlay(quickPlayAlbum.artist, quickPlayAlbum.album, service);
+      }
+      setQuickPlayAlbum(null);
+    },
+    [quickPlayAlbum, executeQuickPlay]
   );
 
   // ── Album action handlers ──
@@ -1380,8 +1461,8 @@ export function LibraryPage() {
                             hasRecommendation={!!album.recommended_by}
                             isNowPlaying={albumIsNowPlaying}
                             onPlay={
-                              user?.spotifyConnected
-                                ? () => handleAlbumMenuClick(album)
+                              user?.spotifyConnected || user?.tidalConnected
+                                ? () => handleQuickPlay(album)
                                 : undefined
                             }
                             onSummaryClick={() =>
@@ -1765,6 +1846,16 @@ export function LibraryPage() {
           setPlaylistSyncListId(null);
         }}
         onSelect={handlePlaylistServiceChosen}
+      />
+
+      {/* Quick-play service chooser */}
+      <ServiceChooserSheet
+        open={showQuickPlayServiceChooser}
+        onClose={() => {
+          setShowQuickPlayServiceChooser(false);
+          setQuickPlayAlbum(null);
+        }}
+        onSelect={handleQuickPlayServiceChosen}
       />
 
       {/* Settings drawer */}
