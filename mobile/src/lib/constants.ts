@@ -11,11 +11,17 @@ export const REORDER_DEBOUNCE_MS = 500;
 /** Long-press duration for drag activation (from design spec) */
 export const DRAG_LONG_PRESS_MS = 480;
 
-/** Auto-scroll trigger zone size in px */
-export const DRAG_EDGE_ZONE_PX = 60;
+/** Auto-scroll trigger zone minimum size in px */
+export const DRAG_EDGE_ZONE_PX = 40;
+
+/** Auto-scroll trigger zone maximum size in px */
+export const DRAG_EDGE_ZONE_MAX_PX = 80;
+
+/** Auto-scroll trigger zone as ratio of container height (0–1) */
+export const DRAG_EDGE_ZONE_RATIO = 0.1;
 
 /** Max auto-scroll speed in px per frame */
-export const DRAG_SCROLL_SPEED_PX = 8;
+export const DRAG_SCROLL_SPEED_PX = 12;
 
 /** Cover image lazy-load root margin */
 export const COVER_OBSERVER_MARGIN = '200px';

@@ -8,7 +8,7 @@
  * - Non-active cards dim to 0.55 opacity
  * - Drop target highlights with bg/border
  * - Real-time list shuffling during drag
- * - Auto-scroll near edges (60px zone, 8px/frame max)
+ * - Auto-scroll near edges (proportional zone, 12px/frame max)
  * - Scroll lock (overflow hidden) during drag
  * - Haptic feedback (navigator.vibrate(50)) on activation
  * - Debounced reorder save on drop (500ms)
@@ -17,6 +17,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { useDragStore } from '@/stores/drag-store';
 import { calcScrollSpeed, startAutoScroll } from './auto-scroll';
+import { freezeViewport, unfreezeViewport } from '@/hooks/useViewport';
 import {
   DRAG_LONG_PRESS_MS,
   DRAG_SWAP_THRESHOLD,
@@ -122,6 +123,8 @@ export function useDragAndDrop({
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const dragOriginIndex = useRef<number | null>(null);
   const currentOrderRef = useRef<string[]>([]);
+  /** Snapshotted scroll container bounds, frozen at drag start. */
+  const containerBounds = useRef<{ top: number; bottom: number } | null>(null);
 
   // Refs to avoid stale closures in native document-level listeners.
   // Updated every render so the native handlers always read the latest values.
@@ -170,6 +173,7 @@ export function useDragAndDrop({
         scrollContainerRef.current.style.touchAction = '';
       }
       document.body.style.overflow = '';
+      unfreezeViewport();
     };
   }, [scrollContainerRef, cleanupNativeListeners]);
 
@@ -202,10 +206,24 @@ export function useDragAndDrop({
       dragOriginIndex.current = index;
       currentOrderRef.current = [...itemIdsRef.current];
 
+      // Freeze --vh so Android browser chrome changes (URL bar snapping)
+      // don't resize the layout mid-drag.
+      freezeViewport();
+
+      // Snapshot container bounds BEFORE locking overflow. On Android
+      // Chromium, setting overflow:hidden on body can cause the URL bar
+      // to snap back, resizing the viewport and shifting the container.
+      // Freezing the bounds at this point avoids displaced trigger zones.
+      const container = scrollContainerRef.current;
+      if (container) {
+        const cRect = container.getBoundingClientRect();
+        containerBounds.current = { top: cRect.top, bottom: cRect.bottom };
+      }
+
       // Lock touchAction on the container so the browser doesn't commit to a
       // new pan gesture mid-drag.
-      if (scrollContainerRef.current) {
-        scrollContainerRef.current.style.touchAction = 'none';
+      if (container) {
+        container.style.touchAction = 'none';
       }
       document.body.style.overflow = 'hidden';
 
@@ -222,8 +240,7 @@ export function useDragAndDrop({
         orderedIds: [...itemIdsRef.current],
       });
 
-      // Start auto-scroll
-      const container = scrollContainerRef.current;
+      // Start auto-scroll (reuse `container` from the snapshot block above)
       if (container) {
         stopAutoScroll.current = startAutoScroll(
           container,
@@ -284,14 +301,14 @@ export function useDragAndDrop({
         const gy = t.clientY - touchOffset.current.y;
         updateGhost(gx, gy);
 
-        // Calculate auto-scroll speed
-        const container = scrollContainerRef.current;
-        if (container) {
-          const containerRect = container.getBoundingClientRect();
+        // Calculate auto-scroll speed using snapshotted container bounds.
+        // Using frozen bounds (captured before overflow:hidden) prevents
+        // displaced trigger zones on Android when browser chrome resizes.
+        if (containerBounds.current) {
           currentSpeed.current = calcScrollSpeed(
             t.clientY,
-            containerRect.top,
-            containerRect.bottom
+            containerBounds.current.top,
+            containerBounds.current.bottom
           );
         }
 
@@ -347,6 +364,7 @@ export function useDragAndDrop({
           scrollContainerRef.current.style.touchAction = '';
         }
         document.body.style.overflow = '';
+        unfreezeViewport();
 
         // Notify parent of new order
         const finalOrder = state.orderedIds;
@@ -361,6 +379,7 @@ export function useDragAndDrop({
 
         dragOriginIndex.current = null;
         touchStart.current = null;
+        containerBounds.current = null;
       };
 
       nativeMoveRef.current = handleMove;

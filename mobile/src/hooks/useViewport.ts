@@ -26,7 +26,27 @@ const isStandalone =
 let lockedHeight: number | null = null;
 let lastOrientation: number = screen.orientation?.angle ?? 0;
 
+/**
+ * When true, --vh updates are suppressed. Used during drag-and-drop to
+ * prevent Android browser chrome changes (e.g. URL bar snapping back when
+ * overflow:hidden is set) from resizing the layout mid-drag.
+ */
+let frozen = false;
+
+/** Freeze --vh so resize events don't update it. */
+export function freezeViewport(): void {
+  frozen = true;
+}
+
+/** Unfreeze --vh and immediately recalculate to the current value. */
+export function unfreezeViewport(): void {
+  frozen = false;
+  setVh();
+}
+
 function setVh() {
+  if (frozen) return;
+
   const rawHeight = window.visualViewport?.height ?? window.innerHeight;
 
   if (isStandalone) {
