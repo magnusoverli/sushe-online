@@ -1,6 +1,48 @@
 [
   {
     "date": "2026-02-20",
+    "category": "feature",
+    "description": "Opens Spotify app when no device found for playback",
+    "hash": "bf2628f61e7f4b73c7f1aae58095c08d02b1425d",
+    "commitMessage": "Open Spotify app via deep link when no active device found on quick-play"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Tap album covers to play directly instead of menu",
+    "hash": "9b785989f690b23217d06a35bd4e7f6d456ad28a",
+    "commitMessage": "Play album directly from cover image tap instead of opening action sheet\n\n- Spotify: searches album then plays on active device (no device picker)\n- Tidal: opens album in Tidal browser/app immediately\n- Both services connected with preference: uses preferred service\n- Both connected without preference: shows ServiceChooserSheet to pick\n- Play overlay now appears for Tidal-only users (was Spotify-only)\n- Shows helpful toast on error (no active device, album not found)\n- Full action sheet with device picker still available via three-dot menu"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS app display and download issues",
+    "hash": "12eaf407d9abab856726b1df8ea841d6c63e5bb8",
+    "commitMessage": "Fix iOS PWA viewport and download issues, tweak AlbumCard layout\n\n- Lock viewport height in standalone mode to prevent iOS share sheet resize bug\n- Only accept new viewport dimensions on orientation change in PWA mode\n- Use blob output for PDF downloads to work in iOS PWA\n- Enlarge album cover art to 88px, add release date and country metadata\n- Minor global.css adjustments for overflow handling"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Bottom tabs stay visible when settings drawer opens",
+    "hash": "05d6da8da09d076306ecd75ce3159a1c31efd893",
+    "commitMessage": "Keep TabBar visible and interactive when settings drawer is open\n\n- Drawer uses paddingBottom to clear TabBar instead of bottom offset\n- Raise TabBar z-index above drawer so it paints on top (no sub-pixel gaps)\n- Add onSettingsClose callback through AppShell and TabBar\n- Highlight Settings tab icon when drawer is open, revert on close\n- Clicking Library/Search while settings is open closes the drawer and navigates\n- Add optional bottom prop to Scrim for future use"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Improved settings menu layout and touch targets",
+    "hash": "e232ae7a49e83537de8c9e4a9e225d70231bee7b",
+    "commitMessage": "Polish settings drawer: card sections, touch targets, and tab chevrons\n\nSettings sections:\n- Convert flat divider layout to card-style containers (subtle bg + border + radius)\n- Reduce wrapper padding to compensate for card internal padding\n- Flatten AdminTab inner cardStyle to avoid cards-inside-cards\n\nTouch-friendliness (Plan B):\n- Bump field row, button, input, toggle, and select padding for ~36-40px tap targets\n- Enlarge Done button, Info icon, tab bar buttons, and inline save/cancel\n- Bump AdminTab action button and smallButton padding\n\nTypography:\n- Standardize all settings tab font sizes to established scale (11-17px)\n- Align all uppercase headers to 0.05em letter-spacing\n- Replace inline rgba colors with design token variables\n- Set select elements to 16px to prevent iOS zoom\n\nTab navigation:\n- Add chevron scroll indicators with fade-in/out based on scroll position\n- Increase tab gap and padding for easier touch targeting"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Recommendation lists now grouped by year in menu",
+    "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
+    "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-20",
     "category": "ui",
     "description": "Tap album covers to play directly without opening menu",
     "hash": "9b785989f690b23217d06a35bd4e7f6d456ad28a",
@@ -103,6 +145,76 @@
     "description": "Organized recommendations by year in navigation menu",
     "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
     "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Removed welcome text from login page",
+    "hash": "8a8e5e7287684dac335e2a63ee04b939f0da8f52",
+    "commitMessage": "Remove 'Welcome back' eyebrow text from login page"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed service connection status not showing properly",
+    "hash": "6eeb74ef373107b0637b8d8b89d1df3c7f5721d8",
+    "commitMessage": "Fix service connection flags always returning false in mobile API\n\nspotifyConnected, tidalConnected, and lastfmConnected were checking\nnon-existent user properties (spotifyAccessToken, tidalAccessToken,\nlastfmSessionKey). Changed to the correct mapped properties (spotifyAuth,\ntidalAuth, lastfmAuth?.session_key) matching what middleware/auth.js and\nservice-auth.js already use. This was preventing playcounts, Spotify\nplayback, Tidal actions, and integration status from working in the\nmobile SPA."
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Added release dates and larger album covers",
+    "hash": "732f22cce4075ff51bc5c66eda2db04de6ce72f8",
+    "commitMessage": "Add release date and country to album cards, enlarge cover art to 88px\n\n- Add releaseDate, country, yearMismatch props to AlbumCard\n- New metadata line between artist and tags showing year · country\n- Year renders in red when it mismatches the list year\n- Remove old year-mismatch tag push from LibraryPage\n- Bump cover art from 80x80 to 88x88px for more visual weight\n- Increase card vertical padding from 5px to 8px for breathing room\n- Tags stack vertically (column) instead of wrapping\n- Tighten tag pills: letter-spacing 0.1em→0.04em, padding 5px→3px"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "List titles now stick to top while scrolling",
+    "hash": "5d100045317a71184fd337242c56167a360d177b",
+    "commitMessage": "Make ListHeader sticky with compositor-friendly scroll-driven collapse\n\n- Move ListHeader from AppShell header slot into <main> scroll container\n  with position: sticky, so it pins at top while content scrolls beneath\n- Title shrinks 32→18px via transform: scale() with origin left top\n- Divider + buttons shift up via translateY to close freed space\n- clip-path: inset(0 0 Xpx 0) clips bottom only — no top title clipping\n- ListHeader owns safe-area-inset-top padding (covers notch when stuck)\n- Add skipSafeArea prop to AppShell to prevent double safe area padding\n- z-index isolation on album list container for Framer Motion stacking\n- Tune button positioning (ACTIONS_OFFSET) and uniform content lift"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "List titles shrink smoothly when scrolling down",
+    "hash": "884d7287d749cdd42ebe46d1b0d9db170337b99e",
+    "commitMessage": "Split ListHeader into fixed title + scrollable metadata, add scroll-driven title shrink\n\n- Split ListHeader into two exports: ListHeader (title + divider, pinned\n  in AppShell header slot) and ListHeaderMeta (metadata + sort control,\n  rendered as first child of scroll area so it scrolls away naturally)\n- Add scroll-driven title shrink: 32px→18px font, 6px→0px top padding,\n  4px→2px divider margin, all over 120px of scroll via direct DOM updates\n- Linear interpolation for 1:1 finger tracking, zero React re-renders\n- Updated tests for the split components"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed scrolling issues when drawers are open",
+    "hash": "0caf146e01e5c4f23547ed999fbf1431381aceb0",
+    "commitMessage": "Fix drawer scroll lock cleanup wiping React inline overflow styles\n\n- NavigationDrawer and SettingsDrawer were using shorthand overflow='hidden'\n  to lock background scroll, then clearing with overflow='' on close\n- The shorthand wiped React's inline overflowY/overflowX styles on the\n  app-shell-content element, breaking scroll after drawer close\n- Changed to use overflowY='hidden' / overflowY='auto' specifically to\n  preserve React's overflowX:'hidden' style"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Moved sort options into list header",
+    "hash": "904556501a38af400a4ccbf3a563c98e63a2529d",
+    "commitMessage": "Move sort control into ListHeader metadata row, unify text sizes\n\n- Add sortControl slot prop to ListHeader, render right-aligned on metadata row\n- Remove standalone sort bar div from LibraryPage\n- Match metadata and sort button font size (both 10px) and color (both --color-text-secondary)\n- Match vertical padding on metadata text to sort button (4px)\n- Bump Dropdown section label 6.5→10px and item labels 8.5→10px to match"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Simplified list headers for cleaner look",
+    "hash": "97eef1beee057ea765bc1c0451289338da0d9f64",
+    "commitMessage": "Compact ListHeader: remove eyebrow, move title to top row, reduce top padding\n\n- Remove eyebrow prop and groupName memo (year already shown in metadata row)\n- Move title onto same row as action buttons with ellipsis truncation\n- Reduce top padding from 24px to 6px\n- Update tests to remove eyebrow assertions"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed app layout when installed on phone",
+    "hash": "8587a92f7d85cbffa8af2138adae61be18deb5c1",
+    "commitMessage": "Fix PWA standalone mode: safe areas, scroll locking, and TabBar sizing\n\n- TabBar: height → minHeight so safe-area padding doesn't compress icons in standalone mode\n- TabBar: active dot bottom 6px → 0px, add touch-action: none to prevent drag\n- SettingsDrawer: add safe-area insets for top (header) and bottom (content)\n- NavigationDrawer: add safe-area insets for top (header) and bottom (content)\n- NavigationDrawer + SettingsDrawer: lock background scroll when open by disabling overflow on app-shell-content\n- AppShell: overscroll-behavior: none on frame, contain on scroll area to prevent rubber-band bounce"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "feature",
+    "description": "Added album reidentification option in menu",
+    "hash": "f856482197806f91fa7c00ed0240594969f763b6",
+    "commitMessage": "Add ReidentifySheet, fix ConfirmDialog centering, bump text sizes for touch readability\n\n- Add ReidentifySheet: MusicBrainz search/select/apply flow via BottomSheet\n  with smart Close/Apply button, stacked at z-450 above action sheet\n- Fix ConfirmDialog: replace transform centering with inset+margin (Framer Motion conflict)\n- Bump ConfirmDialog text sizes (title 17px, message 12px, warning 11px, buttons 12px)\n- Bump ActionItem label 14px, subtitle 11px\n- Bump BottomSheet title 17px, subtitle 12px, add titleIcon prop\n- Bump all AlbumActionSheet inline text (Play/Move/Copy 14px, picker 13px, etc.)\n- Add cover thumbnail in album action sheet header via titleIcon\n- Add --color-bg token (was undefined, caused transparent overlays)\n- BottomSheet accepts zIndex prop for stacking\n- Inline list picker uses grid-template-rows for synchronized expand/collapse\n- Edit Details opens without closing action sheet\n- Smart Close/Apply button on ReidentifySheet (no dead-end state)\n- Add reidentifySearch/reidentifyApply API functions"
   },
   {
     "date": "2026-02-19",
