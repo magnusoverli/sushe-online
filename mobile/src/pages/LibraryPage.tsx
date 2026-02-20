@@ -807,11 +807,8 @@ export function LibraryPage() {
           const msg =
             playErr instanceof Error ? playErr.message : 'Failed to play album';
           if (msg.includes('No active device') || msg.includes('NO_DEVICE')) {
-            // No active device — open album in Spotify app via deep link
-            window.open(
-              `https://open.spotify.com/album/${result.id}`,
-              '_blank'
-            );
+            // No active device — hand off to Spotify app via URI scheme
+            window.location.href = `spotify:album:${result.id}`;
           } else {
             showToast(msg, 'error');
           }
