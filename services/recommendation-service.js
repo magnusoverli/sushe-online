@@ -217,21 +217,38 @@ function createRecommendationService(deps = {}) {
 
   /**
    * Get cover image data for a recommendation notification.
+   * Retries a few times with a delay to allow the background cover fetch
+   * queue to finish (new albums don't have covers immediately).
    * @param {string} albumId
+   * @param {Object} options
+   * @param {number} options.maxRetries - Max retries (default 5)
+   * @param {number} options.delayMs - Delay between retries in ms (default 2000)
    * @returns {Promise<Object|null>} { buffer, format } or null
    */
-  async function getCoverForNotification(albumId) {
-    const coverResult = await pool.query(
-      'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
-      [albumId]
-    );
-    if (coverResult.rows.length > 0 && coverResult.rows[0].cover_image) {
-      const row = coverResult.rows[0];
-      return {
-        buffer: normalizeImageBuffer(row.cover_image),
-        format: row.cover_image_format || 'jpeg',
-      };
+  async function getCoverForNotification(albumId, options = {}) {
+    const maxRetries = options.maxRetries ?? 5;
+    const delayMs = options.delayMs ?? 2000;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const coverResult = await pool.query(
+        'SELECT cover_image, cover_image_format FROM albums WHERE album_id = $1',
+        [albumId]
+      );
+      if (coverResult.rows.length > 0 && coverResult.rows[0].cover_image) {
+        const row = coverResult.rows[0];
+        return {
+          buffer: normalizeImageBuffer(row.cover_image),
+          format: row.cover_image_format || 'jpeg',
+        };
+      }
+
+      // Don't delay after the last attempt
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
     }
+
+    logger.debug('Cover not available after retries', { albumId, maxRetries });
     return null;
   }
 

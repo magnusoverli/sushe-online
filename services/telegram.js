@@ -919,12 +919,16 @@ function createRecommendationsNotifier(
   }
 
   /**
-   * Escape special characters for Telegram Markdown
+   * Escape special characters for Telegram Markdown v1.
+   * Only _ * ` [ need escaping in v1 (not the extended set used by MarkdownV2).
    */
   function escapeMarkdown(text) {
     if (!text) return '';
-    // eslint-disable-next-line no-useless-escape
-    return text.replace(/([_*\[\]()~`>#+=|{}.!-])/g, '\\$1');
+    return text
+      .replace(/_/g, '\\_')
+      .replace(/\*/g, '\\*')
+      .replace(/`/g, '\\`')
+      .replace(/\[/g, '\\[');
   }
 
   return { sendNotification, getThreads };
