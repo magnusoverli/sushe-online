@@ -8,7 +8,6 @@ import { useViewport } from './hooks/useViewport';
 import { useAuth } from './hooks/useAuth';
 import { useRealtimeSync } from './hooks/useRealtimeSync';
 import { ToastContainer } from './components/ui/Toast';
-
 export function App() {
   // Set dynamic --vh for mobile browser chrome
   useViewport();

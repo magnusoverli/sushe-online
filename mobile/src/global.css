@@ -26,6 +26,7 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+  overflow: hidden;
 }
 
 body {
@@ -33,12 +34,13 @@ body {
   color: var(--color-text-primary);
   min-height: 100vh;
   min-height: calc(var(--vh, 1vh) * 100);
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 #root {
   min-height: 100vh;
   min-height: calc(var(--vh, 1vh) * 100);
+  overflow: hidden;
 }
 
 /* ── Scrollbar Hiding ── */

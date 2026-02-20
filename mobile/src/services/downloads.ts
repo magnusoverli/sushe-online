@@ -271,5 +271,6 @@ export async function downloadListAsPDF(listId: string): Promise<void> {
     }
   }
 
-  doc.save(`${listName}.pdf`);
+  const pdfBlob = doc.output('blob');
+  downloadBlob(pdfBlob, `${listName}.pdf`);
 }

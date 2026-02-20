@@ -216,8 +216,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
             minWidth: 0,
             display: 'flex',
             flexDirection: 'column',
-            marginLeft:
-              'calc(var(--space-card-gap-cover-info) - var(--space-card-gap-inner))',
           }}
         >
           <span
@@ -250,9 +248,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '10px',
                 fontWeight: 400,
-                letterSpacing: '0.02em',
+                letterSpacing: '0.015em',
                 color: 'var(--color-text-secondary)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -271,9 +269,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
                   alignItems: 'center',
                   gap: '3px',
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '9px',
+                  fontSize: '10px',
                   fontWeight: 400,
-                  letterSpacing: '0.02em',
+                  letterSpacing: '0.015em',
                   color: 'rgba(255,255,255,0.25)',
                   flexShrink: 0,
                   whiteSpace: 'nowrap',
@@ -292,9 +290,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '10px',
                 fontWeight: 400,
-                letterSpacing: '0.02em',
+                letterSpacing: '0.015em',
                 color: 'var(--color-text-secondary)',
                 marginTop: '2px',
                 overflow: 'hidden',
