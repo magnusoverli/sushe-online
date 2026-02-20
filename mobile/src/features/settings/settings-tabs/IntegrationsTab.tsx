@@ -41,7 +41,7 @@ export function IntegrationsTab() {
   if (!user) return null;
 
   return (
-    <div style={{ padding: '16px 18px' }}>
+    <div style={{ padding: '16px 12px' }}>
       {/* Spotify */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Spotify</div>
@@ -192,8 +192,8 @@ export function IntegrationsTab() {
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '7.5px',
-            color: 'rgba(255,255,255,0.35)',
+            fontSize: '11px',
+            color: 'var(--color-text-secondary)',
             marginBottom: '8px',
           }}
         >

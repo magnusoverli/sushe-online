@@ -35,15 +35,15 @@ export function VisualTab() {
   if (!user) return null;
 
   return (
-    <div style={{ padding: '16px 18px' }}>
+    <div style={{ padding: '16px 12px' }}>
       {/* Accent color */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Accent Color</div>
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '7.5px',
-            color: 'rgba(255,255,255,0.35)',
+            fontSize: '11px',
+            color: 'var(--color-text-secondary)',
             marginBottom: '8px',
           }}
         >
@@ -67,7 +67,7 @@ export function VisualTab() {
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
+              fontSize: '11px',
               color: 'var(--color-text-secondary)',
               textTransform: 'uppercase',
             }}
@@ -87,7 +87,7 @@ export function VisualTab() {
             onChange={(e) => timeMutation.mutate(e.target.value)}
             disabled={timeMutation.isPending}
             style={{
-              padding: '6px 10px',
+              padding: '10px 12px',
               borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.10)',
               background: 'rgba(255,255,255,0.05)',
@@ -113,7 +113,7 @@ export function VisualTab() {
             onChange={(e) => dateMutation.mutate(e.target.value)}
             disabled={dateMutation.isPending}
             style={{
-              padding: '6px 10px',
+              padding: '10px 12px',
               borderRadius: '8px',
               border: '1px solid rgba(255,255,255,0.10)',
               background: 'rgba(255,255,255,0.05)',

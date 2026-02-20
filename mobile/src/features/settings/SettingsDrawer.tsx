@@ -15,7 +15,7 @@ import {
   useRef,
   useEffect,
 } from 'react';
-import { Info } from 'lucide-react';
+import { Info, ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion';
 import { Scrim } from '@/components/ui/Scrim';
 import { AboutSheet } from '@/components/ui/AboutSheet';
@@ -37,6 +37,14 @@ const SWIPE_CLOSE_THRESHOLD = 60;
 
 const drawerEasing: [number, number, number, number] = [0.32, 0.72, 0, 1];
 
+/**
+ * The drawer covers the full screen but its content stops above the TabBar.
+ * The TabBar itself is raised to z-index 250 so it paints on top of the drawer,
+ * avoiding sub-pixel gaps from CSS calc mismatches.
+ */
+const TABBAR_CLEARANCE =
+  'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))';
+
 const drawerStyle: CSSProperties = {
   position: 'fixed',
   top: 0,
@@ -48,6 +56,7 @@ const drawerStyle: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
+  paddingBottom: TABBAR_CLEARANCE,
 };
 
 const TABS: { key: SettingsCategory; label: string; adminOnly?: boolean }[] = [
@@ -65,11 +74,39 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [activeTab, setActiveTab] = useState<SettingsCategory>('account');
   const [showAbout, setShowAbout] = useState(false);
   const tabsRef = useRef<HTMLDivElement>(null);
+  const [showFadeLeft, setShowFadeLeft] = useState(false);
+  const [showFadeRight, setShowFadeRight] = useState(false);
 
-  // Reset to account tab when opening
+  // Update tab bar fade indicators based on scroll position
+  const updateFades = useCallback(() => {
+    const el = tabsRef.current;
+    if (!el) return;
+    const threshold = 4;
+    setShowFadeLeft(el.scrollLeft > threshold);
+    setShowFadeRight(
+      el.scrollLeft + el.clientWidth < el.scrollWidth - threshold
+    );
+  }, []);
+
+  const scrollTabs = useCallback((direction: 'left' | 'right') => {
+    const el = tabsRef.current;
+    if (!el) return;
+    // Scroll by roughly one tab width
+    const amount = el.clientWidth * 0.6;
+    el.scrollBy({
+      left: direction === 'right' ? amount : -amount,
+      behavior: 'smooth',
+    });
+  }, []);
+
+  // Reset to account tab when opening and check initial fade state
   useEffect(() => {
-    if (open) setActiveTab('account');
-  }, [open]);
+    if (open) {
+      setActiveTab('account');
+      // Defer so the DOM has rendered the tabs
+      requestAnimationFrame(updateFades);
+    }
+  }, [open, updateFades]);
 
   // Lock background scroll when drawer is open (including iOS rubber-band bounce)
   useEffect(() => {
@@ -163,7 +200,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 <div
                   style={{
                     fontFamily: 'var(--font-display)',
-                    fontSize: '15px',
+                    fontSize: '17px',
                     color: 'var(--color-text-primary)',
                     letterSpacing: '-0.02em',
                   }}
@@ -181,14 +218,14 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                       border: 'none',
                       color: 'rgba(255,255,255,0.30)',
                       cursor: 'pointer',
-                      padding: '4px',
+                      padding: '10px',
                       display: 'flex',
                       alignItems: 'center',
                     }}
                     aria-label="About"
                     data-testid="settings-about"
                   >
-                    <Info size={14} />
+                    <Info size={18} />
                   </button>
                   <button
                     type="button"
@@ -199,8 +236,8 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                       color: 'rgba(255,255,255,0.45)',
                       cursor: 'pointer',
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '9px',
-                      padding: '4px 8px',
+                      fontSize: '12px',
+                      padding: '10px 12px',
                     }}
                     data-testid="settings-close"
                   >
@@ -209,48 +246,108 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 </div>
               </div>
 
-              {/* Tab bar */}
-              <div
-                ref={tabsRef}
-                className="hide-scrollbar"
-                style={{
-                  display: 'flex',
-                  gap: '2px',
-                  overflowX: 'auto',
-                  paddingBottom: '0',
-                }}
-              >
-                {visibleTabs.map((tab) => (
+              {/* Tab bar with chevron scroll indicators */}
+              <div style={{ position: 'relative' }}>
+                <div
+                  ref={tabsRef}
+                  className="hide-scrollbar"
+                  onScroll={updateFades}
+                  style={{
+                    display: 'flex',
+                    gap: '6px',
+                    overflowX: 'auto',
+                    paddingBottom: '0',
+                    paddingLeft: showFadeLeft ? '24px' : '0',
+                    paddingRight: showFadeRight ? '24px' : '0',
+                    transition:
+                      'padding-left 200ms ease, padding-right 200ms ease',
+                  }}
+                >
+                  {visibleTabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => setActiveTab(tab.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        borderBottom:
+                          activeTab === tab.key
+                            ? '2px solid var(--color-gold)'
+                            : '2px solid transparent',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: '11px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em',
+                        color:
+                          activeTab === tab.key
+                            ? 'var(--color-gold)'
+                            : 'rgba(255,255,255,0.35)',
+                        padding: '12px 12px',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                        transition: 'color 150ms ease',
+                      }}
+                      data-testid={`settings-tab-${tab.key}`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Left chevron */}
+                {showFadeLeft && (
                   <button
-                    key={tab.key}
                     type="button"
-                    onClick={() => setActiveTab(tab.key)}
+                    onClick={() => scrollTabs('left')}
                     style={{
-                      background: 'none',
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      bottom: 0,
+                      width: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--color-bg)',
                       border: 'none',
-                      borderBottom:
-                        activeTab === tab.key
-                          ? '2px solid var(--color-gold)'
-                          : '2px solid transparent',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.1em',
-                      color:
-                        activeTab === tab.key
-                          ? 'var(--color-gold)'
-                          : 'rgba(255,255,255,0.35)',
-                      padding: '8px 12px',
+                      borderRight: 'none',
                       cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                      transition: 'color 150ms ease',
+                      color: 'var(--color-text-secondary)',
+                      padding: 0,
                     }}
-                    data-testid={`settings-tab-${tab.key}`}
+                    aria-label="Scroll tabs left"
                   >
-                    {tab.label}
+                    <ChevronLeft size={14} />
                   </button>
-                ))}
+                )}
+                {/* Right chevron */}
+                {showFadeRight && (
+                  <button
+                    type="button"
+                    onClick={() => scrollTabs('right')}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: '24px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'var(--color-bg)',
+                      border: 'none',
+                      borderLeft: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--color-text-secondary)',
+                      padding: 0,
+                    }}
+                    aria-label="Scroll tabs right"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -261,7 +358,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 flex: 1,
                 overflowY: 'auto',
                 minHeight: 0,
-                paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+                paddingBottom: '16px',
               }}
             >
               {renderTab()}

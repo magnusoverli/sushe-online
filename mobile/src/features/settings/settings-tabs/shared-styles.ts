@@ -1,22 +1,34 @@
 /**
  * Shared styles for settings tabs.
- * Consistent with the design system: DM Mono for body text, DM Serif Display for headers.
+ *
+ * Aligned with the gold standard text-size / colour tiers
+ * established in the navigation drawer and AlbumActionSheet:
+ *
+ *   Title          17px  --font-display   --color-text-primary
+ *   Action label   13px  --font-mono      rgba(255,255,255,0.75)
+ *   Button         12px  --font-mono      --color-text-primary
+ *   Info / banner  12px  --font-mono      var(--color-text-secondary)
+ *   Uppercase hdr  11px  --font-mono      var(--color-text-label)
+ *   Secondary      11px  --font-mono      var(--color-text-secondary)
  */
 
 import type { CSSProperties } from 'react';
 
 export const sectionStyle: CSSProperties = {
-  marginBottom: '20px',
-  paddingBottom: '16px',
-  borderBottom: '1px solid rgba(255,255,255,0.05)',
+  background: 'rgba(255,255,255,0.02)',
+  border: '1px solid rgba(255,255,255,0.06)',
+  borderRadius: '12px',
+  padding: '16px 14px',
+  marginBottom: '14px',
 };
 
 export const sectionTitleStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
+  fontSize: '11px',
+  fontWeight: 400,
   textTransform: 'uppercase',
-  letterSpacing: '0.2em',
-  color: 'rgba(255,255,255,0.25)',
+  letterSpacing: '0.05em',
+  color: 'var(--color-text-label)',
   marginBottom: '10px',
 };
 
@@ -24,23 +36,23 @@ export const fieldRowStyle: CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  padding: '6px 0',
+  padding: '10px 0',
 };
 
 export const fieldLabelStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
-  color: 'rgba(255,255,255,0.50)',
+  fontSize: '13px',
+  color: 'rgba(255,255,255,0.75)',
 };
 
 export const fieldValueStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
-  color: 'rgba(255,255,255,0.75)',
+  fontSize: '13px',
+  color: 'var(--color-text-primary)',
 };
 
 export const inputStyle: CSSProperties = {
-  padding: '8px 12px',
+  padding: '10px 12px',
   borderRadius: '8px',
   border: '1px solid rgba(255,255,255,0.10)',
   background: 'rgba(255,255,255,0.05)',
@@ -52,8 +64,8 @@ export const inputStyle: CSSProperties = {
 
 export const buttonStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
-  padding: '8px 14px',
+  fontSize: '12px',
+  padding: '12px 16px',
   borderRadius: '8px',
   border: 'none',
   background: 'rgba(255,255,255,0.08)',
@@ -64,8 +76,8 @@ export const buttonStyle: CSSProperties = {
 
 export const buttonDestructiveStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
-  padding: '8px 14px',
+  fontSize: '12px',
+  padding: '12px 16px',
   borderRadius: '8px',
   border: 'none',
   background: 'rgba(224,92,92,0.15)',
@@ -101,8 +113,9 @@ export const statValueStyle: CSSProperties = {
 
 export const statLabelStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
+  fontSize: '11px',
+  fontWeight: 400,
   textTransform: 'uppercase',
-  letterSpacing: '0.15em',
-  color: 'rgba(255,255,255,0.35)',
+  letterSpacing: '0.05em',
+  color: 'var(--color-text-label)',
 };

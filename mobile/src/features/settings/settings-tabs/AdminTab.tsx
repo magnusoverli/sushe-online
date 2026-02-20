@@ -59,15 +59,15 @@ import {
 
 const monoSmall = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
-  color: 'rgba(255,255,255,0.35)',
+  fontSize: '12px',
+  color: 'var(--color-text-secondary)',
 } as const;
 
 const selectStyle = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
-  padding: '4px 6px',
-  borderRadius: '6px',
+  fontSize: '16px', // Prevents iOS zoom
+  padding: '6px 10px',
+  borderRadius: '8px',
   border: '1px solid rgba(255,255,255,0.10)',
   background: 'rgba(255,255,255,0.05)',
   color: 'var(--color-text-primary)',
@@ -78,13 +78,12 @@ const cardStyle = {
   background: 'rgba(255,255,255,0.03)',
   borderRadius: '8px',
   padding: '10px',
-  border: '1px solid rgba(255,255,255,0.06)',
 };
 
 const smallButtonBase = {
   ...buttonStyle,
-  padding: '4px 10px',
-  fontSize: '7.5px',
+  padding: '8px 12px',
+  fontSize: '12px',
 };
 
 const SENSITIVITY_OPTIONS = [
@@ -288,7 +287,7 @@ function DuplicatePairCard({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8.5px',
+                fontSize: '13px',
                 color: 'rgba(255,255,255,0.75)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -300,8 +299,8 @@ function DuplicatePairCard({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '7.5px',
-                color: 'rgba(255,255,255,0.40)',
+                fontSize: '12px',
+                color: 'var(--color-text-secondary)',
                 marginTop: '2px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -314,7 +313,7 @@ function DuplicatePairCard({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '7px',
+              fontSize: '11px',
               padding: '2px 6px',
               borderRadius: '4px',
               background:
@@ -355,7 +354,7 @@ function DuplicatePairCard({
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '7px',
+              fontSize: '11px',
               color: 'rgba(255,255,255,0.30)',
               marginBottom: '6px',
             }}
@@ -434,10 +433,10 @@ function AlbumDetail({
       <div
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: '7px',
-          color: 'rgba(255,255,255,0.25)',
+          fontSize: '11px',
+          color: 'var(--color-text-label)',
           textTransform: 'uppercase',
-          letterSpacing: '0.1em',
+          letterSpacing: '0.05em',
           marginBottom: '2px',
         }}
       >
@@ -685,7 +684,7 @@ function AuditAlbumCard({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8.5px',
+                fontSize: '13px',
                 color: 'rgba(255,255,255,0.75)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -697,8 +696,8 @@ function AuditAlbumCard({
             <div
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '7px',
-                color: 'rgba(255,255,255,0.35)',
+                fontSize: '11px',
+                color: 'var(--color-text-secondary)',
                 marginTop: '2px',
               }}
             >
@@ -711,7 +710,7 @@ function AuditAlbumCard({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '6.5px',
+              fontSize: '11px',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
               padding: '2px 6px',
@@ -742,10 +741,10 @@ function AuditAlbumCard({
               <div
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '7px',
-                  color: 'rgba(255,255,255,0.25)',
+                  fontSize: '11px',
+                  color: 'var(--color-text-label)',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.1em',
+                  letterSpacing: '0.05em',
                   marginBottom: '2px',
                 }}
               >
@@ -756,7 +755,7 @@ function AuditAlbumCard({
                   key={`${usage.listId}-${usage.userId}`}
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '7.5px',
+                    fontSize: '12px',
                     color: 'rgba(255,255,255,0.50)',
                   }}
                 >
@@ -771,10 +770,10 @@ function AuditAlbumCard({
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '7px',
-              color: 'rgba(255,255,255,0.25)',
+              fontSize: '11px',
+              color: 'var(--color-text-label)',
               textTransform: 'uppercase',
-              letterSpacing: '0.1em',
+              letterSpacing: '0.05em',
               marginBottom: '4px',
             }}
           >
@@ -809,7 +808,7 @@ function AuditAlbumCard({
                     <div
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '8px',
+                        fontSize: '12px',
                         color: 'rgba(255,255,255,0.70)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -822,7 +821,7 @@ function AuditAlbumCard({
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '7px',
+                      fontSize: '11px',
                       padding: '2px 6px',
                       borderRadius: '4px',
                       background:
@@ -933,7 +932,7 @@ function RecommendationLocks() {
                 <span
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '8.5px',
+                    fontSize: '13px',
                     color: 'rgba(255,255,255,0.75)',
                   }}
                 >
@@ -1140,7 +1139,7 @@ function AggregateListPanel({ year }: { year: number }) {
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '9px',
+              fontSize: '13px',
               fontWeight: 500,
               color: 'rgba(255,255,255,0.80)',
             }}
@@ -1152,7 +1151,7 @@ function AggregateListPanel({ year }: { year: number }) {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '6.5px',
+                  fontSize: '11px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   padding: '2px 6px',
@@ -1168,7 +1167,7 @@ function AggregateListPanel({ year }: { year: number }) {
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '6.5px',
+                  fontSize: '11px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.05em',
                   padding: '2px 6px',
@@ -1409,7 +1408,7 @@ export function AdminTab() {
   };
 
   return (
-    <div style={{ padding: '16px 18px' }}>
+    <div style={{ padding: '16px 12px' }}>
       {/* Pending events */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Pending Events</div>
@@ -1417,8 +1416,8 @@ export function AdminTab() {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
-              color: 'rgba(255,255,255,0.35)',
+              fontSize: '12px',
+              color: 'var(--color-text-secondary)',
             }}
           >
             Loading events...
@@ -1447,7 +1446,7 @@ export function AdminTab() {
                     <div
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '8.5px',
+                        fontSize: '13px',
                         color: 'rgba(255,255,255,0.75)',
                       }}
                     >
@@ -1456,8 +1455,8 @@ export function AdminTab() {
                     <div
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '7px',
-                        color: 'rgba(255,255,255,0.35)',
+                        fontSize: '11px',
+                        color: 'var(--color-text-secondary)',
                         marginTop: '2px',
                       }}
                     >
@@ -1467,7 +1466,7 @@ export function AdminTab() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '6.5px',
+                      fontSize: '11px',
                       textTransform: 'uppercase',
                       letterSpacing: '0.05em',
                       padding: '2px 6px',
@@ -1498,7 +1497,7 @@ export function AdminTab() {
                     <div
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '7.5px',
+                        fontSize: '12px',
                         color: 'rgba(255,255,255,0.50)',
                         marginBottom: '6px',
                       }}
@@ -1516,8 +1515,8 @@ export function AdminTab() {
                     type="button"
                     style={{
                       ...buttonStyle,
-                      padding: '4px 10px',
-                      fontSize: '7.5px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
                       background: 'rgba(76,175,80,0.15)',
                       color: '#4CAF50',
                     }}
@@ -1530,8 +1529,8 @@ export function AdminTab() {
                     type="button"
                     style={{
                       ...buttonStyle,
-                      padding: '4px 10px',
-                      fontSize: '7.5px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
                       background: 'rgba(224,92,92,0.15)',
                       color: 'var(--color-destructive)',
                     }}
@@ -1548,8 +1547,8 @@ export function AdminTab() {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
-              color: 'rgba(255,255,255,0.35)',
+              fontSize: '12px',
+              color: 'var(--color-text-secondary)',
               padding: '8px 0',
             }}
           >
@@ -1565,8 +1564,8 @@ export function AdminTab() {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
-              color: 'rgba(255,255,255,0.35)',
+              fontSize: '12px',
+              color: 'var(--color-text-secondary)',
             }}
           >
             Loading users...
@@ -1599,7 +1598,7 @@ export function AdminTab() {
                     <span
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '8.5px',
+                        fontSize: '13px',
                         color: 'rgba(255,255,255,0.75)',
                       }}
                     >
@@ -1608,7 +1607,7 @@ export function AdminTab() {
                     <span
                       style={{
                         fontFamily: 'var(--font-mono)',
-                        fontSize: '7px',
+                        fontSize: '11px',
                         color: 'rgba(255,255,255,0.30)',
                         marginLeft: '6px',
                       }}
@@ -1619,7 +1618,7 @@ export function AdminTab() {
                   <span
                     style={{
                       fontFamily: 'var(--font-mono)',
-                      fontSize: '7px',
+                      fontSize: '11px',
                       color:
                         u.role === 'admin'
                           ? 'var(--color-gold)'
@@ -1667,8 +1666,8 @@ export function AdminTab() {
                           type="button"
                           style={{
                             ...buttonStyle,
-                            padding: '4px 10px',
-                            fontSize: '7.5px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1682,8 +1681,8 @@ export function AdminTab() {
                           type="button"
                           style={{
                             ...buttonStyle,
-                            padding: '4px 10px',
-                            fontSize: '7.5px',
+                            padding: '8px 12px',
+                            fontSize: '12px',
                           }}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1697,8 +1696,8 @@ export function AdminTab() {
                         type="button"
                         style={{
                           ...buttonDestructiveStyle,
-                          padding: '4px 10px',
-                          fontSize: '7.5px',
+                          padding: '8px 12px',
+                          fontSize: '12px',
                         }}
                         onClick={(e) => {
                           e.stopPropagation();

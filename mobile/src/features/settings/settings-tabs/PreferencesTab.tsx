@@ -54,22 +54,22 @@ const LASTFM_RANGES: { key: string; label: string }[] = [
 
 const loadingStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
-  color: 'rgba(255,255,255,0.35)',
+  fontSize: '12px',
+  color: 'var(--color-text-secondary)',
   padding: '12px 0',
 };
 
 const rankNumberStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
-  color: 'rgba(255,255,255,0.25)',
-  width: '16px',
+  fontSize: '11px',
+  color: 'var(--color-text-label)',
+  width: '18px',
   flexShrink: 0,
 };
 
 const itemNameStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8.5px',
+  fontSize: '13px',
   color: 'rgba(255,255,255,0.75)',
   flex: 1,
   minWidth: 0,
@@ -86,8 +86,8 @@ const itemRowStyle: CSSProperties = {
 };
 
 const dotStyle = (color: string): CSSProperties => ({
-  width: '5px',
-  height: '5px',
+  width: '6px',
+  height: '6px',
   borderRadius: '50%',
   background: color,
   flexShrink: 0,
@@ -95,19 +95,19 @@ const dotStyle = (color: string): CSSProperties => ({
 
 const toggleBarStyle: CSSProperties = {
   display: 'flex',
-  gap: '2px',
+  gap: '6px',
   marginBottom: '10px',
   flexWrap: 'wrap',
 };
 
 const toggleButtonStyle = (active: boolean): CSSProperties => ({
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
-  padding: '4px 8px',
+  fontSize: '11px',
+  padding: '10px 12px',
   borderRadius: '6px',
   border: 'none',
   background: active ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.04)',
-  color: active ? 'var(--color-text-primary)' : 'rgba(255,255,255,0.35)',
+  color: active ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
   cursor: 'pointer',
   transition: 'background 150ms ease',
 });
@@ -123,8 +123,8 @@ const progressBarBg: CSSProperties = {
 
 const subTextStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
-  color: 'rgba(255,255,255,0.30)',
+  fontSize: '11px',
+  color: 'var(--color-text-secondary)',
 };
 
 const syncButtonStyle: CSSProperties = {
@@ -136,8 +136,8 @@ const syncButtonStyle: CSSProperties = {
 
 const updatedAtStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
-  color: 'rgba(255,255,255,0.20)',
+  fontSize: '11px',
+  color: 'var(--color-text-secondary)',
   textAlign: 'center',
   marginTop: '12px',
 };
@@ -309,7 +309,7 @@ function SpotifySection({
               <span style={itemNameStyle}>
                 {a.name}
                 {a.genres && a.genres.length > 0 && (
-                  <span style={{ color: 'rgba(255,255,255,0.25)' }}>
+                  <span style={{ color: 'var(--color-text-label)' }}>
                     {' '}
                     ({a.genres.slice(0, 2).join(', ')})
                   </span>
@@ -436,7 +436,7 @@ export function PreferencesTab() {
 
   if (isLoading) {
     return (
-      <div style={{ padding: '16px 18px' }}>
+      <div style={{ padding: '16px 12px' }}>
         <div style={loadingStyle} data-testid="preferences-loading">
           Loading preferences...
         </div>
@@ -446,12 +446,12 @@ export function PreferencesTab() {
 
   if (!data) {
     return (
-      <div style={{ padding: '16px 18px' }} data-testid="preferences-empty">
+      <div style={{ padding: '16px 12px' }} data-testid="preferences-empty">
         <div
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '8.5px',
-            color: 'rgba(255,255,255,0.45)',
+            fontSize: '12px',
+            color: 'var(--color-text-secondary)',
             textAlign: 'center',
             padding: '24px 0 12px',
           }}
@@ -474,7 +474,7 @@ export function PreferencesTab() {
   const sources = countSources(data);
 
   return (
-    <div style={{ padding: '16px 18px' }} data-testid="preferences-content">
+    <div style={{ padding: '16px 12px' }} data-testid="preferences-content">
       {/* Quick Stats */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Quick Stats</div>

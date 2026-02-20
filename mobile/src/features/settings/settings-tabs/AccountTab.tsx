@@ -121,7 +121,7 @@ export function AccountTab({ onClose }: AccountTabProps) {
   if (!user) return null;
 
   return (
-    <div style={{ padding: '16px 18px' }}>
+    <div style={{ padding: '16px 12px' }}>
       {/* Profile info */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Profile</div>
@@ -142,8 +142,8 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 type="button"
                 style={{
                   ...buttonStyle,
-                  padding: '4px 8px',
-                  fontSize: '7.5px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
                 }}
                 onClick={saveEdit}
                 disabled={emailMutation.isPending}
@@ -154,8 +154,8 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 type="button"
                 style={{
                   ...buttonStyle,
-                  padding: '4px 8px',
-                  fontSize: '7.5px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
                   background: 'transparent',
                   border: '1px solid rgba(255,255,255,0.10)',
                 }}
@@ -173,7 +173,7 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 cursor: 'pointer',
                 background: 'none',
                 border: 'none',
-                padding: 0,
+                padding: '8px 0',
                 textAlign: 'right',
               }}
             >
@@ -198,8 +198,8 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 type="button"
                 style={{
                   ...buttonStyle,
-                  padding: '4px 8px',
-                  fontSize: '7.5px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
                 }}
                 onClick={saveEdit}
                 disabled={usernameMutation.isPending}
@@ -210,8 +210,8 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 type="button"
                 style={{
                   ...buttonStyle,
-                  padding: '4px 8px',
-                  fontSize: '7.5px',
+                  padding: '10px 12px',
+                  fontSize: '12px',
                   background: 'transparent',
                   border: '1px solid rgba(255,255,255,0.10)',
                 }}
@@ -229,7 +229,7 @@ export function AccountTab({ onClose }: AccountTabProps) {
                 cursor: 'pointer',
                 background: 'none',
                 border: 'none',
-                padding: 0,
+                padding: '8px 0',
                 textAlign: 'right',
               }}
             >

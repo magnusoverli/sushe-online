@@ -25,7 +25,7 @@ export function StatsTab() {
   );
 
   return (
-    <div style={{ padding: '16px 18px' }}>
+    <div style={{ padding: '16px 12px' }}>
       {/* Personal stats */}
       <div style={sectionStyle}>
         <div style={sectionTitleStyle}>Personal</div>
@@ -54,8 +54,8 @@ export function StatsTab() {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
-              color: 'rgba(255,255,255,0.35)',
+              fontSize: '12px',
+              color: 'var(--color-text-secondary)',
               padding: '12px 0',
             }}
           >
@@ -88,8 +88,8 @@ export function StatsTab() {
           <div
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '8px',
-              color: 'rgba(255,255,255,0.35)',
+              fontSize: '12px',
+              color: 'var(--color-text-secondary)',
               padding: '12px 0',
             }}
           >
