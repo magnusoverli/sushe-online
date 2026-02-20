@@ -38,6 +38,8 @@ interface AddAlbumSheetProps {
   onClose: () => void;
   listId: string;
   listName: string;
+  /** Called after an album is successfully added (sheet will close itself) */
+  onAlbumAdded?: () => void;
 }
 
 // ── Styles ──
@@ -375,6 +377,7 @@ export function AddAlbumSheet({
   onClose,
   listId,
   listName,
+  onAlbumAdded,
 }: AddAlbumSheetProps) {
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -457,7 +460,6 @@ export function AddAlbumSheet({
           showToast(`"${album.title}" is already in this list`, 'error');
         } else {
           showToast(`Added "${album.title}"`, 'success');
-          setAddedIds((prev) => new Set(prev).add(album.id));
           // Invalidate list data so it refreshes
           queryClient.invalidateQueries({
             queryKey: ['lists', listId, 'albums'],
@@ -465,6 +467,9 @@ export function AddAlbumSheet({
           queryClient.invalidateQueries({
             queryKey: ['lists', 'metadata'],
           });
+          // Close sheet and notify parent
+          onClose();
+          onAlbumAdded?.();
         }
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Failed to add album';
@@ -473,7 +478,7 @@ export function AddAlbumSheet({
         setAddingId(null);
       }
     },
-    [listId, addingId, addedIds, queryClient, showToast]
+    [listId, addingId, addedIds, queryClient, onClose, onAlbumAdded]
   );
 
   const isSearching = artistSearch.isFetching || albumSearch.isFetching;

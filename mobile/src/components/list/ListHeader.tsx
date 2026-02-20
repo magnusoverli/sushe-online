@@ -64,12 +64,18 @@ interface ListHeaderProps {
   onMenuClick?: () => void;
   /** List options (ellipsis) click handler */
   onOptionsClick?: () => void;
+  /** Callback to open the Add Album sheet (hidden when list is locked) */
+  onAddAlbum?: () => void;
+  /** Whether this list is locked */
+  isLocked?: boolean;
 }
 
 export function ListHeader({
   title,
   onMenuClick,
   onOptionsClick,
+  onAddAlbum,
+  isLocked = false,
 }: ListHeaderProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -181,6 +187,26 @@ export function ListHeader({
               willChange: 'transform',
             }}
           >
+            {onAddAlbum && !isLocked && (
+              <button
+                type="button"
+                onClick={onAddAlbum}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '6px',
+                  cursor: 'pointer',
+                  color: 'var(--color-text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                aria-label="Add album"
+                data-testid="list-header-add-album"
+              >
+                <Plus size={18} />
+              </button>
+            )}
             {onOptionsClick && (
               <button
                 type="button"
@@ -262,8 +288,6 @@ interface ListHeaderMetaProps {
   isLocked?: boolean;
   /** Optional sort control rendered right-aligned */
   sortControl?: ReactNode;
-  /** Callback to open the Add Album sheet (hidden when list is locked) */
-  onAddAlbum?: () => void;
 }
 
 export function ListHeaderMeta({
@@ -271,7 +295,6 @@ export function ListHeaderMeta({
   year,
   isLocked = false,
   sortControl,
-  onAddAlbum,
 }: ListHeaderMetaProps) {
   const metaParts: string[] = [];
   if (albumCount != null) {
@@ -326,31 +349,7 @@ export function ListHeaderMeta({
           </span>
         )}
       </span>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
-        {onAddAlbum && !isLocked && (
-          <button
-            type="button"
-            onClick={onAddAlbum}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              padding: '4px',
-              cursor: 'pointer',
-              color: 'var(--color-text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            aria-label="Add album"
-            data-testid="list-header-add-album"
-          >
-            <Plus size={16} />
-          </button>
-        )}
-        {sortControl && (
-          <div style={{ position: 'relative' }}>{sortControl}</div>
-        )}
-      </div>
+      {sortControl && <div style={{ position: 'relative' }}>{sortControl}</div>}
     </div>
   );
 }

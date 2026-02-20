@@ -1327,6 +1327,8 @@ export function LibraryPage() {
             <ListHeader
               title={activeList?.name ?? 'Library'}
               onMenuClick={handleMenuClick}
+              onAddAlbum={() => setShowAddAlbum(true)}
+              isLocked={isListLocked}
               onOptionsClick={
                 activeListId
                   ? () => setListActionTarget(activeListId)
@@ -1339,7 +1341,6 @@ export function LibraryPage() {
               albumCount={activeList?.count}
               year={activeList?.year}
               isLocked={isListLocked}
-              onAddAlbum={() => setShowAddAlbum(true)}
               sortControl={
                 <>
                   <button
@@ -1664,6 +1665,13 @@ export function LibraryPage() {
         onClose={() => setShowAddAlbum(false)}
         listId={activeListId ?? ''}
         listName={activeList?.name ?? ''}
+        onAlbumAdded={() => {
+          // Scroll to bottom after the list re-renders with the new album
+          setTimeout(() => {
+            const el = scrollContainerRef.current;
+            if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+          }, 400);
+        }}
       />
 
       {/* ── Album Action Sheets ── */}
