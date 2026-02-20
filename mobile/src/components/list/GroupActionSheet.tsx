@@ -121,7 +121,7 @@ export function GroupActionSheet({
                 borderRadius: '8px',
                 padding: '10px 12px',
                 fontFamily: 'var(--font-mono)',
-                fontSize: '12px',
+                fontSize: '16px',
                 color: 'var(--color-text-primary)',
                 outline: 'none',
               }}

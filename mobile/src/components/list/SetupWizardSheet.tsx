@@ -74,7 +74,7 @@ const selectStyle: React.CSSProperties = {
   borderRadius: '6px',
   padding: '6px 8px',
   fontFamily: 'var(--font-mono)',
-  fontSize: '12px',
+  fontSize: '16px',
   color: 'var(--color-text-primary)',
   outline: 'none',
 };
@@ -230,7 +230,52 @@ export function SetupWizardSheet({
   const hasYearsNeedingMain = yearsNeedingMain.length > 0;
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="Complete List Setup">
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      title="Complete List Setup"
+      footer={
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+          }}
+        >
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave || isSaving}
+            style={{
+              ...btnBaseStyle,
+              background: canSave
+                ? 'var(--color-gold)'
+                : 'rgba(255,255,255,0.08)',
+              color: canSave ? '#1A1A1F' : 'rgba(255,255,255,0.3)',
+              cursor: !canSave || isSaving ? 'not-allowed' : 'pointer',
+              opacity: isSaving ? 0.6 : 1,
+            }}
+            data-testid="setup-wizard-save"
+          >
+            {isSaving ? 'Saving...' : 'Save Changes'}
+          </button>
+          <button
+            type="button"
+            onClick={handleSkip}
+            disabled={isSaving}
+            style={{
+              ...btnBaseStyle,
+              background: 'transparent',
+              color: 'var(--color-text-secondary)',
+              border: '1px solid rgba(255,255,255,0.08)',
+            }}
+            data-testid="setup-wizard-skip"
+          >
+            Skip for Now
+          </button>
+        </div>
+      }
+    >
       <div
         style={{
           padding: '4px 10px 8px',
@@ -335,48 +380,6 @@ export function SetupWizardSheet({
             </div>
           </div>
         )}
-
-        {/* Buttons */}
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '8px',
-            marginTop: '4px',
-          }}
-        >
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={!canSave || isSaving}
-            style={{
-              ...btnBaseStyle,
-              background: canSave
-                ? 'var(--color-gold)'
-                : 'rgba(255,255,255,0.08)',
-              color: canSave ? '#1A1A1F' : 'rgba(255,255,255,0.3)',
-              cursor: !canSave || isSaving ? 'not-allowed' : 'pointer',
-              opacity: isSaving ? 0.6 : 1,
-            }}
-            data-testid="setup-wizard-save"
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </button>
-          <button
-            type="button"
-            onClick={handleSkip}
-            disabled={isSaving}
-            style={{
-              ...btnBaseStyle,
-              background: 'transparent',
-              color: 'var(--color-text-secondary)',
-              border: '1px solid rgba(255,255,255,0.08)',
-            }}
-            data-testid="setup-wizard-skip"
-          >
-            Skip for Now
-          </button>
-        </div>
       </div>
     </BottomSheet>
   );

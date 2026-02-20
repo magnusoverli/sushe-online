@@ -40,6 +40,8 @@ interface BottomSheetProps {
   /** Optional element rendered inline before the title (e.g. a thumbnail) */
   titleIcon?: ReactNode;
   children: ReactNode;
+  /** Non-scrollable footer pinned at the bottom of the sheet (e.g. action buttons) */
+  footer?: ReactNode;
   /** Override z-index for stacking above other sheets (default: --z-sheet / 400) */
   zIndex?: number;
 }
@@ -89,6 +91,7 @@ export function BottomSheet({
   subtitle,
   titleIcon,
   children,
+  footer,
   zIndex,
 }: BottomSheetProps) {
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -224,13 +227,28 @@ export function BottomSheet({
                 overflowY: 'auto',
                 WebkitOverflowScrolling: 'touch',
                 overscrollBehavior: 'contain',
-                padding:
-                  '8px 8px calc(16px + var(--tabbar-height, 64px) + env(safe-area-inset-bottom, 0px))',
+                padding: footer
+                  ? '8px 8px 16px'
+                  : '8px 8px calc(16px + var(--tabbar-height, 64px) + env(safe-area-inset-bottom, 0px))',
               }}
               className="hide-scrollbar"
             >
               {children}
             </div>
+
+            {/* Non-scrollable footer */}
+            {footer && (
+              <div
+                style={{
+                  flexShrink: 0,
+                  padding:
+                    '8px 8px calc(8px + var(--tabbar-height, 64px) + env(safe-area-inset-bottom, 0px))',
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                }}
+              >
+                {footer}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

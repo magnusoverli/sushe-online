@@ -118,6 +118,64 @@ export function ReidentifySheet({
       zIndex={450}
       title="Re-identify Album"
       subtitle={album ? `${album.artist} \u2014 ${album.album}` : undefined}
+      footer={
+        !loading && !error && candidates.length > 0 ? (
+          hasNewSelection ? (
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={applying}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '10px',
+                border: 'none',
+                background: applying
+                  ? 'rgba(255,255,255,0.05)'
+                  : 'var(--color-gold)',
+                color: applying ? 'var(--color-text-secondary)' : '#1A1A1F',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: applying ? 'default' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+              }}
+              data-testid="reidentify-apply"
+            >
+              {applying && (
+                <Loader
+                  size={14}
+                  style={{ animation: 'spin 1s linear infinite' }}
+                />
+              )}
+              {applying ? 'Applying...' : 'Apply Selection'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                width: '100%',
+                padding: '14px',
+                borderRadius: '10px',
+                border: '1px solid rgba(255,255,255,0.10)',
+                background: 'transparent',
+                color: 'var(--color-text-primary)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px',
+                fontWeight: 500,
+                cursor: 'pointer',
+              }}
+              data-testid="reidentify-close"
+            >
+              Close
+            </button>
+          )
+        ) : undefined
+      }
     >
       <div style={{ padding: '0 4px 8px' }}>
         {/* Loading state */}
@@ -197,64 +255,6 @@ export function ReidentifySheet({
                   onSelect={() => setSelectedId(candidate.id)}
                 />
               ))}
-            </div>
-
-            {/* Action button: adapts label based on selection state */}
-            <div style={{ padding: '12px 0 4px' }}>
-              {hasNewSelection ? (
-                <button
-                  type="button"
-                  onClick={handleApply}
-                  disabled={applying}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    border: 'none',
-                    background: applying
-                      ? 'rgba(255,255,255,0.05)'
-                      : 'var(--color-gold)',
-                    color: applying ? 'var(--color-text-secondary)' : '#1A1A1F',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: applying ? 'default' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                  data-testid="reidentify-apply"
-                >
-                  {applying && (
-                    <Loader
-                      size={14}
-                      style={{ animation: 'spin 1s linear infinite' }}
-                    />
-                  )}
-                  {applying ? 'Applying...' : 'Apply Selection'}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  style={{
-                    width: '100%',
-                    padding: '14px',
-                    borderRadius: '10px',
-                    border: '1px solid rgba(255,255,255,0.10)',
-                    background: 'transparent',
-                    color: 'var(--color-text-primary)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                  }}
-                  data-testid="reidentify-close"
-                >
-                  Close
-                </button>
-              )}
             </div>
           </>
         )}
