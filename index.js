@@ -137,6 +137,23 @@ app.use(createCorsMiddleware());
 // Static files
 app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
+// Mobile SPA static assets (from mobile/dist/)
+// Hashed assets (JS/CSS in /assets/) get long-lived immutable caching.
+// index.html must not be cached so the browser always gets the latest
+// asset references after a build.
+app.use(
+  '/mobile',
+  express.static(path.join(__dirname, 'mobile', 'dist'), {
+    setHeaders(res, filePath) {
+      if (filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else {
+        res.setHeader('Cache-Control', 'no-cache');
+      }
+    },
+  })
+);
+
 // Handle .well-known requests (Android Asset Links, iOS Universal Links, etc.)
 app.use('/.well-known', (req, res) => {
   if (req.path === '/.well-known/assetlinks.json') {
@@ -349,6 +366,18 @@ app.get('/apple-touch-icon-152x152.png', (req, res) => {
 
 app.get('/apple-touch-icon-180x180.png', (req, res) => {
   res.redirect('/icons/ios/180.png');
+});
+
+// ============ MOBILE SPA ============
+
+// Catch-all for mobile SPA client-side routing (Express 5 named wildcard syntax)
+app.get('/mobile/{*path}', (req, res) => {
+  res.sendFile(path.join(__dirname, 'mobile', 'dist', 'index.html'));
+});
+
+// Also serve /mobile (without trailing path) as the SPA entry
+app.get('/mobile', (req, res) => {
+  res.sendFile(path.join(__dirname, 'mobile', 'dist', 'index.html'));
 });
 
 // ============ ERROR HANDLING ============

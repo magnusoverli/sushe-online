@@ -180,7 +180,7 @@ opencodetmp/*
 # Local plans and notes (not synced to repo)
 /plans/
 .opencode/
-
+design_system/
 # Restart trigger file for development (touched to force nodemon restart)
 .restart-trigger
 docker-app-logs.txt
