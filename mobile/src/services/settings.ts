@@ -239,7 +239,8 @@ export async function getAggregateYears(): Promise<{
 
 export async function getAggregateStatus(year: number): Promise<{
   revealed: boolean;
-  confirmations: number;
+  confirmations: { username: string; confirmedAt: string }[];
+  confirmationCount: number;
   requiredConfirmations: number;
   locked: boolean;
 }> {
@@ -247,9 +248,13 @@ export async function getAggregateStatus(year: number): Promise<{
 }
 
 export async function getAggregateStats(year: number): Promise<{
-  totalAlbums: number;
-  totalContributors: number;
-  totalVotes: number;
+  year: number;
+  revealed: boolean;
+  stats: {
+    totalAlbums: number;
+    totalContributors: number;
+    totalVotes: number;
+  };
 }> {
   return api.get(`/api/aggregate-list/${year}/stats`);
 }

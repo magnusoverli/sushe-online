@@ -1199,23 +1199,27 @@ function AggregateListPanel({ year }: { year: number }) {
               <div style={fieldRowStyle}>
                 <span style={fieldLabelStyle}>Confirmations</span>
                 <span style={fieldValueStyle}>
-                  {status?.confirmations ?? 0} /{' '}
+                  {status?.confirmationCount ?? 0} /{' '}
                   {status?.requiredConfirmations ?? '?'}
                 </span>
               </div>
               <div style={fieldRowStyle}>
                 <span style={fieldLabelStyle}>Albums</span>
-                <span style={fieldValueStyle}>{stats?.totalAlbums ?? 0}</span>
+                <span style={fieldValueStyle}>
+                  {stats?.stats?.totalAlbums ?? 0}
+                </span>
               </div>
               <div style={fieldRowStyle}>
                 <span style={fieldLabelStyle}>Contributors</span>
                 <span style={fieldValueStyle}>
-                  {stats?.totalContributors ?? 0}
+                  {stats?.stats?.totalContributors ?? 0}
                 </span>
               </div>
               <div style={fieldRowStyle}>
                 <span style={fieldLabelStyle}>Votes</span>
-                <span style={fieldValueStyle}>{stats?.totalVotes ?? 0}</span>
+                <span style={fieldValueStyle}>
+                  {stats?.stats?.totalVotes ?? 0}
+                </span>
               </div>
 
               {/* Actions */}
@@ -1241,7 +1245,7 @@ function AggregateListPanel({ year }: { year: number }) {
                     Confirm Reveal
                   </button>
                 )}
-                {!status?.revealed && (status?.confirmations ?? 0) > 0 && (
+                {!status?.revealed && (status?.confirmationCount ?? 0) > 0 && (
                   <button
                     type="button"
                     style={smallButtonBase}
