@@ -1,5 +1,243 @@
 [
   {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Tap album covers to play instantly",
+    "hash": "9b785989f690b23217d06a35bd4e7f6d456ad28a",
+    "commitMessage": "Play album directly from cover image tap instead of opening action sheet\n\n- Spotify: searches album then plays on active device (no device picker)\n- Tidal: opens album in Tidal browser/app immediately\n- Both services connected with preference: uses preferred service\n- Both connected without preference: shows ServiceChooserSheet to pick\n- Play overlay now appears for Tidal-only users (was Spotify-only)\n- Shows helpful toast on error (no active device, album not found)\n- Full action sheet with device picker still available via three-dot menu"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS app display and download issues",
+    "hash": "12eaf407d9abab856726b1df8ea841d6c63e5bb8",
+    "commitMessage": "Fix iOS PWA viewport and download issues, tweak AlbumCard layout\n\n- Lock viewport height in standalone mode to prevent iOS share sheet resize bug\n- Only accept new viewport dimensions on orientation change in PWA mode\n- Use blob output for PDF downloads to work in iOS PWA\n- Enlarge album cover art to 88px, add release date and country metadata\n- Minor global.css adjustments for overflow handling"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Navigation tabs stay accessible when settings are open",
+    "hash": "05d6da8da09d076306ecd75ce3159a1c31efd893",
+    "commitMessage": "Keep TabBar visible and interactive when settings drawer is open\n\n- Drawer uses paddingBottom to clear TabBar instead of bottom offset\n- Raise TabBar z-index above drawer so it paints on top (no sub-pixel gaps)\n- Add onSettingsClose callback through AppShell and TabBar\n- Highlight Settings tab icon when drawer is open, revert on close\n- Clicking Library/Search while settings is open closes the drawer and navigates\n- Add optional bottom prop to Scrim for future use"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Improved settings menu design and touch targets",
+    "hash": "e232ae7a49e83537de8c9e4a9e225d70231bee7b",
+    "commitMessage": "Polish settings drawer: card sections, touch targets, and tab chevrons\n\nSettings sections:\n- Convert flat divider layout to card-style containers (subtle bg + border + radius)\n- Reduce wrapper padding to compensate for card internal padding\n- Flatten AdminTab inner cardStyle to avoid cards-inside-cards\n\nTouch-friendliness (Plan B):\n- Bump field row, button, input, toggle, and select padding for ~36-40px tap targets\n- Enlarge Done button, Info icon, tab bar buttons, and inline save/cancel\n- Bump AdminTab action button and smallButton padding\n\nTypography:\n- Standardize all settings tab font sizes to established scale (11-17px)\n- Align all uppercase headers to 0.05em letter-spacing\n- Replace inline rgba colors with design token variables\n- Set select elements to 16px to prevent iOS zoom\n\nTab navigation:\n- Add chevron scroll indicators with fade-in/out based on scroll position\n- Increase tab gap and padding for easier touch targeting"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Organized recommendations by year in navigation menu",
+    "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
+    "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Simplified login page text",
+    "hash": "8a8e5e7287684dac335e2a63ee04b939f0da8f52",
+    "commitMessage": "Remove 'Welcome back' eyebrow text from login page"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed music service connection status display",
+    "hash": "6eeb74ef373107b0637b8d8b89d1df3c7f5721d8",
+    "commitMessage": "Fix service connection flags always returning false in mobile API\n\nspotifyConnected, tidalConnected, and lastfmConnected were checking\nnon-existent user properties (spotifyAccessToken, tidalAccessToken,\nlastfmSessionKey). Changed to the correct mapped properties (spotifyAuth,\ntidalAuth, lastfmAuth?.session_key) matching what middleware/auth.js and\nservice-auth.js already use. This was preventing playcounts, Spotify\nplayback, Tidal actions, and integration status from working in the\nmobile SPA."
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Added release dates and larger album covers",
+    "hash": "732f22cce4075ff51bc5c66eda2db04de6ce72f8",
+    "commitMessage": "Add release date and country to album cards, enlarge cover art to 88px\n\n- Add releaseDate, country, yearMismatch props to AlbumCard\n- New metadata line between artist and tags showing year · country\n- Year renders in red when it mismatches the list year\n- Remove old year-mismatch tag push from LibraryPage\n- Bump cover art from 80x80 to 88x88px for more visual weight\n- Increase card vertical padding from 5px to 8px for breathing room\n- Tags stack vertically (column) instead of wrapping\n- Tighten tag pills: letter-spacing 0.1em→0.04em, padding 5px→3px"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Headers now stick to top while scrolling",
+    "hash": "5d100045317a71184fd337242c56167a360d177b",
+    "commitMessage": "Make ListHeader sticky with compositor-friendly scroll-driven collapse\n\n- Move ListHeader from AppShell header slot into <main> scroll container\n  with position: sticky, so it pins at top while content scrolls beneath\n- Title shrinks 32→18px via transform: scale() with origin left top\n- Divider + buttons shift up via translateY to close freed space\n- clip-path: inset(0 0 Xpx 0) clips bottom only — no top title clipping\n- ListHeader owns safe-area-inset-top padding (covers notch when stuck)\n- Add skipSafeArea prop to AppShell to prevent double safe area padding\n- z-index isolation on album list container for Framer Motion stacking\n- Tune button positioning (ACTIONS_OFFSET) and uniform content lift"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Header titles shrink smoothly when scrolling",
+    "hash": "884d7287d749cdd42ebe46d1b0d9db170337b99e",
+    "commitMessage": "Split ListHeader into fixed title + scrollable metadata, add scroll-driven title shrink\n\n- Split ListHeader into two exports: ListHeader (title + divider, pinned\n  in AppShell header slot) and ListHeaderMeta (metadata + sort control,\n  rendered as first child of scroll area so it scrolls away naturally)\n- Add scroll-driven title shrink: 32px→18px font, 6px→0px top padding,\n  4px→2px divider margin, all over 120px of scroll via direct DOM updates\n- Linear interpolation for 1:1 finger tracking, zero React re-renders\n- Updated tests for the split components"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed scrolling issues in navigation menus",
+    "hash": "0caf146e01e5c4f23547ed999fbf1431381aceb0",
+    "commitMessage": "Fix drawer scroll lock cleanup wiping React inline overflow styles\n\n- NavigationDrawer and SettingsDrawer were using shorthand overflow='hidden'\n  to lock background scroll, then clearing with overflow='' on close\n- The shorthand wiped React's inline overflowY/overflowX styles on the\n  app-shell-content element, breaking scroll after drawer close\n- Changed to use overflowY='hidden' / overflowY='auto' specifically to\n  preserve React's overflowX:'hidden' style"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Moved sort controls to header area",
+    "hash": "904556501a38af400a4ccbf3a563c98e63a2529d",
+    "commitMessage": "Move sort control into ListHeader metadata row, unify text sizes\n\n- Add sortControl slot prop to ListHeader, render right-aligned on metadata row\n- Remove standalone sort bar div from LibraryPage\n- Match metadata and sort button font size (both 10px) and color (both --color-text-secondary)\n- Match vertical padding on metadata text to sort button (4px)\n- Bump Dropdown section label 6.5→10px and item labels 8.5→10px to match"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "More compact list headers save screen space",
+    "hash": "97eef1beee057ea765bc1c0451289338da0d9f64",
+    "commitMessage": "Compact ListHeader: remove eyebrow, move title to top row, reduce top padding\n\n- Remove eyebrow prop and groupName memo (year already shown in metadata row)\n- Move title onto same row as action buttons with ellipsis truncation\n- Reduce top padding from 24px to 6px\n- Update tests to remove eyebrow assertions"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed display issues when installed as app",
+    "hash": "8587a92f7d85cbffa8af2138adae61be18deb5c1",
+    "commitMessage": "Fix PWA standalone mode: safe areas, scroll locking, and TabBar sizing\n\n- TabBar: height → minHeight so safe-area padding doesn't compress icons in standalone mode\n- TabBar: active dot bottom 6px → 0px, add touch-action: none to prevent drag\n- SettingsDrawer: add safe-area insets for top (header) and bottom (content)\n- NavigationDrawer: add safe-area insets for top (header) and bottom (content)\n- NavigationDrawer + SettingsDrawer: lock background scroll when open by disabling overflow on app-shell-content\n- AppShell: overscroll-behavior: none on frame, contain on scroll area to prevent rubber-band bounce"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "feature",
+    "description": "Added option to re-identify albums",
+    "hash": "f856482197806f91fa7c00ed0240594969f763b6",
+    "commitMessage": "Add ReidentifySheet, fix ConfirmDialog centering, bump text sizes for touch readability\n\n- Add ReidentifySheet: MusicBrainz search/select/apply flow via BottomSheet\n  with smart Close/Apply button, stacked at z-450 above action sheet\n- Fix ConfirmDialog: replace transform centering with inset+margin (Framer Motion conflict)\n- Bump ConfirmDialog text sizes (title 17px, message 12px, warning 11px, buttons 12px)\n- Bump ActionItem label 14px, subtitle 11px\n- Bump BottomSheet title 17px, subtitle 12px, add titleIcon prop\n- Bump all AlbumActionSheet inline text (Play/Move/Copy 14px, picker 13px, etc.)\n- Add cover thumbnail in album action sheet header via titleIcon\n- Add --color-bg token (was undefined, caused transparent overlays)\n- BottomSheet accepts zIndex prop for stacking\n- Inline list picker uses grid-template-rows for synchronized expand/collapse\n- Edit Details opens without closing action sheet\n- Smart Close/Apply button on ReidentifySheet (no dead-end state)\n- Add reidentifySearch/reidentifyApply API functions"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Improved scrolling in popup menus",
+    "hash": "9817bb8570702e0b8457cf280c76fd1387d260c2",
+    "commitMessage": "Refactor BottomSheet: flex layout with scrollable content, drag-controls on handle only\n\n- Split BottomSheet into fixed header (drag handle + title) and scrollable content area\n- Use useDragControls so swipe-to-dismiss only triggers from handle region, not content\n- Content area scrolls internally (overflowY auto) instead of sheet growing upward\n- Inline Move/Copy list picker with year-accordion sections in AlbumActionSheet\n- Dim non-active actions when picker is expanded\n- Remove separate ListSelectionSheet usage for move/copy in LibraryPage"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Polished album menu appearance and feel",
+    "hash": "427aa4bbbbbd56662b249e54998722fbf2c06fd1",
+    "commitMessage": "Polish AlbumActionSheet and overlay UX\n\n- Increase font sizes across BottomSheet, ActionItem, and AlbumActionSheet\n- ActionItem label 8.5px→12px, subtitle 7px→8px, BottomSheet title 13px→15px\n- Reset button defaults on ActionItem (text-align, border, background)\n- Remove Edit Details subtitle, use artist/album as AlbumActionSheet title\n- Stop touchstart propagation on three-dot button to prevent stuck hover"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed button highlighting after tapping menus",
+    "hash": "878efba763160fbe8603b4f2d7b7d5276cf73e34",
+    "commitMessage": "Fix hover state sticking when three-dot menu is tapped\n\nStop touchstart propagation on the menu button so the card never\nenters hover state when the menu is opened. Previously touchend was\nstopped but touchstart bubbled to the card, setting isHovered=true\npermanently since the card's touchend never fired."
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed popup menus appearing behind other content",
+    "hash": "96baa3966af8ab412fcb0c28ffe94be9113c8e5b",
+    "commitMessage": "Fix overlay z-index on iOS: render all fixed overlays via React portals\n\nAll position:fixed overlay components (BottomSheet, NavigationDrawer,\nConfirmDialog, ContextMenu, Dropdown, AlbumEditForm, GhostCard, Toast)\nnow render into document.body via createPortal. This escapes the GPU\ncompositing layer created by the scroll container's\n-webkit-overflow-scrolling, which caused album cards to paint above\nmenus and sheets regardless of z-index values."
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed drag-and-drop on touch screens",
+    "hash": "2b71e1a384cd897f7065e89129221c1f3c7c4dcf",
+    "commitMessage": "Fix mobile drag-and-drop: document-level touch listeners, card ref targeting, swap threshold\n\n- Move touchmove/touchend handlers from list container to document-level native\n  listeners so drag tracking continues when finger drifts outside the list area\n- Add touchcancel handling for robustness\n- Merge scroll-prevention listener into unified touchmove handler\n- Convert AlbumCard to forwardRef so registerCard targets the actual card element\n  instead of the framer-motion animation wrapper\n- Replace overcomplicated SWAP_OVERLAP formula with simple DRAG_SWAP_THRESHOLD\n  constant (0.25 = swap at 25% into neighbor, industry-standard midpoint approach)\n- Centralize threshold in constants.ts alongside other drag config\n- Update tests: touchend now fires on document, remove synthetic handler wiring"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "ui",
+    "description": "Smoother drag-and-drop animations",
+    "hash": "b8d8aaec697bef83ab58070bfda2d50145fe3804",
+    "commitMessage": "Fix drag-and-drop flickering and polish mobile album card layout\n\n- Replace scan-all-cards findDropIndex with neighbor-only algorithm: only compare ghost center against the immediately adjacent cards, preventing oscillation where a just-swapped card's midpoint coincides with the ghost center and causes rapid swap/unswap on every frame\n- Isolate ghost position (ghostX/ghostY/ghostWidth) subscriptions inside GhostCard so LibraryPage and its ~50 album card children no longer re-render on every pixel of ghost movement\n- Use ghost center Y (touch.clientY - touchOffset.y + cardHeight/2) as the swap threshold instead of raw touch Y, giving symmetric feel regardless of grab position\n- Source card fully invisible during drag (opacity 0, no scale transform) as clean placeholder\n- Non-dragged cards no longer dim (opacity 1.0 during drag)\n- Remove cover rank badge from CoverImage; rank number stays in left column with visibility:hidden on non-main lists to preserve alignment\n- Menu button always rendered (visibility:hidden when no handler) to prevent 40px layout shift when drag starts\n- Cards full-bleed (--space-list-x 0px), cover art 60px, card padding 8px\n- Fix iOS Safari scroll bug: use native non-passive touchmove preventDefault instead of overflow:hidden on scroll container\n- Fix nodemon restart loop: ignore mobile/dist/ from file watching"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "fix",
+    "description": "Fixed list reordering and caching issues",
+    "hash": "180b2daa9744a868062905fe13ee83a7010fe459",
+    "commitMessage": "Fix critical post-Phase 8 bugs: query key mismatch, reorder identifiers, caching, list persistence\n\n- Fix TanStack Query key mismatch: all invalidateQueries/setQueryData calls\n  now use the correct keys (['lists', listId, 'albums'] and ['lists', 'metadata'])\n  instead of the wrong keys (['list-albums', listId] and ['lists']).\n  This caused all mutations (edit, move, copy, remove, reorder) to silently\n  fail to refresh the UI.\n- Fix drag-and-drop reorder: convert _id to album_id before sending to\n  POST /api/lists/:id/reorder, since the server treats plain strings as\n  album_id values. Also add optimistic cache update so list doesn't snap back.\n- Fix static index.html immutable caching: only /assets/ files (content-hashed)\n  get long-lived immutable cache. index.html gets no-cache so browser always\n  picks up new builds.\n- Persist activeListId to localStorage so the selected list survives page\n  refreshes. Validates stored ID still exists on load."
+  },
+  {
+    "date": "2026-02-18",
+    "category": "feature",
+    "description": "Added Spotify playback and Last.fm scrobbling support",
+    "hash": "101f9949f0ca34c3a9f619d425097f963866a7bc",
+    "commitMessage": "Phase 8: Music integration (Spotify playback, Last.fm scrobbling, now-playing UI)\n\n- Spotify service: playback state, devices, play/pause/resume/next/prev, album/track search\n- Last.fm service: scrobble, now-playing updates, similar artists lookup\n- Playback polling: 3s interval, visibility-aware, updates Zustand store\n- Scrobbler: now-playing on track change, scrobble at 50% or 4min threshold, deduplication\n- Fuzzy album matching: normalizeForMatch strips remaster/edition tags, bidirectional includes\n- NowPlayingBar: floating bar with album art, track/artist/device info, progress bar, Spotify deep link\n- CoverImage: play button overlay (design spec p10-11), now-playing animated border (conic-gradient)\n- AlbumActionSheet: expandable Spotify Connect device picker for Play Album action\n- SimilarArtistsSheet: Last.fm similar artists with match percentages\n- AppShell: conditional NowPlayingBar slot between content and TabBar\n- LibraryPage: playback polling hook, per-album now-playing detection, wired all music actions\n- 48 new tests (356 total), all passing"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "feature",
+    "description": "Added drag and drop reordering",
+    "hash": "2402e11fe4ca7e41fbb31baaa314478a715f2ccb",
+    "commitMessage": "Phase 7: Drag & drop reordering\n\n- useDragAndDrop hook: 480ms long-press detection, ghost card positioning,\n  auto-scroll near edges (60px zone, 8px/frame proportional speed),\n  real-time list shuffling, scroll lock, haptic feedback\n- drag-store (Zustand): isolated high-frequency drag state (isDragging,\n  dragIndex, dropIndex, ghostX/Y, orderedIds)\n- auto-scroll module: calcScrollSpeed + RAF-based scroll loop\n- LibraryPage integration: cards show 6 visual states during drag\n  (dragging=0.2 opacity, dimmed=0.55, drop-target highlight),\n  ghost card renders dragged album, touch handlers on list container\n- AppShell: scrollRef prop for auto-scroll container reference\n- Debounced reorder save (500ms) via POST /api/lists/:id/reorder\n- Drag only enabled in custom sort order\n- Menu/edit clicks disabled during drag\n- debounce utility type fix (any[] constraint for generic params)\n\n23 new tests (308 total), TypeScript clean, build passes"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "feature",
+    "description": "Added album editing and action menu",
+    "hash": "e0391df40bcedd5e9e446d7e6dbde046ce0e83f7",
+    "commitMessage": "Phase 6: Album actions & editing\n\n- AlbumActionSheet: three-dot context menu with edit, play, move, copy, recommend, similar, remove\n- AlbumEditForm: full-screen editor with cover upload/resize, artist/album/date fields,\n  country (native select), genre (searchable overlay), dual comments, track selector\n- GenreSelect: searchable full-screen overlay with 3-tier sort and match highlighting\n- TrackSelector: dual-priority cycling (unselected/secondary/primary), MusicBrainz fetch\n- ListSelectionSheet: year-accordion list picker for move/copy operations\n- SummarySheet: on-demand AI summary display\n- RecommendationInfoSheet: recommender name and date display\n- Static data: 171 genres, 199 countries (mirroring src/data/)\n- MusicBrainz tracks service for fetching album tracklists\n\nBug fixes:\n- Use album_id (canonical) instead of _id (list-item) for removed array and comment updates\n  — fixes move acting as copy and comment updates failing after PUT replacement\n- Sequence comment/genre/country saves before PUT replacement (PUT regenerates all _id values)\n- Reverse move order: add to target first, then remove from source (resilience)\n- Add try/catch error handling to album edit save flow\n- BottomSheet: add subtitle prop, ActionItem: add variant/hasChevron/style aliases\n- AppShell: add minHeight:0 to fix flexbox scroll container\n- Global CSS: iOS Safari auto-zoom prevention for inputs\n\n60 new tests (285 total), TypeScript clean, build passes"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "feature",
+    "description": "Added list management and navigation features",
+    "hash": "78ef7fc0e8969485ca20ca340cc32584e8a3896d",
+    "commitMessage": "Phase 5: Navigation & list management\n\n- Navigation drawer with grouped list sections (year groups, collections, uncategorized)\n- GroupAccordion component with expand/collapse, auto-expand active list's group\n- List switching: tap list in drawer -> fetch data, update header, close drawer\n- ListActionSheet: download (JSON/PDF/CSV), edit details, toggle main, send to service, move to collection, delete with confirmation\n- CollectionPickerSheet: move lists between collections with checkmark on current\n- GroupActionSheet: rename and delete collections (with force option for non-empty)\n- CreateListSheet: name input + category dropdown (year groups, collections, new year, new collection)\n- CreateCollectionSheet: name input with year-name validation\n- EditListSheet: rename list and change year\n- Import list from JSON file (supports old array format and new metadata format)\n- Sidebar footer: Create List, Create Collection, Import buttons\n- Download service: JSON export with native share, CSV, PDF (jsPDF dynamically imported)\n- Toast notification system (Zustand store, auto-dismiss)\n- ConfirmDialog reusable component for destructive actions\n- 57 new tests (225 total), TypeScript clean, build: 506KB JS / 160KB gzipped"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "feature",
+    "description": "Added library view with album display",
+    "hash": "2fe1196c7f2b7ecce6b5d5060dfd9b4388bb396d",
+    "commitMessage": "Phase 4: Library view with core list display\n\n- AppShell layout with scrollable content area and sticky TabBar\n- ListHeader with eyebrow, title, metadata, hamburger menu button\n- CoverImage with IntersectionObserver lazy loading (200px rootMargin),\n  fade-in, position badges (gold/silver/bronze top 3), AI summary and\n  recommendation badge overlays\n- LibraryPage fetches lists metadata and albums via TanStack Query hooks,\n  auto-selects main list, renders AlbumCard with covers and genre tags\n- Sort dropdown (custom, artist, title, year, genre, country)\n- Year mismatch indicator tags on albums from different years\n- End-of-list footer with album count\n- Updated types to match actual API responses (Group, Album nullable fields)\n- 49 new tests (168 total), TypeScript clean, 467KB JS / 149KB gzipped"
+  },
+  {
+    "date": "2026-02-18",
+    "category": "feature",
+    "description": "Added mobile app with authentication",
+    "hash": "f1684cf30c347c72e6ad3070bb21b3a4d2ec0284",
+    "commitMessage": "Add mobile SPA foundation (phases 1-3) with auth bug fixes\n\n- Scaffold Vite 7 + React 19 + TypeScript mobile app at /mobile\n- Design tokens, global styles, Google Fonts (DM Serif Display + DM Mono)\n- API client with session cookie auth and CSRF token handling\n- Auth service, lists, albums, groups, track-picks service modules\n- Zustand stores (app-store, playback-store), React hooks\n- TanStack Router with auth guards and 5 routes\n- Login and registration pages with dark-themed design spec styling\n- 10 design system components: TabBar, AlbumCard (6 states), BottomSheet,\n  NavigationDrawer, ContextMenu, Dropdown, Scrim, ActionItem, TagPill, GhostCard\n- JSON auth API (GET /api/auth/session, POST login/register/logout)\n- Wire mobile SPA into Express (static serving + catch-all)\n- Fix CSRF on auth pages: initCsrf() fetches token before form submission\n- Fix error extraction for nested sendErrorResponse() format\n- Fix session regeneration crash: re-init csrfSecret after req.logIn()\n- 119 tests passing, TypeScript clean, 314KB JS / 99KB gzipped"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed mobile sidebar scroll issues",
+    "hash": "cd851ae4cf969f42b8fdf295f447a79180350e70",
+    "commitMessage": "Fix mobile sidebar scroll bleed-through on touch devices\n\n- Add touch-action: none on albumContainer when sidebar is open\n- Add non-passive touchmove preventDefault on backdrop overlay\n- overflow: hidden alone is insufficient on iOS Safari where native\n  touch scroll engine can reach through overlay elements"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed mobile sidebar button spacing and drag interaction",
+    "hash": "47b758193c5d69ffa2c85ea5e2ed5a16f1f290fd",
+    "commitMessage": "Fix mobile sidebar: equal button padding and disable swipe during drag"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
+    "description": "Improved mobile drawer navigation and interactions",
+    "hash": "520a9dae7d1c2bb1bfa96d53da5e258260bb5032",
+    "commitMessage": "Improve mobile drawer UX and fix sidebar interaction issues\n\n- Redesign drawer footer buttons from icon-only to icon+label tab bar style\n  (List, Collection, Import) with fixed w-14 h-11 sizing\n- Wrap sidebar hover effects in @media (hover: hover) to prevent sticky\n  hover on iOS; add :active tap feedback with instant-in/300ms-fade-out\n  transitions for visual response on all devices\n- Fix group expand state resetting on drag-and-drop reorder by adding\n  hasInitializedExpandState flag so it only runs on first render\n- Add collapseGroupsForActiveList() to collapse all groups except the\n  active list's group when the mobile drawer opens, with full re-render\n  of sortable drag-and-drop"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed background scrolling when mobile sidebar is open",
+    "hash": "eece923770d848fbbac4e11ca124f1a2642a3c3d",
+    "commitMessage": "Fix background scroll bleed-through when mobile sidebar drawer is open\n\n- Lock body scroll (overflow: hidden) when drawer opens\n- Restore body scroll when drawer closes\n- Drawer's own list container still scrolls independently"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "fix",
+    "description": "Fixed header display on iPhone notch screens",
+    "hash": "42b0cd1a80938442abbe9b54340e9b5b7c511a6b",
+    "commitMessage": "Fix iOS safe area implementation - extend header gradient into notch/status bar region\n\n- Add viewport-fit=cover to layout.ejs (was missing, making env() inerts resolve to 0px)\n- Add fixed-position safe area fill element in header to paint gradient behind iOS status bar\n- Add consistent 0px fallbacks to all env(safe-area-inset-*) calls in templates.js\n- Remove legacy constant(safe-area-inset-top) fallback for iOS 11.0-11.2\n- Remove dead detectStandaloneMode() JS and unused standalone-mode CSS class"
+  },
+  {
+    "date": "2026-02-17",
+    "category": "ui",
+    "description": "Redesigned mobile sidebar with icon buttons and gestures",
+    "hash": "7654da46f7fab7fe1836e18ba4c9eafa1f059a44",
+    "commitMessage": "Align mobile sidebar drawer with desktop UI overhaul - Apply gradient background (matching desktop sidebar) to mobile drawer - Replace full-width text action buttons with icon-only Material Symbols buttons (playlist_add, create_new_folder, file_open) with green-tinted backgrounds - Add subtle center gradient bar behind action buttons (matching desktop) - Remove 'Lists' heading, replace with minimal close button (matching desktop) - Narrow drawer width from w-80 to w-72, max-width from 85vw to 80vw - Tighten spacing: list items py-3->py-2.5, headers py-2->py-1.5, list container p-4->p-2, gap space-y-1->space-y-0.5 - Reduce 3-dot menu button padding from p-2 to p-1.5 - Add swipe-to-close gesture with 80px threshold, proportional backdrop fade - Add mobile-action-btn active state CSS (scale + green highlight)"
+  },
+  {
     "date": "2026-02-17",
     "category": "fix",
     "description": "Fixed mobile sidebar scrolling issues on touch devices",
@@ -138,6 +376,97 @@
     "description": "Redesigned mobile menu with new icons and swipe gestures",
     "hash": "7654da46f7fab7fe1836e18ba4c9eafa1f059a44",
     "commitMessage": "Align mobile sidebar drawer with desktop UI overhaul - Apply gradient background (matching desktop sidebar) to mobile drawer - Replace full-width text action buttons with icon-only Material Symbols buttons (playlist_add, create_new_folder, file_open) with green-tinted backgrounds - Add subtle center gradient bar behind action buttons (matching desktop) - Remove 'Lists' heading, replace with minimal close button (matching desktop) - Narrow drawer width from w-80 to w-72, max-width from 85vw to 80vw - Tighten spacing: list items py-3->py-2.5, headers py-2->py-1.5, list container p-4->p-2, gap space-y-1->space-y-0.5 - Reduce 3-dot menu button padding from p-2 to p-1.5 - Add swipe-to-close gesture with 80px threshold, proportional backdrop fade - Add mobile-action-btn active state CSS (scale + green highlight)"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved Spotify player layout and hid scrollbar",
+    "hash": "0c37fe0247fa1a4591e20f37148a48345789db23",
+    "commitMessage": "Refine Spotify miniplayer layout and hide album list scrollbar - Make volume slider width dynamic with full sidebar coverage - Fix play/pause button to be perfectly round (w-9 h-9) - Tighten spacing: cover art, progress bar, controls, volume, device indicator - Compensate for scrollbar gutter on progress bar and controls - Reduce cover art to 76x76px with tighter left gap - Hide album list scrollbar while preserving scroll functionality"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Refined header borders and sidebar spacing",
+    "hash": "6ea5b35d84593cc884fcbc3e0863c6f6a601561b",
+    "commitMessage": "Refine header/row boundaries, sidebar spacing, and logo alignment - Add subtle backdrop blur on bottom edge of column header row - Remove top inset shadow from first album row for smoother transition - Add right padding to sidebar list nav to match left spacing - Center SuShe logo over sidebar by matching container width to 14.5rem"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Added backdrop blur to page header",
+    "hash": "268326ee7aa651c6f63a7bc9a3f36533975299f6",
+    "commitMessage": "Add backdrop blur to soften boundary between page header and column header row - Use ::before pseudo-element with backdrop-filter blur - Apply gradient mask for smooth S-curve fade in/out"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Softened album header visual transition",
+    "hash": "1f78128ab6f695c9213d8b97e885b864e041a0d3",
+    "commitMessage": "Extend album header gradient past left edge to 150% for softer visual transition"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Improved sidebar button alignment and styling",
+    "hash": "ae55011773a3414e83c3e98d1a1df60b3a71fdb3",
+    "commitMessage": "Fix sidebar action button alignment and tweak gradient - Add pr-2 to offset scrollbar gutter visual asymmetry - Move file input outside flex container - Switch to justify-evenly for equal spacing - Reduce gradient center opacity to 10%"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Updated sidebar with outlined icons and green styling",
+    "hash": "2b4d81243a85c0f894da055196316a2e9901c717",
+    "commitMessage": "Switch sidebar action buttons to Material Symbols Outlined icons - Add Material Symbols Outlined font import - Replace Font Awesome solid icons with outlined: playlist_add, create_new_folder, file_open - Update button colors to #20E368, 15% default / 35% hover - Tighten button container padding and refine background gradient"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "fix",
+    "description": "Fixed sidebar group expansion and refined styling",
+    "hash": "b574c0fa80baf1840af2a79852a26f5f94c39a27",
+    "commitMessage": "Fix sidebar group expansion and refine sidebar styling - Fix group expand/collapse: remove single-use guard so active list's group is always expanded on page load - Reduce sidebar width from 15rem to 14.5rem (232px) - Move group headers and list items 6px closer to group border - Restyle sidebar action buttons: green-tinted backgrounds, larger icons, white gradient"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "fix",
+    "description": "Fixed lock indicator not clearing on view switch",
+    "hash": "b430cd81c530987fa984d3631d9371005c43e71c",
+    "commitMessage": "Fix stale lock indicator persisting when switching to recommendations view\n\n- Clear header lock indicator in selectRecommendations wrapper before loading recommendations\n- Fixes bug where lock banner from a previously viewed locked main list remained visible"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Adjusted sidebar spacing and icon brightness",
+    "hash": "7533d47c436d58edfcd747dd0c13b0896bc7d50e",
+    "commitMessage": "Adjust sidebar group list indent to 25px and brighten group header icons\n\n- Set group list items indent to pl-[25px] for precise spacing from group border\n- Change group header icons (calendar/folder) from text-gray-500 to text-gray-300"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Added subtle gradient to sidebar action area",
+    "hash": "66eb8b8ec8e470cc762bd3d6083284a8513142bd",
+    "commitMessage": "Tighten sidebar action buttons area and add subtle center gradient\n\n- Reduce action buttons container padding from py-3 to py-2\n- Add horizontal gradient background with rgba(45,53,82,0.3) center glow"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Resized album covers and softened text colors",
+    "hash": "0a0969b97c4c9d72b99b2a14b21ca5df95a2af7e",
+    "commitMessage": "Reduce cover art to 75px, mute metadata columns, match artist color to album title\n\n- Reduce cover art from 80px to 75px for slightly shorter album rows\n- Update album grid and recommendations grid column widths to match\n- Add opacity 0.7 to Country, Genre 1, Genre 2 columns to visually de-emphasize metadata\n- Change artist text from text-gray-300 to text-gray-200 to match album title brightness"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "ui",
+    "description": "Reorganized list header with softer typography",
+    "hash": "a485e87915da5162255983d010fa275f9cd986f8",
+    "commitMessage": "Refine list header row: move Album title to cover column, soften typography\n\n- Move Album column header from column 2 to column 3 to align with album name data\n- Add pl-2 inset to Album, Comment, and Comment 2 headers for better alignment\n- Change header font from uppercase/semibold/text-base to title case/medium/13px for subtler appearance"
+  },
+  {
+    "date": "2026-02-16",
+    "category": "fix",
+    "description": "Fixed modal bugs and moved year lock to header",
+    "hash": "37a6892905296e72e300905974e1d869eedb897e",
+    "commitMessage": "Fix modal-factory resolve-before-close bugs, move year lock banner to header, remove toast\n\nModal fixes (regression from DRY refactor):\n- Fix showConfirmation promise mode always resolving false (25 call sites broken)\n- Fix showReasoningModal always resolving null (3 call sites broken)\n- Fix showSimilarAlbumModal always resolving cancelled due to recursive onClose\n- Root cause: modalController.close() fires onClose before caller can resolve\n\nYear lock UI improvements:\n- Move lock banner from album container to header bar on desktop (compact pill style)\n- Keep mobile banner in album container unchanged\n- Extract shared showYearLockUI/clearYearLockUI functions in year-lock.js (DRY)\n- Remove duplicated banner creation code from album-display.js and app.js\n- Fix race condition where lock indicator persisted when switching to non-main list\n- Remove success toast when locking/unlocking a year"
   },
   {
     "date": "2026-02-16",
