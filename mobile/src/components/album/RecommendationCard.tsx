@@ -271,7 +271,10 @@ export const RecommendationCard = memo(function RecommendationCard({
           transition: 'background 150ms ease, border-color 150ms ease',
         }}
         onClick={handleMenuClick}
-        onTouchEnd={handleMenuClick}
+        onTouchEnd={(e: React.TouchEvent) => {
+          e.preventDefault();
+          handleMenuClick(e);
+        }}
         aria-label={`Menu for ${rec.album}`}
         data-testid="rec-card-menu-button"
       >

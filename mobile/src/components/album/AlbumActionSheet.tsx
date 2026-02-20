@@ -210,11 +210,18 @@ export function AlbumActionSheet({
     [onClose]
   );
 
-  const handleOpenTidal = useCallback(() => {
+  const handleOpenTidal = useCallback(async () => {
     if (!album) return;
-    openInTidal(album.artist, album.album);
-    showToast('Opening in Tidal', 'success');
     onClose();
+    try {
+      await openInTidal(album.artist, album.album);
+      showToast('Opening in Tidal', 'success');
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : 'Failed to open in Tidal',
+        'error'
+      );
+    }
   }, [album, onClose]);
 
   const expandSpotifyDevices = useCallback(async () => {

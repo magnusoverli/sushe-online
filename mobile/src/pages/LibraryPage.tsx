@@ -793,7 +793,14 @@ export function LibraryPage() {
   const executeQuickPlay = useCallback(
     async (artist: string, albumName: string, service: 'spotify' | 'tidal') => {
       if (service === 'tidal') {
-        openInTidal(artist, albumName);
+        try {
+          await openInTidal(artist, albumName);
+        } catch (err) {
+          showToast(
+            err instanceof Error ? err.message : 'Failed to open in Tidal',
+            'error'
+          );
+        }
         return;
       }
       // Spotify: search then play on active device (no device picker)

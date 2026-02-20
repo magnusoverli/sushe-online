@@ -364,7 +364,14 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
               ? (e: React.TouchEvent) => e.stopPropagation()
               : undefined
           }
-          onTouchEnd={onMenuClick ? handleMenuClick : undefined}
+          onTouchEnd={
+            onMenuClick
+              ? (e: React.TouchEvent) => {
+                  e.preventDefault();
+                  handleMenuClick(e);
+                }
+              : undefined
+          }
           aria-label={onMenuClick ? `Menu for ${title}` : undefined}
           aria-hidden={!onMenuClick}
           data-testid="album-menu-button"
