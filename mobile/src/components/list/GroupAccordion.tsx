@@ -5,7 +5,7 @@
  * and a collapsible list of DrawerNavItem children.
  */
 
-import { type ReactNode, useState, useCallback, useEffect } from 'react';
+import { type ReactNode, useState, useCallback } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -13,32 +13,6 @@ import {
   Folder,
   MoreHorizontal,
 } from 'lucide-react';
-
-const STORAGE_KEY = 'sushe-mobile-accordion-state';
-
-function readPersistedState(): Set<string> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    return new Set(JSON.parse(raw) as string[]);
-  } catch {
-    return new Set();
-  }
-}
-
-function persistState(expanded: boolean, name: string): void {
-  try {
-    const ids = readPersistedState();
-    if (expanded) {
-      ids.add(name);
-    } else {
-      ids.delete(name);
-    }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
-  } catch {
-    // localStorage unavailable
-  }
-}
 
 interface GroupAccordionProps {
   /** Group display name */
@@ -68,15 +42,7 @@ export function GroupAccordion({
   dragState = 'default',
   showDragHandle = false,
 }: GroupAccordionProps) {
-  const [expanded, setExpanded] = useState(() => {
-    const persisted = readPersistedState();
-    return persisted.has(name) || defaultExpanded;
-  });
-
-  // Persist changes to localStorage
-  useEffect(() => {
-    persistState(expanded, name);
-  }, [expanded, name]);
+  const [expanded, setExpanded] = useState(defaultExpanded);
 
   const toggle = useCallback(() => setExpanded((e) => !e), []);
 
@@ -173,11 +139,11 @@ export function GroupAccordion({
           <span
             style={{
               fontFamily: 'var(--font-mono)',
-              fontSize: '7.5px',
-              fontWeight: 500,
-              letterSpacing: '0.08em',
+              fontSize: '11px',
+              fontWeight: 400,
+              letterSpacing: '0.05em',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.30)',
+              color: 'var(--color-text-label)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -200,7 +166,7 @@ export function GroupAccordion({
               cursor: 'pointer',
               padding: '4px',
               borderRadius: '4px',
-              color: 'rgba(255,255,255,0.20)',
+              color: 'var(--color-text-muted)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

@@ -44,6 +44,8 @@ interface DrawerContentProps {
   activeRecommendationYear?: number | null;
   /** Called when a recommendation year is tapped. */
   onSelectRecommendationYear?: (year: number) => void;
+  /** Incremented each time the drawer opens to reset accordion state. */
+  resetKey?: number;
 }
 
 type DragMode = 'none' | 'group' | 'list';
@@ -77,6 +79,7 @@ export function DrawerContent({
   onCloseDrawer,
   activeRecommendationYear,
   onSelectRecommendationYear,
+  resetKey = 0,
 }: DrawerContentProps) {
   const queryClient = useQueryClient();
   const [dragState, setDragState] = useState<DragState>(initialDragState);
@@ -355,6 +358,20 @@ export function DrawerContent({
     return [...recYearsData.years].sort((a, b) => b - a);
   }, [recYearsData]);
 
+  // Build a set of rec years that have a matching year group, and collect orphans
+  const recYearSet = useMemo(() => new Set(recYears), [recYears]);
+  const yearGroupNames = useMemo(
+    () =>
+      new Set(
+        sections.filter((s) => s.group?.isYearGroup).map((s) => s.group!.name)
+      ),
+    [sections]
+  );
+  const orphanRecYears = useMemo(
+    () => recYears.filter((y) => !yearGroupNames.has(String(y))),
+    [recYears, yearGroupNames]
+  );
+
   // Track group index across sections (only those with a group)
   let groupIndex = 0;
 
@@ -395,9 +412,23 @@ export function DrawerContent({
 
         const gDragState = getGroupDragState(group._id, currentGroupIndex);
 
+        // Check if this year group has a matching recommendation
+        const groupYear = group.isYearGroup ? parseInt(group.name, 10) : NaN;
+        const hasRec =
+          !isNaN(groupYear) &&
+          recYearSet.has(groupYear) &&
+          onSelectRecommendationYear;
+
+        // Expand if active list is in this group OR active rec year matches
+        const isRecActiveInGroup =
+          !isNaN(groupYear) && activeRecommendationYear === groupYear;
+        const shouldExpand =
+          section.lists.some((l) => l._id === activeListId) ||
+          isRecActiveInGroup;
+
         return (
           <div
-            key={group._id}
+            key={`${group._id}-${resetKey}`}
             ref={(el) => registerGroupRef(group._id, el)}
             onTouchStart={(e) =>
               handleGroupTouchStart(currentGroupIndex, group._id, e)
@@ -406,9 +437,7 @@ export function DrawerContent({
             <GroupAccordion
               name={group.name}
               isYearGroup={group.isYearGroup}
-              defaultExpanded={section.lists.some(
-                (l) => l._id === activeListId
-              )}
+              defaultExpanded={shouldExpand}
               dragState={gDragState}
               showDragHandle={
                 dragState.mode === 'none' || dragState.mode === 'group'
@@ -474,30 +503,52 @@ export function DrawerContent({
                   </div>
                 );
               })}
+
+              {/* Recommendation item inside this year group */}
+              {hasRec && (
+                <DrawerNavItem
+                  label={`${groupYear} Recs`}
+                  icon={
+                    <ThumbsUp
+                      size={12}
+                      style={{
+                        color: isRecActiveInGroup
+                          ? 'var(--color-gold)'
+                          : '#60a5fa',
+                      }}
+                    />
+                  }
+                  isActive={isRecActiveInGroup}
+                  isLocked={recLockedYears.has(groupYear)}
+                  showDragHandle={
+                    dragState.mode === 'none' || dragState.mode === 'list'
+                  }
+                  onClick={() => onSelectRecommendationYear!(groupYear)}
+                />
+              )}
             </GroupAccordion>
           </div>
         );
       })}
 
-      {/* ── Recommendation years ── */}
-      {recYears.length > 0 && onSelectRecommendationYear && (
+      {/* ── Orphan recommendation years (no matching year group) ── */}
+      {orphanRecYears.length > 0 && onSelectRecommendationYear && (
         <div data-testid="drawer-recommendations-section">
-          {/* Section divider + label */}
           <div
             style={{
               padding: '12px 10px 4px',
               fontFamily: 'var(--font-mono)',
-              fontSize: '7px',
+              fontSize: '11px',
               fontWeight: 400,
-              letterSpacing: '0.15em',
+              letterSpacing: '0.05em',
               textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.20)',
+              color: 'var(--color-text-label)',
             }}
           >
             Recommendations
           </div>
 
-          {recYears.map((year) => {
+          {orphanRecYears.map((year) => {
             const isActive = activeRecommendationYear === year;
             const isYearLocked = recLockedYears.has(year);
 
