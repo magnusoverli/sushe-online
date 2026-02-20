@@ -170,8 +170,8 @@ export const RecommendationCard = memo(function RecommendationCard({
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8px',
-                color: 'rgba(255,255,255,0.20)',
+                fontSize: '9px',
+                color: 'var(--color-text-muted)',
                 flexShrink: 0,
               }}
             >
@@ -183,8 +183,8 @@ export const RecommendationCard = memo(function RecommendationCard({
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '8px',
-                  color: 'rgba(255,255,255,0.12)',
+                  fontSize: '9px',
+                  color: 'var(--color-text-muted)',
                   flexShrink: 0,
                 }}
               >
@@ -193,8 +193,8 @@ export const RecommendationCard = memo(function RecommendationCard({
               <span
                 style={{
                   fontFamily: 'var(--font-mono)',
-                  fontSize: '8px',
-                  color: 'rgba(255,255,255,0.20)',
+                  fontSize: '9px',
+                  color: 'var(--color-text-muted)',
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -235,7 +235,7 @@ export const RecommendationCard = memo(function RecommendationCard({
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '8px',
+                fontSize: '9px',
                 fontWeight: 400,
                 color: 'rgba(255,255,255,0.30)',
                 lineHeight: 1.4,

@@ -52,9 +52,9 @@ const sectionLabelStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
   fontSize: '10px',
   fontWeight: 400,
-  letterSpacing: '0.15em',
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
-  color: 'rgba(255,255,255,0.20)',
+  color: 'var(--color-text-muted)',
   padding: '8px 12px 5px',
 };
 

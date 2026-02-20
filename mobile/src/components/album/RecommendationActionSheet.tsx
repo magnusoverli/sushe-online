@@ -181,7 +181,7 @@ export function RecommendationActionSheet({
                   fontSize: '11px',
                   textTransform: 'uppercase',
                   letterSpacing: '0.2em',
-                  color: 'rgba(255,255,255,0.25)',
+                  color: 'var(--color-text-label)',
                   display: 'block',
                   marginBottom: '6px',
                 }}

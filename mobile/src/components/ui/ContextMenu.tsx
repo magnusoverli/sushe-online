@@ -175,7 +175,7 @@ export function ContextMenu({
                 <div
                   style={{
                     fontFamily: 'var(--font-display)',
-                    fontSize: '8px',
+                    fontSize: '10px',
                     fontWeight: 400,
                     color: 'var(--color-text-primary)',
                     overflow: 'hidden',
@@ -188,7 +188,7 @@ export function ContextMenu({
                 <div
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '6px',
+                    fontSize: '9px',
                     fontWeight: 400,
                     color: 'var(--color-text-secondary)',
                     overflow: 'hidden',
@@ -253,11 +253,11 @@ export function ContextMenu({
                 <span
                   style={{
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '8px',
+                    fontSize: '10px',
                     fontWeight: 400,
                     color: item.destructive
                       ? 'var(--color-destructive)'
-                      : 'rgba(255,255,255,0.70)',
+                      : 'rgba(255,255,255,0.75)',
                     flex: 1,
                     textAlign: 'left',
                   }}

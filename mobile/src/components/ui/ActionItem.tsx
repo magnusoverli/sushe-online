@@ -127,7 +127,7 @@ export function ActionItem({
       {isChevron && !isDestructive && (
         <ChevronRight
           size={12}
-          style={{ color: 'rgba(255,255,255,0.20)', flexShrink: 0 }}
+          style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}
         />
       )}
     </button>

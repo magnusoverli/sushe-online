@@ -196,9 +196,9 @@ const footerBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
   padding: '8px 4px',
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
+  fontSize: '12px',
   letterSpacing: '0.04em',
-  color: 'rgba(255,255,255,0.35)',
+  color: 'var(--color-text-secondary)',
 };
 
 export function LibraryPage() {
@@ -208,6 +208,12 @@ export function LibraryPage() {
   const isDrawerOpen = useAppStore((s) => s.isDrawerOpen);
   const setDrawerOpen = useAppStore((s) => s.setDrawerOpen);
   const user = useAppStore((s) => s.user);
+
+  // Incremented each time the drawer opens to reset accordion state
+  const [drawerResetKey, setDrawerResetKey] = useState(0);
+  useEffect(() => {
+    if (isDrawerOpen) setDrawerResetKey((k) => k + 1);
+  }, [isDrawerOpen]);
 
   const queryClient = useQueryClient();
 
@@ -1031,10 +1037,11 @@ export function LibraryPage() {
   return (
     <>
       <AppShell
-        activeTab="library"
+        activeTab={settingsOpen ? 'settings' : 'library'}
         scrollRef={scrollContainerRef}
         showNowPlaying={showNowPlaying}
         onSettingsClick={() => setSettingsOpen(true)}
+        onSettingsClose={() => setSettingsOpen(false)}
         skipSafeArea={!viewingRecommendations}
         header={
           viewingRecommendations ? (
@@ -1065,7 +1072,7 @@ export function LibraryPage() {
                     padding: '4px 0',
                     cursor: 'pointer',
                     fontFamily: 'var(--font-mono)',
-                    fontSize: '9px',
+                    fontSize: '11px',
                     letterSpacing: '0.04em',
                     color: 'var(--color-text-secondary)',
                   }}
@@ -1160,7 +1167,7 @@ export function LibraryPage() {
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
-                    <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
+                    <span style={{ fontSize: '9px', letterSpacing: '0.05em' }}>
                       LOCKED
                     </span>
                   </span>
@@ -1422,20 +1429,8 @@ export function LibraryPage() {
           <div style={{ paddingTop: '16px' }}>
             <div
               style={{
-                fontFamily: 'var(--font-mono)',
-                fontSize: '7px',
-                letterSpacing: '0.2em',
-                textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.25)',
-                marginBottom: '4px',
-              }}
-            >
-              LIBRARY
-            </div>
-            <div
-              style={{
                 fontFamily: 'var(--font-display)',
-                fontSize: '15px',
+                fontSize: '17px',
                 letterSpacing: '-0.02em',
                 color: 'var(--color-text-primary)',
               }}
@@ -1455,6 +1450,7 @@ export function LibraryPage() {
           onCloseDrawer={() => setDrawerOpen(false)}
           activeRecommendationYear={recommendationYear}
           onSelectRecommendationYear={handleSelectRecommendationYear}
+          resetKey={drawerResetKey}
         />
 
         {/* Spacer to push footer to bottom */}
@@ -1652,7 +1648,7 @@ export function LibraryPage() {
           onClick={() => handleImportConflict('rename')}
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
+            fontSize: '12px',
             padding: '8px 16px',
             borderRadius: '8px',
             border: '1px solid rgba(255,255,255,0.10)',

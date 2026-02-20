@@ -317,7 +317,7 @@ export function ListHeaderMeta({
             data-testid="list-header-lock"
           >
             <Lock size={10} />
-            <span style={{ fontSize: '8px', letterSpacing: '0.06em' }}>
+            <span style={{ fontSize: '9px', letterSpacing: '0.05em' }}>
               LOCKED
             </span>
           </span>

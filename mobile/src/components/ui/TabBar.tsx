@@ -53,6 +53,8 @@ interface TabBarProps {
   activeTab: TabId;
   /** Called when the Settings tab is tapped. */
   onSettingsClick?: () => void;
+  /** Called when a non-settings tab is tapped while settings is active. */
+  onSettingsClose?: () => void;
 }
 
 const barStyle: CSSProperties = {
@@ -84,8 +86,8 @@ const tabItemStyle: CSSProperties = {
 
 const labelBase: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7.5px',
-  letterSpacing: '0.06em',
+  fontSize: '9px',
+  letterSpacing: '0.05em',
   lineHeight: 1,
 };
 
@@ -97,7 +99,11 @@ const dotStyle: CSSProperties = {
   bottom: '0px',
 };
 
-export function TabBar({ activeTab, onSettingsClick }: TabBarProps) {
+export function TabBar({
+  activeTab,
+  onSettingsClick,
+  onSettingsClose,
+}: TabBarProps) {
   const navigate = useNavigate();
 
   return (
@@ -117,8 +123,9 @@ export function TabBar({ activeTab, onSettingsClick }: TabBarProps) {
             onClick={() => {
               if (tab.id === 'settings') {
                 onSettingsClick?.();
-              } else if (tab.path) {
-                navigate({ to: tab.path });
+              } else {
+                if (activeTab === 'settings') onSettingsClose?.();
+                if (tab.path) navigate({ to: tab.path });
               }
             }}
             data-testid={`tab-${tab.id}`}

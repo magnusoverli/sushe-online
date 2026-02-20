@@ -172,7 +172,7 @@ export function ReidentifySheet({
               style={{
                 fontFamily: 'var(--font-mono)',
                 fontSize: '11px',
-                letterSpacing: '0.06em',
+                letterSpacing: '0.05em',
                 textTransform: 'uppercase',
                 color: 'var(--color-text-secondary)',
                 padding: '4px 8px 8px',
@@ -370,7 +370,7 @@ function CandidateCard({
                 fontFamily: 'var(--font-mono)',
                 fontSize: '11px',
                 fontWeight: 500,
-                letterSpacing: '0.06em',
+                letterSpacing: '0.05em',
                 textTransform: 'uppercase',
                 color: '#1A1A1F',
                 background: 'var(--color-gold)',

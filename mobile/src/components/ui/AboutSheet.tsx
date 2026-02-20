@@ -90,7 +90,7 @@ function groupByDate(entries: ChangelogEntry[]): DateGroup[] {
 const badgeStyle = (color: string, bg: string): CSSProperties => ({
   fontFamily: 'var(--font-mono)',
   fontSize: '11px',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.05em',
   textTransform: 'uppercase',
   color,
   background: bg,
@@ -131,7 +131,7 @@ const showMoreStyle: CSSProperties = {
   padding: '10px',
   fontFamily: 'var(--font-mono)',
   fontSize: '12px',
-  color: 'rgba(255,255,255,0.40)',
+  color: 'var(--color-text-secondary)',
   background: 'transparent',
   border: '1px solid rgba(255,255,255,0.08)',
   borderRadius: '8px',
@@ -183,7 +183,7 @@ export function AboutSheet({ open, onClose }: AboutSheetProps) {
             style={{
               fontFamily: 'var(--font-mono)',
               fontSize: '11px',
-              color: 'rgba(255,255,255,0.40)',
+              color: 'var(--color-text-secondary)',
               marginTop: '4px',
             }}
           >
@@ -199,7 +199,7 @@ export function AboutSheet({ open, onClose }: AboutSheetProps) {
               fontSize: '11px',
               textTransform: 'uppercase',
               letterSpacing: '0.2em',
-              color: 'rgba(255,255,255,0.25)',
+              color: 'var(--color-text-label)',
               marginTop: '12px',
               marginBottom: '4px',
             }}

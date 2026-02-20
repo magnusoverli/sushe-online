@@ -35,7 +35,7 @@ const previewCardStyle: CSSProperties = {
 
 const previewTitleStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '8px',
+  fontSize: '10px',
   fontWeight: 500,
   color: 'rgba(255,255,255,0.75)',
   overflow: 'hidden',
@@ -45,8 +45,8 @@ const previewTitleStyle: CSSProperties = {
 
 const previewDescStyle: CSSProperties = {
   fontFamily: 'var(--font-mono)',
-  fontSize: '7px',
-  color: 'rgba(255,255,255,0.40)',
+  fontSize: '9px',
+  color: 'var(--color-text-secondary)',
   overflow: 'hidden',
   textOverflow: 'ellipsis',
   display: '-webkit-box',

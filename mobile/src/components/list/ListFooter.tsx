@@ -22,7 +22,7 @@ export function ListFooter({ albumCount }: ListFooterProps) {
           fontFamily: 'var(--font-mono)',
           fontSize: '10px',
           fontWeight: 400,
-          letterSpacing: '0.06em',
+          letterSpacing: '0.05em',
           textTransform: 'uppercase',
           color: 'rgba(255,255,255,0.12)',
         }}

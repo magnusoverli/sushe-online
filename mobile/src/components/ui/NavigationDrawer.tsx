@@ -181,10 +181,10 @@ export function DrawerNavItem({
   dragState = 'default',
   showDragHandle = false,
 }: DrawerNavItemProps) {
-  const color = isActive ? 'var(--color-gold)' : 'rgba(255,255,255,0.45)';
+  const color = isActive ? 'var(--color-gold)' : 'rgba(255,255,255,0.75)';
   const countColor = isActive
-    ? 'rgba(232,200,122,0.50)'
-    : 'rgba(255,255,255,0.20)';
+    ? 'rgba(232,200,122,0.60)'
+    : 'var(--color-text-secondary)';
 
   const isDragging = dragState === 'dragging';
   const isDropTarget = dragState === 'drop-target';
@@ -246,7 +246,7 @@ export function DrawerNavItem({
       <span
         style={{
           fontFamily: 'var(--font-mono)',
-          fontSize: '8.5px',
+          fontSize: '13px',
           fontWeight: 400,
           color,
           flex: 1,
@@ -259,7 +259,7 @@ export function DrawerNavItem({
         <span
           style={{
             fontFamily: 'var(--font-mono)',
-            fontSize: '7px',
+            fontSize: '11px',
             fontWeight: 400,
             color: countColor,
             flexShrink: 0,
@@ -268,30 +268,33 @@ export function DrawerNavItem({
           {count}
         </span>
       )}
-      {isLocked && (
-        <span
-          style={{
-            display: 'flex',
-            flexShrink: 0,
-            color: 'rgba(255,255,255,0.20)',
-          }}
-          data-testid="drawer-nav-lock"
+      {/* Lock icon — always rendered to reserve space so counts stay aligned;
+          visibility controls whether it's actually shown. */}
+      <span
+        style={{
+          display: 'flex',
+          flexShrink: 0,
+          width: '10px',
+          justifyContent: 'center',
+          color: 'var(--color-text-muted)',
+          visibility: isLocked ? 'visible' : 'hidden',
+        }}
+        data-testid="drawer-nav-lock"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         >
-          <svg
-            width="10"
-            height="10"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-          </svg>
-        </span>
-      )}
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </svg>
+      </span>
     </button>
   );
 }
