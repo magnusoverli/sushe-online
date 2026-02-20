@@ -27,9 +27,12 @@ RUN echo "Cache bust: ${CACHE_BUST}"
 COPY . .
 RUN npm run build
 
+# Build the mobile SPA (separate package.json in mobile/)
+RUN cd mobile && npm ci --prefer-offline --no-audit --no-fund && npm run build
+
 # Remove node_modules before copying to runtime
 # Other dev-only files are handled conditionally during COPY
-RUN rm -rf node_modules
+RUN rm -rf node_modules mobile/node_modules
 
 # ----- Runtime stage -----
 FROM base AS runtime
@@ -72,7 +75,8 @@ RUN if [ "$INSTALL_DEV_DEPS" != "true" ]; then \
       rm -rf test browser-extension .github scripts screenshots .cursor .opencode \
       && rm -f AGENTS.md TESTING.md CHANGELOG.md playwright.config.js \
       && rm -f vite.config.js postcss.config.js tailwind.config.js \
-      && rm -f eslint.config.mjs .prettierrc .prettierignore; \
+      && rm -f eslint.config.mjs .prettierrc .prettierignore \
+      && rm -rf mobile/src mobile/tsconfig.json mobile/vite.config.ts mobile/index.html; \
     fi
 
 # Runtime configuration
