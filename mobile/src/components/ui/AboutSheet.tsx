@@ -157,56 +157,10 @@ export function AboutSheet({ open, onClose }: AboutSheetProps) {
   }, []);
 
   return (
-    <BottomSheet open={open} onClose={onClose} title="About">
+    <BottomSheet open={open} onClose={onClose} title="What's New">
       <div style={{ padding: '0 8px 8px' }}>
-        {/* App info */}
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '8px 0 12px',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-            marginBottom: '4px',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '17px',
-              color: 'var(--color-text-primary)',
-              letterSpacing: '-0.02em',
-            }}
-            data-testid="about-app-name"
-          >
-            SuShe Online
-          </div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              color: 'var(--color-text-secondary)',
-              marginTop: '4px',
-            }}
-          >
-            Track and organize your music, one album at a time.
-          </div>
-        </div>
-
         {/* Changelog */}
         <div>
-          <div
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.2em',
-              color: 'var(--color-text-label)',
-              marginTop: '12px',
-              marginBottom: '4px',
-            }}
-          >
-            What&apos;s New
-          </div>
-
           {groups.length === 0 ? (
             <div
               style={{
