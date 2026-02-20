@@ -38,6 +38,7 @@ import {
   updateAlbumComment,
   updateAlbumComment2,
 } from '@/services/albums';
+import { getCachedCoverArt } from '@/services/search';
 import {
   updateListItems,
   getList,
@@ -1459,6 +1460,7 @@ export function LibraryPage() {
                         coverElement={
                           <CoverImage
                             src={
+                              getCachedCoverArt(album.album_id) ||
                               album.cover_image_url ||
                               (album.album_id
                                 ? getAlbumCoverUrl(album.album_id)
@@ -1898,6 +1900,7 @@ export function LibraryPage() {
             coverElement={
               <CoverImage
                 src={
+                  getCachedCoverArt(draggedAlbum.album_id) ||
                   draggedAlbum.cover_image_url ||
                   (draggedAlbum.album_id
                     ? getAlbumCoverUrl(draggedAlbum.album_id)

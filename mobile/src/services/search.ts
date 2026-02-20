@@ -417,6 +417,19 @@ export async function searchArtistImage(
 const coverArtCache = new Map<string, string | null>();
 
 /**
+ * Get a cached cover art URL for a release group (album_id).
+ * Returns the URL if previously resolved by the racing system, or undefined.
+ * Used by LibraryPage to show covers instantly for just-added albums
+ * before the server-side background fetch completes.
+ */
+export function getCachedCoverArt(
+  releaseGroupId: string | undefined
+): string | undefined {
+  if (!releaseGroupId) return undefined;
+  return coverArtCache.get(releaseGroupId) ?? undefined;
+}
+
+/**
  * Concurrency limiter for the heavy CAA image proxy only.
  * Deezer/iTunes are lightweight API calls and don't need limiting.
  */
