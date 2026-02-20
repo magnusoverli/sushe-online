@@ -18,6 +18,8 @@ interface ScrimProps {
   onDismiss: () => void;
   zIndex?: number;
   className?: string;
+  /** Optional bottom offset (e.g. to stop above TabBar). */
+  bottom?: string;
 }
 
 const baseStyle: CSSProperties = {
@@ -33,6 +35,7 @@ export function Scrim({
   onDismiss,
   zIndex = 300,
   className,
+  bottom,
 }: ScrimProps) {
   // Close on Escape key
   const handleKeyDown = useCallback(
@@ -54,7 +57,13 @@ export function Scrim({
       {visible && (
         <motion.div
           className={className}
-          style={{ ...baseStyle, zIndex }}
+          style={{
+            ...baseStyle,
+            zIndex,
+            ...(bottom
+              ? { inset: undefined, top: 0, left: 0, right: 0, bottom }
+              : {}),
+          }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}

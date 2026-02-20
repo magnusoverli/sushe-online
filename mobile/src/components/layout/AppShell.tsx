@@ -31,6 +31,8 @@ interface AppShellProps {
   showNowPlaying?: boolean;
   /** Called when the Settings tab is tapped in the TabBar. */
   onSettingsClick?: () => void;
+  /** Called when a non-settings tab is tapped while settings is open. */
+  onSettingsClose?: () => void;
   /** Skip auto safe-area-inset-top on main (when a sticky child handles it). */
   skipSafeArea?: boolean;
 }
@@ -42,6 +44,7 @@ export function AppShell({
   scrollRef,
   showNowPlaying = false,
   onSettingsClick,
+  onSettingsClose,
   skipSafeArea = false,
 }: AppShellProps) {
   return (
@@ -86,7 +89,11 @@ export function AppShell({
         {children}
       </main>
       <NowPlayingBar visible={showNowPlaying} />
-      <TabBar activeTab={activeTab} onSettingsClick={onSettingsClick} />
+      <TabBar
+        activeTab={activeTab}
+        onSettingsClick={onSettingsClick}
+        onSettingsClose={onSettingsClose}
+      />
     </div>
   );
 }

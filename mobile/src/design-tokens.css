@@ -97,7 +97,7 @@
 
   /* ── Z-index Stack ── */
   --z-content: 0;
-  --z-tabbar: 100;
+  --z-tabbar: 250;
   --z-drawer: 200;
   --z-scrim: 300;
   --z-sheet: 400;

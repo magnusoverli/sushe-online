@@ -13,8 +13,9 @@ export function SearchPage() {
   return (
     <>
       <AppShell
-        activeTab="search"
+        activeTab={settingsOpen ? 'settings' : 'search'}
         onSettingsClick={() => setSettingsOpen(true)}
+        onSettingsClose={() => setSettingsOpen(false)}
       >
         <div
           style={{
