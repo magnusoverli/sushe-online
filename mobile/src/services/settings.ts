@@ -42,6 +42,12 @@ export async function updateMusicService(
   return api.post('/settings/update-music-service', { musicService });
 }
 
+export async function updatePreferredUi(
+  preferredUi: string | null
+): Promise<{ success: boolean }> {
+  return api.post('/settings/update-preferred-ui', { preferredUi });
+}
+
 // ── Unique field updates ──
 
 export async function updateEmail(

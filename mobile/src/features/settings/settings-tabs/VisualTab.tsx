@@ -1,5 +1,5 @@
 /**
- * VisualTab - Accent color, time format, date format.
+ * VisualTab - Accent color, time format, date format, interface toggle.
  */
 
 import { useState, useCallback } from 'react';
@@ -8,6 +8,7 @@ import {
   useUpdateAccentColor,
   useUpdateTimeFormat,
   useUpdateDateFormat,
+  useUpdatePreferredUi,
 } from '@/hooks/useSettings';
 import {
   sectionStyle,
@@ -19,10 +20,12 @@ import {
 export function VisualTab() {
   const user = useAppStore((s) => s.user);
   const [colorValue, setColorValue] = useState(user?.accentColor ?? '#dc2626');
+  const [switchingUi, setSwitchingUi] = useState(false);
 
   const accentMutation = useUpdateAccentColor();
   const timeMutation = useUpdateTimeFormat();
   const dateMutation = useUpdateDateFormat();
+  const preferredUiMutation = useUpdatePreferredUi();
 
   const handleColorChange = useCallback(
     (hex: string) => {
@@ -31,6 +34,19 @@ export function VisualTab() {
     },
     [accentMutation]
   );
+
+  const handleSwitchToLegacy = useCallback(() => {
+    setSwitchingUi(true);
+    preferredUiMutation.mutate('desktop', {
+      onSuccess: () => {
+        // Navigate to the legacy UI (full page redirect)
+        window.location.href = '/';
+      },
+      onError: () => {
+        setSwitchingUi(false);
+      },
+    });
+  }, [preferredUiMutation]);
 
   if (!user) return null;
 
@@ -126,6 +142,44 @@ export function VisualTab() {
             <option value="MM/DD/YYYY">MM/DD/YYYY</option>
             <option value="DD/MM/YYYY">DD/MM/YYYY</option>
           </select>
+        </div>
+      </div>
+
+      {/* Interface toggle */}
+      <div style={sectionStyle}>
+        <div style={sectionTitleStyle}>Interface</div>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '11px',
+            color: 'var(--color-text-secondary)',
+            marginBottom: '12px',
+            lineHeight: 1.5,
+          }}
+        >
+          You&apos;re using the new mobile interface. Switch back to the classic
+          view if you prefer.
+        </div>
+        <div style={fieldRowStyle}>
+          <span style={fieldLabelStyle}>New mobile interface</span>
+          <button
+            type="button"
+            onClick={handleSwitchToLegacy}
+            disabled={switchingUi}
+            style={{
+              fontFamily: 'var(--font-mono)',
+              fontSize: '12px',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: 'none',
+              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--color-text-primary)',
+              cursor: switchingUi ? 'default' : 'pointer',
+              opacity: switchingUi ? 0.5 : 1,
+            }}
+          >
+            {switchingUi ? 'Switching...' : 'Switch to classic'}
+          </button>
         </div>
       </div>
     </div>

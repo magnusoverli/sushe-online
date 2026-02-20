@@ -69,6 +69,7 @@ export interface User {
   dateFormat?: string;
   musicService?: string | null;
   lastfmUsername?: string | null;
+  preferredUi?: string | null;
   createdAt?: string;
 }
 

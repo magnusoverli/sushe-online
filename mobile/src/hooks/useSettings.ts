@@ -14,6 +14,7 @@ import {
   updateTimeFormat,
   updateDateFormat,
   updateMusicService,
+  updatePreferredUi,
   updateEmail,
   updateUsername,
   changePassword,
@@ -100,6 +101,13 @@ export function useUpdateMusicService() {
   return useSettingMutation(
     (val: string | null) => updateMusicService(val),
     'Music service updated'
+  );
+}
+
+export function useUpdatePreferredUi() {
+  return useSettingMutation(
+    (val: string | null) => updatePreferredUi(val),
+    'Interface preference updated'
   );
 }
 

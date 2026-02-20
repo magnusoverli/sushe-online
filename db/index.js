@@ -211,6 +211,7 @@ if (process.env.DATABASE_URL) {
     listSetupDismissedUntil: 'list_setup_dismissed_until',
     lastfmUsername: 'lastfm_username',
     approvalStatus: 'approval_status',
+    preferredUi: 'preferred_ui',
   };
   const listsMap = {
     _id: '_id',

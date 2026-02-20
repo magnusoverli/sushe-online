@@ -50,6 +50,34 @@ module.exports = (app, deps) => {
 
   const asyncHandler = createAsyncHandler(logger);
 
+  // ── Helper: mobile UA detection for SPA redirect ───────────────────────
+
+  /**
+   * Check if a User-Agent string indicates a mobile phone (not tablet).
+   * Excludes iPad (sends desktop UA in modern iOS) and Android tablets.
+   */
+  function isMobileUA(ua) {
+    if (!ua) return false;
+    // Match phones: iPhone, Android with "Mobile", webOS, iPod, etc.
+    // Exclude tablets: iPad is excluded (modern iPads send Mac UA anyway),
+    // Android without "Mobile" = tablet.
+    return /iPhone|iPod|Android.*Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+      ua
+    );
+  }
+
+  /**
+   * Determine if a request should be redirected to the mobile SPA.
+   * User preference takes priority; falls back to UA detection.
+   */
+  function shouldRedirectToMobile(req) {
+    const pref = req.user?.preferredUi;
+    if (pref === 'desktop') return false;
+    if (pref === 'mobile') return true;
+    // Auto: check UA
+    return isMobileUA(req.headers['user-agent']);
+  }
+
   // ── Helper: respond with JSON or flash+redirect ────────────────────────
 
   function respondWithError(req, res, statusCode, message, redirectPath) {
@@ -274,7 +302,7 @@ module.exports = (app, deps) => {
         return res.redirect('/extension/auth');
       }
 
-      return res.redirect('/');
+      return res.redirect(shouldRedirectToMobile(req) ? '/mobile' : '/');
     } catch (err) {
       logger.error('Authentication error', { error: err.message });
       req.flash('error', 'An error occurred during login');
@@ -288,8 +316,11 @@ module.exports = (app, deps) => {
     req.logout(() => res.redirect('/login'));
   });
 
-  // Home (protected)
+  // Home (protected) — mobile users are redirected to SPA
   app.get('/', ensureAuth, csrfProtection, (req, res) => {
+    if (shouldRedirectToMobile(req)) {
+      return res.redirect('/mobile');
+    }
     res.send(spotifyTemplate(sanitizeUser(req.user), req.csrfToken()));
   });
 
@@ -315,6 +346,11 @@ module.exports = (app, deps) => {
     '/settings/update-music-service',
     ensureAuth,
     settingsHandler('musicService')
+  );
+  app.post(
+    '/settings/update-preferred-ui',
+    ensureAuth,
+    settingsHandler('preferredUi')
   );
 
   // Unique-field settings
