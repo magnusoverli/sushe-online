@@ -77,26 +77,11 @@ const tabItemStyle: CSSProperties = {
   justifyContent: 'center',
   gap: '4px',
   paddingTop: '10px',
-  paddingBottom: '12px',
+  paddingBottom: '0px',
   cursor: 'pointer',
   background: 'transparent',
   border: 'none',
   position: 'relative',
-};
-
-const labelBase: CSSProperties = {
-  fontFamily: 'var(--font-mono)',
-  fontSize: '9px',
-  letterSpacing: '0.05em',
-  lineHeight: 1,
-};
-
-const dotStyle: CSSProperties = {
-  width: '4px',
-  height: '4px',
-  borderRadius: '50%',
-  position: 'absolute',
-  bottom: '0px',
 };
 
 export function TabBar({
@@ -133,20 +118,16 @@ export function TabBar({
             {tab.icon}
             <span
               style={{
-                ...labelBase,
+                fontFamily: 'var(--font-mono)',
+                fontSize: '9px',
+                letterSpacing: '0.05em',
+                lineHeight: 1,
                 color,
                 fontWeight: isActive ? 500 : 400,
               }}
             >
               {tab.label}
             </span>
-            {/* Active dot */}
-            <span
-              style={{
-                ...dotStyle,
-                background: isActive ? 'var(--color-gold)' : 'transparent',
-              }}
-            />
           </button>
         );
       })}
