@@ -1,6 +1,97 @@
 [
   {
     "date": "2026-02-20",
+    "category": "perf",
+    "description": "Faster album cover loading with preconnect hints",
+    "hash": "d1f63deade132350f6cbaed403c69d8f688cbc48",
+    "commitMessage": "Add album cover art racing system with preconnect hints\n\n- Race 3 cover art providers (Deezer, iTunes, CAA proxy) for each album\n- Skip image verification for Deezer/iTunes (reliable CDNs), keep for Wikidata\n- Add CDN preconnect hints when AddAlbumSheet opens (~100-200ms savings per CDN)\n- Concurrency-limit CAA proxy calls (max 4) to avoid thundering herd\n- Extract shared raceProviders() utility and normalizeForApi() helper\n- useCoverArt hook lazy-loads covers with abort-on-unmount\n- Show first-letter monogram as placeholder while covers load"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Add album button moved to header, auto-scrolls to new albums",
+    "hash": "82d65e17c6955c9c3ee78eeebf7d016115942629",
+    "commitMessage": "Move add-album button to sticky header, close sheet on add and scroll to new album\n\n- Move + button from metadata row to title header (brighter color, scales with title)\n- Close AddAlbumSheet on successful add, notify parent via onAlbumAdded callback\n- Scroll to bottom of list after add so the new album is visible\n- Clean up: remove onAddAlbum from ListHeaderMeta, add to ListHeader with isLocked guard"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Added album search with MusicBrainz database integration",
+    "hash": "8638895652dd18875509633460e08e36837e233b",
+    "commitMessage": "Add album search feature with MusicBrainz integration\n\n- AddAlbumSheet: bottom sheet with artist/album search via MusicBrainz proxy\n- Artist image racing system: Deezer, iTunes, Wikidata providers (first wins)\n- ListHeaderMeta: + button to open add album sheet (hidden when locked)\n- BottomSheet: tall prop for full-height sheets, dvh units for keyboard compat\n- Keyboard dismisses on search submit, artist-credits included in discography query"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed React error in Aggregate Lists admin section",
+    "hash": "c1110d2bacbf0e6d35cd8315a862c87adbf304f4",
+    "commitMessage": "Fix React error #31 in Aggregate Lists: align frontend types with backend response\n\n- confirmations is an array, not a number — use confirmationCount instead\n- stats are nested inside a stats property — access stats.stats.*"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS zoom on form inputs and improved sheet footers",
+    "hash": "78873aca0830eea40fcf6e5973d81be77a500455",
+    "commitMessage": "Fix iOS zoom on form inputs and add pinned footer to BottomSheet\n\n- Set fontSize to 16px on inputs/selects in CreateListSheet, CreateCollectionSheet,\n  EditListSheet, GroupActionSheet, and SetupWizardSheet to prevent iOS Safari auto-zoom\n- Add optional footer prop to BottomSheet for non-scrollable pinned buttons\n- Move action buttons to pinned footer in ReidentifySheet and SetupWizardSheet"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Renamed About section to What's New, cleaner design",
+    "hash": "55b25729beb59bccb39cad67fc45ca5d24425d93",
+    "commitMessage": "Streamline About sheet: remove app info header, rename to What's New"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Streamlined bottom navigation bar with tighter spacing",
+    "hash": "aea987d54a58a4d47aef52fddbd5eec485c4ca3f",
+    "commitMessage": "Slim down TabBar: remove active dot, tighten padding, push content to bottom edge"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Opens Spotify app directly when no device found for playback",
+    "hash": "bf2628f61e7f4b73c7f1aae58095c08d02b1425d",
+    "commitMessage": "Open Spotify app via deep link when no active device found on quick-play"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Tap album covers to play music instantly",
+    "hash": "9b785989f690b23217d06a35bd4e7f6d456ad28a",
+    "commitMessage": "Play album directly from cover image tap instead of opening action sheet\n\n- Spotify: searches album then plays on active device (no device picker)\n- Tidal: opens album in Tidal browser/app immediately\n- Both services connected with preference: uses preferred service\n- Both connected without preference: shows ServiceChooserSheet to pick\n- Play overlay now appears for Tidal-only users (was Spotify-only)\n- Shows helpful toast on error (no active device, album not found)\n- Full action sheet with device picker still available via three-dot menu"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS app viewport and download issues",
+    "hash": "12eaf407d9abab856726b1df8ea841d6c63e5bb8",
+    "commitMessage": "Fix iOS PWA viewport and download issues, tweak AlbumCard layout\n\n- Lock viewport height in standalone mode to prevent iOS share sheet resize bug\n- Only accept new viewport dimensions on orientation change in PWA mode\n- Use blob output for PDF downloads to work in iOS PWA\n- Enlarge album cover art to 88px, add release date and country metadata\n- Minor global.css adjustments for overflow handling"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Bottom navigation stays accessible when settings drawer is open",
+    "hash": "05d6da8da09d076306ecd75ce3159a1c31efd893",
+    "commitMessage": "Keep TabBar visible and interactive when settings drawer is open\n\n- Drawer uses paddingBottom to clear TabBar instead of bottom offset\n- Raise TabBar z-index above drawer so it paints on top (no sub-pixel gaps)\n- Add onSettingsClose callback through AppShell and TabBar\n- Highlight Settings tab icon when drawer is open, revert on close\n- Clicking Library/Search while settings is open closes the drawer and navigates\n- Add optional bottom prop to Scrim for future use"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Improved settings drawer with better sections and touch targets",
+    "hash": "e232ae7a49e83537de8c9e4a9e225d70231bee7b",
+    "commitMessage": "Polish settings drawer: card sections, touch targets, and tab chevrons\n\nSettings sections:\n- Convert flat divider layout to card-style containers (subtle bg + border + radius)\n- Reduce wrapper padding to compensate for card internal padding\n- Flatten AdminTab inner cardStyle to avoid cards-inside-cards\n\nTouch-friendliness (Plan B):\n- Bump field row, button, input, toggle, and select padding for ~36-40px tap targets\n- Enlarge Done button, Info icon, tab bar buttons, and inline save/cancel\n- Bump AdminTab action button and smallButton padding\n\nTypography:\n- Standardize all settings tab font sizes to established scale (11-17px)\n- Align all uppercase headers to 0.05em letter-spacing\n- Replace inline rgba colors with design token variables\n- Set select elements to 16px to prevent iOS zoom\n\nTab navigation:\n- Add chevron scroll indicators with fade-in/out based on scroll position\n- Increase tab gap and padding for easier touch targeting"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Organized recommendation lists inside year group accordions",
+    "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
+    "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-20",
     "category": "ui",
     "description": "Moved add album button to sticky header",
     "hash": "82d65e17c6955c9c3ee78eeebf7d016115942629",
@@ -572,6 +663,41 @@
     "description": "Organized recommendations by year in navigation menu",
     "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
     "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Removed welcome text from login page for cleaner design",
+    "hash": "8a8e5e7287684dac335e2a63ee04b939f0da8f52",
+    "commitMessage": "Remove 'Welcome back' eyebrow text from login page"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed service connection status not showing correctly",
+    "hash": "6eeb74ef373107b0637b8d8b89d1df3c7f5721d8",
+    "commitMessage": "Fix service connection flags always returning false in mobile API\n\nspotifyConnected, tidalConnected, and lastfmConnected were checking\nnon-existent user properties (spotifyAccessToken, tidalAccessToken,\nlastfmSessionKey). Changed to the correct mapped properties (spotifyAuth,\ntidalAuth, lastfmAuth?.session_key) matching what middleware/auth.js and\nservice-auth.js already use. This was preventing playcounts, Spotify\nplayback, Tidal actions, and integration status from working in the\nmobile SPA."
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Added release date and country info to album cards",
+    "hash": "732f22cce4075ff51bc5c66eda2db04de6ce72f8",
+    "commitMessage": "Add release date and country to album cards, enlarge cover art to 88px\n\n- Add releaseDate, country, yearMismatch props to AlbumCard\n- New metadata line between artist and tags showing year · country\n- Year renders in red when it mismatches the list year\n- Remove old year-mismatch tag push from LibraryPage\n- Bump cover art from 80x80 to 88x88px for more visual weight\n- Increase card vertical padding from 5px to 8px for breathing room\n- Tags stack vertically (column) instead of wrapping\n- Tighten tag pills: letter-spacing 0.1em→0.04em, padding 5px→3px"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Improved album card layout with better spacing",
+    "hash": "34cc1539241e40089ff1aa0c000b148d5f4a27ad",
+    "commitMessage": "Refine album card rank column and spacing\n\n- Always render rank spacer regardless of sort order for visual coherence\n- Rank visible only on main lists in custom sort, hidden otherwise\n- Shrink rank column from 15px to 5px, font 11→9px, opacity 0.15→0.35\n- Add 2px marginRight on rank for cover spacing\n- Reduce card horizontal padding from 5px to 4px\n- Always pass rank index to AlbumCard (not just in custom sort)"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "List headers now stick to top while scrolling",
+    "hash": "5d100045317a71184fd337242c56167a360d177b",
+    "commitMessage": "Make ListHeader sticky with compositor-friendly scroll-driven collapse\n\n- Move ListHeader from AppShell header slot into <main> scroll container\n  with position: sticky, so it pins at top while content scrolls beneath\n- Title shrinks 32→18px via transform: scale() with origin left top\n- Divider + buttons shift up via translateY to close freed space\n- clip-path: inset(0 0 Xpx 0) clips bottom only — no top title clipping\n- ListHeader owns safe-area-inset-top padding (covers notch when stuck)\n- Add skipSafeArea prop to AppShell to prevent double safe area padding\n- z-index isolation on album list container for Framer Motion stacking\n- Tune button positioning (ACTIONS_OFFSET) and uniform content lift"
   },
   {
     "date": "2026-02-19",
