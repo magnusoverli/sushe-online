@@ -28,13 +28,7 @@ import { MoreVertical, Headphones } from 'lucide-react';
 import { TagPill } from './TagPill';
 import { formatPlaycount } from '@/lib/utils';
 
-export type CardState =
-  | 'default'
-  | 'hover'
-  | 'active'
-  | 'drop-target'
-  | 'dragging'
-  | 'dimmed';
+export type CardState = 'default' | 'hover' | 'active';
 
 export interface AlbumCardProps {
   rank?: number;
@@ -68,35 +62,9 @@ function getCardBg(state: CardState): string {
   switch (state) {
     case 'hover':
       return 'var(--color-card-hover)';
-    case 'drop-target':
-      return 'var(--color-card-drop)';
     default:
       return 'transparent';
   }
-}
-
-function getCardBorder(state: CardState): string {
-  switch (state) {
-    case 'drop-target':
-      return '1px solid var(--color-border-drop)';
-    default:
-      return '1px solid transparent';
-  }
-}
-
-function getCardOpacity(state: CardState): number {
-  switch (state) {
-    case 'dragging':
-      return 0;
-    case 'dimmed':
-      return 1;
-    default:
-      return 1;
-  }
-}
-
-function getCardTransform(_state: CardState): string {
-  return 'none';
 }
 
 // ── Component ──
@@ -148,11 +116,8 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
       padding: 'var(--space-card-y) var(--space-card-x)',
       borderRadius: 'var(--radius-card)',
       background: getCardBg(effectiveState),
-      border: getCardBorder(effectiveState),
-      opacity: getCardOpacity(effectiveState),
-      transform: getCardTransform(effectiveState),
-      transition:
-        'background 150ms ease, opacity 200ms ease, transform 200ms ease, border-color 150ms ease',
+      border: '1px solid transparent',
+      transition: 'background 150ms ease',
       cursor: onClick ? 'pointer' : 'default',
       userSelect: 'none',
       WebkitUserSelect: 'none',

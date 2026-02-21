@@ -104,11 +104,6 @@
   --z-context-menu: 500;
   --z-ghost: 9999;
 
-  /* ── Drag & Drop ── */
-  --drag-long-press-ms: 480;
-  --drag-edge-zone-px: 60;
-  --drag-scroll-speed-px: 8;
-
   /* ── Animation Easings ── */
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
   --ease-menu: ease-out;

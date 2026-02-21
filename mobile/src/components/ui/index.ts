@@ -7,7 +7,7 @@ export { TagPill } from './TagPill';
 export { Scrim } from './Scrim';
 export { ActionItem, type ActionItemProps } from './ActionItem';
 export { TabBar, type TabId } from './TabBar';
-export { AlbumCard, type AlbumCardProps, type CardState } from './AlbumCard';
+export { AlbumCard, type AlbumCardProps } from './AlbumCard';
 export { BottomSheet } from './BottomSheet';
 export { AboutSheet } from './AboutSheet';
 export {
@@ -17,7 +17,7 @@ export {
 } from './NavigationDrawer';
 export { Dropdown, type DropdownItem } from './Dropdown';
 export { ContextMenu, type ContextMenuItem } from './ContextMenu';
-export { GhostCard } from './GhostCard';
+
 export { ToastContainer, showToast, useToastStore } from './Toast';
 export { ConfirmDialog } from './ConfirmDialog';
 export { SkeletonCard, SkeletonList } from './SkeletonCard';

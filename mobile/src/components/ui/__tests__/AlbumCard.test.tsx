@@ -74,17 +74,10 @@ describe('AlbumCard', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it('applies dragging state styles', () => {
-    render(<AlbumCard {...defaultProps} cardState="dragging" />);
+  it('applies hover background', () => {
+    render(<AlbumCard {...defaultProps} cardState="hover" />);
     const card = screen.getByTestId('album-card');
-    expect(card.style.opacity).toBe('0.2');
-    expect(card.style.transform).toContain('scale(0.97)');
-  });
-
-  it('applies dimmed state styles', () => {
-    render(<AlbumCard {...defaultProps} cardState="dimmed" />);
-    const card = screen.getByTestId('album-card');
-    expect(card.style.opacity).toBe('0.55');
+    expect(card.style.background).toBe('var(--color-card-hover)');
   });
 
   it('renders without tags', () => {

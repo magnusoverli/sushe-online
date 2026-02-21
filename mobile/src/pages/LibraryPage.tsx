@@ -19,10 +19,8 @@
  */
 
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppStore } from '@/stores/app-store';
-import { useDragStore } from '@/stores/drag-store';
 import { usePlaybackStore } from '@/stores/playback-store';
 import {
   useListsMetadata,
@@ -51,7 +49,7 @@ import {
   generateUniqueName,
   type ImportMetadata,
 } from '@/services/import';
-import { useDragAndDrop } from '@/features/drag-drop';
+import { SortableAlbumList, SortableAlbumCard } from '@/features/drag-drop';
 import {
   usePlaybackPolling,
   isAlbumMatchingPlayback,
@@ -59,10 +57,10 @@ import {
 import { AppShell } from '@/components/layout/AppShell';
 import { ListHeader, ListHeaderMeta } from '@/components/list/ListHeader';
 import { ListFooter } from '@/components/list/ListFooter';
-import { AlbumCard, type CardState } from '@/components/ui/AlbumCard';
+import { AlbumCard } from '@/components/ui/AlbumCard';
 import { SkeletonList } from '@/components/ui/SkeletonCard';
 import { CoverImage } from '@/components/album/CoverImage';
-import { GhostCard } from '@/components/ui/GhostCard';
+
 import { Dropdown, type DropdownItem } from '@/components/ui/Dropdown';
 import { NavigationDrawer } from '@/components/ui/NavigationDrawer';
 import { DrawerContent } from '@/components/list/DrawerContent';
@@ -388,30 +386,7 @@ export function LibraryPage() {
   const sortTriggerRef = useRef<HTMLButtonElement>(null);
 
   // ── Drag-and-drop reordering ──
-  const isDragging = useDragStore((s) => s.isDragging);
-  const dragOrderedIds = useDragStore((s) => s.orderedIds);
-  const dragIndex = useDragStore((s) => s.dragIndex);
-  const dropIndex = useDragStore((s) => s.dropIndex);
-  // ghostX/ghostY/ghostWidth are subscribed inside GhostCard directly,
-  // so LibraryPage doesn't re-render on every pixel of ghost movement.
-
-  // Derive the displayed album order: during drag, use drag store order
-  const displayAlbums = useMemo(() => {
-    if (!isDragging || sortKey !== 'custom' || dragOrderedIds.length === 0) {
-      return sortedAlbums;
-    }
-    // Reorder sortedAlbums based on dragOrderedIds
-    const albumMap = new Map(sortedAlbums.map((a) => [a._id, a]));
-    return dragOrderedIds
-      .map((id) => albumMap.get(id))
-      .filter((a): a is Album => a !== undefined);
-  }, [isDragging, sortKey, dragOrderedIds, sortedAlbums]);
-
-  // The album being dragged (for ghost card content)
-  const draggedAlbum = useMemo(() => {
-    if (dragIndex === null || !sortedAlbums[dragIndex]) return null;
-    return sortedAlbums[dragIndex];
-  }, [dragIndex, sortedAlbums]);
+  const displayAlbums = sortedAlbums;
 
   // Debounced reorder save
   const debouncedReorder = useMemo(
@@ -428,8 +403,8 @@ export function LibraryPage() {
   );
 
   // Build a lookup from _id to album_id for the reorder API.
-  // The drag-and-drop system tracks items by _id (for React keys and DOM refs),
-  // but the reorder API expects album_id (canonical identifier) in its order array.
+  // @dnd-kit tracks items by _id (for React keys), but the reorder API
+  // expects album_id (canonical identifier) in its order array.
   const idToAlbumId = useMemo(() => {
     const map = new Map<string, string>();
     for (const a of sortedAlbums) {
@@ -438,25 +413,28 @@ export function LibraryPage() {
     return map;
   }, [sortedAlbums]);
 
-  const handleReorderWithAlbumIds = useCallback(
+  const sortableItemIds = useMemo(
+    () => sortedAlbums.map((a) => a._id),
+    [sortedAlbums]
+  );
+
+  const handleReorder = useCallback(
     (newOrder: string[]) => {
-      // newOrder contains _id values from the drag system.
-      // Convert to album_id values for the API, keep _id order for cache update.
+      // Convert _id values to album_id values for the API
       const albumIdOrder = newOrder
         .map((id) => idToAlbumId.get(id))
         .filter((aid): aid is string => aid !== undefined);
 
       if (!activeListId || albumIdOrder.length === 0) return;
 
-      // Optimistically update the query cache so the list doesn't snap back
-      // to the old order when isDragging flips to false.
+      // Optimistically update the query cache
       queryClient.setQueryData<Album[]>(
         ['lists', activeListId, 'albums'],
         (oldAlbums) => {
           if (!oldAlbums) return oldAlbums;
-          const albumMap = new Map(oldAlbums.map((a) => [a._id, a]));
+          const aMap = new Map(oldAlbums.map((a) => [a._id, a]));
           return newOrder
-            .map((id) => albumMap.get(id))
+            .map((id) => aMap.get(id))
             .filter((a): a is Album => a !== undefined);
         }
       );
@@ -466,30 +444,9 @@ export function LibraryPage() {
     [activeListId, debouncedReorder, queryClient, idToAlbumId]
   );
 
-  const { handlers: dragHandlers, registerCard } = useDragAndDrop({
-    itemIds: useMemo(() => sortedAlbums.map((a) => a._id), [sortedAlbums]),
-    onReorder: handleReorderWithAlbumIds,
-    enabled: sortKey === 'custom' && !isListLocked,
-    scrollContainerRef,
-  });
+  const isDragEnabled = sortKey === 'custom' && !isListLocked;
 
-  /** Get the card visual state for a given index during drag. */
-  const getCardState = useCallback(
-    (index: number): CardState => {
-      if (!isDragging) return 'default';
-
-      // Find the original dragged item's current index in the display order
-      const draggedId =
-        dragIndex !== null ? sortedAlbums[dragIndex]?._id : null;
-      const currentId = displayAlbums[index]?._id;
-
-      if (currentId === draggedId) return 'dragging';
-      if (index === dropIndex) return 'drop-target';
-      return 'dimmed';
-    },
-    [isDragging, dragIndex, dropIndex, sortedAlbums, displayAlbums]
-  );
-
+  /** Render the drag overlay content for a given album ID. */
   /** Check if a given album matches the currently playing track. */
   const checkNowPlaying = useCallback(
     (album: Album): boolean => {
@@ -1417,98 +1374,105 @@ export function LibraryPage() {
                 </span>
               </div>
             ) : (
-              <div
-                role="list"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 'var(--space-card-gap-outer)',
-                  padding: `0 var(--space-list-x)`,
-                  position: 'relative',
-                  zIndex: 0,
-                }}
-                data-testid="album-list"
+              <SortableAlbumList
+                itemIds={sortableItemIds}
+                onReorder={handleReorder}
+                enabled={isDragEnabled}
               >
-                {displayAlbums.map((album, index) => {
-                  const rank = index + 1;
-                  const tags = buildAlbumTags(album);
-                  const yearMismatch = isYearMismatch(
-                    album.release_date,
-                    activeList?.year ?? null
-                  );
+                {(activeId) => (
+                  <div
+                    role="list"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--space-card-gap-outer)',
+                      padding: `0 var(--space-list-x)`,
+                      position: 'relative',
+                      zIndex: 0,
+                    }}
+                    data-testid="album-list"
+                  >
+                    {displayAlbums.map((album, index) => {
+                      const rank = index + 1;
+                      const tags = buildAlbumTags(album);
+                      const yearMismatch = isYearMismatch(
+                        album.release_date,
+                        activeList?.year ?? null
+                      );
+                      const albumIsNowPlaying = checkNowPlaying(album);
 
-                  const cardState = getCardState(index);
-                  const albumIsNowPlaying = checkNowPlaying(album);
+                      const card = (
+                        <AlbumCard
+                          rank={rank}
+                          title={album.album}
+                          artist={album.artist}
+                          showRank={sortKey === 'custom'}
+                          rankVisible={activeList?.isMain ?? false}
+                          tags={tags}
+                          releaseDate={album.release_date}
+                          country={album.country}
+                          yearMismatch={yearMismatch}
+                          playcount={playcounts[album._id]}
+                          coverElement={
+                            <CoverImage
+                              src={
+                                getCachedCoverArt(album.album_id) ||
+                                album.cover_image_url ||
+                                (album.album_id
+                                  ? getAlbumCoverUrl(album.album_id)
+                                  : undefined)
+                              }
+                              alt={`${album.album} by ${album.artist}`}
+                              hasSummary={!!album.summary}
+                              hasRecommendation={!!album.recommended_by}
+                              isNowPlaying={albumIsNowPlaying}
+                              onPlay={
+                                user?.spotifyConnected || user?.tidalConnected
+                                  ? () => handleQuickPlay(album)
+                                  : undefined
+                              }
+                              onSummaryClick={() =>
+                                setSummaryTarget({
+                                  albumId: album.album_id,
+                                  albumName: album.album,
+                                  artistName: album.artist,
+                                })
+                              }
+                              onRecommendationClick={() =>
+                                setRecommendationTarget({
+                                  albumName: album.album,
+                                  artistName: album.artist,
+                                  recommendedBy: album.recommended_by,
+                                  recommendedAt: album.recommended_at,
+                                })
+                              }
+                            />
+                          }
+                          onMenuClick={
+                            activeId
+                              ? undefined
+                              : () => handleAlbumMenuClick(album)
+                          }
+                        />
+                      );
 
-                  return (
-                    <motion.div
-                      key={album._id}
-                      onTouchStart={(e) => dragHandlers.onTouchStart(index, e)}
-                      layout
-                      transition={{
-                        layout: isDragging
-                          ? { type: 'spring', stiffness: 600, damping: 50 }
-                          : { duration: 0 },
-                      }}
-                    >
-                      <AlbumCard
-                        ref={(el) => registerCard(index, el)}
-                        rank={rank}
-                        title={album.album}
-                        artist={album.artist}
-                        showRank={sortKey === 'custom'}
-                        rankVisible={activeList?.isMain ?? false}
-                        tags={tags}
-                        releaseDate={album.release_date}
-                        country={album.country}
-                        yearMismatch={yearMismatch}
-                        playcount={playcounts[album._id]}
-                        cardState={cardState}
-                        coverElement={
-                          <CoverImage
-                            src={
-                              getCachedCoverArt(album.album_id) ||
-                              album.cover_image_url ||
-                              (album.album_id
-                                ? getAlbumCoverUrl(album.album_id)
-                                : undefined)
-                            }
-                            alt={`${album.album} by ${album.artist}`}
-                            hasSummary={!!album.summary}
-                            hasRecommendation={!!album.recommended_by}
-                            isNowPlaying={albumIsNowPlaying}
-                            onPlay={
-                              user?.spotifyConnected || user?.tidalConnected
-                                ? () => handleQuickPlay(album)
-                                : undefined
-                            }
-                            onSummaryClick={() =>
-                              setSummaryTarget({
-                                albumId: album.album_id,
-                                albumName: album.album,
-                                artistName: album.artist,
-                              })
-                            }
-                            onRecommendationClick={() =>
-                              setRecommendationTarget({
-                                albumName: album.album,
-                                artistName: album.artist,
-                                recommendedBy: album.recommended_by,
-                                recommendedAt: album.recommended_at,
-                              })
-                            }
-                          />
-                        }
-                        onMenuClick={
-                          isDragging
-                            ? undefined
-                            : () => handleAlbumMenuClick(album)
-                        }
-                      />
-                    </motion.div>
-                  );
-                })}
-              </div>
+                      if (isDragEnabled) {
+                        return (
+                          <SortableAlbumCard
+                            key={album._id}
+                            id={album._id}
+                            activeId={activeId}
+                          >
+                            {card}
+                          </SortableAlbumCard>
+                        );
+                      }
+
+                      return <div key={album._id}>{card}</div>;
+                    })}
+                  </div>
+                )}
+              </SortableAlbumList>
             )}
 
             {/* Footer */}
@@ -1895,30 +1859,6 @@ export function LibraryPage() {
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
-
-      {/* Ghost card for drag-and-drop */}
-      <GhostCard visible={isDragging && draggedAlbum !== null}>
-        {draggedAlbum && (
-          <AlbumCard
-            title={draggedAlbum.album}
-            artist={draggedAlbum.artist}
-            showRank={false}
-            tags={buildAlbumTags(draggedAlbum)}
-            coverElement={
-              <CoverImage
-                src={
-                  getCachedCoverArt(draggedAlbum.album_id) ||
-                  draggedAlbum.cover_image_url ||
-                  (draggedAlbum.album_id
-                    ? getAlbumCoverUrl(draggedAlbum.album_id)
-                    : undefined)
-                }
-                alt={`${draggedAlbum.album} by ${draggedAlbum.artist}`}
-              />
-            }
-          />
-        )}
-      </GhostCard>
     </>
   );
 }
