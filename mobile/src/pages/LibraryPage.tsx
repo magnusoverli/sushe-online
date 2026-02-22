@@ -37,7 +37,12 @@ import {
   updateAlbumComment2,
 } from '@/services/albums';
 import { getCachedCoverArt } from '@/services/search';
-import { updateListItems, getList, replaceListItems } from '@/services/lists';
+import {
+  updateListItems,
+  getList,
+  replaceListItems,
+  reorderList,
+} from '@/services/lists';
 import {
   readImportFile,
   importList,
@@ -82,6 +87,10 @@ import {
   type MusicServiceChoice,
 } from '@/components/album/ServiceChooserSheet';
 import { SetupWizardSheet } from '@/components/list/SetupWizardSheet';
+import {
+  SortableAlbumList,
+  useDebouncedReorder,
+} from '@/components/list/SortableAlbumList';
 import { AddAlbumSheet } from '@/components/album/AddAlbumSheet';
 import { SettingsDrawer } from '@/features/settings';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -373,6 +382,39 @@ export function LibraryPage() {
   }, [albums, sortKey]);
 
   const sortTriggerRef = useRef<HTMLButtonElement>(null);
+
+  // ── Drag-and-drop reorder (custom sort only) ──
+
+  // Build an album lookup map for efficient rendering during reorder
+  const albumMap = useMemo(() => {
+    const map = new Map<string, Album>();
+    if (albums) {
+      for (const a of albums) map.set(a._id, a);
+    }
+    return map;
+  }, [albums]);
+
+  const debouncedSaveReorder = useDebouncedReorder(reorderList, activeListId);
+
+  const handleReorder = useCallback(
+    (newOrder: string[]) => {
+      if (!activeListId) return;
+
+      // Optimistic cache update: reorder albums in the query cache immediately
+      queryClient.setQueryData<Album[]>(
+        ['lists', activeListId, 'albums'],
+        (prev) => {
+          if (!prev) return prev;
+          const map = new Map(prev.map((a) => [a._id, a]));
+          return newOrder.map((id) => map.get(id)).filter(Boolean) as Album[];
+        }
+      );
+
+      // Debounced API save
+      debouncedSaveReorder(activeListId, newOrder);
+    },
+    [activeListId, queryClient, debouncedSaveReorder]
+  );
 
   /** Check if a given album matches the currently playing track. */
   const checkNowPlaying = useCallback(
@@ -1300,6 +1342,70 @@ export function LibraryPage() {
                   This list is empty.
                 </span>
               </div>
+            ) : sortKey === 'custom' ? (
+              <SortableAlbumList
+                items={sortedAlbums.map((a) => a._id)}
+                onReorder={handleReorder}
+                scrollContainerRef={scrollContainerRef}
+                renderItem={(id, index) => {
+                  const album = albumMap.get(id);
+                  if (!album) return null;
+                  const albumIsNowPlaying = checkNowPlaying(album);
+                  return (
+                    <AlbumCard
+                      rank={index + 1}
+                      title={album.album}
+                      artist={album.artist}
+                      showRank
+                      rankVisible={activeList?.isMain ?? false}
+                      tags={buildAlbumTags(album)}
+                      releaseDate={album.release_date}
+                      country={album.country}
+                      yearMismatch={isYearMismatch(
+                        album.release_date,
+                        activeList?.year ?? null
+                      )}
+                      playcount={playcounts[album._id]}
+                      coverElement={
+                        <CoverImage
+                          src={
+                            getCachedCoverArt(album.album_id) ||
+                            album.cover_image_url ||
+                            (album.album_id
+                              ? getAlbumCoverUrl(album.album_id)
+                              : undefined)
+                          }
+                          alt={`${album.album} by ${album.artist}`}
+                          hasSummary={!!album.summary}
+                          hasRecommendation={!!album.recommended_by}
+                          isNowPlaying={albumIsNowPlaying}
+                          onPlay={
+                            user?.spotifyConnected || user?.tidalConnected
+                              ? () => handleQuickPlay(album)
+                              : undefined
+                          }
+                          onSummaryClick={() =>
+                            setSummaryTarget({
+                              albumId: album.album_id,
+                              albumName: album.album,
+                              artistName: album.artist,
+                            })
+                          }
+                          onRecommendationClick={() =>
+                            setRecommendationTarget({
+                              albumName: album.album,
+                              artistName: album.artist,
+                              recommendedBy: album.recommended_by,
+                              recommendedAt: album.recommended_at,
+                            })
+                          }
+                        />
+                      }
+                      onMenuClick={() => handleAlbumMenuClick(album)}
+                    />
+                  );
+                }}
+              />
             ) : (
               <div
                 role="list"
@@ -1307,33 +1413,29 @@ export function LibraryPage() {
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 'var(--space-card-gap-outer)',
-                  padding: `0 var(--space-list-x)`,
+                  padding: '0 var(--space-list-x)',
                   position: 'relative',
                   zIndex: 0,
                 }}
                 data-testid="album-list"
               >
                 {sortedAlbums.map((album, index) => {
-                  const rank = index + 1;
-                  const tags = buildAlbumTags(album);
-                  const yearMismatch = isYearMismatch(
-                    album.release_date,
-                    activeList?.year ?? null
-                  );
                   const albumIsNowPlaying = checkNowPlaying(album);
-
                   return (
                     <div key={album._id}>
                       <AlbumCard
-                        rank={rank}
+                        rank={index + 1}
                         title={album.album}
                         artist={album.artist}
-                        showRank={sortKey === 'custom'}
+                        showRank={false}
                         rankVisible={activeList?.isMain ?? false}
-                        tags={tags}
+                        tags={buildAlbumTags(album)}
                         releaseDate={album.release_date}
                         country={album.country}
-                        yearMismatch={yearMismatch}
+                        yearMismatch={isYearMismatch(
+                          album.release_date,
+                          activeList?.year ?? null
+                        )}
                         playcount={playcounts[album._id]}
                         coverElement={
                           <CoverImage
