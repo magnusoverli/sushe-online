@@ -1,5 +1,145 @@
 [
   {
+    "date": "2026-02-22",
+    "category": "fix",
+    "description": "Fixed drag scrolling blocked by sticky header",
+    "hash": "0f74dcfd3f543dee78701efc4e70bf7d4b7e09d0",
+    "commitMessage": "Fix top auto-scroll zone obscured by sticky header\n\n- Restrict dnd-kit auto-scroll to AppShell main container via canScroll,\n  preventing window-level auto-scroll zones\n- Increase auto-scroll threshold to 0.18 (18% of container height) so the\n  top zone extends past the sticky ListHeader"
+  },
+  {
+    "date": "2026-02-22",
+    "category": "ui",
+    "description": "Removed touch feedback effects from album cards",
+    "hash": "1670a8f23d9ddf31b8e1ebf7f410e00b0abb6b33",
+    "commitMessage": "Remove touch feedback effects from album cards\n\n- Remove touch-simulated hover state (isHovered + onTouchStart/End/Cancel)\n- Remove touch-feedback CSS class that applied opacity dim + scale on press"
+  },
+  {
+    "date": "2026-02-22",
+    "category": "feature",
+    "description": "Added drag-and-drop album reordering on mobile",
+    "hash": "7b2e15bbb6dbb5de96d634f425f04d7f5db10726",
+    "commitMessage": "Add drag-and-drop album reordering to mobile SPA\n\n- Add @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities\n- New SortableAlbumList component with long-press touch activation (250ms),\n  auto-scrolling near viewport edges, and haptic feedback on drag start\n- Live reorder via onDragOver keeps DOM in sync with visual order during\n  drag, eliminating the snap-back flash on drop\n- Debounced reorder API call (500ms) with optimistic TanStack Query cache\n  update for instant UI feedback\n- Drag-and-drop only active when sort is set to Custom Order; other sort\n  modes render a plain non-draggable list"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed drag scrolling issues on Android Chrome",
+    "hash": "4b8061d1b9d398cc4075f0c1b01332cea50217d1",
+    "commitMessage": "Fix drag-and-drop auto-scroll zones displaced on Android Chromium\n\n- Snapshot container bounds at drag start instead of re-measuring every\n  touchmove frame — prevents displaced trigger zones when overflow:hidden\n  causes Android URL bar to snap back and resize the viewport\n- Freeze --vh during drag so visualViewport resize events don't shrink\n  the layout mid-drag (unfreezes on drop or unmount)\n- Make trigger zones proportional (10% of container height, clamped\n  40–80px) so devices with heavy browser chrome get usable zones\n- Top zone now extends above the container into header/safe area so\n  dragging upward triggers scroll-up immediately instead of requiring\n  the finger to be in a narrow band inside the container\n- Bump max auto-scroll speed from 8 to 12 px/frame\n- Add matchMedia polyfill to test-setup for jsdom compatibility"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed Android menu clicks and Tidal links",
+    "hash": "a1df0b01bdcd412fe6baf5dec5c32090c9f25e30",
+    "commitMessage": "Fix Android three-dot menu ghost click and Tidal deep linking in SPA\n\n- Prevent ghost click on Android Chromium: add e.preventDefault() in\n  onTouchEnd for menu buttons in AlbumCard and RecommendationCard to\n  stop the synthesized click from dismissing the sheet via the scrim\n- Fix Tidal opening web page instead of app: rewrite openInTidal to\n  resolve album ID via server API then use tidal:// deep link scheme,\n  matching the legacy UI behaviour\n- Update callers (LibraryPage, AlbumActionSheet) for async openInTidal\n  with error handling\n- Update tidal service tests for new deep link flow"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed Telegram recommendation images and formatting",
+    "hash": "ba87701190a96a5e02f39a248f80adbe71fa9e75",
+    "commitMessage": "Fix Telegram recommendation notifications: cover image and markdown escaping\n\n- Fix cover image race condition: getCoverForNotification now retries up\n  to 5 times with 2s delay, giving the background cover fetch queue time\n  to complete before sending the notification\n- Fix escapeMarkdown to only escape Markdown v1 characters (_*`[) instead\n  of the MarkdownV2 set which caused pipe | and other characters to appear\n  in the rendered text"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Mobile users now auto-redirect to touch interface",
+    "hash": "8da6e0b3e656c00847215e1ae390ea3403e494f0",
+    "commitMessage": "Auto-redirect mobile users to SPA with opt-out preference\n\n- Add preferred_ui column (migration 054) and DB field mapping\n- UA detection redirects phone users to /mobile on login and GET /\n- Excludes tablets/iPads (only matches iPhone, Android Mobile, etc.)\n- User preference overrides UA: 'desktop' opts out, null = auto\n- Both UIs expose a toggle: SPA has 'Switch to classic' button,\n  legacy shows 'Switch to new UI' button (mobile devices only)\n- preferredUi exposed in sanitizeUser, /api/auth/session, login response"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed missing cover art on newly added albums",
+    "hash": "e2534701ae8b2e7ddefeb7e2570587d9eb7fa340",
+    "commitMessage": "Fix missing cover image on just-added albums\n\nAlbums added via AddAlbumSheet now show covers instantly by checking\nthe in-memory racing cache (Deezer/iTunes CDN URLs) before falling\nback to the server endpoint, which 404s until the background fetch\ncompletes."
+  },
+  {
+    "date": "2026-02-20",
+    "category": "perf",
+    "description": "Faster album cover loading with preconnect hints",
+    "hash": "d1f63deade132350f6cbaed403c69d8f688cbc48",
+    "commitMessage": "Add album cover art racing system with preconnect hints\n\n- Race 3 cover art providers (Deezer, iTunes, CAA proxy) for each album\n- Skip image verification for Deezer/iTunes (reliable CDNs), keep for Wikidata\n- Add CDN preconnect hints when AddAlbumSheet opens (~100-200ms savings per CDN)\n- Concurrency-limit CAA proxy calls (max 4) to avoid thundering herd\n- Extract shared raceProviders() utility and normalizeForApi() helper\n- useCoverArt hook lazy-loads covers with abort-on-unmount\n- Show first-letter monogram as placeholder while covers load"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Moved add button to header, auto-scroll to new albums",
+    "hash": "82d65e17c6955c9c3ee78eeebf7d016115942629",
+    "commitMessage": "Move add-album button to sticky header, close sheet on add and scroll to new album\n\n- Move + button from metadata row to title header (brighter color, scales with title)\n- Close AddAlbumSheet on successful add, notify parent via onAlbumAdded callback\n- Scroll to bottom of list after add so the new album is visible\n- Clean up: remove onAddAlbum from ListHeaderMeta, add to ListHeader with isLocked guard"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Added album search with MusicBrainz database",
+    "hash": "8638895652dd18875509633460e08e36837e233b",
+    "commitMessage": "Add album search feature with MusicBrainz integration\n\n- AddAlbumSheet: bottom sheet with artist/album search via MusicBrainz proxy\n- Artist image racing system: Deezer, iTunes, Wikidata providers (first wins)\n- ListHeaderMeta: + button to open add album sheet (hidden when locked)\n- BottomSheet: tall prop for full-height sheets, dvh units for keyboard compat\n- Keyboard dismisses on search submit, artist-credits included in discography query"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS zoom on text inputs",
+    "hash": "78873aca0830eea40fcf6e5973d81be77a500455",
+    "commitMessage": "Fix iOS zoom on form inputs and add pinned footer to BottomSheet\n\n- Set fontSize to 16px on inputs/selects in CreateListSheet, CreateCollectionSheet,\n  EditListSheet, GroupActionSheet, and SetupWizardSheet to prevent iOS Safari auto-zoom\n- Add optional footer prop to BottomSheet for non-scrollable pinned buttons\n- Move action buttons to pinned footer in ReidentifySheet and SetupWizardSheet"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Renamed About section to What's New",
+    "hash": "55b25729beb59bccb39cad67fc45ca5d24425d93",
+    "commitMessage": "Streamline About sheet: remove app info header, rename to What's New"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Cleaner bottom navigation bar design",
+    "hash": "aea987d54a58a4d47aef52fddbd5eec485c4ca3f",
+    "commitMessage": "Slim down TabBar: remove active dot, tighten padding, push content to bottom edge"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Opens Spotify app when no device found for playback",
+    "hash": "bf2628f61e7f4b73c7f1aae58095c08d02b1425d",
+    "commitMessage": "Open Spotify app via deep link when no active device found on quick-play"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "feature",
+    "description": "Tap album cover to play directly",
+    "hash": "9b785989f690b23217d06a35bd4e7f6d456ad28a",
+    "commitMessage": "Play album directly from cover image tap instead of opening action sheet\n\n- Spotify: searches album then plays on active device (no device picker)\n- Tidal: opens album in Tidal browser/app immediately\n- Both services connected with preference: uses preferred service\n- Both connected without preference: shows ServiceChooserSheet to pick\n- Play overlay now appears for Tidal-only users (was Spotify-only)\n- Shows helpful toast on error (no active device, album not found)\n- Full action sheet with device picker still available via three-dot menu"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "fix",
+    "description": "Fixed iOS app download and display issues",
+    "hash": "12eaf407d9abab856726b1df8ea841d6c63e5bb8",
+    "commitMessage": "Fix iOS PWA viewport and download issues, tweak AlbumCard layout\n\n- Lock viewport height in standalone mode to prevent iOS share sheet resize bug\n- Only accept new viewport dimensions on orientation change in PWA mode\n- Use blob output for PDF downloads to work in iOS PWA\n- Enlarge album cover art to 88px, add release date and country metadata\n- Minor global.css adjustments for overflow handling"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Bottom navigation stays visible in settings",
+    "hash": "05d6da8da09d076306ecd75ce3159a1c31efd893",
+    "commitMessage": "Keep TabBar visible and interactive when settings drawer is open\n\n- Drawer uses paddingBottom to clear TabBar instead of bottom offset\n- Raise TabBar z-index above drawer so it paints on top (no sub-pixel gaps)\n- Add onSettingsClose callback through AppShell and TabBar\n- Highlight Settings tab icon when drawer is open, revert on close\n- Clicking Library/Search while settings is open closes the drawer and navigates\n- Add optional bottom prop to Scrim for future use"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Improved settings menu design and touch targets",
+    "hash": "e232ae7a49e83537de8c9e4a9e225d70231bee7b",
+    "commitMessage": "Polish settings drawer: card sections, touch targets, and tab chevrons\n\nSettings sections:\n- Convert flat divider layout to card-style containers (subtle bg + border + radius)\n- Reduce wrapper padding to compensate for card internal padding\n- Flatten AdminTab inner cardStyle to avoid cards-inside-cards\n\nTouch-friendliness (Plan B):\n- Bump field row, button, input, toggle, and select padding for ~36-40px tap targets\n- Enlarge Done button, Info icon, tab bar buttons, and inline save/cancel\n- Bump AdminTab action button and smallButton padding\n\nTypography:\n- Standardize all settings tab font sizes to established scale (11-17px)\n- Align all uppercase headers to 0.05em letter-spacing\n- Replace inline rgba colors with design token variables\n- Set select elements to 16px to prevent iOS zoom\n\nTab navigation:\n- Add chevron scroll indicators with fade-in/out based on scroll position\n- Increase tab gap and padding for easier touch targeting"
+  },
+  {
+    "date": "2026-02-20",
+    "category": "ui",
+    "description": "Organized recommendation lists by year in navigation",
+    "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
+    "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
     "date": "2026-02-20",
     "category": "fix",
     "description": "Fixed drag-and-drop scrolling issues on Android Chrome",
@@ -1314,6 +1454,40 @@
     "description": "Organized recommendations by year in navigation menu",
     "hash": "93e1a849c40290aaff32fe521f3699d12f65514a",
     "commitMessage": "Move recommendation lists inside year group accordions in nav drawer\n\n- Rec items now render inside their matching year group (after regular lists)\n- Orphan rec years (no matching group) fall back to standalone section\n- Replace localStorage accordion persistence with resetKey that resets on drawer open\n- Add recYearSet, yearGroupNames, orphanRecYears memos to DrawerContent"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Simplified login page text",
+    "hash": "8a8e5e7287684dac335e2a63ee04b939f0da8f52",
+    "commitMessage": "Remove 'Welcome back' eyebrow text from login page"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "fix",
+    "description": "Fixed login issues on mobile devices",
+    "hash": "6eeb74ef373107b0637b8d8b89d1df3c7f5721d8",
+    "commitMessage": "Fix service connection flags always returning false in mobile API\n\nspotifyConnected, tidalConnected, and lastfmConnected were checking\nnon-existent user properties (spotifyAccessToken, tidalAccessToken,\nlastfmSessionKey). Changed to the correct mapped properties (spotifyAuth,\ntidalAuth, lastfmAuth?.session_key) matching what middleware/auth.js and\nservice-auth.js already use. This was preventing playcounts, Spotify\nplayback, Tidal actions, and integration status from working in the\nmobile SPA."
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Added release date and country info to album cards",
+    "hash": "732f22cce4075ff51bc5c66eda2db04de6ce72f8",
+    "commitMessage": "Add release date and country to album cards, enlarge cover art to 88px\n\n- Add releaseDate, country, yearMismatch props to AlbumCard\n- New metadata line between artist and tags showing year · country\n- Year renders in red when it mismatches the list year\n- Remove old year-mismatch tag push from LibraryPage\n- Bump cover art from 80x80 to 88x88px for more visual weight\n- Increase card vertical padding from 5px to 8px for breathing room\n- Tags stack vertically (column) instead of wrapping\n- Tighten tag pills: letter-spacing 0.1em→0.04em, padding 5px→3px"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Improved album card layout and spacing",
+    "hash": "34cc1539241e40089ff1aa0c000b148d5f4a27ad",
+    "commitMessage": "Refine album card rank column and spacing\n\n- Always render rank spacer regardless of sort order for visual coherence\n- Rank visible only on main lists in custom sort, hidden otherwise\n- Shrink rank column from 15px to 5px, font 11→9px, opacity 0.15→0.35\n- Add 2px marginRight on rank for cover spacing\n- Reduce card horizontal padding from 5px to 4px\n- Always pass rank index to AlbumCard (not just in custom sort)"
+  },
+  {
+    "date": "2026-02-19",
+    "category": "ui",
+    "description": "Made list headers stay visible when scrolling",
+    "hash": "5d100045317a71184fd337242c56167b360d177b"
   },
   {
     "date": "2026-02-19",
