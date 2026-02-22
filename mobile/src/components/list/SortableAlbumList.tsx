@@ -15,6 +15,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -86,18 +87,13 @@ interface SortableAlbumListProps {
   onReorder: (newOrder: string[]) => void;
   /** Render function for each album by its ID and index. */
   renderItem: (id: string, index: number) => ReactNode;
-  /** Ref to the scroll container (AppShell main) for auto-scroll. */
-  scrollContainerRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function SortableAlbumList({
   items,
   onReorder,
   renderItem,
-  scrollContainerRef,
 }: SortableAlbumListProps) {
-  const [activeId, setActiveId] = useState<string | null>(null);
-
   // Local order state — kept in sync with the items prop, but updated live
   // during drag via onDragOver. This keeps the DOM order in sync with the
   // visual order throughout the drag, so when dnd-kit clears transforms on
@@ -117,59 +113,17 @@ export function SortableAlbumList({
   });
   const sensors = useSensors(touchSensor);
 
-  // ── Auto-scroll during drag ──
-  const rafRef = useRef<number | null>(null);
-  const pointerYRef = useRef<number>(0);
+  // dnd-kit auto-scroll config: threshold is a fraction (0–1) of the
+  // scrollable ancestor's size that defines the edge zone.
+  const autoScrollConfig = useMemo(
+    () => ({
+      threshold: { x: 0, y: 0.1 },
+      acceleration: 10,
+    }),
+    []
+  );
 
-  // Track pointer position during drag via a passive global listener
-  useEffect(() => {
-    if (!activeId) return;
-
-    function onTouchMove(e: TouchEvent) {
-      const touch = e.touches[0];
-      if (touch) pointerYRef.current = touch.clientY;
-    }
-
-    window.addEventListener('touchmove', onTouchMove, { passive: true });
-    return () => window.removeEventListener('touchmove', onTouchMove);
-  }, [activeId]);
-
-  // RAF loop for smooth edge-scrolling
-  useEffect(() => {
-    if (!activeId || !scrollContainerRef?.current) return;
-
-    const EDGE_PX = 80;
-    const MAX_SPEED = 18;
-
-    function tick() {
-      const container = scrollContainerRef?.current;
-      if (!container) return;
-
-      const rect = container.getBoundingClientRect();
-      const y = pointerYRef.current;
-
-      // Scroll up when near top edge
-      if (y < rect.top + EDGE_PX && y > rect.top) {
-        const ratio = 1 - (y - rect.top) / EDGE_PX;
-        container.scrollTop -= Math.ceil(ratio * MAX_SPEED);
-      }
-      // Scroll down when near bottom edge
-      else if (y > rect.bottom - EDGE_PX && y < rect.bottom) {
-        const ratio = 1 - (rect.bottom - y) / EDGE_PX;
-        container.scrollTop += Math.ceil(ratio * MAX_SPEED);
-      }
-
-      rafRef.current = requestAnimationFrame(tick);
-    }
-
-    rafRef.current = requestAnimationFrame(tick);
-    return () => {
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-    };
-  }, [activeId, scrollContainerRef]);
-
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(String(event.active.id));
+  const handleDragStart = useCallback((_event: DragStartEvent) => {
     // Haptic feedback
     if (navigator.vibrate) {
       navigator.vibrate(HAPTIC_DURATION_MS);
@@ -194,8 +148,6 @@ export function SortableAlbumList({
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
-      setActiveId(null);
-
       const { active, over } = event;
       if (!over || active.id === over.id) {
         // Dropped back in original position or cancelled — persist current
@@ -221,7 +173,6 @@ export function SortableAlbumList({
   );
 
   const handleDragCancel = useCallback(() => {
-    setActiveId(null);
     // Revert to the prop order on cancel
     setLocalOrder(items);
   }, [items]);
@@ -230,6 +181,7 @@ export function SortableAlbumList({
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
+      autoScroll={autoScrollConfig}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
