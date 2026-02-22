@@ -22,7 +22,6 @@ import {
   type ReactNode,
   forwardRef,
   useCallback,
-  useState,
 } from 'react';
 import { MoreVertical, Headphones } from 'lucide-react';
 import { TagPill } from './TagPill';
@@ -92,10 +91,7 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
     },
     ref
   ) {
-    const [isHovered, setIsHovered] = useState(false);
-
-    const effectiveState =
-      cardState === 'default' && isHovered ? 'hover' : cardState;
+    const effectiveState = cardState;
 
     const handleMenuClick = useCallback(
       (e: React.MouseEvent | React.TouchEvent) => {
@@ -129,12 +125,9 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
     return (
       <div
         ref={ref}
-        className={`${onClick ? 'touch-feedback' : ''} ${className || ''}`}
+        className={className || undefined}
         style={cardStyle}
         onClick={onClick}
-        onTouchStart={() => setIsHovered(true)}
-        onTouchEnd={() => setIsHovered(false)}
-        onTouchCancel={() => setIsHovered(false)}
         data-testid="album-card"
         role="listitem"
       >
