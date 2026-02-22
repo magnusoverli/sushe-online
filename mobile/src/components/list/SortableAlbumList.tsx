@@ -87,12 +87,17 @@ interface SortableAlbumListProps {
   onReorder: (newOrder: string[]) => void;
   /** Render function for each album by its ID and index. */
   renderItem: (id: string, index: number) => ReactNode;
+  /** Ref to the scroll container (AppShell main) — used to restrict
+   *  auto-scrolling to this element only, preventing dnd-kit from also
+   *  auto-scrolling the window. */
+  scrollContainerRef?: React.RefObject<HTMLElement | null>;
 }
 
 export function SortableAlbumList({
   items,
   onReorder,
   renderItem,
+  scrollContainerRef,
 }: SortableAlbumListProps) {
   // Local order state — kept in sync with the items prop, but updated live
   // during drag via onDragOver. This keeps the DOM order in sync with the
@@ -113,14 +118,25 @@ export function SortableAlbumList({
   });
   const sensors = useSensors(touchSensor);
 
+  // Restrict auto-scrolling to only the AppShell <main> scroll container,
+  // preventing dnd-kit from also auto-scrolling the window (which would
+  // place the top zone at the very top of the screen, above the header).
+  const canScroll = useCallback(
+    (element: Element) => {
+      return element === scrollContainerRef?.current;
+    },
+    [scrollContainerRef]
+  );
+
   // dnd-kit auto-scroll config: threshold is a fraction (0–1) of the
   // scrollable ancestor's size that defines the edge zone.
   const autoScrollConfig = useMemo(
     () => ({
-      threshold: { x: 0, y: 0.1 },
+      threshold: { x: 0, y: 0.18 },
       acceleration: 10,
+      canScroll,
     }),
-    []
+    [canScroll]
   );
 
   const handleDragStart = useCallback((_event: DragStartEvent) => {

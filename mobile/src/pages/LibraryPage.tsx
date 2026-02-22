@@ -1346,6 +1346,7 @@ export function LibraryPage() {
               <SortableAlbumList
                 items={sortedAlbums.map((a) => a._id)}
                 onReorder={handleReorder}
+                scrollContainerRef={scrollContainerRef}
                 renderItem={(id, index) => {
                   const album = albumMap.get(id);
                   if (!album) return null;
