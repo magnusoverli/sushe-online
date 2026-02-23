@@ -165,8 +165,8 @@ export interface DrawerNavItemProps {
   isActive?: boolean;
   isLocked?: boolean;
   onClick?: () => void;
-  /** Visual state during drag operations. */
-  dragState?: 'default' | 'dragging' | 'drop-target';
+  /** Whether this item is currently being dragged. */
+  isDragging?: boolean;
   /** Show a drag handle (grip icon). */
   showDragHandle?: boolean;
 }
@@ -178,16 +178,13 @@ export function DrawerNavItem({
   isActive = false,
   isLocked = false,
   onClick,
-  dragState = 'default',
+  isDragging = false,
   showDragHandle = false,
 }: DrawerNavItemProps) {
   const color = isActive ? 'var(--color-gold)' : 'rgba(255,255,255,0.75)';
   const countColor = isActive
     ? 'rgba(232,200,122,0.60)'
     : 'var(--color-text-secondary)';
-
-  const isDragging = dragState === 'dragging';
-  const isDropTarget = dragState === 'drop-target';
 
   return (
     <button
@@ -201,21 +198,13 @@ export function DrawerNavItem({
         borderRadius: '10px',
         background: isDragging
           ? 'rgba(232,200,122,0.15)'
-          : isDropTarget
-            ? 'rgba(232,200,122,0.06)'
-            : isActive
-              ? 'rgba(232,200,122,0.08)'
-              : 'transparent',
-        borderLeft: isActive
-          ? '2px solid var(--color-gold)'
-          : '2px solid transparent',
+          : isActive
+            ? 'rgba(232,200,122,0.08)'
+            : 'transparent',
         border: 'none',
         cursor: 'pointer',
         transition: 'background 150ms ease, opacity 150ms ease',
         opacity: isDragging ? 0.6 : 1,
-        borderTop: isDropTarget
-          ? '2px solid rgba(232,200,122,0.4)'
-          : '2px solid transparent',
       }}
       onClick={onClick}
       data-testid="drawer-nav-item"
@@ -226,7 +215,6 @@ export function DrawerNavItem({
             display: 'flex',
             flexShrink: 0,
             color: 'rgba(255,255,255,0.15)',
-            touchAction: 'none',
           }}
           data-testid="drawer-drag-handle"
         >

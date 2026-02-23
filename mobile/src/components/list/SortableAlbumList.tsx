@@ -61,6 +61,7 @@ function SortableItem({ id, children }: SortableItemProps) {
     position: 'relative',
     zIndex: isDragging ? 999 : 0,
     opacity: isDragging ? 0.92 : 1,
+    willChange: isDragging ? 'transform' : undefined,
     ...(isDragging
       ? {
           scale: '1.02',
@@ -109,11 +110,15 @@ export function SortableAlbumList({
     setLocalOrder(items);
   }, [items]);
 
-  // Long-press touch sensor: 250ms delay, 5px tolerance
+  // Long-press touch sensor: 250ms delay, 10px tolerance.
+  // tolerance is the max distance (px) the finger can move during the delay
+  // before the activation is cancelled. 5px was too tight for Android devices
+  // which tend to have more touch jitter; users would inadvertently cancel the
+  // drag before the delay elapsed.
   const touchSensor = useSensor(TouchSensor, {
     activationConstraint: {
       delay: 250,
-      tolerance: 5,
+      tolerance: 10,
     },
   });
   const sensors = useSensors(touchSensor);

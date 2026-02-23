@@ -117,7 +117,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
       cursor: onClick ? 'pointer' : 'default',
       userSelect: 'none',
       WebkitUserSelect: 'none',
-      touchAction: 'pan-y',
       position: 'relative',
       ...style,
     };

@@ -3,6 +3,10 @@
  *
  * Renders a group header (with chevron, icon, name, ellipsis menu)
  * and a collapsible list of DrawerNavItem children.
+ *
+ * Drag-and-drop: the parent (DrawerContent) uses @dnd-kit and passes
+ * `dragHandleProps` — event listeners that are spread onto the header
+ * row so that a long-press on the header activates group reordering.
  */
 
 import { type ReactNode, useState, useCallback } from 'react';
@@ -27,10 +31,13 @@ interface GroupAccordionProps {
   onContextMenu?: () => void;
   /** Children (DrawerNavItem elements) */
   children: ReactNode;
-  /** Visual state during group drag operations. */
-  dragState?: 'default' | 'dragging' | 'drop-target';
-  /** Show a drag handle on the group header. */
+  /** Whether this group is currently being dragged. */
+  isDragging?: boolean;
+  /** Show a drag handle (grip icon) on the group header. */
   showDragHandle?: boolean;
+  /** dnd-kit listener props to spread on the header for drag activation. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  dragHandleProps?: Record<string, any>;
 }
 
 export function GroupAccordion({
@@ -39,8 +46,9 @@ export function GroupAccordion({
   defaultExpanded = false,
   onContextMenu,
   children,
-  dragState = 'default',
+  isDragging = false,
   showDragHandle = false,
+  dragHandleProps,
 }: GroupAccordionProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
@@ -57,30 +65,21 @@ export function GroupAccordion({
   const Icon = isYearGroup ? Calendar : Folder;
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
-  const isDragging = dragState === 'dragging';
-  const isDropTarget = dragState === 'drop-target';
-
   return (
     <div data-testid="group-accordion">
-      {/* Group header */}
+      {/* Group header — also serves as the drag handle for group reordering */}
       <div
+        {...dragHandleProps}
         style={{
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
           padding: '6px 4px',
           opacity: isDragging ? 0.5 : 1,
-          background: isDragging
-            ? 'rgba(232,200,122,0.12)'
-            : isDropTarget
-              ? 'rgba(232,200,122,0.06)'
-              : 'transparent',
-          borderTop: isDropTarget
-            ? '2px solid rgba(232,200,122,0.4)'
-            : '2px solid transparent',
+          background: isDragging ? 'rgba(232,200,122,0.12)' : 'transparent',
           borderRadius: '6px',
-          transition:
-            'background 150ms ease, opacity 150ms ease, border-color 150ms ease',
+          transition: 'background 150ms ease, opacity 150ms ease',
+          touchAction: 'none',
         }}
       >
         {showDragHandle && (
@@ -89,7 +88,6 @@ export function GroupAccordion({
               display: 'flex',
               flexShrink: 0,
               color: 'rgba(255,255,255,0.15)',
-              touchAction: 'none',
             }}
             data-testid="group-drag-handle"
           >
