@@ -1,5 +1,33 @@
 [
   {
+    "date": "2026-02-23",
+    "category": "fix",
+    "description": "Fixed drag-and-drop reordering on Android devices",
+    "hash": "28289d11ca4f61fd137054b394d7fa71f08866f7",
+    "commitMessage": "Fix mobile drag-and-drop for Android - migrate drawer to dnd-kit\n\n- Increase TouchSensor tolerance from 5px to 10px for Android touch jitter\n- Add will-change: transform on dragged items for GPU layer promotion\n- Remove touch-action: pan-y from AlbumCard (not needed, dnd-kit handles activation)\n- Migrate DrawerContent from custom touch handlers to @dnd-kit, matching\n  SortableAlbumList's approach for consistent cross-platform behaviour\n- Update GroupAccordion and DrawerNavItem props: replace dragState with\n  isDragging, remove drop-target styles (dnd-kit moves items in DOM)\n- Remove all custom drag state, refs, native touchmove listener, and\n  moveItem utility (replaced by dnd-kit's arrayMove)"
+  },
+  {
+    "date": "2026-02-22",
+    "category": "fix",
+    "description": "Fixed drag scrolling being blocked by header",
+    "hash": "0f74dcfd3f543dee78701efc4e70bf7d4b7e09d0",
+    "commitMessage": "Fix top auto-scroll zone obscured by sticky header\n\n- Restrict dnd-kit auto-scroll to AppShell main container via canScroll,\n  preventing window-level auto-scroll zones\n- Increase auto-scroll threshold to 0.18 (18% of container height) so the\n  top zone extends past the sticky ListHeader"
+  },
+  {
+    "date": "2026-02-22",
+    "category": "ui",
+    "description": "Removed touch animations from album cards",
+    "hash": "1670a8f23d9ddf31b8e1ebf7f410e00b0abb6b33",
+    "commitMessage": "Remove touch feedback effects from album cards\n\n- Remove touch-simulated hover state (isHovered + onTouchStart/End/Cancel)\n- Remove touch-feedback CSS class that applied opacity dim + scale on press"
+  },
+  {
+    "date": "2026-02-22",
+    "category": "feature",
+    "description": "Added drag-and-drop album reordering on mobile",
+    "hash": "7b2e15bbb6dbb5de96d634f425f04d7f5db10726",
+    "commitMessage": "Add drag-and-drop album reordering to mobile SPA\n\n- Add @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities\n- New SortableAlbumList component with long-press touch activation (250ms),\n  auto-scrolling near viewport edges, and haptic feedback on drag start\n- Live reorder via onDragOver keeps DOM in sync with visual order during\n  drag, eliminating the snap-back flash on drop\n- Debounced reorder API call (500ms) with optimistic TanStack Query cache\n  update for instant UI feedback\n- Drag-and-drop only active when sort is set to Custom Order; other sort\n  modes render a plain non-draggable list"
+  },
+  {
     "date": "2026-02-22",
     "category": "fix",
     "description": "Fixed drag scrolling blocked by sticky header",
