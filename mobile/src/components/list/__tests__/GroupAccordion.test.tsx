@@ -113,25 +113,15 @@ describe('GroupAccordion', () => {
     expect(screen.queryByTestId('group-drag-handle')).not.toBeInTheDocument();
   });
 
-  it('applies dragging visual state', () => {
+  it('applies dragging visual state when isDragging is true', () => {
     render(
-      <GroupAccordion name="Dragging" isYearGroup={false} dragState="dragging">
+      <GroupAccordion name="Dragging" isYearGroup={false} isDragging>
         <div>item</div>
       </GroupAccordion>
     );
     const accordion = screen.getByTestId('group-accordion');
     const header = accordion.firstElementChild as HTMLElement;
     expect(header.style.opacity).toBe('0.5');
-  });
-
-  it('applies drop-target visual state', () => {
-    render(
-      <GroupAccordion name="Target" isYearGroup={false} dragState="drop-target">
-        <div>item</div>
-      </GroupAccordion>
-    );
-    const accordion = screen.getByTestId('group-accordion');
-    const header = accordion.firstElementChild as HTMLElement;
-    expect(header.style.background).toContain('rgba(232, 200, 122, 0.06)');
+    expect(header.style.background).toContain('rgba(232, 200, 122, 0.12)');
   });
 });
