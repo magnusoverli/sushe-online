@@ -112,9 +112,9 @@
 }
 
 /* Position number column - center horizontally */
-.album-grid > div:nth-child(1),
-.album-row > div:nth-child(1),
-.album-header > div:nth-child(1) {
+.album-grid > .position-cell,
+.album-row > .position-cell,
+.album-header > .position-cell {
   justify-content: center;
   text-align: center;
   padding: 0; /* Remove any inherited padding */
@@ -127,31 +127,31 @@
 }
 
 /* Album image column - align header text to the right */
-.album-grid > div:nth-child(2),
-.album-row > div:nth-child(2),
-.album-header > div:nth-child(2) {
+.album-grid > .cover-cell,
+.album-row > .cover-cell,
+.album-header > .cover-cell {
   justify-content: flex-end;
 }
 
 /* Add right margin to album cover in rows only */
-.album-row > div:nth-child(2) {
+.album-row > .cover-cell {
   margin-right: 0.5rem;
 }
 
 /* Add right margin to position column in rows only */
-.album-row > div:nth-child(1) {
+.album-row > .position-cell {
   margin-right: 1.5rem;
 }
 
 /* Center-align the "Album" text in the header only */
-.album-header > div:nth-child(2) {
+.album-header > .cover-cell {
   justify-content: center;
 }
 
 /* Special handling for cells that need different alignment */
-.album-grid > div:nth-child(3), /* Album name column */
-.album-row > div:nth-child(3),
-.album-header > div:nth-child(3) {
+.album-grid > .album-cell, /* Album name column */
+.album-row > .album-cell,
+.album-header > .album-cell {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -159,18 +159,18 @@
 }
 
 /* Header keeps negative margin for alignment */
-.album-header > div:nth-child(3) {
+.album-header > .album-cell {
   margin-left: -0.35rem;
 }
 
 /* Album name column - use relative positioning for date placement */
 @media (min-width: 1024px) {
-  .album-row > div:nth-child(3) {
+  .album-row > .album-cell {
     position: relative;
   }
 
   /* Album name - centered on cover, slightly larger font */
-  .album-row > div:nth-child(3) > div:first-child {
+  .album-row > .album-cell > div:first-child {
     width: 100%;
   }
 
@@ -183,15 +183,15 @@
   }
 
   /* Muted text for Country, Genre 1, and Genre 2 columns */
-  .album-row > div:nth-child(5),
-  .album-row > div:nth-child(6),
-  .album-row > div:nth-child(7) {
+  .album-row > .country-cell,
+  .album-row > .genre-1-cell,
+  .album-row > .genre-2-cell {
     opacity: 0.7;
   }
 
-  /* Extra space before Track column (8th column) */
+  /* Extra space before Track column */
   .album-row .track-cell,
-  .album-header > div:nth-child(8) {
+  .album-header > .track-cell {
     margin-left: 0.75rem;
   }
 
@@ -211,7 +211,7 @@
   }
 
   /* Release date - positioned below album name, not affecting centering */
-  .album-row > div:nth-child(3) > div.release-date-display {
+  .album-row > .album-cell > div.release-date-display {
     position: absolute;
     top: calc(50% + 1rem);
     left: 0;
@@ -219,7 +219,7 @@
 }
 
 /* Ensure the date text stays with album name (mobile fallback) */
-.album-row > div:nth-child(3) > div {
+.album-row > .album-cell > div {
   width: 100%;
 }
 

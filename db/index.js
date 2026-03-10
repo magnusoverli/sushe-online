@@ -212,6 +212,7 @@ if (process.env.DATABASE_URL) {
     lastfmUsername: 'lastfm_username',
     approvalStatus: 'approval_status',
     preferredUi: 'preferred_ui',
+    columnVisibility: 'column_visibility',
   };
   const listsMap = {
     _id: '_id',

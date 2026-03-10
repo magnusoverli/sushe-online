@@ -352,6 +352,11 @@ module.exports = (app, deps) => {
     ensureAuth,
     settingsHandler('preferredUi')
   );
+  app.post(
+    '/settings/update-column-visibility',
+    ensureAuth,
+    settingsHandler('columnVisibility')
+  );
 
   // Unique-field settings
   app.post(

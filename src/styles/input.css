@@ -1277,6 +1277,22 @@ body.now-playing-bar-visible #addAlbumFAB {
   background-color: rgba(34, 197, 94, 0.1);
 }
 
+/* Column visibility — hide cells without removing them from the DOM */
+.column-hidden {
+  display: none !important;
+}
+
+/* Column visibility toggle dropdown */
+.column-toggle-dropdown {
+  animation: slideUp 0.15s ease;
+  backdrop-filter: blur(8px);
+  background: rgba(31, 41, 55, 0.95);
+}
+
+.column-toggle-dropdown label:last-child {
+  border-radius: 0 0 0.5rem 0.5rem;
+}
+
 /* Current device indicator animation - only the broadcast tower icon */
 #miniplayerCurrentDevice > span > i.fa-broadcast-tower {
   animation: pulse 2s ease-in-out infinite;

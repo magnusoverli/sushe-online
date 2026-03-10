@@ -29,6 +29,7 @@ function sanitizeUser(user) {
     musicService: user.musicService || null,
     lastfmUsername: user.lastfmUsername || null,
     preferredUi: user.preferredUi || null,
+    columnVisibility: user.columnVisibility || null,
   };
 }
 

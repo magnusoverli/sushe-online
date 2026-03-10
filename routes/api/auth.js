@@ -53,6 +53,7 @@ module.exports = (app, deps) => {
           musicService: req.user.musicService || null,
           lastfmUsername: req.user.lastfmUsername || null,
           preferredUi: req.user.preferredUi || null,
+          columnVisibility: req.user.columnVisibility || null,
           createdAt: req.user.createdAt || null,
         },
         csrfToken: req.csrfToken(),

@@ -5,6 +5,7 @@ const {
   ALLOWED_TIME_FORMATS,
   ALLOWED_DATE_FORMATS,
   ALLOWED_MUSIC_SERVICES,
+  ALLOWED_GRID_COLUMNS,
   HEX_COLOR_REGEX,
 } = require('../services/user-service.js');
 const { createMockLogger } = require('./helpers');
@@ -42,6 +43,17 @@ describe('user-service constants', () => {
 
   it('should export ALLOWED_MUSIC_SERVICES', () => {
     assert.deepStrictEqual(ALLOWED_MUSIC_SERVICES, ['spotify', 'tidal']);
+  });
+
+  it('should export ALLOWED_GRID_COLUMNS', () => {
+    assert.deepStrictEqual(ALLOWED_GRID_COLUMNS, [
+      'country',
+      'genre_1',
+      'genre_2',
+      'track',
+      'comment',
+      'comment_2',
+    ]);
   });
 
   it('should export HEX_COLOR_REGEX that validates hex colors', () => {
@@ -184,6 +196,66 @@ describe('userService.validateSetting', () => {
       service.validateSetting('musicService', 'pandora').valid,
       false
     );
+  });
+
+  // Column visibility
+  it('should accept valid columnVisibility object', () => {
+    const result = service.validateSetting('columnVisibility', {
+      country: false,
+      genre_1: true,
+    });
+    assert.strictEqual(result.valid, true);
+    assert.deepStrictEqual(result.value, { country: false, genre_1: true });
+  });
+
+  it('should accept null columnVisibility (reset to default)', () => {
+    const result = service.validateSetting('columnVisibility', null);
+    assert.strictEqual(result.valid, true);
+    assert.strictEqual(result.value, null);
+  });
+
+  it('should accept empty object columnVisibility', () => {
+    const result = service.validateSetting('columnVisibility', {});
+    assert.strictEqual(result.valid, true);
+    assert.deepStrictEqual(result.value, {});
+  });
+
+  it('should accept all toggleable columns hidden', () => {
+    const result = service.validateSetting('columnVisibility', {
+      country: false,
+      genre_1: false,
+      genre_2: false,
+      track: false,
+      comment: false,
+      comment_2: false,
+    });
+    assert.strictEqual(result.valid, true);
+  });
+
+  it('should reject columnVisibility with unknown column key', () => {
+    const result = service.validateSetting('columnVisibility', {
+      unknown_col: false,
+    });
+    assert.strictEqual(result.valid, false);
+    assert.match(result.error, /Unknown column/);
+  });
+
+  it('should reject columnVisibility with non-boolean values', () => {
+    const result = service.validateSetting('columnVisibility', {
+      country: 'hidden',
+    });
+    assert.strictEqual(result.valid, false);
+    assert.match(result.error, /booleans/);
+  });
+
+  it('should reject array as columnVisibility', () => {
+    const result = service.validateSetting('columnVisibility', ['country']);
+    assert.strictEqual(result.valid, false);
+  });
+
+  it('should reject string as columnVisibility', () => {
+    const result = service.validateSetting('columnVisibility', 'country');
+    assert.strictEqual(result.valid, false);
   });
 
   // Unknown field

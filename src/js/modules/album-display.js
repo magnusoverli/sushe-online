@@ -18,6 +18,44 @@ import {
   positionContextMenu,
   hideAllContextMenus as hideAllMenusBase,
 } from './context-menu.js';
+import {
+  isColumnVisible,
+  getVisibleColumns,
+  getAllColumns,
+  getToggleableColumns,
+  computeGridTemplate,
+  toggleColumn,
+  setAllColumns,
+} from './column-config.js';
+
+/**
+ * Apply column visibility changes in-place without rebuilding the DOM.
+ * Toggles .column-hidden on affected cells and updates grid templates.
+ * All cells are always in the DOM; hidden ones carry .column-hidden.
+ */
+function applyVisibilityInPlace() {
+  const container = document.getElementById('albumContainer');
+  if (!container) return;
+
+  const newTemplate = computeGridTemplate(getVisibleColumns());
+
+  // Update header
+  const hdr = container.querySelector('.album-header');
+  if (hdr) hdr.style.gridTemplateColumns = newTemplate;
+
+  // Update all rows
+  container.querySelectorAll('.album-row').forEach((row) => {
+    row.style.gridTemplateColumns = newTemplate;
+  });
+
+  // Toggle .column-hidden on cells by their cellClass
+  for (const col of getToggleableColumns()) {
+    const visible = isColumnVisible(col.id);
+    container
+      .querySelectorAll(`.${col.cellClass}`)
+      .forEach((cell) => cell.classList.toggle('column-hidden', !visible));
+  }
+}
 
 // Feature flag for incremental updates (can be disabled if issues arise)
 const ENABLE_INCREMENTAL_UPDATES = true;
@@ -101,7 +139,7 @@ function cacheDesktopRowElements(row) {
       row.querySelector('.position-display'),
     albumName: row.querySelector('.font-semibold.text-gray-100'),
     releaseDate: row.querySelector('.release-date-display'),
-    artist: row.querySelectorAll('.flex.items-center > span')[0],
+    artist: row.querySelector('.artist-cell span'),
     countryCell: row.querySelector('.country-cell'),
     genre1Cell: row.querySelector('.genre-1-cell'),
     genre2Cell: row.querySelector('.genre-2-cell'),
@@ -688,37 +726,37 @@ export function createAlbumDisplay(deps = {}) {
       </div>`;
     }
 
-    row.innerHTML = `
-      ${data.position !== null ? `<div class="flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>` : '<div></div>'}
-      <div class="flex items-center">
+    // Build cell HTML map — each column produces its own cell
+    const cellMap = {
+      position:
+        data.position !== null
+          ? `<div class="position-cell flex items-center justify-center text-gray-400 font-medium text-sm position-display" data-position-element="true">${data.position}</div>`
+          : '<div class="position-cell"></div>',
+      cover: `<div class="cover-cell flex items-center">
         <div class="album-cover-container">
           ${
             coverImageSrc
-              ? `
-            <img src="${PLACEHOLDER_GIF}" 
+              ? `<img src="${PLACEHOLDER_GIF}" 
                 data-lazy-src="${coverImageSrc}"
                 alt="${data.albumName}" 
                 class="album-cover rounded-sm shadow-lg"
                 loading="lazy"
                 decoding="async"
                 onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded-sm bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'"
-            >
-          `
-              : `
-            <div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
+              >`
+              : `<div class="album-cover-placeholder rounded-sm bg-gray-800 shadow-lg">
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-gray-600">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                 <circle cx="8.5" cy="8.5" r="1.5"></circle>
                 <polyline points="21 15 16 10 5 21"></polyline>
               </svg>
-            </div>
-          `
+            </div>`
           }
           ${summaryBadgeHtml}
           ${recommendationBadgeHtml}
         </div>
-      </div>
-      <div class="flex flex-col justify-center">
+      </div>`,
+      album: `<div class="album-cell flex flex-col justify-center">
         <div class="flex items-center gap-2">
           <span class="album-name font-semibold text-gray-200 truncate">${data.albumName}</span>
           ${
@@ -730,20 +768,20 @@ export function createAlbumDisplay(deps = {}) {
           }
         </div>
         <div class="text-xs mt-0.5 release-date-display ${data.yearMismatch ? 'text-red-500 cursor-help' : 'text-gray-400'}" ${data.yearMismatch ? `title="${data.yearMismatchTooltip}"` : ''}>${data.releaseDate}</div>
-      </div>
-      <div class="flex items-center">
+      </div>`,
+      artist: `<div class="artist-cell flex items-center">
         <span class="album-cell-text ${data.artist ? 'text-gray-200' : 'text-gray-800 italic'} truncate cursor-pointer hover:text-gray-100">${data.artist}</span>
-      </div>
-      <div class="flex items-center country-cell">
+      </div>`,
+      country: `<div class="flex items-center country-cell">
         <span class="album-cell-text ${data.countryClass} truncate cursor-pointer hover:text-gray-100">${data.countryDisplay}</span>
-      </div>
-      <div class="flex items-center genre-1-cell">
+      </div>`,
+      genre_1: `<div class="flex items-center genre-1-cell">
         <span class="album-cell-text ${data.genre1Class} truncate cursor-pointer hover:text-gray-100">${data.genre1Display}</span>
-      </div>
-      <div class="flex items-center genre-2-cell">
+      </div>`,
+      genre_2: `<div class="flex items-center genre-2-cell">
         <span class="album-cell-text ${data.genre2Class} truncate cursor-pointer hover:text-gray-100">${data.genre2Display}</span>
-      </div>
-      <div class="flex flex-col justify-start track-cell min-w-0 cursor-pointer overflow-hidden">
+      </div>`,
+      track: `<div class="flex flex-col justify-start track-cell min-w-0 cursor-pointer overflow-hidden">
         ${
           data.primaryTrackDisplay
             ? `<div class="flex items-center min-w-0 overflow-hidden w-full">
@@ -764,14 +802,27 @@ export function createAlbumDisplay(deps = {}) {
           </div>`
             : ''
         }
-      </div>
-      <div class="flex items-center comment-cell relative border-l border-gray-700 pl-2 self-stretch">
-        <span class="album-cell-text ${data.comment ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-text">${data.comment || 'Comment'}</span>
-      </div>
-      <div class="flex items-center comment-2-cell relative pl-2 self-stretch">
-        <span class="album-cell-text ${data.comment2 ? 'text-gray-300' : 'text-gray-800 italic'} line-clamp-2 cursor-pointer hover:text-gray-100 comment-2-text">${data.comment2 || 'Comment 2'}</span>
-      </div>
-    `;
+      </div>`,
+      comment: `<div class="flex items-center comment-cell relative border-l border-gray-700 pl-2 self-stretch">
+        <span class="album-cell-text ${data.comment ? 'text-gray-300 hover:text-gray-100' : 'text-transparent hover:text-gray-600 italic'} line-clamp-2 cursor-pointer comment-text">${data.comment || 'Comment'}</span>
+      </div>`,
+      comment_2: `<div class="flex items-center comment-2-cell relative pl-2 self-stretch">
+        <span class="album-cell-text ${data.comment2 ? 'text-gray-300 hover:text-gray-100' : 'text-transparent hover:text-gray-600 italic'} line-clamp-2 cursor-pointer comment-2-text">${data.comment2 || 'Comment 2'}</span>
+      </div>`,
+    };
+
+    // Render ALL columns; hidden ones get .column-hidden for zero-cost toggling
+    const allCols = getAllColumns();
+    const visibleCols = getVisibleColumns();
+    row.style.gridTemplateColumns = computeGridTemplate(visibleCols);
+    row.innerHTML = allCols
+      .map((col) => {
+        const html = cellMap[col.id];
+        if (isColumnVisible(col.id)) return html;
+        // Inject column-hidden class into the outermost div
+        return html.replace(/^(<div\s+class=")/, '$1column-hidden ');
+      })
+      .join('\n');
 
     // Add shared event handlers
     attachDesktopEventHandlers(row, index);
@@ -820,51 +871,65 @@ export function createAlbumDisplay(deps = {}) {
       };
     }
 
-    // Add click handler to country cell
+    // Add click handler to country cell (hidden when column is toggled off)
     const countryCell = row.querySelector('.country-cell');
-    countryCell.onclick = () => {
-      const currentIndex = parseInt(row.dataset.index);
-      makeCountryEditable(countryCell, currentIndex);
-    };
+    if (countryCell) {
+      countryCell.onclick = () => {
+        const currentIndex = parseInt(row.dataset.index);
+        makeCountryEditable(countryCell, currentIndex);
+      };
+    }
 
     // Add click handlers to genre cells
     const genre1Cell = row.querySelector('.genre-1-cell');
-    genre1Cell.onclick = () => {
-      const currentIndex = parseInt(row.dataset.index);
-      makeGenreEditable(genre1Cell, currentIndex, 'genre_1');
-    };
+    if (genre1Cell) {
+      genre1Cell.onclick = () => {
+        const currentIndex = parseInt(row.dataset.index);
+        makeGenreEditable(genre1Cell, currentIndex, 'genre_1');
+      };
+    }
 
     const genre2Cell = row.querySelector('.genre-2-cell');
-    genre2Cell.onclick = () => {
-      const currentIndex = parseInt(row.dataset.index);
-      makeGenreEditable(genre2Cell, currentIndex, 'genre_2');
-    };
+    if (genre2Cell) {
+      genre2Cell.onclick = () => {
+        const currentIndex = parseInt(row.dataset.index);
+        makeGenreEditable(genre2Cell, currentIndex, 'genre_2');
+      };
+    }
 
     // Add click handler to comment cell
     const commentCell = row.querySelector('.comment-cell');
-    commentCell.onclick = () => {
-      const currentIndex = parseInt(row.dataset.index);
-      makeCommentEditable(commentCell, currentIndex);
-    };
+    if (commentCell) {
+      commentCell.onclick = () => {
+        const currentIndex = parseInt(row.dataset.index);
+        makeCommentEditable(commentCell, currentIndex);
+      };
+    }
 
     // Add click handler to comment 2 cell
     const comment2Cell = row.querySelector('.comment-2-cell');
-    comment2Cell.onclick = () => {
-      const currentIndex = parseInt(row.dataset.index);
-      makeComment2Editable(comment2Cell, currentIndex);
-    };
+    if (comment2Cell) {
+      comment2Cell.onclick = () => {
+        const currentIndex = parseInt(row.dataset.index);
+        makeComment2Editable(comment2Cell, currentIndex);
+      };
+    }
 
     // Attach link preview
     const albumsForPreview = getListData(currentList);
     const album = albumsForPreview && albumsForPreview[index];
     const comment = album ? album.comments || album.comment || '' : '';
-    attachLinkPreview(commentCell, comment);
+    if (commentCell) {
+      attachLinkPreview(commentCell, comment);
+    }
 
     const comment2 = album ? album.comments_2 || '' : '';
-    attachLinkPreview(comment2Cell, comment2);
+    if (comment2Cell) {
+      attachLinkPreview(comment2Cell, comment2);
+    }
 
     // Add tooltip only if comment is truncated
-    const commentTextEl = commentCell.querySelector('.comment-text');
+    const commentTextEl = commentCell?.querySelector('.comment-text');
     if (commentTextEl && comment) {
       setTimeout(() => {
         if (isTextTruncated(commentTextEl)) {
@@ -874,7 +939,7 @@ export function createAlbumDisplay(deps = {}) {
     }
 
     // Add tooltip only if comment 2 is truncated
-    const comment2TextEl = comment2Cell.querySelector('.comment-2-text');
+    const comment2TextEl = comment2Cell?.querySelector('.comment-2-text');
     if (comment2TextEl && comment2) {
       setTimeout(() => {
         if (isTextTruncated(comment2TextEl)) {
@@ -2625,23 +2690,134 @@ export function createAlbumDisplay(deps = {}) {
 
     if (!isMobile) {
       // Desktop: Table layout with header
-      // Create header as direct child of scrolling container
+      // Build header with ALL columns; hidden ones get .column-hidden
+      const allCols = getAllColumns();
+      const visibleCols = getVisibleColumns();
+      const gridTemplate = computeGridTemplate(visibleCols);
+
       const header = document.createElement('div');
       header.className =
         'album-header album-grid gap-4 py-2 text-[0.8125rem] font-medium text-gray-200 border-b border-gray-800 sticky top-0 z-10 shrink-0';
       header.style.alignItems = 'center';
-      header.innerHTML = `
-        <div class="text-center"></div>
-        <div></div>
-        <div class="pl-2">Album</div>
-        <div>Artist</div>
-        <div>Country</div>
-        <div>Genre 1</div>
-        <div>Genre 2</div>
-        <div>Track</div>
-        <div class="pl-2">Comment</div>
-        <div class="pl-2">Comment 2</div>
+      header.style.gridTemplateColumns = gridTemplate;
+      header.style.position = 'relative';
+
+      // Header cell extra classes by column ID
+      const headerExtras = {
+        position: ' text-center',
+        album: ' pl-2',
+        comment: ' pl-2',
+        comment_2: ' pl-2',
+      };
+
+      const headerCells = allCols
+        .map((col) => {
+          const hidden = !isColumnVisible(col.id) ? ' column-hidden' : '';
+          return `<div class="${col.cellClass}${headerExtras[col.id] || ''}${hidden}">${col.label}</div>`;
+        })
+        .join('\n        ');
+      header.innerHTML = headerCells;
+
+      // Column visibility toggle button + dropdown
+      const toggleBtn = document.createElement('button');
+      toggleBtn.className =
+        'column-toggle-btn absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-300 transition-colors duration-150 z-20';
+      toggleBtn.title = 'Show/hide columns';
+      toggleBtn.innerHTML = '<i class="fas fa-columns text-xs"></i>';
+
+      // Dropdown appended to body with fixed positioning to avoid
+      // clipping by #albumContainer's overflow-y: auto
+      const dropdown = document.createElement('div');
+      dropdown.className =
+        'column-toggle-dropdown hidden fixed w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50';
+
+      // Build checkbox list
+      const toggleableCols = getToggleableColumns();
+      dropdown.innerHTML = `
+        <div class="px-3 py-2 border-b border-gray-700 flex items-center justify-between">
+          <span class="text-xs font-semibold text-gray-400 uppercase tracking-wider">Columns</span>
+          <button class="column-toggle-reset text-xs text-gray-400 hover:text-gray-200 transition-colors cursor-pointer ml-4">Reset</button>
+        </div>
+        <div class="py-1">
+          ${toggleableCols
+            .map(
+              (col) => `
+            <label class="flex items-center gap-2.5 px-3 py-1.5 cursor-pointer hover:bg-gray-700/50 transition-colors duration-100">
+              <input type="checkbox" data-column-id="${col.id}"
+                ${isColumnVisible(col.id) ? 'checked' : ''}
+                class="w-3.5 h-3.5 rounded-sm border-gray-600 bg-gray-900 text-red-600 focus:ring-red-500 focus:ring-offset-gray-800 cursor-pointer accent-[var(--accent-color)]" />
+              <span class="text-sm text-gray-300">${col.label}</span>
+            </label>`
+            )
+            .join('')}
+        </div>
       `;
+      document.body.appendChild(dropdown);
+
+      /** Position the dropdown below the button, right-aligned */
+      function positionDropdown() {
+        const rect = toggleBtn.getBoundingClientRect();
+        dropdown.style.top = `${rect.bottom + 4}px`;
+        dropdown.style.left = `${rect.right - dropdown.offsetWidth}px`;
+      }
+
+      // Toggle dropdown on button click
+      toggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const wasHidden = dropdown.classList.contains('hidden');
+        dropdown.classList.toggle('hidden');
+        if (wasHidden) positionDropdown();
+      });
+
+      // Reset button — show all columns
+      dropdown
+        .querySelector('.column-toggle-reset')
+        .addEventListener('click', (e) => {
+          e.stopPropagation();
+          setAllColumns(true);
+          applyVisibilityInPlace();
+          // Sync dropdown checkboxes
+          dropdown
+            .querySelectorAll('input[data-column-id]')
+            .forEach((cb) => (cb.checked = true));
+        });
+
+      // Checkbox change handlers
+      dropdown.querySelectorAll('input[data-column-id]').forEach((cb) => {
+        cb.addEventListener('change', (e) => {
+          e.stopPropagation();
+          toggleColumn(cb.dataset.columnId);
+          applyVisibilityInPlace();
+        });
+      });
+
+      // Close dropdown on outside click
+      const closeDropdown = (e) => {
+        if (
+          !dropdown.contains(e.target) &&
+          e.target !== toggleBtn &&
+          !toggleBtn.contains(e.target)
+        ) {
+          dropdown.classList.add('hidden');
+        }
+      };
+      document.addEventListener('click', closeDropdown);
+
+      // Close on Escape
+      const escHandler = (e) => {
+        if (e.key === 'Escape' && !dropdown.classList.contains('hidden')) {
+          dropdown.classList.add('hidden');
+        }
+      };
+      document.addEventListener('keydown', escHandler);
+
+      header.appendChild(toggleBtn);
+
+      // Clean up previous body-appended dropdown on rebuild
+      const oldDropdown = document.querySelector(
+        'body > .column-toggle-dropdown'
+      );
+      if (oldDropdown && oldDropdown !== dropdown) oldDropdown.remove();
 
       // Create rows container
       const rowsContainer = document.createElement('div');
@@ -3094,6 +3270,13 @@ export function createAlbumDisplay(deps = {}) {
 
   // Set up global event listeners for cover preview
   document.addEventListener('keydown', handleCoverPreviewKeydown);
+
+  // Listen for column visibility changes from external sources (e.g. settings drawer)
+  window.addEventListener('columnvisibilitychange', () => {
+    const isMobile = window.innerWidth < 1024;
+    if (isMobile) return; // Column visibility only applies to desktop
+    applyVisibilityInPlace();
+  });
 
   // Return public API
   return {

@@ -11,6 +11,11 @@ import { openDuplicateReviewModal } from './duplicate-review-modal.js';
 import { openManualAlbumAudit } from './manual-album-audit-modal.js';
 import { escapeHtml } from './html-utils.js';
 import { createSettingsModal as createSettingsModalBase } from './ui-factories.js';
+import {
+  getToggleableColumns,
+  isColumnVisible,
+  toggleColumn as toggleColumnVisibility,
+} from './column-config.js';
 
 /**
  * Create settings drawer utilities with injected dependencies
@@ -431,6 +436,7 @@ export function createSettingsDrawer(deps = {}) {
         timeFormat: user.timeFormat || '24h',
         dateFormat: user.dateFormat || 'MM/DD/YYYY',
         preferredUi: user.preferredUi || null,
+        columnVisibility: user.columnVisibility || null,
       };
     } catch (error) {
       console.error('Error loading visual data:', error);
@@ -438,6 +444,7 @@ export function createSettingsDrawer(deps = {}) {
         accentColor: '#dc2626',
         timeFormat: '24h',
         dateFormat: 'MM/DD/YYYY',
+        columnVisibility: null,
       };
     }
   }
@@ -1003,6 +1010,30 @@ export function createSettingsDrawer(deps = {}) {
                   <option value="MM/DD/YYYY" ${data.dateFormat === 'DD/MM/YYYY' ? '' : 'selected'}>MM/DD/YYYY</option>
                   <option value="DD/MM/YYYY" ${data.dateFormat === 'DD/MM/YYYY' ? 'selected' : ''}>DD/MM/YYYY</option>
                 </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="settings-group">
+          <h3 class="settings-group-title">Grid Columns</h3>
+          <div class="settings-group-content">
+            <div class="settings-row" style="flex-direction: column; align-items: stretch; gap: 0.5rem;">
+              <div class="settings-row-label">
+                <label class="settings-label">Visible Columns</label>
+                <p class="settings-description">Choose which columns to show in the desktop album grid</p>
+              </div>
+              <div class="flex flex-wrap gap-2 mt-1" id="columnVisibilityToggles">
+                ${getToggleableColumns()
+                  .map(
+                    (col) => `
+                  <label class="flex items-center gap-2 px-3 py-1.5 bg-gray-900/50 rounded-sm cursor-pointer hover:bg-gray-800/50 transition border border-gray-700/50">
+                    <input type="checkbox" data-settings-column-id="${col.id}"
+                      ${isColumnVisible(col.id) ? 'checked' : ''}
+                      class="w-3.5 h-3.5 rounded-sm border-gray-600 bg-gray-900 cursor-pointer accent-[var(--accent-color)]" />
+                    <span class="text-sm text-gray-300">${col.label}</span>
+                  </label>`
+                  )
+                  .join('')}
               </div>
             </div>
           </div>
@@ -2365,6 +2396,20 @@ export function createSettingsDrawer(deps = {}) {
     const switchToMobileBtn = document.getElementById('switchToMobileUiBtn');
     if (switchToMobileBtn) {
       switchToMobileBtn.addEventListener('click', handleSwitchToMobileUi);
+    }
+
+    // Column visibility toggles
+    const columnToggles = document.getElementById('columnVisibilityToggles');
+    if (columnToggles) {
+      columnToggles
+        .querySelectorAll('input[data-settings-column-id]')
+        .forEach((cb) => {
+          cb.addEventListener('change', () => {
+            toggleColumnVisibility(cb.dataset.settingsColumnId);
+            // The column-config module dispatches 'columnvisibilitychange'
+            // which album-display listens for to trigger a rebuild
+          });
+        });
     }
   }
 

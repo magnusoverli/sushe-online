@@ -17,6 +17,14 @@ const ALLOWED_TIME_FORMATS = ['12h', '24h'];
 const ALLOWED_DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY'];
 const ALLOWED_MUSIC_SERVICES = ['spotify', 'tidal'];
 const ALLOWED_UI_MODES = ['mobile', 'desktop'];
+const ALLOWED_GRID_COLUMNS = [
+  'country',
+  'genre_1',
+  'genre_2',
+  'track',
+  'comment',
+  'comment_2',
+];
 
 const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
 
@@ -155,6 +163,33 @@ function createUserService(deps = {}) {
         }
         return { valid: true, value: value || null };
 
+      case 'columnVisibility':
+        // null resets to default (all columns visible)
+        if (value === null) {
+          return { valid: true, value: null };
+        }
+        if (typeof value !== 'object' || Array.isArray(value)) {
+          return {
+            valid: false,
+            error: 'Column visibility must be an object or null',
+          };
+        }
+        for (const key of Object.keys(value)) {
+          if (!ALLOWED_GRID_COLUMNS.includes(key)) {
+            return {
+              valid: false,
+              error: `Unknown column: ${key}`,
+            };
+          }
+          if (typeof value[key] !== 'boolean') {
+            return {
+              valid: false,
+              error: `Column visibility values must be booleans`,
+            };
+          }
+        }
+        return { valid: true, value };
+
       default:
         return { valid: false, error: `Unknown setting: ${field}` };
     }
@@ -182,5 +217,6 @@ module.exports = {
   ALLOWED_TIME_FORMATS,
   ALLOWED_DATE_FORMATS,
   ALLOWED_MUSIC_SERVICES,
+  ALLOWED_GRID_COLUMNS,
   HEX_COLOR_REGEX,
 };

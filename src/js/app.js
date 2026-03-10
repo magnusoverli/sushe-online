@@ -48,6 +48,7 @@ import { createLinkPreview } from './modules/link-preview.js';
 import { createRecommendations } from './modules/recommendations.js';
 import { createTrackSelection } from './modules/track-selection.js';
 import { createListCrud } from './modules/list-crud.js';
+import { init as initColumnConfig } from './modules/column-config.js';
 import { createPlayback } from './modules/playback.js';
 import { createAlbumContextMenu } from './modules/album-context-menu.js';
 
@@ -1775,6 +1776,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Don't initialize main app features on auth pages
     return;
   }
+
+  // Initialize column visibility before any album rendering occurs
+  initColumnConfig(window.currentUser?.columnVisibility || null);
 
   // PERFORMANCE: Start loading list data immediately - this is the critical path
   // Other UI initializations run in parallel while data is fetched
