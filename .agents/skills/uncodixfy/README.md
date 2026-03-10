@@ -4,17 +4,15 @@
   <img src="images/thumb.jpg" alt="Uncodixify" width="100%">
 </p>
 
-
 GPT is surprisingly bad at UI design.
 
 If you ask it to generate interfaces long enough, you start noticing the same bad design-patterns repeating.
 
 Floating cards.  
 Oversized rounded corners.  
-Gradient-heavy dashboards.    
+Gradient-heavy dashboards.  
 Decorative labels everywhere.  
-Glass panels.  
-
+Glass panels.
 
 After a while you can recognize a “GPT UI” immediately.
 
@@ -32,14 +30,12 @@ It doesn't try to teach GPT how to design.
 
 It mostly just tells it what **not** to do.
 
-
-
-
 ## Using it
 
 Include `uncodixify.md` in your prompt or system instructions when asking GPT to generate UI.
 
 Example:
+
 <p align="center">
   <img src="images/1.png" width="48%">
   <img src="images/2.png" width="48%">
@@ -55,6 +51,7 @@ Before (Typical GPT UI) | After (Uncodixified)
 Before (Typical GPT UI) | After (Uncodixified)
 
 ---
+
 ## Agent Skill
 
 Uncodixfy is also available as an agent skill via `SKILL.md`. This works with AI coding agents that support the skill format, including Codex and Claude Code.
@@ -64,6 +61,7 @@ Uncodixfy is also available as an agent skill via `SKILL.md`. This works with AI
 ```
 npx skills add cyxzdev/Uncodixfy
 ```
+
 Or bunx if you want.
 
 Once installed, invoke it with:
@@ -71,6 +69,7 @@ Once installed, invoke it with:
 ```text
 /uncodixfy
 ```
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/image?repos=cyxzdev/Uncodixfy&type=date&legend=top-left)](https://www.star-history.com/?repos=cyxzdev%2FUncodixfy&type=date&legend=top-left)
