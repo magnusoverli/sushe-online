@@ -629,6 +629,7 @@ export function AlbumActionSheet({
           {/* Move to List (inline expand) */}
           <button
             type="button"
+            disabled={isListLocked}
             onClick={() => {
               setExpandedPicker(expandedPicker === 'move' ? null : 'move');
               setExpandedYear(null);
@@ -639,8 +640,10 @@ export function AlbumActionSheet({
               gap: 10,
               padding: 10,
               borderRadius: 10,
-              cursor: 'pointer',
+              cursor: isListLocked ? 'default' : 'pointer',
               transition: 'background 150ms ease',
+              opacity: isListLocked ? 0.35 : 1,
+              pointerEvents: isListLocked ? 'none' : 'auto',
               userSelect: 'none',
               WebkitUserSelect: 'none',
               width: '100%',

@@ -1346,7 +1346,7 @@ export function LibraryPage() {
                   This list is empty.
                 </span>
               </div>
-            ) : sortKey === 'custom' ? (
+            ) : sortKey === 'custom' && !isListLocked ? (
               <SortableAlbumList
                 items={sortedAlbums.map((a) => a._id)}
                 onReorder={handleReorder}
