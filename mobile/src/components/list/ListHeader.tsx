@@ -49,7 +49,7 @@ const DIVIDER_SHIFT = TITLE_VISUAL_COLLAPSE; // ~16.1px
 const CONTENT_LIFT = 3;
 
 /** Extra downward nudge for action buttons (closer to divider) */
-const ACTIONS_OFFSET = 8;
+const ACTIONS_OFFSET = 0;
 
 /** Clip from bottom: freed space + content lift */
 const CLIP_BOTTOM = DIVIDER_SHIFT + CONTENT_LIFT; // ~19.1px
@@ -80,6 +80,7 @@ export function ListHeader({
   const outerRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const actionsRef = useRef<HTMLDivElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
   const dividerRef = useRef<HTMLDivElement>(null);
 
   // rAF-throttled scroll listener — compositor-friendly properties only
@@ -87,6 +88,7 @@ export function ListHeader({
     const outerEl = outerRef.current;
     const titleEl = titleRef.current;
     const actionsEl = actionsRef.current;
+    const hamburgerEl = hamburgerRef.current;
     const dividerEl = dividerRef.current;
     if (!outerEl || !titleEl || !dividerEl) return;
 
@@ -106,11 +108,15 @@ export function ListHeader({
       const shift = DIVIDER_SHIFT * progress + lift;
       const clip = CLIP_BOTTOM * progress;
 
-      // Everything shifts up by the same lift amount;
-      // divider also shifts by title collapse to close the gap
+      // Title scales down with its own origin; hamburger and actions
+      // shift up by half the clipped amount to stay centered in the
+      // shrinking visible area; divider follows full shift.
+      const centerShift = clip / 2;
       titleEl.style.transform = `translateY(${-lift}px) scale(${scale})`;
+      if (hamburgerEl)
+        hamburgerEl.style.transform = `translateY(${-centerShift}px)`;
       if (actionsEl)
-        actionsEl.style.transform = `translateY(${ACTIONS_OFFSET - shift}px)`;
+        actionsEl.style.transform = `translateY(${-centerShift}px)`;
       dividerEl.style.transform = `translateY(${-shift}px)`;
       outerEl.style.clipPath = `inset(0 0 ${clip}px 0)`;
     };
@@ -147,14 +153,52 @@ export function ListHeader({
           padding: `${PADDING_TOP}px var(--space-header-x) 0px`,
         }}
       >
-        {/* Title row: title + actions */}
+        {/* Title row: hamburger + title + actions */}
         <div
           style={{
             display: 'flex',
-            alignItems: 'flex-start',
+            alignItems: 'center',
             gap: '8px',
           }}
         >
+          {/* Hamburger menu — left of title */}
+          {onMenuClick && (
+            <button
+              ref={hamburgerRef}
+              type="button"
+              onClick={onMenuClick}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                padding: '6px',
+                marginLeft: '-20px',
+                cursor: 'pointer',
+                color: 'var(--color-text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                alignSelf: 'center',
+                willChange: 'transform',
+              }}
+              aria-label="Open navigation"
+              data-testid="list-header-menu"
+            >
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              >
+                <line x1="3" y1="5" x2="17" y2="5" />
+                <line x1="3" y1="10" x2="17" y2="10" />
+                <line x1="3" y1="15" x2="17" y2="15" />
+              </svg>
+            </button>
+          )}
           <h1
             ref={titleRef}
             style={{
@@ -225,38 +269,6 @@ export function ListHeader({
                 data-testid="list-header-options"
               >
                 <MoreVertical size={18} />
-              </button>
-            )}
-            {onMenuClick && (
-              <button
-                type="button"
-                onClick={onMenuClick}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '6px',
-                  cursor: 'pointer',
-                  color: 'var(--color-text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                aria-label="Open navigation"
-                data-testid="list-header-menu"
-              >
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                >
-                  <line x1="3" y1="5" x2="17" y2="5" />
-                  <line x1="3" y1="10" x2="17" y2="10" />
-                  <line x1="3" y1="15" x2="17" y2="15" />
-                </svg>
               </button>
             )}
           </div>

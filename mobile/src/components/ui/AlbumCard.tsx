@@ -130,27 +130,6 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
         data-testid="album-card"
         role="listitem"
       >
-        {/* Rank — always rendered to reserve space; visibility controls display */}
-        {rank != null && (
-          <span
-            style={{
-              fontFamily: 'var(--font-mono)',
-              fontSize: '11px',
-              fontWeight: 300,
-              letterSpacing: 0,
-              color: 'var(--color-text-rank)',
-              width: '5px',
-              textAlign: 'right',
-              flexShrink: 0,
-              marginRight: '2px',
-              visibility: showRank && rankVisible ? 'visible' : 'hidden',
-            }}
-            data-testid="album-rank"
-          >
-            {rank}
-          </span>
-        )}
-
         {/* Cover art */}
         <div
           style={{
@@ -292,64 +271,102 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
           )}
         </div>
 
-        {/* Three-dot menu button — always rendered to preserve layout width.
-          When onMenuClick is absent (e.g. during drag) the button is hidden
-          via visibility so the 28px column stays in the flow and card height
-          remains stable. */}
-        <button
-          type="button"
-          style={{
-            width: '28px',
-            height: '28px',
-            borderRadius: '7px',
-            border: '1px solid transparent',
-            background: 'transparent',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: onMenuClick ? 'pointer' : 'default',
-            flexShrink: 0,
-            padding: 0,
-            color: 'rgba(255,255,255,0.55)',
-            transition: 'background 150ms ease, border-color 150ms ease',
-            visibility: onMenuClick ? 'visible' : 'hidden',
-            pointerEvents: onMenuClick ? 'auto' : 'none',
-          }}
-          onClick={onMenuClick ? handleMenuClick : undefined}
-          onTouchStart={
-            onMenuClick
-              ? (e: React.TouchEvent) => e.stopPropagation()
-              : undefined
-          }
-          onTouchEnd={
-            onMenuClick
-              ? (e: React.TouchEvent) => {
-                  e.preventDefault();
-                  handleMenuClick(e);
-                }
-              : undefined
-          }
-          aria-label={onMenuClick ? `Menu for ${title}` : undefined}
-          aria-hidden={!onMenuClick}
-          data-testid="album-menu-button"
-        >
-          <MoreVertical size={14} />
-        </button>
-
-        {/* Active indicator bar */}
+        {/* Right column: rank + three-dot menu + active indicator */}
         <div
           style={{
-            width: '3px',
-            height: '32px',
-            borderRadius: 'var(--radius-indicator)',
-            background:
-              'linear-gradient(180deg, var(--color-gold) 0%, var(--color-gold-dark) 100%)',
-            opacity: isActive ? 1 : 0,
+            display: 'flex',
+            alignItems: 'center',
+            alignSelf: 'stretch',
+            gap: '2px',
             flexShrink: 0,
-            transition: 'opacity 200ms ease',
           }}
-          data-testid="active-indicator"
-        />
+        >
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              alignSelf: 'stretch',
+            }}
+          >
+            {/* Rank — top of the right column */}
+            {rank != null && (
+              <span
+                style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '11px',
+                  fontWeight: 300,
+                  letterSpacing: 0,
+                  color: 'var(--color-text-rank)',
+                  textAlign: 'center',
+                  minWidth: '28px',
+                  visibility: showRank && rankVisible ? 'visible' : 'hidden',
+                }}
+                data-testid="album-rank"
+              >
+                {rank}
+              </span>
+            )}
+            {/* Three-dot menu button */}
+            <button
+              type="button"
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '7px',
+                border: '1px solid transparent',
+                background: 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: onMenuClick ? 'pointer' : 'default',
+                flexShrink: 0,
+                padding: 0,
+                color: 'rgba(255,255,255,0.55)',
+                transition: 'background 150ms ease, border-color 150ms ease',
+                visibility: onMenuClick ? 'visible' : 'hidden',
+                pointerEvents: onMenuClick ? 'auto' : 'none',
+              }}
+              onClick={onMenuClick ? handleMenuClick : undefined}
+              onTouchStart={
+                onMenuClick
+                  ? (e: React.TouchEvent) => e.stopPropagation()
+                  : undefined
+              }
+              onTouchEnd={
+                onMenuClick
+                  ? (e: React.TouchEvent) => {
+                      e.preventDefault();
+                      handleMenuClick(e);
+                    }
+                  : undefined
+              }
+              aria-label={onMenuClick ? `Menu for ${title}` : undefined}
+              aria-hidden={!onMenuClick}
+              data-testid="album-menu-button"
+            >
+              <MoreVertical size={14} />
+            </button>
+            {/* Spacer to balance rank height so three-dot centers vertically */}
+            {rank != null && <div style={{ height: '11px' }} />}
+          </div>
+
+          {/* Active indicator bar */}
+          <div
+            style={{
+              width: '3px',
+              height: '32px',
+              borderRadius: 'var(--radius-indicator)',
+              background:
+                'linear-gradient(180deg, var(--color-gold) 0%, var(--color-gold-dark) 100%)',
+              opacity: isActive ? 1 : 0,
+              flexShrink: 0,
+              transition: 'opacity 200ms ease',
+            }}
+            data-testid="active-indicator"
+          />
+        </div>
       </div>
     );
   }
