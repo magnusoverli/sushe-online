@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-03-12",
+    "category": "fix",
+    "description": "Fixed drag-and-drop reorder not saving on mobile",
+    "hash": "50cb0c5555af503b42b347746809ef2f5f216810",
+    "commitMessage": "Fix drag-and-drop reorder not persisting in mobile SPA\n\nThe reorder API expects album_id values but the SPA was sending list item\n_id values instead, so the SQL UPDATE matched 0 rows and positions never\nchanged in the DB. Map _id → album_id before calling the reorder API."
+  },
+  {
+    "date": "2026-03-10",
+    "category": "feature",
+    "description": "Added column visibility toggles for desktop album grid",
+    "hash": "0ee3e2149875e9ff2c1d425707ecbfceb4dd470c",
+    "commitMessage": "Add column visibility toggles for desktop album grid\n\n- Users can show/hide 6 optional columns (Country, Genre 1, Genre 2,\n  Track, Comment, Comment 2) via a dropdown in the header or the\n  settings drawer. 4 structural columns remain always visible.\n- Preferences persisted server-side via new column_visibility JSONB\n  column (migration 055), following established settings pattern.\n- CSS refactor: replaced all 21 nth-child selectors in app.css with\n  class-based selectors (.position-cell, .cover-cell, .album-cell,\n  .artist-cell) so hiding columns doesn't shift grid indices.\n- In-place DOM toggling: checkbox changes toggle .column-hidden class\n  and update grid templates without rebuilding the album list.\n- Dropdown uses fixed positioning on document.body to avoid clipping\n  by albumContainer's overflow-y: auto.\n- Empty comment cells use text-transparent placeholder instead of\n  visible ghost text.\n- 9 new tests for columnVisibility validation in user-service."
+  },
+  {
     "date": "2026-03-10",
     "category": "feature",
     "description": "Added column visibility toggles for desktop album grid",
