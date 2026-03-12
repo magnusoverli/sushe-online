@@ -48,9 +48,6 @@ const DIVIDER_SHIFT = TITLE_VISUAL_COLLAPSE; // ~16.1px
 /** Extra upward lift applied to all content (title, buttons, divider) */
 const CONTENT_LIFT = 3;
 
-/** Extra downward nudge for action buttons (closer to divider) */
-const ACTIONS_OFFSET = 0;
-
 /** Clip from bottom: freed space + content lift */
 const CLIP_BOTTOM = DIVIDER_SHIFT + CONTENT_LIFT; // ~19.1px
 
