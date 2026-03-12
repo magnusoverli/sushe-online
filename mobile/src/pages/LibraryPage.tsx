@@ -410,10 +410,14 @@ export function LibraryPage() {
         }
       );
 
-      // Debounced API save
-      debouncedSaveReorder(activeListId, newOrder);
+      // Debounced API save — backend reorderItems expects album_id strings,
+      // but newOrder contains list item _id values, so map them first.
+      const albumIdOrder = newOrder
+        .map((id) => albumMap.get(id)?.album_id)
+        .filter((id): id is string => Boolean(id));
+      debouncedSaveReorder(activeListId, albumIdOrder);
     },
-    [activeListId, queryClient, debouncedSaveReorder]
+    [activeListId, queryClient, debouncedSaveReorder, albumMap]
   );
 
   /** Check if a given album matches the currently playing track. */
