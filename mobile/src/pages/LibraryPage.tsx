@@ -121,7 +121,7 @@ import type {
 } from '@/lib/types';
 
 const SORT_OPTIONS: DropdownItem[] = [
-  { id: 'custom', label: 'Custom Order' },
+  { id: 'custom', label: 'Rank' },
   { id: 'artist', label: 'Artist' },
   { id: 'title', label: 'Title' },
   { id: 'year', label: 'Year' },

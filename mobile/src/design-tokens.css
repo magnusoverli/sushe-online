@@ -50,7 +50,7 @@
 
   /* ── Tab Bar ── */
   --tabbar-bg: #0e0e12;
-  --tabbar-height: 64px;
+  --tabbar-height: 45px;
   --tabbar-border: rgba(255, 255, 255, 0.06);
   --tabbar-icon-size: 20px;
   --tabbar-icon-stroke: 1.5px;

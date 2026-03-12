@@ -32,19 +32,19 @@ const TABS: TabDef[] = [
   {
     id: 'library',
     label: 'Library',
-    icon: <Library size={20} strokeWidth={1.5} />,
+    icon: <Library size={23} strokeWidth={1.5} />,
     path: '/',
   },
   {
     id: 'search',
     label: 'Search',
-    icon: <Search size={20} strokeWidth={1.5} />,
+    icon: <Search size={23} strokeWidth={1.5} />,
     path: '/search',
   },
   {
     id: 'settings',
     label: 'Settings',
-    icon: <Settings size={20} strokeWidth={1.5} />,
+    icon: <Settings size={23} strokeWidth={1.5} />,
     // No path — handled via onSettingsClick callback
   },
 ];
@@ -119,7 +119,7 @@ export function TabBar({
             <span
               style={{
                 fontFamily: 'var(--font-mono)',
-                fontSize: '9px',
+                fontSize: '11px',
                 letterSpacing: '0.05em',
                 lineHeight: 1,
                 color,

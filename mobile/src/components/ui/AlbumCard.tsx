@@ -177,10 +177,10 @@ export const AlbumCard = forwardRef<HTMLDivElement, AlbumCardProps>(
         >
           <span
             style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: '15px',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '14px',
               fontWeight: 400,
-              letterSpacing: '-0.01em',
+              letterSpacing: '-0.02em',
               lineHeight: 1.3,
               color: titleColor,
               overflow: 'hidden',
