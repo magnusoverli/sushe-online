@@ -1,5 +1,40 @@
 [
   {
+    "date": "2026-03-14",
+    "category": "fix",
+    "description": "Fixed small typo in genre list",
+    "hash": "704e55a4edd2b570c1d1947f137837f9ef64faec",
+    "commitMessage": "Small typo fix"
+  },
+  {
+    "date": "2026-03-12",
+    "category": "security",
+    "description": "Protected locked lists from editing on mobile",
+    "hash": "443a27042a947c7d56c419b22a302779a5d99d3e",
+    "commitMessage": "Enforce locked list protections in mobile SPA\n\n- Disable drag-and-drop reorder on locked lists by falling through to\n  the static album list renderer instead of SortableAlbumList\n- Disable 'Move to List' button on locked lists to prevent partial\n  failures where the album gets added to the target but not removed\n  from the locked source list"
+  },
+  {
+    "date": "2026-03-12",
+    "category": "ui",
+    "description": "Updated mobile card and header layout",
+    "hash": "fa624e9057dfb138c4ae382e29686d634d58f48f",
+    "commitMessage": "Rework mobile SPA card and header layout\n\n- AlbumCard: move rank to top-right column, center three-dot vertically,\n  remove left rank column so cover sits flush against card edge\n- ListHeader: move hamburger to left of title, center-align all elements,\n  fix scroll shrink animation for center-aligned layout\n- Reduce tab bar height to 30px"
+  },
+  {
+    "date": "2026-03-12",
+    "category": "ui",
+    "description": "Improved album fonts and tab bar sizing",
+    "hash": "3f68aadbec268d066c7734bc5bf58717b4c9da0f",
+    "commitMessage": "UI tweaks: album title font, tab bar sizing, sort label rename\n\n- Switch album card title font from DM Serif Display to DM Mono\n- Reduce album title size to 14px, tighten letter-spacing to -0.02em\n- Reduce tab bar height from 64px to 45px\n- Increase tab bar icons from 20px to 23px\n- Increase tab bar label font size to 11px\n- Rename sort option 'Custom Order' to 'Rank'"
+  },
+  {
+    "date": "2026-03-12",
+    "category": "fix",
+    "description": "Fixed drag-and-drop reordering not saving on mobile",
+    "hash": "50cb0c5555af503b42b347746809ef2f5f216810",
+    "commitMessage": "Fix drag-and-drop reorder not persisting in mobile SPA\n\nThe reorder API expects album_id values but the SPA was sending list item\n_id values instead, so the SQL UPDATE matched 0 rows and positions never\nchanged in the DB. Map _id → album_id before calling the reorder API."
+  },
+  {
     "date": "2026-03-12",
     "category": "security",
     "description": "Protected locked lists from edits on mobile",
