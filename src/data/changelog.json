@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-03-18",
+    "category": "ui",
+    "description": "Mobile users now redirected to proper login page",
+    "hash": "f74576c833c0d0da1078376b730dcb398f4f354b",
+    "commitMessage": "Redirect unauthenticated mobile users to SPA login/register\n\nGET /login and GET /register now check isMobileUA() and redirect\nto /mobile/login and /mobile/register respectively, so mobile\ndevices get the dedicated SPA from the first page load instead of\nthe responsive desktop UI.\n\nAlso redirects POST /register success/failure to the mobile\nequivalents for mobile UAs as a safety net."
+  },
+  {
+    "date": "2026-03-14",
+    "category": "fix",
+    "description": "Fixed typo in genre list",
+    "hash": "704e55a4edd2b570c1d1947f137837f9ef64faec",
+    "commitMessage": "Small typo fix"
+  },
+  {
     "date": "2026-03-14",
     "category": "fix",
     "description": "Fixed small typo in genre list",
