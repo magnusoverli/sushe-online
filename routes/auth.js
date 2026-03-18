@@ -167,6 +167,11 @@ module.exports = (app, deps) => {
 
   // Registration page
   app.get('/register', csrfProtection, (req, res) => {
+    // Serve mobile SPA registration to mobile devices
+    if (isMobileUA(req.headers['user-agent'])) {
+      return res.redirect('/mobile/register');
+    }
+
     res.send(
       htmlTemplate(
         registerTemplate(req, res.locals.flash),
@@ -199,12 +204,16 @@ module.exports = (app, deps) => {
         'success',
         'Registration successful! Your account is pending admin approval.'
       );
-      res.redirect('/login');
+      res.redirect(
+        isMobileUA(req.headers['user-agent']) ? '/mobile/login' : '/login'
+      );
     } catch (error) {
       logger.error('Registration error', { error: error.message });
       recordAuthAttempt('register', 'failure');
       req.flash('error', 'Registration error. Please try again.');
-      res.redirect('/register');
+      res.redirect(
+        isMobileUA(req.headers['user-agent']) ? '/mobile/register' : '/register'
+      );
     }
   });
 
@@ -212,6 +221,11 @@ module.exports = (app, deps) => {
   app.get('/login', csrfProtection, (req, res) => {
     if (req.isAuthenticated()) {
       return res.redirect('/');
+    }
+
+    // Serve mobile SPA login to mobile devices
+    if (isMobileUA(req.headers['user-agent'])) {
+      return res.redirect('/mobile/login');
     }
 
     logger.debug('Login GET - CSRF token generation', {
