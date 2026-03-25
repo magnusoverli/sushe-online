@@ -173,6 +173,41 @@ test.describe('Navigation and UI', () => {
     await page.goto('/forgot');
     await expect(page).toHaveTitle(/Password Recovery/);
   });
+
+  test('should return 404 for removed /mobile SPA entry', async ({ page }) => {
+    const response = await page.goto('/mobile');
+    expect(response?.status()).toBe(404);
+  });
+
+  test('should return 404 for removed /mobile SPA auth route', async ({
+    page,
+  }) => {
+    const response = await page.goto('/mobile/login');
+    expect(response?.status()).toBe(404);
+  });
+});
+
+test.describe('Mobile User-Agent Routing', () => {
+  test.use({
+    userAgent:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  });
+
+  test('should keep /login on classic auth page for mobile user-agent', async ({
+    page,
+  }) => {
+    await page.goto('/login');
+    await expect(page).toHaveURL(/.*\/login/);
+    await expect(page.locator('input[name="email"]')).toBeVisible();
+  });
+
+  test('should keep /register on classic auth page for mobile user-agent', async ({
+    page,
+  }) => {
+    await page.goto('/register');
+    await expect(page).toHaveURL(/.*\/register/);
+    await expect(page.locator('input[name="username"]')).toBeVisible();
+  });
 });
 
 test.describe('Security Features', () => {
