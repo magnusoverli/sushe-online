@@ -16,7 +16,6 @@ const logger = require('../utils/logger');
 const ALLOWED_TIME_FORMATS = ['12h', '24h'];
 const ALLOWED_DATE_FORMATS = ['MM/DD/YYYY', 'DD/MM/YYYY'];
 const ALLOWED_MUSIC_SERVICES = ['spotify', 'tidal'];
-const ALLOWED_UI_MODES = ['mobile', 'desktop'];
 const ALLOWED_GRID_COLUMNS = [
   'country',
   'genre_1',
@@ -154,12 +153,6 @@ function createUserService(deps = {}) {
       case 'musicService':
         if (value && !ALLOWED_MUSIC_SERVICES.includes(value)) {
           return { valid: false, error: 'Invalid music service' };
-        }
-        return { valid: true, value: value || null };
-
-      case 'preferredUi':
-        if (value && !ALLOWED_UI_MODES.includes(value)) {
-          return { valid: false, error: 'Invalid UI mode' };
         }
         return { valid: true, value: value || null };
 

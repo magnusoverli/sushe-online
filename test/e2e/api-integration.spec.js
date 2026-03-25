@@ -426,10 +426,11 @@ test.describe('Track Picks API Integration', () => {
 test.describe('List Main Status', () => {
   test('should set and unset list as main', async ({ page }) => {
     await setupAuthenticatedUser(page);
+    const listName = `Main Status Test ${Date.now()}`;
 
     // Create a list
     const { json: createBody } = await createList(page, {
-      name: 'Main Status Test',
+      name: listName,
       year: 2024,
     });
     const listId = createBody._id;
@@ -447,7 +448,7 @@ test.describe('List Main Status', () => {
     expect(setMainResponse.status()).toBe(200);
 
     // Verify via lists endpoint
-    const list = await findListByName(page, 'Main Status Test');
+    const list = await findListByName(page, listName);
     expect(list).not.toBeNull();
     expect(list.isMain).toBe(true);
 
