@@ -48,58 +48,68 @@
   padding-right: 1rem; /* 16px - maintain edge spacing */
 }
 
-/* Define the recommendations grid class (7 columns - matches regular list structure) */
+/* Recommendations grid: uses the same cell structure as regular list rows */
 .recommendations-grid {
   display: grid;
-  grid-template-columns: 75px 0.75fr 0.65fr 0.6fr 0.6fr 0.75fr 0.6fr;
-  /* Cover(75px), Album, Artist, Genre 1, Genre 2, Recommended By, Date Added */
-  /* Column widths match regular list proportions where applicable */
+  grid-template-columns: 75px minmax(0, 1fr) minmax(0, 0.9fr) minmax(
+      0,
+      0.78fr
+    ) minmax(0, 0.78fr) minmax(0, 0.92fr) minmax(0, 0.72fr);
   align-items: center;
   padding-left: 1rem;
   padding-right: 1rem;
   gap: 1rem;
 }
 
-/* Recommendations grid cells - ensure proper flex behavior */
+/* Recommendation cells should behave like regular row cells */
 .recommendations-grid > div {
-  min-width: 0; /* Prevent grid blowout */
+  min-width: 0;
   display: flex;
   align-items: center;
 }
 
-/* Emulate position column spacing (match regular lists) */
-.recommendations-grid > div:nth-child(1) {
-  margin-left: calc(
-    7px + 1.5rem
-  ); /* 31px - emulates position column (7px) + its margin (24px) */
-  margin-right: 0.5rem; /* 8px - matches regular list cover margin */
-  justify-content: flex-start; /* Left-align covers like regular lists */
+.recommendations-grid > .cover-cell {
+  justify-content: flex-end;
+  margin-right: 0.5rem;
 }
 
-/* Center-align "ALBUM" header text over cover column (matches regular lists) */
-.recommendations-header > div:nth-child(1) {
+.recommendations-header > .cover-cell {
   justify-content: center;
+  margin-right: 0;
 }
 
-/* Album name column - vertical layout with left alignment (matches regular lists) */
-.recommendations-grid > div:nth-child(2) {
+/* Album column mirrors regular list stacked title/date layout */
+.recommendations-grid > .album-cell {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
 }
 
-/* Muted text for Genre 1 and Genre 2 columns in recommendations */
-.recommendations-grid > div:nth-child(4),
-.recommendations-grid > div:nth-child(5) {
+.recommendations-grid .album-name,
+.recommendations-grid .album-cell-text {
+  width: 100%;
+}
+
+.recommendations-grid > .genre-1-cell,
+.recommendations-grid > .genre-2-cell {
   opacity: 0.7;
 }
 
-/* Add visual separator to Date Added column (last column) */
-.recommendations-grid > div:nth-child(7) {
-  border-left: 1px solid rgba(55, 65, 81, 1); /* gray-700 */
-  padding-left: 1rem; /* 16px - matches regular list comment cell */
-  align-self: stretch; /* Span full height like comment cell */
+.recommendations-grid > .date-added-cell {
+  border-left: 1px solid rgba(55, 65, 81, 1);
+  padding-left: 1rem;
+  align-self: stretch;
+}
+
+@media (max-width: 1280px) and (min-width: 1024px) {
+  .recommendations-grid {
+    grid-template-columns: 75px minmax(0, 0.95fr) minmax(0, 0.85fr) minmax(
+        0,
+        0.72fr
+      ) minmax(0, 0.72fr) minmax(0, 0.86fr) minmax(0, 0.7fr);
+    gap: 0.75rem;
+  }
 }
 
 /* Fix alignment issues with flex items inside grid cells */

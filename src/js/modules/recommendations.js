@@ -218,27 +218,30 @@ export function createRecommendations(deps = {}) {
         
         <!-- INFO SECTION -->
         <div class="flex-1 min-w-0 py-1 pl-2 pr-1 flex flex-col justify-between h-[122px]">
-          <div class="flex items-center">
-            <h3 class="font-semibold text-gray-200 text-sm leading-tight truncate">
-              <i class="fas fa-compact-disc fa-xs mr-2"></i>${escapeHtml(rec.album)}
+          <div class="flex items-center min-w-0">
+            <h3 class="font-semibold text-gray-200 text-sm leading-tight flex items-center min-w-0 w-full">
+              <i class="fas fa-compact-disc fa-xs mr-2 shrink-0"></i>
+              <span class="truncate flex-1 min-w-0" title="${escapeHtml(rec.album)}">${escapeHtml(rec.album)}</span>
             </h3>
           </div>
-          <div class="flex items-center">
-            <p class="text-[13px] text-gray-500 truncate">
-              <i class="fas fa-user fa-xs mr-2"></i>
-              <span data-field="artist-mobile-text">${escapeHtml(rec.artist)}</span>
+          <div class="flex items-center min-w-0">
+            <p class="text-[13px] text-gray-500 flex items-center min-w-0 w-full">
+              <i class="fas fa-user fa-xs mr-2 shrink-0"></i>
+              <span data-field="artist-mobile-text" class="truncate flex-1 min-w-0" title="${escapeHtml(rec.artist)}">${escapeHtml(rec.artist)}</span>
             </p>
           </div>
-          <div class="flex items-center">
-            <p class="text-[13px] text-gray-400 truncate">
-              <i class="fas fa-tag fa-xs mr-2"></i>
-              ${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}${!rec.genre_1 && !rec.genre_2 ? '<span class="text-gray-600 italic">No genre</span>' : ''}
+          <div class="flex items-center min-w-0">
+            <p class="text-[13px] text-gray-400 flex items-center min-w-0 w-full">
+              <i class="fas fa-tag fa-xs mr-2 shrink-0"></i>
+              <span class="truncate flex-1 min-w-0" title="${escapeHtml(rec.genre_1 && rec.genre_2 ? `${rec.genre_1}, ${rec.genre_2}` : rec.genre_1 || rec.genre_2 || 'No genre')}">
+                ${rec.genre_1 ? escapeHtml(rec.genre_1) : ''}${rec.genre_1 && rec.genre_2 ? ', ' : ''}${rec.genre_2 ? escapeHtml(rec.genre_2) : ''}${!rec.genre_1 && !rec.genre_2 ? '<span class="text-gray-600 italic">No genre</span>' : ''}
+              </span>
             </p>
           </div>
-          <div class="flex items-center">
-            <span class="text-[13px] text-blue-400 truncate">
-              <i class="fas fa-thumbs-up fa-xs mr-2"></i>
-              ${escapeHtml(rec.recommended_by)}
+          <div class="flex items-center min-w-0">
+            <span class="text-[13px] text-blue-400 flex items-center min-w-0 w-full">
+              <i class="fas fa-thumbs-up fa-xs mr-2 shrink-0"></i>
+              <span class="truncate flex-1 min-w-0" title="${escapeHtml(rec.recommended_by)}">${escapeHtml(rec.recommended_by)}</span>
             </span>
           </div>
           ${
@@ -693,24 +696,24 @@ export function createRecommendations(deps = {}) {
         container.appendChild(cardContainer);
       }
     } else {
-      // Desktop: Grid layout with header (matching regular lists)
+      // Desktop: Grid layout with header (matching regular list structure)
       const header = document.createElement('div');
       header.className =
-        'recommendations-header recommendations-grid gap-4 py-2 text-base font-semibold uppercase tracking-wider text-gray-200 border-b border-gray-800 sticky top-0 z-10 shrink-0';
+        'album-header recommendations-header recommendations-grid gap-4 py-2 text-[0.8125rem] font-medium text-gray-200 border-b border-gray-800 sticky top-0 z-10 shrink-0';
       header.style.alignItems = 'center';
       header.innerHTML = `
-        <div>Album</div>
-        <div></div>
-        <div>Artist</div>
-        <div>Genre 1</div>
-        <div>Genre 2</div>
-        <div>Recommended By</div>
-        <div>Date Added</div>
+        <div class="cover-cell"></div>
+        <div class="album-cell">Album</div>
+        <div class="artist-cell">Artist</div>
+        <div class="genre-1-cell">Genre 1</div>
+        <div class="genre-2-cell">Genre 2</div>
+        <div class="recommended-by-cell">Recommended By</div>
+        <div class="date-added-cell">Date Added</div>
       `;
 
       const rowsContainer = document.createElement('div');
       rowsContainer.className =
-        'recommendations-rows-container relative flex-1';
+        'album-rows-container recommendations-rows-container relative flex-1';
 
       if (recommendations.length === 0) {
         const emptyDiv = document.createElement('div');
@@ -742,6 +745,8 @@ export function createRecommendations(deps = {}) {
           const genre2Display = rec.genre_2
             ? escapeHtml(rec.genre_2)
             : '<span class="text-gray-600 italic">No genre</span>';
+          const genre1Title = rec.genre_1 || 'No genre';
+          const genre2Title = rec.genre_2 || 'No genre';
 
           // Format release date (matches regular list formatting)
           const releaseDate = rec.release_date
@@ -753,7 +758,7 @@ export function createRecommendations(deps = {}) {
             : '';
 
           row.innerHTML = `
-            <div class="flex items-center justify-center">
+            <div class="cover-cell flex items-center justify-center">
               <div class="album-cover-container">
                 <img src="/api/albums/${encodeURIComponent(rec.album_id)}/cover" 
                      alt="${escapeHtml(rec.album)}" 
@@ -763,24 +768,24 @@ export function createRecommendations(deps = {}) {
                      onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\\'album-cover-placeholder rounded-sm bg-gray-800 shadow-lg\\'><svg width=\\'24\\' height=\\'24\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\' class=\\'text-gray-600\\'><rect x=\\'3\\' y=\\'3\\' width=\\'18\\' height=\\'18\\' rx=\\'2\\' ry=\\'2\\'></rect><circle cx=\\'8.5\\' cy=\\'8.5\\' r=\\'1.5\\'></circle><polyline points=\\'21 15 16 10 5 21\\'></polyline></svg></div>'">
               </div>
             </div>
-            <div class="flex flex-col justify-center">
+            <div class="album-cell flex flex-col justify-center min-w-0">
               <div class="flex items-center gap-2">
-                <span class="album-name font-semibold text-gray-200 truncate">${escapeHtml(rec.album)}</span>
+                <span class="album-name font-semibold text-gray-200 truncate" title="${escapeHtml(rec.album)}">${escapeHtml(rec.album)}</span>
               </div>
               ${releaseDate ? `<div class="text-xs mt-0.5 release-date-display text-gray-400">${releaseDate}</div>` : ''}
             </div>
-            <div class="flex items-center">
-              <span class="album-cell-text text-gray-300 truncate">${escapeHtml(rec.artist)}</span>
+            <div class="artist-cell flex items-center min-w-0">
+              <span class="album-cell-text text-gray-300 truncate" title="${escapeHtml(rec.artist)}">${escapeHtml(rec.artist)}</span>
             </div>
-            <div class="flex items-center">
-              <span class="album-cell-text text-gray-400 truncate">${genre1Display}</span>
+            <div class="genre-1-cell flex items-center min-w-0">
+              <span class="album-cell-text text-gray-400 truncate" title="${escapeHtml(genre1Title)}">${genre1Display}</span>
             </div>
-            <div class="flex items-center">
-              <span class="album-cell-text text-gray-400 truncate">${genre2Display}</span>
+            <div class="genre-2-cell flex items-center min-w-0">
+              <span class="album-cell-text text-gray-400 truncate" title="${escapeHtml(genre2Title)}">${genre2Display}</span>
             </div>
-            <div class="flex items-center">
-              <span class="flex items-center gap-1 text-blue-400 truncate">
-                ${escapeHtml(rec.recommended_by)}
+            <div class="recommended-by-cell flex items-center min-w-0">
+              <span class="album-cell-text text-blue-400 truncate flex-1 min-w-0" title="${escapeHtml(rec.recommended_by)}">${escapeHtml(rec.recommended_by)}</span>
+              <span class="ml-1 shrink-0">
                 <button class="view-reasoning-btn text-gray-500 hover:text-blue-400 p-1 transition-colors shrink-0" 
                         title="View reasoning"
                         data-rec-index="${recommendations.indexOf(rec)}">
@@ -788,8 +793,8 @@ export function createRecommendations(deps = {}) {
                 </button>
               </span>
             </div>
-            <div class="flex items-center">
-              <span class="album-cell-text text-gray-500 truncate">${formattedDate}</span>
+            <div class="date-added-cell flex items-center min-w-0">
+              <span class="album-cell-text text-gray-500 truncate" title="${formattedDate}">${formattedDate}</span>
             </div>
           `;
 
