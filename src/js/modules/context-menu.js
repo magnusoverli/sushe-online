@@ -77,6 +77,7 @@ const OPTION_IDS = [
   'moveAlbumOption',
   'copyAlbumOption',
   'playAlbumOption',
+  'playRecommendationOption',
   'downloadListOption',
   'addToListOption',
 ];

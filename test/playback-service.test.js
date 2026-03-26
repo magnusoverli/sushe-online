@@ -23,7 +23,7 @@ describe('playback-service', async () => {
       globalThis.window.location = { href: '' };
     });
 
-    it('should open Spotify album with correct URI', async () => {
+    it('should open Spotify album with correct URL', async () => {
       const mockShowToast = mock.fn();
       globalThis.fetch = mock.fn(() =>
         Promise.resolve({
@@ -41,11 +41,11 @@ describe('playback-service', async () => {
 
       assert.strictEqual(
         globalThis.window.location.href,
-        'spotify:album:abc123'
+        'https://open.spotify.com/album/abc123'
       );
     });
 
-    it('should open Tidal album with correct URI', async () => {
+    it('should open Tidal album with correct URL', async () => {
       const mockShowToast = mock.fn();
       globalThis.fetch = mock.fn(() =>
         Promise.resolve({
@@ -63,7 +63,7 @@ describe('playback-service', async () => {
 
       assert.strictEqual(
         globalThis.window.location.href,
-        'tidal://album/xyz789'
+        'https://listen.tidal.com/album/xyz789'
       );
     });
 
@@ -91,7 +91,7 @@ describe('playback-service', async () => {
       assert.ok(fetchUrl.includes('track=Paranoid'));
       assert.strictEqual(
         globalThis.window.location.href,
-        'spotify:track:track1'
+        'https://open.spotify.com/track/track1'
       );
     });
 
@@ -151,7 +151,7 @@ describe('playback-service', async () => {
       assert.strictEqual(mockShowToast.mock.calls.length, 1);
     });
 
-    it('should open Tidal track with correct URI', async () => {
+    it('should open Tidal track with correct URL', async () => {
       const mockShowToast = mock.fn();
       globalThis.fetch = mock.fn(() =>
         Promise.resolve({
@@ -173,7 +173,7 @@ describe('playback-service', async () => {
 
       assert.strictEqual(
         globalThis.window.location.href,
-        'tidal://track/tidalTrack1'
+        'https://listen.tidal.com/track/tidalTrack1'
       );
     });
 

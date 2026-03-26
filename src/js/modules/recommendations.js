@@ -7,6 +7,20 @@
  * @param {Object} deps - External dependencies injected from app.js
  * @returns {Object} Public API
  */
+export function playRecommendationAlbum(rec, playAlbumByMetadata, showToast) {
+  if (!rec?.artist || !rec?.album) {
+    showToast('Could not find album data', 'error');
+    return;
+  }
+
+  if (typeof playAlbumByMetadata !== 'function') {
+    showToast('Playback is not available right now', 'error');
+    return;
+  }
+
+  playAlbumByMetadata(rec.artist, rec.album);
+}
+
 export function createRecommendations(deps = {}) {
   const {
     apiCall,
@@ -36,6 +50,8 @@ export function createRecommendations(deps = {}) {
     updateMobileHeader,
     showLoadingSpinner,
     refreshRecommendationYears,
+    playAlbumByMetadata,
+    showPlayAlbumSubmenuForAlbum,
   } = deps;
 
   // ============ PRIVATE STATE ============
@@ -398,9 +414,7 @@ export function createRecommendations(deps = {}) {
       playBtn.addEventListener('click', (e) => {
         e.preventDefault();
         close();
-        if (window.playAlbumSafe) {
-          window.playAlbumSafe(rec.album_id);
-        }
+        playRecommendationAlbum(rec, playAlbumByMetadata, showToast);
       });
     }
 
@@ -853,19 +867,32 @@ export function createRecommendations(deps = {}) {
     if (!contextMenu) return;
 
     if (playOption) {
-      playOption.addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+      setupSubmenuHover(playOption, {
+        onShow: () => {
+          if (!currentRecommendationContext) return;
+          const { rec } = currentRecommendationContext;
 
-        if (!currentRecommendationContext) return;
-        const { rec } = currentRecommendationContext;
+          if (typeof showPlayAlbumSubmenuForAlbum !== 'function') {
+            playRecommendationAlbum(rec, playAlbumByMetadata, showToast);
+            return;
+          }
 
-        if (window.playAlbumSafe) {
-          window.playAlbumSafe(rec.album_id);
-        }
-
-        contextMenu.classList.add('hidden');
-        currentRecommendationContext = null;
+          showPlayAlbumSubmenuForAlbum(
+            {
+              artist: rec.artist,
+              album: rec.album,
+            },
+            {
+              playOptionId: 'playRecommendationOption',
+              contextMenuId: 'recommendationContextMenu',
+            }
+          );
+        },
+        relatedElements: () => [document.getElementById('playAlbumSubmenu')],
+        onHide: () => {
+          const submenu = document.getElementById('playAlbumSubmenu');
+          if (submenu) submenu.classList.add('hidden');
+        },
       });
     }
 

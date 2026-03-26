@@ -175,6 +175,10 @@ const getRecommendationsModule = createLazyModule(() =>
     updateMobileHeader,
     showLoadingSpinner,
     refreshRecommendationYears,
+    playAlbumByMetadata: (artist, album) =>
+      getPlaybackModule().playAlbumByMetadata(artist, album),
+    showPlayAlbumSubmenuForAlbum: (album, menuOptions) =>
+      getPlaybackModule().showPlayAlbumSubmenuForAlbum(album, menuOptions),
   })
 );
 

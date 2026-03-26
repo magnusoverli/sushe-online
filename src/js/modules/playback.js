@@ -39,18 +39,45 @@ export function createPlayback(deps = {}) {
   // Play Album Submenu (Spotify Connect devices)
   // ========================================================
 
-  /**
-   * Show the play album submenu with device options
-   */
-  async function showPlayAlbumSubmenu() {
+  function getPrimaryService() {
+    const hasSpotify = window.currentUser?.spotifyAuth;
+    const hasTidal = window.currentUser?.tidalAuth;
+    const musicService = window.currentUser?.musicService;
+
+    if (musicService === 'tidal' && hasTidal) return 'tidal';
+    if (musicService === 'spotify' && hasSpotify) return 'spotify';
+    if (hasTidal && !hasSpotify) return 'tidal';
+    if (hasSpotify) return 'spotify';
+    return null;
+  }
+
+  function positionPlaySubmenuForElements(submenu, playOption, contextMenu) {
+    if (!submenu || !playOption || !contextMenu) return;
+
+    const playRect = playOption.getBoundingClientRect();
+    const menuRect = contextMenu.getBoundingClientRect();
+
+    submenu.style.left = `${menuRect.right}px`;
+    submenu.style.top = `${playRect.top}px`;
+  }
+
+  async function showPlayAlbumSubmenuWithOptions(options = {}) {
+    const {
+      playOptionId = 'playAlbumOption',
+      contextMenuId = 'albumContextMenu',
+      onOpenApp = () => triggerPlayAlbum(),
+      onSpotifyDevice = (deviceId) => playAlbumOnSpotifyDevice(deviceId),
+    } = options;
+
     const submenu = document.getElementById('playAlbumSubmenu');
-    const playOption = document.getElementById('playAlbumOption');
+    const playOption = document.getElementById(playOptionId);
+    const contextMenu = document.getElementById(contextMenuId);
     const moveSubmenu = document.getElementById('albumMoveSubmenu');
     const moveOption = document.getElementById('moveAlbumOption');
 
-    if (!submenu || !playOption) return;
+    if (!submenu || !playOption || !contextMenu) return;
 
-    // Hide the other submenu first
+    // Hide the list move submenu first if present
     if (moveSubmenu) {
       moveSubmenu.classList.add('hidden');
       moveOption?.classList.remove('bg-gray-700', 'text-white');
@@ -61,20 +88,7 @@ export function createPlayback(deps = {}) {
 
     const hasSpotify = window.currentUser?.spotifyAuth;
     const hasTidal = window.currentUser?.tidalAuth;
-    const musicService = window.currentUser?.musicService;
-
-    // Determine which service to show for "Open in..." based on preference
-    // Priority: user preference > only connected service > Spotify (if both)
-    let primaryService = null;
-    if (musicService === 'tidal' && hasTidal) {
-      primaryService = 'tidal';
-    } else if (musicService === 'spotify' && hasSpotify) {
-      primaryService = 'spotify';
-    } else if (hasTidal && !hasSpotify) {
-      primaryService = 'tidal';
-    } else if (hasSpotify) {
-      primaryService = 'spotify';
-    }
+    const primaryService = getPrimaryService();
 
     // Build menu items
     let menuItems = [];
@@ -110,7 +124,7 @@ export function createPlayback(deps = {}) {
       submenu.innerHTML =
         menuItems.join('') +
         '<div class="px-4 py-2 text-sm text-gray-400"><i class="fas fa-spinner fa-spin mr-2"></i>Loading devices...</div>';
-      positionPlaySubmenu();
+      positionPlaySubmenuForElements(submenu, playOption, contextMenu);
       submenu.classList.remove('hidden');
 
       const devices = await fetchSpotifyDevices();
@@ -156,39 +170,68 @@ export function createPlayback(deps = {}) {
         const deviceId = btn.dataset.deviceId;
 
         // Hide menus and remove highlight
-        document.getElementById('albumContextMenu')?.classList.add('hidden');
+        contextMenu?.classList.add('hidden');
         submenu.classList.add('hidden');
         playOption?.classList.remove('bg-gray-700', 'text-white');
 
         if (action === 'open-app') {
-          // Use existing playAlbum function (opens in app)
-          triggerPlayAlbum();
-        } else if (action === 'spotify-device') {
-          // Play on specific Spotify Connect device
-          playAlbumOnSpotifyDevice(deviceId);
+          onOpenApp();
+        } else if (action === 'spotify-device' && deviceId) {
+          onSpotifyDevice(deviceId);
         }
       });
     });
 
-    positionPlaySubmenu();
+    positionPlaySubmenuForElements(submenu, playOption, contextMenu);
     submenu.classList.remove('hidden');
+  }
+
+  /**
+   * Show the play album submenu with device options
+   */
+  async function showPlayAlbumSubmenu() {
+    await showPlayAlbumSubmenuWithOptions();
+  }
+
+  /**
+   * Show the shared play submenu for an arbitrary album object.
+   * Used by recommendation context menu so it gets the same options as lists.
+   */
+  async function showPlayAlbumSubmenuForAlbum(album, menuOptions = {}) {
+    if (!album?.artist || !album?.album) {
+      showToast('Could not find album data', 'error');
+      return;
+    }
+
+    await showPlayAlbumSubmenuWithOptions({
+      playOptionId: 'playRecommendationOption',
+      contextMenuId: 'recommendationContextMenu',
+      ...menuOptions,
+      onOpenApp: () => playAlbumByMetadata(album.artist, album.album),
+      onSpotifyDevice: (deviceId) =>
+        playOnSpotifyDevice(
+          {
+            artist: album.artist,
+            album: album.album,
+          },
+          deviceId,
+          showToast
+        ),
+    });
   }
 
   /**
    * Position the play submenu next to the play option
    */
-  function positionPlaySubmenu() {
+  function positionPlaySubmenu(
+    playOptionId = 'playAlbumOption',
+    contextMenuId = 'albumContextMenu'
+  ) {
     const submenu = document.getElementById('playAlbumSubmenu');
-    const playOption = document.getElementById('playAlbumOption');
-    const contextMenu = document.getElementById('albumContextMenu');
+    const playOption = document.getElementById(playOptionId);
+    const contextMenu = document.getElementById(contextMenuId);
 
-    if (!submenu || !playOption || !contextMenu) return;
-
-    const playRect = playOption.getBoundingClientRect();
-    const menuRect = contextMenu.getBoundingClientRect();
-
-    submenu.style.left = `${menuRect.right}px`;
-    submenu.style.top = `${playRect.top}px`;
+    positionPlaySubmenuForElements(submenu, playOption, contextMenu);
   }
 
   // ========================================================
@@ -282,6 +325,18 @@ export function createPlayback(deps = {}) {
   }
 
   /**
+   * Play an album by artist/album metadata without list context.
+   */
+  function playAlbumByMetadata(artist, album) {
+    if (!artist || !album) {
+      showToast('Could not find album data', 'error');
+      return;
+    }
+
+    playOnService('album', { artist, album });
+  }
+
+  /**
    * Play the selected track on the connected music service
    */
   function playTrack(index) {
@@ -337,11 +392,13 @@ export function createPlayback(deps = {}) {
   // Public API
   return {
     showPlayAlbumSubmenu,
+    showPlayAlbumSubmenuForAlbum,
     positionPlaySubmenu,
     triggerPlayAlbum,
     playAlbumOnSpotifyDevice,
     playAlbumOnDeviceMobile,
     playAlbum,
+    playAlbumByMetadata,
     playTrack,
     playTrackSafe,
     playSpecificTrack,

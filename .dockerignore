@@ -1,4 +1,7 @@
 node_modules
+**/node_modules
+mobile/node_modules
+mobile/dist
 npm-debug.log
 .env
 *.db

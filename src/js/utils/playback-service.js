@@ -5,7 +5,7 @@
  */
 
 /**
- * Open an album or track in the user's music app (Spotify or Tidal).
+ * Open an album or track in the user's connected music service.
  *
  * @param {string} service - 'spotify' or 'tidal'
  * @param {'album'|'track'} type - Whether to open an album or track
@@ -43,11 +43,12 @@ export async function openInMusicApp(service, type, params, showToast) {
     }
 
     if (data.id) {
-      if (service === 'spotify') {
-        window.location.href = `spotify:${type}:${data.id}`;
-      } else {
-        window.location.href = `tidal://${type}/${data.id}`;
-      }
+      const destinationUrl =
+        service === 'spotify'
+          ? `https://open.spotify.com/${type}/${encodeURIComponent(data.id)}`
+          : `https://listen.tidal.com/${type}/${encodeURIComponent(data.id)}`;
+
+      window.location.href = destinationUrl;
     } else if (data.error) {
       showToast(data.error, 'error');
     } else {
