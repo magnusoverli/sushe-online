@@ -28,7 +28,6 @@ function sanitizeUser(user) {
     tidalAuth: !!user.tidalAuth,
     musicService: user.musicService || null,
     lastfmUsername: user.lastfmUsername || null,
-    preferredUi: user.preferredUi || null,
     columnVisibility: user.columnVisibility || null,
   };
 }

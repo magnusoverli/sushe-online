@@ -10,7 +10,7 @@ const assert = require('node:assert');
 
 // Set up minimal browser globals before importing the ES module
 globalThis.window = globalThis.window || {};
-globalThis.localStorage = globalThis.localStorage || {
+globalThis.localStorage = {
   _store: {},
   getItem(key) {
     return this._store[key] ?? null;

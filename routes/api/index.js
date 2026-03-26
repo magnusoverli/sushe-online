@@ -235,7 +235,6 @@ module.exports = (app, deps) => {
   };
 
   // Register all route modules
-  require('./auth')(app, { ...sharedDeps, ...deps });
   require('./albums')(app, sharedDeps);
   require('./groups')(app, sharedDeps);
   require('./lists')(app, sharedDeps);

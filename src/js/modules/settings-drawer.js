@@ -435,7 +435,6 @@ export function createSettingsDrawer(deps = {}) {
         accentColor: user.accentColor || '#dc2626',
         timeFormat: user.timeFormat || '24h',
         dateFormat: user.dateFormat || 'MM/DD/YYYY',
-        preferredUi: user.preferredUi || null,
         columnVisibility: user.columnVisibility || null,
       };
     } catch (error) {
@@ -1038,30 +1037,6 @@ export function createSettingsDrawer(deps = {}) {
             </div>
           </div>
         </div>
-        ${
-          /iPhone|iPod|Android.*Mobile|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-            navigator.userAgent
-          )
-            ? `
-        <div class="settings-group" style="margin-top: 1.5rem;">
-          <h3 class="settings-group-title">Interface</h3>
-          <div class="settings-group-content">
-            <div class="settings-row">
-              <div class="settings-row-label">
-                <label class="settings-label">New mobile interface</label>
-                <p class="settings-description">Switch to the new mobile experience</p>
-              </div>
-              <div class="settings-row-control">
-                <button id="switchToMobileUiBtn" class="settings-btn-primary" style="padding: 8px 16px; border-radius: 8px; border: none; background: rgba(232,200,122,0.15); color: #e8c87a; cursor: pointer; font-size: 0.85rem;">
-                  Switch to new UI
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        `
-            : ''
-        }
       </div>
     `;
   }
@@ -2393,11 +2368,6 @@ export function createSettingsDrawer(deps = {}) {
       });
     }
 
-    const switchToMobileBtn = document.getElementById('switchToMobileUiBtn');
-    if (switchToMobileBtn) {
-      switchToMobileBtn.addEventListener('click', handleSwitchToMobileUi);
-    }
-
     // Column visibility toggles
     const columnToggles = document.getElementById('columnVisibilityToggles');
     if (columnToggles) {
@@ -3392,37 +3362,6 @@ export function createSettingsDrawer(deps = {}) {
       const select = document.getElementById('dateFormatSelect');
       if (select && categoryData.visual) {
         select.value = categoryData.visual.dateFormat;
-      }
-    }
-  }
-
-  /**
-   * Handle switching to the new mobile UI
-   */
-  async function handleSwitchToMobileUi() {
-    const btn = document.getElementById('switchToMobileUiBtn');
-    if (btn) {
-      btn.disabled = true;
-      btn.textContent = 'Switching...';
-    }
-    try {
-      await apiCall('/settings/update-preferred-ui', {
-        method: 'POST',
-        body: JSON.stringify({ preferredUi: null }),
-      });
-
-      if (window.currentUser) {
-        window.currentUser.preferredUi = null;
-      }
-
-      // Redirect to the mobile SPA
-      window.location.href = '/mobile';
-    } catch (error) {
-      console.error('Error switching to mobile UI:', error);
-      showToast('Failed to switch interface', 'error');
-      if (btn) {
-        btn.disabled = false;
-        btn.textContent = 'Switch to new UI';
       }
     }
   }
