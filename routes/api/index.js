@@ -45,6 +45,9 @@ const { createListService } = require('../../services/list-service');
 const { createGroupService } = require('../../services/group-service');
 const { createAlbumService } = require('../../services/album-service');
 const {
+  createExternalIdentityService,
+} = require('../../services/external-identity-service');
+const {
   createRecommendationService,
 } = require('../../services/recommendation-service');
 const {
@@ -154,6 +157,11 @@ module.exports = (app, deps) => {
     invalidateCachesForAlbumUsers: helpers.invalidateCachesForAlbumUsers,
   });
 
+  const externalIdentityService = createExternalIdentityService({
+    pool,
+    logger,
+  });
+
   // Create recommendation service
   const recommendationService = createRecommendationService({
     pool,
@@ -202,6 +210,7 @@ module.exports = (app, deps) => {
     groupService,
     albumService,
     recommendationService,
+    externalIdentityService,
     refreshPlaycountsInBackground,
 
     // Helpers

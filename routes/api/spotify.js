@@ -24,10 +24,15 @@ module.exports = (app, deps) => {
     requireSpotifyAuth,
     pool,
     refreshPlaycountsInBackground,
+    externalIdentityService,
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
-  const spotifyService = createSpotifyService({ fetch, logger });
+  const spotifyService = createSpotifyService({
+    fetch,
+    logger,
+    externalIdentityService,
+  });
 
   /**
    * Shared helper for simple Spotify player control commands.
@@ -119,7 +124,7 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     requireSpotifyAuth,
     asyncHandler(async (req, res) => {
-      const { artist, album } = req.query;
+      const { artist, album, albumId, releaseDate } = req.query;
       if (!artist || !album) {
         return res.status(400).json({ error: 'artist and album are required' });
       }
@@ -128,6 +133,10 @@ module.exports = (app, deps) => {
       const result = await spotifyService.searchAlbum(
         artist,
         album,
+        {
+          albumId,
+          releaseDate,
+        },
         req.spotifyAuth.access_token
       );
 
@@ -388,7 +397,7 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     requireSpotifyAuth,
     asyncHandler(async (req, res) => {
-      const { artist, album, track } = req.query;
+      const { artist, album, track, albumId, releaseDate } = req.query;
       if (!artist || !album || !track) {
         return res
           .status(400)
@@ -406,6 +415,10 @@ module.exports = (app, deps) => {
         artist,
         album,
         track,
+        {
+          albumId,
+          releaseDate,
+        },
         req.spotifyAuth.access_token
       );
 

@@ -34,10 +34,49 @@ module.exports = (app, deps) => {
     lastfmUpdateNowPlaying,
     getLastfmSimilarArtists,
     getLastfmRecentTracks,
+    externalIdentityService,
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
   const playcountService = createPlaycountService();
+
+  async function getLastfmArtistCandidates(artist, albumId = null) {
+    if (!artist) return [];
+
+    const candidates = [artist];
+
+    if (!externalIdentityService) {
+      return candidates;
+    }
+
+    try {
+      if (albumId) {
+        const albumMapping =
+          await externalIdentityService.getAlbumServiceMapping(
+            'lastfm',
+            albumId
+          );
+        if (albumMapping?.external_artist) {
+          candidates.unshift(albumMapping.external_artist);
+        }
+      }
+
+      const aliases = await externalIdentityService.getArtistAliasCandidates(
+        'lastfm',
+        artist,
+        { includeCrossService: true }
+      );
+      candidates.push(...aliases);
+    } catch (err) {
+      logger.warn('Failed to resolve Last.fm artist aliases', {
+        artist,
+        albumId,
+        error: err.message,
+      });
+    }
+
+    return [...new Set(candidates.filter(Boolean))];
+  }
 
   // GET /api/lastfm/top-albums - Get user's top albums from Last.fm
   app.get(
@@ -87,18 +126,57 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     requireLastfmAuth,
     asyncHandler(async (req, res) => {
-      const { artist, album } = req.query;
+      const { artist, album, albumId } = req.query;
 
       if (!artist || !album) {
         return res.status(400).json({ error: 'artist and album are required' });
       }
 
-      const info = await getLastfmAlbumInfo(
-        artist,
-        album,
-        req.user.lastfmUsername,
-        process.env.LASTFM_API_KEY
-      );
+      const artistCandidates = await getLastfmArtistCandidates(artist, albumId);
+
+      let info = null;
+      let matchedArtist = null;
+
+      for (const artistCandidate of artistCandidates) {
+        const candidateInfo = await getLastfmAlbumInfo(
+          artistCandidate,
+          album,
+          req.user.lastfmUsername,
+          process.env.LASTFM_API_KEY
+        );
+
+        if (!candidateInfo?.notFound) {
+          info = candidateInfo;
+          matchedArtist = artistCandidate;
+          break;
+        }
+      }
+
+      if (!info) {
+        info = { userplaycount: '0', playcount: '0', listeners: '0' };
+      }
+
+      if (
+        externalIdentityService &&
+        matchedArtist &&
+        matchedArtist !== artist
+      ) {
+        await externalIdentityService
+          .upsertArtistAlias({
+            service: 'lastfm',
+            canonicalArtist: artist,
+            serviceArtist: matchedArtist,
+            sourceAlbumId: albumId || null,
+          })
+          .catch((err) => {
+            logger.warn('Failed to persist Last.fm artist alias', {
+              artist,
+              matchedArtist,
+              albumId,
+              error: err.message,
+            });
+          });
+      }
 
       res.json({
         playcount: parseInt(info.userplaycount || 0),
@@ -215,17 +293,52 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     requireLastfmAuth,
     asyncHandler(async (req, res) => {
-      const { artist, limit = 20 } = req.query;
+      const { artist, limit = 20, albumId } = req.query;
 
       if (!artist) {
         return res.status(400).json({ error: 'artist is required' });
       }
 
-      const similarArtists = await getLastfmSimilarArtists(
-        artist,
-        Math.min(parseInt(limit) || 20, 50),
-        process.env.LASTFM_API_KEY
-      );
+      const artistCandidates = await getLastfmArtistCandidates(artist, albumId);
+      const safeLimit = Math.min(parseInt(limit) || 20, 50);
+
+      let similarArtists = [];
+      let matchedArtist = null;
+
+      for (const artistCandidate of artistCandidates) {
+        const result = await getLastfmSimilarArtists(
+          artistCandidate,
+          safeLimit,
+          process.env.LASTFM_API_KEY
+        );
+        if (result && result.length > 0) {
+          similarArtists = result;
+          matchedArtist = artistCandidate;
+          break;
+        }
+      }
+
+      if (
+        externalIdentityService &&
+        matchedArtist &&
+        matchedArtist !== artist
+      ) {
+        await externalIdentityService
+          .upsertArtistAlias({
+            service: 'lastfm',
+            canonicalArtist: artist,
+            serviceArtist: matchedArtist,
+            sourceAlbumId: albumId || null,
+          })
+          .catch((err) => {
+            logger.warn('Failed to persist Last.fm similar-artist alias', {
+              artist,
+              matchedArtist,
+              albumId,
+              error: err.message,
+            });
+          });
+      }
 
       if (!similarArtists || similarArtists.length === 0) {
         return res.json({

@@ -14,6 +14,9 @@ const {
   normalizeForLastfm,
 } = require('../utils/lastfm-auth');
 const { normalizeAlbumKey } = require('../utils/fuzzy-match');
+const {
+  createExternalIdentityService,
+} = require('./external-identity-service');
 
 // Default intervals
 const DEFAULT_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -144,6 +147,56 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
   );
 }
 
+async function getLastfmArtistCandidates(pool, log, album) {
+  const canonicalArtist = album?.artist;
+  const albumId = album?.album_id || album?.albumId || null;
+
+  if (!canonicalArtist) {
+    return [];
+  }
+
+  const candidates = [canonicalArtist];
+
+  try {
+    const externalIdentityService = createExternalIdentityService({
+      pool,
+      logger: log,
+    });
+
+    if (albumId) {
+      const lastfmMapping =
+        await externalIdentityService.getAlbumServiceMapping('lastfm', albumId);
+      if (lastfmMapping?.external_artist) {
+        candidates.unshift(lastfmMapping.external_artist);
+      }
+
+      const spotifyMapping =
+        await externalIdentityService.getAlbumServiceMapping(
+          'spotify',
+          albumId
+        );
+      if (spotifyMapping?.external_artist) {
+        candidates.push(spotifyMapping.external_artist);
+      }
+    }
+
+    const aliases = await externalIdentityService.getArtistAliasCandidates(
+      'lastfm',
+      canonicalArtist,
+      { includeCrossService: true }
+    );
+    candidates.push(...aliases);
+  } catch (err) {
+    log.warn('Failed to load Last.fm artist alias candidates', {
+      artist: canonicalArtist,
+      albumId,
+      error: err.message,
+    });
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
+}
+
 /**
  * Refresh playcount for a single album
  * @param {Object} pool - Database pool
@@ -155,12 +208,72 @@ async function upsertPlaycount(pool, userId, album, playcount, status) {
  */
 async function refreshAlbumPlaycount(pool, log, userId, lastfmUsername, album) {
   try {
-    const info = await getLastfmAlbumInfo(
-      album.artist,
-      album.album,
-      lastfmUsername,
-      process.env.LASTFM_API_KEY
-    );
+    const albumId = album.album_id || album.albumId || null;
+    const artistCandidates = await getLastfmArtistCandidates(pool, log, album);
+
+    let info = null;
+    let matchedArtist = album.artist;
+
+    for (const artistCandidate of artistCandidates) {
+      const candidateInfo = await getLastfmAlbumInfo(
+        artistCandidate,
+        album.album,
+        lastfmUsername,
+        process.env.LASTFM_API_KEY
+      );
+
+      if (!candidateInfo?.notFound) {
+        info = candidateInfo;
+        matchedArtist = artistCandidate;
+        break;
+      }
+
+      if (!info) {
+        info = candidateInfo;
+      }
+    }
+
+    if (!info) {
+      info = {
+        userplaycount: '0',
+        playcount: '0',
+        listeners: '0',
+        notFound: true,
+      };
+    }
+
+    if (matchedArtist !== album.artist) {
+      try {
+        const externalIdentityService = createExternalIdentityService({
+          pool,
+          logger: log,
+        });
+
+        await externalIdentityService.upsertArtistAlias({
+          service: 'lastfm',
+          canonicalArtist: album.artist,
+          serviceArtist: matchedArtist,
+          sourceAlbumId: albumId,
+        });
+
+        if (albumId) {
+          await externalIdentityService.upsertAlbumServiceMapping({
+            albumId,
+            service: 'lastfm',
+            externalArtist: matchedArtist,
+            externalAlbum: album.album,
+            strategy: 'alias_fallback',
+          });
+        }
+      } catch (err) {
+        log.warn('Failed to persist Last.fm alias mapping', {
+          artist: album.artist,
+          matchedArtist,
+          albumId,
+          error: err.message,
+        });
+      }
+    }
 
     // Check if album was not found on Last.fm
     if (info.notFound) {

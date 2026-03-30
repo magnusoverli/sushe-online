@@ -95,6 +95,32 @@ describe('playback-service', async () => {
       );
     });
 
+    it('should include albumId and releaseDate when provided', async () => {
+      const mockShowToast = mock.fn();
+      globalThis.fetch = mock.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ id: 'abc123' }),
+        })
+      );
+
+      await openInMusicApp(
+        'spotify',
+        'album',
+        {
+          artist: 'Exxul',
+          album: 'Meteahna Timpurilor',
+          albumId: 'album-123',
+          releaseDate: '2007-01-01',
+        },
+        mockShowToast
+      );
+
+      const requestUrl = globalThis.fetch.mock.calls[0].arguments[0];
+      assert.ok(requestUrl.includes('albumId=album-123'));
+      assert.ok(requestUrl.includes('releaseDate=2007-01-01'));
+    });
+
     it('should show toast on error response', async () => {
       const mockShowToast = mock.fn();
       globalThis.fetch = mock.fn(() =>
@@ -281,6 +307,39 @@ describe('playback-service', async () => {
       const lastToast =
         mockShowToast.mock.calls[mockShowToast.mock.calls.length - 1];
       assert.ok(lastToast.arguments[0].includes('not found'));
+    });
+
+    it('should pass albumId and releaseDate to Spotify album search', async () => {
+      const mockShowToast = mock.fn();
+      let callCount = 0;
+      globalThis.fetch = mock.fn(() => {
+        callCount++;
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ id: 'spotifyAlbumId' }),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ success: true }),
+        });
+      });
+
+      await playOnSpotifyDevice(
+        {
+          artist: 'Exxul',
+          album: 'Meteahna Timpurilor',
+          album_id: 'album-42',
+          release_date: '2007-01-01',
+        },
+        'device123',
+        mockShowToast
+      );
+
+      const searchRequestUrl = globalThis.fetch.mock.calls[0].arguments[0];
+      assert.ok(searchRequestUrl.includes('albumId=album-42'));
+      assert.ok(searchRequestUrl.includes('releaseDate=2007-01-01'));
     });
 
     it('should show error when play request fails with success: false', async () => {

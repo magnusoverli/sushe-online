@@ -199,12 +199,18 @@ export function createPlayback(deps = {}) {
       playOptionId: 'playRecommendationOption',
       contextMenuId: 'recommendationContextMenu',
       ...menuOptions,
-      onOpenApp: () => playAlbumByMetadata(album.artist, album.album),
+      onOpenApp: () =>
+        playAlbumByMetadata(album.artist, album.album, {
+          albumId: album.albumId,
+          releaseDate: album.releaseDate,
+        }),
       onSpotifyDevice: (deviceId) =>
         playOnSpotifyDevice(
           {
             artist: album.artist,
             album: album.album,
+            album_id: album.albumId,
+            release_date: album.releaseDate,
           },
           deviceId,
           showToast
@@ -313,19 +319,29 @@ export function createPlayback(deps = {}) {
     const album = albums && albums[index];
     if (!album) return;
 
-    playOnService('album', { artist: album.artist, album: album.album });
+    playOnService('album', {
+      artist: album.artist,
+      album: album.album,
+      albumId: album.album_id,
+      releaseDate: album.release_date,
+    });
   }
 
   /**
    * Play an album by artist/album metadata without list context.
    */
-  function playAlbumByMetadata(artist, album) {
+  function playAlbumByMetadata(artist, album, options = {}) {
     if (!artist || !album) {
       showToast('Could not find album data', 'error');
       return;
     }
 
-    playOnService('album', { artist, album });
+    playOnService('album', {
+      artist,
+      album,
+      albumId: options.albumId,
+      releaseDate: options.releaseDate,
+    });
   }
 
   /**
@@ -346,6 +362,8 @@ export function createPlayback(deps = {}) {
       artist: album.artist,
       album: album.album,
       track: trackPick,
+      albumId: album.album_id,
+      releaseDate: album.release_date,
     });
   }
 
@@ -378,6 +396,8 @@ export function createPlayback(deps = {}) {
       artist: album.artist,
       album: album.album,
       track: trackName,
+      albumId: album.album_id,
+      releaseDate: album.release_date,
     });
   }
 

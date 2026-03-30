@@ -468,7 +468,10 @@ export function createMobileUI(deps = {}) {
         e.stopPropagation();
         close();
         if (showDiscoveryModal && album.artist) {
-          showDiscoveryModal('similar', { artist: album.artist });
+          showDiscoveryModal('similar', {
+            artist: album.artist,
+            albumId: album.album_id || null,
+          });
         } else if (!album.artist) {
           showToast('Could not find album artist', 'error');
         }

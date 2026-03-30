@@ -20,7 +20,10 @@ export function playRecommendationAlbum(rec, playAlbumByMetadata, showToast) {
     return;
   }
 
-  playAlbumByMetadata(rec.artist, rec.album);
+  playAlbumByMetadata(rec.artist, rec.album, {
+    albumId: rec.album_id,
+    releaseDate: rec.release_date,
+  });
 }
 
 export function createRecommendations(deps = {}) {
@@ -143,6 +146,8 @@ export function createRecommendations(deps = {}) {
               {
                 artist: rec.artist,
                 album: rec.album,
+                albumId: rec.album_id,
+                releaseDate: rec.release_date,
               },
               {
                 playOptionId: 'playRecommendationOption',

@@ -127,7 +127,7 @@ export function showDiscoveryModal(type, data = {}) {
   document.body.style.overflow = 'hidden';
 
   // Fetch similar artists
-  fetchSimilarArtists(data.artist);
+  fetchSimilarArtists(data.artist, data.albumId || null);
 }
 
 /**
@@ -204,7 +204,7 @@ function renderErrorState(message, retryAction) {
  * Fetch similar artists from API
  * @param {string} artistName - Artist name to find similar artists for
  */
-async function fetchSimilarArtists(artistName) {
+async function fetchSimilarArtists(artistName, albumId = null) {
   const content = discoveryModal.querySelector('#discoveryModalContent');
 
   // Abort any previous artist image searches
@@ -214,9 +214,15 @@ async function fetchSimilarArtists(artistName) {
   similarArtistsAbortController = new AbortController();
 
   try {
-    const data = await apiCall(
-      `/api/lastfm/similar-artists?artist=${encodeURIComponent(artistName)}&limit=20`
-    );
+    const query = new URLSearchParams({
+      artist: artistName,
+      limit: '20',
+    });
+    if (albumId) {
+      query.set('albumId', albumId);
+    }
+
+    const data = await apiCall(`/api/lastfm/similar-artists?${query}`);
 
     if (!data.artists || data.artists.length === 0) {
       content.innerHTML = renderEmptyState(
@@ -233,7 +239,7 @@ async function fetchSimilarArtists(artistName) {
     console.error('Error fetching similar artists:', err);
     content.innerHTML = renderErrorState(
       'Failed to load similar artists.',
-      `window.discoveryRetry('similar', '${artistName.replace(/'/g, "\\'")}')`
+      `window.discoveryRetry('similar', '${artistName.replace(/'/g, "\\'")}', '${(albumId || '').replace(/'/g, "\\'")}')`
     );
   }
 }
@@ -341,10 +347,10 @@ function renderSimilarArtistsList(artists) {
 /**
  * Retry function (exposed globally for onclick handlers)
  */
-window.discoveryRetry = (type, artist) => {
+window.discoveryRetry = (type, artist, albumId = null) => {
   if (type === 'similar' && artist) {
     const content = discoveryModal.querySelector('#discoveryModalContent');
     content.innerHTML = renderSkeletonLoaders();
-    fetchSimilarArtists(artist);
+    fetchSimilarArtists(artist, albumId);
   }
 };

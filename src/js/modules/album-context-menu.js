@@ -335,7 +335,10 @@ export function createAlbumContextMenu(deps = {}) {
         if (album && album.artist) {
           // Import and call showDiscoveryModal dynamically
           import('./discovery.js').then(({ showDiscoveryModal }) => {
-            showDiscoveryModal('similar', { artist: album.artist });
+            showDiscoveryModal('similar', {
+              artist: album.artist,
+              albumId: album.album_id || null,
+            });
           });
         } else {
           showToast('Could not find album artist', 'error');

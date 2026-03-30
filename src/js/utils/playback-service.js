@@ -12,6 +12,8 @@
  * @param {Object} params - Search parameters
  * @param {string} params.artist - Artist name
  * @param {string} params.album - Album name
+ * @param {string} [params.albumId] - Canonical SuShe album ID
+ * @param {string} [params.releaseDate] - Album release date
  * @param {string} [params.track] - Track name (required when type is 'track')
  * @param {Function} showToast - Function to show toast notifications
  * @returns {Promise<void>}
@@ -21,6 +23,12 @@ export async function openInMusicApp(service, type, params, showToast) {
     `artist=${encodeURIComponent(params.artist)}`,
     `album=${encodeURIComponent(params.album)}`,
   ];
+  if (params.albumId) {
+    queryParts.push(`albumId=${encodeURIComponent(params.albumId)}`);
+  }
+  if (params.releaseDate) {
+    queryParts.push(`releaseDate=${encodeURIComponent(params.releaseDate)}`);
+  }
   if (type === 'track' && params.track) {
     queryParts.push(`track=${encodeURIComponent(params.track)}`);
   }
@@ -95,7 +103,18 @@ export async function playOnSpotifyDevice(album, deviceId, showToast) {
 
   try {
     // First, search for the album on Spotify to get the ID
-    const searchQuery = `artist=${encodeURIComponent(album.artist)}&album=${encodeURIComponent(album.album)}`;
+    const searchParams = new URLSearchParams({
+      artist: album.artist,
+      album: album.album,
+    });
+    if (album.album_id) {
+      searchParams.set('albumId', album.album_id);
+    }
+    if (album.release_date) {
+      searchParams.set('releaseDate', album.release_date);
+    }
+
+    const searchQuery = searchParams.toString();
     const searchResp = await fetch(`/api/spotify/album?${searchQuery}`, {
       credentials: 'include',
     });
