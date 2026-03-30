@@ -11,7 +11,8 @@ describe('recommendations playback', async () => {
     const rec = {
       artist: 'Burial',
       album: 'Untrue',
-      album_id: 'db-id-not-used-here',
+      album_id: 'db-id-123',
+      release_date: '2007-11-05',
     };
     const mockPlayAlbumByMetadata = mock.fn();
     const mockShowToast = mock.fn();
@@ -22,6 +23,10 @@ describe('recommendations playback', async () => {
     assert.deepStrictEqual(mockPlayAlbumByMetadata.mock.calls[0].arguments, [
       'Burial',
       'Untrue',
+      {
+        albumId: 'db-id-123',
+        releaseDate: '2007-11-05',
+      },
     ]);
     assert.strictEqual(mockShowToast.mock.calls.length, 0);
   });
