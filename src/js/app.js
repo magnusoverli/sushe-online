@@ -38,7 +38,7 @@ import {
   editRecommendationReasoning,
   removeRecommendation,
 } from './utils/recommendation-actions.js';
-import { setupSubmenuHover } from './utils/submenu-behavior.js';
+import { createContextSubmenuController } from './utils/context-submenu-controller.js';
 import { createLazyModule } from './utils/lazy-module.js';
 import {
   computeListDiff,
@@ -117,8 +117,6 @@ let currentContextGroup = null;
 let pendingImportData = null;
 let pendingImportFilename = null;
 let trackAbortController = null;
-let currentHighlightedYear = null;
-let moveListsHideTimeout = null;
 
 /**
  * Get or initialize the link preview module
@@ -159,7 +157,6 @@ const getRecommendationsModule = createLazyModule(() =>
     groupListsByYear,
     editRecommendationReasoning,
     removeRecommendation,
-    setupSubmenuHover,
     getListData,
     setListData,
     getLists,
@@ -179,6 +176,7 @@ const getRecommendationsModule = createLazyModule(() =>
       getPlaybackModule().playAlbumByMetadata(artist, album),
     showPlayAlbumSubmenuForAlbum: (album, menuOptions) =>
       getPlaybackModule().showPlayAlbumSubmenuForAlbum(album, menuOptions),
+    createContextSubmenuController,
   })
 );
 
@@ -286,6 +284,7 @@ function showPlayAlbumSubmenu() {
  */
 const getAlbumContextMenuModule = createLazyModule(() =>
   createAlbumContextMenu({
+    apiCall,
     getListData,
     getLists,
     getCurrentListId,
@@ -302,14 +301,6 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     setTrackAbortController: (val) => {
       trackAbortController = val;
     },
-    getCurrentHighlightedYear: () => currentHighlightedYear,
-    setCurrentHighlightedYear: (val) => {
-      currentHighlightedYear = val;
-    },
-    getMoveListsHideTimeout: () => moveListsHideTimeout,
-    setMoveListsHideTimeout: (val) => {
-      moveListsHideTimeout = val;
-    },
     findAlbumByIdentity,
     showMobileEditForm,
     showMobileEditFormSafe,
@@ -322,6 +313,7 @@ const getAlbumContextMenuModule = createLazyModule(() =>
     getRecommendationsModule: () => getRecommendationsModule(),
     getMobileUIModule: () => getMobileUIModule(),
     getListMetadata,
+    createContextSubmenuController,
   })
 );
 // Wrapper functions for album context menu module
@@ -330,9 +322,6 @@ function hideAllContextMenus() {
 }
 function initializeAlbumContextMenu() {
   return getAlbumContextMenuModule().initializeAlbumContextMenu();
-}
-function hideSubmenuOnLeave() {
-  return getAlbumContextMenuModule().hideSubmenuOnLeave();
 }
 
 /**
@@ -1918,7 +1907,6 @@ document.addEventListener('DOMContentLoaded', () => {
       initializeAlbumContextMenu();
       getRecommendationsModule().initializeRecommendationContextMenu();
       getListCrudModule().initializeCategoryContextMenu();
-      hideSubmenuOnLeave();
       getListCrudModule().initializeCreateList();
       getListCrudModule().initializeCreateCollection();
       getListCrudModule().initializeRenameList();

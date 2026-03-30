@@ -14,13 +14,9 @@
  */
 
 import { verifyAlbumAtIndex } from '../utils/album-identity.js';
-import {
-  setupSubmenuHover,
-  setupChainedSubmenus,
-} from '../utils/submenu-behavior.js';
 import { groupListsByYear } from '../utils/list-grouping.js';
+import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
 import { hideAllContextMenus as hideAllMenusBase } from './context-menu.js';
-import { apiCall } from './utils.js';
 
 /**
  * Create the album context menu module
@@ -39,11 +35,8 @@ export function createAlbumContextMenu(deps = {}) {
     setContextAlbumId,
     getTrackAbortController,
     setTrackAbortController,
-    getCurrentHighlightedYear,
-    setCurrentHighlightedYear,
-    getMoveListsHideTimeout,
-    setMoveListsHideTimeout,
     findAlbumByIdentity,
+    apiCall,
     showMobileEditForm,
     showMobileEditFormSafe,
     showPlayAlbumSubmenu,
@@ -55,7 +48,96 @@ export function createAlbumContextMenu(deps = {}) {
     getRecommendationsModule,
     getMobileUIModule,
     getListMetadata: _getListMetadata,
+    createContextSubmenuController:
+      makeContextSubmenuController = createContextSubmenuController,
   } = deps;
+
+  let currentMoveHighlightedYear = null;
+  let moveListsHideTimeout = null;
+  let albumSubmenuController = null;
+
+  function clearMoveListsHideTimeout() {
+    if (moveListsHideTimeout) {
+      clearTimeout(moveListsHideTimeout);
+      moveListsHideTimeout = null;
+    }
+  }
+
+  function clearMoveYearHighlight() {
+    if (!currentMoveHighlightedYear) return;
+    const yearMenu = document.getElementById('albumMoveSubmenu');
+    yearMenu
+      ?.querySelector(`[data-year="${currentMoveHighlightedYear}"]`)
+      ?.classList.remove('bg-gray-700', 'text-white');
+    currentMoveHighlightedYear = null;
+  }
+
+  function hideAlbumPlaySubmenu() {
+    document.getElementById('playAlbumSubmenu')?.classList.add('hidden');
+    document
+      .getElementById('playAlbumOption')
+      ?.classList.remove('bg-gray-700', 'text-white');
+  }
+
+  function hideMoveSubmenus() {
+    clearMoveListsHideTimeout();
+    document.getElementById('albumMoveSubmenu')?.classList.add('hidden');
+    document.getElementById('albumMoveListsSubmenu')?.classList.add('hidden');
+    document
+      .getElementById('moveAlbumOption')
+      ?.classList.remove('bg-gray-700', 'text-white');
+    clearMoveYearHighlight();
+  }
+
+  function hideCopySubmenu() {
+    document.getElementById('albumCopySubmenu')?.classList.add('hidden');
+    document
+      .getElementById('copyAlbumOption')
+      ?.classList.remove('bg-gray-700', 'text-white');
+  }
+
+  function hideAlbumSubmenus() {
+    hideAlbumPlaySubmenu();
+    hideMoveSubmenus();
+    hideCopySubmenu();
+  }
+
+  function initializeAlbumSubmenuController() {
+    const contextMenu = document.getElementById('albumContextMenu');
+    if (!contextMenu || typeof makeContextSubmenuController !== 'function') {
+      return;
+    }
+
+    albumSubmenuController?.destroy();
+
+    albumSubmenuController = makeContextSubmenuController({
+      contextMenuId: contextMenu,
+      branches: [
+        {
+          triggerId: 'playAlbumOption',
+          submenuIds: ['playAlbumSubmenu'],
+          onShow: showPlayAlbumSubmenu,
+          onHide: hideAlbumPlaySubmenu,
+        },
+        {
+          triggerId: 'moveAlbumOption',
+          submenuIds: ['albumMoveSubmenu', 'albumMoveListsSubmenu'],
+          relatedMenuIds: ['albumMoveSubmenu', 'albumMoveListsSubmenu'],
+          onShow: showMoveToListSubmenu,
+          onHide: hideMoveSubmenus,
+        },
+        {
+          triggerId: 'copyAlbumOption',
+          submenuIds: ['albumCopySubmenu'],
+          onShow: showCopyToListSubmenu,
+          onHide: hideCopySubmenu,
+        },
+      ],
+      onHideAll: clearMoveYearHighlight,
+    });
+
+    albumSubmenuController.initialize();
+  }
 
   // ========================================================
   // Hide All Context Menus
@@ -67,6 +149,11 @@ export function createAlbumContextMenu(deps = {}) {
    */
   function hideAllContextMenus() {
     hideAllMenusBase();
+    if (albumSubmenuController) {
+      albumSubmenuController.hideAll();
+    } else {
+      hideAlbumSubmenus();
+    }
 
     // Module-specific cleanup: clear context album and cancel track fetches
     setContextAlbum(null);
@@ -96,9 +183,10 @@ export function createAlbumContextMenu(deps = {}) {
     const contextMenu = document.getElementById('albumContextMenu');
     const removeOption = document.getElementById('removeAlbumOption');
     const editOption = document.getElementById('editAlbumOption');
-    const playOption = document.getElementById('playAlbumOption');
 
-    if (!contextMenu || !removeOption || !editOption || !playOption) return;
+    if (!contextMenu || !removeOption || !editOption) return;
+
+    initializeAlbumSubmenuController();
 
     // Handle edit option click
     editOption.onclick = () => {
@@ -125,16 +213,6 @@ export function createAlbumContextMenu(deps = {}) {
         );
       }
     };
-
-    // Handle play option - show submenu with devices (for Spotify) or direct play (for Tidal/local)
-    setupSubmenuHover(playOption, {
-      onShow: showPlayAlbumSubmenu,
-      relatedElements: () => [document.getElementById('playAlbumSubmenu')],
-      onHide: () => {
-        const submenu = document.getElementById('playAlbumSubmenu');
-        if (submenu) submenu.classList.add('hidden');
-      },
-    });
 
     // Handle remove option click
     removeOption.onclick = async () => {
@@ -195,38 +273,6 @@ export function createAlbumContextMenu(deps = {}) {
         }
       );
     };
-
-    // Handle move option click - show submenu
-    const moveOption = document.getElementById('moveAlbumOption');
-    if (moveOption) {
-      setupSubmenuHover(moveOption, {
-        onShow: showMoveToListSubmenu,
-        relatedElements: () => [
-          document.getElementById('albumMoveSubmenu'),
-          document.getElementById('albumMoveListsSubmenu'),
-        ],
-        onHide: () => {
-          const submenu = document.getElementById('albumMoveSubmenu');
-          const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
-          if (submenu) submenu.classList.add('hidden');
-          if (listsSubmenu) listsSubmenu.classList.add('hidden');
-          setCurrentHighlightedYear(null);
-        },
-      });
-    }
-
-    // Handle copy option click - show submenu
-    const copyOption = document.getElementById('copyAlbumOption');
-    if (copyOption) {
-      setupSubmenuHover(copyOption, {
-        onShow: showCopyToListSubmenu,
-        relatedElements: () => [document.getElementById('albumCopySubmenu')],
-        onHide: () => {
-          const submenu = document.getElementById('albumCopySubmenu');
-          if (submenu) submenu.classList.add('hidden');
-        },
-      });
-    }
 
     // Handle recommend option click
     const recommendOption = document.getElementById('recommendAlbumOption');
@@ -548,28 +594,16 @@ export function createAlbumContextMenu(deps = {}) {
     const submenu = document.getElementById('albumMoveSubmenu');
     const listsSubmenu = document.getElementById('albumMoveListsSubmenu');
     const moveOption = document.getElementById('moveAlbumOption');
-    const playSubmenu = document.getElementById('playAlbumSubmenu');
-    const playOption = document.getElementById('playAlbumOption');
-    const copySubmenu = document.getElementById('albumCopySubmenu');
-    const copyOption = document.getElementById('copyAlbumOption');
 
     if (!submenu || !moveOption) return;
 
-    // Hide the other submenus first
-    if (playSubmenu) {
-      playSubmenu.classList.add('hidden');
-      playOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-    if (copySubmenu) {
-      copySubmenu.classList.add('hidden');
-      copyOption?.classList.remove('bg-gray-700', 'text-white');
-    }
+    clearMoveListsHideTimeout();
+
     if (listsSubmenu) {
       listsSubmenu.classList.add('hidden');
     }
 
-    // Reset highlighted year
-    setCurrentHighlightedYear(null);
+    clearMoveYearHighlight();
 
     // Highlight the parent menu item
     moveOption.classList.add('bg-gray-700', 'text-white');
@@ -595,11 +629,7 @@ export function createAlbumContextMenu(deps = {}) {
       // Add hover handlers to each year option
       submenu.querySelectorAll('[data-year]').forEach((btn) => {
         btn.addEventListener('mouseenter', () => {
-          const moveListsHideTimeout = getMoveListsHideTimeout();
-          if (moveListsHideTimeout) {
-            clearTimeout(moveListsHideTimeout);
-            setMoveListsHideTimeout(null);
-          }
+          clearMoveListsHideTimeout();
           const year = btn.dataset.year;
           showMoveToListYearSubmenu(year, btn, listsByYear);
         });
@@ -612,13 +642,12 @@ export function createAlbumContextMenu(deps = {}) {
               listsMenu.contains(e.relatedTarget));
 
           if (!toListsSubmenu) {
-            const timeout = setTimeout(() => {
+            moveListsHideTimeout = setTimeout(() => {
               if (listsMenu) listsMenu.classList.add('hidden');
               // Remove highlight from year button
               btn.classList.remove('bg-gray-700', 'text-white');
-              setCurrentHighlightedYear(null);
+              currentMoveHighlightedYear = null;
             }, 100);
-            setMoveListsHideTimeout(timeout);
           }
         });
       });
@@ -644,12 +673,10 @@ export function createAlbumContextMenu(deps = {}) {
 
     if (!listsSubmenu || !yearSubmenu) return;
 
-    const currentHighlightedYear = getCurrentHighlightedYear();
-
     // Remove highlight from previously highlighted year
-    if (currentHighlightedYear && currentHighlightedYear !== year) {
+    if (currentMoveHighlightedYear && currentMoveHighlightedYear !== year) {
       const prevBtn = yearSubmenu.querySelector(
-        `[data-year="${currentHighlightedYear}"]`
+        `[data-year="${currentMoveHighlightedYear}"]`
       );
       if (prevBtn) {
         prevBtn.classList.remove('bg-gray-700', 'text-white');
@@ -658,7 +685,7 @@ export function createAlbumContextMenu(deps = {}) {
 
     // Highlight the current year button
     yearButton.classList.add('bg-gray-700', 'text-white');
-    setCurrentHighlightedYear(year);
+    currentMoveHighlightedYear = year;
 
     // Get lists for this year
     const yearLists = listsByYear[year] || [];
@@ -702,11 +729,7 @@ export function createAlbumContextMenu(deps = {}) {
 
     // Handle mouse leaving the lists submenu
     listsSubmenu.onmouseenter = () => {
-      const moveListsHideTimeout = getMoveListsHideTimeout();
-      if (moveListsHideTimeout) {
-        clearTimeout(moveListsHideTimeout);
-        setMoveListsHideTimeout(null);
-      }
+      clearMoveListsHideTimeout();
     };
 
     listsSubmenu.onmouseleave = (e) => {
@@ -716,10 +739,10 @@ export function createAlbumContextMenu(deps = {}) {
         (e.relatedTarget === yearMenu || yearMenu.contains(e.relatedTarget));
 
       if (!toYearSubmenu) {
-        const timeout = setTimeout(() => {
+        moveListsHideTimeout = setTimeout(() => {
           listsSubmenu.classList.add('hidden');
           // Remove highlight from year button
-          const highlightedYear = getCurrentHighlightedYear();
+          const highlightedYear = currentMoveHighlightedYear;
           if (highlightedYear) {
             const yearBtn = yearMenu?.querySelector(
               `[data-year="${highlightedYear}"]`
@@ -727,10 +750,9 @@ export function createAlbumContextMenu(deps = {}) {
             if (yearBtn) {
               yearBtn.classList.remove('bg-gray-700', 'text-white');
             }
-            setCurrentHighlightedYear(null);
+            currentMoveHighlightedYear = null;
           }
         }, 100);
-        setMoveListsHideTimeout(timeout);
       }
     };
 
@@ -749,27 +771,11 @@ export function createAlbumContextMenu(deps = {}) {
   function showCopyToListSubmenu() {
     const submenu = document.getElementById('albumCopySubmenu');
     const copyOption = document.getElementById('copyAlbumOption');
-    const playSubmenu = document.getElementById('playAlbumSubmenu');
-    const playOption = document.getElementById('playAlbumOption');
-    const moveSubmenu = document.getElementById('albumMoveSubmenu');
-    const moveListsSubmenu = document.getElementById('albumMoveListsSubmenu');
-    const moveOption = document.getElementById('moveAlbumOption');
 
     if (!submenu || !copyOption) return;
 
-    // Hide the other submenus first
-    if (playSubmenu) {
-      playSubmenu.classList.add('hidden');
-      playOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-    if (moveSubmenu) {
-      moveSubmenu.classList.add('hidden');
-      moveOption?.classList.remove('bg-gray-700', 'text-white');
-    }
-    if (moveListsSubmenu) {
-      moveListsSubmenu.classList.add('hidden');
-    }
-    setCurrentHighlightedYear(null);
+    clearMoveListsHideTimeout();
+    clearMoveYearHighlight();
 
     // Highlight the parent menu item
     copyOption.classList.add('bg-gray-700', 'text-white');
@@ -838,51 +844,7 @@ export function createAlbumContextMenu(deps = {}) {
    * Hide submenus when mouse leaves the context menu area
    */
   function hideSubmenuOnLeave() {
-    const contextMenu = document.getElementById('albumContextMenu');
-    const moveSubmenu = document.getElementById('albumMoveSubmenu');
-    const moveListsSubmenu = document.getElementById('albumMoveListsSubmenu');
-    const copySubmenu = document.getElementById('albumCopySubmenu');
-    const playSubmenu = document.getElementById('playAlbumSubmenu');
-    const moveOption = document.getElementById('moveAlbumOption');
-    const copyOption = document.getElementById('copyAlbumOption');
-    const playOption = document.getElementById('playAlbumOption');
-
-    if (!contextMenu) return;
-
-    const submenus = [];
-    if (moveSubmenu) {
-      submenus.push({
-        element: moveSubmenu,
-        triggerElement: moveOption,
-        relatedMenus: [moveListsSubmenu].filter(Boolean),
-      });
-    }
-    if (moveListsSubmenu) {
-      submenus.push({
-        element: moveListsSubmenu,
-        relatedMenus: [moveSubmenu].filter(Boolean),
-      });
-    }
-    if (copySubmenu) {
-      submenus.push({
-        element: copySubmenu,
-        triggerElement: copyOption,
-      });
-    }
-    if (playSubmenu) {
-      submenus.push({
-        element: playSubmenu,
-        triggerElement: playOption,
-      });
-    }
-
-    setupChainedSubmenus({
-      contextMenu,
-      submenus,
-      onHideAll: () => {
-        setCurrentHighlightedYear(null);
-      },
-    });
+    initializeAlbumSubmenuController();
   }
 
   // Public API

@@ -1,3 +1,5 @@
+import { createContextSubmenuController } from '../utils/context-submenu-controller.js';
+
 /**
  * Recommendations Module
  *
@@ -34,7 +36,6 @@ export function createRecommendations(deps = {}) {
     groupListsByYear,
     editRecommendationReasoning,
     removeRecommendation,
-    setupSubmenuHover,
     getListData,
     setListData,
     getLists,
@@ -52,6 +53,8 @@ export function createRecommendations(deps = {}) {
     refreshRecommendationYears,
     playAlbumByMetadata,
     showPlayAlbumSubmenuForAlbum,
+    createContextSubmenuController:
+      makeContextSubmenuController = createContextSubmenuController,
   } = deps;
 
   // ============ PRIVATE STATE ============
@@ -64,6 +67,112 @@ export function createRecommendations(deps = {}) {
 
   /** Timeout for hiding recommendation add-to-list submenu */
   let recommendationAddListsHideTimeout = null;
+
+  /** Shared submenu controller instance for recommendation context menu */
+  let recommendationSubmenuController = null;
+
+  function clearRecommendationAddListsHideTimeout() {
+    if (recommendationAddListsHideTimeout) {
+      clearTimeout(recommendationAddListsHideTimeout);
+      recommendationAddListsHideTimeout = null;
+    }
+  }
+
+  function hideRecommendationPlaySubmenu() {
+    document.getElementById('playAlbumSubmenu')?.classList.add('hidden');
+    document
+      .getElementById('playRecommendationOption')
+      ?.classList.remove('bg-gray-700', 'text-white');
+  }
+
+  function hideRecommendationAddSubmenus() {
+    clearRecommendationAddListsHideTimeout();
+
+    document
+      .getElementById('recommendationAddSubmenu')
+      ?.classList.add('hidden');
+    document
+      .getElementById('recommendationAddListsSubmenu')
+      ?.classList.add('hidden');
+    document
+      .getElementById('addToListOption')
+      ?.classList.remove('bg-gray-700', 'text-white');
+
+    const yearMenu = document.getElementById('recommendationAddSubmenu');
+    if (currentRecommendationAddHighlightedYear && yearMenu) {
+      yearMenu
+        .querySelector(
+          `[data-add-year="${currentRecommendationAddHighlightedYear}"]`
+        )
+        ?.classList.remove('bg-gray-700', 'text-white');
+    }
+
+    currentRecommendationAddHighlightedYear = null;
+  }
+
+  function hideRecommendationSubmenus() {
+    hideRecommendationPlaySubmenu();
+    hideRecommendationAddSubmenus();
+  }
+
+  function initializeRecommendationSubmenuController(contextMenu) {
+    if (!contextMenu || typeof makeContextSubmenuController !== 'function') {
+      return;
+    }
+
+    recommendationSubmenuController?.destroy();
+
+    recommendationSubmenuController = makeContextSubmenuController({
+      contextMenuId: contextMenu,
+      branches: [
+        {
+          triggerId: 'playRecommendationOption',
+          submenuIds: ['playAlbumSubmenu'],
+          onShow: () => {
+            hideRecommendationAddSubmenus();
+
+            if (!currentRecommendationContext) return;
+            const { rec } = currentRecommendationContext;
+
+            if (typeof showPlayAlbumSubmenuForAlbum !== 'function') {
+              playRecommendationAlbum(rec, playAlbumByMetadata, showToast);
+              return;
+            }
+
+            showPlayAlbumSubmenuForAlbum(
+              {
+                artist: rec.artist,
+                album: rec.album,
+              },
+              {
+                playOptionId: 'playRecommendationOption',
+                contextMenuId: 'recommendationContextMenu',
+              }
+            );
+          },
+          onHide: hideRecommendationPlaySubmenu,
+        },
+        {
+          triggerId: 'addToListOption',
+          submenuIds: [
+            'recommendationAddSubmenu',
+            'recommendationAddListsSubmenu',
+          ],
+          relatedMenuIds: [
+            'recommendationAddSubmenu',
+            'recommendationAddListsSubmenu',
+          ],
+          onShow: () => {
+            hideRecommendationPlaySubmenu();
+            showRecommendationAddSubmenu();
+          },
+          onHide: hideRecommendationAddSubmenus,
+        },
+      ],
+    });
+
+    recommendationSubmenuController.initialize();
+  }
 
   // ============ RECOMMEND ALBUM ============
 
@@ -832,6 +941,11 @@ export function createRecommendations(deps = {}) {
    */
   function showRecommendationContextMenu(e, rec, year) {
     hideAllContextMenus();
+    if (recommendationSubmenuController) {
+      recommendationSubmenuController.hideAll();
+    } else {
+      hideRecommendationSubmenus();
+    }
 
     currentRecommendationContext = { rec, year };
 
@@ -866,43 +980,14 @@ export function createRecommendations(deps = {}) {
    */
   function initializeRecommendationContextMenu() {
     const contextMenu = document.getElementById('recommendationContextMenu');
-    const playOption = document.getElementById('playRecommendationOption');
     const removeOption = document.getElementById('removeRecommendationOption');
 
     if (!contextMenu) return;
 
-    if (playOption) {
-      setupSubmenuHover(playOption, {
-        onShow: () => {
-          if (!currentRecommendationContext) return;
-          const { rec } = currentRecommendationContext;
-
-          if (typeof showPlayAlbumSubmenuForAlbum !== 'function') {
-            playRecommendationAlbum(rec, playAlbumByMetadata, showToast);
-            return;
-          }
-
-          showPlayAlbumSubmenuForAlbum(
-            {
-              artist: rec.artist,
-              album: rec.album,
-            },
-            {
-              playOptionId: 'playRecommendationOption',
-              contextMenuId: 'recommendationContextMenu',
-            }
-          );
-        },
-        relatedElements: () => [document.getElementById('playAlbumSubmenu')],
-        onHide: () => {
-          const submenu = document.getElementById('playAlbumSubmenu');
-          if (submenu) submenu.classList.add('hidden');
-        },
-      });
-    }
+    initializeRecommendationSubmenuController(contextMenu);
 
     if (removeOption) {
-      removeOption.addEventListener('click', async () => {
+      removeOption.onclick = async () => {
         contextMenu.classList.add('hidden');
 
         if (!currentRecommendationContext) return;
@@ -918,12 +1003,12 @@ export function createRecommendations(deps = {}) {
         );
 
         currentRecommendationContext = null;
-      });
+      };
     }
 
     const editReasoningOption = document.getElementById('editReasoningOption');
     if (editReasoningOption) {
-      editReasoningOption.addEventListener('click', async () => {
+      editReasoningOption.onclick = async () => {
         contextMenu.classList.add('hidden');
 
         if (!currentRecommendationContext) return;
@@ -939,22 +1024,7 @@ export function createRecommendations(deps = {}) {
         );
 
         currentRecommendationContext = null;
-      });
-    }
-
-    const addToListOption = document.getElementById('addToListOption');
-    if (addToListOption) {
-      setupSubmenuHover(addToListOption, {
-        onShow: showRecommendationAddSubmenu,
-        relatedElements: () => [
-          document.getElementById('recommendationAddSubmenu'),
-        ],
-        onHide: () => {
-          const submenu = document.getElementById('recommendationAddSubmenu');
-          if (submenu) submenu.classList.add('hidden');
-          currentRecommendationAddHighlightedYear = null;
-        },
-      });
+      };
     }
   }
 

@@ -72,16 +72,8 @@ export function createPlayback(deps = {}) {
     const submenu = document.getElementById('playAlbumSubmenu');
     const playOption = document.getElementById(playOptionId);
     const contextMenu = document.getElementById(contextMenuId);
-    const moveSubmenu = document.getElementById('albumMoveSubmenu');
-    const moveOption = document.getElementById('moveAlbumOption');
 
     if (!submenu || !playOption || !contextMenu) return;
-
-    // Hide the list move submenu first if present
-    if (moveSubmenu) {
-      moveSubmenu.classList.add('hidden');
-      moveOption?.classList.remove('bg-gray-700', 'text-white');
-    }
 
     // Highlight the parent menu item
     playOption.classList.add('bg-gray-700', 'text-white');
