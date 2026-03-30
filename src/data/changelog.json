@@ -1,5 +1,26 @@
 [
   {
+    "date": "2026-03-30",
+    "category": "feature",
+    "description": "Added cross-service playback syncing with external music platforms",
+    "hash": "0cd87283be18ce7e841c551596afe4a18fb948e0",
+    "commitMessage": "Add persistent external identity mapping for cross-service playback\n\nPersist canonical-to-service album and artist aliases, then use them to resolve Spotify and Last.fm name mismatches so play and discovery flows stay reliable across naming variants."
+  },
+  {
+    "date": "2026-03-26",
+    "category": "ui",
+    "description": "Improved recommendations list layout and long text display",
+    "hash": "734df7c9bddf61ad58e18999cb473b919523d86b",
+    "commitMessage": "Improve recommendations list layout parity and long-text handling"
+  },
+  {
+    "date": "2026-03-26",
+    "category": "fix",
+    "description": "Fixed recommendation play menu and web playback links",
+    "hash": "5b7373c37309f5455ed120874618659edd6b5280",
+    "commitMessage": "Fix recommendation play menu parity and web playback links"
+  },
+  {
     "date": "2026-03-26",
     "category": "ui",
     "description": "Better layout and long text display in recommendations",
