@@ -4,6 +4,57 @@
  * devices, and playing on a specific device.
  */
 
+const SPOTIFY_APP_FALLBACK_DELAY_MS = 1200;
+
+function openSpotifyAppWithFallback(type, id) {
+  const appUrl = `spotify:${type}:${id}`;
+  const webUrl = `https://open.spotify.com/${type}/${encodeURIComponent(id)}`;
+  const hasDocument = typeof document !== 'undefined';
+  const hasWindowEvents = typeof window?.addEventListener === 'function';
+
+  if (!hasDocument || !hasWindowEvents) {
+    window.location.href = appUrl;
+    return;
+  }
+
+  let appLikelyOpened = false;
+
+  const markOpened = () => {
+    appLikelyOpened = true;
+  };
+
+  const onVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      markOpened();
+    }
+  };
+
+  const cleanup = () => {
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('blur', markOpened);
+    window.removeEventListener('pagehide', markOpened);
+  };
+
+  const fallbackTimer = setTimeout(() => {
+    if (!appLikelyOpened) {
+      window.location.href = webUrl;
+    }
+    cleanup();
+  }, SPOTIFY_APP_FALLBACK_DELAY_MS);
+
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  window.addEventListener('blur', markOpened);
+  window.addEventListener('pagehide', markOpened);
+
+  try {
+    window.location.href = appUrl;
+  } catch (_err) {
+    clearTimeout(fallbackTimer);
+    cleanup();
+    window.location.href = webUrl;
+  }
+}
+
 /**
  * Open an album or track in the user's connected music service.
  *
@@ -51,12 +102,11 @@ export async function openInMusicApp(service, type, params, showToast) {
     }
 
     if (data.id) {
-      const destinationUrl =
-        service === 'spotify'
-          ? `https://open.spotify.com/${type}/${encodeURIComponent(data.id)}`
-          : `https://listen.tidal.com/${type}/${encodeURIComponent(data.id)}`;
-
-      window.location.href = destinationUrl;
+      if (service === 'spotify') {
+        openSpotifyAppWithFallback(type, data.id);
+      } else {
+        window.location.href = `https://listen.tidal.com/${type}/${encodeURIComponent(data.id)}`;
+      }
     } else if (data.error) {
       showToast(data.error, 'error');
     } else {
