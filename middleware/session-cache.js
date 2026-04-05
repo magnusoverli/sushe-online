@@ -9,6 +9,18 @@
 
 const logger = require('../utils/logger');
 
+function cloneSessionData(data) {
+  if (typeof global.structuredClone === 'function') {
+    try {
+      return global.structuredClone(data);
+    } catch {
+      // Fall through to JSON clone for non-cloneable payloads
+    }
+  }
+
+  return JSON.parse(JSON.stringify(data));
+}
+
 /**
  * Simple in-memory session cache with TTL support
  */
@@ -117,7 +129,7 @@ function wrapSessionStore(store, cache, options = {}) {
     const cached = cache.get(sid);
     if (cached) {
       // Clone to prevent mutation of cached data
-      return callback(null, JSON.parse(JSON.stringify(cached)));
+      return callback(null, cloneSessionData(cached));
     }
 
     originalGet(sid, (err, session) => {

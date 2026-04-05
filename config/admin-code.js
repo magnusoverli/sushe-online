@@ -6,6 +6,7 @@
  */
 
 const logger = require('../utils/logger');
+const crypto = require('crypto');
 
 // Admin code state
 let adminCode = null;
@@ -14,24 +15,43 @@ let lastCodeUsedBy = null;
 let lastCodeUsedAt = null;
 const adminCodeAttempts = new Map(); // Track failed attempts
 
+function generateSecureCode(length = 8) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+
+  for (let i = 0; i < length; i++) {
+    const index = crypto.randomInt(0, chars.length);
+    code += chars[index];
+  }
+
+  return code;
+}
+
+function getLoggableCode(code) {
+  const mode = process.env.ADMIN_CODE_LOG_MODE || 'plaintext';
+
+  if (mode === 'masked') {
+    return `${code.slice(0, 2)}******`;
+  }
+
+  return code;
+}
+
 /**
  * Generate a new admin access code.
  * Outputs structured JSON log for Loki/Grafana parsing.
  */
 function generateAdminCode() {
   try {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    adminCode = Array.from(
-      { length: 8 },
-      () => chars[Math.floor(Math.random() * chars.length)]
-    ).join('');
+    adminCode = generateSecureCode(8);
     adminCodeExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
     // Log admin code using structured logging (parseable by Loki)
     const logData = {
-      code: adminCode,
+      code: getLoggableCode(adminCode),
       expiresAt: adminCodeExpiry.toISOString(),
       ttlSeconds: 300,
+      logMode: process.env.ADMIN_CODE_LOG_MODE || 'plaintext',
     };
 
     // Include previous usage info if available
@@ -95,4 +115,6 @@ module.exports = {
   getAdminCodeState,
   startAdminCodeRotation,
   generateAdminCode,
+  generateSecureCode,
+  getLoggableCode,
 };

@@ -79,9 +79,6 @@ const {
 
 // ============ EARLY INITIALIZATION ============
 
-// Register process-level error and signal handlers
-registerProcessHandlers();
-
 // Multer upload configuration
 const upload = multer({
   storage: multer.diskStorage({
@@ -139,7 +136,7 @@ app.use(express.static('public', { maxAge: '1y', immutable: true }));
 
 // Handle .well-known requests (Android Asset Links, iOS Universal Links, etc.)
 app.use('/.well-known', (req, res) => {
-  if (req.path === '/.well-known/assetlinks.json') {
+  if (req.path === '/assetlinks.json') {
     return res.json([]);
   }
   res.status(204).end();
@@ -180,26 +177,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Conditional compression - skip for small API responses
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/') && req.method === 'GET') {
-    const originalJson = res.json;
-    res.json = function (data) {
-      const jsonString = JSON.stringify(data);
-      if (jsonString.length > 1024) {
-        compression()(req, res, () => {
-          originalJson.call(this, data);
-        });
-      } else {
-        originalJson.call(this, data);
-      }
-    };
-  }
-  next();
-});
-
-// Apply compression for all other requests
-app.use(compression());
+// Apply compression for requests above 1KB
+app.use(compression({ threshold: 1024 }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(express.json({ limit: '50mb' }));
 
@@ -208,6 +187,9 @@ app.use(requestIdMiddleware());
 
 // Prometheus metrics middleware
 app.use(metricsMiddleware());
+
+// Health check and metrics routes (kept before session/auth stack for lower overhead)
+registerHealthRoutes(app, pool);
 
 // Session middleware with PostgreSQL store and caching
 const sessionMiddleware = createSessionMiddleware(pool);
@@ -264,7 +246,12 @@ const { createDuplicateService } = require('./services/duplicate-service');
 const { createReidentifyService } = require('./services/reidentify-service');
 
 const authService = createAuthService({ usersAsync, bcrypt, logger });
-const userService = createUserService({ users, usersAsync, logger });
+const userService = createUserService({
+  users,
+  usersAsync,
+  logger,
+  invalidateUserCache,
+});
 const duplicateService = createDuplicateService({ pool, logger });
 const reidentifyService = createReidentifyService({ pool, logger });
 
@@ -311,9 +298,6 @@ const deps = {
   duplicateService,
   reidentifyService,
 };
-
-// Health check and metrics routes
-registerHealthRoutes(app, pool);
 
 // Application routes
 authRoutes(app, deps);
@@ -370,21 +354,39 @@ app.use((err, req, res, next) => {
 // ============ SERVER STARTUP ============
 
 const PORT = process.env.PORT || 3000;
-const MigrationManager = require('./db/migrations');
 const httpServer = http.createServer(app);
+
+let stopSyncServices = async () => {};
+
+// Register process-level error and signal handlers
+registerProcessHandlers({
+  closeHttpServer: async () => {
+    if (!httpServer.listening) {
+      return;
+    }
+
+    await new Promise((resolve, reject) => {
+      httpServer.close((err) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve();
+      });
+    });
+  },
+  runCleanup: async () => {
+    await stopSyncServices();
+  },
+  closeDatabasePool: async () => {
+    if (pool && typeof pool.end === 'function') {
+      await pool.end();
+    }
+  },
+});
 
 ready
   .then(async () => {
-    // Run pending migrations automatically on startup
-    try {
-      const migrationManager = new MigrationManager(pool);
-      await migrationManager.runMigrations();
-    } catch (migrationErr) {
-      logger.error('Migration failed during startup', {
-        error: migrationErr.message,
-      });
-    }
-
     // Initialize background queues
     initializeQueues(pool);
 
@@ -401,7 +403,7 @@ ready
       });
 
       // Start background sync services
-      startSyncServices(pool);
+      stopSyncServices = startSyncServices(pool);
     });
   })
   .catch((err) => {

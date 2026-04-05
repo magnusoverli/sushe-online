@@ -46,6 +46,7 @@ module.exports = (app, deps) => {
     passport,
     authService,
     userService,
+    invalidateUserCache,
   } = deps;
 
   const asyncHandler = createAsyncHandler(logger);
@@ -381,6 +382,10 @@ module.exports = (app, deps) => {
           { $set: { hash: result.newHash, updatedAt: new Date() } }
         );
 
+        if (invalidateUserCache) {
+          invalidateUserCache(req.user._id);
+        }
+
         return respondWithSuccess(
           req,
           res,
@@ -437,6 +442,10 @@ module.exports = (app, deps) => {
           { _id: req.user._id },
           { $set: { role: 'admin', adminGrantedAt: new Date() } }
         );
+
+        if (invalidateUserCache) {
+          invalidateUserCache(req.user._id);
+        }
 
         logger.info(`Admin access granted to: ${req.user.email}`);
         authService.finalizeAdminCodeUsage(adminCodeState, req.user.email);

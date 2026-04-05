@@ -14,12 +14,42 @@ const {
   wrapSessionStore,
 } = require('../middleware/session-cache');
 
+const FALLBACK_SESSION_SECRET = 'your-secret-key';
+
+function resolveSessionSettings(env = process.env, log = logger) {
+  const isProduction = env.NODE_ENV === 'production';
+  const strictSecretRequired = env.SESSION_SECRET_REQUIRED === 'true';
+  const secretFromEnv = env.SESSION_SECRET;
+  const sessionSecret = secretFromEnv || FALLBACK_SESSION_SECRET;
+  const usingFallbackSecret =
+    !secretFromEnv || secretFromEnv === FALLBACK_SESSION_SECRET;
+
+  if (isProduction && usingFallbackSecret) {
+    log.error('Insecure SESSION_SECRET configuration detected in production', {
+      strictMode: strictSecretRequired,
+    });
+
+    if (strictSecretRequired) {
+      throw new Error(
+        'SESSION_SECRET is required in production when SESSION_SECRET_REQUIRED=true'
+      );
+    }
+  }
+
+  return {
+    sessionSecret,
+    cookieSecure: isProduction ? 'auto' : false,
+  };
+}
+
 /**
  * Create session middleware with PostgreSQL store and caching.
  * @param {Object} pool - PostgreSQL connection pool
  * @returns {Function} Express session middleware
  */
 function createSessionMiddleware(pool) {
+  const settings = resolveSessionSettings(process.env, logger);
+
   const sessionCache = new SessionCache({ ttl: 30000, maxSize: 1000 }); // 30 sec TTL
   const pgStore = new pgSession({
     pool: pool,
@@ -32,11 +62,11 @@ function createSessionMiddleware(pool) {
 
   const sessionMiddleware = session({
     store: wrapSessionStore(pgStore, sessionCache),
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    secret: settings.sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      secure: false,
+      secure: settings.cookieSecure,
       httpOnly: true,
       maxAge: 1000 * 60 * 60 * 24, // 24 hours
       sameSite: 'lax',
@@ -56,31 +86,27 @@ function createSessionMiddleware(pool) {
  */
 function flashMiddleware() {
   return (req, res, next) => {
-    // Initialize flash in session if it doesn't exist
-    if (!req.session.flash) {
-      req.session.flash = {};
+    const existingFlash = req.session?.flash;
+
+    // Make flash messages available to templates
+    res.locals.flash = existingFlash ? { ...existingFlash } : {};
+
+    // Clear only when there is something to clear to avoid unnecessary session writes
+    if (existingFlash) {
+      delete req.session.flash;
     }
-
-    // Make flash messages available to templates via res.locals
-    // Clone the flash object to avoid reference issues
-    res.locals.flash = { ...req.session.flash };
-
-    // Clear flash messages after making them available
-    // This ensures they're only shown once
-    delete req.session.flash;
 
     // Add flash method to request object
     req.flash = (type, message) => {
-      // Ensure session.flash exists
-      if (!req.session.flash) {
-        req.session.flash = {};
-      }
       // If called with just type, return messages of that type (getter)
       if (message === undefined) {
-        return req.session.flash[type] || [];
+        return req.session?.flash?.[type] || [];
       }
 
       // Otherwise, add message (setter)
+      if (!req.session.flash) {
+        req.session.flash = {};
+      }
       if (!req.session.flash[type]) {
         req.session.flash[type] = [];
       }
@@ -91,4 +117,9 @@ function flashMiddleware() {
   };
 }
 
-module.exports = { createSessionMiddleware, flashMiddleware };
+module.exports = {
+  createSessionMiddleware,
+  flashMiddleware,
+  resolveSessionSettings,
+  FALLBACK_SESSION_SECRET,
+};

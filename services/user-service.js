@@ -41,6 +41,10 @@ const HEX_COLOR_REGEX = /^#[0-9A-F]{6}$/i;
 function createUserService(deps = {}) {
   const usersDep = deps.users;
   const usersAsyncDep = deps.usersAsync;
+  const invalidateUserCacheDep =
+    typeof deps.invalidateUserCache === 'function'
+      ? deps.invalidateUserCache
+      : () => {};
 
   if (!usersDep) {
     throw new Error('users (callback-style) is required for UserService');
@@ -66,6 +70,7 @@ function createUserService(deps = {}) {
       { _id: userId },
       { $set: { [field]: value, updatedAt: new Date() } }
     );
+    invalidateUserCacheDep(userId);
     log.info(`User setting updated`, { userId, field, value });
   }
 
@@ -100,6 +105,7 @@ function createUserService(deps = {}) {
       { $set: { [field]: trimmed, updatedAt: new Date() } }
     );
 
+    invalidateUserCacheDep(userId);
     log.info(`User ${field} updated`, { userId, field });
     return { success: true };
   }
@@ -116,6 +122,7 @@ function createUserService(deps = {}) {
       { _id: userId },
       { $set: { lastSelectedList: listId, updatedAt: new Date() } }
     );
+    invalidateUserCacheDep(userId);
   }
 
   // ── Validation helpers ─────────────────────────────────────────────────

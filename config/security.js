@@ -6,6 +6,10 @@
 
 const helmet = require('helmet');
 const cors = require('cors');
+const {
+  isAllowedOrigin,
+  createOriginPolicyFromEnv,
+} = require('../utils/origin-policy');
 
 /**
  * Create Helmet security middleware with static-asset bypass optimization.
@@ -71,48 +75,14 @@ function createHelmetMiddleware() {
  * @returns {Function} Express middleware
  */
 function createCorsMiddleware() {
+  const originPolicy = createOriginPolicyFromEnv(process.env);
+
   const corsOptions = {
     origin: function (origin, callback) {
-      // Allow requests with no origin (like mobile apps, curl, Postman)
-      if (!origin) return callback(null, true);
-
-      // Allow chrome-extension:// origins (browser extensions)
-      if (origin.startsWith('chrome-extension://')) {
+      if (isAllowedOrigin(origin, originPolicy)) {
         return callback(null, true);
       }
 
-      // Allow moz-extension:// origins (Firefox extensions)
-      if (origin.startsWith('moz-extension://')) {
-        return callback(null, true);
-      }
-
-      // Allow localhost for development
-      if (
-        origin.includes('localhost') ||
-        origin.includes('127.0.0.1') ||
-        origin.includes('[::1]')
-      ) {
-        return callback(null, true);
-      }
-
-      // Allow private network IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-      // Also allow CGNAT range (100.64-127.x.x) used by Tailscale and other VPNs
-      // This allows direct IP access for admin operations bypassing Cloudflare
-      const ipMatch = origin.match(
-        // eslint-disable-next-line security/detect-unsafe-regex
-        /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.\d{1,3}\.\d{1,3})(:\d+)?$/
-      );
-      if (ipMatch) {
-        return callback(null, true);
-      }
-
-      // In production, you might want to whitelist specific domains
-      // For now, allow all HTTPS origins for flexibility
-      if (origin.startsWith('https://')) {
-        return callback(null, true);
-      }
-
-      // Reject all other origins
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true, // Allow cookies and authentication headers
