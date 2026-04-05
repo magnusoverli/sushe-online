@@ -32,9 +32,13 @@ function initializeQueues(pool) {
 /**
  * Start background sync services (preference sync, playcount sync).
  * Only starts in production or when explicitly enabled via env vars.
+ * Returns a cleanup function used during graceful shutdown.
  * @param {Object} pool - PostgreSQL connection pool
+ * @returns {Function} stopSyncServices cleanup function
  */
 function startSyncServices(pool) {
+  const cleanupTasks = [];
+
   // Start preference sync service (only in production or if explicitly enabled)
   if (
     process.env.NODE_ENV === 'production' ||
@@ -44,13 +48,10 @@ function startSyncServices(pool) {
       const syncService = createPreferenceSyncService({ pool, logger });
       syncService.start();
 
-      // Clean shutdown
-      const shutdown = () => {
+      cleanupTasks.push(async () => {
         logger.info('Shutting down preference sync service...');
         syncService.stop();
-      };
-      process.on('SIGTERM', shutdown);
-      process.on('SIGINT', shutdown);
+      });
 
       logger.info('Preference sync service initialized');
     } catch (syncErr) {
@@ -74,13 +75,10 @@ function startSyncServices(pool) {
       });
       playcountSyncService.start();
 
-      // Clean shutdown
-      const playcountShutdown = () => {
+      cleanupTasks.push(async () => {
         logger.info('Shutting down playcount sync service...');
         playcountSyncService.stop();
-      };
-      process.on('SIGTERM', playcountShutdown);
-      process.on('SIGINT', playcountShutdown);
+      });
 
       logger.info('Playcount sync service initialized (24h interval)');
     } catch (syncErr) {
@@ -90,6 +88,18 @@ function startSyncServices(pool) {
       // Don't exit - sync service is not critical for app operation
     }
   }
+
+  return async function stopSyncServices() {
+    for (const stopTask of cleanupTasks) {
+      try {
+        await stopTask();
+      } catch (error) {
+        logger.error('Error while stopping sync service', {
+          error: error.message,
+        });
+      }
+    }
+  };
 }
 
 module.exports = { initializeQueues, startSyncServices };

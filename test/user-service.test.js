@@ -273,10 +273,12 @@ describe('userService.validateSetting', () => {
 describe('userService.updateSetting', () => {
   it('should call usersAsync.update with correct parameters', async () => {
     const mockUsersAsync = createMockUsersAsync();
+    const invalidateUserCache = mock.fn();
     const service = createUserService({
       users: createMockUsers(),
       usersAsync: mockUsersAsync,
       logger: createMockLogger(),
+      invalidateUserCache,
     });
 
     await service.updateSetting('user123', 'accentColor', '#ff0000');
@@ -286,6 +288,11 @@ describe('userService.updateSetting', () => {
     assert.strictEqual(query._id, 'user123');
     assert.strictEqual(update.$set.accentColor, '#ff0000');
     assert.ok(update.$set.updatedAt instanceof Date);
+    assert.strictEqual(invalidateUserCache.mock.calls.length, 1);
+    assert.strictEqual(
+      invalidateUserCache.mock.calls[0].arguments[0],
+      'user123'
+    );
   });
 });
 
@@ -307,6 +314,14 @@ describe('userService.updateUniqueField', () => {
   });
 
   it('should succeed when value is unique', async () => {
+    const invalidateUserCache = mock.fn();
+    service = createUserService({
+      users: createMockUsers(),
+      usersAsync: mockUsersAsync,
+      logger: createMockLogger(),
+      invalidateUserCache,
+    });
+
     const result = await service.updateUniqueField(
       'user123',
       'email',
@@ -322,6 +337,11 @@ describe('userService.updateUniqueField', () => {
 
     // Verify update
     assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
+    assert.strictEqual(invalidateUserCache.mock.calls.length, 1);
+    assert.strictEqual(
+      invalidateUserCache.mock.calls[0].arguments[0],
+      'user123'
+    );
   });
 
   it('should fail when email is already taken', async () => {
@@ -375,10 +395,12 @@ describe('userService.updateUniqueField', () => {
 describe('userService.updateLastSelectedList', () => {
   it('should call usersAsync.update with correct parameters', async () => {
     const mockUsersAsync = createMockUsersAsync();
+    const invalidateUserCache = mock.fn();
     const service = createUserService({
       users: createMockUsers(),
       usersAsync: mockUsersAsync,
       logger: createMockLogger(),
+      invalidateUserCache,
     });
 
     await service.updateLastSelectedList('user123', 'list456');
@@ -388,5 +410,10 @@ describe('userService.updateLastSelectedList', () => {
     assert.strictEqual(query._id, 'user123');
     assert.strictEqual(update.$set.lastSelectedList, 'list456');
     assert.ok(update.$set.updatedAt instanceof Date);
+    assert.strictEqual(invalidateUserCache.mock.calls.length, 1);
+    assert.strictEqual(
+      invalidateUserCache.mock.calls[0].arguments[0],
+      'user123'
+    );
   });
 });

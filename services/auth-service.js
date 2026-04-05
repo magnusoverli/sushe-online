@@ -229,8 +229,9 @@ function createAuthService(deps = {}) {
     const isExpired = new Date() > adminCodeState.adminCodeExpiry;
 
     log.info('Admin code validation', {
-      submittedCode,
-      expectedCode: adminCodeState.adminCode,
+      userId,
+      hasSubmittedCode: !!submittedCode,
+      codeLength: submittedCode ? submittedCode.length : 0,
       isExpired,
       expiresAt: adminCodeState.adminCodeExpiry.toISOString(),
     });

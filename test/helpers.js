@@ -21,6 +21,7 @@ function createMockLogger() {
     warn: mock.fn(),
     error: mock.fn(),
     debug: mock.fn(),
+    shutdown: mock.fn(async () => {}),
   };
 }
 

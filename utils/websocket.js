@@ -8,6 +8,10 @@ const {
   incWebsocketConnections,
   decWebsocketConnections,
 } = require('./metrics');
+const {
+  isAllowedOrigin,
+  createOriginPolicyFromEnv,
+} = require('./origin-policy');
 
 /**
  * Create broadcast helpers that emit to a user's room
@@ -143,43 +147,12 @@ function createWebSocketService(deps = {}) {
    * @returns {Object} Socket.io server instance
    */
   function setup(httpServer, sessionMiddleware) {
+    const originPolicy = createOriginPolicyFromEnv(process.env);
+
     io = new Server(httpServer, {
       cors: {
         origin: function (origin, callback) {
-          // Allow requests with no origin (like mobile apps, curl, Postman)
-          if (!origin) return callback(null, true);
-
-          // Allow chrome-extension:// origins (browser extensions)
-          if (origin.startsWith('chrome-extension://')) {
-            return callback(null, true);
-          }
-
-          // Allow moz-extension:// origins (Firefox extensions)
-          if (origin.startsWith('moz-extension://')) {
-            return callback(null, true);
-          }
-
-          // Allow localhost for development
-          if (
-            origin.includes('localhost') ||
-            origin.includes('127.0.0.1') ||
-            origin.includes('[::1]')
-          ) {
-            return callback(null, true);
-          }
-
-          // Allow private network IP addresses (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
-          // Also allow CGNAT range (100.64-127.x.x) used by Tailscale and other VPNs
-          const ipMatch = origin.match(
-            // eslint-disable-next-line security/detect-unsafe-regex
-            /^https?:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3}|100\.(6[4-9]|[7-9][0-9]|1[0-1][0-9]|12[0-7])\.\d{1,3}\.\d{1,3})(:\d+)?$/
-          );
-          if (ipMatch) {
-            return callback(null, true);
-          }
-
-          // Allow all HTTPS origins
-          if (origin.startsWith('https://')) {
+          if (isAllowedOrigin(origin, originPolicy)) {
             return callback(null, true);
           }
 
