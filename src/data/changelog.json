@@ -7,6 +7,13 @@
     "commitMessage": "Add Deathrock to allowed genres"
   },
   {
+    "date": "2026-04-05",
+    "category": "feature",
+    "description": "Added Deathrock as a new music genre option",
+    "hash": "120ea298f67fb48e72d81b5d88f119f2cabe93ab",
+    "commitMessage": "Add Deathrock to allowed genres"
+  },
+  {
     "date": "2026-03-30",
     "category": "fix",
     "description": "Fixed Spotify app links with web player backup",
