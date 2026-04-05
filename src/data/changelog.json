@@ -1,5 +1,19 @@
 [
   {
+    "date": "2026-04-05",
+    "category": "feature",
+    "description": "Added Deathrock as a new music genre option",
+    "hash": "120ea298f67fb48e72d81b5d88f119f2cabe93ab",
+    "commitMessage": "Add Deathrock to allowed genres"
+  },
+  {
+    "date": "2026-03-30",
+    "category": "fix",
+    "description": "Fixed Spotify app links with web player backup",
+    "hash": "32b7d2380e3a17249e90cdf3f5a090eb7ea95507",
+    "commitMessage": "Restore Spotify app deep-link with web fallback\n\nOpen in Spotify now tries the app URI first and only falls back to open.spotify.com when launch is not detected, with tests covering both paths."
+  },
+  {
     "date": "2026-03-30",
     "category": "feature",
     "description": "Added direct links to open albums in Spotify app",
