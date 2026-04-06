@@ -1098,6 +1098,10 @@ function createListService(deps = {}) {
    * @returns {Promise<{list: Object, itemCount: number}>}
    */
   async function reorderItems(listId, userId, order) {
+    if (!Array.isArray(order)) {
+      throw new TransactionAbort(400, { error: 'Invalid order array' });
+    }
+
     const list = await findListByIdOrThrow(
       listId,
       userId,
@@ -1108,46 +1112,82 @@ function createListService(deps = {}) {
 
     await withTransaction(pool, async (client) => {
       const now = new Date();
-      const byAlbumId = [];
-      const byItemId = [];
 
-      for (const entry of order) {
-        if (typeof entry === 'string') {
-          effectivePos += 1;
-          byAlbumId.push({ albumId: entry, position: effectivePos });
-        } else if (entry && typeof entry === 'object' && entry._id) {
-          effectivePos += 1;
-          byItemId.push({ itemId: entry._id, position: effectivePos });
+      const listItemsResult = await client.query(
+        'SELECT _id, album_id FROM list_items WHERE list_id = $1',
+        [list._id]
+      );
+      const listItems = listItemsResult.rows;
+
+      if (listItems.length === 0) {
+        if (order.length > 0) {
+          throw new TransactionAbort(400, {
+            error: 'Order must be empty for a list with no items',
+          });
+        }
+        effectivePos = 0;
+        return;
+      }
+
+      const itemIdsByAlbumId = new Map();
+      const validItemIds = new Set();
+      for (const item of listItems) {
+        validItemIds.add(item._id);
+        if (item.album_id) {
+          itemIdsByAlbumId.set(item.album_id, item._id);
         }
       }
 
-      if (byAlbumId.length > 0) {
-        await client.query(
-          `UPDATE list_items SET position = t.position, updated_at = $1
-           FROM UNNEST($2::text[], $3::int[]) AS t(album_id, position)
-           WHERE list_items.list_id = $4 AND list_items.album_id = t.album_id`,
-          [
-            now,
-            byAlbumId.map((i) => i.albumId),
-            byAlbumId.map((i) => i.position),
-            list._id,
-          ]
-        );
+      const orderedItemIds = [];
+      for (const entry of order) {
+        if (typeof entry === 'string') {
+          const resolvedItemId = itemIdsByAlbumId.get(entry);
+          if (!resolvedItemId) {
+            throw new TransactionAbort(400, {
+              error: `Album '${entry}' is not in this list`,
+            });
+          }
+          orderedItemIds.push(resolvedItemId);
+          continue;
+        }
+
+        if (entry && typeof entry === 'object' && entry._id) {
+          if (!validItemIds.has(entry._id)) {
+            throw new TransactionAbort(400, {
+              error: `Item '${entry._id}' is not in this list`,
+            });
+          }
+          orderedItemIds.push(entry._id);
+          continue;
+        }
+
+        throw new TransactionAbort(400, {
+          error: 'Order contains invalid entries',
+        });
       }
 
-      if (byItemId.length > 0) {
-        await client.query(
-          `UPDATE list_items SET position = t.position, updated_at = $1
-           FROM UNNEST($2::text[], $3::int[]) AS t(item_id, position)
-           WHERE list_items._id = t.item_id AND list_items.list_id = $4`,
-          [
-            now,
-            byItemId.map((i) => i.itemId),
-            byItemId.map((i) => i.position),
-            list._id,
-          ]
-        );
+      if (new Set(orderedItemIds).size !== orderedItemIds.length) {
+        throw new TransactionAbort(400, {
+          error: 'Order cannot contain duplicate entries',
+        });
       }
+
+      if (orderedItemIds.length !== listItems.length) {
+        throw new TransactionAbort(400, {
+          error: 'Order must include all list items exactly once',
+        });
+      }
+
+      const positionValues = orderedItemIds.map((_, index) => index + 1);
+      await client.query(
+        `UPDATE list_items
+         SET position = t.position, updated_at = $1
+         FROM UNNEST($2::text[], $3::int[]) AS t(item_id, position)
+         WHERE list_items._id = t.item_id AND list_items.list_id = $4`,
+        [now, orderedItemIds, positionValues, list._id]
+      );
+
+      effectivePos = orderedItemIds.length;
     });
 
     log.info('List reordered', {

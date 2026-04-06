@@ -33,6 +33,34 @@ function createAlbumService(deps = {}) {
   const logger = deps.logger || defaultLogger;
   const { upsertAlbumRecord, invalidateCachesForAlbumUsers } = deps;
 
+  function validateOptionalTextField(value, errorMessage) {
+    if (value !== null && value !== undefined && typeof value !== 'string') {
+      throw new TransactionAbort(400, { error: errorMessage });
+    }
+  }
+
+  function normalizeOptionalText(value) {
+    return value ? value.trim() : null;
+  }
+
+  function buildAlbumMetadataFields({ country, genre_1, genre_2 }) {
+    const fields = [];
+
+    if (country !== undefined) {
+      fields.push({ column: 'country', value: normalizeOptionalText(country) });
+    }
+
+    if (genre_1 !== undefined) {
+      fields.push({ column: 'genre_1', value: normalizeOptionalText(genre_1) });
+    }
+
+    if (genre_2 !== undefined) {
+      fields.push({ column: 'genre_2', value: normalizeOptionalText(genre_2) });
+    }
+
+    return fields;
+  }
+
   /**
    * Get album cover image data.
    * If cover is missing, triggers an async background fetch.
@@ -139,13 +167,7 @@ function createAlbumService(deps = {}) {
    * @param {string} userId - For logging
    */
   async function updateCountry(albumId, country, userId) {
-    if (
-      country !== null &&
-      country !== undefined &&
-      typeof country !== 'string'
-    ) {
-      throw new TransactionAbort(400, { error: 'Invalid country value' });
-    }
+    validateOptionalTextField(country, 'Invalid country value');
 
     const checkResult = await pool.query(
       'SELECT album_id FROM albums WHERE album_id = $1',
@@ -156,7 +178,7 @@ function createAlbumService(deps = {}) {
       throw new TransactionAbort(404, { error: 'Album not found' });
     }
 
-    const trimmedCountry = country ? country.trim() : null;
+    const trimmedCountry = normalizeOptionalText(country);
 
     await pool.query(
       'UPDATE albums SET country = $1, updated_at = $2 WHERE album_id = $3',
@@ -181,14 +203,8 @@ function createAlbumService(deps = {}) {
   async function updateGenres(albumId, genres, userId) {
     const { genre_1, genre_2 } = genres;
 
-    if (
-      (genre_1 !== undefined &&
-        genre_1 !== null &&
-        typeof genre_1 !== 'string') ||
-      (genre_2 !== undefined && genre_2 !== null && typeof genre_2 !== 'string')
-    ) {
-      throw new TransactionAbort(400, { error: 'Invalid genre values' });
-    }
+    validateOptionalTextField(genre_1, 'Invalid genre values');
+    validateOptionalTextField(genre_2, 'Invalid genre values');
 
     const checkResult = await pool.query(
       'SELECT album_id FROM albums WHERE album_id = $1',
@@ -199,17 +215,11 @@ function createAlbumService(deps = {}) {
       throw new TransactionAbort(404, { error: 'Album not found' });
     }
 
-    const fields = [];
-    if (genre_1 !== undefined) {
-      fields.push({
-        column: 'genre_1',
-        value: genre_1 ? genre_1.trim() : null,
-      });
-    }
-    if (genre_2 !== undefined) {
-      fields.push({
-        column: 'genre_2',
-        value: genre_2 ? genre_2.trim() : null,
+    const fields = buildAlbumMetadataFields({ genre_1, genre_2 });
+
+    if (fields.length === 0) {
+      throw new TransactionAbort(400, {
+        error: 'No genre updates provided',
       });
     }
 
@@ -247,25 +257,11 @@ function createAlbumService(deps = {}) {
         const { albumId, country, genre_1, genre_2 } = update;
         if (!albumId) continue;
 
-        const fields = [];
-        if (country !== undefined) {
-          fields.push({
-            column: 'country',
-            value: country ? country.trim() : null,
-          });
-        }
-        if (genre_1 !== undefined) {
-          fields.push({
-            column: 'genre_1',
-            value: genre_1 ? genre_1.trim() : null,
-          });
-        }
-        if (genre_2 !== undefined) {
-          fields.push({
-            column: 'genre_2',
-            value: genre_2 ? genre_2.trim() : null,
-          });
-        }
+        validateOptionalTextField(country, 'Invalid country value');
+        validateOptionalTextField(genre_1, 'Invalid genre values');
+        validateOptionalTextField(genre_2, 'Invalid genre values');
+
+        const fields = buildAlbumMetadataFields({ country, genre_1, genre_2 });
 
         const partialUpdate = buildPartialUpdate(
           'albums',

@@ -95,6 +95,33 @@ function matchAndFindStale(listItems, statsMap, normalizeAlbumKey) {
 }
 
 /**
+ * Build scoped lookup inputs for fetching cached stats for a specific list.
+ *
+ * @param {Array} listItems - Rows with album_id, artist, album
+ * @param {Function} normalizeAlbumKey - Normalization function
+ * @returns {{albumIds: string[], normalizedKeys: string[]}}
+ */
+function buildStatsLookupInputs(listItems, normalizeAlbumKey) {
+  const albumIds = new Set();
+  const normalizedKeys = new Set();
+
+  for (const item of listItems) {
+    if (item.album_id) {
+      albumIds.add(item.album_id);
+    }
+
+    if (item.artist && item.album) {
+      normalizedKeys.add(normalizeAlbumKey(item.artist, item.album));
+    }
+  }
+
+  return {
+    albumIds: [...albumIds],
+    normalizedKeys: [...normalizedKeys],
+  };
+}
+
+/**
  * Factory that creates playcount service with injectable dependencies.
  *
  * @param {Object} deps - Dependencies
@@ -209,9 +236,10 @@ function createPlaycountService(deps = {}) {
     normalizeAlbumKey,
   }) {
     // Verify list exists
-    const list = await pool.query(`SELECT _id FROM lists WHERE _id = $1`, [
-      listId,
-    ]);
+    const list = await pool.query(
+      `SELECT _id FROM lists WHERE _id = $1 AND user_id = $2`,
+      [listId, userId]
+    );
     if (list.rows.length === 0) {
       return { error: { status: 404, message: 'List not found' } };
     }
@@ -230,15 +258,42 @@ function createPlaycountService(deps = {}) {
       return { playcounts: {}, refreshing: 0 };
     }
 
-    // Get cached playcounts from user_album_stats
-    const statsResult = await pool.query(
-      `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at
-       FROM user_album_stats
-       WHERE user_id = $1`,
-      [userId]
+    // Fetch only cached playcounts relevant to albums in this list.
+    const { albumIds, normalizedKeys } = buildStatsLookupInputs(
+      listItems,
+      normalizeAlbumKey
     );
 
-    const statsMap = buildStatsMap(statsResult.rows, normalizeAlbumKey);
+    let statsRows = [];
+    const statsPredicates = [];
+    const statsParams = [userId];
+
+    if (albumIds.length > 0) {
+      statsPredicates.push(
+        `album_id = ANY($${statsParams.length + 1}::text[])`
+      );
+      statsParams.push(albumIds);
+    }
+
+    if (normalizedKeys.length > 0) {
+      statsPredicates.push(
+        `normalized_key = ANY($${statsParams.length + 1}::text[])`
+      );
+      statsParams.push(normalizedKeys);
+    }
+
+    if (statsPredicates.length > 0) {
+      const statsResult = await pool.query(
+        `SELECT artist, album_name, album_id, normalized_key, lastfm_playcount, lastfm_status, lastfm_updated_at
+         FROM user_album_stats
+         WHERE user_id = $1
+           AND (${statsPredicates.join(' OR ')})`,
+        statsParams
+      );
+      statsRows = statsResult.rows;
+    }
+
+    const statsMap = buildStatsMap(statsRows, normalizeAlbumKey);
     const { playcounts, albumsToRefresh } = matchAndFindStale(
       listItems,
       statsMap,

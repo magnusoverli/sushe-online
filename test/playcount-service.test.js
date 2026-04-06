@@ -313,4 +313,136 @@ describe('playcount-service', () => {
       assert.strictEqual(callOrder.length, 7);
     });
   });
+
+  describe('getListPlaycounts', () => {
+    it('should return 404 when list does not belong to user', async () => {
+      const mockPool = createMockPool([{ rows: [] }]);
+
+      const { getListPlaycounts } = createPlaycountService({
+        refreshAlbumPlaycount: mock.fn(async () => null),
+      });
+
+      const result = await getListPlaycounts({
+        listId: 'list1',
+        userId: 'user1',
+        lastfmUsername: 'lfm-user',
+        pool: mockPool,
+        logger: createMockLogger(),
+        normalizeAlbumKey: (artist, album) => `${artist}::${album}`,
+      });
+
+      assert.deepStrictEqual(result, {
+        error: { status: 404, message: 'List not found' },
+      });
+
+      const [sql, params] = mockPool.query.mock.calls[0].arguments;
+      assert.ok(sql.includes('WHERE _id = $1 AND user_id = $2'));
+      assert.deepStrictEqual(params, ['list1', 'user1']);
+    });
+
+    it('should fetch cached stats scoped to list albums', async () => {
+      const mockLogger = createMockLogger();
+      const mockPool = createMockPool([
+        { rows: [{ _id: 'list1' }] },
+        {
+          rows: [
+            {
+              _id: 'item1',
+              album_id: 'album-1',
+              artist: 'Boards of Canada',
+              album: 'Music Has the Right to Children',
+            },
+            {
+              _id: 'item2',
+              album_id: 'album-2',
+              artist: 'Bicep',
+              album: 'Isles',
+            },
+          ],
+        },
+        {
+          rows: [
+            {
+              artist: 'boards of canada',
+              album_name: 'music has the right to children',
+              album_id: 'album-1',
+              normalized_key:
+                'boards of canada::music has the right to children',
+              lastfm_playcount: 42,
+              lastfm_status: 'success',
+              lastfm_updated_at: new Date().toISOString(),
+            },
+          ],
+        },
+      ]);
+
+      const { getListPlaycounts } = createPlaycountService({
+        refreshAlbumPlaycount: mock.fn(async () => ({
+          playcount: 1,
+          status: 'success',
+        })),
+      });
+
+      const normalizeAlbumKey = (artist, album) =>
+        `${artist}`.toLowerCase() + `::${album}`.toLowerCase();
+
+      const result = await getListPlaycounts({
+        listId: 'list1',
+        userId: 'user1',
+        lastfmUsername: 'lfm-user',
+        pool: mockPool,
+        logger: mockLogger,
+        normalizeAlbumKey,
+      });
+
+      assert.strictEqual(result.refreshing, 1);
+      assert.strictEqual(result.playcounts.item1.playcount, 42);
+
+      const statsQueryCall = mockPool.query.mock.calls[2].arguments;
+      const statsSql = statsQueryCall[0];
+      const statsParams = statsQueryCall[1];
+
+      assert.ok(statsSql.includes('album_id = ANY'));
+      assert.ok(statsSql.includes('normalized_key = ANY'));
+      assert.strictEqual(statsParams[0], 'user1');
+      assert.deepStrictEqual(statsParams[1], ['album-1', 'album-2']);
+      assert.deepStrictEqual(statsParams[2], [
+        'boards of canada::music has the right to children',
+        'bicep::isles',
+      ]);
+    });
+
+    it('should skip stats query when list items have no lookup keys', async () => {
+      const mockLogger = createMockLogger();
+      const mockPool = createMockPool([
+        { rows: [{ _id: 'list1' }] },
+        {
+          rows: [
+            {
+              _id: 'item1',
+              album_id: null,
+              artist: null,
+              album: null,
+            },
+          ],
+        },
+      ]);
+
+      const { getListPlaycounts } = createPlaycountService({
+        refreshAlbumPlaycount: mock.fn(async () => null),
+      });
+
+      const result = await getListPlaycounts({
+        listId: 'list1',
+        userId: 'user1',
+        lastfmUsername: 'lfm-user',
+        pool: mockPool,
+        logger: mockLogger,
+        normalizeAlbumKey: (artist, album) => `${artist}::${album}`,
+      });
+
+      assert.deepStrictEqual(result, { playcounts: {}, refreshing: 0 });
+      assert.strictEqual(mockPool.query.mock.calls.length, 2);
+    });
+  });
 });

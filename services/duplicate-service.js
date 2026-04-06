@@ -10,8 +10,11 @@
  */
 
 const defaultLogger = require('../utils/logger');
-const { TransactionAbort } = require('../db/transaction');
-const { findPotentialDuplicates } = require('../utils/fuzzy-match');
+const { withTransaction, TransactionAbort } = require('../db/transaction');
+const {
+  findPotentialDuplicates,
+  normalizeForComparison,
+} = require('../utils/fuzzy-match');
 
 /**
  * Create duplicate service with injected dependencies
@@ -23,6 +26,84 @@ const { findPotentialDuplicates } = require('../utils/fuzzy-match');
 function createDuplicateService(deps = {}) {
   const pool = deps.pool;
   const logger = deps.logger || defaultLogger;
+
+  function getBlockingKeys(album) {
+    const normalizedArtist = normalizeForComparison(album.artist || '');
+    const normalizedAlbum = normalizeForComparison(album.album || '');
+    const artistTokens = normalizedArtist.split(' ').filter(Boolean);
+    const albumTokens = normalizedAlbum.split(' ').filter(Boolean);
+
+    const keys = new Set();
+    const artistFirstChar = normalizedArtist.charAt(0);
+    const albumFirstChar = normalizedAlbum.charAt(0);
+    const artistFirstToken = artistTokens[0] || '';
+    const albumFirstToken = albumTokens[0] || '';
+
+    if (artistFirstChar) keys.add(`artist1:${artistFirstChar}`);
+    if (albumFirstChar) keys.add(`album1:${albumFirstChar}`);
+
+    if (artistFirstChar && albumFirstChar) {
+      keys.add(`pair1:${artistFirstChar}|${albumFirstChar}`);
+    }
+
+    if (artistFirstToken) {
+      keys.add(`artist3:${artistFirstToken.slice(0, 3)}`);
+    }
+
+    if (albumFirstToken) {
+      keys.add(`album3:${albumFirstToken.slice(0, 3)}`);
+    }
+
+    if (artistFirstToken && albumFirstToken) {
+      keys.add(
+        `pair3:${artistFirstToken.slice(0, 3)}|${albumFirstToken.slice(0, 3)}`
+      );
+    }
+
+    return [...keys];
+  }
+
+  function buildBlockingBuckets(albums) {
+    const buckets = new Map();
+
+    for (let i = 0; i < albums.length; i++) {
+      const keys = getBlockingKeys(albums[i]);
+
+      for (const key of keys) {
+        if (!buckets.has(key)) {
+          buckets.set(key, []);
+        }
+
+        buckets.get(key).push(i);
+      }
+    }
+
+    return buckets;
+  }
+
+  function getCandidateIndexes(index, album, buckets, totalAlbums) {
+    const candidateIndexes = new Set();
+    const keys = getBlockingKeys(album);
+
+    for (const key of keys) {
+      const bucket = buckets.get(key) || [];
+
+      for (const candidateIndex of bucket) {
+        if (candidateIndex > index) {
+          candidateIndexes.add(candidateIndex);
+        }
+      }
+    }
+
+    if (candidateIndexes.size === 0) {
+      const fallbackWindow = Math.min(totalAlbums, index + 201);
+      for (let i = index + 1; i < fallbackWindow; i++) {
+        candidateIndexes.add(i);
+      }
+    }
+
+    return [...candidateIndexes].sort((a, b) => a - b);
+  }
 
   /**
    * Scan all albums for potential fuzzy-match duplicates.
@@ -76,13 +157,26 @@ function createDuplicateService(deps = {}) {
       hasCover: row.has_cover,
     }));
 
+    const blockingBuckets = buildBlockingBuckets(albums);
+
     // Find all potential duplicate pairs
     const duplicatePairs = [];
     const processedPairs = new Set();
+    const totalPossibleComparisons = (albums.length * (albums.length - 1)) / 2;
+    let candidateComparisons = 0;
 
     for (let i = 0; i < albums.length; i++) {
       const album = albums[i];
-      const candidates = albums.slice(i + 1);
+      const candidateIndexes = getCandidateIndexes(
+        i,
+        album,
+        blockingBuckets,
+        albums.length
+      );
+      const candidates = candidateIndexes.map(
+        (candidateIndex) => albums[candidateIndex]
+      );
+      candidateComparisons += candidates.length;
 
       const matches = findPotentialDuplicates(album, candidates, {
         threshold: clampedThreshold,
@@ -114,6 +208,16 @@ function createDuplicateService(deps = {}) {
       totalAlbums: albums.length,
       potentialDuplicates: duplicatePairs.length,
       excludedPairs: excludePairs.size / 2,
+      comparisonsEvaluated: candidateComparisons,
+      totalPossibleComparisons,
+      comparisonReductionPct:
+        totalPossibleComparisons > 0
+          ? Math.round(
+              ((totalPossibleComparisons - candidateComparisons) /
+                totalPossibleComparisons) *
+                100
+            )
+          : 0,
     });
 
     return {
@@ -230,77 +334,81 @@ function createDuplicateService(deps = {}) {
       });
     }
 
-    // Fetch both albums to merge metadata
-    const albumsResult = await pool.query(
-      `SELECT album_id, artist, album, release_date, country, 
-              genre_1, genre_2, tracks, cover_image, cover_image_format,
-              summary, summary_source, summary_fetched_at
-       FROM albums WHERE album_id = $1 OR album_id = $2`,
-      [keepAlbumId, deleteAlbumId]
-    );
-
-    const keepAlbum = albumsResult.rows.find((a) => a.album_id === keepAlbumId);
-    const deleteAlbum = albumsResult.rows.find(
-      (a) => a.album_id === deleteAlbumId
-    );
-
-    if (!keepAlbum) {
-      throw new TransactionAbort(404, { error: 'Keep album not found' });
-    }
-
-    // Smart merge metadata from deleted album into kept album
-    let metadataMerged = false;
-    if (deleteAlbum) {
-      const { fieldsToMerge, values } = buildMergeFields(
-        keepAlbum,
-        deleteAlbum
+    return withTransaction(pool, async (client) => {
+      // Fetch both albums to merge metadata
+      const albumsResult = await client.query(
+        `SELECT album_id, artist, album, release_date, country,
+                genre_1, genre_2, tracks, cover_image, cover_image_format,
+                summary, summary_source, summary_fetched_at
+         FROM albums WHERE album_id = $1 OR album_id = $2`,
+        [keepAlbumId, deleteAlbumId]
       );
 
-      if (fieldsToMerge.length > 0) {
-        fieldsToMerge.push(`updated_at = NOW()`);
-        await pool.query(
-          `UPDATE albums SET ${fieldsToMerge.join(', ')} WHERE album_id = $1`,
-          values
-        );
-        metadataMerged = true;
-        logger.info('Merged metadata into kept album', {
-          keepAlbumId,
-          fieldsMerged: fieldsToMerge.length - 1, // -1 for updated_at
-        });
+      const keepAlbum = albumsResult.rows.find(
+        (a) => a.album_id === keepAlbumId
+      );
+      const deleteAlbum = albumsResult.rows.find(
+        (a) => a.album_id === deleteAlbumId
+      );
+
+      if (!keepAlbum) {
+        throw new TransactionAbort(404, { error: 'Keep album not found' });
       }
-    }
 
-    // Update all list_items to point to the kept album
-    const updateResult = await pool.query(
-      `UPDATE list_items SET album_id = $1 WHERE album_id = $2`,
-      [keepAlbumId, deleteAlbumId]
-    );
+      // Smart merge metadata from deleted album into kept album
+      let metadataMerged = false;
+      if (deleteAlbum) {
+        const { fieldsToMerge, values } = buildMergeFields(
+          keepAlbum,
+          deleteAlbum
+        );
 
-    // Delete the duplicate album
-    const deleteResult = await pool.query(
-      `DELETE FROM albums WHERE album_id = $1`,
-      [deleteAlbumId]
-    );
+        if (fieldsToMerge.length > 0) {
+          fieldsToMerge.push(`updated_at = NOW()`);
+          await client.query(
+            `UPDATE albums SET ${fieldsToMerge.join(', ')} WHERE album_id = $1`,
+            values
+          );
+          metadataMerged = true;
+          logger.info('Merged metadata into kept album', {
+            keepAlbumId,
+            fieldsMerged: fieldsToMerge.length - 1, // -1 for updated_at
+          });
+        }
+      }
 
-    // Clean up any distinct pairs involving the deleted album
-    await pool.query(
-      `DELETE FROM album_distinct_pairs WHERE album_id_1 = $1 OR album_id_2 = $1`,
-      [deleteAlbumId]
-    );
+      // Update all list_items to point to the kept album
+      const updateResult = await client.query(
+        `UPDATE list_items SET album_id = $1 WHERE album_id = $2`,
+        [keepAlbumId, deleteAlbumId]
+      );
 
-    logger.info('Albums merged successfully', {
-      keepAlbumId,
-      deleteAlbumId,
-      listItemsUpdated: updateResult.rowCount,
-      albumsDeleted: deleteResult.rowCount,
-      metadataMerged,
+      // Delete the duplicate album
+      const deleteResult = await client.query(
+        `DELETE FROM albums WHERE album_id = $1`,
+        [deleteAlbumId]
+      );
+
+      // Clean up any distinct pairs involving the deleted album
+      await client.query(
+        `DELETE FROM album_distinct_pairs WHERE album_id_1 = $1 OR album_id_2 = $1`,
+        [deleteAlbumId]
+      );
+
+      logger.info('Albums merged successfully', {
+        keepAlbumId,
+        deleteAlbumId,
+        listItemsUpdated: updateResult.rowCount,
+        albumsDeleted: deleteResult.rowCount,
+        metadataMerged,
+      });
+
+      return {
+        listItemsUpdated: updateResult.rowCount,
+        albumsDeleted: deleteResult.rowCount,
+        metadataMerged,
+      };
     });
-
-    return {
-      listItemsUpdated: updateResult.rowCount,
-      albumsDeleted: deleteResult.rowCount,
-      metadataMerged,
-    };
   }
 
   return { scanDuplicates, mergeAlbums };
