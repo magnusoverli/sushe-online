@@ -146,7 +146,7 @@ module.exports = (app, deps) => {
       await albumService.markDistinct(
         req.body.album_id_1,
         req.body.album_id_2,
-        req.user?.id
+        req.user?._id
       );
       res.json({ success: true });
     }, 'marking albums as distinct')
@@ -166,7 +166,7 @@ module.exports = (app, deps) => {
           cover_image_format: req.body.cover_image_format,
           tracks: req.body.tracks,
         },
-        req.user?.id
+        req.user?._id
       );
       res.json({ success: true, album_id: canonicalId });
     }, 'merging album metadata')

@@ -13,6 +13,7 @@
 
 const { createAsyncHandler } = require('../../middleware/async-handler');
 const { SUSHE_USER_AGENT } = require('../../utils/musicbrainz-helpers');
+const { validateUnfurlTarget } = require('../../utils/unfurl-url');
 const {
   createTrackResolutionService,
 } = require('../../services/track-resolution-service');
@@ -342,13 +343,27 @@ module.exports = (app, deps) => {
     cacheConfigs.public,
     asyncHandler(async (req, res) => {
       const { url } = req.query;
-      if (!url) {
-        return res.status(400).json({ error: 'url query is required' });
+      const validation = validateUnfurlTarget(url);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
       }
 
-      const response = await fetch(url, {
+      const response = await fetch(validation.url, {
         headers: { 'User-Agent': 'Mozilla/5.0 (SuSheBot)' },
       });
+
+      if (!response.ok) {
+        return res.status(502).json({ error: 'Failed to fetch target URL' });
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (
+        !contentType.includes('text/html') &&
+        !contentType.includes('application/xhtml+xml')
+      ) {
+        return res.status(415).json({ error: 'URL must return HTML content' });
+      }
+
       const html = await response.text();
 
       const getMeta = (name) => {

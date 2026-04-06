@@ -28,7 +28,13 @@ module.exports = (app, deps) => {
     invalidTokenTemplate,
     resetPasswordTemplate,
     composeForgotPasswordEmail,
+    isValidPassword,
   } = deps;
+
+  const passwordValidator =
+    typeof isValidPassword === 'function'
+      ? isValidPassword
+      : (password) => typeof password === 'string' && password.length >= 8;
 
   // Forgot password page
   app.get('/forgot', csrfProtection, (req, res) => {
@@ -178,6 +184,11 @@ module.exports = (app, deps) => {
               'Invalid Token - Black Metal Auth'
             )
           );
+        }
+
+        if (!passwordValidator(req.body.password)) {
+          req.flash('error', 'Password must be at least 8 characters long');
+          return res.redirect('/reset/' + req.params.token);
         }
 
         const hash = await bcrypt.hash(req.body.password, 12);

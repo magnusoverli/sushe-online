@@ -192,15 +192,16 @@ module.exports = (app, deps) => {
     ensureAuthAPI,
     requireLastfmAuth,
     asyncHandler(async (req, res) => {
-      const { albums } = req.body;
+      const { albums, mode } = req.body;
 
       if (!albums || !Array.isArray(albums)) {
         return res.status(400).json({ error: 'albums array is required' });
       }
 
       const albumsToFetch = albums.slice(0, 50);
-      const BATCH_SIZE = 5;
-      const DELAY_MS = 1100;
+      const isFastMode = mode === 'fast';
+      const BATCH_SIZE = isFastMode ? 10 : 5;
+      const DELAY_MS = isFastMode ? 0 : 1100;
       const results = [];
 
       for (let i = 0; i < albumsToFetch.length; i += BATCH_SIZE) {
@@ -224,7 +225,7 @@ module.exports = (app, deps) => {
 
         results.push(...batchResults);
 
-        if (i + BATCH_SIZE < albumsToFetch.length) {
+        if (DELAY_MS > 0 && i + BATCH_SIZE < albumsToFetch.length) {
           await new Promise((resolve) => setTimeout(resolve, DELAY_MS));
         }
       }
@@ -233,7 +234,10 @@ module.exports = (app, deps) => {
         .filter((r) => r.status === 'fulfilled')
         .map((r) => r.value);
 
-      res.json({ playcounts });
+      res.json({
+        playcounts,
+        mode: isFastMode ? 'fast' : 'balanced',
+      });
     }, 'fetching Last.fm batch playcounts')
   );
 

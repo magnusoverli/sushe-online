@@ -46,17 +46,15 @@ module.exports = (app, deps) => {
         const callbackData = callbackQuery.data;
         const telegramUser = callbackQuery.from;
 
-        logger.warn('[DEBUG-TELEGRAM-LINK] Telegram callback received', {
+        logger.debug('Telegram callback received', {
           callbackData,
           telegramUserId: telegramUser.id,
-          telegramUserIdType: typeof telegramUser.id,
-          telegramUsername: telegramUser.username,
         });
 
         // Parse the callback data
         const parsed = telegramNotifier.parseCallbackData(callbackData);
 
-        logger.warn('[DEBUG-TELEGRAM-LINK] Parsed callback data', { parsed });
+        logger.debug('Parsed Telegram callback data', { parsed });
 
         if (parsed?.type === 'event_action') {
           // Try to get linked admin user, but don't require it
@@ -64,7 +62,7 @@ module.exports = (app, deps) => {
             telegramUser.id
           );
 
-          logger.warn('[DEBUG-TELEGRAM-LINK] getLinkedAdmin result', {
+          logger.debug('Telegram linked-admin lookup result', {
             adminUserFound: !!adminUser,
             adminUsername: adminUser?.username || null,
             telegramUserId: telegramUser.id,
@@ -79,14 +77,10 @@ module.exports = (app, deps) => {
               telegramUserId: telegramUser.id,
             };
 
-            logger.warn(
-              '[DEBUG-TELEGRAM-LINK] Using Telegram user directly (no linking required)',
-              {
-                telegramUserId: telegramUser.id,
-                telegramUsername: telegramUser.username,
-                pseudoAdminUser: adminUser,
-              }
-            );
+            logger.debug('Using Telegram user directly (not linked)', {
+              telegramUserId: telegramUser.id,
+              telegramUsername: telegramUser.username,
+            });
           }
 
           // Get admin event service

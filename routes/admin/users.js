@@ -11,8 +11,15 @@
 const logger = require('../../utils/logger');
 
 module.exports = (app, deps) => {
-  const { ensureAuth, ensureAdmin, users, usersAsync, lists, listsAsync } =
-    deps;
+  const {
+    ensureAuth,
+    ensureAdmin,
+    users,
+    usersAsync,
+    lists,
+    listsAsync,
+    invalidateUserCache,
+  } = deps;
 
   // Admin: Delete user
   app.post('/admin/delete-user', ensureAuth, ensureAdmin, (req, res) => {
@@ -43,6 +50,10 @@ module.exports = (app, deps) => {
           return res.status(404).json({ error: 'User not found' });
         }
 
+        if (typeof invalidateUserCache === 'function') {
+          invalidateUserCache(userId);
+        }
+
         logger.info(`Admin ${req.user.email} deleted user with ID: ${userId}`);
         res.json({ success: true });
       });
@@ -61,6 +72,10 @@ module.exports = (app, deps) => {
 
       if (numUpdated === 0) {
         return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (typeof invalidateUserCache === 'function') {
+        invalidateUserCache(userId);
       }
 
       logger.info(
@@ -96,6 +111,10 @@ module.exports = (app, deps) => {
 
       if (numUpdated === 0) {
         return res.status(404).json({ error: 'User not found' });
+      }
+
+      if (typeof invalidateUserCache === 'function') {
+        invalidateUserCache(userId);
       }
 
       logger.info(

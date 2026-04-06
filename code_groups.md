@@ -39,7 +39,8 @@
 ## Progress
 
 - **Step 1 / Area 1 (Group 1: App Composition & Startup):** Complete
-- **Next area to evaluate:** Group 2 - HTTP Interface Layer (Routes/Controllers)
+- **Step 2 / Area 2 (Group 2: HTTP Interface Layer):** Complete (full file coverage + high/medium/perf improvements implemented)
+- **Next area to evaluate:** Group 3 - Core Business Services
 
 ## Default Scope Exclusions
 
