@@ -36,6 +36,11 @@
    - **Scope:** `scripts/`, `package.json`, `vite.config.js`, `postcss.config.js`, `tailwind.config.js`, `docker-compose.yml`, `docker-compose.local.yml`, `Dockerfile`
    - **Focus:** build pipeline clarity, script cohesion, CI reliability, maintainability.
 
+## Progress
+
+- **Step 1 / Area 1 (Group 1: App Composition & Startup):** Complete
+- **Next area to evaluate:** Group 2 - HTTP Interface Layer (Routes/Controllers)
+
 ## Default Scope Exclusions
 
 - Generated/vendor/runtime artifacts: `node_modules/`, `public/js/bundle.js`, `playwright-report/`, `test-results/`, `.git/`
@@ -68,7 +73,20 @@
 
 ## Recommended Review Output Format (Per Group)
 
-1. Bug risks found
-2. Performance opportunities
-3. SOLID / DRY / SoC findings
-4. Prioritized fixes (high / medium / low)
+1. **Bug risks found**
+   - What can fail, how to trigger it, and likely user/business impact.
+
+2. **Performance & latency opportunities**
+   - Hot paths and measurable opportunities (`p50/p95/p99` latency, startup time, query count, CPU/memory).
+
+3. **SOLID / DRY / SoC findings**
+   - Concrete violations (with file/function references) and why they hurt maintainability.
+
+4. **Prioritized fixes (high / medium / low)**
+   - Include expected impact, implementation risk, and non-breaking rollout notes.
+
+5. **Regression safety plan**
+   - Tests to add/update and quick verification steps to confirm no behavior regressions.
+
+6. **Success metrics after implementation**
+   - Which metrics should improve and how to verify (latency, error rate, throughput, resource usage).

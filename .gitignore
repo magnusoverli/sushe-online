@@ -185,3 +185,4 @@ design_system/
 .restart-trigger
 docker-app-logs.txt
 nul
+code_groups.md
