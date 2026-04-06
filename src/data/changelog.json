@@ -1,6 +1,20 @@
 [
   {
     "date": "2026-04-05",
+    "category": "perf",
+    "description": "Improved app startup speed and performance",
+    "hash": "8cd7792075813c34838f20bfe2b90e953686556f",
+    "commitMessage": "Improve startup reliability and reduce middleware overhead\n\nUnify shutdown orchestration, harden session/CORS/admin code paths, and remove duplicate startup work while preserving backward compatibility. Add focused regression tests and origin-policy reuse so health, auth, and cache behavior stay fast and predictable."
+  },
+  {
+    "date": "2026-04-05",
+    "category": "feature",
+    "description": "Added Deathrock as available music genre",
+    "hash": "120ea298f67fb48e72d81b5d88f119f2cabe93ab",
+    "commitMessage": "Add Deathrock to allowed genres"
+  },
+  {
+    "date": "2026-04-05",
     "category": "feature",
     "description": "Added Deathrock as a new music genre option",
     "hash": "120ea298f67fb48e72d81b5d88f119f2cabe93ab",
