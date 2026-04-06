@@ -1,6 +1,13 @@
 [
   {
     "date": "2026-04-05",
+    "category": "feature",
+    "description": "Added Deathrock to available music genres",
+    "hash": "120ea298f67fb48e72d81b5d88f119f2cabe93ab",
+    "commitMessage": "Add Deathrock to allowed genres"
+  },
+  {
+    "date": "2026-04-05",
     "category": "perf",
     "description": "Improved app startup speed and performance",
     "hash": "8cd7792075813c34838f20bfe2b90e953686556f",
