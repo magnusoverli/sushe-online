@@ -225,80 +225,103 @@ function createGroupService(deps = {}) {
    * @throws {TransactionAbort} on validation failure
    */
   async function deleteGroup(userId, groupExternalId, force = false) {
-    const groupResult = await pool.query(
-      `SELECT id, name, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
-      [groupExternalId, userId]
-    );
+    return withTransaction(pool, async (client) => {
+      const groupResult = await client.query(
+        `SELECT id, name, year FROM list_groups WHERE _id = $1 AND user_id = $2`,
+        [groupExternalId, userId]
+      );
 
-    if (groupResult.rows.length === 0) {
-      throw new TransactionAbort(404, { error: 'Group not found' });
-    }
+      if (groupResult.rows.length === 0) {
+        throw new TransactionAbort(404, { error: 'Group not found' });
+      }
 
-    const group = groupResult.rows[0];
+      const group = groupResult.rows[0];
 
-    if (group.year !== null) {
-      throw new TransactionAbort(400, {
-        error:
-          'Year groups cannot be deleted manually. They are removed automatically when empty.',
-      });
-    }
-
-    // Check if any main lists in the group are in locked years
-    const mainListsWithYears = await pool.query(
-      `SELECT year FROM lists WHERE group_id = $1 AND year IS NOT NULL AND is_main = TRUE`,
-      [group.id]
-    );
-
-    for (const row of mainListsWithYears.rows) {
-      const yearLocked = await isYearLocked(pool, row.year);
-      if (yearLocked) {
-        throw new TransactionAbort(403, {
-          error: `Cannot delete group: Main list for year ${row.year} is locked`,
-          yearLocked: true,
-          year: row.year,
+      if (group.year !== null) {
+        throw new TransactionAbort(400, {
+          error:
+            'Year groups cannot be deleted manually. They are removed automatically when empty.',
         });
       }
-    }
 
-    // Check if collection has lists
-    const listCountResult = await pool.query(
-      `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
-      [group.id]
-    );
-    const listCount = parseInt(listCountResult.rows[0].count, 10);
+      // Check if any main lists in the group are in locked years
+      const mainListsWithYears = await client.query(
+        `SELECT year FROM lists WHERE group_id = $1 AND year IS NOT NULL AND is_main = TRUE`,
+        [group.id]
+      );
 
-    if (listCount > 0 && !force) {
-      throw new TransactionAbort(409, {
-        error: 'Collection contains lists',
-        listCount,
-        requiresConfirmation: true,
+      const uniqueYears = [
+        ...new Set(mainListsWithYears.rows.map((r) => r.year)),
+      ];
+      if (uniqueYears.length > 0) {
+        let lockedYears = new Set();
+        try {
+          const lockedResult = await client.query(
+            `SELECT year FROM master_lists WHERE year = ANY($1::int[]) AND locked = TRUE`,
+            [uniqueYears]
+          );
+          lockedYears = new Set(lockedResult.rows.map((r) => r.year));
+        } catch (err) {
+          // Preserve existing fail-open semantics from isYearLocked utility.
+          logger.error('Error checking locked years for group delete', {
+            userId,
+            groupId: groupExternalId,
+            years: uniqueYears,
+            error: err.message,
+          });
+        }
+
+        for (const year of uniqueYears) {
+          if (lockedYears.has(year)) {
+            throw new TransactionAbort(403, {
+              error: `Cannot delete group: Main list for year ${year} is locked`,
+              yearLocked: true,
+              year,
+            });
+          }
+        }
+      }
+
+      // Check if collection has lists
+      const listCountResult = await client.query(
+        `SELECT COUNT(*) as count FROM lists WHERE group_id = $1`,
+        [group.id]
+      );
+      const listCount = parseInt(listCountResult.rows[0].count, 10);
+
+      if (listCount > 0 && !force) {
+        throw new TransactionAbort(409, {
+          error: 'Collection contains lists',
+          listCount,
+          requiresConfirmation: true,
+        });
+      }
+
+      // Move lists to Uncategorized if needed, then delete group
+      if (listCount > 0) {
+        const uncategorizedId = await findOrCreateUncategorizedGroup(
+          client,
+          userId
+        );
+
+        await client.query(
+          `UPDATE lists SET group_id = $1, is_main = FALSE, year = NULL, updated_at = NOW()
+           WHERE group_id = $2`,
+          [uncategorizedId, group.id]
+        );
+      }
+
+      await client.query(`DELETE FROM list_groups WHERE id = $1`, [group.id]);
+
+      logger.info('Collection deleted', {
+        userId,
+        groupId: groupExternalId,
+        groupName: group.name,
+        listsUnassigned: listCount,
       });
-    }
 
-    // Move lists to Uncategorized if needed, then delete group
-    if (listCount > 0) {
-      const uncategorizedId = await findOrCreateUncategorizedGroup(
-        pool,
-        userId
-      );
-
-      await pool.query(
-        `UPDATE lists SET group_id = $1, is_main = FALSE, year = NULL, updated_at = NOW() 
-         WHERE group_id = $2`,
-        [uncategorizedId, group.id]
-      );
-    }
-
-    await pool.query(`DELETE FROM list_groups WHERE id = $1`, [group.id]);
-
-    logger.info('Collection deleted', {
-      userId,
-      groupId: groupExternalId,
-      groupName: group.name,
-      listsUnassigned: listCount,
+      return { listsUnassigned: listCount };
     });
-
-    return { listsUnassigned: listCount };
   }
 
   /**
@@ -315,24 +338,52 @@ function createGroupService(deps = {}) {
 
     await withTransaction(pool, async (client) => {
       const groupsResult = await client.query(
-        `SELECT _id FROM list_groups WHERE user_id = $1`,
+        `SELECT g._id, g.name, g.year, COUNT(l.id) as list_count
+         FROM list_groups g
+         LEFT JOIN lists l ON l.group_id = g.id
+         WHERE g.user_id = $1
+         GROUP BY g.id`,
         [userId]
       );
 
-      const userGroupIds = new Set(groupsResult.rows.map((r) => r._id));
+      const reorderableGroupIds = new Set(
+        groupsResult.rows
+          .filter((row) => {
+            const isUncategorized =
+              row.name === 'Uncategorized' && row.year === null;
+            const listCount = parseInt(row.list_count, 10);
+            return !(isUncategorized && listCount === 0);
+          })
+          .map((r) => r._id)
+      );
+
+      if (new Set(order).size !== order.length) {
+        throw new TransactionAbort(400, {
+          error: 'Order cannot contain duplicate group IDs',
+        });
+      }
+
+      if (order.length !== reorderableGroupIds.size) {
+        throw new TransactionAbort(400, {
+          error: 'Order must include all user groups exactly once',
+        });
+      }
 
       for (const gId of order) {
-        if (!userGroupIds.has(gId)) {
+        if (!reorderableGroupIds.has(gId)) {
           throw new TransactionAbort(400, {
             error: `Invalid group ID: ${gId}`,
           });
         }
       }
 
-      for (let i = 0; i < order.length; i++) {
+      if (order.length > 0) {
         await client.query(
-          `UPDATE list_groups SET sort_order = $1, updated_at = NOW() WHERE _id = $2 AND user_id = $3`,
-          [i, order[i], userId]
+          `UPDATE list_groups AS g
+           SET sort_order = o.position, updated_at = NOW()
+           FROM UNNEST($1::text[], $2::int[]) AS o(group_id, position)
+           WHERE g._id = o.group_id AND g.user_id = $3`,
+          [order, order.map((_, i) => i), userId]
         );
       }
     });
@@ -481,6 +532,18 @@ function createGroupService(deps = {}) {
 
       const groupListIds = new Set(listsResult.rows.map((r) => r._id));
 
+      if (new Set(order).size !== order.length) {
+        throw new TransactionAbort(400, {
+          error: 'order cannot contain duplicate list IDs',
+        });
+      }
+
+      if (order.length !== groupListIds.size) {
+        throw new TransactionAbort(400, {
+          error: 'order must include all lists in the group exactly once',
+        });
+      }
+
       for (const listId of order) {
         if (!groupListIds.has(listId)) {
           throw new TransactionAbort(400, {
@@ -489,10 +552,13 @@ function createGroupService(deps = {}) {
         }
       }
 
-      for (let i = 0; i < order.length; i++) {
+      if (order.length > 0) {
         await client.query(
-          `UPDATE lists SET sort_order = $1, updated_at = NOW() WHERE _id = $2 AND user_id = $3`,
-          [i, order[i], userId]
+          `UPDATE lists AS l
+           SET sort_order = o.position, updated_at = NOW()
+           FROM UNNEST($1::text[], $2::int[]) AS o(list_id, position)
+           WHERE l._id = o.list_id AND l.user_id = $3`,
+          [order, order.map((_, i) => i), userId]
         );
       }
     });

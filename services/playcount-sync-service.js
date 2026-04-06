@@ -41,39 +41,35 @@ async function getUsersNeedingSync(pool, staleThresholdMs, limit = 50) {
   const staleIntervalSeconds = Math.floor(staleThresholdMs / 1000);
 
   const query = `
-    SELECT DISTINCT
+    WITH fresh_users AS (
+      SELECT DISTINCT uas.user_id
+      FROM user_album_stats uas
+      WHERE uas.lastfm_updated_at > NOW() - make_interval(secs => $2)
+    ),
+    users_with_missing_coverage AS (
+      SELECT DISTINCT l.user_id
+      FROM lists l
+      JOIN list_items li ON li.list_id = l._id
+      JOIN albums a ON li.album_id = a.album_id
+      LEFT JOIN user_album_stats uas
+        ON uas.user_id = l.user_id
+       AND uas.album_id = a.album_id
+      WHERE a.album_id IS NOT NULL
+        AND a.artist IS NOT NULL
+        AND a.album IS NOT NULL
+        AND uas.id IS NULL
+    )
+    SELECT
       u._id,
       u.username,
       u.lastfm_username
     FROM users u
+    LEFT JOIN fresh_users f ON f.user_id = u._id
+    LEFT JOIN users_with_missing_coverage m ON m.user_id = u._id
     WHERE u.lastfm_auth IS NOT NULL
       AND u.lastfm_username IS NOT NULL
       AND u.lastfm_username != ''
-      AND (
-        NOT EXISTS (
-          SELECT 1 FROM user_album_stats uas 
-          WHERE uas.user_id = u._id 
-            AND uas.lastfm_updated_at > NOW() - make_interval(secs => $2)
-        )
-        OR EXISTS (
-          SELECT 1 FROM list_items li
-          JOIN lists l ON li.list_id = l._id
-          JOIN albums a ON li.album_id = a.album_id
-          WHERE l.user_id = u._id
-            AND NOT EXISTS (
-              SELECT 1 FROM user_album_stats uas
-              WHERE uas.user_id = u._id
-                AND uas.normalized_key = (
-                  SELECT key FROM (
-                    SELECT LOWER(REGEXP_REPLACE(REGEXP_REPLACE(
-                      COALESCE(a.artist, '') || '::' || COALESCE(a.album, ''),
-                      E'\\\\s+', ' ', 'g'
-                    ), E'[^a-z0-9 ]', '', 'gi')) as key
-                  ) subq
-                )
-            )
-        )
-      )
+      AND (f.user_id IS NULL OR m.user_id IS NOT NULL)
     ORDER BY u._id
     LIMIT $1
   `;

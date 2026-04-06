@@ -22,6 +22,38 @@ function createSpotifyPlaylistService(deps) {
 
   const BASE_URL = 'https://api.spotify.com/v1';
 
+  async function findPlaylistByName(playlistName, headers) {
+    let offset = 0;
+
+    while (true) {
+      const resp = await fetch(
+        `${BASE_URL}/me/playlists?limit=50&offset=${offset}`,
+        {
+          headers,
+        }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(
+          `Failed to fetch Spotify playlists: ${resp.status} - ${errorText}`
+        );
+      }
+
+      const playlists = await resp.json();
+      const existing = playlists.items.find((p) => p.name === playlistName);
+      if (existing) {
+        return existing;
+      }
+
+      if (!playlists.next) {
+        return null;
+      }
+
+      offset += 50;
+    }
+  }
+
   /**
    * Check if playlist exists in Spotify
    * @param {string} playlistName - Name of the playlist
@@ -32,96 +64,15 @@ function createSpotifyPlaylistService(deps) {
     const headers = {
       Authorization: `Bearer ${auth.access_token}`,
     };
-
-    let offset = 0;
-    let hasMore = true;
-    let totalChecked = 0;
-    let allPlaylistNames = [];
-
-    while (hasMore) {
-      try {
-        const url = `${BASE_URL}/me/playlists?limit=50&offset=${offset}`;
-        logger.info('Fetching Spotify playlists:', { url, offset });
-
-        const resp = await fetch(url, { headers });
-
-        if (resp.ok) {
-          const playlists = await resp.json();
-          totalChecked += playlists.items.length;
-
-          // Collect all playlist names for debugging
-          allPlaylistNames = allPlaylistNames.concat(
-            playlists.items.map((p) => p.name)
-          );
-
-          // Log details about this batch
-          logger.info('Spotify playlists batch:', {
-            count: playlists.items.length,
-            total: playlists.total,
-            offset,
-            hasNext: playlists.next !== null,
-            nextUrl: playlists.next,
-            searchingFor: playlistName,
-            batchNames: playlists.items.map((p) => ({
-              name: p.name,
-              owner: p.owner.display_name || p.owner.id,
-              collaborative: p.collaborative,
-              public: p.public,
-            })),
-          });
-
-          const exists = playlists.items.some((p) => {
-            // Log every comparison for debugging
-            logger.debug('Comparing playlist names:', {
-              searchName: playlistName,
-              searchNameLength: playlistName.length,
-              searchNameType: typeof playlistName,
-              spotifyName: p.name,
-              spotifyNameLength: p.name.length,
-              spotifyNameType: typeof p.name,
-              exactMatch: p.name === playlistName,
-              caseInsensitiveMatch:
-                p.name.toLowerCase() === playlistName.toLowerCase(),
-              trimmedMatch: p.name.trim() === playlistName.trim(),
-            });
-
-            const match = p.name === playlistName;
-            if (match) {
-              logger.info('Found matching Spotify playlist:', {
-                searchName: playlistName,
-                foundName: p.name,
-                playlistId: p.id,
-              });
-            }
-            return match;
-          });
-
-          if (exists) return true;
-
-          hasMore = playlists.next !== null;
-          offset += 50;
-        } else {
-          logger.error('Failed to fetch Spotify playlists:', {
-            status: resp.status,
-            statusText: resp.statusText,
-          });
-          return false;
-        }
-      } catch (err) {
-        logger.error('Error fetching Spotify playlists:', err);
-        return false;
-      }
+    try {
+      const existing = await findPlaylistByName(playlistName, headers);
+      return Boolean(existing);
+    } catch (err) {
+      logger.error('Error fetching Spotify playlists:', {
+        error: err.message,
+      });
+      return false;
     }
-
-    logger.info('Playlist search complete', {
-      totalChecked,
-      searchName: playlistName,
-      searchNameLength: playlistName.length,
-      found: false,
-      allPlaylistNames: allPlaylistNames.slice(0, 100), // Log first 100 names
-      totalPlaylists: allPlaylistNames.length,
-    });
-    return false;
   }
 
   /**
@@ -261,27 +212,14 @@ function createSpotifyPlaylistService(deps) {
 
     // Check if playlist exists
     let playlistId = null;
-    let existingPlaylist = null;
+    const existingPlaylist = await findPlaylistByName(playlistName, headers);
 
     logger.debug('Checking for existing playlists');
-    const playlistsResp = await fetch(`${BASE_URL}/me/playlists?limit=50`, {
-      headers,
-    });
-    if (playlistsResp.ok) {
-      const playlists = await playlistsResp.json();
-      existingPlaylist = playlists.items.find((p) => p.name === playlistName);
-      if (existingPlaylist) {
-        playlistId = existingPlaylist.id;
-        logger.debug('Found existing playlist', { playlistId });
-      } else {
-        logger.debug('No existing playlist found');
-      }
+    if (existingPlaylist) {
+      playlistId = existingPlaylist.id;
+      logger.debug('Found existing playlist', { playlistId });
     } else {
-      const errorText = await playlistsResp.text();
-      logger.error('Failed to fetch playlists', {
-        status: playlistsResp.status,
-        error: errorText,
-      });
+      logger.debug('No existing playlist found');
     }
 
     // Create playlist if it doesn't exist
@@ -329,13 +267,24 @@ function createSpotifyPlaylistService(deps) {
     // Update playlist with tracks
     if (trackUris.length > 0) {
       // Clear existing tracks
-      await fetch(`${BASE_URL}/playlists/${playlistId}/tracks`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ uris: [] }),
-      });
+      const clearResp = await fetch(
+        `${BASE_URL}/playlists/${playlistId}/tracks`,
+        {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({ uris: [] }),
+        }
+      );
+
+      if (!clearResp.ok) {
+        const errorText = await clearResp.text();
+        throw new Error(
+          `Failed to clear Spotify playlist tracks: ${clearResp.status} - ${errorText}`
+        );
+      }
 
       // Add new tracks in batches of 100 (Spotify limit)
+      let failedBatchCount = 0;
       for (let i = 0; i < trackUris.length; i += 100) {
         const batch = trackUris.slice(i, i + 100);
         const addResp = await fetch(
@@ -348,10 +297,25 @@ function createSpotifyPlaylistService(deps) {
         );
 
         if (!addResp.ok) {
-          logger.warn(
-            `Failed to add tracks batch ${i}-${i + batch.length}: ${addResp.status}`
+          failedBatchCount += 1;
+          const errorText = await addResp.text();
+          result.errors.push(
+            `Failed to add Spotify tracks batch ${i}-${i + batch.length}: ${addResp.status}`
           );
+          logger.warn('Failed to add Spotify track batch', {
+            playlistId,
+            batchStart: i,
+            batchSize: batch.length,
+            status: addResp.status,
+            error: errorText,
+          });
         }
+      }
+
+      if (failedBatchCount > 0) {
+        throw new Error(
+          `Failed to add ${failedBatchCount} Spotify track batch(es)`
+        );
       }
     }
 

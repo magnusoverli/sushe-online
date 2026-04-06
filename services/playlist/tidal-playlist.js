@@ -22,6 +22,41 @@ function createTidalPlaylistService(deps) {
 
   const BASE_URL = 'https://openapi.tidal.com/v2';
 
+  async function findPlaylistByName(playlistName, headers) {
+    let offset = 0;
+
+    while (true) {
+      const resp = await fetch(
+        `${BASE_URL}/me/playlists?limit=50&offset=${offset}`,
+        {
+          headers,
+        }
+      );
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        throw new Error(
+          `Failed to fetch Tidal playlists: ${resp.status} - ${errorText}`
+        );
+      }
+
+      const playlists = await resp.json();
+      const existing = playlists.data.find(
+        (p) => p.attributes.title === playlistName
+      );
+
+      if (existing) {
+        return existing;
+      }
+
+      if (playlists.data.length < 50) {
+        return null;
+      }
+
+      offset += 50;
+    }
+  }
+
   /**
    * Check if playlist exists in Tidal
    * @param {string} playlistName - Name of the playlist
@@ -33,34 +68,12 @@ function createTidalPlaylistService(deps) {
       Authorization: `Bearer ${auth.access_token}`,
       Accept: 'application/vnd.api+json',
     };
-
-    let offset = 0;
-    let hasMore = true;
-
-    while (hasMore) {
-      try {
-        const resp = await fetch(
-          `${BASE_URL}/me/playlists?limit=50&offset=${offset}`,
-          { headers }
-        );
-
-        if (resp.ok) {
-          const playlists = await resp.json();
-          const exists = playlists.data.some(
-            (p) => p.attributes.title === playlistName
-          );
-          if (exists) return true;
-
-          hasMore = playlists.data.length === 50;
-          offset += 50;
-        } else {
-          return false;
-        }
-      } catch (_err) {
-        return false;
-      }
+    try {
+      const existing = await findPlaylistByName(playlistName, headers);
+      return Boolean(existing);
+    } catch (_err) {
+      return false;
     }
-    return false;
   }
 
   /**
@@ -196,23 +209,9 @@ function createTidalPlaylistService(deps) {
 
     // Check if playlist exists
     let playlistId = null;
-    let existingPlaylist;
-
-    try {
-      const playlistsResp = await fetch(`${BASE_URL}/me/playlists?limit=50`, {
-        headers,
-      });
-      if (playlistsResp.ok) {
-        const playlists = await playlistsResp.json();
-        existingPlaylist = playlists.data.find(
-          (p) => p.attributes.title === playlistName
-        );
-        if (existingPlaylist) {
-          playlistId = existingPlaylist.id;
-        }
-      }
-    } catch (err) {
-      logger.debug('Error fetching Tidal playlists:', err);
+    const existingPlaylist = await findPlaylistByName(playlistName, headers);
+    if (existingPlaylist) {
+      playlistId = existingPlaylist.id;
     }
 
     // Create playlist if it doesn't exist
@@ -263,16 +262,23 @@ function createTidalPlaylistService(deps) {
     // Update playlist with tracks
     if (trackIds.length > 0) {
       // Clear existing tracks first
-      try {
-        await fetch(`${BASE_URL}/playlists/${playlistId}/items`, {
+      const clearResp = await fetch(
+        `${BASE_URL}/playlists/${playlistId}/items`,
+        {
           method: 'DELETE',
           headers,
-        });
-      } catch (err) {
-        logger.debug('Error clearing Tidal playlist:', err);
+        }
+      );
+
+      if (!clearResp.ok) {
+        const errorText = await clearResp.text();
+        throw new Error(
+          `Failed to clear Tidal playlist tracks: ${clearResp.status} - ${errorText}`
+        );
       }
 
       // Add new tracks in batches
+      let failedBatchCount = 0;
       for (let i = 0; i < trackIds.length; i += 50) {
         const batch = trackIds.slice(i, i + 50);
         const trackData = batch.map((id) => ({
@@ -293,13 +299,37 @@ function createTidalPlaylistService(deps) {
           );
 
           if (!addResp.ok) {
-            logger.warn(
+            failedBatchCount += 1;
+            const errorText = await addResp.text();
+            result.errors.push(
               `Failed to add Tidal tracks batch ${i}-${i + batch.length}: ${addResp.status}`
             );
+            logger.warn('Failed to add Tidal track batch', {
+              playlistId,
+              batchStart: i,
+              batchSize: batch.length,
+              status: addResp.status,
+              error: errorText,
+            });
           }
         } catch (err) {
-          logger.warn(`Error adding Tidal tracks batch:`, err);
+          failedBatchCount += 1;
+          result.errors.push(
+            `Error adding Tidal tracks batch ${i}-${i + batch.length}: ${err.message}`
+          );
+          logger.warn('Error adding Tidal tracks batch', {
+            playlistId,
+            batchStart: i,
+            batchSize: batch.length,
+            error: err.message,
+          });
         }
+      }
+
+      if (failedBatchCount > 0) {
+        throw new Error(
+          `Failed to add ${failedBatchCount} Tidal track batch(es)`
+        );
       }
     }
 
