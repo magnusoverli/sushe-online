@@ -9,6 +9,7 @@
 
 const { URLSearchParams } = require('url');
 const logger = require('../../utils/logger');
+const { sanitizeReturnPath } = require('../../utils/redirect-path');
 
 module.exports = (app, deps) => {
   const { ensureAuth, usersAsync, crypto } = deps;
@@ -21,7 +22,7 @@ module.exports = (app, deps) => {
 
     // Store returnTo path for after OAuth completes
     if (req.query.returnTo) {
-      req.session.spotifyReturnTo = req.query.returnTo;
+      req.session.spotifyReturnTo = sanitizeReturnPath(req.query.returnTo);
     }
 
     const params = new URLSearchParams({
@@ -84,18 +85,15 @@ module.exports = (app, deps) => {
       if (token && token.expires_in) {
         token.expires_at = Date.now() + token.expires_in * 1000;
       }
-      // Fire-and-forget async update with error logging
-      usersAsync
-        .update(
-          { _id: req.user._id },
-          { $set: { spotifyAuth: token, updatedAt: new Date() } }
-        )
-        .catch((err) =>
-          logger.error('Spotify auth update error', {
-            error: err.message,
-            userId: req.user._id,
-          })
-        );
+      const numUpdated = await usersAsync.update(
+        { _id: req.user._id },
+        { $set: { spotifyAuth: token, updatedAt: new Date() } }
+      );
+
+      if (numUpdated === 0) {
+        throw new Error('Failed to persist Spotify credentials');
+      }
+
       req.user.spotifyAuth = token;
       req.flash('success', 'Spotify connected');
     } catch (e) {
@@ -107,31 +105,38 @@ module.exports = (app, deps) => {
     }
 
     // Redirect back to where the user was (for automatic reconnects) or home
-    const returnTo = req.session.spotifyReturnTo || '/';
+    const returnTo = sanitizeReturnPath(req.session.spotifyReturnTo);
     delete req.session.spotifyReturnTo; // Clean up
     res.redirect(returnTo);
   });
 
   // Disconnect Spotify account
-  app.get('/auth/spotify/disconnect', ensureAuth, (req, res) => {
-    logger.info('Disconnecting Spotify', {
-      email: req.user.email,
-      userId: req.user._id,
-    });
-    // Fire-and-forget async update with error logging
-    usersAsync
-      .update(
+  app.get('/auth/spotify/disconnect', ensureAuth, async (req, res) => {
+    try {
+      logger.info('Disconnecting Spotify', {
+        email: req.user.email,
+        userId: req.user._id,
+      });
+
+      const numUpdated = await usersAsync.update(
         { _id: req.user._id },
         { $unset: { spotifyAuth: true }, $set: { updatedAt: new Date() } }
-      )
-      .catch((err) =>
-        logger.error('Spotify disconnect error', {
-          error: err.message,
-          userId: req.user._id,
-        })
       );
-    delete req.user.spotifyAuth;
-    req.flash('success', 'Spotify disconnected');
-    res.redirect('/');
+
+      if (numUpdated === 0) {
+        throw new Error('User not found during Spotify disconnect');
+      }
+
+      delete req.user.spotifyAuth;
+      req.flash('success', 'Spotify disconnected');
+      res.redirect('/');
+    } catch (err) {
+      logger.error('Spotify disconnect error', {
+        error: err.message,
+        userId: req.user._id,
+      });
+      req.flash('error', 'Failed to disconnect Spotify');
+      res.redirect('/');
+    }
   });
 };

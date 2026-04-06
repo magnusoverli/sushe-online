@@ -251,6 +251,9 @@ function createTestApp(options = {}) {
     ),
   };
 
+  const mockInvalidateUserCache =
+    options.invalidateUserCache || mock.fn(() => {});
+
   // Create deps object
   const deps = {
     ensureAuth,
@@ -269,6 +272,7 @@ function createTestApp(options = {}) {
     crypto: mockCrypto,
     pool: mockPool,
     duplicateService: mockDuplicateService,
+    invalidateUserCache: mockInvalidateUserCache,
   };
 
   // Import and setup routes
@@ -287,6 +291,7 @@ function createTestApp(options = {}) {
     mockLists,
     mockListsAsync,
     mockListItemsAsync,
+    mockInvalidateUserCache,
   };
 }
 
@@ -294,7 +299,8 @@ function createTestApp(options = {}) {
 
 describe('POST /admin/delete-user', () => {
   it('should delete user as admin', async () => {
-    const { app, mockUsers, mockLists } = createTestApp();
+    const { app, mockUsers, mockLists, mockInvalidateUserCache } =
+      createTestApp();
 
     const response = await request(app)
       .post('/admin/delete-user')
@@ -304,6 +310,11 @@ describe('POST /admin/delete-user', () => {
     assert.strictEqual(response.body.success, true);
     assert.strictEqual(mockLists.remove.mock.calls.length, 1);
     assert.strictEqual(mockUsers.remove.mock.calls.length, 1);
+    assert.strictEqual(mockInvalidateUserCache.mock.calls.length, 1);
+    assert.strictEqual(
+      mockInvalidateUserCache.mock.calls[0].arguments[0],
+      'target-user-123'
+    );
   });
 
   it("should cascade delete user's lists", async () => {
@@ -404,7 +415,7 @@ describe('POST /admin/delete-user', () => {
 
 describe('POST /admin/make-admin', () => {
   it('should grant admin role', async () => {
-    const { app, mockUsersAsync } = createTestApp();
+    const { app, mockUsersAsync, mockInvalidateUserCache } = createTestApp();
 
     const response = await request(app)
       .post('/admin/make-admin')
@@ -413,6 +424,11 @@ describe('POST /admin/make-admin', () => {
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.body.success, true);
     assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
+    assert.strictEqual(mockInvalidateUserCache.mock.calls.length, 1);
+    assert.strictEqual(
+      mockInvalidateUserCache.mock.calls[0].arguments[0],
+      'target-user-123'
+    );
   });
 
   it('should set adminGrantedAt timestamp', async () => {
@@ -482,7 +498,7 @@ describe('POST /admin/make-admin', () => {
 
 describe('POST /admin/revoke-admin', () => {
   it('should revoke admin role', async () => {
-    const { app, mockUsersAsync } = createTestApp();
+    const { app, mockUsersAsync, mockInvalidateUserCache } = createTestApp();
 
     const response = await request(app)
       .post('/admin/revoke-admin')
@@ -491,6 +507,11 @@ describe('POST /admin/revoke-admin', () => {
     assert.strictEqual(response.status, 200);
     assert.strictEqual(response.body.success, true);
     assert.strictEqual(mockUsersAsync.update.mock.calls.length, 1);
+    assert.strictEqual(mockInvalidateUserCache.mock.calls.length, 1);
+    assert.strictEqual(
+      mockInvalidateUserCache.mock.calls[0].arguments[0],
+      'other-admin-456'
+    );
   });
 
   it('should unset role and adminGrantedAt', async () => {

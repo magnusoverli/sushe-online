@@ -9,6 +9,7 @@
 
 const { URLSearchParams } = require('url');
 const logger = require('../../utils/logger');
+const { sanitizeReturnPath } = require('../../utils/redirect-path');
 
 module.exports = (app, deps) => {
   const { ensureAuth, usersAsync, crypto } = deps;
@@ -30,7 +31,7 @@ module.exports = (app, deps) => {
 
     // Store returnTo path for after OAuth completes
     if (req.query.returnTo) {
-      req.session.tidalReturnTo = req.query.returnTo;
+      req.session.tidalReturnTo = sanitizeReturnPath(req.query.returnTo);
     }
 
     const params = new URLSearchParams({
@@ -144,7 +145,7 @@ module.exports = (app, deps) => {
     }
 
     // Redirect back to where the user was (for automatic reconnects) or home
-    const returnTo = req.session.tidalReturnTo || '/';
+    const returnTo = sanitizeReturnPath(req.session.tidalReturnTo);
     delete req.session.tidalReturnTo; // Clean up
     res.redirect(returnTo);
   });

@@ -99,6 +99,7 @@ module.exports = (app, deps) => {
     composeForgotPasswordEmail,
     csrfProtection,
     pool,
+    isValidPassword,
   } = deps;
 
   // Create helper functions
@@ -233,6 +234,7 @@ module.exports = (app, deps) => {
     invalidTokenTemplate,
     resetPasswordTemplate,
     composeForgotPasswordEmail,
+    isValidPassword,
 
     // Last.fm functions
     getLastfmTopAlbums,

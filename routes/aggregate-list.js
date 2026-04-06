@@ -12,6 +12,18 @@ module.exports = (app, deps) => {
   // Create aggregate list utility instance
   const aggregateList = createAggregateList({ pool, logger });
 
+  function scheduleAggregateRecompute(year, reason) {
+    if (!year) return;
+
+    aggregateList.recompute(year).catch((error) => {
+      logger.error('Failed to recompute aggregate list', {
+        year,
+        reason,
+        error: error.message,
+      });
+    });
+  }
+
   // ============ AGGREGATE LIST PAGE ROUTES ============
 
   /**
@@ -411,12 +423,13 @@ module.exports = (app, deps) => {
 
         await aggregateList.addContributor(year, userId, req.user._id);
 
-        // Recompute the aggregate list with the new contributor
-        await aggregateList.recompute(year);
+        // Recompute in background to keep admin mutations fast
+        scheduleAggregateRecompute(year, 'add_contributor');
 
         res.json({
           success: true,
           message: `User added as contributor for ${year}`,
+          recomputeScheduled: true,
         });
       },
       'adding contributor',
@@ -455,12 +468,13 @@ module.exports = (app, deps) => {
 
         const result = await aggregateList.removeContributor(year, userId);
 
-        // Recompute the aggregate list without this contributor
-        await aggregateList.recompute(year);
+        // Recompute in background to keep admin mutations fast
+        scheduleAggregateRecompute(year, 'remove_contributor');
 
         res.json({
           success: true,
           removed: result.removed,
+          recomputeScheduled: true,
           message: result.removed
             ? `User removed as contributor for ${year}`
             : 'User was not a contributor',
@@ -490,12 +504,13 @@ module.exports = (app, deps) => {
 
         await aggregateList.setContributors(year, userIds, req.user._id);
 
-        // Recompute the aggregate list with new contributors
-        await aggregateList.recompute(year);
+        // Recompute in background to keep admin mutations fast
+        scheduleAggregateRecompute(year, 'set_contributors');
 
         res.json({
           success: true,
           count: userIds.length,
+          recomputeScheduled: true,
           message: `Set ${userIds.length} contributors for ${year}`,
         });
       },

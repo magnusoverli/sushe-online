@@ -19,6 +19,8 @@ module.exports = (app, deps) => {
   const {
     ensureAuthAPI,
     logger,
+    listItemsAsync,
+    listsAsync,
     helpers: { invalidateListCaches },
   } = deps;
   const asyncHandler = createAsyncHandler(logger);
@@ -45,8 +47,6 @@ module.exports = (app, deps) => {
 
       // Priority must be 1 (primary) or 2 (secondary)
       const targetPriority = priority === 1 ? 1 : 2;
-
-      const { listItemsAsync, listsAsync } = require('../../db');
 
       // Verify the list item belongs to the user
       const listItem = await listItemsAsync.findOne({ _id: listItemId });
@@ -100,8 +100,6 @@ module.exports = (app, deps) => {
       if (!listItemId) {
         return res.status(400).json({ error: 'List item ID is required' });
       }
-
-      const { listItemsAsync, listsAsync } = require('../../db');
 
       // Verify the list item belongs to the user
       const listItem = await listItemsAsync.findOne({ _id: listItemId });

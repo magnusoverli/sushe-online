@@ -34,11 +34,10 @@ module.exports = (app, deps) => {
         const { listId } = req.params;
         const { action = 'update', service } = req.body;
 
-        logger.info('Playlist endpoint called:', {
+        logger.debug('Playlist endpoint called', {
           listId,
           action,
           service,
-          body: req.body,
         });
 
         // Determine target service: explicit service > user preference > auto-detect from auth
@@ -139,17 +138,13 @@ module.exports = (app, deps) => {
           req.user._id
         );
 
-        // Debug logging for playlist track picks
-        logger.info('Playlist creation - items loaded', {
+        logger.debug('Playlist creation items loaded', {
           listId: list._id,
           userId: req.user._id,
           itemCount: items.length,
-          sampleTracks: items.slice(0, 3).map((item) => ({
-            album: item.album,
-            primaryTrack: item.primaryTrack,
-            secondaryTrack: item.secondaryTrack,
-            trackPick: item.trackPick,
-          })),
+          pickedTrackCount: items.filter(
+            (item) => item.primaryTrack || item.secondaryTrack || item.trackPick
+          ).length,
         });
 
         // Pre-flight validation
